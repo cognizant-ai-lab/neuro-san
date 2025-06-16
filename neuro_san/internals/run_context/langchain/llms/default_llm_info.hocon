@@ -542,6 +542,106 @@
         "knowledge_cutoff": "unknown",
     },
 
+    # Google Gemini
+
+    "gemini-2.5-flash-preview-05-20": {
+        "class": "gemini",
+        "model_info_url": "",
+        "modalities": {
+            "input": [ "text", "images", "video", "audio" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1048576,
+        "max_output_tokens": 65536,
+        "knowledge_cutoff": "01/2025",
+    },
+    "gemini-2.5-pro-preview-06-05": {
+        "class": "gemini",
+        "model_info_url": "",
+        "modalities": {
+            "input": [ "text", "images", "video", "audio" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1048576,
+        "max_output_tokens": 65536,
+        "knowledge_cutoff": "01/2025",
+    },
+    "gemini-2.0-flash": {
+        "class": "gemini",
+        "model_info_url": "",
+        "modalities": {
+            "input": [ "text", "images", "video", "audio" ],
+            "output": [ "text", "images" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1048576,
+        "max_output_tokens": 8192,
+        "knowledge_cutoff": "08/2024",
+    },
+    "gemini-2.0-flash-lite": {
+        "class": "gemini",
+        "model_info_url": "",
+        "modalities": {
+            "input": [ "text", "images", "video", "audio" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1048576,
+        "max_output_tokens": 8192,
+        "knowledge_cutoff": "08/2024",
+    },
+    "gemini-1.5-flash": {
+        "class": "gemini",
+        "model_info_url": "",
+        "modalities": {
+            "input": [ "text", "images", "video", "audio" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1048576,
+        "max_output_tokens": 8192,
+        "knowledge_cutoff": "09/2024",
+    },
+    "gemini-1.5-flash-8b": {
+        "class": "gemini",
+        "model_info_url": "",
+        "modalities": {
+            "input": [ "text", "images", "video", "audio" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1048576,
+        "max_output_tokens": 8192,
+        "knowledge_cutoff": "10/2024",
+    },
+    "gemini-1.5-pro": {
+        "class": "gemini",
+        "model_info_url": "",
+        "modalities": {
+            "input": [ "text", "images", "video", "audio" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 2097152,
+        "max_output_tokens": 8192,
+        "knowledge_cutoff": "09/2024",
+    },
+    "gemini-2.0-flash-live-001": {
+        "class": "gemini",
+        "model_info_url": "",
+        "modalities": {
+            "input": [ "text", "video", "audio" ],
+            "output": [ "text", "audio" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1048576,
+        "max_output_tokens": 8192,
+        "knowledge_cutoff": "08/2024",
+    },
+    
+
     # These are data for each LLM class, so they don't have to be repeated for each
     # LLM info entry above.
     "classes": {
@@ -655,6 +755,12 @@
                 "stop": null,
                 "nvidia_api_key": null,
                 "nvidia_base_url": null,
+            }
+        },
+        "gemini": {
+            "args": {
+                "temperature": null,
+                "max_tokens": null,
             }
         }
     }
