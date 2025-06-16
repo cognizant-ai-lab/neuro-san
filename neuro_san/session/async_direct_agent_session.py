@@ -26,7 +26,7 @@ from neuro_san.internals.chat.connectivity_reporter import ConnectivityReporter
 from neuro_san.internals.chat.data_driven_chat_session import DataDrivenChatSession
 from neuro_san.internals.filters.message_filter import MessageFilter
 from neuro_san.internals.filters.message_filter_factory import MessageFilterFactory
-from neuro_san.internals.graph.registry.agent_tool_registry import AgentToolRegistry
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.session.session_invocation_context import SessionInvocationContext
 
 
@@ -37,14 +37,14 @@ class AsyncDirectAgentSession(AsyncAgentSession):
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self,
-                 tool_registry: AgentToolRegistry,
+                 agent_network: AgentNetwork,
                  invocation_context: SessionInvocationContext,
                  metadata: Dict[str, Any] = None,
                  security_cfg: Dict[str, Any] = None):
         """
         Constructor
 
-        :param tool_registry: The agent tool registry to use for the session.
+        :param agent_network: The AgentNetwork to use for the session.
         :param invocation_context: The SessionInvocationContext to use to consult
                         for policy objects scoped at the invocation level.
         :param metadata: A dictionary of request metadata to be forwarded
@@ -59,7 +59,7 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         self._security_cfg: Dict[str, Any] = security_cfg
 
         self.invocation_context: SessionInvocationContext = invocation_context
-        self.tool_registry: AgentToolRegistry = tool_registry
+        self.agent_network: AgentNetwork = agent_network
         self.request_id: str = None
         if metadata is not None:
             self.request_id = metadata.get("request_id")
@@ -77,9 +77,9 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         response_dict: Dict[str, Any] = {
         }
 
-        front_man: str = self.tool_registry.find_front_man()
+        front_man: str = self.agent_network.find_front_man()
         if front_man is not None:
-            spec: Dict[str, Any] = self.tool_registry.get_agent_tool_spec(front_man)
+            spec: Dict[str, Any] = self.agent_network.get_agent_tool_spec(front_man)
             empty: Dict[str, Any] = {}
             function: Dict[str, Any] = spec.get("function", empty)
             response_dict = {
@@ -103,7 +103,7 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         response_dict: Dict[str, Any] = {
         }
 
-        reporter = ConnectivityReporter(self.tool_registry)
+        reporter = ConnectivityReporter(self.agent_network)
         connectivity_info: List[Dict[str, Any]] = reporter.report_network_connectivity()
         response_dict = {
             "connectivity_info": connectivity_info,
@@ -132,7 +132,7 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         user_input = extractor.get("user_message.text")
 
         # Create the gateway to the internals.
-        chat_session = DataDrivenChatSession(registry=self.tool_registry)
+        chat_session = DataDrivenChatSession(agent_network=self.agent_network)
 
         # Prepare the response dictionary
         template_response_dict = {

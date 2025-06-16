@@ -28,8 +28,8 @@ from neuro_san.http_sidecar.http_server_app import HttpServerApp
 from neuro_san.service.async_agent_service import AsyncAgentService
 from neuro_san.service.agent_server_logging import AgentServerLogging
 from neuro_san.service.agent_server import AgentServer
-from neuro_san.internals.tool_factories.service_tool_factory_provider import ServiceToolFactoryProvider
-from neuro_san.internals.tool_factories.single_agent_tool_factory_provider import SingleAgentToolFactoryProvider
+from neuro_san.internals.network_providers.service_agent_network_storage import ServiceAgentNetworkStorage
+from neuro_san.internals.network_providers.single_agent_network_provider import SingleAgentNetworkProvider
 
 from neuro_san.http_sidecar.interfaces.agent_authorizer import AgentAuthorizer
 from neuro_san.http_sidecar.interfaces.agents_updater import AgentsUpdater
@@ -170,14 +170,14 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
         Add agent to the map of known agents
         :param agent_name: name of an agent
         """
-        agent_tool_factory_provider: SingleAgentToolFactoryProvider =\
-            ServiceToolFactoryProvider.get_instance().get_agent_tool_factory_provider(agent_name)
+        agent_network_provider: SingleAgentNetworkProvider = \
+            ServiceAgentNetworkStorage.get_instance().get_agent_network_provider(agent_name)
         # Convert back to a single string as required by constructor
         request_metadata_str: str = " ".join(self.forwarded_request_metadata)
-        agent_server_logging: AgentServerLogging =\
+        agent_server_logging: AgentServerLogging = \
             AgentServerLogging(self.server_name_for_logs, request_metadata_str)
-        agent_service: AsyncAgentService =\
-            AsyncAgentService(self.logger, None, agent_name, agent_tool_factory_provider, agent_server_logging)
+        agent_service: AsyncAgentService = \
+            AsyncAgentService(self.logger, None, agent_name, agent_network_provider, agent_server_logging)
         self.allowed_agents[agent_name] = agent_service
 
     def remove_agent(self, agent_name: str):

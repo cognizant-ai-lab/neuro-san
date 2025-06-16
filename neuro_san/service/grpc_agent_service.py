@@ -25,7 +25,7 @@ from leaf_server_common.server.request_logger import RequestLogger
 
 from neuro_san.api.grpc import agent_pb2 as service_messages
 from neuro_san.api.grpc import agent_pb2_grpc
-from neuro_san.internals.interfaces.agent_tool_factory_provider import AgentToolFactoryProvider
+from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.service.agent_server_logging import AgentServerLogging
 from neuro_san.service.agent_service import AgentService
 
@@ -40,7 +40,7 @@ class GrpcAgentService(agent_pb2_grpc.AgentServiceServicer):
                  request_logger: RequestLogger,
                  security_cfg: Dict[str, Any],
                  agent_name: str,
-                 tool_registry_provider: AgentToolFactoryProvider,
+                 agent_network_provider: AgentNetworkProvider,
                  server_logging: AgentServerLogging):
         """
         Set the gRPC interface up for health checking so that the service
@@ -54,7 +54,7 @@ class GrpcAgentService(agent_pb2_grpc.AgentServiceServicer):
                         connection.  Supplying this implies use of a secure
                         GRPC Channel.  If None, uses insecure channel.
         :param agent_name: The agent name for the service
-        :param tool_registry_provider: The AgentToolFactoryProvider to use for the session.
+        :param agent_network_provider: The AgentNetworkProvider to use for the service.
         :param server_logging: An AgentServerLogging instance initialized so that
                         spawned asyncrhonous threads can also properly initialize
                         their logging.
@@ -64,7 +64,7 @@ class GrpcAgentService(agent_pb2_grpc.AgentServiceServicer):
             AgentService(request_logger,
                          security_cfg,
                          agent_name,
-                         tool_registry_provider,
+                         agent_network_provider,
                          server_logging)
 
     def get_request_count(self) -> int:

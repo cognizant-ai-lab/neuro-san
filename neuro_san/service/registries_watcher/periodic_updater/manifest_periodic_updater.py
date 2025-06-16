@@ -14,11 +14,11 @@ import time
 import threading
 from typing import Dict
 
-from neuro_san.internals.tool_factories.service_tool_factory_provider import ServiceToolFactoryProvider
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
+from neuro_san.internals.network_providers.service_agent_network_storage import ServiceAgentNetworkStorage
 from neuro_san.service.registries_watcher.periodic_updater.registry_event_observer import RegistryEventObserver
 from neuro_san.service.registries_watcher.periodic_updater.registry_polling_observer import RegistryPollingObserver
-from neuro_san.internals.graph.registry.agent_tool_registry import AgentToolRegistry
-from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 
 
 class ManifestPeriodicUpdater:
@@ -43,8 +43,7 @@ class ManifestPeriodicUpdater:
             self.observer = RegistryPollingObserver(self.manifest_path, poll_interval)
         else:
             self.observer = RegistryEventObserver(self.manifest_path)
-        self.tool_factory: ServiceToolFactoryProvider = \
-            ServiceToolFactoryProvider.get_instance()
+        self.network_storage: ServiceAgentNetworkStorage = ServiceAgentNetworkStorage.get_instance()
         self.go_run: bool = True
 
     def _run(self):
@@ -65,9 +64,9 @@ class ManifestPeriodicUpdater:
             self.logger.info("Observed events: modified %d, added %d, deleted %d",
                              modified, added, deleted)
             self.logger.info("Updating manifest file: %s", self.manifest_path)
-            registries: Dict[str, AgentToolRegistry] = \
+            agent_networks: Dict[str, AgentNetwork] = \
                 RegistryManifestRestorer().restore(self.manifest_path)
-            self.tool_factory.setup_tool_registries(registries)
+            self.network_storage.setup_agent_networks(agent_networks)
 
     def compute_polling_interval(self, update_period_seconds: int) -> int:
         """

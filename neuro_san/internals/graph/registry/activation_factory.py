@@ -123,6 +123,7 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
                                 factory: AgentToolFactory = None) -> CallableActivation:
         """
         Create an active node for an agent from its spec.
+        This is how CallableActivations create other CallableActivations.
 
         :param parent_run_context: The RunContext of the agent calling this method
         :param parent_agent_spec: The spec of the agent calling this method.
@@ -186,7 +187,7 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
                          parent_run_context: RunContext = None,
                          factory: AgentToolFactory = None) -> FrontMan:
         """
-        Find and create the FrontMan for chat
+        Find and create the FrontMan for DataDrivenChat
 
         :param sly_data: A mapping whose keys might be referenceable by agents, but whose
                  values should not appear in agent chat text. Can be an empty dictionary.

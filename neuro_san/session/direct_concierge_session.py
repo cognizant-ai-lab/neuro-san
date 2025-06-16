@@ -15,7 +15,7 @@ from typing import Dict
 from typing import List
 
 from neuro_san.interfaces.concierge_session import ConciergeSession
-from neuro_san.internals.tool_factories.service_tool_factory_provider import ServiceToolFactoryProvider
+from neuro_san.internals.network_providers.service_agent_network_storage import ServiceAgentNetworkStorage
 
 
 class DirectConciergeSession(ConciergeSession):
@@ -51,9 +51,8 @@ class DirectConciergeSession(ConciergeSession):
                     protobuf structure. Has the following keys:
                 "agents" - the sequence of dictionaries describing available agents
         """
-        tool_factory_provider: ServiceToolFactoryProvider = \
-            ServiceToolFactoryProvider.get_instance()
-        agents_names: List[str] = tool_factory_provider.get_agent_names()
+        network_storage: ServiceAgentNetworkStorage = ServiceAgentNetworkStorage.get_instance()
+        agents_names: List[str] = network_storage.get_agent_names()
         agents_list: List[Dict[str, Any]] = []
         for agent_name in agents_names:
             agents_list.append({"agent_name": agent_name, "description": ""})

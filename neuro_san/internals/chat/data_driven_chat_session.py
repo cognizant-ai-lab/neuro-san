@@ -14,6 +14,7 @@ from typing import Dict
 from typing import Iterator
 from typing import List
 
+import copy
 import logging
 import traceback
 
@@ -21,6 +22,7 @@ from openai import BadRequestError
 
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.chat.chat_history_message_processor import ChatHistoryMessageProcessor
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.registry.agent_tool_registry import AgentToolRegistry
 from neuro_san.internals.graph.activations.sly_data_redactor import SlyDataRedactor
 from neuro_san.internals.interfaces.front_man import FrontMan
@@ -41,17 +43,18 @@ class DataDrivenChatSession:
     in using data-driven agent tool graphs.
     """
 
-    def __init__(self, registry: AgentToolRegistry):
+    def __init__(self, agent_network: AgentNetwork):
         """
         Constructor
 
-        :param registry: The AgentToolRegistry to use.
+        :param agent_network: The AgentNetwork to use.
         """
-        # This block contains top candidates for state storage that needs to be
-        # retained when session_ids go away.
-        self.front_man: FrontMan = None
+        # We make a copy of the AgentNetwork at this level to allow for interactions
+        # within this scope to modify the network topology.
+        agent_network_copy: AgentNetwork = copy.deepcopy(agent_network)
+        self.registry: AgentToolRegistry = AgentToolRegistry(agent_network_copy)
 
-        self.registry: AgentToolRegistry = registry
+        self.front_man: FrontMan = None
         self.sly_data: Dict[str, Any] = {}
 
     async def set_up(self, invocation_context: InvocationContext,

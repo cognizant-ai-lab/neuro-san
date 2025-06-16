@@ -14,25 +14,25 @@ import threading
 from typing import Dict
 from typing import List
 
-from neuro_san.internals.graph.interfaces.agent_tool_factory import AgentToolFactory
-from neuro_san.internals.interfaces.tool_factory_provider import ToolFactoryProvider
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
-from neuro_san.internals.tool_factories.single_agent_tool_factory_provider import SingleAgentToolFactoryProvider
+from neuro_san.internals.network_providers.single_agent_network_provider import SingleAgentNetworkProvider
 
 
-class ServiceToolFactoryProvider(ToolFactoryProvider):
+class ServiceAgentNetworkStorage:
     """
-    Service-wide provider of agents tools factories.
+    Service-wide storage for AgentNetworkProviders.
     This class is a global singleton containing
-    a table of currently active tool factories for each agent registered to the service.
-    Note: a mapping from an agent to its tools factory is dynamic,
-    as we can change agents definitions at service run-time.
+    a table of currently active AgentNetworks for each agent registered to the service.
+    Note: a mapping from an agent to its AgentNetwork is dynamic,
+          as we can change agents definitions at service run-time.
     """
 
     instance = None
 
     def __init__(self):
-        self.agents_table: Dict[str, AgentToolFactory] = {}
+        self.agents_table: Dict[str, AgentNetwork] = {}
         self.logger = logging.getLogger(self.__class__.__name__)
         self.lock = threading.Lock()
         self.listeners: List[AgentStateListener] = []
@@ -42,9 +42,9 @@ class ServiceToolFactoryProvider(ToolFactoryProvider):
         """
         Get a singleton instance of this class
         """
-        if not ServiceToolFactoryProvider.instance:
-            ServiceToolFactoryProvider.instance = ServiceToolFactoryProvider()
-        return ServiceToolFactoryProvider.instance
+        if not ServiceAgentNetworkStorage.instance:
+            ServiceAgentNetworkStorage.instance = ServiceAgentNetworkStorage()
+        return ServiceAgentNetworkStorage.instance
 
     def add_listener(self, listener: AgentStateListener):
         """
@@ -59,44 +59,44 @@ class ServiceToolFactoryProvider(ToolFactoryProvider):
         if listener in self.listeners:
             self.listeners.remove(listener)
 
-    def add_agent_tool_registry(self, agent_name: str, registry: AgentToolFactory):
+    def add_agent_network(self, agent_name: str, agent_network: AgentNetwork):
         """
         This method is a single point of entry in the service
-        where we register a new "agent name + AgentToolFactory" pair in the service scope
-        or notify the service that for existing agent its AgentToolFactory has been modified.
+        where we register a new agent name -> AgentNetwork pair in the service scope
+        or notify the service that for existing agent its AgentNetwork has been modified.
         """
         is_new: bool = False
         with self.lock:
             is_new = self.agents_table.get(agent_name, None) is None
-            self.agents_table[agent_name] = registry
+            self.agents_table[agent_name] = agent_network
         # Notify listeners about this state change:
         # do it outside of internal lock
         for listener in self.listeners:
             if is_new:
                 listener.agent_added(agent_name)
-                self.logger.info("ADDED tool registry for agent %s", agent_name)
+                self.logger.info("ADDED network for agent %s", agent_name)
             else:
                 listener.agent_modified(agent_name)
-                self.logger.info("REPLACED tool registry for agent %s", agent_name)
+                self.logger.info("REPLACED network for agent %s", agent_name)
 
-    def setup_tool_registries(self, registries: Dict[str, AgentToolFactory]):
+    def setup_agent_networks(self, agent_networks: Dict[str, AgentNetwork]):
         """
-        Replace agents registries with "registries" collection.
+        Replace agents networks with a new collection.
         Previous state could be empty.
         """
         current_agents = set(self.agents_table.keys())
-        new_agents = set(registries.keys())
+        new_agents = set(agent_networks.keys())
         # Remove agents which are not in the new collection:
         agents_to_remove = current_agents - new_agents
         for agent_name in agents_to_remove:
-            self.remove_agent_tool_registry(agent_name)
+            self.remove_agent_network(agent_name)
         # Now add (or possibly replace) agents from new collection:
         for agent_name in new_agents:
-            self.add_agent_tool_registry(agent_name, registries[agent_name])
+            self.add_agent_network(agent_name, agent_networks[agent_name])
 
-    def remove_agent_tool_registry(self, agent_name: str):
+    def remove_agent_network(self, agent_name: str):
         """
-        Remove agent name and its AgentToolFactory from service scope,
+        Remove agent name and its AgentNetwork from service scope,
         so that agent becomes unavailable on our server.
         """
         with self.lock:
@@ -105,14 +105,14 @@ class ServiceToolFactoryProvider(ToolFactoryProvider):
         # do it outside of internal lock
         for listener in self.listeners:
             listener.agent_removed(agent_name)
-        self.logger.info("REMOVED tool registry for agent %s", agent_name)
+        self.logger.info("REMOVED network for agent %s", agent_name)
 
-    def get_agent_tool_factory_provider(self, agent_name: str) -> ToolFactoryProvider:
+    def get_agent_network_provider(self, agent_name: str) -> AgentNetworkProvider:
         """
-        Get agent tool factory provider for a specific agent
+        Get AgentNetworkProvider for a specific agent
         :param agent_name: name of an agent
         """
-        return SingleAgentToolFactoryProvider(agent_name, self.agents_table)
+        return SingleAgentNetworkProvider(agent_name, self.agents_table)
 
     def get_agent_names(self) -> List[str]:
         """

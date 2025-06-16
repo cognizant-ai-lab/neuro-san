@@ -311,9 +311,10 @@ class LangChainRunContext(RunContext):
             adapter = ExternalToolAdapter(session_factory, name)
             try:
                 function_json = await adapter.get_function_json(self.invocation_context)
-            except ValueError:
+            except ValueError as exception:
                 # Could not reach the server for the external agent, so tell about it
-                message: str = f"Agent/tool {name} was unreachable. Not including it as a tool."
+                message: str = f"Agent/tool {name} was unreachable. Not including it as a tool.\n"
+                message += str(exception)
                 agent_message = AgentMessage(content=message)
                 await self.journal.write_message(agent_message)
                 self.logger.info(message)

@@ -55,9 +55,9 @@ class ExternalToolAdapter:
             try:
                 function_response: Dict[str, Any] = await session.function(request_dict)
                 self.function_json = function_response.get("function")
-            except AioRpcError as exception:
+            except (AioRpcError, ValueError) as exception:
                 message: str = f"Problem accessing external agent {self.agent_url}.\n"
-                if exception.code() == StatusCode.UNIMPLEMENTED:
+                if not isinstance(exception, AioRpcError) or exception.code() == StatusCode.UNIMPLEMENTED:
                     message += """
 The server (which could be your own localhost) is currently not serving up
 an agent network by that name. Try these hints:

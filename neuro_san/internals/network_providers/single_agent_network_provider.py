@@ -11,29 +11,28 @@
 
 from typing import Dict
 
-from neuro_san.internals.graph.interfaces.agent_tool_factory import AgentToolFactory
-from neuro_san.internals.interfaces.agent_tool_factory_provider import AgentToolFactoryProvider
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 
 
-class SingleAgentToolFactoryProvider(AgentToolFactoryProvider):
+class SingleAgentNetworkProvider(AgentNetworkProvider):
     """
-    Class providing current agent tool factory for a given agent
-    in the service scope.
+    Class providing current AgentNetwork for a given agent in the service scope.
     """
-    def __init__(self, agent_name: str, agents_table: Dict[str, AgentToolFactory]):
+    def __init__(self, agent_name: str, agents_table: Dict[str, AgentNetwork]):
         """
         Constructor.
-        :param agent_name: name of an agent to provide AgentToolFactory instances for;
+        :param agent_name: name of an agent to provide AgentNetwork instances for;
         :param agents_table: service-wide table mapping agent names to their
-            currently active AgentToolFactory instances.
+            currently active AgentNetwork instances.
             This table is assumed to be dynamically modified outside a single agent scope.
         """
         self.agent_name = agent_name
-        self.agents_table: Dict[str, AgentToolFactory] = agents_table
+        self.agents_table: Dict[str, AgentNetwork] = agents_table
 
-    def get_agent_tool_factory(self) -> AgentToolFactory:
+    def get_agent_network(self) -> AgentNetwork:
         """
-        :return: Current Agent tool factory instance for specific agent name.
+        :return: Current AgentNetwork instance for specific agent name.
                 None if this does not exist for the instance's agent_name.
         """
         return self.agents_table.get(self.agent_name)

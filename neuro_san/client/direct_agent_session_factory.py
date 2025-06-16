@@ -15,16 +15,17 @@ from leaf_common.time.timeout import Timeout
 
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
-from neuro_san.internals.graph.registry.agent_tool_registry import AgentToolRegistry
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.run_context.factory.master_toolbox_factory import MasterToolboxFactory
 from neuro_san.internals.run_context.factory.master_llm_factory import MasterLlmFactory
-from neuro_san.internals.graph.persistence.agent_tool_registry_restorer import AgentToolRegistryRestorer
+from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
-from neuro_san.internals.interfaces.agent_tool_factory_provider import AgentToolFactoryProvider
-from neuro_san.internals.tool_factories.service_tool_factory_provider import ServiceToolFactoryProvider
+from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
+from neuro_san.internals.network_providers.service_agent_network_storage import ServiceAgentNetworkStorage
 from neuro_san.session.direct_agent_session import DirectAgentSession
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
+from neuro_san.session.missing_agent_check import MissingAgentCheck
 from neuro_san.session.session_invocation_context import SessionInvocationContext
 
 
@@ -32,8 +33,8 @@ class DirectAgentSessionFactory:
     """
     Sets up everything needed to use a DirectAgentSession more as a library.
     This includes:
-        * Some reading of AgentToolRegistries
-        * Setting up ServiceToolFactoryProvider with agent registries
+        * Some reading of AgentNetworks
+        * Setting up ServiceAgentNetworkStorage with agent networks
           which were read in
         * Initializing an LlmFactory
     """
@@ -43,11 +44,10 @@ class DirectAgentSessionFactory:
         Constructor
         """
         manifest_restorer = RegistryManifestRestorer()
-        self.manifest_tool_registries: Dict[str, AgentToolRegistry] = manifest_restorer.restore()
-        tool_factory: ServiceToolFactoryProvider =\
-            ServiceToolFactoryProvider.get_instance()
-        for agent_name, tool_registry in self.manifest_tool_registries.items():
-            tool_factory.add_agent_tool_registry(agent_name, tool_registry)
+        self.manifest_networks: Dict[str, AgentNetwork] = manifest_restorer.restore()
+        network_storage: ServiceAgentNetworkStorage = ServiceAgentNetworkStorage.get_instance()
+        for agent_name, agent_network in self.manifest_networks.items():
+            network_storage.add_agent_network(agent_name, agent_network)
 
     def create_session(self, agent_name: str, use_direct: bool = False,
                        metadata: Dict[str, str] = None, umbrella_timeout: Timeout = None) -> AgentSession:
@@ -64,47 +64,50 @@ class DirectAgentSessionFactory:
                         Default is None (no timeout).
         """
 
-        tool_registry: AgentToolRegistry = self.get_agent_tool_registry(agent_name)
+        agent_network: AgentNetwork = self.get_agent_network(agent_name)
 
         llm_factory: ContextTypeLlmFactory = MasterLlmFactory.create_llm_factory()
         toolbox_factory: ContextTypeToolboxFactory = MasterToolboxFactory.create_toolbox_factory()
         # Load once now that we know what tool registry to use.
         # Include "agent_llm_info_file" from agent network hocon to llm factory.
-        agent_llm_info_file = tool_registry.get_agent_llm_info_file()
+        agent_llm_info_file = agent_network.get_agent_llm_info_file()
         llm_factory.load(agent_llm_info_file)
         toolbox_factory.load()
 
         factory = ExternalAgentSessionFactory(use_direct=use_direct)
         invocation_context = SessionInvocationContext(factory, llm_factory, toolbox_factory, metadata)
         invocation_context.start()
-        session: DirectAgentSession = DirectAgentSession(tool_registry=tool_registry,
+        session: DirectAgentSession = DirectAgentSession(agent_network=agent_network,
                                                          invocation_context=invocation_context,
                                                          metadata=metadata,
                                                          umbrella_timeout=umbrella_timeout)
         return session
 
-    def get_agent_tool_registry(self, agent_name: str) -> AgentToolRegistry:
+    def get_agent_network(self, agent_name: str) -> AgentNetwork:
         """
-        :param agent_name: The name of the agent whose AgentToolRegistry we want to get.
+        :param agent_name: The name of the agent whose AgentNetwork we want to get.
                 This name can be something in the manifest file (with no file suffix)
                 or a specific full-reference to an agent network's hocon file.
-        :return: The AgentToolRegistry corresponding to that agent.
+        :return: The AgentNetwork corresponding to that agent.
         """
 
         if agent_name is None or len(agent_name) == 0:
             return None
 
-        tool_registry: AgentToolRegistry = None
+        agent_network: AgentNetwork = None
         if agent_name.endswith(".hocon") or agent_name.endswith(".json"):
             # We got a specific file name
-            restorer = AgentToolRegistryRestorer()
-            tool_registry = restorer.restore(file_reference=agent_name)
+            restorer = AgentNetworkRestorer()
+            agent_network = restorer.restore(file_reference=agent_name)
         else:
             # Use the standard stuff available via the manifest file.
-            tool_factory: ServiceToolFactoryProvider =\
-                ServiceToolFactoryProvider.get_instance()
-            tool_registry_provider: AgentToolFactoryProvider =\
-                tool_factory.get_agent_tool_factory_provider(agent_name)
-            tool_registry = tool_registry_provider.get_agent_tool_factory()
+            network_storage: ServiceAgentNetworkStorage =\
+                ServiceAgentNetworkStorage.get_instance()
+            agent_network_provider: AgentNetworkProvider =\
+                network_storage.get_agent_network_provider(agent_name)
+            agent_network = agent_network_provider.get_agent_network()
 
-        return tool_registry
+        # Common place for nice error messages when networks are not found
+        MissingAgentCheck.check_agent_network(agent_network, agent_name)
+
+        return agent_network
