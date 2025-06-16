@@ -24,7 +24,7 @@ from leaf_server_common.server.server_loop_callbacks import ServerLoopCallbacks
 
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
-from neuro_san.internals.graph.registry.agent_tool_registry import AgentToolRegistry
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.service.agent_server import AgentServer
 from neuro_san.service.agent_server import DEFAULT_SERVER_NAME
 from neuro_san.service.agent_server import DEFAULT_SERVER_NAME_FOR_LOGS
@@ -50,7 +50,7 @@ class AgentMainLoop(ServerLoopCallbacks):
         self.port: int = 0
         self.http_port: int = 0
 
-        self.tool_registries: Dict[str, AgentToolRegistry] = {}
+        self.agent_networks: Dict[str, AgentNetwork] = {}
 
         self.server_name: str = DEFAULT_SERVER_NAME
         self.server_name_for_logs: str = DEFAULT_SERVER_NAME_FOR_LOGS
@@ -118,10 +118,10 @@ class AgentMainLoop(ServerLoopCallbacks):
         self.manifest_update_period_seconds = args.manifest_update_period_seconds
 
         manifest_restorer = RegistryManifestRestorer()
-        manifest_tool_registries: Dict[str, AgentToolRegistry] = manifest_restorer.restore()
+        manifest_agent_networks: Dict[str, AgentNetwork] = manifest_restorer.restore()
         self.manifest_files = manifest_restorer.get_manifest_files()
 
-        self.tool_registries = manifest_tool_registries
+        self.agent_networks = manifest_agent_networks
 
     def _get_default_openapi_spec_path(self) -> str:
         """
@@ -139,7 +139,7 @@ class AgentMainLoop(ServerLoopCallbacks):
 
         self.server = AgentServer(self.port,
                                   server_loop_callbacks=self,
-                                  tool_registries=self.tool_registries,
+                                  agent_networks=self.agent_networks,
                                   server_name=self.server_name,
                                   server_name_for_logs=self.server_name_for_logs,
                                   max_concurrent_requests=self.max_concurrent_requests,

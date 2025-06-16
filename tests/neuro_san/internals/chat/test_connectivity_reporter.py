@@ -16,8 +16,8 @@ from typing import List
 from unittest import TestCase
 
 from neuro_san.internals.chat.connectivity_reporter import ConnectivityReporter
-from neuro_san.internals.graph.registry.agent_tool_registry import AgentToolRegistry
-from neuro_san.internals.graph.persistence.agent_tool_registry_restorer import AgentToolRegistryRestorer
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
 from neuro_san.internals.utils.file_of_class import FileOfClass
 
 
@@ -30,26 +30,26 @@ class TestConnectivityReporter(TestCase):
         """
         Can we construct?
         """
-        agent_tool_registry: AgentToolRegistry = None
-        reporter = ConnectivityReporter(agent_tool_registry)
+        agent_network: AgentNetwork = None
+        reporter = ConnectivityReporter(agent_network)
         self.assertIsNotNone(reporter)
 
-    def get_sample_registry(self, hocon_file: str) -> AgentToolRegistry:
+    def get_sample_registry(self, hocon_file: str) -> AgentNetwork:
         """
         :param hocon_file: A hocon file reference within this repo
         """
         file_of_class = FileOfClass(__file__, "../../../../neuro_san/registries")
         file_reference = file_of_class.get_file_in_basis(hocon_file)
-        restorer = AgentToolRegistryRestorer()
-        agent_tool_registry: AgentToolRegistry = restorer.restore(file_reference=file_reference)
-        return agent_tool_registry
+        restorer = AgentNetworkRestorer()
+        agent_network: AgentNetwork = restorer.restore(file_reference=file_reference)
+        return agent_network
 
     def test_hello_world(self):
         """
         Tests the connectivity of the hello world hocon
         """
-        agent_tool_registry: AgentToolRegistry = self.get_sample_registry("hello_world.hocon")
-        reporter = ConnectivityReporter(agent_tool_registry)
+        agent_network: AgentNetwork = self.get_sample_registry("hello_world.hocon")
+        reporter = ConnectivityReporter(agent_network)
 
         messages: List[Dict[str, Any]] = reporter.report_network_connectivity()
         self.assertEqual(len(messages), 2)

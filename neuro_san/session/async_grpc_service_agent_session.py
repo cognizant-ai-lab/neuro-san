@@ -91,11 +91,14 @@ class AsyncGrpcServiceAgentSession(AsyncAbstractServiceSession, AsyncAgentSessio
                 "function" - the dictionary description of the function
         """
         # pylint: disable=no-member
-        return await self.call_grpc_method(
+        response_dict: Dict[str, Any] = await self.call_grpc_method(
             "function",
             self._function_from_stub,
             request_dict,
             service_messages.FunctionRequest())
+
+        Timeout.check_if_not_none(self.umbrella_timeout)
+        return response_dict
 
     async def connectivity(self, request_dict: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -109,11 +112,14 @@ class AsyncGrpcServiceAgentSession(AsyncAbstractServiceSession, AsyncAgentSessio
                                     wants the client ot know about.
         """
         # pylint: disable=no-member
-        return await self.call_grpc_method(
+        response_dict: Dict[str, Any] = await self.call_grpc_method(
             "connectivity",
             self._connectivity_from_stub,
             request_dict,
             service_messages.ConnectivityRequest())
+
+        Timeout.check_if_not_none(self.umbrella_timeout)
+        return response_dict
 
     async def streaming_chat(self, request_dict: Dict[str, Any]) -> AsyncGenerator[Dict[str, Any], None]:
         """

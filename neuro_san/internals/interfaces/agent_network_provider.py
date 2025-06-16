@@ -10,17 +10,15 @@
 #
 # END COPYRIGHT
 
-from neuro_san.internals.graph.interfaces.agent_tool_factory import AgentToolFactory
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 
 
-class AgentToolFactoryProvider:
+class AgentNetworkProvider:
     """
-    Abstract interface for providing an agent tool factory at run-time.
+    Abstract interface for providing an AgentNetwork instance at run-time.
     """
-    def get_agent_tool_factory(self) -> AgentToolFactory:
+    def get_agent_network(self) -> AgentNetwork:
         """
-        Get tool factory provider for an agent.
-        :return: tool factory for this agent,
-                 or None if no such tool factory is available.
+        :return: AgentNetwork instance or None if no such AgentNetwork is available.
         """
         raise NotImplementedError

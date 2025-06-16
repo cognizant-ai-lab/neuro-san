@@ -15,7 +15,8 @@ from typing import Dict
 from typing import List
 
 import json
-import os
+
+from pathlib import Path
 
 from neuro_san.internals.messages.chat_message_type import ChatMessageType
 from neuro_san.internals.messages.origination import Origination
@@ -31,9 +32,22 @@ class ThinkingFileMessageProcessor(MessageProcessor):
     def __init__(self, thinking_file: str, thinking_dir: str):
         """
         Constructor
+
+        :param thinking_file: A string representing the path to a single file where
+                              all agent output is combined.  We no longer recommmend this
+                              now that we have ...
+        :param thinking_dir: A string representing the path to a single directory where
+                             each agent in the network gets its own history file according
+                             to its agent network origin name.  This is much easier to
+                             debug as you do not have to tease apart output from interacting agents.
         """
-        self.thinking_file: str = thinking_file
-        self.thinking_dir: str = thinking_dir
+        self.thinking_file: Path = None
+        if thinking_file is not None:
+            self.thinking_file = Path(thinking_file)
+
+        self.thinking_dir: Path = None
+        if thinking_dir is not None:
+            self.thinking_dir = Path(thinking_dir)
 
     def process_message(self, chat_message_dict: Dict[str, Any], message_type: ChatMessageType):
         """
@@ -75,17 +89,17 @@ class ThinkingFileMessageProcessor(MessageProcessor):
             # There is no real text, but there is a structure. JSON-ify it.
             text = json.dumps(structure, indent=4, sort_keys=True)
 
-        filename: str = self.thinking_file
+        filename: Path = self.thinking_file
         if self.thinking_dir:
             if origin_str is None or len(origin_str) == 0:
                 return
-            filename = os.path.join(self.thinking_dir, origin_str)
+            filename = Path(self.thinking_dir, origin_str)
 
         how_to_open_file: str = "a"
-        if not os.path.exists(filename):
+        if not filename.exists():
             how_to_open_file = "w"
 
-        with open(filename, how_to_open_file, encoding="utf-8") as thinking:
+        with filename.open(mode=how_to_open_file, encoding="utf-8") as thinking:
             use_origin: str = ""
 
             # Maybe add some context to where message is coming from if not using thinking_dir

@@ -22,8 +22,8 @@ from leaf_server_common.server.server_loop_callbacks import ServerLoopCallbacks
 from neuro_san.api.grpc import agent_pb2
 from neuro_san.api.grpc import concierge_pb2_grpc
 
-from neuro_san.internals.graph.registry.agent_tool_registry import AgentToolRegistry
-from neuro_san.internals.tool_factories.service_tool_factory_provider import ServiceToolFactoryProvider
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.network_providers.service_agent_network_storage import ServiceAgentNetworkStorage
 from neuro_san.session.agent_service_stub import AgentServiceStub
 from neuro_san.service.agent_server_logging import AgentServerLogging
 from neuro_san.service.agent_servicer_to_server import AgentServicerToServer
@@ -53,7 +53,7 @@ class AgentServer:
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self, port: int,
                  server_loop_callbacks: ServerLoopCallbacks,
-                 tool_registries: Dict[str, AgentToolRegistry],
+                 agent_networks: Dict[str, AgentNetwork],
                  server_name: str = DEFAULT_SERVER_NAME,
                  server_name_for_logs: str = DEFAULT_SERVER_NAME_FOR_LOGS,
                  max_concurrent_requests: int = DEFAULT_MAX_CONCURRENT_REQUESTS,
@@ -65,7 +65,7 @@ class AgentServer:
         :param port: The integer port number for the service to listen on
         :param server_loop_callbacks: The ServerLoopCallbacks instance for
                 break out methods in main serving loop.
-        :param tool_registries: A dictionary of agent name to AgentToolRegistry to use for the session.
+        :param agent_networks: A dictionary of agent name to AgentNetwork to use for the session.
         :param server_name: The name of the service
         :param server_name_for_logs: The name of the service for log files
         :param max_concurrent_requests: The maximum number of requests to handle at a time.
@@ -83,7 +83,7 @@ class AgentServer:
 
         self.logger = logging.getLogger(__name__)
 
-        self.tool_registries: Dict[str, AgentToolRegistry] = tool_registries
+        self.agent_networks: Dict[str, AgentNetwork] = agent_networks
         self.server_name: str = server_name
         self.server_name_for_logs: str = server_name_for_logs
         self.max_concurrent_requests: int = max_concurrent_requests
@@ -95,7 +95,7 @@ class AgentServer:
         self.service_router: DynamicAgentRouter = DynamicAgentRouter()
         # Event to notify that we have started serving
         self.notify_started: threading.Event = threading.Event()
-        self.logger.info("tool_registries found: %s", str(list(self.tool_registries.keys())))
+        self.logger.info("agent_networks found: %s", str(list(self.agent_networks.keys())))
 
     def get_services(self) -> List[GrpcAgentService]:
         """
@@ -109,25 +109,25 @@ class AgentServer:
         """
         return self.notify_started
 
-    def setup_tool_factory_provider(self):
+    def setup_agent_network_storage(self):
         """
-        Initialize service tool factory provider with agents registries
+        Initialize ServiceAgentNetworkStorage with AgentNetworks
         we have parsed in server manifest file.
         """
-        tool_factory_provider: ServiceToolFactoryProvider =\
-            ServiceToolFactoryProvider.get_instance()
-        tool_factory_provider.setup_tool_registries(self.tool_registries)
+        network_storage: ServiceAgentNetworkStorage =\
+            ServiceAgentNetworkStorage.get_instance()
+        network_storage.setup_agent_networks(self.agent_networks)
 
     def agent_added(self, agent_name: str):
         """
         Agent is being added to the service.
         :param agent_name: name of an agent
         """
-        tool_factory_provider: ServiceToolFactoryProvider =\
-            ServiceToolFactoryProvider.get_instance()
+        network_storage: ServiceAgentNetworkStorage =\
+            ServiceAgentNetworkStorage.get_instance()
         service = GrpcAgentService(self.server_lifetime, self.security_cfg,
                                    agent_name,
-                                   tool_factory_provider.get_agent_tool_factory_provider(agent_name),
+                                   network_storage.get_agent_network_provider(agent_name),
                                    self.server_logging)
         self.services.append(service)
         servicer_to_server = AgentServicerToServer(service)
@@ -174,13 +174,13 @@ class AgentServer:
         # New-style service
         self.security_cfg = None     # ... yet
 
-        tool_factory_provider: ServiceToolFactoryProvider = \
-            ServiceToolFactoryProvider.get_instance()
+        network_storage: ServiceAgentNetworkStorage = \
+            ServiceAgentNetworkStorage.get_instance()
         # Add listener to handle adding per-agent gRPC services
         # to our dynamic router:
-        tool_factory_provider.add_listener(self)
+        network_storage.add_listener(self)
 
-        self.setup_tool_factory_provider()
+        self.setup_agent_network_storage()
 
         # Add DynamicAgentRouter instance as a generic RPC handler for our server:
         server.add_generic_rpc_handlers((self.service_router,))

@@ -12,6 +12,8 @@
 from typing import Any
 from typing import Dict
 
+from leaf_common.time.timeout import Timeout
+
 from neuro_san.client.direct_agent_session_factory import DirectAgentSessionFactory
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.session.grpc_service_agent_session import GrpcServiceAgentSession
@@ -29,7 +31,8 @@ class AgentSessionFactory:
                        hostname: str = None,
                        port: int = None,
                        use_direct: bool = False,
-                       metadata: Dict[str, str] = None) -> AgentSession:
+                       metadata: Dict[str, str] = None,
+                       connect_timeout_in_seconds: float = None) -> AgentSession:
         """
         :param session_type: The type of session to create
         :param agent_name: The name of the agent to use for the session.
@@ -40,8 +43,16 @@ class AgentSessionFactory:
         :param metadata: A grpc metadata of key/value pairs to be inserted into
                          the header. Default is None. Preferred format is a
                          dictionary of string keys to string values.
+        :param connect_timeout_in_seconds: A timeout in seconds after which attempts
+                        to reach a server will stop. By default this is None,
+                        meaning sessions will try forever.
         """
         session: AgentSession = None
+
+        umbrella_timeout: Timeout = None
+        if connect_timeout_in_seconds is not None:
+            umbrella_timeout = Timeout()
+            umbrella_timeout.set_limit_in_seconds(connect_timeout_in_seconds)
 
         # Incorrectly flagged as destination of Trust Boundary Violation 1
         #   Reason: This is the place where the session_type enforced-string argument is
@@ -49,10 +60,10 @@ class AgentSessionFactory:
         if session_type == "direct":
             factory = DirectAgentSessionFactory()
             session = factory.create_session(agent_name, use_direct=use_direct,
-                                             metadata=metadata)
+                                             metadata=metadata, umbrella_timeout=umbrella_timeout)
         elif session_type in ("service", "grpc"):
             session = GrpcServiceAgentSession(host=hostname, port=port, agent_name=agent_name,
-                                              metadata=metadata)
+                                              metadata=metadata, umbrella_timeout=umbrella_timeout)
         elif session_type in ("http", "https"):
 
             # If there is no port really specified, use the other default port
@@ -65,7 +76,8 @@ class AgentSessionFactory:
                 # For now, to get the https scheme
                 security_cfg = {}
             session = HttpServiceAgentSession(host=hostname, port=use_port, agent_name=agent_name,
-                                              security_cfg=security_cfg, metadata=metadata)
+                                              security_cfg=security_cfg, metadata=metadata,
+                                              timeout_in_seconds=connect_timeout_in_seconds)
         else:
             # Incorrectly flagged as destination of Trust Boundary Violation 2
             #   Reason: This is the place where the session_type enforced-string argument is

@@ -22,9 +22,11 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
     - [success_ratio](#success_ratio)
     - [use_direct](#use_direct)
     - [metadata](#metadata)
+    - [timeout_in_seconds](#timeout_in_seconds)
     - [interactions](#interactions)
       - [text](#text)
       - [sly_data](#sly_data)
+      - [timeout_in_seconds](#timeout_in_seconds-1)
       - [chat_filter](#chat_filter)
       - [continue_conversation](#continue_conversation)
       - [response](#response)
@@ -98,6 +100,10 @@ By default this value is "1/1" indicating that the test case will only run once,
 and that single test sample *must* pass in order to "pass".  This is in keeping with
 standard expectations w/ non-statistically-oriented tests.
 
+Keep in mind that when using the success_ratio to define test success for an agent test,
+sometimes the failures can actually be due to the test criteria ([gist/not_gist](#gistnot_gist) prompting) and
+not the agent itself.
+
 ### use_direct
 
 Boolean value that describes how an external agent is called.
@@ -115,6 +121,12 @@ however some servers may require this to contain bearer tokens for access,
 or extra user-identifying information for logging.
 
 By default the value for this dictionary is None.
+
+### timeout_in_seconds
+
+An optional float that describes how long the test as a whole should take before
+the test driver should give up on it.  This includes multiple attempts when a
+[success_ratio](#success_ratio) is defined.
 
 ### interactions
 
@@ -145,6 +157,10 @@ is at least documented in the agent's hocon file.
 Superfluous information is passed, taking up space, but ignored.
 
 The default value is None.
+
+#### timeout_in_seconds
+
+An optional float that describes how long the single interaction should take before giving up.
 
 #### chat_filter
 

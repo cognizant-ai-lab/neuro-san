@@ -26,15 +26,15 @@ from pyparsing.exceptions import ParseSyntaxException
 from leaf_common.persistence.easy.easy_hocon_persistence import EasyHoconPersistence
 from leaf_common.persistence.interface.restorer import Restorer
 
-from neuro_san.internals.graph.persistence.agent_tool_registry_restorer import AgentToolRegistryRestorer
-from neuro_san.internals.graph.registry.agent_tool_registry import AgentToolRegistry
+from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.utils.file_of_class import FileOfClass
 
 
 class RegistryManifestRestorer(Restorer):
     """
-    This interface provides a way to retrieve an object
-    from some storage like a file, a database or S3.
+    Implementation of the Restorer interface that reads the manifest file
+    for agent networks/registries.
     """
 
     def __init__(self, manifest_files: Union[str, List[str]] = None):
@@ -66,13 +66,13 @@ class RegistryManifestRestorer(Restorer):
         self.logger = logging.getLogger(self.__class__.__name__)
 
     # pylint: disable=too-many-locals
-    def restore_from_files(self, file_references: Sequence[str]) -> Dict[str, AgentToolRegistry]:
+    def restore_from_files(self, file_references: Sequence[str]) -> Dict[str, AgentNetwork]:
         """
         :param file_references: The sequence of file references to use when restoring.
-        :return: a built map of agents tools registries
+        :return: a built map of agent networks
         """
 
-        tool_registries: Dict[str, AgentToolRegistry] = {}
+        agent_networks: Dict[str, AgentNetwork] = {}
 
         # Loop through all the manifest files in the list to make a composite
         for manifest_file in file_references:
@@ -127,34 +127,34 @@ your current working directory (pwd).
 
                 file_of_class = FileOfClass(manifest_file)
                 manifest_dir: str = file_of_class.get_basis()
-                registry_restorer = AgentToolRegistryRestorer(manifest_dir)
+                registry_restorer = AgentNetworkRestorer(manifest_dir)
                 try:
-                    tool_registry: AgentToolRegistry = registry_restorer.restore(file_reference=use_key)
+                    agent_network: AgentNetwork = registry_restorer.restore(file_reference=use_key)
                 except FileNotFoundError as exc:
                     self.logger.error("Failed to restore registry item %s - %s", use_key, str(exc))
-                    tool_registry = None
-                if tool_registry is not None:
-                    tool_name: str = Path(use_key).stem
-                    tool_registries[tool_name] = tool_registry
+                    agent_network = None
+                if agent_network is not None:
+                    network_name: str = Path(use_key).stem
+                    agent_networks[network_name] = agent_network
                 else:
                     self.logger.error("manifest registry %s not found in %s", use_key, manifest_file)
 
-        return tool_registries
+        return agent_networks
 
     # pylint: disable=too-many-locals
-    def restore(self, file_reference: str = None) -> Dict[str, AgentToolRegistry]:
+    def restore(self, file_reference: str = None) -> Dict[str, AgentNetwork]:
         """
         :param file_reference: The file reference to use when restoring.
                 Default is None, implying the file reference is up to the
                 implementation.
-        :return: a built map of agents tools registries
+        :return: a built map of agent networks
         """
         if file_reference is not None:
             return self.restore_from_files([file_reference])
 
-        tool_registries: Dict[str, AgentToolRegistry] =\
+        agent_networks: Dict[str, AgentNetwork] =\
             self.restore_from_files(self.manifest_files)
-        return tool_registries
+        return agent_networks
 
     def get_manifest_files(self) -> List[str]:
         """

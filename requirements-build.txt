@@ -4,6 +4,7 @@
 # Tests
 pytest==8.3.3
 pytest-timer==1.0.0
+pytest-timeout>=2.3.1
 timeout-decorator==0.5.0
 coverage==7.6.1
 pytest-cov==5.0.0

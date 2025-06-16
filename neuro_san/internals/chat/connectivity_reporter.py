@@ -24,8 +24,7 @@ from neuro_san.internals.run_context.utils.external_agent_parsing import Externa
 
 class ConnectivityReporter:
     """
-    A class that knows how to report the connectivity of an entire
-    AgentToolRegistry.
+    A class that knows how to report the connectivity of an entire AgentNetwork.
 
     Connectivity information comes as a series of AgentFramework
     messages, each of whose origin field reflects the name of the

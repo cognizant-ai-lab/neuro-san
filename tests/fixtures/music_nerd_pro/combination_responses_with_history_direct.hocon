@@ -31,7 +31,7 @@
                     # Keywords says we are going to look for exact matches for each
                     # element in a list of strings.  All elements need to show up
                     # in order to pass.
-                    "keywords": ["Beatles", "\"running_cost"\": 3.0]
+                    "keywords": ["Beatles", "3.0"]
                 }     
             }
         },
@@ -42,7 +42,7 @@
             "text": "Where were they from?",
             "response": {
                 "text": {
-                    "keywords": ["Liverpool", "\"running_cost"\": 6.0]
+                    "keywords": ["Liverpool", "6.0"]
                 }
             }
         }

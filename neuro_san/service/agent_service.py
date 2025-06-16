@@ -23,8 +23,8 @@ from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_server_common.server.atomic_counter import AtomicCounter
 from leaf_server_common.server.request_logger import RequestLogger
 
-from neuro_san.internals.interfaces.agent_tool_factory_provider import AgentToolFactoryProvider
-from neuro_san.internals.graph.registry.agent_tool_registry import AgentToolRegistry
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.run_context.factory.master_toolbox_factory import MasterToolboxFactory
@@ -53,7 +53,7 @@ class AgentService:
                  request_logger: RequestLogger,
                  security_cfg: Dict[str, Any],
                  agent_name: str,
-                 tool_registry_provider: AgentToolFactoryProvider,
+                 agent_network_provider: AgentNetworkProvider,
                  server_logging: AgentServerLogging):
         """
         Set the gRPC interface up for health checking so that the service
@@ -67,7 +67,7 @@ class AgentService:
                         connection.  Supplying this implies use of a secure
                         GRPC Channel.  If None, uses insecure channel.
         :param agent_name: The agent name for the service
-        :param tool_registry_provider: The AgentToolFactoryProvider to use for the session.
+        :param agent_network_provider: The AgentNetworkProvider to use for the session.
         :param server_logging: An AgentServerLogging instance initialized so that
                         spawned asyncrhonous threads can also properly initialize
                         their logging.
@@ -76,15 +76,15 @@ class AgentService:
         self.security_cfg = security_cfg
         self.server_logging: AgentServerLogging = server_logging
 
-        self.tool_registry_provider: AgentToolFactoryProvider = tool_registry_provider
+        self.agent_network_provider: AgentNetworkProvider = agent_network_provider
         self.agent_name: str = agent_name
         self.request_counter = AtomicCounter()
 
         self.llm_factory: ContextTypeLlmFactory = MasterLlmFactory.create_llm_factory()
         self.toolbox_factory: ContextTypeToolboxFactory = MasterToolboxFactory.create_toolbox_factory()
         # Load once and include "agent_llm_info_file" from agent network hocon to llm factory..
-        tool_registry: AgentToolRegistry = self.tool_registry_provider.get_agent_tool_factory()
-        agent_llm_info_file = tool_registry.get_agent_llm_info_file()
+        agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
+        agent_llm_info_file = agent_network.get_agent_llm_info_file()
         self.llm_factory.load(agent_llm_info_file)
         self.toolbox_factory.load()
 
@@ -123,8 +123,8 @@ class AgentService:
         metadata.update(request_metadata)
 
         # Delegate to Direct*Session
-        tool_registry: AgentToolRegistry = self.tool_registry_provider.get_agent_tool_factory()
-        session = DirectAgentSession(tool_registry=tool_registry,
+        agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
+        session = DirectAgentSession(agent_network=agent_network,
                                      invocation_context=None,
                                      metadata=metadata,
                                      security_cfg=self.security_cfg)
@@ -165,8 +165,8 @@ class AgentService:
         metadata.update(request_metadata)
 
         # Delegate to Direct*Session
-        tool_registry: AgentToolRegistry = self.tool_registry_provider.get_agent_tool_factory()
-        session = DirectAgentSession(tool_registry=tool_registry,
+        agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
+        session = DirectAgentSession(agent_network=agent_network,
                                      invocation_context=None,
                                      metadata=metadata,
                                      security_cfg=self.security_cfg)
@@ -221,8 +221,8 @@ class AgentService:
         _ = executor.submit(None, self.server_logging.setup_logging, metadata, metadata.get("request_id"))
 
         # Delegate to Direct*Session
-        tool_registry: AgentToolRegistry = self.tool_registry_provider.get_agent_tool_factory()
-        session = DirectAgentSession(tool_registry=tool_registry,
+        agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
+        session = DirectAgentSession(agent_network=agent_network,
                                      invocation_context=invocation_context,
                                      metadata=metadata,
                                      security_cfg=self.security_cfg)

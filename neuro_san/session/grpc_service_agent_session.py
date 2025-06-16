@@ -92,11 +92,14 @@ class GrpcServiceAgentSession(AbstractServiceSession, AgentSession):
                 "function" - the dictionary description of the function
         """
         # pylint: disable=no-member
-        return self.call_grpc_method(
+        response: Dict[str, Any] = self.call_grpc_method(
             "function",
             self._function_from_stub,
             request_dict,
             service_messages.FunctionRequest())
+
+        Timeout.check_if_not_none(self.umbrella_timeout)
+        return response
 
     def connectivity(self, request_dict: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -110,11 +113,14 @@ class GrpcServiceAgentSession(AbstractServiceSession, AgentSession):
                                     wants the client ot know about.
         """
         # pylint: disable=no-member
-        return self.call_grpc_method(
+        response: Dict[str, Any] = self.call_grpc_method(
             "connectivity",
             self._connectivity_from_stub,
             request_dict,
             service_messages.ConnectivityRequest())
+
+        Timeout.check_if_not_none(self.umbrella_timeout)
+        return response
 
     def streaming_chat(self, request_dict: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:
         """

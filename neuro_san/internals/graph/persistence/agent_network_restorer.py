@@ -31,12 +31,12 @@ from neuro_san.internals.graph.filters.dictionary_common_defs_config_filter \
 from neuro_san.internals.graph.filters.name_correction_config_filter import NameCorrectionConfigFilter
 from neuro_san.internals.graph.filters.string_common_defs_config_filter \
     import StringCommonDefsConfigFilter
-from neuro_san.internals.graph.registry.agent_tool_registry import AgentToolRegistry
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 
 
-class AgentToolRegistryRestorer(Restorer):
+class AgentNetworkRestorer(Restorer):
     """
-    Implementation of the Restorer interface to read in an AgentToolRegistry
+    Implementation of the Restorer interface to read in an AgentNetwork
     instance given a JSON file name.
     """
 
@@ -82,22 +82,22 @@ syntactically incorrect in that file.
 """
             raise ParseException(message) from exception
 
-        # Now create the AgentToolRegistry
+        # Now create the AgentNetwork
         # Inside here is incorrectly flagged as destination of Path Traversal 7
         #   Reason: The lines above ensure that the path of registry_dir is within
         #           this source base. CheckMarx does not recognize
         #           the calls to Pathlib/__file__ as a valid means to resolve
         #           these kinds of issues.
         name = Path(use_file).stem
-        tool_registry: AgentToolRegistry = self.restore_from_config(name, config)
-        return tool_registry
+        agent_network: AgentNetwork = self.restore_from_config(name, config)
+        return agent_network
 
-    def restore_from_config(self, agent_name: str, config: Dict[str, Any]) -> AgentToolRegistry:
+    def restore_from_config(self, agent_name: str, config: Dict[str, Any]) -> AgentNetwork:
         """
         :param agent_name: name of an agent;
         :param config: agent configuration dictionary,
             built or parsed from external sources;
-        :return: AgentToolRegistry instance for an agent.
+        :return: AgentNetwork instance for an agent.
         """
         # Perform a filter chain on the config that was read in
         filter_chain = ConfigFilterChain()
@@ -107,7 +107,7 @@ syntactically incorrect in that file.
         filter_chain.register(NameCorrectionConfigFilter())
         config = filter_chain.filter_config(config)
 
-        # Now create the AgentToolRegistry
-        tool_registry = AgentToolRegistry(config, agent_name)
+        # Now create the AgentNetwork
+        agent_network = AgentNetwork(config, agent_name)
 
-        return tool_registry
+        return agent_network

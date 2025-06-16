@@ -39,6 +39,7 @@ class TestSmokeTestHocons(TestCase):
 
         # List more hocon files as they become available here.
     ]))
+    @pytest.mark.timeout(10)  # 10 seconds for this test
     @pytest.mark.smoke
     def test_hocon(self, test_name: str, test_hocon: str):
         """

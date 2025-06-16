@@ -17,6 +17,15 @@
     # Describes what agent to test against.
     "agent": "esp_decision_assistant",
 
+    # Timeout for the entire test.
+    # It's also possible to have a timeout_in_seconds on a per-interaction basis.
+    "timeout_in_seconds": 45,
+
+    # success_ratio is useful for passing to the assessor to find out why
+    # a test is intermitently failing. Sometimes it's the agent prompt, but
+    # sometimes it's the test itself.
+    # "success_ratio": "20/20",
+
     # Interactions are a series of dictionaries with request elements paired with
     # descriptions of response checks.
     "interactions": [
@@ -43,7 +52,9 @@ If you have all the information you need, there is no need to confirm the contex
                     # Gist says we are going to ask an LLM about how the response
                     # matches up to our description of acceptance criteria.
                     # Each component of the list needs to pass muster in order to pass.
-                    "gist": ["The text sample should generally reflect a negative sentiment about crossing the road."]
+                    "gist": ["""
+The text sample should generally reflect a negative sentiment about crossing the road in the immediate future.
+                             """"]
                 }
             }
         }
