@@ -69,6 +69,14 @@ class AgentServiceServicer(object):
         have its chat_context field filled in with a structure. You can
         copy this whole-cloth to the chat_context of your next StreamingChat
         request to continue the conversation.
+        3) It is important to note that since this is a streaming API, for HTTP clients:
+        a) Any single response will always be on the same line. That is,
+        responses will not be broken up across multiple lines in an
+        HTTP response.
+        b) We cannot yet guarantee that there will be only one streamed response
+        per HTTP response line. That is, it is possible for more than one
+        response *might* come on a single line if they come quickly enough,
+        though this is not the empirically observed norm.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
