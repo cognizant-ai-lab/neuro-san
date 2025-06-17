@@ -544,33 +544,9 @@
 
     # Google Gemini
 
-    "gemini-2.5-flash-preview-05-20": {
-        "class": "gemini",
-        "model_info_url": "",
-        "modalities": {
-            "input": [ "text", "images", "video", "audio" ],
-            "output": [ "text" ],
-        },
-        "capabilities": [ "tools" ],
-        "context_window_size": 1048576,
-        "max_output_tokens": 65536,
-        "knowledge_cutoff": "01/2025",
-    },
-    "gemini-2.5-pro-preview-06-05": {
-        "class": "gemini",
-        "model_info_url": "",
-        "modalities": {
-            "input": [ "text", "images", "video", "audio" ],
-            "output": [ "text" ],
-        },
-        "capabilities": [ "tools" ],
-        "context_window_size": 1048576,
-        "max_output_tokens": 65536,
-        "knowledge_cutoff": "01/2025",
-    },
     "gemini-2.0-flash": {
         "class": "gemini",
-        "model_info_url": "",
+        "model_info_url": "https://ai.google.dev/gemini-api/docs/models#gemini-2.0-flash",
         "modalities": {
             "input": [ "text", "images", "video", "audio" ],
             "output": [ "text", "images" ],
@@ -582,7 +558,7 @@
     },
     "gemini-2.0-flash-lite": {
         "class": "gemini",
-        "model_info_url": "",
+        "model_info_url": "https://ai.google.dev/gemini-api/docs/models#gemini-2.0-flash-lite",
         "modalities": {
             "input": [ "text", "images", "video", "audio" ],
             "output": [ "text" ],
@@ -594,7 +570,7 @@
     },
     "gemini-1.5-flash": {
         "class": "gemini",
-        "model_info_url": "",
+        "model_info_url": "https://ai.google.dev/gemini-api/docs/models#gemini-1.5-flash",
         "modalities": {
             "input": [ "text", "images", "video", "audio" ],
             "output": [ "text" ],
@@ -606,7 +582,7 @@
     },
     "gemini-1.5-flash-8b": {
         "class": "gemini",
-        "model_info_url": "",
+        "model_info_url": "https://ai.google.dev/gemini-api/docs/models#gemini-1.5-flash-8b",
         "modalities": {
             "input": [ "text", "images", "video", "audio" ],
             "output": [ "text" ],
@@ -618,7 +594,7 @@
     },
     "gemini-1.5-pro": {
         "class": "gemini",
-        "model_info_url": "",
+        "model_info_url": "https://ai.google.dev/gemini-api/docs/models#gemini-1.5-pro",
         "modalities": {
             "input": [ "text", "images", "video", "audio" ],
             "output": [ "text" ],
@@ -627,18 +603,6 @@
         "context_window_size": 2097152,
         "max_output_tokens": 8192,
         "knowledge_cutoff": "09/2024",
-    },
-    "gemini-2.0-flash-live-001": {
-        "class": "gemini",
-        "model_info_url": "",
-        "modalities": {
-            "input": [ "text", "video", "audio" ],
-            "output": [ "text", "audio" ],
-        },
-        "capabilities": [ "tools" ],
-        "context_window_size": 1048576,
-        "max_output_tokens": 8192,
-        "knowledge_cutoff": "08/2024",
     },
     
 
@@ -759,8 +723,16 @@
         },
         "gemini": {
             "args": {
-                "temperature": null,
+                # Note that we can only supply arguments that are "Just Data" in nature.
+                # See https://python.langchain.com/api_reference/google_genai/chat_models/langchain_google_genai.chat_models.ChatGoogleGenerativeAI.html
+                "google_api_key": null,
                 "max_tokens": null,
+                "max_retries": 6,
+                "n": 1,         # Number of chat completions to generate for each prompt.
+                "temperature": 0.7,         # [0.0, 2.0],
+                "timeout": null,
+                "top_k": null, 
+                "top_p": null,
             }
         }
     }

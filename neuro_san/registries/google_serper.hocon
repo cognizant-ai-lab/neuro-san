@@ -15,7 +15,7 @@
 
 {
     "llm_config": {
-        "model_name": "gpt-4o",
+        "model_name": "gemini-2.0-flash",
     },
     "tools": [
         # These tool definitions do not have to be in any particular order

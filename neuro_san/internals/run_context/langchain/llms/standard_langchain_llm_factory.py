@@ -15,6 +15,7 @@ from typing import Dict
 from typing import List
 
 from langchain_anthropic.chat_models import ChatAnthropic
+from langchain_google_genai.chat_models import ChatGoogleGenerativeAI
 from langchain_ollama import ChatOllama
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
 from langchain_core.callbacks.base import BaseCallbackHandler
@@ -204,6 +205,19 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                                                                  "NVIDIA_API_KEY"),
                             nvidia_base_url=self.get_value_or_env(config, "nvidia_base_url",
                                                                   "NVIDIA_BASE_URL"),
+                            callbacks=callbacks)
+        elif chat_class == "gemini":
+            llm = ChatGoogleGenerativeAI(
+                            model=model_name,
+                            google_api_key=self.get_value_or_env(config, "google_api_key",
+                                                                 "GOOGLE_API_KEY"),
+                            max_retries=config.get("max_retries"),
+                            max_tokens=config.get("max_tokens"),    # This is always for output
+                            n=config.get("n"),
+                            temperature=config.get("temperature"),
+                            timeout=config.get("timeout"),
+                            top_k=config.get("top_k"),
+                            top_p=config.get("top_p"),
                             callbacks=callbacks)
         elif chat_class is None:
             raise ValueError(f"Class name {chat_class} for model_name {model_name} is unspecified.")
