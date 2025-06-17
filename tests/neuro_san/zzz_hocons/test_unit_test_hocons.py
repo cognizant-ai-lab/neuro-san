@@ -34,6 +34,7 @@ class TestUnitTestHocons(TestCase):
         "math_guy/basic_sly_data.hocon",
         "math_guy/forwarded_sly_data.hocon",
         "music_nerd/beatles_with_history.hocon",
+        "music_nerd_pro/combination_responses_with_history_http.hocon",
 
         # List more hocon files as they become available here.
     ]))
