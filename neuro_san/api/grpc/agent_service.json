@@ -127,7 +127,7 @@
           "AgentService"
         ],
         "summary": "StreamingChat",
-        "description": "Most important semantics of the streaming:\n  1) The \"answer\" to a query of any agent network is in the *last* streamed\n     AGENT_FRAMEWORK message.\n  2) To RESTfully continue your conversation with the agent network:\n     The very last AGENT_FRAMEWORK message before the stream closes will\n     have its chat_context field filled in with a structure. You can\n     copy this whole-cloth to the chat_context of your next StreamingChat\n     request to continue the conversation.",
+        "description": "Most important semantics of the streaming:\n  1) The \"answer\" to a query of any agent network is in the *last* streamed\n     AGENT_FRAMEWORK message.\n  2) To RESTfully continue your conversation with the agent network:\n     The very last AGENT_FRAMEWORK message before the stream closes will\n     have its chat_context field filled in with a structure. You can\n     copy this whole-cloth to the chat_context of your next StreamingChat\n     request to continue the conversation.\n  3) It is important to note that since this is a streaming API, for HTTP clients:\n      a) Any single response will always be on the same line. That is,\n         responses will not be broken up across multiple lines in an\n         HTTP response.\n      b) We cannot yet guarantee that there will be only one streamed response\n         per HTTP response line. That is, it is possible for more than one\n         response *might* come on a single line if they come quickly enough,\n         though this is not the empirically observed norm.",
         "operationId": "AgentService_StreamingChat",
         "parameters": [
           {
