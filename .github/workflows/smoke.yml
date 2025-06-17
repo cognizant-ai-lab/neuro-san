@@ -33,10 +33,6 @@ jobs:
         run: |
           apt-get update && apt-get install -y netcat-openbsd procps curl net-tools
 
-          nohup python -m neuro_san.service.agent_main_loop > agent.log 2>&1 &
-          echo $! > agent.pid
-          sleep 2
-
           neuro_san/scripts/server_start.sh
 
           pytest -s --verbose -m "smoke" --timer-top-n 100 -n auto
