@@ -9,6 +9,8 @@
 #
 # END COPYRIGHT
 
+import pytest
+
 from unittest import TestCase
 
 from parameterized import parameterized
@@ -38,6 +40,7 @@ class TestUnitTestHocons(TestCase):
 
         # List more hocon files as they become available here.
     ]))
+    @pytest.mark.timeout(10)  # 10 seconds for this test
     def test_hocon(self, test_name: str, test_hocon: str):
         """
         Test method for a single parameterized test case specified by a hocon file.
