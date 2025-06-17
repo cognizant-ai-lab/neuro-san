@@ -39,6 +39,8 @@ class TestSmokeTestHocons(TestCase):
     ]))
     @pytest.mark.timeout(30)  # 30 seconds for this test
     @pytest.mark.smoke
+    @pytest.mark.non_default_llm_provider
+    @pytest.mark.anthropic
     def test_hocon(self, test_name: str, test_hocon: str):
         """
         Test method for a single parameterized test case specified by a hocon file.
