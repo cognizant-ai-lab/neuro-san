@@ -25,7 +25,7 @@ jobs:
         run: pip freeze
 
 
-      - name: Run pytest (excluding integration tests)
+      - name: Run pytest integration tests
         run: pytest -s --verbose -m "integration" --timer-top-n 100
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
