@@ -41,7 +41,7 @@ jobs:
       - name: Run pytest with start of server (excluding integration tests & Smoke tests)
         shell: bash
         run: |
-          neuro_san/scripts/server_start.sh
+          build_scripts/server_start.sh
           pytest --verbose -m "not integration and not smoke" --timer-top-n 10 -n auto
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
