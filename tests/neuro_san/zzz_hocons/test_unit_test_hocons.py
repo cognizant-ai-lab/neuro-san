@@ -11,6 +11,8 @@
 
 from unittest import TestCase
 
+import pytest
+
 from parameterized import parameterized
 
 from neuro_san.test.unittest.dynamic_hocon_unit_tests import DynamicHoconUnitTests
@@ -34,9 +36,11 @@ class TestUnitTestHocons(TestCase):
         "math_guy/basic_sly_data.hocon",
         "math_guy/forwarded_sly_data.hocon",
         "music_nerd/beatles_with_history.hocon",
+        "music_nerd_pro/combination_responses_with_history_http.hocon",
 
         # List more hocon files as they become available here.
     ]))
+    @pytest.mark.timeout(30)  # 30 seconds for this test
     def test_hocon(self, test_name: str, test_hocon: str):
         """
         Test method for a single parameterized test case specified by a hocon file.

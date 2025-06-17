@@ -37,6 +37,7 @@ class TestIntegrationTestHocons(TestCase):
 
         # List more hocon files as they become available here.
     ]))
+    @pytest.mark.timeout(30)  # 30 seconds for this test
     @pytest.mark.integration
     def test_hocon(self, test_name: str, test_hocon: str):
         """
