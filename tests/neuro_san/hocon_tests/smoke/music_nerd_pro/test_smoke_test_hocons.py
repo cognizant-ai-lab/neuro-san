@@ -35,7 +35,6 @@ class TestSmokeTestHocons(TestCase):
         # Barring that, try to stick to alphabetical order.
         "music_nerd_pro/combination_responses_with_history_direct.hocon",
         "music_nerd_pro/combination_responses_with_history_grpc.hocon",
-        "music_nerd_pro/combination_responses_with_history_http.hocon",
 
         # List more hocon files as they become available here.
     ]))

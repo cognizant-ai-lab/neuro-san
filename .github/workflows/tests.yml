@@ -38,7 +38,7 @@ jobs:
       - name: Run flake8
         run: flake8
 
-      - name: Run pytest (excluding integration tests & Smoke tests)
+      - name: Run pytest with start of server (excluding integration tests & Smoke tests)
         shell: bash
         run: |
           apt-get update && apt-get install -y netcat-openbsd procps curl net-tools
