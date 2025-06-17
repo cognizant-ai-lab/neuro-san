@@ -1,7 +1,7 @@
 #!/bin/bash
   
 
-if ! ps -p $(cat agent.pid) > /dev/null; then
+if ! ps -p "$(cat agent.pid)" > /dev/null; then
   echo "❌ Server process failed to start"
   echo "----- agent.log -----"
   cat agent.log
