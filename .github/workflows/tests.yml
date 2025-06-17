@@ -90,7 +90,7 @@ jobs:
           echo "✅ Server is healthy and ready"
 
           netstat -tuln | grep -E '8080|30011'
-          pytest --verbose -m "not integration and not smoke" --timer-top-n 10
+          pytest --verbose -m "not integration and not smoke" --timer-top-n 10 -n auto
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           AGENT_TOOL_PATH: "./neuro_san/coded_tools"
