@@ -194,5 +194,15 @@ ENV AGENT_REQUEST_LIMIT=-1
 # if value is not specified or <= 0, no dynamic updates will be executed.
 ENV AGENT_MANIFEST_UPDATE_PERIOD_SECONDS=0
 
+# By default, the HTTP service reports the neuro-san library pip version in its health-check response.
+# It is possible to add other libraries to those results by listing them within this env var
+# below and separating them with spaces, like this: "langchain openai".
+# Sometimes it is useful to report a library version explicitly when they are not actually
+# pip-installed (for instance when building a container from your own source, it's the
+# tag of your repo that you care about.)  In that case you can add an entry with its version
+# after a colon, like this: "my_repo:1.2.3".
+# You can combine these too, like this: "langchain openai my_repo:1.2.3"
+ENV AGENT_VERSION_LIBS=""
+
 # ENTRYPOINT ls ${APP_SOURCE}
 ENTRYPOINT "${APP_ENTRYPOINT}"
