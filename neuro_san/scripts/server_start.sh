@@ -1,5 +1,9 @@
 #!/bin/bash
   
+# Script to be run to start server before any of test case client that require services like HTTP or GRPC
+
+apt-get update && apt-get install -y netcat-openbsd procps curl net-tools
+
 nohup python -m neuro_san.service.agent_main_loop > agent.log 2>&1 &
   echo $! > agent.pid
   sleep 2
