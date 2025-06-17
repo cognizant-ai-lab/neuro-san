@@ -19,7 +19,7 @@ from threading import Lock, Thread
 from tornado.web import Application
 from tornado.ioloop import IOLoop
 
-from neuro_san.interfaces.event_loop_logger import EventLoopLogger
+from neuro_san.http_sidecar.logging.event_loop_logger import EventLoopLogger
 
 
 class HttpServerApp(Application):
