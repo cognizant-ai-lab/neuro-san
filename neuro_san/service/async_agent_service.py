@@ -21,7 +21,7 @@ from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 
 from leaf_server_common.server.atomic_counter import AtomicCounter
 
-from neuro_san.interfaces.event_loop_logger import EventLoopLogger
+from neuro_san.http_sidecar.logging.event_loop_logger import EventLoopLogger
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
