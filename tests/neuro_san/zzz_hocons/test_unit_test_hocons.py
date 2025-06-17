@@ -36,12 +36,35 @@ class TestUnitTestHocons(TestCase):
         "math_guy/basic_sly_data.hocon",
         "math_guy/forwarded_sly_data.hocon",
         "music_nerd/beatles_with_history.hocon",
+
+        # List more hocon files as they become available here.
+    ]))
+    @pytest.mark.timeout(30)  # 30 seconds for each test
+    def test_hocon(self, test_name: str, test_hocon: str):
+        """
+        Test method for a single parameterized test case specified by a hocon file.
+        Arguments to this method are given by the iteration that happens as a result
+        of the magic of the @parameterized.expand annotation above.
+
+        :param test_name: The name of a single test.
+        :param test_hocon: The hocon file of a single data-driven test case.
+        """
+        # Call the guts of the dynamic test driver.
+        # This will expand the test_hocon file name from the expanded list to
+        # include the file basis implied by the __file__ and path_to_basis above.
+        self.DYNAMIC.one_test_hocon(self, test_name, test_hocon)
+
+    @parameterized.expand(DynamicHoconUnitTests.from_hocon_list([
+        # These can be in any order.
+        # Ideally more basic functionality will come first.
+        # Barring that, try to stick to alphabetical order.
         "music_nerd_pro/combination_responses_with_history_http.hocon",
 
         # List more hocon files as they become available here.
     ]))
-    @pytest.mark.timeout(30)  # 30 seconds for this test
-    def test_hocon(self, test_name: str, test_hocon: str):
+    @pytest.mark.needs_server
+    @pytest.mark.timeout(30)  # 30 seconds for each test
+    def test_hocon_with_server(self, test_name: str, test_hocon: str):
         """
         Test method for a single parameterized test case specified by a hocon file.
         Arguments to this method are given by the iteration that happens as a result
