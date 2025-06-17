@@ -1,10 +1,5 @@
 #!/bin/bash
   
-  
-
-nohup python -m neuro_san.service.agent_main_loop > agent.log 2>&1 &
-echo $! > agent.pid
-sleep 2
 
 if ! ps -p $(cat agent.pid) > /dev/null; then
   echo "❌ Server process failed to start"
