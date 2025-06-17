@@ -43,30 +43,18 @@ class HealthCheckHandler(RequestHandler):
             self.set_header("Access-Control-Allow-Methods", "GET, OPTIONS")
             self.set_header("Access-Control-Allow-Headers", "Content-Type, Transfer-Encoding")
 
+        self.versions: Dict[str, Any] = self.determine_versions()
+
     async def get(self):
         """
         Implementation of GET request handler for API health check.
         """
 
-        # Allow for a list of libraries to report versioning.
-        # For now we simply report one, but we might want to allow extension here
-        # at some point.
-        versioned_libs: List[str] = ["neuro-san"]
-        versions: Dict[str, Any] = {}
-
-        for lib in versioned_libs:
-            version: str = None
-            try:
-                version = str(library_version(lib))
-            except PackageNotFoundError:
-                version = "unknown"
-            versions[lib] = version
-
         try:
             result_dict: Dict[str, Any] = {
                 "service": "neuro-san agents",
                 "status": "healthy",
-                "versions": versions
+                "versions": self.versions
             }
             self.set_header("Content-Type", "application/json")
             self.write(result_dict)
@@ -97,3 +85,53 @@ class HealthCheckHandler(RequestHandler):
         # No body needed. Just return a 204 No Content
         self.set_status(http.HTTPStatus.NO_CONTENT)
         self.finish()
+
+    def determine_versions(self) -> Dict[str, Any]:
+        """
+        Allow for a list of libraries to report versioning.
+        We have a static list that we always support, but also look at the
+        AGENT_VERSION_LIBS env var (if set) to potentially report more.
+        :return: A dictionary whose keys are libraries and whose values are the
+                 versions installed for those libraries.
+        """
+        versions: Dict[str, Any] = {}
+
+        # Start with a static list of libs we always support
+        versioned_libs: List[str] = ["neuro-san"]
+
+        # Try to incorporate libs from the env var.
+        env_var_libs: str = os.environ.get("AGENT_VERSION_LIBS")
+        if env_var_libs is not None:
+            for env_var_lib in env_var_libs.split(" "):
+                if env_var_lib is None:
+                    # Skip anything with nothing in it
+                    continue
+
+                env_var_lib = env_var_lib.strip()
+                if len(env_var_lib) == 0:
+                    # Skip anything with nothing in it
+                    continue
+
+                if ":" not in env_var_lib:
+                    # Look for the library in the versioning loop below
+                    versioned_libs.append(env_var_lib)
+                    continue
+
+                # We have a version coming in from the env var
+                version: str = env_var_lib.split(":")[1]
+                env_var_lib = env_var_lib.split(":")[0]
+                versions[env_var_lib] = version
+
+        for lib in versioned_libs:
+            # Did we already find a version from the env var?
+            version: str = versions.get(lib)
+            if version is None:
+                try:
+                    # Try getting the pip-installed version from the system
+                    version = str(library_version(lib))
+                except PackageNotFoundError:
+                    # Don't know what to do, so report a shrug.
+                    version = "unknown"
+                versions[lib] = version
+
+        return versions
