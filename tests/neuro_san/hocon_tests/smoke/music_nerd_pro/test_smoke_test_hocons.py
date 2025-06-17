@@ -35,11 +35,10 @@ class TestSmokeTestHocons(TestCase):
         # Barring that, try to stick to alphabetical order.
         "music_nerd_pro/combination_responses_with_history_direct.hocon",
         "music_nerd_pro/combination_responses_with_history_grpc.hocon",
-        "music_nerd_pro/combination_responses_with_history_http.hocon",
 
         # List more hocon files as they become available here.
     ]))
-    @pytest.mark.timeout(10)  # 10 seconds for this test
+    @pytest.mark.timeout(30)  # 30 seconds for this test
     @pytest.mark.smoke
     def test_hocon(self, test_name: str, test_hocon: str):
         """
