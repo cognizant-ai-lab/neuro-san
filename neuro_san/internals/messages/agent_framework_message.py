@@ -47,3 +47,4 @@ class AgentFrameworkMessage(BaseMessage):
         super().__init__(content=content, **kwargs)
         self.chat_context: Dict[str, Any] = chat_context
         self.sly_data: Dict[str, Any] = sly_data
+        self.structure: Dict[str, Any] = structure

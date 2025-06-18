@@ -13,7 +13,6 @@
 from typing import Any
 from typing import Dict
 from typing import List
-from typing import Tuple
 from typing import Union
 
 import json
@@ -28,29 +27,6 @@ from neuro_san.internals.messages.agent_message import AgentMessage
 from neuro_san.internals.messages.agent_framework_message import AgentFrameworkMessage
 from neuro_san.internals.messages.agent_tool_result_message import AgentToolResultMessage
 from neuro_san.internals.messages.chat_message_type import ChatMessageType
-
-
-def pretty_the_messages(messages: List[Any]) -> str:
-    """
-    Pretty printing helper
-    :param messages: A list of OpenAI messages
-    :return: A single string representing the output of the messages.
-    """
-    prettied = ""
-    messages_list = list(messages)  # Convert to list to allow reversing
-
-    # Iterate in reverse to find the last user message
-    rm = []
-    for m in reversed(messages_list):
-        rm.append(m)
-        if get_role(m) == "user":
-            break
-
-    for m in reversed(rm):
-        if any(get_content(m)):
-            prettied += f"{get_role(m)}: {get_content(m)}\n"
-
-    return prettied
 
 
 def get_last_message_with_content(messages: List[Any]) -> object:
@@ -245,24 +221,6 @@ def convert_to_base_message(chat_message: Dict[str, Any], langchain_only: bool =
     # Any other message type we do not want to send to any agent as chat history.
 
     return base_message
-
-
-def convert_to_message_tuple(base_message: BaseMessage) -> Tuple[str, Any]:
-    """
-    :param base_message: The base message to convert to a tuple used for a
-                    prompt template.
-    :return: A tuple corresponding to the input
-    """
-    if base_message is None:
-        return None
-
-    use_type: str = base_message.type
-    if use_type == "agent_tool_result":
-        # Langchain innards do not know about our own message types
-        use_type = "ai"
-
-    message_tuple: Tuple[str, Any] = (use_type, base_message.content)
-    return message_tuple
 
 
 def is_relevant_to_chat_history(base_message: BaseMessage) -> bool:
