@@ -198,6 +198,13 @@ class ExternalActivation(AbstractCallableActivation):
             "user_message": {
                 "type": ChatMessageType.HUMAN,
                 "text": agent_input
+            },
+            "chat_filter": {
+                # Use maximal so that a stready stream of messages can
+                # contribute to keeping the connection alive.
+                # This can be optimized away, but some long-running agents
+                # still have problems.  Need a better way.
+                "chat_filter_type": "MAXIMAL"
             }
         }
 
