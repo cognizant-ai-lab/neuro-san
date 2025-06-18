@@ -18,6 +18,7 @@ from typing import List
 API_KEY_EXCEPTIONS: Dict[str, List] = {
     "OPENAI_API_KEY": ["OPENAI_API_KEY", "Incorrect API key provided"],
     "ANTHROPIC_API_KEY": ["ANTHROPIC_API_KEY", "anthropic_api_key", "invalid x-api-key", "credit balance"],
+    "GOOGLE_API_KEY": ["Application Default Credentials", "default credentials", "Gemini: 400 API key not valid"],
 }
 
 
