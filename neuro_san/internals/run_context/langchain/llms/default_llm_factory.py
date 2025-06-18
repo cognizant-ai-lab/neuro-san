@@ -17,6 +17,7 @@ from typing import Type
 
 import os
 
+from google.auth.exceptions import DefaultCredentialsError
 from openai import OpenAIError
 from pydantic_core import ValidationError
 
@@ -258,7 +259,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
             # Catch some common wrong or missing API key errors in a single place
             # with some verbose error messaging.
-            except (OpenAIError, ValidationError) as exception:
+            except (DefaultCredentialsError, OpenAIError, ValidationError) as exception:
                 # Will re-raise but with the right exception text it will
                 # also provide some more helpful failure text.
                 message: str = ApiKeyErrorCheck.check_for_api_key_exception(exception)
