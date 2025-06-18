@@ -89,6 +89,9 @@ class AbstractHttpServiceAgentSession(AgentSessionConstants):
     def get_headers(self, extra_headers: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Get headers for any outgoing request
+
+        :param extra_headers: Optional extra dictionary of headers to include
+        :return: The dictionary of headers to use.
         """
         headers: Dict[str, Any] = {}
         if self.metadata is not None:
