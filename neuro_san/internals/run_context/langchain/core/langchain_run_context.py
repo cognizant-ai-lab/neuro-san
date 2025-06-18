@@ -42,6 +42,7 @@ from langchain_core.messages.system import SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
+from langchain_google_genai.chat_models import ChatGoogleGenerativeAIError
 
 from neuro_san.internals.errors.error_detector import ErrorDetector
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
@@ -494,7 +495,7 @@ class LangChainRunContext(RunContext):
         while return_dict is None and retries > 0:
             try:
                 return_dict: Dict[str, Any] = await agent_executor.ainvoke(inputs, invoke_config)
-            except (APIError, BadRequestError, AuthenticationError) as api_error:
+            except (APIError, BadRequestError, AuthenticationError, ChatGoogleGenerativeAIError) as api_error:
                 message: str = ApiKeyErrorCheck.check_for_api_key_exception(api_error)
                 if message is not None:
                     raise ValueError(message) from api_error
