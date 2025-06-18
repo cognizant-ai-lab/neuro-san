@@ -81,7 +81,9 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         """
         path: str = self.get_request_path("streaming_chat")
         try:
-            with requests.post(path, json=request_dict, headers=self.get_headers(),
+            extra_headers: Dict[str, Any] = {"Connection": "keep-alive"}
+            with requests.post(path, json=request_dict,
+                               headers=self.get_headers(extra_headers=extra_headers),
                                stream=True,
                                timeout=self.timeout_in_seconds) as response:
                 response.raise_for_status()

@@ -86,13 +86,15 @@ class AbstractHttpServiceAgentSession(AgentSessionConstants):
 
         return f"{scheme}://{self.use_host}:{self.use_port}/api/v1/{self.agent_name}/{method}"
 
-    def get_headers(self) -> Dict[str, Any]:
+    def get_headers(self, extra_headers: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Get headers for any outgoing request
         """
-        headers: Dict[str, Any] = self.metadata
-        if headers is None:
-            headers = {}
+        headers: Dict[str, Any] = {}
+        if self.metadata is not None:
+            headers.update(self.metadata)
+        if extra_headers is not None:
+            headers.update(extra_headers)
         return headers
 
     def help_message(self, path: str) -> str:

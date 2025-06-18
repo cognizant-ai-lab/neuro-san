@@ -89,7 +89,8 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
         """
         path: str = self.get_request_path("streaming_chat")
         try:
-            async with ClientSession(headers=self.get_headers(),
+            extra_headers: Dict[str, Any] = {"Connection": "keep-alive"}
+            async with ClientSession(headers=self.get_headers(extra_headers=extra_headers),
                                      conn_timeout=self.timeout_in_seconds,
                                      read_timeout=self.timeout_in_seconds,
                                      ) as session:
