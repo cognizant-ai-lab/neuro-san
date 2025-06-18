@@ -19,6 +19,7 @@ import json
 import traceback
 import uuid
 
+from copy import copy
 from logging import Logger
 from logging import getLogger
 
@@ -455,11 +456,12 @@ class LangChainRunContext(RunContext):
 
         run: Run = LangChainRun(self.run_id_base, self.chat_history)
 
-        # Chat history is updated in write_message
-        await self.journal.write_message(self.recent_human_message)
+        # Chat history is updated in write_message() below, so to save on
+        # some tokens, make a shallow copy of it here as we send it to the LLM
+        previous_chat_history: List[BaseMessage] = copy(self.chat_history)
 
         inputs = {
-            "chat_history": self.chat_history,
+            "chat_history": previous_chat_history,
             "input": self.recent_human_message
         }
         invoke_config = {
@@ -467,6 +469,9 @@ class LangChainRunContext(RunContext):
                 "session_id": run.get_id()
             }
         }
+
+        # Chat history is updated in write_message
+        await self.journal.write_message(self.recent_human_message)
 
         # Attempt to count tokens/costs while invoking the agent.
         token_counter = LangChainTokenCounter(self.llm, self.invocation_context, self.journal)
