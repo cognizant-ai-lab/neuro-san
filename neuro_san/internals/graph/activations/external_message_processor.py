@@ -18,8 +18,8 @@ from copy import copy
 from langchain_core.messages.base import BaseMessage
 
 from neuro_san.internals.journals.originating_journal import OriginatingJournal
-from neuro_san.internals.messages.chat_message_type import ChatMessageType
 from neuro_san.internals.messages.base_message_dictionary_converter import BaseMessageDictionaryConverter
+from neuro_san.internals.messages.chat_message_type import ChatMessageType
 from neuro_san.message_processing.message_processor import MessageProcessor
 
 
