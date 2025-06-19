@@ -64,7 +64,21 @@
         "max_output_tokens": 32768,
         "knowledge_cutoff": "09/30/2023",
     },
-
+    "gpt-4.1": {
+        "use_model_name": "gpt-4.1-2025-04-14",
+    },
+    "gpt-4.1-2025-04-14": {
+        "class": "openai",
+        "model_info_url": "https://platform.openai.com/docs/models/gpt-4.1",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1047576,
+        "max_output_tokens": 32768,
+        "knowledge_cutoff": "05/31/2024",
+    },
     "gpt-4o": {
         "use_model_name": "gpt-4o-2024-08-06",
     },
