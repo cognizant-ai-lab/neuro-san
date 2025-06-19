@@ -259,19 +259,21 @@
         "class": "azure-openai",
         "use_model_name": "gpt-4-0613",
         "model_info_url": "https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models?tabs=global-standard%2Cstandard-chat-completions#gpt-4-and-gpt-4-turbo-models"
-
     },
     "azure-gpt-4o-mini": {
         "class": "azure-openai",
         "use_model_name": "gpt-4o-mini-2024-07-18"
         "model_info_url": "https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models?tabs=global-standard%2Cstandard-chat-completions#gpt-4-and-gpt-4-turbo-models"
-
     },
     "azure-gpt-4o": {
         "class": "azure-openai",
         "use_model_name": "gpt-4o-2024-08-06",
         "model_info_url": "https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models?tabs=global-standard%2Cstandard-chat-completions#gpt-4-and-gpt-4-turbo-models"
-
+    },
+    "azure-gpt-4.1": {
+        "class": "azure-openai",
+        "use_model_name": "gpt-4.1-2025-04-14",
+        "model_info_url": "https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models?tabs=global-standard%2Cstandard-chat-completions#gpt-4-and-gpt-4-turbo-models"
     },
     "azure-o1": {
         "class": "azure-openai",
