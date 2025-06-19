@@ -112,7 +112,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                             model_name=model_name,
                             temperature=config.get("temperature"),
                             openai_api_key=self.get_value_or_env(config, "openai_api_key",
-                                                                 "OPENAI_API_KEY"),
+                                                                 "AZURE_OPENAI_API_KEY"),
                             openai_api_base=self.get_value_or_env(config, "openai_api_base",
                                                                   "OPENAI_API_BASE"),
                             openai_organization=self.get_value_or_env(config, "openai_organization",
