@@ -24,10 +24,7 @@ pyOpenSSL>=24.0.0
 boto3>=1.34.51
 botocore>=1.34.51
 idna>=3.6
-# urllib3==1.26.15 is the minimum blessed version from our Python 3.10 upgrades,
-# but latest 2.0 versions have an incompatibility with the requests library
-# See UN-1190.
-urllib3>=1.26.18,<2.0
+urllib3>=1.26.18
 aiohttp>=3.10.5,<4.0
 
 # These are transient dependencies needed by leaf-common
