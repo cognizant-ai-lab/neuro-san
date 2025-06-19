@@ -21,7 +21,7 @@ from langchain_core.messages.base import BaseMessage
 from neuro_san.internals.messages.chat_message_type import ChatMessageType
 
 
-class RoleUtils:
+class IntraAgentMessageUtils:
     """
     Utility class to parse messages with role information.
     This ancient style of message is used between agents and tool calls
@@ -37,20 +37,20 @@ class RoleUtils:
         response_list = []
         for index, one_message in enumerate(the_messages):
             # Duplicate the role message before every tool response role message
-            role: str = RoleUtils._get_role(one_message)
+            role: str = IntraAgentMessageUtils._get_role(one_message)
             if role == "tool" and index > 0:
                 previous_message = the_messages[index - 1]
-                previous_role: str = RoleUtils._get_role(previous_message)
+                previous_role: str = IntraAgentMessageUtils._get_role(previous_message)
                 if previous_role == "assistant":
                     new_message = {
                         "role": previous_role,
-                        "content": RoleUtils.get_content(previous_message)
+                        "content": IntraAgentMessageUtils.get_content(previous_message)
                     }
                     response_list.append(new_message)
 
             message_dict = {
                 "role": role,
-                "content": RoleUtils.get_content(one_message)
+                "content": IntraAgentMessageUtils.get_content(one_message)
             }
             response_list.append(message_dict)
 

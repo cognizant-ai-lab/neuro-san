@@ -24,7 +24,7 @@ from leaf_common.config.dictionary_overlay import DictionaryOverlay
 
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.journal import Journal
-from neuro_san.internals.messages.role_utils import RoleUtils
+from neuro_san.internals.messages.intra_agent_message_utils import IntraAgentMessageUtils
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.run import Run
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
@@ -308,7 +308,7 @@ class OpenAIRunContext(RunContext):
         messages_list = list(messages)
 
         for m in reversed(messages_list):
-            if any(RoleUtils.get_content(m)):
+            if any(IntraAgentMessageUtils.get_content(m)):
                 return m
 
         return None
