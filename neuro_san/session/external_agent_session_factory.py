@@ -87,8 +87,16 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
             session = AsyncDirectAgentSession(agent_network, invocation_context, metadata=metadata)
 
         if session is None:
+            # When creating a session for external agents, specifically use None for the
+            # streaming timeout.  This implies an infinite amount of time to let the
+            # external agent get its job done.  The rationale here is that:
+            #   a)  We do not know how long any given external agent is really going to take
+            #       to do its job.
+            #   b)  We figure that the regular connection aspects to the server in question
+            #       have already been sorted out in the obligitory call to function() that
+            #       precedes any streaming_chat() call.
             session = AsyncHttpServiceAgentSession(host, port, agent_name=agent_name,
-                                                   metadata=metadata)
+                                                   metadata=metadata, streaming_timeout_in_seconds=None)
 
         # Quiet any logging from leaf-common grpc stuff.
         quiet_please = logging.getLogger("leaf_common.session.grpc_client_retry")
