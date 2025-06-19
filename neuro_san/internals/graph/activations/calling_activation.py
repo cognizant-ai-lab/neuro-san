@@ -225,7 +225,8 @@ context with which it will proces input, essentially telling it what to do.
 
         output: str = await callable_component.build()
         # Even though we get a string, run it through the json stuff again to more reliably
-        # escape when the output itself has JSON in it.
+        # escape when the output itself has JSON in it.  When messing with this, it's worth
+        # testing both esp_decision_assistant and intranet_agents_with_tools.
         output = json.dumps(output)
 
         # Prepare the tool output
