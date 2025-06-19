@@ -54,7 +54,7 @@ from neuro_san.internals.journals.originating_journal import OriginatingJournal
 from neuro_san.internals.messages.origination import Origination
 from neuro_san.internals.messages.agent_message import AgentMessage
 from neuro_san.internals.messages.agent_tool_result_message import AgentToolResultMessage
-from neuro_san.internals.messages.message_utils import convert_to_base_message
+from neuro_san.internals.messages.base_message_dictionary_converter import BaseMessageDictionaryConverter
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.run import Run
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
@@ -723,9 +723,10 @@ class LangChainRunContext(RunContext):
                 # Empty list - Nothing to convert. Use default empty list.
                 break
 
+            converter = BaseMessageDictionaryConverter()
             self.chat_history = []
             for chat_message in one_messages:
-                base_message: BaseMessage = convert_to_base_message(chat_message)
+                base_message: BaseMessage = converter.from_dict(chat_message)
                 if base_message is not None:
                     self.chat_history.append(base_message)
 

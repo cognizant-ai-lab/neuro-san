@@ -29,7 +29,7 @@ from neuro_san.internals.interfaces.front_man import FrontMan
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.messages.agent_framework_message import AgentFrameworkMessage
-from neuro_san.internals.messages.message_utils import convert_to_chat_message
+from neuro_san.internals.messages.base_message_dictionary_converter import BaseMessageDictionaryConverter
 from neuro_san.internals.run_context.factory.run_context_factory import RunContextFactory
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.message_processing.message_processor import MessageProcessor
@@ -135,9 +135,10 @@ class DataDrivenChatSession:
             logger = logging.getLogger(self.__class__.__name__)
             logger.error(traceback.format_exc())
 
+        converter = BaseMessageDictionaryConverter(origin=self.front_man.get_origin())
         chat_messages: List[Dict[str, Any]] = []
         for raw_message in raw_messages:
-            chat_message: Dict[str, Any] = convert_to_chat_message(raw_message, self.front_man.get_origin())
+            chat_message: Dict[str, Any] = converter.to_dict(raw_message)
             chat_messages.append(chat_message)
 
         return iter(chat_messages)

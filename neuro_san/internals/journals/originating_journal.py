@@ -18,7 +18,7 @@ from langchain_core.messages.base import BaseMessage
 
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.messages.agent_tool_result_message import AgentToolResultMessage
-from neuro_san.internals.messages.message_utils import is_relevant_to_chat_history
+from neuro_san.internals.messages.base_message_dictionary_converter import BaseMessageDictionaryConverter
 
 
 class OriginatingJournal(Journal):
@@ -66,7 +66,7 @@ class OriginatingJournal(Journal):
         if origin is not None:
             use_origin = origin
 
-        if self.chat_history is not None and is_relevant_to_chat_history(message):
+        if self.chat_history is not None and BaseMessageDictionaryConverter.is_relevant_to_chat_history(message):
             # Different LLM providers handle message types differently when constructing responses:
             #
             # - Anthropic models (via ChatAnthropic) explicitly check the `message.type` string
