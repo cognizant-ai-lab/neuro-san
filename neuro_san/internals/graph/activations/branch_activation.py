@@ -22,7 +22,7 @@ from neuro_san.internals.graph.activations.argument_assigner import ArgumentAssi
 from neuro_san.internals.graph.activations.calling_activation import CallingActivation
 from neuro_san.internals.graph.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.graph.interfaces.callable_activation import CallableActivation
-from neuro_san.internals.messages.message_utils import generate_response
+from neuro_san.internals.messages.role_utils import RoleUtils
 from neuro_san.internals.run_context.interfaces.run import Run
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 
@@ -131,7 +131,7 @@ class BranchActivation(CallingActivation, CallableActivation):
 
         messages = await self.integrate_callable_response(run, messages)
 
-        response = generate_response(messages)
+        response = RoleUtils.generate_response(messages)
         return response
 
     def get_origin(self) -> List[Dict[str, Any]]:
