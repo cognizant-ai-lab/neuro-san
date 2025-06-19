@@ -58,17 +58,18 @@ def generate_response(the_messages: List[Any]) -> str:
         # Duplicate the role message before every tool response role message
         role: str = get_role(one_message)
         if role == "tool" and index > 0:
-            previous_role: str = get_role(the_messages[index - 1])
+            previous_message = the_messages[index - 1]
+            previous_role: str = get_role(previous_message)
             if previous_role == "assistant":
                 new_message = {
                     "role": previous_role,
-                    "content": get_content(the_messages[index - 1])
+                    "content": get_content(previous_message)
                 }
                 response_list.append(new_message)
 
         message_dict = {
             "role": role,
-            "content": get_content(m)
+            "content": get_content(one_message)
         }
         response_list.append(message_dict)
 
