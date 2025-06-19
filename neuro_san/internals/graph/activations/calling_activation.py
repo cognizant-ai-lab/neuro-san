@@ -225,7 +225,7 @@ context with which it will proces input, essentially telling it what to do.
 
         output: str = await callable_component.build()
         # Convert to string again in case output has JSON in it. (?)
-        output = json.dumps(output)
+        #output = json.dumps(output)
 
         # Prepare the tool output
         tool_output: Dict[str, Any] = {

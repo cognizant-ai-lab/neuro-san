@@ -603,7 +603,7 @@ class LangChainRunContext(RunContext):
         # Put back some escaping of double quotes in messages that are not json.
         # We have to do this because gpt-4o seems to not like json braces in its
         # input, but now we have to deal with the consequences in the output.
-        # See BranchTook._get_args_value_as_string().
+        # See ArgumentAssigner.get_args_value_as_string().
         tool_chat_list_string = tool_chat_list_string.replace('\\"', '\\\\\"')
 
         # Decode the JSON in that string now.
