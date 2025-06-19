@@ -37,10 +37,10 @@ class RoleUtils:
         response_list = []
         for index, one_message in enumerate(the_messages):
             # Duplicate the role message before every tool response role message
-            role: str = RoleUtils.get_role(one_message)
+            role: str = RoleUtils._get_role(one_message)
             if role == "tool" and index > 0:
                 previous_message = the_messages[index - 1]
-                previous_role: str = RoleUtils.get_role(previous_message)
+                previous_role: str = RoleUtils._get_role(previous_message)
                 if previous_role == "assistant":
                     new_message = {
                         "role": previous_role,
@@ -57,7 +57,7 @@ class RoleUtils:
         return json.dumps(response_list)
 
     @staticmethod
-    def get_role(message: Any) -> str:
+    def _get_role(message: Any) -> str:
         """
         :param message: Either an OpenAI message or a langchain BaseMessage
         :return: A string describing the role of the message
