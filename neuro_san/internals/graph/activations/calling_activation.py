@@ -13,8 +13,6 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-import json
-
 from leaf_common.config.dictionary_overlay import DictionaryOverlay
 
 from neuro_san.internals.graph.activations.abstract_callable_activation import AbstractCallableActivation
@@ -224,8 +222,6 @@ context with which it will proces input, essentially telling it what to do.
                                                  self.sly_data, tool_arguments)
 
         output: str = await callable_component.build()
-        # Convert to string again in case output has JSON in it. (?)
-        #output = json.dumps(output)
 
         # Prepare the tool output
         tool_output: Dict[str, Any] = {
