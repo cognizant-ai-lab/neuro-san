@@ -83,7 +83,7 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         try:
             with requests.post(path, json=request_dict, headers=self.get_headers(),
                                stream=True,
-                               timeout=self.timeout_in_seconds) as response:
+                               timeout=self.streaming_timeout_in_seconds) as response:
                 response.raise_for_status()
 
                 for line in response.iter_lines(decode_unicode=True):
