@@ -29,25 +29,6 @@ from neuro_san.internals.messages.agent_tool_result_message import AgentToolResu
 from neuro_san.internals.messages.chat_message_type import ChatMessageType
 
 
-def get_last_message_with_content(messages: List[Any]) -> object:
-    """
-    Sometimes just indexing a message list by [-1]
-    gives you a message that does not actually have any content.
-    This method gives you the last messages that does have content.
-
-    :param messages: input list of OpenAI messages
-    :return: An applicalble OpenAI message (or None if no message is applicable)
-    """
-
-    messages_list = list(messages)
-
-    for m in reversed(messages_list):
-        if any(get_content(m)):
-            return m
-
-    return None
-
-
 def generate_response(the_messages: List[Any]) -> str:
     """
     :param the_messages: A list of OpenAI messages
