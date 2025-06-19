@@ -28,7 +28,6 @@ class AgentFrameworkMessage(BaseMessage):
     def __init__(self, content: Union[str, List[Union[str, Dict]]] = None,
                  chat_context: Dict[str, Any] = None,
                  sly_data: Dict[str, Any] = None,
-                 structure: Dict[str, Any] = None,
                  **kwargs: Any) -> None:
         """
         Pass in content as positional arg.
@@ -38,13 +37,8 @@ class AgentFrameworkMessage(BaseMessage):
                     of the chat conversation such that when it is passed on to a
                     different server, the conversation can continue uninterrupted.
         :param sly_data: A dictionary of private data, separate from the chat stream.
-        :param structure: A dictionary previously extracted from the content
-                        that had been optionally detected by the system as JSON text.
-                        The idea is to have the server do the hard parsing so the
-                        multitude of clients do not have to rediscover how to best do it.
         :param kwargs: Additional fields to pass to the superclass
         """
         super().__init__(content=content, **kwargs)
         self.chat_context: Dict[str, Any] = chat_context
         self.sly_data: Dict[str, Any] = sly_data
-        self.structure: Dict[str, Any] = structure
