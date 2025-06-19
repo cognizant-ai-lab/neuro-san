@@ -22,10 +22,11 @@ class CallableActivation:
     when invoking LLM function calls.
     """
 
-    async def build(self) -> List[Any]:
+    async def build(self) -> str:
         """
         Main entry point to the class.
-        :return: A List of messages produced during this process.
+
+        :return: A string representing a List of messages produced during this process.
         """
         raise NotImplementedError
 

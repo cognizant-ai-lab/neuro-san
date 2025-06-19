@@ -17,7 +17,7 @@ from langchain_core.messages.base import BaseMessage
 
 from neuro_san.internals.interfaces.async_hopper import AsyncHopper
 from neuro_san.internals.journals.journal import Journal
-from neuro_san.internals.messages.message_utils import convert_to_chat_message
+from neuro_san.internals.messages.base_message_dictionary_converter import BaseMessageDictionaryConverter
 
 
 class MessageJournal(Journal):
@@ -46,7 +46,8 @@ class MessageJournal(Journal):
                     "instantiation_index"   An integer indicating which incarnation
                                             of the tool is being dealt with.
         """
-        message_dict: Dict[str, Any] = convert_to_chat_message(message, origin)
+        converter = BaseMessageDictionaryConverter(origin=origin)
+        message_dict: Dict[str, Any] = converter.to_dict(message)
 
         # Queue Producer from this:
         #   https://stackoverflow.com/questions/74130544/asyncio-yielding-results-from-multiple-futures-as-they-arrive

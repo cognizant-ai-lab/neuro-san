@@ -24,7 +24,7 @@ from leaf_common.config.dictionary_overlay import DictionaryOverlay
 
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.journal import Journal
-from neuro_san.internals.messages.message_utils import get_last_message_with_content
+from neuro_san.internals.messages.intra_agent_message_utils import IntraAgentMessageUtils
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.run import Run
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
@@ -187,8 +187,8 @@ class OpenAIRunContext(RunContext):
 
             latest_messages = await self.openai_client.list_messages(thread_id=self.thread_id)
 
-            last_message_with_content = get_last_message_with_content(messages)
-            latest_message_with_content = get_last_message_with_content(latest_messages)
+            last_message_with_content = self.get_last_message_with_content(messages)
+            latest_message_with_content = self.get_last_message_with_content(latest_messages)
             if (latest_messages and messages and latest_message_with_content and
                 (len(latest_messages) > len(messages) or
                     (len(latest_message_with_content.content[0].text.value) >
@@ -293,3 +293,22 @@ class OpenAIRunContext(RunContext):
         :return: The Journal associated with the instance
         """
         return self.journal
+
+    @staticmethod
+    def get_last_message_with_content(messages: List[Any]) -> object:
+        """
+        Sometimes just indexing a message list by [-1]
+        gives you a message that does not actually have any content.
+        This method gives you the last messages that does have content.
+
+        :param messages: input list of OpenAI messages
+        :return: An applicalble OpenAI message (or None if no message is applicable)
+        """
+
+        messages_list = list(messages)
+
+        for m in reversed(messages_list):
+            if any(IntraAgentMessageUtils.get_content(m)):
+                return m
+
+        return None

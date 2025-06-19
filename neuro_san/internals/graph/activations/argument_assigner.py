@@ -95,7 +95,11 @@ class ArgumentAssigner:
             args_value_str = ", ".join(str_values)
 
         elif value_type == "string":
-            args_value_str = f'"{args_value}"'
+            # For a long time, this had been:
+            #       args_value_str = f'"{args_value}"'
+            # ... but as of 6/19/25 we are experimenting with new quoting
+            #   in an attempt to reduce crazy JSON escaping
+            args_value_str = f"'{args_value}'"
             # Per https://github.com/langchain-ai/langchain/issues/1660
             # We need to use double curly braces in order to pass values
             # that actually have curly braces in them so they will not
