@@ -54,17 +54,20 @@ def generate_response(the_messages: List[Any]) -> str:
     :return: a JSON-ification of the list of messages.
     """
     response_list = []
-    for i, m in enumerate(the_messages):
+    for index, one_message in enumerate(the_messages):
         # Duplicate the role message before every tool response role message
-        if get_role(m) == "tool" and i > 0 and get_role(the_messages[i - 1]) == "assistant":
-            new_message = {
-                "role": get_role(the_messages[i - 1]),
-                "content": get_content(the_messages[i - 1])
-            }
-            response_list.append(new_message)
+        role: str = get_role(one_message)
+        if role == "tool" and index > 0:
+            previous_role: str = get_role(the_messages[index - 1])
+            if previous_role == "assistant":
+                new_message = {
+                    "role": previous_role,
+                    "content": get_content(the_messages[index - 1])
+                }
+                response_list.append(new_message)
 
         message_dict = {
-            "role": get_role(m),
+            "role": role,
             "content": get_content(m)
         }
         response_list.append(message_dict)
