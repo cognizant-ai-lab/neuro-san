@@ -24,6 +24,8 @@ from neuro_san.internals.messages.chat_message_type import ChatMessageType
 class RoleUtils:
     """
     Utility class to parse messages with role information.
+    This ancient style of message is used between agents and tool calls
+    and is agnostic to OpenAI vs langchain.
     """
 
     @staticmethod
