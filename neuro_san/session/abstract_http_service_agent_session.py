@@ -57,7 +57,6 @@ class AbstractHttpServiceAgentSession(AgentSessionConstants):
         :param agent_name: The name of the agent to talk to
         """
         _ = umbrella_timeout
-        _ = streaming_timeout_in_seconds
 
         self.security_cfg: Dict[str, Any] = security_cfg
         self.use_host: str = "localhost"
@@ -72,7 +71,8 @@ class AbstractHttpServiceAgentSession(AgentSessionConstants):
             raise ValueError("agent_name is None")
         self.agent_name: str = agent_name
 
-        self.timeout_in_seconds = timeout_in_seconds
+        self.timeout_in_seconds: int = timeout_in_seconds
+        self.streaming_timeout_in_seconds: int = streaming_timeout_in_seconds
         self.metadata: Dict[str, str] = metadata
 
     def get_request_path(self, method: str) -> str:

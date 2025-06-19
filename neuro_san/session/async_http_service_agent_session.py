@@ -17,6 +17,7 @@ from typing import Generator
 import json
 
 from aiohttp import ClientSession
+from aiohttp import ClientTimeout
 
 from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.session.abstract_http_service_agent_session import AbstractHttpServiceAgentSession
@@ -39,9 +40,12 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
         path: str = self.get_request_path("function")
         result_dict: Dict[str, Any] = None
         try:
+            timeout: ClientTimeout = None
+            if self.timeout_in_seconds is not None:
+                timeout = ClientTimeout(self.timeout_in_seconds)
+
             async with ClientSession(headers=self.get_headers(),
-                                     conn_timeout=self.timeout_in_seconds,
-                                     read_timeout=self.timeout_in_seconds,
+                                     timeout=timeout
                                      ) as session:
                 async with session.get(path, json=request_dict) as response:
                     result_dict = await response.json()
@@ -63,9 +67,11 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
         path: str = self.get_request_path("connectivity")
         result_dict: Dict[str, Any] = None
         try:
+            timeout: ClientTimeout = None
+            if self.timeout_in_seconds is not None:
+                timeout = ClientTimeout(self.timeout_in_seconds)
             async with ClientSession(headers=self.get_headers(),
-                                     conn_timeout=self.timeout_in_seconds,
-                                     read_timeout=self.timeout_in_seconds,
+                                     timeout=timeout
                                      ) as session:
                 async with session.get(path, json=request_dict) as response:
                     result_dict = await response.json()
@@ -89,9 +95,11 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
         """
         path: str = self.get_request_path("streaming_chat")
         try:
+            timeout: ClientTimeout = None
+            if self.streaming_timeout_in_seconds is not None:
+                timeout = ClientTimeout(self.streaming_timeout_in_seconds)
             async with ClientSession(headers=self.get_headers(),
-                                     conn_timeout=self.timeout_in_seconds,
-                                     read_timeout=self.timeout_in_seconds,
+                                     timeout=timeout
                                      ) as session:
                 async with session.post(path, json=request_dict) as response:
                     # Check for successful response status
