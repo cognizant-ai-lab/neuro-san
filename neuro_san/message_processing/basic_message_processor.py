@@ -65,3 +65,10 @@ class BasicMessageProcessor(CompositeMessageProcessor):
                 Empty dictionaries or None values simply start a new conversation.
         """
         return self.chat_context.get_chat_context()
+
+    def get_structure(self) -> Dict[str, Any]:
+        """
+        :return: Any dictionary structure that was contained within the final answer
+                 from the agent session interaction, if such a specific breakout was desired.
+        """
+        return self.answer.get_structure()

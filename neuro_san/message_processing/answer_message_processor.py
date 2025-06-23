@@ -82,7 +82,8 @@ class AnswerMessageProcessor(MessageProcessor):
             return
 
         origin: List[Dict[str, Any]] = chat_message_dict.get("origin")
-        text = chat_message_dict.get("text")
+        text: str = chat_message_dict.get("text")
+        structure: Dict[str, Any] = chat_message_dict.get("structure")
 
         # Record what we got.
         # We might get another as we go along, but the last message in the stream
@@ -91,9 +92,11 @@ class AnswerMessageProcessor(MessageProcessor):
             self.answer = text
         if origin is not None:
             self.answer_origin = origin
+        if structure is not None:
+            self.structure = structure
 
         # If we are parsing structure and have something to parse, go there.
-        if self.answer is not None and self.parse_structure is not None:
+        if self.structure is None and self.answer is not None and self.parse_structure is not None:
 
             # For now, just do JSON.
             structure_parser = JsonStructureParser()
