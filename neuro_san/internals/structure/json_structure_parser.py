@@ -75,7 +75,7 @@ class JsonStructureParser:
                 meat = meat.strip()
 
                 # Maybe add the delimiters back to help parsing the meat.
-                use_delims: bool = (start_delim != end_delim)
+                use_delims: bool = start_delim != end_delim
                 if use_delims:
                     meat = f"{start_delim}{meat}{end_delim}"
 
