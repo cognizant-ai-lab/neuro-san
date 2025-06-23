@@ -82,11 +82,13 @@ class AgentService:
 
         self.llm_factory: ContextTypeLlmFactory = MasterLlmFactory.create_llm_factory()
         self.toolbox_factory: ContextTypeToolboxFactory = MasterToolboxFactory.create_toolbox_factory()
-        # Load once and include "agent_llm_info_file" from agent network hocon to llm factory..
+        # Load once and include "agent_llm_info_file" and "agent_toolbox_info_file" from agent network hocon
+        # to llm factory and toolbox factory, respectively.
         agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
         agent_llm_info_file = agent_network.get_agent_llm_info_file()
+        agent_toolbox_info_file = agent_network.get_agent_toolbox_info_file()
         self.llm_factory.load(agent_llm_info_file)
-        self.toolbox_factory.load()
+        self.toolbox_factory.load(agent_toolbox_info_file)
 
     def get_request_count(self) -> int:
         """

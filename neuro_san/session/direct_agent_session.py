@@ -111,7 +111,8 @@ class DirectAgentSession(AgentSession):
         }
 
         reporter = ConnectivityReporter(self.agent_network)
-        connectivity_info: List[Dict[str, Any]] = reporter.report_network_connectivity()
+        agent_toolbox_info_file: str = self.agent_network.get_agent_toolbox_info_file()
+        connectivity_info: List[Dict[str, Any]] = reporter.report_network_connectivity(agent_toolbox_info_file)
         response_dict = {
             "connectivity_info": connectivity_info,
         }

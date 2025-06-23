@@ -41,10 +41,12 @@ class ContextTypeToolboxFactory:
         - "parameters":  Information on arguments of the tool.
     """
 
-    def load(self):
+    def load(self, agent_toolbox_info_file: str):
         """
         Goes through the process of loading any user extensions and/or configuration
         files
+
+        :param agent_toolbox_info_file: User-specified toolbox info from agent network hocon
         """
         raise NotImplementedError
 

@@ -78,15 +78,21 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         self.overlayer = DictionaryOverlay()
         self.toolbox_info_file: str = None
 
-    def load(self):
+    def load(self, agent_toolbox_info_file: str):
         """
         Loads the base tool information from hocon files.
+
+        :param agent_toolbox_info_file: User-specified toolbox info from agent network hocon
         """
         restorer = ToolboxInfoRestorer()
         self.toolbox_infos = restorer.restore()
 
         # Mix in user-specified toolbox info, if available.
-        toolbox_info_file: str = os.getenv("AGENT_TOOLBOX_INFO_FILE")
+        # First check "agent_toolbox_info_file" key from agent network hocon.
+        # If that is unavailable, fallback to env variable.
+        toolbox_info_file: str = agent_toolbox_info_file
+        if not agent_toolbox_info_file:
+            toolbox_info_file = os.getenv("AGENT_TOOLBOX_INFO_FILE")
         if toolbox_info_file is not None and len(toolbox_info_file) > 0:
             extra_toolbox_infos: Dict[str, Any] = restorer.restore(file_reference=toolbox_info_file)
             self.toolbox_infos = self.overlayer.overlay(self.toolbox_infos, extra_toolbox_infos)

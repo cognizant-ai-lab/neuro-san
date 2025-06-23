@@ -69,10 +69,12 @@ class DirectAgentSessionFactory:
         llm_factory: ContextTypeLlmFactory = MasterLlmFactory.create_llm_factory()
         toolbox_factory: ContextTypeToolboxFactory = MasterToolboxFactory.create_toolbox_factory()
         # Load once now that we know what tool registry to use.
-        # Include "agent_llm_info_file" from agent network hocon to llm factory.
+        # Include "agent_llm_info_file" and "agent_toolbox_info_file" from agent network hocon
+        # to llm factory and toolbox_factory, respectively.
         agent_llm_info_file = agent_network.get_agent_llm_info_file()
+        agent_toolbox_info_file = agent_network.get_agent_toolbox_info_file()
         llm_factory.load(agent_llm_info_file)
-        toolbox_factory.load()
+        toolbox_factory.load(agent_toolbox_info_file)
 
         factory = ExternalAgentSessionFactory(use_direct=use_direct)
         invocation_context = SessionInvocationContext(factory, llm_factory, toolbox_factory, metadata)

@@ -50,8 +50,9 @@ class TestConnectivityReporter(TestCase):
         """
         agent_network: AgentNetwork = self.get_sample_registry("hello_world.hocon")
         reporter = ConnectivityReporter(agent_network)
+        agent_toolbox_info_file: str = agent_network.get_agent_toolbox_info_file()
 
-        messages: List[Dict[str, Any]] = reporter.report_network_connectivity()
+        messages: List[Dict[str, Any]] = reporter.report_network_connectivity(agent_toolbox_info_file)
         self.assertEqual(len(messages), 2)
 
         # First guy is the front-man and he only has a single tool
