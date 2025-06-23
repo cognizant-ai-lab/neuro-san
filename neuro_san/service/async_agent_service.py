@@ -80,8 +80,8 @@ class AsyncAgentService:
         # Load once and include "agent_llm_info_file" and "agent_toolbox_info_file" from agent network hocon
         # to llm factory and toolbox factory, respectively.
         agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
-        agent_llm_info_file = agent_network.get_agent_llm_info_file()
-        agent_toolbox_info_file = agent_network.get_agent_toolbox_info_file()
+        agent_llm_info_file: str = agent_network.get_agent_llm_info_file()
+        agent_toolbox_info_file: str = agent_network.get_agent_toolbox_info_file()
         self.llm_factory.load(agent_llm_info_file)
         self.toolbox_factory.load(agent_toolbox_info_file)
 
