@@ -15,6 +15,7 @@ from typing import List
 
 from neuro_san.internals.filters.answer_message_filter import AnswerMessageFilter
 from neuro_san.internals.messages.chat_message_type import ChatMessageType
+from neuro_san.internals.structure.json_structure_parser import JsonStructureParser
 from neuro_san.message_processing.message_processor import MessageProcessor
 
 
@@ -90,3 +91,15 @@ class AnswerMessageProcessor(MessageProcessor):
             self.answer = text
         if origin is not None:
             self.answer_origin = origin
+
+        # If we are parsing structure and have something to parse, go there.
+        if self.answer is not None and self.parse_structure is not None:
+
+            # For now, just do JSON.
+            structure_parser = JsonStructureParser()
+            self.structure = structure_parser.parse_structure(self.answer)
+            if self.structure is not None:
+                # We got some kind of structure.
+                # Have the answer be the remainder, which is
+                # anything not used to detect or describe the structure.
+                self.answer = structure_parser.get_remainder()
