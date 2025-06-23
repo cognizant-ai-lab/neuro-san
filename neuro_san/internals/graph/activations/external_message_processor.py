@@ -18,8 +18,8 @@ from copy import copy
 from langchain_core.messages.base import BaseMessage
 
 from neuro_san.internals.journals.originating_journal import OriginatingJournal
+from neuro_san.internals.messages.base_message_dictionary_converter import BaseMessageDictionaryConverter
 from neuro_san.internals.messages.chat_message_type import ChatMessageType
-from neuro_san.internals.messages.message_utils import convert_to_base_message
 from neuro_san.message_processing.message_processor import MessageProcessor
 
 
@@ -52,7 +52,8 @@ class ExternalMessageProcessor(MessageProcessor):
         origin.extend(message_origin)
 
         # Send the message to the client with deepened origin information
-        message: BaseMessage = convert_to_base_message(chat_message_dict, langchain_only=False)
+        converter = BaseMessageDictionaryConverter(langchain_only=False)
+        message: BaseMessage = converter.from_dict(chat_message_dict)
         await self.journal.write_message(message, origin=origin)
 
     def process_message(self, chat_message_dict: Dict[str, Any], message_type: ChatMessageType):
