@@ -108,11 +108,13 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                     "include_usage": True
                 }
             }
+            openai_api_key: str = self.get_value_or_env(config, "openai_api_key", "AZURE_OPENAI_API_KEY")
+            if openai_api_key is None:
+                openai_api_key = self.get_value_or_env(config, "openai_api_key", "OPENAI_API_KEY")
             llm = AzureChatOpenAI(
                             model_name=model_name,
                             temperature=config.get("temperature"),
-                            openai_api_key=self.get_value_or_env(config, "openai_api_key",
-                                                                 "OPENAI_API_KEY"),
+                            openai_api_key=openai_api_key,
                             openai_api_base=self.get_value_or_env(config, "openai_api_base",
                                                                   "OPENAI_API_BASE"),
                             openai_organization=self.get_value_or_env(config, "openai_organization",
