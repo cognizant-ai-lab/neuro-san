@@ -41,9 +41,9 @@ class TestJsonStructureParser(TestCase):
         remainder: str = parser.get_remainder()
         self.assertIsNone(remainder)
 
-    def test_minimal_structure(self):
+    def test_json_backtick_structure(self):
         """
-        Tests no structure in response.
+        Tests standard json backtick/markdown in response.
         """
         test: str = """
 This has minimal structure in it.
@@ -63,3 +63,45 @@ This has minimal structure in it.
         remainder: str = parser.get_remainder()
         self.assertIsNotNone(remainder)
         self.assertEqual(remainder, "This has minimal structure in it.")
+
+    def test_no_backtick_structure(self):
+        """
+        Tests no backtick/markdown in response.
+        """
+        test: str = """
+This has minimal structure in it.
+{
+    "key": "value"
+}
+"""
+        parser = JsonStructureParser()
+
+        structure: Dict[str, Any] = parser.parse_structure(test)
+        self.assertIsNotNone(structure)
+        value: str = structure.get("key")
+        self.assertEqual(value, "value")
+
+        remainder: str = parser.get_remainder()
+        self.assertIsNotNone(remainder)
+
+    def test_just_backtick_structure(self):
+        """
+        Tests no backtick/markdown in response.
+        """
+        test: str = """
+This has minimal structure in it.
+```
+{
+    "key": "value"
+}
+```
+"""
+        parser = JsonStructureParser()
+
+        structure: Dict[str, Any] = parser.parse_structure(test)
+        self.assertIsNotNone(structure)
+        value: str = structure.get("key")
+        self.assertEqual(value, "value")
+
+        remainder: str = parser.get_remainder()
+        self.assertIsNotNone(remainder)

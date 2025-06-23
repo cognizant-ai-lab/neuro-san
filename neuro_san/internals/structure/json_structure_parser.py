@@ -12,6 +12,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import List
 
 from json.decoder import JSONDecodeError
 
@@ -41,23 +42,51 @@ class JsonStructureParser:
         self.remainder = None
 
         meat: str = content
-        if "```json" in content:
-            # Well-formed json backtick business
-            split_header: List[str] = content.split("```json")
+        delimiters: Dict[str, str] = {
+            "```json":  {
+                "end": "```",
+                "use_delims": True
+            },
+            "```":  {
+                "end": "```",
+                "use_delims": False
+            },
+            "{":  {
+                "end": "}",
+                "use_delims": True
+            }
+        }
 
-            # Start the remainder off with everything before the json backtick business
-            self.remainder = split_header[0]
+        for start_delim, parse_dict in delimiters.items():
+            if start_delim in content:
+                # Well-formed per delimiter
+                split_header: List[str] = content.split(start_delim)
 
-            # Find the end of the backticks if any
-            split_footer: List[str] = split_header[-1].split("```")
+                # Start the remainder off with everything before the json backtick business
+                self.remainder = split_header[0]
 
-            # Meat is everything in between
-            meat = split_footer[0]
+                # Find the end of the backticks if any
+                end_delim: str = parse_dict.get("end")
+                if end_delim != start_delim:
+                    split_footer: List[str] = split_header[-1].split(end_delim)
+                    meat = split_footer[0]
+                    if len(split_footer) > 1:
+                        # Add to the remainder anything outside the delimiting backticks
+                        self.remainder += split_footer[-1]
+                else:
+                    meat = split_header[1]
+                    if len(split_header) > 2:
+                        # Add the remaining with the end delimiter.
+                        # We are only parsing the first we find.
+                        self.remainder += end_delim.join(split_header[2:])
 
-            if len(split_footer) > 1:
-                # Add to the remainder anything outside the delimiting backticks
-                self.remainder += split_footer[-1]
-        
+                # Meat is everything in between, maybe with start and end delims on either end.
+                meat = meat.strip()
+                if parse_dict.get("use_delims", True):
+                    meat = f"{start_delim}{meat}{end_delim}"
+
+                break
+
         # Attempt parsing the structure from the meat
         structure: Dict[str, Any] = None
         try:
