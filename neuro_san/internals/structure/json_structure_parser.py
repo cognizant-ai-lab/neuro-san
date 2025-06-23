@@ -43,21 +43,13 @@ class JsonStructureParser:
 
         meat: str = content
         delimiters: Dict[str, str] = {
-            "```json":  {
-                "end": "```",
-                "use_delims": True
-            },
-            "```":  {
-                "end": "```",
-                "use_delims": False
-            },
-            "{":  {
-                "end": "}",
-                "use_delims": True
-            }
+            # Start : End
+            "```json": "```",
+            "```": "```",
+            "{": "}",
         }
 
-        for start_delim, parse_dict in delimiters.items():
+        for start_delim, end_delim in delimiters.items():
             if start_delim in content:
                 # Well-formed per delimiter
                 split_header: List[str] = content.split(start_delim)
@@ -66,7 +58,6 @@ class JsonStructureParser:
                 self.remainder = split_header[0]
 
                 # Find the end of the backticks if any
-                end_delim: str = parse_dict.get("end")
                 if end_delim != start_delim:
                     split_footer: List[str] = split_header[-1].split(end_delim)
                     meat = split_footer[0]
@@ -82,7 +73,10 @@ class JsonStructureParser:
 
                 # Meat is everything in between, maybe with start and end delims on either end.
                 meat = meat.strip()
-                if parse_dict.get("use_delims", True):
+
+                # Maybe add the delimiters back to help parsing the meat.
+                use_delims: bool = (start_delim != end_delim)
+                if use_delims:
                     meat = f"{start_delim}{meat}{end_delim}"
 
                 break
