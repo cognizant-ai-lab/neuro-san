@@ -37,6 +37,7 @@ class JsonStructureParser:
         self.remainder = None
 
         structure: Dict[str, Any] = None
+        _ = content
 
         return structure
 
