@@ -131,7 +131,7 @@ This has minimal structure in it.
         self.assertIsNotNone(remainder)
         self.assertEqual(remainder, "This has minimal structure in it.")
 
-    def test_no_backtick_front_remainder(self):
+    def test_no_backtick_end_remainder(self):
         """
         Tests no backtick/markdown in response.
         """
@@ -152,7 +152,7 @@ This has minimal structure in it.
         self.assertIsNotNone(remainder)
         self.assertEqual(remainder, "This has minimal structure in it.")
 
-    def test_just_backtick_front_remainder(self):
+    def test_just_backtick_end_remainder(self):
         """
         Tests no backtick/markdown in response.
         """
