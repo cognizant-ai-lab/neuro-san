@@ -13,6 +13,10 @@
 from typing import Any
 from typing import Dict
 
+from json.decoder import JSONDecodeError
+
+from langchain_core.utils.json import parse_json_markdown
+
 
 class JsonStructureParser:
     """
@@ -36,8 +40,35 @@ class JsonStructureParser:
         # Reset remainder on each call
         self.remainder = None
 
+        meat: str = content
+        if "```json" in content:
+            # Well-formed json backtick business
+            split_header: List[str] = content.split("```json")
+
+            # Start the remainder off with everything before the json backtick business
+            self.remainder = split_header[0]
+
+            # Find the end of the backticks if any
+            split_footer: List[str] = split_header[-1].split("```")
+
+            # Meat is everything in between
+            meat = split_footer[0]
+
+            if len(split_footer) > 1:
+                # Add to the remainder anything outside the delimiting backticks
+                self.remainder += split_footer[-1]
+        
+        # Attempt parsing the structure from the meat
         structure: Dict[str, Any] = None
-        _ = content
+        try:
+            structure = parse_json_markdown(meat)
+        except JSONDecodeError:
+            # Couldn't parse
+            self.remainder = None
+
+        # Strip any whitespace of the ends of any remainder.
+        if self.remainder is not None:
+            self.remainder = self.remainder.strip()
 
         return structure
 
