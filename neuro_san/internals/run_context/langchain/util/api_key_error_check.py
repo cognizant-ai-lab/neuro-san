@@ -19,6 +19,15 @@ API_KEY_EXCEPTIONS: Dict[str, List] = {
     "OPENAI_API_KEY": ["OPENAI_API_KEY", "Incorrect API key provided"],
     "ANTHROPIC_API_KEY": ["ANTHROPIC_API_KEY", "anthropic_api_key", "invalid x-api-key", "credit balance"],
     "GOOGLE_API_KEY": ["Application Default Credentials", "default credentials", "Gemini: 400 API key not valid"],
+
+    # Azure OpenAI requires several parameters; all can be set via environment variables
+    # except "deployment_name", which must be provided explicitly.
+    "AZURE_OPENAI_API_KEY": ["Error code: 401", "invalid subscription key", "wrong API endpoint", "Connection error"],
+    "AZURE_OPENAI_ENDPOINT": ["validation error", "base_url", "azure_endpoint", "AZURE_OPENAI_ENDPOINT",
+                              "Connection error"],
+    "OPENAI_API_VERSION": ["validation error", "api_version", "OPENAI_API_VERSION", "Error code: 404",
+                           "Resource not found"],
+    "deployment_name": ["Error code: 404", "Resource not found", "API deployment for this resource does not exist"],
 }
 
 
@@ -36,26 +45,26 @@ class ApiKeyErrorCheck:
         """
 
         exception_message: str = str(exception)
-        api_key: str = None
+        matched_keys: List[str] = []
 
-        # Search for strings in the exception message
-        found = False
+        # Collect all keys that have any associated string in the exception message
+        # since there could be multiple keys with the exact same message.
         for api_key, string_list in API_KEY_EXCEPTIONS.items():
             for find_string in string_list:
                 if find_string in exception_message:
-                    found = True
+                    matched_keys.append(api_key)
+                    # No need to check the remaining strings for this key
                     break
-            if found:
-                break
 
-        if found:
+        if matched_keys:
+            keys_str = ", ".join(matched_keys)
             return f"""
-A value for the {api_key} environment variable must be correctly set in the neuro-san
+A value for the {keys_str} environment variable must be correctly set in the neuro-san
 server or run-time enviroment in order to use this agent network.
 
 Some things to try:
-1) Double check that your value for {api_key} is set correctly
-2) If you do not have a value for {api_key}, visit the LLM provider's website to get one.
+1) Double check that your value for {keys_str} is set correctly
+2) If you do not have a value for {keys_str}, visit the LLM provider's website to get one.
 3) It's possible that your credit balance on your account with the LLM provider is too low
    to make the request.  Check that.
 4) Sometimes these errors happen because of firewall blockages to the site that hosts the LLM.
