@@ -12,6 +12,8 @@
 from typing import Any
 from typing import Dict
 
+import json
+
 from neuro_san.client.agent_session_factory import AgentSessionFactory
 from neuro_san.client.streaming_input_processor import StreamingInputProcessor
 from neuro_san.interfaces.agent_session import AgentSession
@@ -62,5 +64,8 @@ class SimpleOneShot:
             processor.process_message(message, chat_response.get("type"))
 
         raw_answer: str = processor.get_answer()
+        structure: Dict[str, Any] = processor.get_structure()
+        if structure is not None:
+            raw_answer += "\n```json" + json.dumps(structure, indent=4, sort_keys=True) + "```"
 
         return raw_answer
