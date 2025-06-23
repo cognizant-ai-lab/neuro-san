@@ -24,11 +24,22 @@ class AnswerMessageProcessor(MessageProcessor):
     of the chat session.
     """
 
-    def __init__(self):
+    def __init__(self, parse_structure: str = None):
         """
         Constructor
+
+        :param parse_structure: Optional string telling us to look for a dictionary structure
+                    within the final answer to separate out in a common way so that clients
+                    do not have to reinvent this wheel over and over again.
+
+                    Valid values are:
+                        "json" - look for JSON in the message content as structure to report.
+
+                    By default this is None, implying that such parsing is bypassed.
         """
         self.answer: str = None
+        self.structure: Dict[str, Any] = None
+        self.parse_structure: str = parse_structure
         self.answer_origin: List[Dict[str, Any]] = None
         self.filter: AnswerMessageFilter = AnswerMessageFilter()
 
@@ -44,11 +55,19 @@ class AnswerMessageProcessor(MessageProcessor):
         """
         return self.answer_origin
 
+    def get_structure(self) -> Dict[str, Any]:
+        """
+        :return: Any dictionary structure that was contained within the final answer
+                 from the agent session interaction, if such a specific breakout was desired.
+        """
+        return self.structure
+
     def reset(self):
         """
         Resets any previously accumulated state
         """
         self.answer = None
+        self.structure = None
         self.answer_origin = None
 
     def process_message(self, chat_message_dict: Dict[str, Any], message_type: ChatMessageType):

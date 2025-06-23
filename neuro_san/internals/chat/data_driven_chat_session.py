@@ -178,6 +178,7 @@ class DataDrivenChatSession:
         if answer is None:
             # Can't have content as None or problems arise.
             answer = ""
+        structure: Dict[str, Any] = answer_processor.get_structure()
 
         # Send back sly_data as the front-man permits
         front_man_spec: Dict[str, Any] = self.front_man.get_agent_tool_spec()
@@ -188,7 +189,7 @@ class DataDrivenChatSession:
 
         # Stream over chat state as the last message
         message = AgentFrameworkMessage(content=answer, chat_context=return_chat_context,
-                                        sly_data=return_sly_data)
+                                        sly_data=return_sly_data, structure=structure)
         journal: Journal = invocation_context.get_journal()
         await journal.write_message(message, origin=None)
 
