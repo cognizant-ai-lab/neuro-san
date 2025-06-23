@@ -171,8 +171,12 @@ class DataDrivenChatSession:
         # Determine the chat_context to enable continuing the conversation
         return_chat_context: Dict[str, Any] = self.prepare_chat_context(message_list)
 
+        # Get whether or not we should parse structure from the final answer
+        # from the config for the network.
+        parse_structure: str = self.registry.get_config().get("parse_structure")
+
         # Find "the answer" and have that be the content of the last message we send
-        answer_processor = AnswerMessageProcessor()
+        answer_processor = AnswerMessageProcessor(parse_structure=parse_structure)
         answer_processor.process_messages(message_list)
         answer: str = answer_processor.get_answer()
         if answer is None:
