@@ -100,11 +100,11 @@ class AbstractClassActivation(AbstractCallableActivation):
         raise NotImplementedError
 
     # pylint: disable=too-many-locals
-    async def build(self) -> List[Any]:
+    async def build(self) -> str:
         """
         Main entry point to the class.
 
-        :return: A List of messages produced during this process.
+        :return: A string representing a List of messages produced during this process.
         """
         messages: List[Any] = []
 

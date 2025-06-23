@@ -73,11 +73,11 @@ class FrontManActivation(CallingActivation, FrontMan):
         if self.run_context is not None:
             self.run_context.update_invocation_context(invocation_context)
 
-    async def build(self) -> List[Any]:
+    async def build(self) -> str:
         """
         Main entry point to the class.
 
-        :return: A List of messages produced during this process.
+        :return: A string representing a List of messages produced during this process.
         """
         # This is never called for a FrontMan, but is needed to satisfy the
         # class heirarchy stemming from CallableActivation.
