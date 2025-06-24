@@ -32,7 +32,8 @@ from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeL
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
 from neuro_san.internals.run_context.langchain.llms.llm_info_restorer import LlmInfoRestorer
 from neuro_san.internals.run_context.langchain.llms.standard_langchain_llm_factory import StandardLangChainLlmFactory
-from neuro_san.internals.run_context.langchain.llms.user_specified_langchain_llm_factory import UserSpecifiedLangChainLlmFactory
+from neuro_san.internals.run_context.langchain.llms.user_specified_langchain_llm_factory import \
+    UserSpecifiedLangChainLlmFactory
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
 
 
@@ -163,7 +164,6 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         """
         full_config: Dict[str, Any] = self.create_full_llm_config(config)
         llm: BaseLanguageModel = self.create_base_chat_model(full_config, callbacks)
-        print(f"\n\n{llm=}\n\n")
         return llm
 
     def create_full_llm_config(self, config: Dict[str, Any]) -> Dict[str, Any]:

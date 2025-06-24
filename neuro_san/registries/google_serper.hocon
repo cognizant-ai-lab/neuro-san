@@ -28,9 +28,9 @@
         {
             "name": "searcher",
             "instructions": "Use your tool to respond to the inquiry.",
-             "function": {
+            "function": {
                 "description": "Assist user with answer from internet."
-             }
+            }
             "tools": ["search_tool"]
         },
         {
