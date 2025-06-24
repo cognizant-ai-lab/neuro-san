@@ -31,7 +31,6 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
     - [verbose](#verbose)
     - [error_formatter](#error_formatter)
     - [error_fragments](#error_fragments)
-  - [parse_structure](#parse_structure)
   - [tools](#tools)
 - [Single Agent Specification](#single-agent-specification)
   - [name](#name)
@@ -262,20 +261,6 @@ which contains the following keys:
 
 A list of strings where if any one of the strings appears in agent output,
 it is considered an error and reported as such per the [error_formatter](#error-formatter).
-
-### parse_structure
-
-Optional string which describes what format within the output should be parsed
-into the "structure" member of the final ChatMessage answer.
-
-The idea is to have the lion's share of the structured data parsing happens
-uniformly on the server, and clients of various languages don't have to go through
-their own gymnastics to get this basic information out of the system.
-
-By default this is None, implying that parsing structure information is not turned on.
-
-Another possible value is "json", which implies structure parsing should look for
-JSON formatted data in the final answer string.
 
 ### tools
 
