@@ -18,7 +18,7 @@ from json.decoder import JSONDecodeError
 
 from langchain_core.utils.json import parse_json_markdown
 
-from neuro_san.internals.structure.structure_parser import StructureParser
+from neuro_san.internals.parsers.structure.structure_parser import StructureParser
 
 
 class JsonStructureParser(StructureParser):

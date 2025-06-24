@@ -15,8 +15,8 @@ from typing import List
 
 from neuro_san.internals.filters.answer_message_filter import AnswerMessageFilter
 from neuro_san.internals.messages.chat_message_type import ChatMessageType
-from neuro_san.internals.structure.structure_parser import StructureParser
-from neuro_san.internals.structure.structure_parser_factory import StructureParserFactory
+from neuro_san.internals.parsers.structure.structure_parser import StructureParser
+from neuro_san.internals.parsers.structure.structure_parser_factory import StructureParserFactory
 from neuro_san.message_processing.message_processor import MessageProcessor
 
 

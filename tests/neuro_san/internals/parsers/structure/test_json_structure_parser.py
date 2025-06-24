@@ -14,7 +14,7 @@ from typing import Dict
 
 from unittest import TestCase
 
-from neuro_san.internals.structure.json_structure_parser import JsonStructureParser
+from neuro_san.internals.parsers.structure.json_structure_parser import JsonStructureParser
 
 
 class TestJsonStructureParser(TestCase):

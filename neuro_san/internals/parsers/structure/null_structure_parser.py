@@ -13,7 +13,7 @@
 from typing import Any
 from typing import Dict
 
-from neuro_san.internals.structure.structure_parser import StructureParser
+from neuro_san.internals.parsers.structure.structure_parser import StructureParser
 
 
 class NullStructureParser(StructureParser):

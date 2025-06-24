@@ -10,9 +10,9 @@
 #
 # END COPYRIGHT
 
-from neuro_san.internals.structure.json_structure_parser import JsonStructureParser
-from neuro_san.internals.structure.null_structure_parser import NullStructureParser
-from neuro_san.internals.structure.structure_parser import StructureParser
+from neuro_san.internals.parsers.structure.json_structure_parser import JsonStructureParser
+from neuro_san.internals.parsers.structure.null_structure_parser import NullStructureParser
+from neuro_san.internals.parsers.structure.structure_parser import StructureParser
 
 
 class StructureParserFactory:
