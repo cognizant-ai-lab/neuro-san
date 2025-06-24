@@ -14,6 +14,7 @@ from typing import Any
 from typing import Dict
 from typing import Generator
 from typing import Optional
+
 from copy import copy
 
 from neuro_san.client.thinking_file_message_processor import ThinkingFileMessageProcessor
@@ -90,7 +91,7 @@ class StreamingInputProcessor:
 
             # Update the state if there is something to update it with
             chat_context = self.processor.get_chat_context()
-            last_chat_response = self.processor.get_answer()
+            last_chat_response = self.processor.get_compiled_answer()
             returned_sly_data: Dict[str, Any] = self.processor.get_sly_data()
             origin_str = Origination.get_full_name_from_origin(self.processor.get_answer_origin())
 

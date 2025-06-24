@@ -13,6 +13,7 @@ from typing import Any
 from typing import Dict
 from typing import Iterator
 from typing import List
+from typing import Union
 
 import copy
 import logging
@@ -171,13 +172,18 @@ class DataDrivenChatSession:
         # Determine the chat_context to enable continuing the conversation
         return_chat_context: Dict[str, Any] = self.prepare_chat_context(message_list)
 
+        # Get the formats we should parse from the final answer from the config for the network.
+        # As of 6/24/25, this is an unadvertised experimental feature.
+        parse_formats: Union[str, List[str]] = self.registry.get_config().get("parse_formats")
+
         # Find "the answer" and have that be the content of the last message we send
-        answer_processor = AnswerMessageProcessor()
+        answer_processor = AnswerMessageProcessor(parse_formats=parse_formats)
         answer_processor.process_messages(message_list)
         answer: str = answer_processor.get_answer()
         if answer is None:
             # Can't have content as None or problems arise.
             answer = ""
+        structure: Dict[str, Any] = answer_processor.get_structure()
 
         # Send back sly_data as the front-man permits
         front_man_spec: Dict[str, Any] = self.front_man.get_agent_tool_spec()
@@ -188,7 +194,7 @@ class DataDrivenChatSession:
 
         # Stream over chat state as the last message
         message = AgentFrameworkMessage(content=answer, chat_context=return_chat_context,
-                                        sly_data=return_sly_data)
+                                        sly_data=return_sly_data, structure=structure)
         journal: Journal = invocation_context.get_journal()
         await journal.write_message(message, origin=None)
 
