@@ -172,8 +172,8 @@ class DataDrivenChatSession:
         # Determine the chat_context to enable continuing the conversation
         return_chat_context: Dict[str, Any] = self.prepare_chat_context(message_list)
 
-        # Get the formats we should parse from the final answer
-        # from the config for the network.
+        # Get the formats we should parse from the final answer from the config for the network.
+        # As of 6/24/25, this is an unadvertised experimental feature.
         parse_formats: Union[str, List[str]] = self.registry.get_config().get("parse_formats")
 
         # Find "the answer" and have that be the content of the last message we send
