@@ -48,6 +48,7 @@ class FirstAvailableStructureParser(StructureParser):
 
             structure_parser: StructureParser = self.factory.create_structure_parser(parse_format)
             if structure_parser is None:
+                # Format did not match anything we know how to parse. Keep looking.
                 continue
 
             structure = structure_parser.parse_structure(content)
