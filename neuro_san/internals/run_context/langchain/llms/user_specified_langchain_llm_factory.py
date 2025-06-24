@@ -28,37 +28,18 @@ from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import
 
 class UserSpecifiedLangChainLlmFactory(LangChainLlmFactory):
     """
-    Factory class for LLM operations
+    A factory for constructing LLMs based on user-specified configurations provided under the "llm_config"
+    section of the agent network HOCON file.
 
-    Most methods take a config dictionary which consists of the following keys:
-
-        "model_name"                The name of the model.
-                                    Default if not specified is "gpt-3.5-turbo"
-
-        "temperature"               A float "temperature" value with which to
-                                    initialize the chat model.  In general,
-                                    higher temperatures yield more random results.
-                                    Default if not specified is 0.7
-
-        "prompt_token_fraction"     The fraction of total tokens (not necessarily words
-                                    or letters) to use for a prompt. Each model_name
-                                    has a documented number of max_tokens it can handle
-                                    which is a total count of message + response tokens
-                                    which goes into the calculation involved in
-                                    get_max_prompt_tokens().
-                                    By default the value is 0.5.
-
-        "max_tokens"                The maximum number of tokens to use in
-                                    get_max_prompt_tokens(). By default this comes from
-                                    the model description in this class.
+    The specific LLM class to instantiate is determined by the "class" field in "llm_config", and all
+    other keys in the config are passed as arguments to that class's constructor.
     """
 
     def create_base_chat_model(self, config: Dict[str, Any],
                                callbacks: List[BaseCallbackHandler] = None) -> BaseLanguageModel:
         """
-        Create a BaseLanguageModel from the fully-specified llm config.
-        :param config: The fully specified llm config which is a product of
-                    _create_full_llm_config() above.
+        Create a BaseLanguageModel from the user-specified llm config.
+        :param config: The user-specified llm config
         :param callbacks: A list of BaseCallbackHandlers to add to the chat model.
         :return: A BaseLanguageModel (can be Chat or LLM)
                 Can raise a ValueError if the config's class or model_name value is

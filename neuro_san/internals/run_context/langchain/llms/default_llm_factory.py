@@ -174,7 +174,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         self.llm_class = config.get("class")
         if self.llm_class:
-            # If config has "class", it is user specified llm so return config as is,
+            # If config has "class", it is a user-specified llm so return config as is,
             # and replace "StandardLangChainLlmFactory" with "UserSpecifiedLangChainLlmFactory".
             self.llm_factories[0] = UserSpecifiedLangChainLlmFactory()
             return config
