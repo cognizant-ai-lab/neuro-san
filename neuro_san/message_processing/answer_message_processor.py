@@ -12,11 +12,12 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Union
 
 from neuro_san.internals.filters.answer_message_filter import AnswerMessageFilter
 from neuro_san.internals.messages.chat_message_type import ChatMessageType
-from neuro_san.internals.parsers.structure.structure_parser import StructureParser
-from neuro_san.internals.parsers.structure.structure_parser_factory import StructureParserFactory
+from neuro_san.internals.parsers.structure.first_available_structure_parser \
+    import FirstAvailableStructureParser
 from neuro_san.message_processing.message_processor import MessageProcessor
 
 
@@ -26,13 +27,14 @@ class AnswerMessageProcessor(MessageProcessor):
     of the chat session.
     """
 
-    def __init__(self, parse_structure: str = None):
+    def __init__(self, parse_formats: Union[str, List[str]] = None):
         """
         Constructor
 
-        :param parse_structure: Optional string telling us to look for a dictionary structure
-                    within the final answer to separate out in a common way so that clients
-                    do not have to reinvent this wheel over and over again.
+        :param parse_formats: Optional string or list of strings telling us to look for
+                    specific formats within the text of the final answer to separate out
+                    in a common way so that clients do not have to reinvent this wheel over
+                    and over again.
 
                     Valid values are:
                         "json" - look for JSON in the message content as structure to report.
@@ -41,9 +43,19 @@ class AnswerMessageProcessor(MessageProcessor):
         """
         self.answer: str = None
         self.structure: Dict[str, Any] = None
-        self.parse_structure: str = parse_structure
         self.answer_origin: List[Dict[str, Any]] = None
         self.filter: AnswerMessageFilter = AnswerMessageFilter()
+
+        # Only deal with non-empy lists of strings internally
+        self.parse_formats: List[str] = parse_formats
+        if self.parse_formats is not None:
+            if isinstance(self.parse_formats, str):
+                self.parse_formats = [self.parse_formats]
+        else:
+            self.parse_formats = []
+
+        if not isinstance(self.parse_formats, List):
+            raise ValueError(f"Value '{parse_formats}' must be a string, a list of strings, or None")
 
     def get_answer(self) -> str:
         """
@@ -96,14 +108,9 @@ class AnswerMessageProcessor(MessageProcessor):
         if structure is not None:
             self.structure = structure
 
-        # If we are parsing structure and have something to parse, go there.
-        if self.structure is None and self.answer is not None and self.parse_structure is not None:
-
-            factory = StructureParserFactory()
-            structure_parser: StructureParser = factory.create_structure_parser(self.parse_structure)
+        if self.structure is None and self.answer is not None:
+            # Parse structure from the first available format in the answer content
+            structure_parser = FirstAvailableStructureParser(self.parse_formats)
             self.structure = structure_parser.parse_structure(self.answer)
             if self.structure is not None:
-                # We got some kind of structure.
-                # Have the answer be the remainder, which is
-                # anything not used to detect or describe the structure.
                 self.answer = structure_parser.get_remainder()

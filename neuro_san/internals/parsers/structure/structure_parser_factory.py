@@ -11,7 +11,6 @@
 # END COPYRIGHT
 
 from neuro_san.internals.parsers.structure.json_structure_parser import JsonStructureParser
-from neuro_san.internals.parsers.structure.null_structure_parser import NullStructureParser
 from neuro_san.internals.parsers.structure.structure_parser import StructureParser
 
 
@@ -30,10 +29,8 @@ class StructureParserFactory:
         structure_parser: StructureParser = None
 
         if parser_type is None or not isinstance(parser_type, str):
-            structure_parser = NullStructureParser()
+            structure_parser = None
         elif parser_type.lower() == "json":
             structure_parser = JsonStructureParser()
-        else:
-            structure_parser = NullStructureParser()
 
         return structure_parser
