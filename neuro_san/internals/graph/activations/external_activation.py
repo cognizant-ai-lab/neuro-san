@@ -16,6 +16,7 @@ from typing import List
 from typing import Union
 
 import json
+
 from logging import getLogger
 from logging import Logger
 
@@ -157,6 +158,9 @@ class ExternalActivation(AbstractCallableActivation):
 
         # Get stuff back from the message processing
         answer: str = self.processor.get_answer()
+        structure: Dict[str, Any] = self.processor.get_structure()
+        if structure is not None:
+            answer += "\n```json" + json.dumps(structure, indent=4, sort_keys=True) + "```"
         self.chat_context = self.processor.get_chat_context()
         returned_sly_data: Dict[str, Any] = self.processor.get_sly_data()
 
