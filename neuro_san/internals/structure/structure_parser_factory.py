@@ -29,7 +29,7 @@ class StructureParserFactory:
 
         structure_parser: StructureParser = None
 
-        if parser_type is None:
+        if parser_type is None or not isinstance(parser_type, str):
             structure_parser = NullStructureParser()
         elif parser_type.lower() == "json":
             structure_parser = JsonStructureParser()

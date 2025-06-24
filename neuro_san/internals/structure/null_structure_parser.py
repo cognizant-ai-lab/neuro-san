@@ -30,4 +30,5 @@ class NullStructureParser(StructureParser):
                 Will return None if no parseable structure is detected.
         """
         self.remainder = None
-        return None
+        structure: Dict[str, Any] = None
+        return structure
