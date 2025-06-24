@@ -18,17 +18,13 @@ from json.decoder import JSONDecodeError
 
 from langchain_core.utils.json import parse_json_markdown
 
+from neuro_san.internals.structure.structure_parser import StructureParser
 
-class JsonStructureParser:
+
+class JsonStructureParser(StructureParser):
     """
     JSON implementation for a StructureParser.
     """
-
-    def __init__(self):
-        """
-        Constructor
-        """
-        self.remainder: str = None
 
     def parse_structure(self, content: str) -> Dict[str, Any]:
         """
@@ -94,12 +90,3 @@ class JsonStructureParser:
             self.remainder = self.remainder.strip()
 
         return structure
-
-    def get_remainder(self) -> str:
-        """
-        :return: Any content string that was not essential in detecting or
-                 describing the structure.  The parse_structure() method must
-                 be called to get anything valid out of the return value here.
-                 Will return None if no parseable structure is detected.
-        """
-        return self.remainder

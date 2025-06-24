@@ -15,7 +15,8 @@ from typing import List
 
 from neuro_san.internals.filters.answer_message_filter import AnswerMessageFilter
 from neuro_san.internals.messages.chat_message_type import ChatMessageType
-from neuro_san.internals.structure.json_structure_parser import JsonStructureParser
+from neuro_san.internals.structure.structure_parser import StructureParser
+from neuro_san.internals.structure.structure_parser_factory import StructureParserFactory
 from neuro_san.message_processing.message_processor import MessageProcessor
 
 
@@ -98,8 +99,8 @@ class AnswerMessageProcessor(MessageProcessor):
         # If we are parsing structure and have something to parse, go there.
         if self.structure is None and self.answer is not None and self.parse_structure is not None:
 
-            # For now, just do JSON.
-            structure_parser = JsonStructureParser()
+            factory = StructureParserFactory()
+            structure_parser: StructureParser = factory.create_structure_parser(self.parse_structure)
             self.structure = structure_parser.parse_structure(self.answer)
             if self.structure is not None:
                 # We got some kind of structure.
