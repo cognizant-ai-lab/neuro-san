@@ -17,8 +17,6 @@ from typing import Optional
 
 from copy import copy
 
-import json
-
 from neuro_san.client.thinking_file_message_processor import ThinkingFileMessageProcessor
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.internals.messages.chat_message_type import ChatMessageType
@@ -93,12 +91,7 @@ class StreamingInputProcessor:
 
             # Update the state if there is something to update it with
             chat_context = self.processor.get_chat_context()
-            last_chat_response = self.processor.get_answer()
-            structure = self.processor.get_structure()
-            if structure is not None:
-                # Add structure to output as if it came last
-                last_chat_response = last_chat_response + "\n```json\n" + \
-                        json.dumps(structure, indent=4, sort_keys=True) + "```"
+            last_chat_response = self.processor.get_compiled_answer()
             returned_sly_data: Dict[str, Any] = self.processor.get_sly_data()
             origin_str = Origination.get_full_name_from_origin(self.processor.get_answer_origin())
 

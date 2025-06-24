@@ -157,10 +157,7 @@ class ExternalActivation(AbstractCallableActivation):
             await self.processor.async_process_message(response)
 
         # Get stuff back from the message processing
-        answer: str = self.processor.get_answer()
-        structure: Dict[str, Any] = self.processor.get_structure()
-        if structure is not None:
-            answer += "\n```json" + json.dumps(structure, indent=4, sort_keys=True) + "```"
+        answer: str = self.processor.get_compiled_answer()
         self.chat_context = self.processor.get_chat_context()
         returned_sly_data: Dict[str, Any] = self.processor.get_sly_data()
 
