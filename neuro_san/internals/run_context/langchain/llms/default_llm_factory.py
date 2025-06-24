@@ -32,6 +32,7 @@ from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeL
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
 from neuro_san.internals.run_context.langchain.llms.llm_info_restorer import LlmInfoRestorer
 from neuro_san.internals.run_context.langchain.llms.standard_langchain_llm_factory import StandardLangChainLlmFactory
+from neuro_san.internals.run_context.langchain.llms.user_specified_langchain_llm_factory import UserSpecifiedLangChainLlmFactory
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
 
 
@@ -71,6 +72,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         self.llm_factories: List[LangChainLlmFactory] = [
             StandardLangChainLlmFactory()
         ]
+        self.llm_class: str = None
 
     def load(self, agent_llm_info_file: str):
         """
@@ -161,6 +163,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         """
         full_config: Dict[str, Any] = self.create_full_llm_config(config)
         llm: BaseLanguageModel = self.create_base_chat_model(full_config, callbacks)
+        print(f"\n\n{llm=}\n\n")
         return llm
 
     def create_full_llm_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -168,6 +171,14 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         :param config: The llm_config from the user
         :return: The fully specified config with defaults filled in.
         """
+
+        self.llm_class = config.get("class")
+        if self.llm_class:
+            # If config has "class", it is user specified llm so return config as is,
+            # and replace "StandardLangChainLlmFactory" with "UserSpecifiedLangChainLlmFactory".
+            self.llm_factories[0] = UserSpecifiedLangChainLlmFactory()
+            return config
+
         default_config: Dict[str, Any] = self.llm_infos.get("default_config")
         use_config = self.overlayer.overlay(default_config, config)
 

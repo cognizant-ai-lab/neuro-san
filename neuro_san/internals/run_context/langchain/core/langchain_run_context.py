@@ -23,9 +23,9 @@ from copy import copy
 from logging import Logger
 from logging import getLogger
 
-from openai import APIError
-from anthropic import BadRequestError
-from anthropic import AuthenticationError
+from ollama import ResponseError
+import openai
+import anthropic
 
 from pydantic_core import ValidationError
 
@@ -495,7 +495,7 @@ class LangChainRunContext(RunContext):
         while return_dict is None and retries > 0:
             try:
                 return_dict: Dict[str, Any] = await agent_executor.ainvoke(inputs, invoke_config)
-            except (APIError, BadRequestError, AuthenticationError, ChatGoogleGenerativeAIError) as api_error:
+            except (openai.APIError, anthropic.APIError, ChatGoogleGenerativeAIError) as api_error:
                 message: str = ApiKeyErrorCheck.check_for_api_key_exception(api_error)
                 if message is not None:
                     raise ValueError(message) from api_error
@@ -508,6 +508,16 @@ class LangChainRunContext(RunContext):
                 self.logger.warning("retrying from KeyError")
                 retries = retries - 1
                 exception = key_error
+                backtrace = traceback.format_exc()
+            except ResponseError as ollama_response_error:
+                self.logger.warning("retrying from Ollama ResponseError")
+                retries = retries - 1
+                exception = ollama_response_error
+                backtrace = traceback.format_exc()
+            except TypeError as type_error:
+                self.logger.warning("retrying from TypeError")
+                retries = retries - 1
+                exception = type_error
                 backtrace = traceback.format_exc()
             except ValueError as value_error:
                 response = str(value_error)
