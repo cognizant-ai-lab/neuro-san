@@ -143,7 +143,7 @@ Here are some pre-conditions for an agent in your network to be a potential fron
 
 Disqualifiers. A front man cannot:
 * be a CodedTool with a "class" definition
-* be a tool from a "toolbox" definition
+* be a tool with a "toolbox" definition
 """)
 
         if len(valid_front_men) > 1:
