@@ -43,6 +43,8 @@
     "google_serper.hocon": true,
     "website_rag.hocon": true,
 
+    "mcp_deepwiki.hocon": true,
+
     # Agents having to do with test infrastructure
     "gist.hocon": true,
     "assess_failure.hocon": true,

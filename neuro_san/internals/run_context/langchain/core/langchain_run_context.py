@@ -65,6 +65,7 @@ from neuro_san.internals.run_context.langchain.core.langchain_run import LangCha
 from neuro_san.internals.run_context.langchain.journaling.journaling_callback_handler import JournalingCallbackHandler
 from neuro_san.internals.run_context.langchain.journaling.journaling_tools_agent_output_parser \
     import JournalingToolsAgentOutputParser
+from neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter import LangchainMCPAdapter
 from neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter import LangChainTokenCounter
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
 from neuro_san.internals.run_context.utils.external_agent_parsing import ExternalAgentParsing
@@ -322,7 +323,7 @@ class LangChainRunContext(RunContext):
                 self.logger.info(message)
         else:
             toolbox: str = agent_spec.get("toolbox")
-            mcp: str = agent_spec.get("mcp")
+            mcp: Dict[str, Any] = agent_spec.get("mcp")
             if toolbox:
                 toolbox_factory: ContextTypeToolboxFactory = self.invocation_context.get_toolbox_factory()
                 try:
@@ -345,16 +346,9 @@ class LangChainRunContext(RunContext):
                     self.logger.info(message)
                     return None
             elif mcp:
-                client = MultiServerMCPClient(
-                    {
-                        "mcp_tool": {
-                            "url": mcp
-                            "transport" "streamable_http"
-                        }
-                    }
-                )
-                mcp_tools = await client.get_tools()
-                return mcp_tools
+                server_url = mcp.get("server_url")                    
+                allowed_tools = mcp.get("allowed_tools")
+                return LangchainMCPAdapter.get_mcp_tools(server_url, allowed_tools)
             else:
                 function_json = agent_spec.get("function")
 
