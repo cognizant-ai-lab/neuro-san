@@ -50,6 +50,9 @@ class ThinkingFileMessageProcessor(MessageProcessor):
         if thinking_dir is not None:
             self.thinking_dir = Path(thinking_dir)
 
+        # Dictionary for storing origins that differ from what might be expected
+        self.origins: Dict[str, str] = {}
+
     def process_message(self, chat_message_dict: Dict[str, Any], message_type: ChatMessageType):
         """
         Process the message.
@@ -92,16 +95,26 @@ class ThinkingFileMessageProcessor(MessageProcessor):
 
         use_origin: str = self._determine_origin_reporting(response, origin_str)
 
+        # Determine the filename to use given the origin_str.
+        # Previously we might have used a uuid as a filename, but by default
+        # we want the filenames to match the full origin_str.
+        origin_filename: str = self.origins.get(origin_str, origin_str)
+
         try:
-            self._write_to_file(origin_str, origin_str, message_type_str, use_origin, text)
+            self._write_to_file(origin_filename, origin_str, message_type_str, use_origin, text)
         except OSError as os_error:
             # For very deep networks we can sometimes get a "File name too long",
             # which is Error code 63.
             if os_error.errno == 63:
+
                 # Retry with a uuid as file name.
                 # If this fails, there's no helping ya.
-                new_uuid: str = str(uuid.uuid4())
-                self._write_to_file(new_uuid, origin_str, message_type_str, use_origin, text)
+                origin_filename = str(uuid.uuid4())
+                self._write_to_file(origin_filename, origin_str, message_type_str, use_origin, text)
+
+                # Squirell that uuid away so results continue to go to the same
+                # file over and over again.
+                self.origins[origin_str] = origin_filename
             else:
                 raise os_error
 
