@@ -322,6 +322,7 @@ class LangChainRunContext(RunContext):
                 self.logger.info(message)
         else:
             toolbox: str = agent_spec.get("toolbox")
+            mcp: str = agent_spec.get("mcp")
             if toolbox:
                 toolbox_factory: ContextTypeToolboxFactory = self.invocation_context.get_toolbox_factory()
                 try:
@@ -343,6 +344,17 @@ class LangChainRunContext(RunContext):
                     await self.journal.write_message(agent_message)
                     self.logger.info(message)
                     return None
+            elif mcp:
+                client = MultiServerMCPClient(
+                    {
+                        "mcp_tool": {
+                            "url": mcp
+                            "transport" "streamable_http"
+                        }
+                    }
+                )
+                mcp_tools = await client.get_tools()
+                return mcp_tools
             else:
                 function_json = agent_spec.get("function")
 
