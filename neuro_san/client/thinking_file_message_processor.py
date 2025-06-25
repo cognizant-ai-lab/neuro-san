@@ -93,6 +93,7 @@ class ThinkingFileMessageProcessor(MessageProcessor):
             # There is no real text, but there is a structure. JSON-ify it.
             text = json.dumps(structure, indent=4, sort_keys=True)
 
+        # Figure out how we are going to report the origin given the message.
         use_origin: str = self._determine_origin_reporting(response, origin_str)
 
         # Determine the filename to use given the origin_str.
