@@ -147,7 +147,7 @@ Disqualifiers. A front man cannot:
 """)
 
         if len(valid_front_men) > 1:
-            raise ValueError(f"Found > 1 front man for chat. Possibilities: {front_men}")
+            raise ValueError(f"Found > 1 front man for chat. Possibilities: {valid_front_men}")
 
         front_man: str = front_men[0]
 
