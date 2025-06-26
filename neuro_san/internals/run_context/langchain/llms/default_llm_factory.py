@@ -83,8 +83,6 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
     def load(self):
         """
         Loads the LLM information from hocon files.
-
-        :param agent_llm_info_file: User-specified llm info from agent network hocon
         """
         restorer = LlmInfoRestorer()
         self.llm_infos = restorer.restore()
