@@ -75,7 +75,10 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         self.llm_factories: List[LangChainLlmFactory] = [
             StandardLangChainLlmFactory()
         ]
-        self.llm_info_file: str = config.get("agent_llm_info_file")
+        if config:
+            self.llm_info_file: str = config.get("agent_llm_info_file")
+        else:
+            self.llm_info_file = None
 
     def load(self):
         """

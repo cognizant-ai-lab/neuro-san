@@ -79,7 +79,10 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         """
         self.toolbox_infos: Dict[str, Any] = {}
         self.overlayer = DictionaryOverlay()
-        self.toolbox_info_file: str = config.get("toolbox_info_file")
+        if config:
+            self.toolbox_info_file: str = config.get("toolbox_info_file")
+        else:
+            self.toolbox_info_file = None
 
     def load(self):
         """
