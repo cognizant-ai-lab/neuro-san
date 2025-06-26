@@ -21,6 +21,7 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
     - [replacement_strings](#replacement_strings)
     - [replacement_values](#replacement_values)
   - [agent_llm_info_file](#agent_llm_info_file)
+  - [toolbox_info_file](#toolbox_info_file)
   - [llm_config](#llm_config)
     - [model_name](#model_name)
     - [fallbacks](#fallbacks)
@@ -138,6 +139,10 @@ your string values within your replacement_values and things will work out as yo
 The agent_llm_info_file key allows you to specify a custom HOCON file that extends the default list of available LLMs used by agents in a neuro-san network. This is especially useful if you're using models that are not included in the default configuration (e.g., newly released models or organization-specific endpoints).
 
 For more information on selecting and customizing models, see the [model_name](#model_name) section below.
+
+### toolbox_info_file
+
+
 
 
 ### llm_config
