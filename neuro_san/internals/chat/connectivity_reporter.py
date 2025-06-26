@@ -66,7 +66,6 @@ class ConnectivityReporter:
     def report_network_connectivity(self) -> List[Dict[str, Any]]:
         """
         Share the connectivity information of the agent network in question
-
         :return: A list of connectivity information dictionaries each with the following keys:
             * origin  - The agent network node whose connectivity is being described
             * tools   - A list of tool nodes that are possible to reach from the origin
