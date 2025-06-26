@@ -21,6 +21,7 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
     - [replacement_strings](#replacement_strings)
     - [replacement_values](#replacement_values)
   - [agent_llm_info_file](#agent_llm_info_file)
+  - [toolbox_info_file](#toolbox_info_file)
   - [llm_config](#llm_config)
     - [model_name](#model_name)
     - [fallbacks](#fallbacks)
@@ -139,6 +140,12 @@ The agent_llm_info_file key allows you to specify a custom HOCON file that exten
 
 For more information on selecting and customizing models, see the [model_name](#model_name) section below.
 
+### toolbox_info_file
+
+The toolbox_info_file key lets you define a custom HOCON file that adds to the default set of tools available to agents within a neuro-san network. This is particularly helpful when you have tools shared across multiple agent networks.
+
+For further details, refer to the [toolbox](#toolbox) section below.
+
 ### llm_config
 
 An optional dictionary describing the default settings for agent LLMs when specifics
@@ -165,7 +172,8 @@ to use LLMs from various providers.
 | LLM Provider  | API Key environment variable  |
 |:--------------|:------------------------------|
 | Anthropic     | ANTHROPIC_API_KEY             |
-| Azure OpenAI  | OPENAI_API_KEY                |
+| Azure OpenAI  | AZURE_OPENAI_API_KEY          |
+| Google Gemini | GOOGLE_API_KEY                |
 | NVidia        | NVIDIA_API_KEY                |
 | Ollma         | &lt;None required&gt;         |
 | OpenAI        | OPENAI_API_KEY                |
@@ -471,13 +479,18 @@ Currently supported tool types include:
 
 The default toolbox configuration is located at [toolbox_info.hocon](../neuro_san/internals/run_context/langchain/toolbox/toolbox_info.hocon).
 
-To use your own tools, create a custom toolbox .hocon file and point to it by setting the AGENT_TOOLBOX_INFO_FILE environment variable.
+To use your own tools, create a custom toolbox `.hocon` file and reference it by either:
+
+- Setting the `toolbox_info_file` key in the agent network `.hocon` file, or  
+- Defining the `AGENT_TOOLBOX_INFO_FILE` environment variable.
+
+For more details on tool extension, see the [Toolbox Extension Guide](./toolbox_info_hocon_reference.md#extending-toolbox-info).
 
 For more information on tool schema, see the [toolbox_info_hocon_reference](./toolbox_info_hocon_reference.md).
 
 Example networks using tools from toolbox:
 
-- [langchain_search_tool.hocon](../neuro_san/registries/langchain_search_tool.hocon)
+- [bing_search.hocon](../neuro_san/registries/bing_search.hocon)
 which uses a langchain's base tool
 - [website_rag.hocon](../neuro_san/registries/website_rag.hocon) which uses predefined
 coded tools.

@@ -9,6 +9,7 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
+from typing import Any
 from typing import Dict
 
 from leaf_common.time.timeout import Timeout
@@ -65,13 +66,11 @@ class DirectAgentSessionFactory:
         """
 
         agent_network: AgentNetwork = self.get_agent_network(agent_name)
-
-        llm_factory: ContextTypeLlmFactory = MasterLlmFactory.create_llm_factory()
-        toolbox_factory: ContextTypeToolboxFactory = MasterToolboxFactory.create_toolbox_factory()
+        config: Dict[str, Any] = agent_network.get_config()
+        llm_factory: ContextTypeLlmFactory = MasterLlmFactory.create_llm_factory(config)
+        toolbox_factory: ContextTypeToolboxFactory = MasterToolboxFactory.create_toolbox_factory(config)
         # Load once now that we know what tool registry to use.
-        # Include "agent_llm_info_file" from agent network hocon to llm factory.
-        agent_llm_info_file = agent_network.get_agent_llm_info_file()
-        llm_factory.load(agent_llm_info_file)
+        llm_factory.load()
         toolbox_factory.load()
 
         factory = ExternalAgentSessionFactory(use_direct=use_direct)

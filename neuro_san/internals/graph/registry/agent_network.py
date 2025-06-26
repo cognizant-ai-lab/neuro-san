@@ -153,12 +153,6 @@ Disqualifiers. A front man cannot:
 
         return front_man
 
-    def get_agent_llm_info_file(self) -> str:
-        """
-        :return: The absolute path of agent llm info file for llm extension.
-        """
-        return self.config.get("agent_llm_info_file")
-
     def get_network_name(self) -> str:
         """
         :return: The network name of this AgentNetwork
