@@ -12,9 +12,12 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Union
 
 from neuro_san.internals.filters.answer_message_filter import AnswerMessageFilter
 from neuro_san.internals.messages.chat_message_type import ChatMessageType
+from neuro_san.internals.parsers.structure.first_available_structure_parser \
+    import FirstAvailableStructureParser
 from neuro_san.message_processing.message_processor import MessageProcessor
 
 
@@ -24,13 +27,35 @@ class AnswerMessageProcessor(MessageProcessor):
     of the chat session.
     """
 
-    def __init__(self):
+    def __init__(self, parse_formats: Union[str, List[str]] = None):
         """
         Constructor
+
+        :param parse_formats: Optional string or list of strings telling us to look for
+                    specific formats within the text of the final answer to separate out
+                    in a common way so that clients do not have to reinvent this wheel over
+                    and over again.
+
+                    Valid values are:
+                        "json" - look for JSON in the message content as structure to report.
+
+                    By default this is None, implying that such parsing is bypassed.
         """
         self.answer: str = None
+        self.structure: Dict[str, Any] = None
         self.answer_origin: List[Dict[str, Any]] = None
         self.filter: AnswerMessageFilter = AnswerMessageFilter()
+
+        # Only deal with non-empy lists of strings internally
+        self.parse_formats: List[str] = parse_formats
+        if self.parse_formats is not None:
+            if isinstance(self.parse_formats, str):
+                self.parse_formats = [self.parse_formats]
+        else:
+            self.parse_formats = []
+
+        if not isinstance(self.parse_formats, List):
+            raise ValueError(f"Value '{parse_formats}' must be a string, a list of strings, or None")
 
     def get_answer(self) -> str:
         """
@@ -44,11 +69,19 @@ class AnswerMessageProcessor(MessageProcessor):
         """
         return self.answer_origin
 
+    def get_structure(self) -> Dict[str, Any]:
+        """
+        :return: Any dictionary structure that was contained within the final answer
+                 from the agent session interaction, if such a specific breakout was desired.
+        """
+        return self.structure
+
     def reset(self):
         """
         Resets any previously accumulated state
         """
         self.answer = None
+        self.structure = None
         self.answer_origin = None
 
     def process_message(self, chat_message_dict: Dict[str, Any], message_type: ChatMessageType):
@@ -62,7 +95,8 @@ class AnswerMessageProcessor(MessageProcessor):
             return
 
         origin: List[Dict[str, Any]] = chat_message_dict.get("origin")
-        text = chat_message_dict.get("text")
+        text: str = chat_message_dict.get("text")
+        structure: Dict[str, Any] = chat_message_dict.get("structure")
 
         # Record what we got.
         # We might get another as we go along, but the last message in the stream
@@ -71,3 +105,12 @@ class AnswerMessageProcessor(MessageProcessor):
             self.answer = text
         if origin is not None:
             self.answer_origin = origin
+        if structure is not None:
+            self.structure = structure
+
+        if self.structure is None and self.answer is not None:
+            # Parse structure from the first available format in the answer content
+            structure_parser = FirstAvailableStructureParser(self.parse_formats)
+            self.structure = structure_parser.parse_structure(self.answer)
+            if self.structure is not None:
+                self.answer = structure_parser.get_remainder()
