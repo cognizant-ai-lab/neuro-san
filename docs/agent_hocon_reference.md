@@ -173,6 +173,7 @@ to use LLMs from various providers.
 |:--------------|:------------------------------|
 | Anthropic     | ANTHROPIC_API_KEY             |
 | Azure OpenAI  | AZURE_OPENAI_API_KEY          |
+| Google Gemini | GOOGLE_API_KEY                |
 | NVidia        | NVIDIA_API_KEY                |
 | Ollma         | &lt;None required&gt;         |
 | OpenAI        | OPENAI_API_KEY                |
