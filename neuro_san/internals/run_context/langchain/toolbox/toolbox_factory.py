@@ -80,7 +80,7 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         self.toolbox_infos: Dict[str, Any] = {}
         self.overlayer = DictionaryOverlay()
         self.toolbox_info_file: str = None
-        self.config: Dict[str, Any] = config
+        self.toolbox_info_file: str = config.get("toolbox_info_file")
 
     def load(self):
         """
@@ -92,7 +92,7 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         # Mix in user-specified toolbox info, if available.
         # First check "toolbox_info_file" key from agent network hocon.
         # If that is unavailable, fallback to env variable.
-        toolbox_info_file: str = self.config.get("toolbox_info_file")
+        toolbox_info_file: str = self.toolbox_info_file
         if not toolbox_info_file:
             toolbox_info_file = os.getenv("AGENT_TOOLBOX_INFO_FILE")
         if toolbox_info_file is not None and len(toolbox_info_file) > 0:

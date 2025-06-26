@@ -75,7 +75,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         self.llm_factories: List[LangChainLlmFactory] = [
             StandardLangChainLlmFactory()
         ]
-        self.config: Dict[str, Any] = config
+        self.llm_info_file: str = config.get("agent_llm_info_file")
 
     def load(self):
         """
@@ -89,7 +89,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         # Mix in user-specified llm info, if available.
         # First check "agent_llm_info_file" key from agent network hocon.
         # If that is unavailable, fallback to env variable.
-        llm_info_file: str = self.config.get("agent_llm_info_file")
+        llm_info_file: str = self.llm_info_file
         if not llm_info_file:
             llm_info_file = os.getenv("AGENT_LLM_INFO_FILE")
         if llm_info_file is not None and len(llm_info_file) > 0:
