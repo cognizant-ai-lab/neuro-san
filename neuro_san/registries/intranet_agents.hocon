@@ -61,6 +61,17 @@ the inquiry, if any. or if it is being asked to respond to the inquiry.
         },
     }
     "tools": [
+
+        # This first agent definition is regarded as the "Front Man", which
+        # does all the talking to the outside world/client.
+        # It is identified as such because it is either:
+        #   A) The only one with no parameters in his function definition,
+        #      and therefore he needs to talk to the outside world to get things rolling.
+        #   B) The first agent listed, regardless of function parameters.
+        #
+        # Some disqualifications from being a front man:
+        #   1) Cannot use a CodedTool "class" definition
+        #   2) Cannot use a Tool "toolbox" definition
         {
             "name": "main_search_box",
 
@@ -70,9 +81,7 @@ the inquiry, if any. or if it is being asked to respond to the inquiry.
 
             "function": {
 
-                # When there are no function parameters to the front-man,
-                # its description acts as an initial prompt. 
-
+                # The description acts as an initial prompt. 
                 "description": "I can help you with your intranet needs."
             },
             "instructions": """
