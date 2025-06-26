@@ -38,9 +38,9 @@ class MasterToolboxFactory:
         if context_type.startswith("openai"):
             toolbox_factory = None
         elif context_type.startswith("langchain"):
-            toolbox_factory = ToolboxFactory()
+            toolbox_factory = ToolboxFactory(config)
         else:
             # Default case
-            toolbox_factory = ToolboxFactory()
+            toolbox_factory = ToolboxFactory(config)
 
         return toolbox_factory
