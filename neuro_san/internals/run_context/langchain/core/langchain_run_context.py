@@ -23,7 +23,6 @@ from copy import copy
 from logging import Logger
 from logging import getLogger
 
-from ollama import ResponseError
 import openai
 import anthropic
 
@@ -508,11 +507,6 @@ class LangChainRunContext(RunContext):
                 self.logger.warning("retrying from KeyError")
                 retries = retries - 1
                 exception = key_error
-                backtrace = traceback.format_exc()
-            except ResponseError as ollama_response_error:
-                self.logger.warning("retrying from Ollama ResponseError")
-                retries = retries - 1
-                exception = ollama_response_error
                 backtrace = traceback.format_exc()
             except TypeError as type_error:
                 self.logger.warning("retrying from TypeError")
