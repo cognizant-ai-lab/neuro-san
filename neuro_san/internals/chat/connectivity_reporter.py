@@ -63,11 +63,9 @@ class ConnectivityReporter:
             config: Dict[str, Any] = self.inspector.get_config()
             self.toolbox_factory = MasterToolboxFactory.create_toolbox_factory(config)
 
-    def report_network_connectivity(self, agent_toolbox_info_file: str) -> List[Dict[str, Any]]:
+    def report_network_connectivity(self) -> List[Dict[str, Any]]:
         """
         Share the connectivity information of the agent network in question
-
-        :param agent_toolbox_info_file: User-specified toolbox info from agent network hocon
 
         :return: A list of connectivity information dictionaries each with the following keys:
             * origin  - The agent network node whose connectivity is being described
@@ -85,7 +83,7 @@ class ConnectivityReporter:
         """
         # Load the toolbox factory once
         if self.toolbox_factory is not None:
-            self.toolbox_factory.load(agent_toolbox_info_file)
+            self.toolbox_factory.load()
 
         # Find the name of the front-man as a root node
         front_man: str = self.inspector.find_front_man()

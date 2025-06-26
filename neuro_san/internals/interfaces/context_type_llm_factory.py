@@ -41,12 +41,10 @@ class ContextTypeLlmFactory:
                                     the model description in this class.
     """
 
-    def load(self, agent_llm_info_file: str):
+    def load(self):
         """
         Goes through the process of loading any user extensions and/or configuration
         files
-
-        :param agent_llm_info_file: User-specified llm info from agent network hocon
         """
         raise NotImplementedError
 

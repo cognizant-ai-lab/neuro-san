@@ -70,28 +70,30 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         "neuro_san/internals/run_context/langchain/toolbox/toolbox_info.hocon"
     """
 
-    def __init__(self):
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
         """
         Constructor
+
+        :param config: The config dictionary which may or may not contain
+                       keys for the context_type and toolbox_info_file
         """
         self.toolbox_infos: Dict[str, Any] = {}
         self.overlayer = DictionaryOverlay()
         self.toolbox_info_file: str = None
+        self.config: Dict[str, Any] = config
 
-    def load(self, agent_toolbox_info_file: str):
+    def load(self):
         """
         Loads the base tool information from hocon files.
-
-        :param agent_toolbox_info_file: User-specified toolbox info from agent network hocon
         """
         restorer = ToolboxInfoRestorer()
         self.toolbox_infos = restorer.restore()
 
         # Mix in user-specified toolbox info, if available.
-        # First check "agent_toolbox_info_file" key from agent network hocon.
+        # First check "toolbox_info_file" key from agent network hocon.
         # If that is unavailable, fallback to env variable.
-        toolbox_info_file: str = agent_toolbox_info_file
-        if not agent_toolbox_info_file:
+        toolbox_info_file: str = self.config.get("toolbox_info_file")
+        if not toolbox_info_file:
             toolbox_info_file = os.getenv("AGENT_TOOLBOX_INFO_FILE")
         if toolbox_info_file is not None and len(toolbox_info_file) > 0:
             extra_toolbox_infos: Dict[str, Any] = restorer.restore(file_reference=toolbox_info_file)

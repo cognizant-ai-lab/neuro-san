@@ -13,6 +13,7 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Type
 
 import os
@@ -62,17 +63,21 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                                     the model description in this class.
     """
 
-    def __init__(self):
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
         """
         Constructor
+
+        :param config: The config dictionary which may or may not contain
+                       keys for the context_type and agent_llm_info_file
         """
         self.llm_infos: Dict[str, Any] = {}
         self.overlayer = DictionaryOverlay()
         self.llm_factories: List[LangChainLlmFactory] = [
             StandardLangChainLlmFactory()
         ]
+        self.config: Dict[str, Any] = config
 
-    def load(self, agent_llm_info_file: str):
+    def load(self):
         """
         Loads the LLM information from hocon files.
 
@@ -84,8 +89,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         # Mix in user-specified llm info, if available.
         # First check "agent_llm_info_file" key from agent network hocon.
         # If that is unavailable, fallback to env variable.
-        llm_info_file: str = agent_llm_info_file
-        if not agent_llm_info_file:
+        llm_info_file: str = self.config.get("agent_llm_info_file")
+        if not llm_info_file:
             llm_info_file = os.getenv("AGENT_LLM_INFO_FILE")
         if llm_info_file is not None and len(llm_info_file) > 0:
             extra_llm_infos: Dict[str, Any] = restorer.restore(file_reference=llm_info_file)
