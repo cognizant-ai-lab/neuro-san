@@ -13,6 +13,8 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+import json
+
 from neuro_san.message_processing.answer_message_processor import AnswerMessageProcessor
 from neuro_san.message_processing.chat_context_message_processor import ChatContextMessageProcessor
 from neuro_san.message_processing.composite_message_processor import CompositeMessageProcessor
@@ -65,3 +67,27 @@ class BasicMessageProcessor(CompositeMessageProcessor):
                 Empty dictionaries or None values simply start a new conversation.
         """
         return self.chat_context.get_chat_context()
+
+    def get_structure(self) -> Dict[str, Any]:
+        """
+        :return: Any dictionary structure that was contained within the final answer
+                 from the agent session interaction, if such a specific breakout was desired.
+        """
+        return self.answer.get_structure()
+
+    def get_compiled_answer(self) -> str:
+        """
+        :return: All components of the "answer" except for sly_data compiled into
+                 a single string.  This includes the results of these methods in order:
+                    get_answer()
+                    get_structure()
+        """
+        compiled: str = self.get_answer()
+
+        # Add a structure to the mix in a uniform manner, if there is one
+        structure: Dict[str, Any] = self.get_structure()
+        if structure is not None:
+            string_struct: str = json.dumps(structure, indent=4, sort_keys=True)
+            compiled += f"\n```json\n{string_struct}\n```"
+
+        return compiled

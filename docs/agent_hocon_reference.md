@@ -78,7 +78,7 @@ A commondefs dictionary where keys are strings to be found within braces within 
 and the values of the dictionary are to replace those keys anywhere throughout the dictionary where string
 values are to be found.  Example:
 
-```
+```json
 {
     "commondefs": {
         "replacement_strings": {
@@ -104,7 +104,7 @@ of the dictionary are to replace those keys anywhere throughout the dictionary w
 whenever an exact match of the string value is found.
 values are to be found.  Example:
 
-```
+```json
 {
     "commondefs": {
         "replacement_values": {
@@ -123,7 +123,7 @@ values are to be found.  Example:
 
 This results in a final interpretation where the "function" value is:
 
-```
+```json
 "function": {
     "key1": "my_value",
     "key2": 1.0
@@ -138,7 +138,6 @@ your string values within your replacement_values and things will work out as yo
 The agent_llm_info_file key allows you to specify a custom HOCON file that extends the default list of available LLMs used by agents in a neuro-san network. This is especially useful if you're using models that are not included in the default configuration (e.g., newly released models or organization-specific endpoints).
 
 For more information on selecting and customizing models, see the [model_name](#model_name) section below.
-
 
 ### llm_config
 
@@ -172,7 +171,7 @@ to use LLMs from various providers.
 | OpenAI        | OPENAI_API_KEY                |
 
 Note: _We strongly recommend to **not** set secrets as values within any source file._
-These files tend to creep into source control repos, and it is __very__ bad practice
+These files tend to creep into source control repos, and it is **very** bad practice
 to expose secrets by checking them in.
 
 If your favorite model, or new hotness is not listed in default_llm_info.hocon,
@@ -225,7 +224,7 @@ As long as a parameter is a scalar listed in the args section for your LLM's cla
 file, you can set that parameter in any llm_config within its own technical limits however you like.
 
 Note: _We strongly recommend to **not** set secrets as values within any source file, including hocon files._
-These files tend to creep into source control repos, and it is __very__ bad practice
+These files tend to creep into source control repos, and it is **very** bad practice
 to expose secrets by checking them in.
 
 #### verbose
@@ -260,7 +259,7 @@ which contains the following keys:
 #### error_fragments
 
 A list of strings where if any one of the strings appears in agent output,
-it is considered an error and reported as such per the [error_formatter](#error-formatter).
+it is considered an error and reported as such per the [error_formatter](#error_formatter).
 
 ### tools
 
@@ -284,9 +283,9 @@ There are a few settings that only apply to the front man.
 
 ### name
 
-Every agent *must* have a name.
+Every agent _must_ have a name.
 
-Names can contain alphanumeric characters with - or _ as word separators.
+Names can contain alphanumeric characters with "-" or "_" as word separators.
 No spaces or other punctuation is allowed.
 This allows for snake_case, camelCase, kebab-case, PascalCase, or SCREAMING_SNAKE_CASE
 human-readable names, however you like them.
@@ -308,8 +307,8 @@ What is defined in this dictionary is what is returned for the agent's Function(
 
 #### description
 
-Every agent *must* have its function description filled out.
-This is a single string value which informs anything upstream as to what *this* agent can do for it.
+Every agent _must_ have its function description filled out.
+This is a single string value which informs anything upstream as to what _this_ agent can do for it.
 
 For a user-facing front-man, what is contained in this description often suffices as a prompt for the user.
 
@@ -371,8 +370,8 @@ The front-man is the only agent node that ever needs to specify this aspect of t
 definition, as sly_data itself is already visible to all other internal agents of the network.
 
 Example networks that advertise their sly_data_schema:
-- [math_guy.hocon](../neuro_san/registries/math_guy.hocon)
 
+- [math_guy.hocon](../neuro_san/registries/math_guy.hocon)
 
 ### instructions
 
@@ -412,19 +411,21 @@ This allows common agent network definitions to be used as functions for other l
 
 Furthermore, it is also possible to reference agents on other neuro-san _servers_ by using a URL as a tool reference.
 
+<!-- markdownlint-disable-next-line MD034 -->
 Example: "http://localhost:8080/math_guy"
 
 This enables entire ecosystems of agent webs.
 
+<!-- markdownlint-disable-next-line MD024 -->
 ### llm_config
 
-It is possible for any LLM-enabled agent description to also have its own [llm_config](#llm-config)
+It is possible for any LLM-enabled agent description to also have its own [llm_config](#llm_config)
 dictionary.  This allows for agents to use the right agent for the job.
 Some considerations might include:
 
-* Use of lower-cost LLMs for lighter (perhaps non-tool-using) jobs
-* Use of specially trained LLMs when subject matter expertise is required.
-* Use of securely sequestered LLMs when sensitive information is appropos to a single agent's chat stream.
+- Use of lower-cost LLMs for lighter (perhaps non-tool-using) jobs
+- Use of specially trained LLMs when subject matter expertise is required.
+- Use of securely sequestered LLMs when sensitive information is appropos to a single agent's chat stream.
 
 ### class
 
@@ -435,6 +436,7 @@ interface.
 Implementations must be found in the directory where the class can be resolved by looking
 under the AGENT_TOOL_PATH environment variable setting as part of the PYTHONPATH.
 By default neuro-san deployments assume that PYTHONPATH is set to contain the
+<!-- markdownlint-disable-next-line MD033 -->
 top-level of your project's repo and that AGENT_TOOL_PATH is set to "<top-level>/coded_tools".
 In that directory each agent has its own folder and the value of the class is resolved
 from there.
@@ -444,11 +446,10 @@ If the agent is called "math_guy" and the class is valued as "calculator.Calcula
 The python file math_guy/calculator.py under AGENT_TOOL_PATH is expected to have
 a class called Calculator which implements the CodedTool interface.
 
-
 Implementations of the CodedTool interface must have implementations which:
 
-* have a no-args constructor
-* implement either the preferred async_invoke() or the discouraged synchronous invoke() method.
+- have a no-args constructor
+- implement either the preferred async_invoke() or the discouraged synchronous invoke() method.
 
 Agents representing CodedTools have the arguments described their [function parameters](#parameters)
 populated by calling LLMs and passed in via the args dictionary of their async/invoke() method
@@ -464,6 +465,7 @@ agent parallelism and performance problems at scale.
 
 An optional string that refers to a predefined tool listed in a toolbox configuration file.
 Currently supported tool types include:
+
 - langchain's base tools
 - coded tools.
 
@@ -474,6 +476,7 @@ To use your own tools, create a custom toolbox .hocon file and point to it by se
 For more information on tool schema, see the [toolbox_info_hocon_reference](./toolbox_info_hocon_reference.md).
 
 Example networks using tools from toolbox:
+
 - [langchain_search_tool.hocon](../neuro_san/registries/langchain_search_tool.hocon)
 which uses a langchain's base tool
 - [website_rag.hocon](../neuro_san/registries/website_rag.hocon) which uses predefined
@@ -518,7 +521,7 @@ A string value in the dictionary represents a translation to a new key.
 
 Example:
 
-```
+```json
     "allow": {
         "to_downstream": {
             "sly_data": {
@@ -533,7 +536,7 @@ Example:
 In simple sly_data situations you can simply specify which keys you want to allow
 as a list:
 
-```
+```json
     "allow": {
         "to_downstream": {
             "sly_data": [ "user_id", "session_id" ]
@@ -543,9 +546,10 @@ as a list:
 
 #### from_downstream
 
-Dictionary which specifies security policy for information coming *from* downstream [external agents](#external-agents).
+Dictionary which specifies security policy for information coming _from_ downstream [external agents](#external-agents).
 This has no effect on any information flowing between agents internal to the network.
 
+<!-- markdownlint-disable-next-line MD024 -->
 ##### sly_data
 
 By default no sly_data is accepted from any external agent.
@@ -565,6 +569,7 @@ Dictionary which specifies security policy for information going back to any cal
 
 This has no effect on any information flowing between agents internal to the network.
 
+<!-- markdownlint-disable-next-line MD024 -->
 ##### sly_data
 
 By default no sly_data goes back to the upstream caller from the agent network
@@ -585,13 +590,14 @@ that can visualize the network's connectivity.
 When not present, the system determines the value given the configuration of the node
 and will return one of the following strings:
 
-* external_agent - for [External Agents](#external-agents)
-* coded_tool - for a [CodedTool](../neuro_san/interfaces/coded_tool.py)
-* langchain_tool - for a langchain tool
-* llm_agent - for LLM-powered agents
+- external_agent - for [External Agents](#external-agents)
+- coded_tool - for a [CodedTool](../neuro_san/interfaces/coded_tool.py)
+- langchain_tool - for a langchain tool
+- llm_agent - for LLM-powered agents
 
 ### max_message_history
 
+<!-- markdownlint-disable-next-line MD036 -->
 _Front Man only_
 
 An integer which tells the server how many of the most recent chat history messages
@@ -601,10 +607,12 @@ on the next client invocation.  By default this value is None, indicating there 
 This is useful when end-user conversations with agents are expected to be lengthy and/or change
 topics frequently.
 
+<!-- markdownlint-disable-next-line MD024 -->
 ### error_formatter
 
-Same as top-level [error_formatter above](#error-formatter), except at single-agent scope.
+Same as top-level [error_formatter above](#error_formatter), except at single-agent scope.
 
+<!-- markdownlint-disable-next-line MD024 -->
 ### error_fragments
 
-Same as top-level [error_fragments above](#error-fragments), except at single-agent scope.
+Same as top-level [error_fragments above](#error_fragments), except at single-agent scope.

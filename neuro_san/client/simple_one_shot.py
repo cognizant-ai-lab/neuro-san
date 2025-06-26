@@ -61,6 +61,6 @@ class SimpleOneShot:
             message: Dict[str, Any] = chat_response.get("response", empty)
             processor.process_message(message, chat_response.get("type"))
 
-        raw_answer: str = processor.get_answer()
+        raw_answer: str = processor.get_compiled_answer()
 
         return raw_answer
