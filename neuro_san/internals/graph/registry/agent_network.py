@@ -13,6 +13,8 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from copy import copy
+
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
@@ -115,17 +117,40 @@ Some things to try:
                 front_men.append(name)
 
         if len(front_men) == 0:
-            # The next way to find a front man is to see which agent was registered first
+            # The best way to find a front man is to see which agent was registered first
             front_men.append(self.first_agent)
 
-        if len(front_men) == 0:
-            raise ValueError("No front man for chat found. "
-                             "One entry's function must not have any parameters defined to be the front man")
+        # Check for validity of our front-man candidates.
+        valid_front_men: List[str] = copy(front_men)
+        for front_man in front_men:
 
-        if len(front_men) > 1:
-            raise ValueError(f"Found > 1 front man for chat. Possibilities: {front_men}")
+            # Check the agent spec of the front man for validity
+            agent_spec: Dict[str, Any] = self.get_agent_tool_spec(front_man)
 
-        front_man = front_men[0]
+            if agent_spec.get("class") is not None:
+                # Currently, front man cannot be a coded tool
+                valid_front_men.remove(front_man)
+            elif agent_spec.get("toolbox") is not None:
+                # Currently, front man cannot from a toolbox
+                valid_front_men.remove(front_man)
+
+        if len(valid_front_men) == 0:
+            raise ValueError("""
+No front man found.
+Here are some pre-conditions for an agent in your network to be a potential front man:
+1) The agent's "function" does not have any "parameters" defined OR
+2) The agent is the first listed among the "tools" of your agent hocon file
+
+Disqualifiers. A front man cannot:
+* be a CodedTool with a "class" definition
+* be a tool with a "toolbox" definition
+""")
+
+        if len(valid_front_men) > 1:
+            raise ValueError(f"Found > 1 front man for chat. Possibilities: {valid_front_men}")
+
+        front_man: str = valid_front_men[0]
+
         return front_man
 
     def get_network_name(self) -> str:
