@@ -384,6 +384,13 @@
           "sly_data_schema": {
             "type": "object",
             "description": "Optional map of parameters passed in via the sly_data dictionary private data channel that the agent needs in order to work.  Just like the parameters above, this is really a pydantic/OpenAI function description, which is a bit too complex to specify directly in protobuf."
+          },
+          "structure_formats": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of formats that could be parsed from the text of the messages into the structure field of a ChatMessage."
           }
         },
         "description": "Description of an agent's function"

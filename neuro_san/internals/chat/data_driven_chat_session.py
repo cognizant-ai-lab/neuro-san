@@ -21,6 +21,8 @@ import traceback
 
 from openai import BadRequestError
 
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
+
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.chat.chat_history_message_processor import ChatHistoryMessageProcessor
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -172,12 +174,16 @@ class DataDrivenChatSession:
         # Determine the chat_context to enable continuing the conversation
         return_chat_context: Dict[str, Any] = self.prepare_chat_context(message_list)
 
+        # Get the front man spec. We will need it later for a few things.
+        front_man_spec: Dict[str, Any] = self.front_man.get_agent_tool_spec()
+        front_man_extractor = DictionaryExtractor(front_man_spec)
+
         # Get the formats we should parse from the final answer from the config for the network.
         # As of 6/24/25, this is an unadvertised experimental feature.
-        parse_formats: Union[str, List[str]] = self.registry.get_config().get("parse_formats")
+        structure_formats: Union[str, List[str]] = front_man_extractor.get("function.structure_formats")
 
         # Find "the answer" and have that be the content of the last message we send
-        answer_processor = AnswerMessageProcessor(parse_formats=parse_formats)
+        answer_processor = AnswerMessageProcessor(parse_formats=structure_formats)
         answer_processor.process_messages(message_list)
         answer: str = answer_processor.get_answer()
         if answer is None:
@@ -186,7 +192,6 @@ class DataDrivenChatSession:
         structure: Dict[str, Any] = answer_processor.get_structure()
 
         # Send back sly_data as the front-man permits
-        front_man_spec: Dict[str, Any] = self.front_man.get_agent_tool_spec()
         redactor = SlyDataRedactor(front_man_spec,
                                    config_keys=["allow.to_upstream.sly_data"],
                                    allow_empty_dict=False)

@@ -89,6 +89,12 @@ class DirectAgentSession(AgentSession):
             spec: Dict[str, Any] = self.agent_network.get_agent_tool_spec(front_man)
             empty: Dict[str, Any] = {}
             function: Dict[str, Any] = spec.get("function", empty)
+
+            # Repair single string for grpc
+            formats = function.get("structure_formats")
+            if isinstance(formats, str):
+                function["structure_formats"] = [formats] 
+
             response_dict = {
                 "function": function,
             }
