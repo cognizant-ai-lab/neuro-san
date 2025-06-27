@@ -42,6 +42,7 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
             - [properties](#properties)
             - [required](#required)
         - [sly_data_schema](#sly_data_schema)
+        - [structure_formats](#structure_formats)
     - [instructions](#instructions)
     - [command](#command)
     - [tools (agents)](#tools-agents)
@@ -383,6 +384,27 @@ definition, as sly_data itself is already visible to all other internal agents o
 Example networks that advertise their sly_data_schema:
 
 - [math_guy.hocon](../neuro_san/registries/math_guy.hocon)
+
+#### structure_formats
+
+An optional list of strings describing the formats that the server-side should
+parse into the structure field of the ChatMessage response so clients do not have
+to re-invent this parsing wheel multiple times over.
+
+The first single structure found of the appropriate format(s) from the text of a response
+is what is put into the ChatMessage structure field, and any text which contributed to the 
+parsing of that structure is removed from the ChatMessage text field.
+
+Supported values are:
+
+- "json"    Looks for JSON in the messages from the LLM and extracts 
+
+Currently, the front-man is the only agent node that ever needs to specify this aspect of the [function](#function)
+definition.
+
+Example networks that parse their structure_formats:
+
+- [music_nerd_pro.hocon](../neuro_san/registries/music_nerd_pro.hocon)
 
 ### instructions
 
