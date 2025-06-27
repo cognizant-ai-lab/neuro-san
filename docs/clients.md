@@ -46,7 +46,8 @@ returns:
     ```json
     {
         "function": {
-            "description": "\nI can help you to make a terse anouncement.\nTell me what your target audience is, and what sentiment you would like to relate.\n"
+            "description": "\nI can help you to make a terse anouncement.\nTell me what your target audience is, and what
+            sentiment you would like to relate.\n"
         }
     }
     ```
