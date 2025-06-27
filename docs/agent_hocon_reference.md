@@ -427,7 +427,7 @@ Example: "http://localhost:8080/math_guy"
 
 This enables entire ecosystems of agent webs.
 
-<!-- markdownlint-disable-next-line MD024 -->
+<!--- pyml disable-next-line no-duplicate-heading -->
 ### llm_config
 
 It is possible for any LLM-enabled agent description to also have its own [llm_config](#llm_config)
@@ -444,13 +444,14 @@ Optional string specifying a Python class which implements the
 [CodedTool](../neuro_san/interfaces/coded_tool.py)
 interface.
 
+<!-- pyml disable no-inline-html -->
 Implementations must be found in the directory where the class can be resolved by looking
 under the AGENT_TOOL_PATH environment variable setting as part of the PYTHONPATH.
 By default neuro-san deployments assume that PYTHONPATH is set to contain the
-<!-- markdownlint-disable-next-line MD033 -->
 top-level of your project's repo and that AGENT_TOOL_PATH is set to "<top-level>/coded_tools".
 In that directory each agent has its own folder and the value of the class is resolved
 from there.
+<!-- pyml disable no-inline-html -->
 
 For example:
 If the agent is called "math_guy" and the class is valued as "calculator.Calculator",
@@ -565,7 +566,7 @@ as a list:
 Dictionary which specifies security policy for information coming _from_ downstream [external agents](#external-agents).
 This has no effect on any information flowing between agents internal to the network.
 
-<!-- markdownlint-disable-next-line MD024 -->
+<!--- pyml disable-next-line no-duplicate-heading -->
 ##### sly_data
 
 By default no sly_data is accepted from any external agent.
@@ -585,7 +586,7 @@ Dictionary which specifies security policy for information going back to any cal
 
 This has no effect on any information flowing between agents internal to the network.
 
-<!-- markdownlint-disable-next-line MD024 -->
+<!--- pyml disable-next-line no-duplicate-heading -->
 ##### sly_data
 
 By default no sly_data goes back to the upstream caller from the agent network
@@ -613,7 +614,7 @@ and will return one of the following strings:
 
 ### max_message_history
 
-<!-- markdownlint-disable-next-line MD036 -->
+<!-- pyml disable-next-line no-emphasis-as-heading -->
 _Front Man only_
 
 An integer which tells the server how many of the most recent chat history messages
@@ -623,12 +624,12 @@ on the next client invocation.  By default this value is None, indicating there 
 This is useful when end-user conversations with agents are expected to be lengthy and/or change
 topics frequently.
 
-<!-- markdownlint-disable-next-line MD024 -->
+<!--- pyml disable-next-line no-duplicate-heading -->
 ### error_formatter
 
 Same as top-level [error_formatter above](#error_formatter), except at single-agent scope.
 
-<!-- markdownlint-disable-next-line MD024 -->
+<!--- pyml disable-next-line no-duplicate-heading -->
 ### error_fragments
 
 Same as top-level [error_fragments above](#error_fragments), except at single-agent scope.

@@ -158,7 +158,7 @@ Superfluous information is passed, taking up space, but ignored.
 
 The default value is None.
 
-<!-- markdownlint-disable-next-line MD024 -->
+<!--- pyml disable-next-line no-duplicate-heading -->
 #### timeout_in_seconds
 
 An optional float that describes how long the single interaction should take before giving up.

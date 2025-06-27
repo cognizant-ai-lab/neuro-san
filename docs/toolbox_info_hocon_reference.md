@@ -164,7 +164,7 @@ Example:
 }
 ```
 
-<!-- markdownlint-disable-next-line MD024 -->
+<!--- pyml disable-next-line no-duplicate-heading -->
 #### `display_as` *(optional)*
 
 Display type for clients. Options:
