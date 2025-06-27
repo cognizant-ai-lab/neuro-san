@@ -392,12 +392,12 @@ parse into the structure field of the ChatMessage response so clients do not hav
 to re-invent this parsing wheel multiple times over.
 
 The first single structure found of the appropriate format(s) from the text of a response
-is what is put into the ChatMessage structure field, and any text which contributed to the 
+is what is put into the ChatMessage structure field, and any text which contributed to the
 parsing of that structure is removed from the ChatMessage text field.
 
 Supported values are:
 
-- "json"    Looks for JSON in the messages from the LLM and extracts 
+- "json"    Looks for JSON in the messages from the LLM and extracts
 
 Currently, the front-man is the only agent node that ever needs to specify this aspect of the [function](#function)
 definition.
@@ -507,7 +507,7 @@ The default toolbox configuration is located at [toolbox_info.hocon](../neuro_sa
 
 To use your own tools, create a custom toolbox `.hocon` file and reference it by either:
 
-- Setting the `toolbox_info_file` key in the agent network `.hocon` file, or  
+- Setting the `toolbox_info_file` key in the agent network `.hocon` file, or
 - Defining the `AGENT_TOOLBOX_INFO_FILE` environment variable.
 
 For more details on tool extension, see the [Toolbox Extension Guide](./toolbox_info_hocon_reference.md#extending-toolbox-info).
