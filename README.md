@@ -187,9 +187,9 @@ at your own manifest file, set a new environment variable:
 
 ## Infrastructure
 
-The agent infrastructure is run as a gRPC service.
-That gRPC service is implemented (client and server) using the
-[AgentSession](https://github.com/cognizant-ai-lab/neuro-san/blob/main/neuro_san/session/agent_session.py)
+The agent infrastructure is run as a library, an HTTP service and/or a gRPC service.
+Access to agents is implemented (client and server) using the
+[AgentSession](https://github.com/cognizant-ai-lab/neuro-san/blob/main/neuro_san/interfaces/agent_session.py)
 interface:
 
 It has 2 main methods:
@@ -218,7 +218,9 @@ Implementations of the AgentSession interface:
 
 Note that agent_cli uses all of these.  You can look at the source code there for examples.
 
-There are also some asynchoronous implementations session classes available
+There are also some asynchoronous implementations available of the
+[AsyncAgentSession](https://github.com/cognizant-ai-lab/neuro-san/blob/main/neuro_san/interfaces/async_agent_session.py)
+interface:
 
 ## Advanced concepts
 

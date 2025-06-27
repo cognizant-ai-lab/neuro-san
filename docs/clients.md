@@ -19,11 +19,11 @@ There are async version of all of the above as well.
 
 ## Other clients
 
-A neuro-san server uses gRPC under the hood. You can check out the protobufs definition of the
+A neuro-san server uses HTTP and/or gRPC under the hood. You can check out the protobufs definition of the
 API under neuro_san/api/grpc.  The place to start is agent.proto for the service definitions.
 The next most important file there is chat.proto for the chat message definitions.
 
-While gRPC data transimission is more compact, most clients will likely want to use the http
+While gRPC data transimission is more compact, most clients will likely want to use the HTTP
 interface for ease of use in terms of web-apps and dev-ops administration.
 
 ### Using curl to interact with a neuro-san server
