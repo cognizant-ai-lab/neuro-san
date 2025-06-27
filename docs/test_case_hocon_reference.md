@@ -222,7 +222,7 @@ inclusion is an AND operation.)
 For instance, part of the [music_nerd test case](../tests/fixtures/music_nerd/beatles_with_history.hocon)
 contains this interaction definition:
 
-```python
+```json
     "interactions": [
         {
             # This is what we send as input to streaming_chat()
@@ -270,7 +270,7 @@ inclusion is an AND operation.)
 For instance, part of the [math_guy test case](../tests/fixtures/math_guy/basic_sly_data.hocon)
 contains this interaction definition:
 
-```python
+```json
     "interactions": [
         {
             # This is what we send as input to streaming_chat()
