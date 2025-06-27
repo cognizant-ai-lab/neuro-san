@@ -51,6 +51,8 @@ class AbstractAgentEvaluator(AgentEvaluator):
         test_dict: Dict[str, Any] = {}
         if first_component == "text":
             test_dict[first_component] = processor.get_answer()
+        elif first_component == "structure":
+            test_dict[first_component] = processor.get_structure()
         elif first_component == "sly_data":
             test_dict[first_component] = processor.get_sly_data()
 

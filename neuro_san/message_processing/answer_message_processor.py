@@ -27,11 +27,11 @@ class AnswerMessageProcessor(MessageProcessor):
     of the chat session.
     """
 
-    def __init__(self, parse_formats: Union[str, List[str]] = None):
+    def __init__(self, structure_formats: Union[str, List[str]] = None):
         """
         Constructor
 
-        :param parse_formats: Optional string or list of strings telling us to look for
+        :param structure_formats: Optional string or list of strings telling us to look for
                     specific formats within the text of the final answer to separate out
                     in a common way so that clients do not have to reinvent this wheel over
                     and over again.
@@ -47,15 +47,15 @@ class AnswerMessageProcessor(MessageProcessor):
         self.filter: AnswerMessageFilter = AnswerMessageFilter()
 
         # Only deal with non-empy lists of strings internally
-        self.parse_formats: List[str] = parse_formats
-        if self.parse_formats is not None:
-            if isinstance(self.parse_formats, str):
-                self.parse_formats = [self.parse_formats]
+        self.structure_formats: List[str] = structure_formats
+        if self.structure_formats is not None:
+            if isinstance(self.structure_formats, str):
+                self.structure_formats = [self.structure_formats]
         else:
-            self.parse_formats = []
+            self.structure_formats = []
 
-        if not isinstance(self.parse_formats, List):
-            raise ValueError(f"Value '{parse_formats}' must be a string, a list of strings, or None")
+        if not isinstance(self.structure_formats, List):
+            raise ValueError(f"Value '{structure_formats}' must be a string, a list of strings, or None")
 
     def get_answer(self) -> str:
         """
@@ -108,9 +108,9 @@ class AnswerMessageProcessor(MessageProcessor):
         if structure is not None:
             self.structure = structure
 
-        if self.structure is None and self.answer is not None:
+        if structure is None and text is not None:
             # Parse structure from the first available format in the answer content
-            structure_parser = FirstAvailableStructureParser(self.parse_formats)
-            self.structure = structure_parser.parse_structure(self.answer)
+            structure_parser = FirstAvailableStructureParser(self.structure_formats)
+            self.structure = structure_parser.parse_structure(text)
             if self.structure is not None:
                 self.answer = structure_parser.get_remainder()

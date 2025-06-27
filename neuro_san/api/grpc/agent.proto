@@ -93,6 +93,10 @@ message Function {
     // this is really a pydantic/OpenAI function description, which is
     // a bit too complex to specify directly in protobuf.
     google.protobuf.Struct sly_data_schema = 3 [json_name="sly_data_schema"];
+
+    // Optional list of formats that could be parsed from the text of the messages
+    // into the structure field of a ChatMessage.
+    repeated string structure_formats = 4 [json_name="structure_formats"];
 }
 
 // Response structure for Function gRPC method

@@ -24,14 +24,14 @@ class FirstAvailableStructureParser(StructureParser):
     and does structure parsing on the first one that matches for the text.
     """
 
-    def __init__(self, parse_formats: List[str]):
+    def __init__(self, structure_formats: List[str]):
         """
         Constructor
 
-        :param parse_formats: A List of strings containing potential parse formats to match
+        :param structure_formats: A List of strings containing potential parse formats to match
         """
         super().__init__()
-        self.parse_formats: List[str] = parse_formats
+        self.structure_formats: List[str] = structure_formats
         self.factory = StructureParserFactory()
 
     def parse_structure(self, content: str) -> Dict[str, Any]:
@@ -44,9 +44,9 @@ class FirstAvailableStructureParser(StructureParser):
         """
         structure: Dict[str, Any] = None
 
-        for parse_format in self.parse_formats:
+        for structure_format in self.structure_formats:
 
-            structure_parser: StructureParser = self.factory.create_structure_parser(parse_format)
+            structure_parser: StructureParser = self.factory.create_structure_parser(structure_format)
             if structure_parser is None:
                 # Format did not match anything we know how to parse. Keep looking.
                 continue
