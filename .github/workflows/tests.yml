@@ -32,6 +32,9 @@ jobs:
       - name: Run pylint
         run: build_scripts/run_pylint.sh
 
+      - name: Run pymarkdownlint
+        run: build_scripts/run_markdownlint.sh
+
       - name: Run shellcheck
         run: build_scripts/run_shellcheck.sh
 
