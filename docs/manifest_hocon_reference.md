@@ -44,7 +44,7 @@ agents and/or uptake modifications in currently served agents.
 
 This is useful in certain development situations,
 and in certain dev-ops situations where mulitple neuro-san server pods share a common read-only volume mount of the
-agent files as part of the cluster configuration. 
+agent files as part of the cluster configuration.
 
 By default, the environment variable AGENT_MANIFEST_UPDATE_PERIOD_SECONDS is set to 0, meaning this monitoring/update
 feature is turned off.  When this value is > 0, it defines how often any server will scan for updates in the manifest.hocon

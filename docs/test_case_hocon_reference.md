@@ -16,29 +16,29 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
 <!--TOC-->
 
 - [Data-Driven Test Case HOCON File Reference](#data-driven-test-case-hocon-file-reference)
-  - [Data-Driven Test Case Specifications](#data-driven-test-case-specifications)
-    - [agent](#agent)
-    - [connections](#connections)
-    - [success_ratio](#success_ratio)
-    - [use_direct](#use_direct)
-    - [metadata](#metadata)
-    - [timeout_in_seconds](#timeout_in_seconds)
-    - [interactions](#interactions)
-      - [text](#text)
-      - [sly_data](#sly_data)
-      - [timeout_in_seconds](#timeout_in_seconds-1)
-      - [chat_filter](#chat_filter)
-      - [continue_conversation](#continue_conversation)
-      - [response](#response)
-        - [text (response)](#text-response)
-        - [sly_data (response)](#sly_data-response)
-        - [Stock Tests](#stock-tests)
-          - [value/not_value](#valuenot_value)
-          - [less/not_less](#lessnot_less)
-          - [greater/not_greater](#greaternot_greater)
-          - [keywords/not_keywords](#keywordsnot_keywords)
-          - [gist/not_gist](#gistnot_gist)
-  - [Use with the Assessor](#use-with-the-assessor)
+    - [Data-Driven Test Case Specifications](#data-driven-test-case-specifications)
+        - [agent](#agent)
+        - [connections](#connections)
+        - [success_ratio](#success_ratio)
+        - [use_direct](#use_direct)
+        - [metadata](#metadata)
+        - [timeout_in_seconds](#timeout_in_seconds)
+        - [interactions](#interactions)
+            - [text](#text)
+            - [sly_data](#sly_data)
+            - [timeout_in_seconds](#timeout_in_seconds-1)
+            - [chat_filter](#chat_filter)
+            - [continue_conversation](#continue_conversation)
+            - [response](#response)
+                - [text (response)](#text-response)
+                - [sly_data (response)](#sly_data-response)
+                - [Stock Tests](#stock-tests)
+                    - [value/not_value](#valuenot_value)
+                    - [less/not_less](#lessnot_less)
+                    - [greater/not_greater](#greaternot_greater)
+                    - [keywords/not_keywords](#keywordsnot_keywords)
+                    - [gist/not_gist](#gistnot_gist)
+    - [Use with the Assessor](#use-with-the-assessor)
 
 <!--TOC-->
 
@@ -62,13 +62,12 @@ Single string values can be:
 | grpc  |  Connect to the agent via a server via gRPC |
 | https |  Connect to the agent via a server via secure http |
 
-
 Note that it is possible to specify a list of connection types for the same test case.
 If this is the case, the test driver will conduct the same test via each connection type.
 
 Example of a list:
 
-```
+```python
     ...
     "connections": [ "direct", "http", "grpc" ]
     ...
@@ -83,8 +82,9 @@ in order to call the test passing.
 
 The big idea here is that this is an acknowledgement of the realities of working with LLMs:
 
-* agents do not always do what you want them to
-* getting agents to give you correct output given existing prompts and a particular input is fundamentally an optimization exercise against the prompts themselves.
+- agents do not always do what you want them to
+- getting agents to give you correct output given existing prompts and a particular input is fundamentally an optimization
+exercise against the prompts themselves.
 
 The denominator (bottom) of the fraction is an integer indicating how many test samples (repeat iterations)
 should be attempted.
@@ -93,7 +93,7 @@ The numerator (top) of the fraction is an integer indicating how many of those t
 need to execute without failure in order to call the test "passing" within a unit test infrastructure
 that needs some kind of boolean assessment.
 
-When using the (Assessor)[../neuro_san/test/assessor/assessor.py] tool to categorize modes of failure,
+When using the [Assessor](../neuro_san/test/assessor/assessor.py) tool to categorize modes of failure,
 the denominator here is also used as the indication of how many test samples should be taken.
 
 By default this value is "1/1" indicating that the test case will only run once,
@@ -158,6 +158,7 @@ Superfluous information is passed, taking up space, but ignored.
 
 The default value is None.
 
+<!-- markdownlint-disable-next-line MD024 -->
 #### timeout_in_seconds
 
 An optional float that describes how long the single interaction should take before giving up.
@@ -175,7 +176,7 @@ on to the next interaction dictionary.
 The only other honored value is "MAXIMAL", indicating full debug information should
 come back to the client.  This ends up being a lot more messages.
 
-_Future_ iterations of the test infrastructure may elect to test at the level of
+*Future* iterations of the test infrastructure may elect to test at the level of
 this fine-grained MAXIMAL debug information.
 
 #### continue_conversation
@@ -218,10 +219,10 @@ and its value can either be a single test value as verification criteria for the
 to pass or a list of these values - all of which must pass the test.  (That is, list
 inclusion is an AND operation.)
 
-For instance, part of the (music_nerd test case)[../tests/fixtures/music_nerd/beatles_with_history.hocon]
+For instance, part of the [music_nerd test case](../tests/fixtures/music_nerd/beatles_with_history.hocon)
 contains this interaction definition:
 
-```
+```python
     "interactions": [
         {
             # This is what we send as input to streaming_chat()
@@ -246,7 +247,7 @@ contains this interaction definition:
 The first "text" asks the agent the question "Who did Yellow Submarine?" in its request.
 In the "response" block, it is the "text" of the corresponding response that is to be tested.
 We could set up multiple tests here, but for this simple example we are electing to test
-the agent's "answer" against containing the [keyword](#keywordsnot-keyword) "Beatles".
+the agent's "answer" against containing the [keyword](#keywordsnot_keywords) "Beatles".
 The test doesn't care about exact verbiage of the "answer" from the agent, all that matters
 is that somewhere in the text, the keyword "Beatles" is in there.
 
@@ -266,10 +267,10 @@ and its value can either be a single test value as verification criteria for the
 to pass or a list of these values - all of which must pass the test.  (That is, list
 inclusion is an AND operation.)
 
-For instance, part of the (math_guy test case)[../tests/fixtures/math_guy/basic_sly_data.hocon]
+For instance, part of the [math_guy test case](../tests/fixtures/math_guy/basic_sly_data.hocon)
 contains this interaction definition:
 
-```
+```python
     "interactions": [
         {
             # This is what we send as input to streaming_chat()
@@ -380,7 +381,7 @@ Similarly the "not_gist" test passes when the response does not match the "gist"
 
 The [Assessor](../neuro_san/test/assesor/assessor.py) is a tool which uses these data-driven test cases
 as a basis for gathering repeated test samples so as to assess how often the test case will pass.
-You give the assessor a test case hocon file, it looks at the [success_ratio](#success-ratio) denominator
+You give the assessor a test case hocon file, it looks at the [success_ratio](#success_ratio) denominator
 to see how many test samples it should run.  As it gathers its output for each test sample, it
 records *how* the failures occurred and attempts to classify them according to common modes of failure.
 This allows you to get statistical picture of what you need to improve with respect to prompt or

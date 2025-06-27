@@ -17,51 +17,51 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
 <!--TOC-->
 
 - [Top-Level Agent Network Specifications](#top-level-agent-network-specifications)
-  - [commondefs](#commondefs)
-    - [replacement_strings](#replacement_strings)
-    - [replacement_values](#replacement_values)
-  - [agent_llm_info_file](#agent_llm_info_file)
-  - [toolbox_info_file](#toolbox_info_file)
-  - [llm_config](#llm_config)
-    - [model_name](#model_name)
-    - [fallbacks](#fallbacks)
-    - [max_iterations](#max_iterations)
-    - [max_execution_seconds](#max_execution_seconds)
-    - [temperature](#temperature)
-    - [Other LLM-specific Parameters](#other-llm-specific-parameters)
-    - [verbose](#verbose)
-    - [error_formatter](#error_formatter)
-    - [error_fragments](#error_fragments)
-  - [tools](#tools)
+    - [commondefs](#commondefs)
+        - [replacement_strings](#replacement_strings)
+        - [replacement_values](#replacement_values)
+    - [agent_llm_info_file](#agent_llm_info_file)
+    - [toolbox_info_file](#toolbox_info_file)
+    - [llm_config](#llm_config)
+        - [model_name](#model_name)
+        - [fallbacks](#fallbacks)
+        - [max_iterations](#max_iterations)
+        - [max_execution_seconds](#max_execution_seconds)
+        - [temperature](#temperature)
+        - [Other LLM-specific Parameters](#other-llm-specific-parameters)
+        - [verbose](#verbose)
+        - [error_formatter](#error_formatter)
+        - [error_fragments](#error_fragments)
+    - [tools](#tools)
 - [Single Agent Specification](#single-agent-specification)
-  - [name](#name)
-  - [function](#function)
-    - [description](#description)
-    - [parameters](#parameters)
-      - [type](#type)
-      - [properties](#properties)
-      - [required](#required)
-    - [sly_data_schema](#sly_data_schema)
-  - [instructions](#instructions)
-  - [command](#command)
-  - [tools (agents)](#tools-agents)
-    - [External Agents](#external-agents)
-  - [llm_config](#llm_config-1)
-  - [class](#class)
-  - [toolbox](#toolbox)
-  - [args](#args)
-  - [allow](#allow)
-    - [connectivity](#connectivity)
-    - [to_downstream](#to_downstream)
-      - [sly_data](#sly_data)
-    - [from_downstream](#from_downstream)
-      - [sly_data](#sly_data-1)
-    - [to_upstream](#to_upstream)
-      - [sly_data](#sly_data-2)
-  - [display_as](#display_as)
-  - [max_message_history](#max_message_history)
-  - [error_formatter](#error_formatter-1)
-  - [error_fragments](#error_fragments-1)
+    - [name](#name)
+    - [function](#function)
+        - [description](#description)
+        - [parameters](#parameters)
+            - [type](#type)
+            - [properties](#properties)
+            - [required](#required)
+        - [sly_data_schema](#sly_data_schema)
+    - [instructions](#instructions)
+    - [command](#command)
+    - [tools (agents)](#tools-agents)
+        - [External Agents](#external-agents)
+    - [llm_config](#llm_config-1)
+    - [class](#class)
+    - [toolbox](#toolbox)
+    - [args](#args)
+    - [allow](#allow)
+        - [connectivity](#connectivity)
+        - [to_downstream](#to_downstream)
+            - [sly_data](#sly_data)
+        - [from_downstream](#from_downstream)
+            - [sly_data](#sly_data-1)
+        - [to_upstream](#to_upstream)
+            - [sly_data](#sly_data-2)
+    - [display_as](#display_as)
+    - [max_message_history](#max_message_history)
+    - [error_formatter](#error_formatter-1)
+    - [error_fragments](#error_fragments-1)
 
 <!--TOC-->
 
@@ -136,13 +136,16 @@ your string values within your replacement_values and things will work out as yo
 
 ### agent_llm_info_file
 
-The agent_llm_info_file key allows you to specify a custom HOCON file that extends the default list of available LLMs used by agents in a neuro-san network. This is especially useful if you're using models that are not included in the default configuration (e.g., newly released models or organization-specific endpoints).
+The agent_llm_info_file key allows you to specify a custom HOCON file that extends the default list of available LLMs used
+by agents in a neuro-san network. This is especially useful if you're using models that are not included in the default
+configuration (e.g., newly released models or organization-specific endpoints).
 
 For more information on selecting and customizing models, see the [model_name](#model_name) section below.
 
 ### toolbox_info_file
 
-The toolbox_info_file key lets you define a custom HOCON file that adds to the default set of tools available to agents within a neuro-san network. This is particularly helpful when you have tools shared across multiple agent networks.
+The toolbox_info_file key lets you define a custom HOCON file that adds to the default set of tools available to agents
+within a neuro-san network. This is particularly helpful when you have tools shared across multiple agent networks.
 
 For further details, refer to the [toolbox](#toolbox) section below.
 
@@ -520,7 +523,7 @@ Mid-level agents can have this be false to hide certain implementation details.
 
 #### to_downstream
 
-Dictionary which specifies security policy for information go *to* downstream [external agents](#external-agents).
+Dictionary which specifies security policy for information go _to_ downstream [external agents](#external-agents).
 This has no effect on any information flowing between agents internal to the network.
 
 ##### sly_data

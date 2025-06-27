@@ -16,27 +16,27 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
 <!--TOC-->
 
 - [LLM Info HOCON File Reference](#llm-info-hocon-file-reference)
-  - [LLM Info Specifications](#llm-info-specifications)
-    - [Model Name Keys](#model-name-keys)
-      - [class](#class)
-      - [model_info_url](#model_info_url)
-      - [modalities](#modalities)
-        - [input](#input)
-        - [output](#output)
-      - [capabilities](#capabilities)
-      - [context_window_size](#context_window_size)
-      - [max_output_tokens](#max_output_tokens)
-      - [knowledge_cutoff](#knowledge_cutoff)
-      - [use_model_name](#use_model_name)
-    - [classes](#classes)
-      - [Class Name Keys](#class-name-keys)
-        - [extends](#extends)
-        - [args](#args)
-      - [factories](#factories)
-    - [default_config](#default_config)
-  - [Extending LLM Info Specifications](#extending-llm-info-specifications)
-    - [AGENT_LLM_INFO_FILE environment variable](#agent_llm_info_file-environment-variable)
-    - [agent_llm_info_file key in specific agent hocon files](#agent_llm_info_file-key-in-specific-agent-hocon-files)
+    - [LLM Info Specifications](#llm-info-specifications)
+        - [Model Name Keys](#model-name-keys)
+            - [class](#class)
+            - [model_info_url](#model_info_url)
+            - [modalities](#modalities)
+                - [input](#input)
+                - [output](#output)
+            - [capabilities](#capabilities)
+            - [context_window_size](#context_window_size)
+            - [max_output_tokens](#max_output_tokens)
+            - [knowledge_cutoff](#knowledge_cutoff)
+            - [use_model_name](#use_model_name)
+        - [classes](#classes)
+            - [Class Name Keys](#class-name-keys)
+                - [extends](#extends)
+                - [args](#args)
+            - [factories](#factories)
+        - [default_config](#default_config)
+    - [Extending LLM Info Specifications](#extending-llm-info-specifications)
+        - [AGENT_LLM_INFO_FILE environment variable](#agent_llm_info_file-environment-variable)
+        - [agent_llm_info_file key in specific agent hocon files](#agent_llm_info_file-key-in-specific-agent-hocon-files)
 
 <!--TOC-->
 
@@ -82,8 +82,8 @@ The keys to this dictionary are described immediately below.
 A list of strings describing the input modalities of the LLM.
 Some common input modalities include:
 
-* text
-* image
+- text
+- image
 
 Typically, an LLM will at least have a "text" modality but might have more than one.
 
@@ -95,8 +95,8 @@ magically manifest itself.  This is a matter of how the LLM was trained.
 A list of strings describing the output modalities of the LLM.
 Some common output modalities include:
 
-* text
-* image
+- text
+- image
 
 Typically, an LLM will at least have a "text" modality but might have more than one.
 
@@ -107,11 +107,11 @@ magically manifest itself.  This is a matter of how the LLM was trained.
 
 A list of strings describing the capabilities the LLM has been trained on.
 
-* tools
+- tools
 
 Currently the only capability that matters to neuro-san is an LLM's capability
 to use tools. Any intermediate LLM-powered agent in neuro-san requires the use of tools
-in order to be able to call its downstream agents. Normally a model's [model_info_url](#model-info-url)
+in order to be able to call its downstream agents. Normally a model's [model_info_url](#model_info_url)
 will say whether or not a given model is tool-using or not.  If it doesn't say that it
 is trained to use tools, it typically does not.
 
@@ -191,7 +191,7 @@ class.
 ##### extends
 
 An optional key with a string value that points to another class definition within the
-[classes](#classes) dictionary. 
+[classes](#classes) dictionary.
 
 The idea is to allow the data-driven defaults to inherit
 from previous definitions just like the Python implementations can, allowing overriding
@@ -218,10 +218,10 @@ look like this:
 
 Any classes listed must:
 
-* Exist in the PYTHONPATH of your server
-* Derive from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory.LangChainLlmFactory
+- Exist in the PYTHONPATH of your server
+- Derive from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory.LangChainLlmFactory
   to override the create_base_chat_model() method that creates your BaseLanguageModel instance.
-* Have a no-args constructor
+- Have a no-args constructor
 
 ### default_config
 

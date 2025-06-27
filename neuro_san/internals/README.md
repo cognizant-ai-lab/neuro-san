@@ -1,16 +1,18 @@
+# Streaming Chat Details
+
 Here is how streaming_chat() works for the langchain implementation in perhaps too much detail:
 
-*   A request bearing user-input comes into an AgentSession (either by method or web service call).
-*   An instance of a DataDrivenChat object is initialized with (among other things):
-        * A single AgentToolRegistry for the entirety of the agent network
-        * A single FrontMan node instantiation.  This instance is initialized with the following:
-            * An AgentToolFactory instance - this is used when tool calls are successful
+* A request bearing user-input comes into an AgentSession (either by method or web service call).
+* An instance of a DataDrivenChat object is initialized with (among other things):
+    * A single AgentToolRegistry for the entirety of the agent network
+    * A single FrontMan node instantiation.  This instance is initialized with the following:
+        * An AgentToolFactory instance - this is used when tool calls are successful
                 to "make real" a node in the agent graph from the AgentToolRegistry specs
-            * An instance of a Journal, which has access to a queue that feeds messages back 
+        * An instance of a Journal, which has access to a queue that feeds messages back
                 to the caller (see below)
-            * An instance of the front-man's agent spec dictionary
-            * Any sly_data (private data) that was passed in as part of the request.
-*   An asynchronous invocation of DataDrivenChat.streaming_chat() is set up to happen in a separate thread
+        * An instance of the front-man's agent spec dictionary
+        * Any sly_data (private data) that was passed in as part of the request.
+* An asynchronous invocation of DataDrivenChat.streaming_chat() is set up to happen in a separate thread
     while the AgentSession itself, prepares to receive a stream of messages from a queue.
     streaming_chat() is passed the user input, the sly_data dictionary (both passed as part of the request)
     and an InvocationContext object which will be passed around to the system below. This InvocationContext
@@ -25,7 +27,7 @@ Here is how streaming_chat() works for the langchain implementation in perhaps t
 * Meanwhile back inside the asynchronous DataDrivenChat.streaming_chat() call,
     * A RunContext is created for the front man per the agent spec (langchain vs openai)
         with some information as to the name of the front man agent.  This is stored
-        as part of the origin to be used for sending messages back indicating where in 
+        as part of the origin to be used for sending messages back indicating where in
         the agent hierarchy any given message is coming from.
     * The AgentToolRegistry is consulted to find and create an instance of the FrontMan.
     * The RunContext's create_resources() is invoked which does the following:
@@ -49,7 +51,7 @@ Here is how streaming_chat() works for the langchain implementation in perhaps t
             * A system message which holds the instructions
             * A placeholder message which holds the (impending) chat history
             * A "human" message which holds the input to the calle (user or agent generated)
-            * A placeholder message for the "agent scratchpad" to allow a place for agent 
+            * A placeholder message for the "agent scratchpad" to allow a place for agent
                 decisions to be kept.
         * Finally, a langchain Agent instance itself is created passing it the LLM instance,
             the tools list and the prompt template.
@@ -82,13 +84,13 @@ Here is how streaming_chat() works for the langchain implementation in perhaps t
     * For each tool that the agent wants to be called:
         * We get the name of the tool to be called  
         * We get the arguments to be passed to the tool
-        * We instantiate a new node in our graph via the AgentToolFactory that corresponds 
+        * We instantiate a new node in our graph via the AgentToolFactory that corresponds
             to the agent_spec of the tool to be called.  The Factory will create one of the
             following nodes based on the spec:  
                 (Note: Here "tool" and "node" are interchangeable terms.
                         Maybe I should rename these all to "node" for clarity in the future.)
             * An ExternalTool - Used to invoke an agent network on another server.
-                When this guy is made, an effort to redact the sly_data 
+                When this guy is made, an effort to redact the sly_data
                 is made before passing it on to its constructor
             * A ClassTool - an internal representation which knows how to invoke the
                 user's CodedTool implementation
@@ -96,7 +98,7 @@ Here is how streaming_chat() works for the langchain implementation in perhaps t
                 LLM-based agent.
 
             * Each tool above is instantiated with access to the following:
-                * Its parent node's RunContext instance (so it can make its own based on that if needed) 
+                * Its parent node's RunContext instance (so it can make its own based on that if needed)
                 * The Journal instance for sending messages
                 * The AgentToolFactory instance so its later possible tool calls can go through the same procedure
                 * A copy of its own agent spec dictionary
@@ -111,16 +113,16 @@ Here is how streaming_chat() works for the langchain implementation in perhaps t
                     results are returned as a plaintext string.  It's within a CodedTool's invoke()
                     that calls to web services and use of the sly_data is made if needed.
             * BranchTool - Do a bunch of things:
-                    * Call create_resources() on its new RunContext 
-                    * Invoke the Agent/LLM with a call to RunContext.submit_message() with
+                * Call create_resources() on its new RunContext
+                * Invoke the Agent/LLM with a call to RunContext.submit_message() with
                       the instructions and command from its spec, along with text that
                       specifies what the arguments are.
-                    * Wait on the Run that is produced from that submit_message()
-                    * Enter a similar loop as that of  the front man which looks to see
+                * Wait on the Run that is produced from that submit_message()
+                * Enter a similar loop as that of  the front man which looks to see
                         if the results require more action. If more action is required,
                         a recursion into make_tool_function_calls() is made, but this time
                         at the level of a different agent within the hierarchy (not the front man).
-                    * Report the results when that loop is finished.
+                * Report the results when that loop is finished.
 
         * Results from each tool/node invoked (there might be more than one at a time)
             are compiled back into the chat history stored in the RunContext
@@ -131,5 +133,5 @@ Here is how streaming_chat() works for the langchain implementation in perhaps t
             outside world (LLM or agent network, or whatever).
 
 Here is an image to help:
-![](neuro_san_information_flow_bw.png)
 
+![NeuroSan Information Flow](neuro_san_information_flow_bw.png)

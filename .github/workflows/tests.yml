@@ -20,17 +20,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Installing node, so we can install markdownlint next
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Install dependencies
         run: |
           apt-get update && apt-get install -y shellcheck
           pip install -r requirements-build.txt
           pip install -r requirements.txt
+          npm install -g markdownlint-cli
 
       - name: Show installed packages
         run: pip freeze
 
       - name: Run pylint
         run: build_scripts/run_pylint.sh
+
+      - name: Run markdownlint
+        run: build_scripts/run_markdownlint.sh
 
       - name: Run shellcheck
         run: build_scripts/run_shellcheck.sh
