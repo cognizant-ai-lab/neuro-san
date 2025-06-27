@@ -183,7 +183,7 @@ class DataDrivenChatSession:
         structure_formats: Union[str, List[str]] = front_man_extractor.get("function.structure_formats")
 
         # Find "the answer" and have that be the content of the last message we send
-        answer_processor = AnswerMessageProcessor(parse_formats=structure_formats)
+        answer_processor = AnswerMessageProcessor(structure_formats=structure_formats)
         answer_processor.process_messages(message_list)
         answer: str = answer_processor.get_answer()
         if answer is None:
