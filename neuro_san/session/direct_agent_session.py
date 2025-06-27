@@ -93,7 +93,7 @@ class DirectAgentSession(AgentSession):
             # Repair single string for grpc
             formats = function.get("structure_formats")
             if isinstance(formats, str):
-                function["structure_formats"] = [formats] 
+                function["structure_formats"] = [formats]
 
             response_dict = {
                 "function": function,
