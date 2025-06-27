@@ -40,7 +40,7 @@ class DataDrivenAgentTestDriver:
     specified as a hocon file.
     """
 
-    TEST_KEYS: List[str] = ["text", "sly_data"]
+    TEST_KEYS: List[str] = ["text", "structure", "sly_data"]
 
     def __init__(self, asserts: AssertForwarder, fixtures: FileOfClass = None):
         """
@@ -220,6 +220,7 @@ Need at least {num_need_success} to consider {hocon_file} test to be successful.
 
         # Prepare the request
         text: str = interaction.get("text")
+        structure: str = interaction.get("structure")
         sly_data: str = interaction.get("sly_data")
         chat_filter: Dict[str, Any] = {
             "chat_filter_type": interaction.get("chat_filter", "MINIMAL")
