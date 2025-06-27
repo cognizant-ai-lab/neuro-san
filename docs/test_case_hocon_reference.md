@@ -67,7 +67,7 @@ If this is the case, the test driver will conduct the same test via each connect
 
 Example of a list:
 
-```python
+```json
     ...
     "connections": [ "direct", "http", "grpc" ]
     ...
