@@ -636,6 +636,7 @@ Same as top-level [error_fragments above](#error_fragments), except at single-ag
 
 ### structure_formats
 
+<!-- pyml disable-next-line no-emphasis-as-heading -->
 _Front Man only_
 
 An optional list of strings describing the formats that the server-side should
@@ -656,4 +657,3 @@ definition.
 Example networks that parse their structure_formats:
 
 - [music_nerd_pro.hocon](../neuro_san/registries/music_nerd_pro.hocon)
-
