@@ -131,6 +131,24 @@ string of a JSON dictionary. For example:
 
 To run Python unit/integration tests, follow the [instructions](docs/tests.md) here.
 
+### Note on Markdown Linting
+
+We use [pymarkdown](https://pymarkdown.readthedocs.io/en/latest/) to run linting on .md files.
+`pymarkdown` can be configured via `.pymarkdown.yaml` located in the projects top level folder. See
+this [page](https://pymarkdown.readthedocs.io/en/latest/rules/) for all the configuration options.
+`pymarkdown` is installed in the virtual environment as part of the build dependency requirements
+specified in `build-requirements.txt`.
+
+To run an installed version of `pymarkdown`, run the following command:
+
+    pymarkdown --config ./.pymarkdownlint.yaml scan ./docs ./README.md
+
+The `--config` flag is used to pass in a configuration file to `pymarkdownlint`
+
+To see all the options, run the following command:
+
+    pymarkdown --help
+
 ## Creating a new agent network
 
 ### Agent example files
