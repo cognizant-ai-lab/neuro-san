@@ -77,7 +77,6 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         self.llm_factories: List[LangChainLlmFactory] = [
             StandardLangChainLlmFactory()
         ]
-        self.llm_class: str = None
 
         if config:
             self.llm_info_file: str = config.get("agent_llm_info_file")
@@ -181,8 +180,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         :return: The fully specified config with defaults filled in.
         """
 
-        self.llm_class = config.get("class")
-        if self.llm_class:
+        if config.get("class"):
             # If config has "class", it is a user-specified llm so return config as is,
             # and replace "StandardLangChainLlmFactory" with "UserSpecifiedLangChainLlmFactory".
             self.llm_factories[0] = UserSpecifiedLangChainLlmFactory()

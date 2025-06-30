@@ -51,23 +51,26 @@ class UserSpecifiedLangChainLlmFactory(LangChainLlmFactory):
         if chat_class is not None:
             chat_class = chat_class.lower()
 
+        # Copy the config
+        user_config = config.copy()
+
         # Take "class" out of config and add "callback".
-        config.pop("class")
-        config["callbacks"] = callbacks
+        user_config.pop("class")
+        user_config["callbacks"] = callbacks
 
         # Unpack config in the user-specified class
         if chat_class == "openai":
-            llm = ChatOpenAI(**config)
+            llm = ChatOpenAI(**user_config)
         elif chat_class == "azure-openai":
-            llm = AzureChatOpenAI(**config)
+            llm = AzureChatOpenAI(**user_config)
         elif chat_class == "anthropic":
-            llm = ChatAnthropic(**config)
+            llm = ChatAnthropic(**user_config)
         elif chat_class == "ollama":
-            llm = ChatOllama(**config)
+            llm = ChatOllama(**user_config)
         elif chat_class == "nvidia":
-            llm = ChatNVIDIA(**config)
+            llm = ChatNVIDIA(**user_config)
         elif chat_class == "gemini":
-            llm = ChatGoogleGenerativeAI(**config)
+            llm = ChatGoogleGenerativeAI(**user_config)
         else:
             valid_class_map = {
                 "openai": "ChatOpenAI",
