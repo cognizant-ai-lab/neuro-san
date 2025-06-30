@@ -41,6 +41,7 @@ class JsonStructureParser(StructureParser):
             # Start : End
             "```json": "```",
             "```": "```",
+            "`{": "}`",
             "{": "}",
         }
 
