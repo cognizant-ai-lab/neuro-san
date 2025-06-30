@@ -178,7 +178,7 @@ class AsyncDirectAgentSession(AsyncAgentSession):
                 if message_processor is not None:
                     message_type: ChatMessageType = message.get("type")
                     # Can modify message
-                    message_processor.process_message(message, message_type)
+                    await message_processor.process_message(message, message_type)
                 response_dict["response"] = message
                 yield response_dict
 
