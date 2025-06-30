@@ -17,11 +17,9 @@ def configure_llm_provider_keys(request, monkeypatch):
         if is_anthropic:
             if not os.getenv("ANTHROPIC_API_KEY"):
                 pytest.skip("Missing ANTHROPIC_API_KEY for test marked 'anthropic'")
-        
         if is_gemini:
             if not os.getenv("GOOGLE_API_KEY"):
                 pytest.skip("Missing GOOGLE_API_KEY for test marked 'gemini'")
-
         else:
             pytest.skip("Unknown non-default provider; test requires explicit key handling.")
     else:
