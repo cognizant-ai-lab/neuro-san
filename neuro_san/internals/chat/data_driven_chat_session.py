@@ -37,6 +37,7 @@ from neuro_san.internals.run_context.factory.run_context_factory import RunConte
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.message_processing.message_processor import MessageProcessor
 from neuro_san.message_processing.answer_message_processor import AnswerMessageProcessor
+from neuro_san.message_processing.structure_message_processor import StructureMessageProcessor
 
 
 # pylint: disable=too-many-instance-attributes
@@ -245,3 +246,25 @@ class DataDrivenChatSession:
         }
 
         return chat_context
+
+    def create_outgoing_message_processor(self) -> MessageProcessor:
+        """
+        :return: A MessageProcessor that filters messages outgoing to the client.
+                How this works is based on settings on the front man.
+                Can be None.
+        """
+        message_processor: MessageProcessor = None
+
+        front_man_name: str = self.registry.find_front_man()
+        front_man_spec: Dict[str, Any] = self.registry.get_agent_tool_spec(front_man_name)
+        front_man_extractor = DictionaryExtractor(front_man_spec)
+
+        # Get the formats we should parse from the final answer from the config for the network.
+        # As of 6/24/25, this is an unadvertised experimental feature.
+        structure_formats: Union[str, List[str]] = front_man_extractor.get("function.structure_formats")
+        if structure_formats is None:
+            return message_processor
+
+        # Eventually this might be a CompositeMessageProcessor
+        message_processor = StructureMessageProcessor(structure_formats)
+        return message_processor

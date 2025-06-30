@@ -78,4 +78,4 @@ class StructureMessageProcessor(MessageProcessor):
         # Modify the existing chat_message_dict to reflect extracted structure
         use_text: str = structure_parser.get_remainder()
         chat_message_dict["text"] = use_text
-        chat_message_dict["structure"] = structure
+        chat_message_dict["structure"] = use_structure
