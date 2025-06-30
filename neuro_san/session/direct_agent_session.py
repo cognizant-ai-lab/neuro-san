@@ -29,6 +29,8 @@ from neuro_san.internals.chat.data_driven_chat_session import DataDrivenChatSess
 from neuro_san.internals.filters.message_filter import MessageFilter
 from neuro_san.internals.filters.message_filter_factory import MessageFilterFactory
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.messages.chat_message_type import ChatMessageType
+from neuro_san.message_processing.message_processor import MessageProcessor
 from neuro_san.session.session_invocation_context import SessionInvocationContext
 
 
@@ -175,6 +177,9 @@ class DirectAgentSession(AgentSession):
         # Ignore the future. Live in the now.
         _ = future
 
+        # Late-stage conversions for any and all messages
+        message_processor: MessageProcessor = chat_session.create_outgoing_message_processor()
+
         # The synchronously_iterate() method below will synchronously block waiting for
         # chat.ChatMessage dictionaries to come back asynchronously from the submit()
         # above until there are no more from the input.
@@ -189,6 +194,10 @@ class DirectAgentSession(AgentSession):
             response_dict: Dict[str, Any] = copy(template_response_dict)
             if message_filter.allow(message):
                 # We expect the message to be a dictionary form of chat.ChatMessage
+                if message_processor is not None:
+                    message_type: ChatMessageType = message.get("type")
+                    # Can modify message
+                    message_processor.process_message(message, message_type)
                 response_dict["response"] = message
                 yield response_dict
 
