@@ -444,7 +444,6 @@ This allows common agent network definitions to be used as functions for other l
 
 Furthermore, it is also possible to reference agents on other neuro-san _servers_ by using a URL as a tool reference.
 
-<!-- markdownlint-disable-next-line MD034 -->
 Example: "http://localhost:8080/math_guy"
 
 This enables entire ecosystems of agent webs.
@@ -473,7 +472,7 @@ By default neuro-san deployments assume that PYTHONPATH is set to contain the
 top-level of your project's repo and that AGENT_TOOL_PATH is set to "<top-level>/coded_tools".
 In that directory each agent has its own folder and the value of the class is resolved
 from there.
-<!-- pyml disable no-inline-html -->
+<!-- pyml enable no-inline-html -->
 
 For example:
 If the agent is called "math_guy" and the class is valued as "calculator.Calculator",

@@ -79,3 +79,21 @@ Set a trace to stop the debugger on the next line
 Run pytest with '--pdb' flag
 
     pytest -v --pdb ./tests/neuro_san/internals/graph/test_sly_data_redactor.py
+
+## Note on Markdown Linting
+
+We use [pymarkdown](https://pymarkdown.readthedocs.io/en/latest/) to run linting on .md files.
+`pymarkdown` can be configured via `.pymarkdown.yaml` located in the projects top level folder. See
+this [page](https://pymarkdown.readthedocs.io/en/latest/rules/) for all the configuration options.
+`pymarkdown` is installed in the virtual environment as part of the build dependency requirements
+specified in `build-requirements.txt`.
+
+To run an installed version of `pymarkdown`, run the following command:
+
+    pymarkdown --config ./.pymarkdownlint.yaml scan ./docs ./README.md
+
+The `--config` flag is used to pass in a configuration file to `pymarkdownlint`
+
+To see all the options, run the following command:
+
+    pymarkdown --help
