@@ -21,8 +21,6 @@ import traceback
 
 from openai import BadRequestError
 
-from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
-
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.chat.chat_history_message_processor import ChatHistoryMessageProcessor
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -177,11 +175,10 @@ class DataDrivenChatSession:
 
         # Get the front man spec. We will need it later for a few things.
         front_man_spec: Dict[str, Any] = self.front_man.get_agent_tool_spec()
-        front_man_extractor = DictionaryExtractor(front_man_spec)
 
         # Get the formats we should parse from the final answer from the config for the network.
         # As of 6/24/25, this is an unadvertised experimental feature.
-        structure_formats: Union[str, List[str]] = front_man_extractor.get("function.structure_formats")
+        structure_formats: Union[str, List[str]] = front_man_spec.get("structure_formats")
 
         # Find "the answer" and have that be the content of the last message we send
         answer_processor = AnswerMessageProcessor(structure_formats=structure_formats)
@@ -257,11 +254,10 @@ class DataDrivenChatSession:
 
         front_man_name: str = self.registry.find_front_man()
         front_man_spec: Dict[str, Any] = self.registry.get_agent_tool_spec(front_man_name)
-        front_man_extractor = DictionaryExtractor(front_man_spec)
 
         # Get the formats we should parse from the final answer from the config for the network.
         # As of 6/24/25, this is an unadvertised experimental feature.
-        structure_formats: Union[str, List[str]] = front_man_extractor.get("function.structure_formats")
+        structure_formats: Union[str, List[str]] = front_man_spec.get("structure_formats")
         if structure_formats is None:
             return message_processor
 
