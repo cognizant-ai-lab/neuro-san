@@ -13,31 +13,33 @@
 See class comment for details
 """
 
+from typing import Any
+from typing import Dict
+from typing import List
+
 import random
 import threading
-from typing import Any, Dict, List
 
 from tornado.ioloop import IOLoop
 
 from neuro_san.interfaces.concierge_session import ConciergeSession
 from neuro_san.internals.network_providers.service_agent_network_storage import ServiceAgentNetworkStorage
 from neuro_san.internals.network_providers.single_agent_network_provider import SingleAgentNetworkProvider
-from neuro_san.http_sidecar.interfaces.agent_authorizer import AgentAuthorizer
-from neuro_san.http_sidecar.interfaces.agents_updater import AgentsUpdater
-from neuro_san.http_sidecar.handlers.health_check_handler import HealthCheckHandler
-from neuro_san.http_sidecar.handlers.connectivity_handler import ConnectivityHandler
-from neuro_san.http_sidecar.handlers.function_handler import FunctionHandler
-from neuro_san.http_sidecar.handlers.streaming_chat_handler import StreamingChatHandler
-from neuro_san.http_sidecar.handlers.concierge_handler import ConciergeHandler
-from neuro_san.http_sidecar.handlers.openapi_publish_handler import OpenApiPublishHandler
-from neuro_san.http_sidecar.http_server_app import HttpServerApp
-from neuro_san.http_sidecar.logging.event_loop_logger import EventLoopLogger
-from neuro_san.http_sidecar.logging.http_logger import HttpLogger
+from neuro_san.service.generic.agent_server_logging import AgentServerLogging
+from neuro_san.service.generic.async_agent_service import AsyncAgentService
+from neuro_san.service.http.handlers.health_check_handler import HealthCheckHandler
+from neuro_san.service.http.handlers.connectivity_handler import ConnectivityHandler
+from neuro_san.service.http.handlers.function_handler import FunctionHandler
+from neuro_san.service.http.handlers.streaming_chat_handler import StreamingChatHandler
+from neuro_san.service.http.handlers.concierge_handler import ConciergeHandler
+from neuro_san.service.http.handlers.openapi_publish_handler import OpenApiPublishHandler
+from neuro_san.service.http.interfaces.agent_authorizer import AgentAuthorizer
+from neuro_san.service.http.interfaces.agents_updater import AgentsUpdater
+from neuro_san.service.http.logging.http_logger import HttpLogger
+from neuro_san.service.http.server.http_server_app import HttpServerApp
+from neuro_san.service.interfaces.agent_server import AgentServer
+from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
 from neuro_san.session.direct_concierge_session import DirectConciergeSession
-from neuro_san.service.agent_server import DEFAULT_FORWARDED_REQUEST_METADATA
-from neuro_san.service.async_agent_service import AsyncAgentService
-from neuro_san.service.agent_server_logging import AgentServerLogging
-from neuro_san.service.agent_server import AgentServer
 
 
 class HttpSidecar(AgentAuthorizer, AgentsUpdater):
@@ -54,7 +56,7 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
                  port: int, http_port: int,
                  openapi_service_spec_path: str,
                  requests_limit: int,
-                 forwarded_request_metadata: str = DEFAULT_FORWARDED_REQUEST_METADATA):
+                 forwarded_request_metadata: str = AgentServer.DEFAULT_FORWARDED_REQUEST_METADATA):
         """
         Constructor:
         :param start_event: event to await before starting actual service;
@@ -88,7 +90,7 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
         self.allowed_agents: Dict[str, AsyncAgentService] = {}
         self.lock = None
 
-    def __call__(self, grpc_server: AgentServer):
+    def __call__(self, other_server: AgentServer):
         """
         Method to be called by a thread running tornado HTTP server
         to actually start serving requests.
@@ -114,7 +116,8 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
 
         IOLoop.current().start()
         self.logger.info({}, "Http server stopped.")
-        grpc_server.stop()
+        if other_server is not None:
+            other_server.stop()
 
     def make_app(self, requests_limit: int, logger: EventLoopLogger):
         """
