@@ -13,31 +13,34 @@
 See class comment for details
 """
 
+from typing import Any
+from typing import Dict
+from typing import List
+
 import random
 import threading
-from typing import Any, Dict, List
 
 from tornado.ioloop import IOLoop
 
 from neuro_san.interfaces.concierge_session import ConciergeSession
 from neuro_san.internals.network_providers.service_agent_network_storage import ServiceAgentNetworkStorage
 from neuro_san.internals.network_providers.single_agent_network_provider import SingleAgentNetworkProvider
-from neuro_san.http_sidecar.interfaces.agent_authorizer import AgentAuthorizer
-from neuro_san.http_sidecar.interfaces.agents_updater import AgentsUpdater
-from neuro_san.http_sidecar.handlers.health_check_handler import HealthCheckHandler
-from neuro_san.http_sidecar.handlers.connectivity_handler import ConnectivityHandler
-from neuro_san.http_sidecar.handlers.function_handler import FunctionHandler
-from neuro_san.http_sidecar.handlers.streaming_chat_handler import StreamingChatHandler
-from neuro_san.http_sidecar.handlers.concierge_handler import ConciergeHandler
-from neuro_san.http_sidecar.handlers.openapi_publish_handler import OpenApiPublishHandler
-from neuro_san.http_sidecar.http_server_app import HttpServerApp
-from neuro_san.http_sidecar.logging.event_loop_logger import EventLoopLogger
-from neuro_san.http_sidecar.logging.http_logger import HttpLogger
+from neuro_san.service.generic.async_agent_service import AsyncAgentService
+from neuro_san.service.grpc.agent_server import AgentServer
+from neuro_san.service.grpc.agent_server import DEFAULT_FORWARDED_REQUEST_METADATA
+from neuro_san.service.http.handlers.health_check_handler import HealthCheckHandler
+from neuro_san.service.http.handlers.connectivity_handler import ConnectivityHandler
+from neuro_san.service.http.handlers.function_handler import FunctionHandler
+from neuro_san.service.http.handlers.streaming_chat_handler import StreamingChatHandler
+from neuro_san.service.http.handlers.concierge_handler import ConciergeHandler
+from neuro_san.service.http.handlers.openapi_publish_handler import OpenApiPublishHandler
+from neuro_san.service.http.interfaces.agent_authorizer import AgentAuthorizer
+from neuro_san.service.http.interfaces.agents_updater import AgentsUpdater
+from neuro_san.service.http.http_server_app import HttpServerApp
+from neuro_san.service.http.logging.http_logger import HttpLogger
+from neuro_san.service.logging.agent_server_logging import AgentServerLogging
+from neuro_san.service.logging.event_loop_logger import EventLoopLogger
 from neuro_san.session.direct_concierge_session import DirectConciergeSession
-from neuro_san.service.agent_server import DEFAULT_FORWARDED_REQUEST_METADATA
-from neuro_san.service.async_agent_service import AsyncAgentService
-from neuro_san.service.agent_server_logging import AgentServerLogging
-from neuro_san.service.agent_server import AgentServer
 
 
 class HttpSidecar(AgentAuthorizer, AgentsUpdater):

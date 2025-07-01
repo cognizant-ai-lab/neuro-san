@@ -26,8 +26,8 @@ from leaf_server_common.server.request_logger import RequestLogger
 from neuro_san.api.grpc import agent_pb2 as service_messages
 from neuro_san.api.grpc import agent_pb2_grpc
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
-from neuro_san.service.agent_server_logging import AgentServerLogging
-from neuro_san.service.agent_service import AgentService
+from neuro_san.service.generic.agent_service import AgentService
+from neuro_san.service.logging.agent_server_logging import AgentServerLogging
 
 
 class GrpcAgentService(agent_pb2_grpc.AgentServiceServicer):

@@ -12,14 +12,18 @@
 """
 See class comment for details
 """
-from typing import Any, Dict
+from typing import Any
+from typing import Dict
+
 import time
-from threading import Lock, Thread
+
+from threading import Lock
+from threading import Thread
 
 from tornado.web import Application
 from tornado.ioloop import IOLoop
 
-from neuro_san.http_sidecar.logging.event_loop_logger import EventLoopLogger
+from neuro_san.service.logging.event_loop_logger import EventLoopLogger
 
 
 class HttpServerApp(Application):

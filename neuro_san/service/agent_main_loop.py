@@ -15,8 +15,8 @@ See class comment for details
 from typing import Dict
 from typing import List
 
-import threading
 import os
+import threading
 
 from argparse import ArgumentParser
 
@@ -25,15 +25,15 @@ from leaf_server_common.server.server_loop_callbacks import ServerLoopCallbacks
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
-from neuro_san.service.agent_server import AgentServer
-from neuro_san.service.agent_server import DEFAULT_SERVER_NAME
-from neuro_san.service.agent_server import DEFAULT_SERVER_NAME_FOR_LOGS
-from neuro_san.service.agent_server import DEFAULT_MAX_CONCURRENT_REQUESTS
-from neuro_san.service.agent_server import DEFAULT_REQUEST_LIMIT
-from neuro_san.service.agent_server import DEFAULT_FORWARDED_REQUEST_METADATA
-from neuro_san.service.grpc_agent_service import GrpcAgentService
-from neuro_san.http_sidecar.http_sidecar import HttpSidecar
 from neuro_san.internals.utils.file_of_class import FileOfClass
+from neuro_san.service.grpc.agent_server import AgentServer
+from neuro_san.service.grpc.agent_server import DEFAULT_SERVER_NAME
+from neuro_san.service.grpc.agent_server import DEFAULT_SERVER_NAME_FOR_LOGS
+from neuro_san.service.grpc.agent_server import DEFAULT_MAX_CONCURRENT_REQUESTS
+from neuro_san.service.grpc.agent_server import DEFAULT_REQUEST_LIMIT
+from neuro_san.service.grpc.agent_server import DEFAULT_FORWARDED_REQUEST_METADATA
+from neuro_san.service.grpc.grpc_agent_service import GrpcAgentService
+from neuro_san.service.http.http_sidecar import HttpSidecar
 from neuro_san.service.registries_watcher.periodic_updater.manifest_periodic_updater import ManifestPeriodicUpdater
 
 

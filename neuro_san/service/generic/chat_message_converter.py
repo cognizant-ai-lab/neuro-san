@@ -9,10 +9,13 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
-import copy
 from typing import Any
 from typing import Dict
+
+import copy
+
 from leaf_common.serialization.interface.dictionary_converter import DictionaryConverter
+
 from neuro_san.internals.messages.chat_message_type import ChatMessageType
 
 
