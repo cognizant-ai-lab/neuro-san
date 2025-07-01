@@ -12,5 +12,6 @@
 from neuro_san.service.main_loop.server_main_loop import ServerMainLoop
 
 
+# Backwards compatibility entry point
 if __name__ == '__main__':
     ServerMainLoop().main_loop()
