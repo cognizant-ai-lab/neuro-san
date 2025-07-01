@@ -88,6 +88,8 @@ class BasicMessageProcessor(CompositeMessageProcessor):
         structure: Dict[str, Any] = self.get_structure()
         if structure is not None:
             string_struct: str = json.dumps(structure, indent=4, sort_keys=True)
+            if compiled is None:
+                compiled = ""
             compiled += f"\n```json\n{string_struct}\n```"
 
         return compiled
