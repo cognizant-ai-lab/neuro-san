@@ -26,8 +26,6 @@ from neuro_san.interfaces.concierge_session import ConciergeSession
 from neuro_san.internals.network_providers.service_agent_network_storage import ServiceAgentNetworkStorage
 from neuro_san.internals.network_providers.single_agent_network_provider import SingleAgentNetworkProvider
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
-from neuro_san.service.grpc.agent_server import AgentServer
-from neuro_san.service.grpc.agent_server import DEFAULT_FORWARDED_REQUEST_METADATA
 from neuro_san.service.http.handlers.health_check_handler import HealthCheckHandler
 from neuro_san.service.http.handlers.connectivity_handler import ConnectivityHandler
 from neuro_san.service.http.handlers.function_handler import FunctionHandler
@@ -38,6 +36,7 @@ from neuro_san.service.http.interfaces.agent_authorizer import AgentAuthorizer
 from neuro_san.service.http.interfaces.agents_updater import AgentsUpdater
 from neuro_san.service.http.http_server_app import HttpServerApp
 from neuro_san.service.http.logging.http_logger import HttpLogger
+from neuro_san.service.interfaces.agent_server import AgentServer
 from neuro_san.service.logging.agent_server_logging import AgentServerLogging
 from neuro_san.service.logging.event_loop_logger import EventLoopLogger
 from neuro_san.session.direct_concierge_session import DirectConciergeSession
@@ -57,7 +56,7 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
                  port: int, http_port: int,
                  openapi_service_spec_path: str,
                  requests_limit: int,
-                 forwarded_request_metadata: str = DEFAULT_FORWARDED_REQUEST_METADATA):
+                 forwarded_request_metadata: str = AgentServer.DEFAULT_FORWARDED_REQUEST_METADATA):
         """
         Constructor:
         :param start_event: event to await before starting actual service;
@@ -91,7 +90,7 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
         self.allowed_agents: Dict[str, AsyncAgentService] = {}
         self.lock = None
 
-    def __call__(self, grpc_server: AgentServer):
+    def __call__(self, other_server: AgentServer):
         """
         Method to be called by a thread running tornado HTTP server
         to actually start serving requests.
@@ -117,7 +116,7 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
 
         IOLoop.current().start()
         self.logger.info({}, "Http server stopped.")
-        grpc_server.stop()
+        other_server.stop()
 
     def make_app(self, requests_limit: int, logger: EventLoopLogger):
         """

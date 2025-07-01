@@ -29,6 +29,7 @@ from neuro_san.service.grpc.concierge_service import ConciergeService
 from neuro_san.service.grpc.dynamic_agent_router import DynamicAgentRouter
 from neuro_san.service.grpc.grpc_agent_service import GrpcAgentService
 from neuro_san.service.logging.agent_server_logging import AgentServerLogging
+from neuro_san.service.interfaces.agent_server import AgentServer
 from neuro_san.session.agent_service_stub import AgentServiceStub
 
 DEFAULT_SERVER_NAME: str = 'neuro-san.Agent'
@@ -40,12 +41,9 @@ DEFAULT_MAX_CONCURRENT_REQUESTS: int = 10
 # This is per the lifetime of the server (before it kills itself).
 DEFAULT_REQUEST_LIMIT: int = 1000 * 1000
 
-# A space-delimited list of http metadata request keys to forward to logs/other requests
-DEFAULT_FORWARDED_REQUEST_METADATA: str = "request_id user_id"
-
 
 # pylint: disable=too-many-instance-attributes
-class AgentServer:
+class GrpcAgentServer(AgentServer):
     """
     Server implementation for the Agent gRPC Service.
     """
@@ -58,7 +56,7 @@ class AgentServer:
                  server_name_for_logs: str = DEFAULT_SERVER_NAME_FOR_LOGS,
                  max_concurrent_requests: int = DEFAULT_MAX_CONCURRENT_REQUESTS,
                  request_limit: int = DEFAULT_REQUEST_LIMIT,
-                 forwarded_request_metadata: str = DEFAULT_FORWARDED_REQUEST_METADATA):
+                 forwarded_request_metadata: str = AgentServer.DEFAULT_FORWARDED_REQUEST_METADATA):
         """
         Constructor
 

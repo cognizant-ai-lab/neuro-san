@@ -26,12 +26,11 @@ from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.utils.file_of_class import FileOfClass
-from neuro_san.service.grpc.agent_server import AgentServer
-from neuro_san.service.grpc.agent_server import DEFAULT_SERVER_NAME
-from neuro_san.service.grpc.agent_server import DEFAULT_SERVER_NAME_FOR_LOGS
-from neuro_san.service.grpc.agent_server import DEFAULT_MAX_CONCURRENT_REQUESTS
-from neuro_san.service.grpc.agent_server import DEFAULT_REQUEST_LIMIT
-from neuro_san.service.grpc.agent_server import DEFAULT_FORWARDED_REQUEST_METADATA
+from neuro_san.service.grpc.grpc_agent_server import DEFAULT_SERVER_NAME
+from neuro_san.service.grpc.grpc_agent_server import DEFAULT_SERVER_NAME_FOR_LOGS
+from neuro_san.service.grpc.grpc_agent_server import DEFAULT_MAX_CONCURRENT_REQUESTS
+from neuro_san.service.grpc.grpc_agent_server import DEFAULT_REQUEST_LIMIT
+from neuro_san.service.grpc.grpc_agent_server import GrpcAgentServer
 from neuro_san.service.grpc.grpc_agent_service import GrpcAgentService
 from neuro_san.service.http.http_sidecar import HttpSidecar
 from neuro_san.service.registries_watcher.periodic_updater.manifest_periodic_updater import ManifestPeriodicUpdater
@@ -56,10 +55,10 @@ class AgentMainLoop(ServerLoopCallbacks):
         self.server_name_for_logs: str = DEFAULT_SERVER_NAME_FOR_LOGS
         self.max_concurrent_requests: int = DEFAULT_MAX_CONCURRENT_REQUESTS
         self.request_limit: int = DEFAULT_REQUEST_LIMIT
-        self.forwarded_request_metadata: int = DEFAULT_FORWARDED_REQUEST_METADATA
+        self.forwarded_request_metadata: int = GrpcAgentServer.DEFAULT_FORWARDED_REQUEST_METADATA
         self.service_openapi_spec_file: str = self._get_default_openapi_spec_path()
         self.manifest_update_period_seconds: int = 0
-        self.server: AgentServer = None
+        self.server: GrpcAgentServer = None
         self.manifest_files: List[str] = []
 
     def parse_args(self):
@@ -137,14 +136,14 @@ class AgentMainLoop(ServerLoopCallbacks):
         """
         self.parse_args()
 
-        self.server = AgentServer(self.port,
-                                  server_loop_callbacks=self,
-                                  agent_networks=self.agent_networks,
-                                  server_name=self.server_name,
-                                  server_name_for_logs=self.server_name_for_logs,
-                                  max_concurrent_requests=self.max_concurrent_requests,
-                                  request_limit=self.request_limit,
-                                  forwarded_request_metadata=self.forwarded_request_metadata)
+        self.server = GrpcAgentServer(self.port,
+                                      server_loop_callbacks=self,
+                                      agent_networks=self.agent_networks,
+                                      server_name=self.server_name,
+                                      server_name_for_logs=self.server_name_for_logs,
+                                      max_concurrent_requests=self.max_concurrent_requests,
+                                      request_limit=self.request_limit,
+                                      forwarded_request_metadata=self.forwarded_request_metadata)
 
         if self.manifest_update_period_seconds > 0:
             manifest_file: str = self.manifest_files[0]
