@@ -40,7 +40,7 @@ class DataDrivenAgentTestDriver:
     specified as a hocon file.
     """
 
-    TEST_KEYS: List[str] = ["text", "sly_data"]
+    TEST_KEYS: List[str] = ["text", "structure", "sly_data"]
 
     def __init__(self, asserts: AssertForwarder, fixtures: FileOfClass = None):
         """

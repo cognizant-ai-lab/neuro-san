@@ -32,6 +32,7 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
             - [response](#response)
                 - [text (response)](#text-response)
                 - [sly_data (response)](#sly_data-response)
+                - [structure (response)](#structure-response)
                 - [Stock Tests](#stock-tests)
                     - [value/not_value](#valuenot_value)
                     - [less/not_less](#lessnot_less)
@@ -307,6 +308,63 @@ key is tested against all of the tests listed in the corresponding dictionary. I
 there is a single [value](#valuenot_value) check against the number 19481.0.
 
 Note that for sly_data, it's possible to return nested dictionaries.
+To test the key/value pairs inside nested dictionaries, simply nest your test dictionaries.
+
+##### structure (response)
+
+The structure field of the response is a dictionary describing which tests to perform
+on the structure dictionary optionally returned as part of the response from the agent's "answer",
+very much like [sly_data](#sly_data-response) above.
+
+Since the structure is inherently a dictionary, we don't really want to test entire dictionary
+contents. Instead, what we want to test are specific values for particular keys inside the
+structure dictionary that was returned.  As such, each key in the test case's dictionary here
+corresponds to a specific key inside the returned structure that is to be tested.  The value
+is yet another dictionary that describes what to test, just like in [text](#text-response) above.
+
+Each key corresponds to a specific test/assert in the [Stock Tests](#stock-tests),
+and its value can either be a single test value as verification criteria for the test
+to pass or a list of these values - all of which must pass the test.  (That is, list
+inclusion is an AND operation.)
+
+For instance, part of the [music_nerd_pro test case](../tests/fixtures/music_nerd_pro/combination_responses_with_history_http.hocon)
+contains this interaction definition:
+
+```json
+    "interactions": [
+        {
+            # This is what we send as input to streaming_chat()
+            "text": "Who did Yellow Submarine?",
+
+            # The response block treats how we are going to test what comes back
+            "response": {
+                # Structure block says how we are going to examine the structure
+                # (dictionary) returned as part of the response.               
+                "structure": {
+                    # "answer" is a key that is supposed to be in the dictionary.
+                    "answer": {
+                        # Keywords says we are going to look for exact matches for each
+                        # element in a list of strings.  All elements need to show up
+                        # in order to pass.
+                        "keywords": "Beatles"
+                    },
+                    "running_cost": {
+                        "value": 3.0
+                    }
+                }
+            }
+        },
+        ...
+    ]
+```
+
+In this response part, what is being tested is the structure dictionary returned with "the answer".
+That dictionary is expected to have two keys called "answer" and "running_cost". Each
+have their own tests against single values.  Here, the "answer" key test looks for a single
+[keyword](#keywordsnot_keywords) in a string, and the "running_cost" looks for a single specific
+number [value](#valuenot_value).
+
+Note that for structure, as for sly_data, it's possible to return nested dictionaries.
 To test the key/value pairs inside nested dictionaries, simply nest your test dictionaries.
 
 ##### Stock Tests

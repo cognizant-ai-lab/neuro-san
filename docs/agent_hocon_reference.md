@@ -62,6 +62,7 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
     - [max_message_history](#max_message_history)
     - [error_formatter](#error_formatter-1)
     - [error_fragments](#error_fragments-1)
+    - [structure_formats](#structure_formats)
 
 <!--TOC-->
 
@@ -484,7 +485,7 @@ The default toolbox configuration is located at [toolbox_info.hocon](../neuro_sa
 
 To use your own tools, create a custom toolbox `.hocon` file and reference it by either:
 
-- Setting the `toolbox_info_file` key in the agent network `.hocon` file, or  
+- Setting the `toolbox_info_file` key in the agent network `.hocon` file, or
 - Defining the `AGENT_TOOLBOX_INFO_FILE` environment variable.
 
 For more details on tool extension, see the [Toolbox Extension Guide](./toolbox_info_hocon_reference.md#extending-toolbox-info).
@@ -632,3 +633,27 @@ Same as top-level [error_formatter above](#error_formatter), except at single-ag
 ### error_fragments
 
 Same as top-level [error_fragments above](#error_fragments), except at single-agent scope.
+
+### structure_formats
+
+<!-- pyml disable-next-line no-emphasis-as-heading -->
+_Front Man only_
+
+An optional list of strings describing the formats that the server-side should
+parse into the structure field of the ChatMessage response so clients do not have
+to re-invent this parsing wheel multiple times over.
+
+The first single structure found of the appropriate format(s) from the text of a response
+is what is put into the ChatMessage structure field, and any text which contributed to the
+parsing of that structure is removed from the ChatMessage text field.
+
+Supported values are:
+
+- "json"    Looks for JSON in the messages from the LLM and extracts
+
+Currently, the front-man is the only agent node that ever needs to specify this aspect of the [function](#function)
+definition.
+
+Example networks that parse their structure_formats:
+
+- [music_nerd_pro.hocon](../neuro_san/registries/music_nerd_pro.hocon)
