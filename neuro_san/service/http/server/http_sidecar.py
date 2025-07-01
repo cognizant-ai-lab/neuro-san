@@ -34,8 +34,8 @@ from neuro_san.service.http.handlers.concierge_handler import ConciergeHandler
 from neuro_san.service.http.handlers.openapi_publish_handler import OpenApiPublishHandler
 from neuro_san.service.http.interfaces.agent_authorizer import AgentAuthorizer
 from neuro_san.service.http.interfaces.agents_updater import AgentsUpdater
-from neuro_san.service.http.http_server_app import HttpServerApp
 from neuro_san.service.http.logging.http_logger import HttpLogger
+from neuro_san.service.http.server.http_server_app import HttpServerApp
 from neuro_san.service.interfaces.agent_server import AgentServer
 from neuro_san.service.logging.agent_server_logging import AgentServerLogging
 from neuro_san.service.logging.event_loop_logger import EventLoopLogger

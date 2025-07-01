@@ -32,7 +32,7 @@ from neuro_san.service.grpc.grpc_agent_server import DEFAULT_MAX_CONCURRENT_REQU
 from neuro_san.service.grpc.grpc_agent_server import DEFAULT_REQUEST_LIMIT
 from neuro_san.service.grpc.grpc_agent_server import GrpcAgentServer
 from neuro_san.service.grpc.grpc_agent_service import GrpcAgentService
-from neuro_san.service.http.http_sidecar import HttpSidecar
+from neuro_san.service.http.server.http_sidecar import HttpSidecar
 from neuro_san.service.registries_watcher.periodic_updater.manifest_periodic_updater import ManifestPeriodicUpdater
 
 
