@@ -12,7 +12,7 @@
 """
 See class comment for details
 """
-from neuro_san.service.async_agent_service import AsyncAgentService
+from neuro_san.service.generic.async_agent_service import AsyncAgentService
 
 
 class AgentAuthorizer:
