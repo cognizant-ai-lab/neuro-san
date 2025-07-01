@@ -35,6 +35,7 @@ from neuro_san.internals.run_context.factory.run_context_factory import RunConte
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.message_processing.message_processor import MessageProcessor
 from neuro_san.message_processing.answer_message_processor import AnswerMessageProcessor
+from neuro_san.message_processing.structure_message_processor import StructureMessageProcessor
 
 
 # pylint: disable=too-many-instance-attributes
@@ -172,12 +173,15 @@ class DataDrivenChatSession:
         # Determine the chat_context to enable continuing the conversation
         return_chat_context: Dict[str, Any] = self.prepare_chat_context(message_list)
 
+        # Get the front man spec. We will need it later for a few things.
+        front_man_spec: Dict[str, Any] = self.front_man.get_agent_tool_spec()
+
         # Get the formats we should parse from the final answer from the config for the network.
         # As of 6/24/25, this is an unadvertised experimental feature.
-        parse_formats: Union[str, List[str]] = self.registry.get_config().get("parse_formats")
+        structure_formats: Union[str, List[str]] = front_man_spec.get("structure_formats")
 
         # Find "the answer" and have that be the content of the last message we send
-        answer_processor = AnswerMessageProcessor(parse_formats=parse_formats)
+        answer_processor = AnswerMessageProcessor(structure_formats=structure_formats)
         answer_processor.process_messages(message_list)
         answer: str = answer_processor.get_answer()
         if answer is None:
@@ -186,7 +190,6 @@ class DataDrivenChatSession:
         structure: Dict[str, Any] = answer_processor.get_structure()
 
         # Send back sly_data as the front-man permits
-        front_man_spec: Dict[str, Any] = self.front_man.get_agent_tool_spec()
         redactor = SlyDataRedactor(front_man_spec,
                                    config_keys=["allow.to_upstream.sly_data"],
                                    allow_empty_dict=False)
@@ -240,3 +243,24 @@ class DataDrivenChatSession:
         }
 
         return chat_context
+
+    def create_outgoing_message_processor(self) -> MessageProcessor:
+        """
+        :return: A MessageProcessor that filters messages outgoing to the client.
+                How this works is based on settings on the front man.
+                Can be None.
+        """
+        message_processor: MessageProcessor = None
+
+        front_man_name: str = self.registry.find_front_man()
+        front_man_spec: Dict[str, Any] = self.registry.get_agent_tool_spec(front_man_name)
+
+        # Get the formats we should parse from the final answer from the config for the network.
+        # As of 6/24/25, this is an unadvertised experimental feature.
+        structure_formats: Union[str, List[str]] = front_man_spec.get("structure_formats")
+        if structure_formats is None:
+            return message_processor
+
+        # Eventually this might be a CompositeMessageProcessor
+        message_processor = StructureMessageProcessor(structure_formats)
+        return message_processor
