@@ -30,7 +30,7 @@ interface for ease of use in terms of web-apps and dev-ops administration.
 
 In one window start up a neuro-san server:
 
-    python -m neuro_san.service.agent_main_loop
+    python -m neuro_san.service.main_loop.server_main_loop
 
 In another window, you can interact with this server via curl.
 

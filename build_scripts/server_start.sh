@@ -4,7 +4,7 @@
 
 apt-get update && apt-get install -y netcat-openbsd procps curl net-tools
 
-nohup python -m neuro_san.service.agent_main_loop > agent.log 2>&1 &
+nohup python -m neuro_san.service.main_loop.server_main_loop > agent.log 2>&1 &
   echo $! > agent.pid
   sleep 2
 
