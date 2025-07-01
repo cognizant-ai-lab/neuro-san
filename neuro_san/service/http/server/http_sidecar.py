@@ -116,7 +116,8 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
 
         IOLoop.current().start()
         self.logger.info({}, "Http server stopped.")
-        other_server.stop()
+        if other_server is not None:
+            other_server.stop()
 
     def make_app(self, requests_limit: int, logger: EventLoopLogger):
         """
