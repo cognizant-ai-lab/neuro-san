@@ -96,7 +96,7 @@ are set before proceeding.
 
 Option 1: Run the service directly.  (Most useful for development)
 
-    python -m neuro_san.service.agent_main_loop
+    python -m neuro_san.service.main_loop.server_main_loop
 
 Option 2: Build and run the docker container for the hosting agent service:
 
