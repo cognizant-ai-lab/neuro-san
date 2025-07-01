@@ -24,11 +24,11 @@ from neuro_san.api.grpc import concierge_pb2_grpc
 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.service_agent_network_storage import ServiceAgentNetworkStorage
+from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.grpc.agent_servicer_to_server import AgentServicerToServer
 from neuro_san.service.grpc.concierge_service import ConciergeService
 from neuro_san.service.grpc.dynamic_agent_router import DynamicAgentRouter
 from neuro_san.service.grpc.grpc_agent_service import GrpcAgentService
-from neuro_san.service.logging.agent_server_logging import AgentServerLogging
 from neuro_san.service.interfaces.agent_server import AgentServer
 from neuro_san.session.agent_service_stub import AgentServiceStub
 

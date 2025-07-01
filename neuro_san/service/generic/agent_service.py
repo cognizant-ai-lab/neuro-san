@@ -29,8 +29,8 @@ from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextT
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.run_context.factory.master_toolbox_factory import MasterToolboxFactory
 from neuro_san.internals.run_context.factory.master_llm_factory import MasterLlmFactory
+from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.chat_message_converter import ChatMessageConverter
-from neuro_san.service.logging.agent_server_logging import AgentServerLogging
 from neuro_san.session.direct_agent_session import DirectAgentSession
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
 from neuro_san.session.session_invocation_context import SessionInvocationContext

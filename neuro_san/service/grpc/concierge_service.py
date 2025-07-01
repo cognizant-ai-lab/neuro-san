@@ -28,7 +28,7 @@ from leaf_server_common.server.request_logger import RequestLogger
 from neuro_san.api.grpc import concierge_pb2 as concierge_messages
 from neuro_san.api.grpc import concierge_pb2_grpc
 
-from neuro_san.service.logging.agent_server_logging import AgentServerLogging
+from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.session.direct_concierge_session import DirectConciergeSession
 
 
