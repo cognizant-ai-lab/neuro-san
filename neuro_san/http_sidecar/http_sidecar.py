@@ -126,6 +126,7 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
         }
         handlers = []
         handlers.append(("/", HealthCheckHandler, health_request_data))
+        handlers.append(("/healthz", HealthCheckHandler, health_request_data))
         handlers.append(("/api/v1/list", ConciergeHandler, request_data))
         handlers.append(("/api/v1/docs", OpenApiPublishHandler, request_data))
 

@@ -43,18 +43,17 @@ class HealthCheckHandler(RequestHandler):
             self.set_header("Access-Control-Allow-Methods", "GET, OPTIONS")
             self.set_header("Access-Control-Allow-Headers", "Content-Type, Transfer-Encoding")
 
-        self.versions: Dict[str, Any] = self.determine_versions()
-
     async def get(self):
         """
         Implementation of GET request handler for API health check.
         """
 
         try:
+            versions: Dict[str, Any] = self.determine_versions()
             result_dict: Dict[str, Any] = {
                 "service": "neuro-san agents",
                 "status": "healthy",
-                "versions": self.versions
+                "versions": versions
             }
             self.set_header("Content-Type", "application/json")
             self.write(result_dict)
