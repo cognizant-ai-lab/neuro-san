@@ -12,10 +12,13 @@
 """
 See class comment for details
 """
+from typing import Any
+from typing import Dict
+from typing import Sequence
+
 import copy
 import logging
 import pathlib
-from typing import Any, Dict, Sequence
 
 from leaf_server_common.logging.logging_setup import setup_logging
 
