@@ -105,6 +105,10 @@ class TestSmokeTestHocons(TestCase):
         # include the file basis implied by the __file__ and path_to_basis above.
         self.DYNAMIC.one_test_hocon(self, test_name, test_hocon)
     
+    @pytest.mark.timeout(30)  # 30 seconds for this test
+    @pytest.mark.smoke
+    @pytest.mark.non_default_llm_provider
+    @pytest.mark.gemini
     def test_hocon_with_gemini(self, test_name: str, test_hocon: str):
         """
         Test method for a single parameterized test case specified by a hocon file.
