@@ -16,7 +16,7 @@
 {
     "llm_config": {
         "model_name": "azure-gpt-4o",
-        "deployment_name": "your_deployment_name",
+        "deployment_name": "gpt-4o",
     },
     "tools": [
         # These tool definitions do not have to be in any particular order
