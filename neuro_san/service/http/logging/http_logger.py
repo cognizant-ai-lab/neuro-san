@@ -12,15 +12,18 @@
 """
 See class comment for details
 """
+from typing import Any
+from typing import Dict
+from typing import Sequence
+
 import copy
 import logging
 import pathlib
-from typing import Any, Dict, Sequence
 
 from leaf_server_common.logging.logging_setup import setup_logging
 
-from neuro_san.http_sidecar.logging.event_loop_logger import EventLoopLogger
-from neuro_san.http_sidecar.logging.log_context_filter import LogContextFilter
+from neuro_san.service.http.logging.log_context_filter import LogContextFilter
+from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
 
 
 class HttpLogger(EventLoopLogger):

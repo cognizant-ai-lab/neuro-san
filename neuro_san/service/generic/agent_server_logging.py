@@ -58,7 +58,7 @@ class AgentServerLogging:
         # Make for easy running from the neuro-san repo
         if os.environ.get("AGENT_SERVICE_LOG_JSON") is None:
             # Use the log file that is local to the repo
-            file_of_class = FileOfClass(__file__, path_to_basis="../deploy")
+            file_of_class = FileOfClass(__file__, path_to_basis="../../deploy")
             os.environ["AGENT_SERVICE_LOG_JSON"] = file_of_class.get_file_in_basis("logging.json")
 
         # Need to initialize the forwarded metadata default values before our first

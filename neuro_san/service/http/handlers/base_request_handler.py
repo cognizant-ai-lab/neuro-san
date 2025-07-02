@@ -27,9 +27,9 @@ import grpc
 import tornado
 from tornado.web import RequestHandler
 
-from neuro_san.http_sidecar.logging.http_logger import HttpLogger
-from neuro_san.http_sidecar.interfaces.agent_authorizer import AgentAuthorizer
-from neuro_san.http_sidecar.interfaces.agents_updater import AgentsUpdater
+from neuro_san.service.http.interfaces.agent_authorizer import AgentAuthorizer
+from neuro_san.service.http.interfaces.agents_updater import AgentsUpdater
+from neuro_san.service.http.logging.http_logger import HttpLogger
 
 
 class BaseRequestHandler(RequestHandler):

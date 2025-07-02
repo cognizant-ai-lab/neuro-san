@@ -9,22 +9,18 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
-"""
-See class comment for details
-"""
-from neuro_san.service.async_agent_service import AsyncAgentService
 
 
-class AgentAuthorizer:
+class AgentServer:
     """
-    Abstract interface implementing some policy
-    of allowing to route incoming requests to an agent.
+    Interface for an AgentServer, regardless of transport mechanism
     """
 
-    def allow(self, agent_name) -> AsyncAgentService:
+    # A space-delimited list of http metadata request keys to forward to logs/other requests
+    DEFAULT_FORWARDED_REQUEST_METADATA: str = "request_id user_id"
+
+    def stop(self):
         """
-        :param agent_name: name of an agent
-        :return: instance of AsyncAgentService if routing requests is allowed for this agent;
-                 None otherwise
+        Stop the server.
         """
         raise NotImplementedError

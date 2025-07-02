@@ -12,10 +12,12 @@
 """
 See class comment for details
 """
-import json
-from typing import Any, Dict
+from typing import Any
+from typing import Dict
 
-from neuro_san.http_sidecar.handlers.base_request_handler import BaseRequestHandler
+import json
+
+from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
 
 
 class OpenApiPublishHandler(BaseRequestHandler):

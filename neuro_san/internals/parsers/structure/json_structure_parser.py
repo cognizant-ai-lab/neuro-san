@@ -15,8 +15,7 @@ from typing import Dict
 from typing import List
 
 from json.decoder import JSONDecodeError
-
-from langchain_core.utils.json import parse_json_markdown
+from json_repair import loads
 
 from neuro_san.internals.parsers.structure.structure_parser import StructureParser
 
@@ -42,11 +41,16 @@ class JsonStructureParser(StructureParser):
             # Start : End
             "```json": "```",
             "```": "```",
+            "`{": "}`",
             "{": "}",
         }
 
         for start_delim, end_delim in delimiters.items():
             if start_delim in content:
+
+                # Note: This code assumes we only have one delimited JSON structure to parse
+                #       within the content.
+
                 # Well-formed per delimiter
                 split_header: List[str] = content.split(start_delim)
 
@@ -80,7 +84,11 @@ class JsonStructureParser(StructureParser):
         # Attempt parsing the structure from the meat
         structure: Dict[str, Any] = None
         try:
-            structure = parse_json_markdown(meat)
+            structure = loads(meat)
+            if not isinstance(structure, Dict):
+                # json_repair seems to sometimes return an empty string if there is nothing
+                # for it to grab onto.
+                structure = None
         except JSONDecodeError:
             # Couldn't parse
             self.remainder = None
