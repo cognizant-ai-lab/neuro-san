@@ -203,8 +203,6 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         if config.get("class"):
             # If config has "class", it is a user-specified llm so return config as is,
-            # and replace "StandardLangChainLlmFactory" with "UserSpecifiedLangChainLlmFactory".
-            # self.llm_factories[0] = UserSpecifiedLangChainLlmFactory()
             return config
 
         default_config: Dict[str, Any] = self.llm_infos.get("default_config")
