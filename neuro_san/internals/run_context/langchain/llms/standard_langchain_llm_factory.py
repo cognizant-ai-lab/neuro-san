@@ -70,7 +70,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         if chat_class is not None:
             chat_class = chat_class.lower()
 
-        model_name: str = config.get("model_name")
+        model_name: str = config.get("model_name") or config.get("model") or config.get("model_id")
 
         if chat_class == "openai":
             llm = ChatOpenAI(

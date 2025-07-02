@@ -46,7 +46,9 @@
     # Agents having to do with test infrastructure
     "gist.hocon": true,
     "assess_failure.hocon": true,
-
+    "test_new_model_default_class.hocon": true,
+    "test_new_class.hocon": true,
+    "test_new_model_extended_class.hocon": true
     # STOP AND READ: YOU PROBABLY DON'T WANT TO ADD YOUR .hocon FILE HERE.
     #
     # The agent network .hocon files above are examples specific to the neuro-san library.

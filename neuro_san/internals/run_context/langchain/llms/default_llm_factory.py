@@ -33,8 +33,7 @@ from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeL
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
 from neuro_san.internals.run_context.langchain.llms.llm_info_restorer import LlmInfoRestorer
 from neuro_san.internals.run_context.langchain.llms.standard_langchain_llm_factory import StandardLangChainLlmFactory
-from neuro_san.internals.run_context.langchain.llms.user_specified_langchain_llm_factory import \
-    UserSpecifiedLangChainLlmFactory
+from neuro_san.internals.run_context.langchain.toolbox.toolbox_factory import ToolboxFactory
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
 
 
@@ -126,24 +125,13 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             raise ValueError(f"The value for the classes.factories key in {llm_info_file} "
                              "must be a list of strings")
 
-        class_split: List[str] = llm_factory_class_name.split(".")
-        if len(class_split) <= 2:
-            raise ValueError(f"Value in the classes.factories in {llm_info_file} must be of the form "
-                             "<package_name>.<module_name>.<ClassName>")
-
-        # Create a list of a single package given the name in the value
-        packages: List[str] = [".".join(class_split[:-2])]
-        class_name: str = class_split[-1]
-        resolver = Resolver(packages)
-
-        # Resolve the class name
-        llm_factory_class: Type[LangChainLlmFactory] = None
-        try:
-            llm_factory_class: Type[LangChainLlmFactory] = \
-                resolver.resolve_class_in_module(class_name, module_name=class_split[-2])
-        except AttributeError as exception:
-            raise ValueError(f"Class {llm_factory_class_name} in {llm_info_file} "
-                             "not found in PYTHONPATH") from exception
+        # Resolve the factory class
+        llm_factory_class = self._resolve_class_from_path(
+            class_path=llm_factory_class_name,
+            expected_base=LangChainLlmFactory,
+            source_file=llm_info_file,
+            description="classes.factories"
+        )
 
         # Instantiate it
         try:
@@ -157,6 +145,38 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             raise ValueError(f"Class {llm_factory_class_name} in {llm_info_file} "
                              "must be of type LangChainLlmFactory")
         return llm_factory
+
+    def _resolve_class_from_path(
+            self,
+            class_path: str,
+            expected_base: Type,
+            source_file: str,
+            description: str
+    ) -> Type:
+
+        parts = class_path.split(".")
+        if len(parts) <= 2:
+            raise ValueError(
+                f"Value for '{description}' in {source_file} must be of the form "
+                "<package>.<module>.<ClassName>"
+            )
+
+        module_name = parts[-2]
+        class_name = parts[-1]
+        packages = [".".join(parts[:-2])]
+        resolver = Resolver(packages)
+
+        try:
+            cls = resolver.resolve_class_in_module(class_name, module_name=module_name)
+        except AttributeError as e:
+            raise ValueError(f"Class {class_path} in {source_file} not found in PYTHONPATH") from e
+
+        if not issubclass(cls, expected_base):
+            raise ValueError(
+                f"Class {class_path} in {source_file} must be a subclass of {expected_base.__name__}"
+            )
+
+        return cls
 
     def create_llm(self, config: Dict[str, Any], callbacks: List[BaseCallbackHandler] = None) -> BaseLanguageModel:
         """
@@ -172,6 +192,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         """
         full_config: Dict[str, Any] = self.create_full_llm_config(config)
         llm: BaseLanguageModel = self.create_base_chat_model(full_config, callbacks)
+        print(f"\n\n{llm=}\n\n")
         return llm
 
     def create_full_llm_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -183,7 +204,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         if config.get("class"):
             # If config has "class", it is a user-specified llm so return config as is,
             # and replace "StandardLangChainLlmFactory" with "UserSpecifiedLangChainLlmFactory".
-            self.llm_factories[0] = UserSpecifiedLangChainLlmFactory()
+            # self.llm_factories[0] = UserSpecifiedLangChainLlmFactory()
             return config
 
         default_config: Dict[str, Any] = self.llm_infos.get("default_config")
@@ -288,6 +309,27 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             except ValueError as exception:
                 # Let the next model have a crack
                 found_exception = exception
+
+        # Try resolving via 'class' in config if factories failed
+        class_path = config.get("class")
+        if found_exception is not None and class_path:
+            if not isinstance(class_path, str):
+                raise ValueError("'class' in llm_config must be a string")
+
+            # Resolve the 'class'
+            llm_class = self._resolve_class_from_path(
+                class_path=class_path,
+                expected_base=BaseLanguageModel,
+                source_file="agent network hocon file",
+                description="llm_config"
+            )
+
+            # copy the config, take 'class' out, and unpack into llm constructor
+            user_config = config.copy()
+            user_config.pop("class")
+            ToolboxFactory.check_invalid_args(llm_class, user_config)
+            llm = llm_class(**user_config)
+            found_exception = None
 
         if found_exception is not None:
             raise found_exception
