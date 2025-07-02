@@ -127,7 +127,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         Return a file path to default location of OpenAPI specification file
         for neuro-san service.
         """
-        file_of_class = FileOfClass(__file__, path_to_basis="../api/grpc")
+        file_of_class = FileOfClass(__file__, path_to_basis="../../api/grpc")
         return file_of_class.get_file_in_basis("agent_service.json")
 
     def main_loop(self):
