@@ -12,20 +12,21 @@
 """
 See class comment for details
 """
-from typing import Any, Dict
+from typing import Any
+from typing import Dict
 
-from neuro_san.http_sidecar.handlers.base_request_handler import BaseRequestHandler
-from neuro_san.service.async_agent_service import AsyncAgentService
+from neuro_san.service.generic.async_agent_service import AsyncAgentService
+from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
 
 
-class FunctionHandler(BaseRequestHandler):
+class ConnectivityHandler(BaseRequestHandler):
     """
-    Handler class for neuro-san "function" API call.
+    Handler class for neuro-san "connectivity" API call.
     """
 
     async def get(self, agent_name: str):
         """
-        Implementation of GET request handler for "function" API call.
+        Implementation of GET request handler for "connectivity" API call.
         """
         metadata: Dict[str, Any] = self.get_metadata()
         update_done: bool = await self.update_agents(metadata=metadata)
@@ -39,12 +40,12 @@ class FunctionHandler(BaseRequestHandler):
             self.do_finish()
             return
 
-        self.application.start_client_request(metadata, f"{agent_name}/function")
+        self.application.start_client_request(metadata, f"{agent_name}/connectivity")
         try:
             data: Dict[str, Any] = {}
-            result_dict: Dict[str, Any] = await service.function(data, metadata)
+            result_dict: Dict[str, Any] = await service.connectivity(data, metadata)
 
-            # Return service response to the HTTP client
+            # Return gRPC response to the HTTP client
             self.set_header("Content-Type", "application/json")
             self.write(result_dict)
 
@@ -52,4 +53,4 @@ class FunctionHandler(BaseRequestHandler):
             self.process_exception(exc)
         finally:
             self.do_finish()
-            self.application.finish_client_request(metadata, f"{agent_name}/function")
+            self.application.finish_client_request(metadata, f"{agent_name}/connectivity")

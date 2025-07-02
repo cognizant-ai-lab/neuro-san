@@ -40,9 +40,10 @@ class AnswerMessageFilter(MessageFilter):
             # whose origin length is the only one of length 1.
             return False
 
-        text = chat_message_dict.get("text")
-        if text is None:
-            # Final answers need to be text (for now).
+        text: str = chat_message_dict.get("text")
+        structure: Dict[str, Any] = chat_message_dict.get("structure")
+        if text is None and structure is None:
+            # Final answers need to be text or structure.
             # There might be more options in the future.
             return False
 

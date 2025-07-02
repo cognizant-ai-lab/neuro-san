@@ -9,32 +9,18 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
-"""
-See class comment for details
-"""
+from neuro_san.service.http.logging.log_context_filter import LogContextFilter as ParentLogContextFilter
 
-import contextvars
-import logging
+print("""
+WARNING: The class:
+     neuro_san.http_sidecar.logging.log_context_filter.LogContextFilter
+... has moved to be ...
+    neuro_san.service.http.logging.log_context_filter.LogContextFilter.
+Please update the logging.json file associated with your Neuro SAN agent server accordingly.
+""")
 
 
-class LogContextFilter(logging.Filter):
+class LogContextFilter(ParentLogContextFilter):
     """
-    Custom logging filter for Http server.
+    Compatibility class for logging.json entries that haven't quite converted yet.
     """
-
-    def filter(self, record):
-        """
-        Logging filter: add key-value pairs from log_context
-        to logging record to be used.
-        """
-        ctx = LogContextFilter.log_context.get()
-        for key, value in ctx.items():
-            setattr(record, key, value)
-        return True
-
-    @classmethod
-    def set_log_context(cls):
-        """
-        Create log context class instance.
-        """
-        cls.log_context = contextvars.ContextVar("http_server_context", default={})
