@@ -21,7 +21,7 @@ class NullUsageLogger(UsageLogger):
     Implementation of the UsageLogger interface that does nothing.
     """
 
-    def log_usage(self, token_dict: Dict[str, Any], request_metadata: Dict[str, Any]):
+    async def log_usage(self, token_dict: Dict[str, Any], request_metadata: Dict[str, Any]):
         """
         Logs the token usage for external capture.
 

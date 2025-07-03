@@ -19,7 +19,7 @@ class UsageLogger:
     Interface for logging per-user usage statistics.
     """
 
-    def log_usage(self, token_dict: Dict[str, Any], request_metadata: Dict[str, Any]):
+    async def log_usage(self, token_dict: Dict[str, Any], request_metadata: Dict[str, Any]):
         """
         Logs the token usage for external capture.
 
