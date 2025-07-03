@@ -23,6 +23,7 @@ from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_server_common.server.atomic_counter import AtomicCounter
 from leaf_server_common.server.request_logger import RequestLogger
 
+from neuro_san.interfaces.usage_logger import UsageLogger
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
@@ -31,6 +32,7 @@ from neuro_san.internals.run_context.factory.master_toolbox_factory import Maste
 from neuro_san.internals.run_context.factory.master_llm_factory import MasterLlmFactory
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.chat_message_converter import ChatMessageConverter
+from neuro_san.service.usage.usage_logger_factory import UsageLoggerFactory
 from neuro_san.session.direct_agent_session import DirectAgentSession
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
 from neuro_san.session.session_invocation_context import SessionInvocationContext
@@ -244,6 +246,12 @@ class AgentService:
 
         request_reporting: Dict[str, Any] = invocation_context.get_request_reporting()
         invocation_context.close()
+
+        # Maybe report token accounting to a UsageLogger
+        token_dict: Dict[str, Any] = request_reporting.get("token_accounting")
+        if token_dict is not None:
+            usage_logger: UsageLogger = UsageLoggerFactory.create_usage_logger()
+            usage_logger.synchronous_log_usage(token_dict, request_metadata)
 
         # Iterator has finally signaled that there are no more responses to be had.
         # Log that we are done.

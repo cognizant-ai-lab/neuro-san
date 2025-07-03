@@ -11,7 +11,6 @@
 # END COPYRIGHT
 from typing import Any
 from typing import Dict
-from typing import List
 
 from neuro_san.internals.filters.message_filter import MessageFilter
 from neuro_san.internals.messages.chat_message_type import ChatMessageType

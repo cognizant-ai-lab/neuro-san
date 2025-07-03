@@ -14,6 +14,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from asyncio import run
 from os import environ
 
 from neuro_san.interfaces.usage_logger import UsageLogger
@@ -72,6 +73,13 @@ class WrappedUsageLogger(UsageLogger):
         minimal_metadata: Dict[str, Any] = self.minimize_metadata(request_metadata)
 
         await self.wrapped.log_usage(compliant_token_dict, minimal_metadata)
+
+    def synchronous_log_usage(self, token_dict: Dict[str, Any], request_metadata: Dict[str, Any]):
+        """
+        Logs the token usage for external capture.
+        See comments for log_usage() above.
+        """
+        run(self.log_usage(token_dict, request_metadata))
 
     def make_compliant_token_dict(self, token_dict: Dict[str, Any]) -> Dict[str, Any]:
         """
