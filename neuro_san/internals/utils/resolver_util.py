@@ -55,16 +55,16 @@ class ResolverUtil:
         class_reference: Type[Any] = None
         try:
             class_reference = resolver.resolve_class_in_module(class_name, module_name=class_split[-2])
-        except AttributeError:
+        except AttributeError as exception:
             raise ValueError(f"Class '{class_name}' from {class_name_source} "
-                             "not found in PYTHONPATH")
+                             "not found in PYTHONPATH") from exception
 
         # Instantiate the class
         try:
             instance = class_reference()
-        except TypeError:
+        except TypeError as exception:
             raise ValueError(f"Class '{class_name}' from {class_name_source} "
-                             "must have a no-args constructor")
+                             "must have a no-args constructor") from exception
 
         # Make sure it is the correct type
         if not isinstance(instance, type_of_class):
