@@ -33,8 +33,8 @@ from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeL
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
 from neuro_san.internals.run_context.langchain.llms.llm_info_restorer import LlmInfoRestorer
 from neuro_san.internals.run_context.langchain.llms.standard_langchain_llm_factory import StandardLangChainLlmFactory
-from neuro_san.internals.run_context.langchain.toolbox.toolbox_factory import ToolboxFactory
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
+from neuro_san.internals.run_context.langchain.util.argument_validator import ArgumentValidator
 
 
 class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
@@ -125,7 +125,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                              "must be a list of strings")
 
         # Resolve the factory class
-        llm_factory_class = self._resolve_class_from_path(
+        llm_factory_class: Type[LangChainLlmFactory] = self._resolve_class_from_path(
             class_path=llm_factory_class_name,
             expected_base=LangChainLlmFactory,
             source_file=llm_info_file,
@@ -191,7 +191,6 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         """
         full_config: Dict[str, Any] = self.create_full_llm_config(config)
         llm: BaseLanguageModel = self.create_base_chat_model(full_config, callbacks)
-        print(f"\n\n{llm=}\n\n")
         return llm
 
     def create_full_llm_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -272,7 +271,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
     def create_base_chat_model(self, config: Dict[str, Any],
                                callbacks: List[BaseCallbackHandler] = None) -> BaseLanguageModel:
         """
-        Create a BaseLanguageModel from the fully-specified llm config.
+        Create a BaseLanguageModel from the fully-specified llm config either from standard LLM factory,
+        user-defined LLM factory, or user-specified langchain model class.
         :param config: The fully specified llm config which is a product of
                     _create_full_llm_config() above.
         :param callbacks: A list of BaseCallbackHandlers to add to the chat model.
@@ -308,30 +308,45 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 found_exception = exception
 
         # Try resolving via 'class' in config if factories failed
-        class_path = config.get("class")
-        if found_exception is not None and class_path:
-            if not isinstance(class_path, str):
-                raise ValueError("'class' in llm_config must be a string")
-
-            # Resolve the 'class'
-            llm_class = self._resolve_class_from_path(
-                class_path=class_path,
-                expected_base=BaseLanguageModel,
-                source_file="agent network hocon file",
-                description="llm_config"
-            )
-
-            # copy the config, take 'class' out, and unpack into llm constructor
-            user_config = config.copy()
-            user_config.pop("class")
-            ToolboxFactory.check_invalid_args(llm_class, user_config)
-            llm = llm_class(**user_config)
+        class_path: str = config.get("class")
+        if llm is None and found_exception is not None and class_path:
+            llm = self.create_base_chat_model_from_user_class(class_path, config)
             found_exception = None
 
         if found_exception is not None:
             raise found_exception
 
         return llm
+
+    def create_base_chat_model_from_user_class(self, class_path: str, config: Dict[str, Any]) -> BaseLanguageModel:
+        """
+        Create a BaseLanguageModel from the user-specified langchain model class.
+        :param class_path: A string in the form of <package>.<module>.<Class>
+        :param config: The fully specified llm config which is a product of
+                    _create_full_llm_config() above.
+
+        :return: A BaseLanguageModel
+        """
+
+        if not isinstance(class_path, str):
+            raise ValueError("'class' in llm_config must be a string")
+
+        # Resolve the 'class'
+        llm_class: Type[BaseLanguageModel] = self._resolve_class_from_path(
+            class_path=class_path,
+            expected_base=BaseLanguageModel,
+            source_file="agent network hocon file",
+            description="llm_config"
+        )
+
+        # Copy the config, take 'class' out, and unpack into llm constructor
+        user_config: Dict[str, Any] = config.copy()
+        user_config.pop("class")
+
+        # Check for invalid args and throw error if found
+        ArgumentValidator.check_invalid_args(llm_class, user_config)
+
+        return llm_class(**user_config)
 
     def get_max_prompt_tokens(self, config: Dict[str, Any]) -> int:
         """

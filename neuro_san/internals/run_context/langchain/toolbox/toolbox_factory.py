@@ -10,15 +10,12 @@
 #
 # END COPYRIGHT
 
-from inspect import isclass
-from inspect import signature
-from types import MethodType
+
 from typing import Any
 from typing import Callable
 from typing import Dict
 from typing import List
 from typing import Optional
-from typing import Set
 from typing import Type
 from typing import Union
 
@@ -33,6 +30,7 @@ from leaf_common.config.resolver import Resolver
 
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.run_context.langchain.toolbox.toolbox_info_restorer import ToolboxInfoRestorer
+from neuro_san.internals.run_context.langchain.util.argument_validator import ArgumentValidator
 
 
 class ToolboxFactory(ContextTypeToolboxFactory):
@@ -153,7 +151,7 @@ class ToolboxFactory(ContextTypeToolboxFactory):
             self._get_from_api_wrapper_method(tool_class) or tool_class
 
         # Validate and instantiate
-        ToolboxFactory.check_invalid_args(callable_obj, final_args)
+        ArgumentValidator.check_invalid_args(callable_obj, final_args)
         # Instance can be a BaseTool or a BaseToolkit
         instance: Union[BaseTool, BaseToolkit] = callable_obj(**final_args)
 
@@ -179,7 +177,7 @@ class ToolboxFactory(ContextTypeToolboxFactory):
                 # If the argument is a class definition, resolve and instantiate it
                 nested_class: BaseModel = self._resolve_class(value.get("class"))
                 nested_args: Dict[str, Any] = self._resolve_args(value.get("args", empty))
-                ToolboxFactory.check_invalid_args(nested_class, nested_args)
+                ArgumentValidator.check_invalid_args(nested_class, nested_args)
                 resolved_args[key] = nested_class(**nested_args)
             else:
                 # Otherwise, keep primitive values as they are
@@ -210,30 +208,6 @@ class ToolboxFactory(ContextTypeToolboxFactory):
             return resolver.resolve_class_in_module(class_name, module_name=class_split[-2])
         except AttributeError as exception:
             raise ValueError(f"Class {class_path} not found in PYTHONPATH") from exception
-
-    @staticmethod
-    def check_invalid_args(method_class: Union[Type, MethodType], args: Dict[str, Any]):
-        """
-        Check for invalid arguments in class or method
-        :param method_class: Class or method to check for the invalid arguments
-        :param args: Arguments to check
-        """
-        pydantic_args: Set[str] = set()
-        # Check for if it is a class that extends pydantic BaseModel
-        if isclass(method_class) and issubclass(method_class, BaseModel):
-            # Include field names as args
-            pydantic_args = set(method_class.model_fields.keys())
-        # Combine the arguments
-        class_args_set: Set[str] = set(signature(method_class).parameters.keys()).union(pydantic_args)
-        args_set: Set[str] = set(args.keys())
-
-        # If there are args that are not from class args or alias, raise error
-        invalid_args: Set[str] = args_set - class_args_set
-        if invalid_args:
-            raise ValueError(
-                f"Arguments {invalid_args} for '{method_class.__name__}' do not match any attributes "
-                "of the class or any arguments of the method."
-            )
 
     def _get_from_api_wrapper_method(
         self,
