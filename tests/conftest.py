@@ -20,7 +20,7 @@ def configure_llm_provider_keys(request, monkeypatch):
                 pytest.skip("Missing ANTHROPIC_API_KEY for test marked 'anthropic'")
         elif is_azure:
             if not os.getenv("AZURE_OPENAI_API_KEY"):
-                pytest.skip("Missing GOOGLE_API_KEY for test marked 'azure'")
+                pytest.skip("Missing AZURE_OPENAI_API_KEY for test marked 'azure'")
         elif is_gemini:
             if not os.getenv("GOOGLE_API_KEY"):
                 pytest.skip("Missing GOOGLE_API_KEY for test marked 'gemini'")
