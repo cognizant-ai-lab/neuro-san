@@ -750,6 +750,33 @@
                 "top_k": null, 
                 "top_p": null,
             }
+        },
+        "bedrock": {
+            "args": {
+                # Note that we can only supply arguments that are "Just Data" in nature.
+                # See https://python.langchain.com/api_reference/aws/chat_models/langchain_aws.chat_models.bedrock.ChatBedrock.html
+                "aws_access_key_id": null,
+                "aws_secret_access_key": null,
+                "aws_session_token": null,
+                "base_model_id": null,
+                "beta_use_converse_api": false,
+                "cache": null,
+                "config": null,
+                "credentials_profile_name": null,
+                "custom_get_token_ids": null,
+                "endpoint_url": null,
+                "guardrails": null,
+                "max_tokens": null,
+                "metadata": null,
+                "provider": null,
+                "rate_limiter": null,
+                "region_name": null,
+                "stop_sequences": null,
+                # streaming is always on. Without it token counting will not work.
+                "system_prompt_with_tools": "",
+                "tags": null,
+                "temperature": null
+            }
         }
     }
 
