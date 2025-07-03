@@ -14,6 +14,7 @@ from os import environ
 
 from neuro_san.interfaces.usage_logger import UsageLogger
 from neuro_san.internals.utils.resolver_util import ResolverUtil
+from neuro_san.service.usage.wrapped_usage_logger import WrappedUsageLogger
 
 
 class UsageLoggerFactory:
@@ -23,16 +24,17 @@ class UsageLoggerFactory:
     """
 
     @staticmethod
-    def create_usage_logger(self) -> UsageLogger:
+    def create_usage_logger(self) -> WrappedUsageLogger:
         """
         Reads the server environment variables to create a UsageLogger instance.
 
-        :return: The UsageLogger that pertains to the AGENT_USAGE_LOGGER env var.
-                Can return None if this env var is not set. Can throw an exception
+        :return: A WrappedUsageLogger that wraps the class referred to by the
+                AGENT_USAGE_LOGGER env var.  Can throw an exception
                 if there are problems creating the class referenced by the env var.
         """
         usage_logger_class_name: str = environ.get("AGENT_USAGE_LOGGER")
         usage_logger: UsageLogger = ResolverUtil.create_instance(usage_logger_class_name,
                                                                  "AGENT_USAGE_LOGGER env var",
                                                                  UsageLogger)
-        return usage_logger
+        wrapped: WrappedUsageLogger = WrappedUsageLogger(usage_logger)
+        return wrapped
