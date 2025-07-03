@@ -31,7 +31,7 @@ from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.chat_message_converter import ChatMessageConverter
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
 from neuro_san.service.usage.usage_logger_factory import UsageLoggerFactory
-from neuro_san.service.wrapped_usage_logger import WrappedUsageLogger
+from neuro_san.service.usage.wrapped_usage_logger import WrappedUsageLogger
 from neuro_san.session.async_direct_agent_session import AsyncDirectAgentSession
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
 from neuro_san.session.session_invocation_context import SessionInvocationContext

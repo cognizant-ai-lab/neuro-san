@@ -24,7 +24,7 @@ class UsageLoggerFactory:
     """
 
     @staticmethod
-    def create_usage_logger(self) -> WrappedUsageLogger:
+    def create_usage_logger() -> WrappedUsageLogger:
         """
         Reads the server environment variables to create a UsageLogger instance.
 
