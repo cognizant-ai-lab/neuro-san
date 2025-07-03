@@ -153,20 +153,20 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             description: str
     ) -> Type:
 
-        parts = class_path.split(".")
+        parts: List[str] = class_path.split(".")
         if len(parts) <= 2:
             raise ValueError(
                 f"Value for '{description}' in {source_file} must be of the form "
                 "<package>.<module>.<ClassName>"
             )
 
-        module_name = parts[-2]
-        class_name = parts[-1]
-        packages = [".".join(parts[:-2])]
+        module_name: str = parts[-2]
+        class_name: str = parts[-1]
+        packages: str = [".".join(parts[:-2])]
         resolver = Resolver(packages)
 
         try:
-            cls = resolver.resolve_class_in_module(class_name, module_name=module_name)
+            cls: Type = resolver.resolve_class_in_module(class_name, module_name=module_name)
         except AttributeError as e:
             raise ValueError(f"Class {class_path} in {source_file} not found in PYTHONPATH") from e
 
