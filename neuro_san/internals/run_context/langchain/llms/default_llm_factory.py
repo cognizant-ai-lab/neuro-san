@@ -318,12 +318,18 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         return llm
 
-    def create_base_chat_model_from_user_class(self, class_path: str, config: Dict[str, Any]) -> BaseLanguageModel:
+    def create_base_chat_model_from_user_class(
+            self,
+            class_path: str,
+            config: Dict[str, Any],
+            callbacks: Optional[List[BaseCallbackHandler]] = None
+    ) -> BaseLanguageModel:
         """
         Create a BaseLanguageModel from the user-specified langchain model class.
         :param class_path: A string in the form of <package>.<module>.<Class>
         :param config: The fully specified llm config which is a product of
                     _create_full_llm_config() above.
+        :param callbacks: A list of BaseCallbackHandlers to add to the chat model.
 
         :return: A BaseLanguageModel
         """
@@ -339,9 +345,11 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             description="llm_config"
         )
 
-        # Copy the config, take 'class' out, and unpack into llm constructor
+        # Copy the config, take 'class' out, and add callbacks
+        # Then unpack into llm constructor
         user_config: Dict[str, Any] = config.copy()
         user_config.pop("class")
+        user_config["callbacks"] = callbacks
 
         # Check for invalid args and throw error if found
         ArgumentValidator.check_invalid_args(llm_class, user_config)
