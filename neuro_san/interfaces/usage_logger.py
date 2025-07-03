@@ -28,6 +28,9 @@ class UsageLogger:
 
         :param token_dict: A dictionary that describes overall token usage for a completed request.
 
+                For each class of LLM (more or less equivalent to an LLM provider), there will
+                be one key whose value is a dictionary with some other keys:
+
                 Relevant keys include:
                     "completion_tokens" - Integer number of tokens generated in response to LLM input
                     "prompt_tokens" - Integer number of tokens that provide input to an LLM

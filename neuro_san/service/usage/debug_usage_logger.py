@@ -16,9 +16,10 @@ from typing import Dict
 from neuro_san.interfaces.usage_logger import UsageLogger
 
 
-class NullUsageLogger(UsageLogger):
+class DebugUsageLogger(UsageLogger):
     """
-    Implementation of the UsageLogger interface that does nothing.
+    Implementation of the UsageLogger interface that merely spits out
+    usage stats to the logger.
     """
 
     async def log_usage(self, token_dict: Dict[str, Any], request_metadata: Dict[str, Any]):
@@ -26,6 +27,9 @@ class NullUsageLogger(UsageLogger):
         Logs the token usage for external capture.
 
         :param token_dict: A dictionary that describes overall token usage for a completed request.
+
+                For each class of LLM (more or less equivalent to an LLM provider), there will
+                be one key whose value is a dictionary with some other keys:
 
                 Relevant keys include:
                     "completion_tokens" - Integer number of tokens generated in response to LLM input
