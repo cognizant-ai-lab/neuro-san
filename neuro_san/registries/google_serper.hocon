@@ -35,10 +35,10 @@
         {
             "name": "searcher",
             "instructions": "Use your tool to respond to the inquiry.",
-             "function": {
+            "function": {
                 # The description acts as an initial prompt.
                 "description": "Assist user with answer from internet."
-             }
+            }
             "tools": ["search_tool"]
         },
         {

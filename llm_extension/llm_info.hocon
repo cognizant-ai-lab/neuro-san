@@ -1,0 +1,26 @@
+# Copyright (C) 2023-2025 Cognizant Digital Business, Evolutionary AI.
+# All Rights Reserved.
+# Issued under the Academic Public License.
+#
+# You can be released from the terms, and requirements of the Academic Public
+# License by purchasing a commercial license.
+# Purchase of a commercial license is mandatory for any use of the
+# neuro-san SDK Software in commercial settings.
+#
+# END COPYRIGHT
+
+# The schema specifications for this file are documented here:
+# https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/llm_info_hocon_reference.md
+
+{
+
+
+    "classes": {
+        "factories": [ "llm_extension.groq_langchain_llm_factory.GroqLangChainLlmFactory" ]
+        "groq": {
+            # Add arguments like temperature that you want to pass to the llm here.
+            "temperature": 0.7
+        }
+    }
+
+}
