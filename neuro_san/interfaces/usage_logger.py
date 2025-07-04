@@ -19,7 +19,7 @@ class UsageLogger:
     Interface for logging per-user usage statistics.
 
     The idea here is that employing an implementation of one of these
-    for any given Neuro SAN server is an optional.
+    for any given Neuro SAN server is completely optional.
     """
 
     async def log_usage(self, token_dict: Dict[str, Any], request_metadata: Dict[str, Any]):
