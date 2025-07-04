@@ -177,7 +177,11 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         return cls
 
-    def create_llm(self, config: Dict[str, Any], callbacks: List[BaseCallbackHandler] = None) -> BaseLanguageModel:
+    def create_llm(
+            self,
+            config: Dict[str, Any],
+            callbacks: Optional[List[BaseCallbackHandler]] = None
+    ) -> BaseLanguageModel:
         """
         Creates a langchain LLM based on the 'model_name' value of
         the config passed in.
@@ -199,9 +203,26 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         :return: The fully specified config with defaults filled in.
         """
 
-        if config.get("class"):
-            # If config has "class", it is a user-specified llm so return config as is,
-            return config
+        class_from_llm_config: str = config.get("class")
+        if class_from_llm_config:
+            if not isinstance(class_from_llm_config, str):
+                raise ValueError("Value of 'class' has to be string.")
+            # A "class" key in the config indicates the user has specified a particular LLM implementation.
+            # However, the config may only contain partial arguments (e.g., {"arg_1": 0.5}) and omit others.
+            #
+            # In the standard factory, LLM classes are instantiated like:
+            #   ChatOpenAI(arg_1=config.get("arg_1"), arg_2=config.get("arg_2"))
+            # If a required argument like "arg_2" is missing in the config, config.get("arg_2") returns None,
+            # which may raise an error during instantiation if the argument has no default.
+            #
+            # To prevent this, we first fetch the default arguments for the given class from llm_info,
+            # then merge them with the user-provided config. This ensures all expected arguments are present,
+            # and the user’s config values take precedence over the defaults.
+            config_from_class_in_llm_info: Dict[str, Any] = self.get_chat_class_args(class_from_llm_config)
+
+            # Merge the defaults from llm_info with the user-defined config,
+            # giving priority to values in config.
+            return self.overlayer.overlay(config_from_class_in_llm_info, config)
 
         default_config: Dict[str, Any] = self.llm_infos.get("default_config")
         use_config = self.overlayer.overlay(default_config, config)
@@ -242,7 +263,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         return full_config
 
-    def get_chat_class_args(self, chat_class_name: str, use_model_name: str) -> Dict[str, Any]:
+    def get_chat_class_args(self, chat_class_name: str, use_model_name: Optional[str] = None) -> Dict[str, Any]:
         """
         :param chat_class_name: string name of the chat class to look up.
         :param use_model_name: the original model name that prompted the chat class lookups
@@ -254,8 +275,9 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         chat_classes: Dict[str, Any] = self.llm_infos.get("classes")
         chat_class: Dict[str, Any] = chat_classes.get(chat_class_name)
         if chat_class is None:
-            raise ValueError(f"llm info entry for {use_model_name} uses a 'class' of {chat_class_name} "
-                             "which is not defined in the 'classes' table.")
+            # If chat_class_name is not in "classes" in llm_info,
+            # it could be a user-specified langchain model class
+            return {}
 
         # Get the args from the chat class
         args: Dict[str, Any] = chat_class.get("args")
@@ -269,7 +291,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         return args
 
     def create_base_chat_model(self, config: Dict[str, Any],
-                               callbacks: List[BaseCallbackHandler] = None) -> BaseLanguageModel:
+                               callbacks: Optional[List[BaseCallbackHandler]] = None) -> BaseLanguageModel:
         """
         Create a BaseLanguageModel from the fully-specified llm config either from standard LLM factory,
         user-defined LLM factory, or user-specified langchain model class.

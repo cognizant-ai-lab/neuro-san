@@ -15,8 +15,8 @@
 
 {
     "llm_config": {
-        "class": "openai",
-        "model_name": "gpt-4.1-mini",
+        "class": "azure-openai",
+        "deployment_name": "gpt-4o",
         "temperature": 0.5
     },
     "tools": [
