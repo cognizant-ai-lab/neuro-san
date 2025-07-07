@@ -204,5 +204,15 @@ ENV AGENT_MANIFEST_UPDATE_PERIOD_SECONDS=0
 # You can combine these too, like this: "langchain openai my_repo:1.2.3"
 ENV AGENT_VERSION_LIBS=""
 
-# ENTRYPOINT ls ${APP_SOURCE}
+# A reference to a Python class that can be used to log per-user request information.
+# This class must have a no-args constructor and implement the
+# neuro_san.interfaces.usage_logger.UsageLogger interface.
+# When not set, this defaults to a null implementation.
+ENV AGENT_USAGE_LOGGER=""
+
+# A space-delimited list of http metadata request keys to forward to the AGENT_USAGE_LOGGER
+# described above. When not set, this defaults to the value provided by
+# AGENT_FORWARDED_REQUEST_METADATA
+ENV AGENT_USAGE_LOGGER_METADATA=""
+
 ENTRYPOINT "${APP_ENTRYPOINT}"
