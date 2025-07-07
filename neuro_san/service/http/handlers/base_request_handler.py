@@ -83,7 +83,7 @@ class BaseRequestHandler(RequestHandler):
         if os.environ.get("AGENT_ALLOW_CORS_HEADERS") is not None:
             self.set_header("Access-Control-Allow-Origin", "*")
             self.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            self.set_header("Access-Control-Allow-Headers", "Content-Type, Transfer-Encoding")
+            self.set_header("Access-Control-Allow-Headers", "Content-Type, Transfer-Encoding, User_id")
 
     def get_metadata(self) -> Dict[str, Any]:
         """
