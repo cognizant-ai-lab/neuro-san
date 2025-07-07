@@ -13,7 +13,6 @@
 from typing import Any
 from typing import Dict
 from typing import List
-from typing import Optional
 from typing import Type
 
 import os
@@ -64,7 +63,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                                     the model description in this class.
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: Dict[str, Any] = None):
         """
         Constructor
 
@@ -180,7 +179,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
     def create_llm(
             self,
             config: Dict[str, Any],
-            callbacks: Optional[List[BaseCallbackHandler]] = None
+            callbacks: List[BaseCallbackHandler] = None
     ) -> BaseLanguageModel:
         """
         Creates a langchain LLM based on the 'model_name' value of
@@ -263,7 +262,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         return full_config
 
-    def get_chat_class_args(self, chat_class_name: str, use_model_name: Optional[str] = None) -> Dict[str, Any]:
+    def get_chat_class_args(self, chat_class_name: str, use_model_name: str = None) -> Dict[str, Any]:
         """
         :param chat_class_name: string name of the chat class to look up.
         :param use_model_name: the original model name that prompted the chat class lookups
@@ -275,7 +274,11 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         chat_classes: Dict[str, Any] = self.llm_infos.get("classes")
         chat_class: Dict[str, Any] = chat_classes.get(chat_class_name)
         if chat_class is None:
-            # If chat_class_name is not in "classes" in llm_info,
+            if use_model_name is not None:
+                # If use_model_name is given, it must have a "class" in "classes"
+                raise ValueError(f"llm info entry for {use_model_name} uses a 'class' of {chat_class_name} "
+                                 "which is not defined in the 'classes' table.")
+            # If use_model_name is not provided and chat_class_name is not in "classes" in llm_info,
             # it could be a user-specified langchain model class
             return {}
 
@@ -291,7 +294,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         return args
 
     def create_base_chat_model(self, config: Dict[str, Any],
-                               callbacks: Optional[List[BaseCallbackHandler]] = None) -> BaseLanguageModel:
+                               callbacks: List[BaseCallbackHandler] = None) -> BaseLanguageModel:
         """
         Create a BaseLanguageModel from the fully-specified llm config either from standard LLM factory,
         user-defined LLM factory, or user-specified langchain model class.
@@ -344,7 +347,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             self,
             class_path: str,
             config: Dict[str, Any],
-            callbacks: Optional[List[BaseCallbackHandler]] = None
+            callbacks: List[BaseCallbackHandler] = None
     ) -> BaseLanguageModel:
         """
         Create a BaseLanguageModel from the user-specified langchain model class.
