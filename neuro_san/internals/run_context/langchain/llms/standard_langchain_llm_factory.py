@@ -230,22 +230,22 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 base_model_id=config.get("base_model_id"),
                 beta_use_converse_api=config.get("beta_use_converse_api"),
                 cache=config.get("cache"),
-                "config": null,
-                "credentials_profile_name": null,
-                "custom_get_token_ids": null,
-                "endpoint_url": null,
-                "guardrails": null,
-                "max_tokens": null,
-                "metadata": null,
-                "provider": null,
-                "rate_limiter": null,
-                "region_name": null,
-                "stop_sequences": null,
+                config=config.get("config"),
+                credentials_profile_name=config.get("credentials_profile_name"),
+                custom_get_token_ids=config.get("custom_get_token_ids"),
+                endpoint_url=config.get("endpoint_url"),
+                guardrails=config.get("guardrails"),
+                max_tokens=config.get("max_tokens"),
+                metadata=config.get("metadata"),
+                provider=config.get("provider"),
+                rate_limiter=config.get("rate_limiter"),
+                region_name=config.get("region_name"),
+                stop_sequences=config.get("stop_sequences"),
                 streaming=True,
-                "system_prompt_with_tools": "",
-                "tags": null,
-                "temperature": null
-            )
+                system_prompt_with_tools=config.get("system_prompt_with_tools"),
+                tags=config.get("tags"),
+                temperature=config.get("temperature"),
+                callbacks=callbacks)
         elif chat_class is None:
             raise ValueError(f"Class name {chat_class} for model_name {model_name} is unspecified.")
         else:
