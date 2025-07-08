@@ -55,7 +55,8 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.server_name_for_logs: str = DEFAULT_SERVER_NAME_FOR_LOGS
         self.max_concurrent_requests: int = DEFAULT_MAX_CONCURRENT_REQUESTS
         self.request_limit: int = DEFAULT_REQUEST_LIMIT
-        self.forwarded_request_metadata: int = GrpcAgentServer.DEFAULT_FORWARDED_REQUEST_METADATA
+        self.forwarded_request_metadata: str = GrpcAgentServer.DEFAULT_FORWARDED_REQUEST_METADATA
+        self.usage_logger_metadata: str = ""
         self.service_openapi_spec_file: str = self._get_default_openapi_spec_path()
         self.manifest_update_period_seconds: int = 0
         self.server: GrpcAgentServer = None
@@ -92,6 +93,10 @@ class ServerMainLoop(ServerLoopCallbacks):
                                                        self.forwarded_request_metadata),
                                 help="Space-delimited list of http request metadata keys to forward "
                                      "to logs/other requests")
+        arg_parser.add_argument("--usage_logger_metadata", type=str,
+                                default=os.environ.get("AGENT_USAGE_LOGGER_METADATA", ""),
+                                help="Space-delimited list of http request metadata keys to forward "
+                                     "to models usage statistics logger")
         arg_parser.add_argument("--openapi_service_spec_path", type=str,
                                 default=os.environ.get("AGENT_OPENAPI_SPEC",
                                                        self.service_openapi_spec_file),
@@ -113,6 +118,9 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.max_concurrent_requests = args.max_concurrent_requests
         self.request_limit = args.request_limit
         self.forwarded_request_metadata = args.forwarded_request_metadata
+        self.usage_logger_metadata = args.usage_logger_metadata
+        if len(self.usage_logger_metadata) == 0:
+            self.usage_logger_metadata = self.forwarded_request_metadata
         self.service_openapi_spec_file = args.openapi_service_spec_path
         self.manifest_update_period_seconds = args.manifest_update_period_seconds
 
@@ -136,6 +144,12 @@ class ServerMainLoop(ServerLoopCallbacks):
         """
         self.parse_args()
 
+        # Construct forwarded metadata list as a union of
+        # self.forwarded_request_metadata and self.usage_logger_metadata
+        metadata_set = set(self.forwarded_request_metadata.split())
+        metadata_set = metadata_set | set(self.usage_logger_metadata.split())
+        metadata_str: str = " ".join(sorted(metadata_set))
+
         self.server = GrpcAgentServer(self.port,
                                       server_loop_callbacks=self,
                                       agent_networks=self.agent_networks,
@@ -143,7 +157,7 @@ class ServerMainLoop(ServerLoopCallbacks):
                                       server_name_for_logs=self.server_name_for_logs,
                                       max_concurrent_requests=self.max_concurrent_requests,
                                       request_limit=self.request_limit,
-                                      forwarded_request_metadata=self.forwarded_request_metadata)
+                                      forwarded_request_metadata=metadata_str)
 
         if self.manifest_update_period_seconds > 0:
             manifest_file: str = self.manifest_files[0]
@@ -158,7 +172,7 @@ class ServerMainLoop(ServerLoopCallbacks):
             self.http_port,
             self.service_openapi_spec_file,
             self.request_limit,
-            forwarded_request_metadata=self.forwarded_request_metadata)
+            forwarded_request_metadata=metadata_str)
         http_server_thread = threading.Thread(target=http_sidecar, args=(self.server,), daemon=True)
         http_server_thread.start()
 
