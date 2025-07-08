@@ -23,7 +23,7 @@ from neuro_san.api.grpc import agent_pb2
 from neuro_san.api.grpc import concierge_pb2_grpc
 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
-from neuro_san.internals.network_providers.service_agent_network_storage import ServiceAgentNetworkStorage
+from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.grpc.agent_servicer_to_server import AgentServicerToServer
 from neuro_san.service.grpc.concierge_service import ConciergeService
@@ -51,7 +51,7 @@ class GrpcAgentServer(AgentServer):
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self, port: int,
                  server_loop_callbacks: ServerLoopCallbacks,
-                 network_storage: ServiceAgentNetworkStorage,
+                 network_storage: AgentNetworkStorage,
                  agent_networks: Dict[str, AgentNetwork],
                  server_name: str = DEFAULT_SERVER_NAME,
                  server_name_for_logs: str = DEFAULT_SERVER_NAME_FOR_LOGS,
@@ -65,7 +65,7 @@ class GrpcAgentServer(AgentServer):
         :param server_loop_callbacks: The ServerLoopCallbacks instance for
                 break out methods in main serving loop.
         :param agent_networks: A dictionary of agent name to AgentNetwork to use for the session.
-        :param network_storage: A ServiceAgentNetworkStorage instance which keeps all
+        :param network_storage: A AgentNetworkStorage instance which keeps all
                                 the AgentNetwork instances.
         :param server_name: The name of the service
         :param server_name_for_logs: The name of the service for log files
@@ -84,7 +84,7 @@ class GrpcAgentServer(AgentServer):
 
         self.logger = logging.getLogger(__name__)
 
-        self.network_storage: ServiceAgentNetworkStorage = network_storage
+        self.network_storage: AgentNetworkStorage = network_storage
         self.agent_networks: Dict[str, AgentNetwork] = agent_networks
         self.server_name: str = server_name
         self.server_name_for_logs: str = server_name_for_logs

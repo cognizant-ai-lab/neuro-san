@@ -28,7 +28,7 @@ from leaf_server_common.server.request_logger import RequestLogger
 from neuro_san.api.grpc import concierge_pb2 as concierge_messages
 from neuro_san.api.grpc import concierge_pb2_grpc
 
-from neuro_san.internals.network_providers.service_agent_network_storage import ServiceAgentNetworkStorage
+from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.session.direct_concierge_session import DirectConciergeSession
 
@@ -42,7 +42,7 @@ class ConciergeService(concierge_pb2_grpc.ConciergeServiceServicer):
                  request_logger: RequestLogger,
                  security_cfg: Dict[str, Any],
                  server_logging: AgentServerLogging,
-                 network_storage: ServiceAgentNetworkStorage):
+                 network_storage: AgentNetworkStorage):
         """
         Set the gRPC interface up for health checking so that the service
         will be opened to callers when the mesh sees it operational, if this
@@ -57,14 +57,14 @@ class ConciergeService(concierge_pb2_grpc.ConciergeServiceServicer):
         :param server_logging: An AgentServerLogging instance initialized so that
                         spawned asynchronous threads can also properly initialize
                         their logging.
-        :param network_storage: A ServiceAgentNetworkStorage instance which keeps all
+        :param network_storage: A AgentNetworkStorage instance which keeps all
                                 the AgentNetwork instances.
         """
         self.request_logger = request_logger
         self.security_cfg = security_cfg
         self.server_logging: AgentServerLogging = server_logging
         self.forwarder: GrpcMetadataForwarder = self.server_logging.get_forwarder()
-        self.network_storage: ServiceAgentNetworkStorage = network_storage
+        self.network_storage: AgentNetworkStorage = network_storage
 
     # pylint: disable=no-member
     def List(self, request: concierge_messages.ConciergeRequest,

@@ -25,7 +25,7 @@ from leaf_server_common.server.server_loop_callbacks import ServerLoopCallbacks
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
-from neuro_san.internals.network_providers.service_agent_network_storage import ServiceAgentNetworkStorage
+from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.utils.file_of_class import FileOfClass
 from neuro_san.service.grpc.grpc_agent_server import DEFAULT_SERVER_NAME
 from neuro_san.service.grpc.grpc_agent_server import DEFAULT_SERVER_NAME_FOR_LOGS
@@ -62,7 +62,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.manifest_update_period_seconds: int = 0
         self.server: GrpcAgentServer = None
         self.manifest_files: List[str] = []
-        self.network_storage = ServiceAgentNetworkStorage()
+        self.network_storage = AgentNetworkStorage()
 
     def parse_args(self):
         """

@@ -23,7 +23,7 @@ import threading
 from tornado.ioloop import IOLoop
 
 from neuro_san.interfaces.concierge_session import ConciergeSession
-from neuro_san.internals.network_providers.service_agent_network_storage import ServiceAgentNetworkStorage
+from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.network_providers.single_agent_network_provider import SingleAgentNetworkProvider
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
@@ -55,7 +55,7 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
                  http_port: int,
                  openapi_service_spec_path: str,
                  requests_limit: int,
-                 network_storage: ServiceAgentNetworkStorage,
+                 network_storage: AgentNetworkStorage,
                  forwarded_request_metadata: str = AgentServer.DEFAULT_FORWARDED_REQUEST_METADATA):
         """
         Constructor:
@@ -65,7 +65,7 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
         :param request_limit: The number of requests to service before shutting down.
                         This is useful to be sure production environments can handle
                         a service occasionally going down.
-        :param network_storage: A ServiceAgentNetworkStorage instance which keeps all
+        :param network_storage: A AgentNetworkStorage instance which keeps all
                                 the AgentNetwork instances.
         :param forwarded_request_metadata: A space-delimited list of http metadata request keys
                to forward to logs/other requests
@@ -73,7 +73,7 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
         self.server_name_for_logs: str = "Http Server"
         self.start_event: threading.Event = start_event
         self.http_port = http_port
-        self.network_storage: ServiceAgentNetworkStorage = network_storage
+        self.network_storage: AgentNetworkStorage = network_storage
 
         # Randomize requests limit for this server instance.
         # Lower and upper bounds for number of requests before shutting down

@@ -20,7 +20,7 @@ from neuro_san.internals.interfaces.agent_state_listener import AgentStateListen
 from neuro_san.internals.network_providers.single_agent_network_provider import SingleAgentNetworkProvider
 
 
-class ServiceAgentNetworkStorage:
+class AgentNetworkStorage:
     """
     Service-wide storage for AgentNetworkProviders containing
     a table of currently active AgentNetworks for each agent registered to the service.

@@ -16,7 +16,7 @@ from typing import Dict
 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
-from neuro_san.internals.network_providers.service_agent_network_storage import ServiceAgentNetworkStorage
+from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.registries_watcher.periodic_updater.registry_event_observer import RegistryEventObserver
 from neuro_san.service.registries_watcher.periodic_updater.registry_polling_observer import RegistryPollingObserver
 
@@ -29,18 +29,18 @@ class ManifestPeriodicUpdater:
     use_polling: bool = True
 
     def __init__(self,
-                 network_storage: ServiceAgentNetworkStorage,
+                 network_storage: AgentNetworkStorage,
                  manifest_path: str,
                  update_period_seconds: int):
         """
         Constructor.
 
-        :param network_storage: A ServiceAgentNetworkStorage instance which keeps all
+        :param network_storage: A AgentNetworkStorage instance which keeps all
                                 the AgentNetwork instances.
         :param manifest_path: file path to server manifest file
         :param update_period_seconds: update period in seconds
         """
-        self.network_storage: ServiceAgentNetworkStorage = network_storage
+        self.network_storage: AgentNetworkStorage = network_storage
         self.manifest_path: str = manifest_path
         self.update_period_seconds: int = update_period_seconds
         self.logger = logging.getLogger(self.__class__.__name__)
