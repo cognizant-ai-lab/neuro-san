@@ -152,7 +152,8 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
         :return: nothing
         """
         data: Dict[str, Any] = {}
-        session: ConciergeSession = DirectConciergeSession(metadata=metadata)
+        # Why do we need the Concierge if we already have access to network_storage?
+        session: ConciergeSession = DirectConciergeSession(self.network_storage, metadata=metadata)
         agents_dict: Dict[str, List[Dict[str, str]]] = session.list(data)
         agents_list: List[Dict[str, str]] = agents_dict["agents"]
         agents: List[str] = []
@@ -200,5 +201,6 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
             "agent_policy": self,
             "agents_updater": self,
             "forwarded_request_metadata": self.forwarded_request_metadata,
-            "openapi_service_spec_path": self.openapi_service_spec_path
+            "openapi_service_spec_path": self.openapi_service_spec_path,
+            "network_storage": self.network_storage
         }

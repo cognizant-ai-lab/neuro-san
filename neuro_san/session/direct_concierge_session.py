@@ -26,11 +26,14 @@ class DirectConciergeSession(ConciergeSession):
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self,
+                 network_storage: ServiceAgentNetworkStorage,
                  metadata: Dict[str, Any] = None,
                  security_cfg: Dict[str, Any] = None):
         """
         Constructor
 
+        :param network_storage: A ServiceAgentNetworkStorage instance which keeps all
+                                the AgentNetwork instances.
         :param metadata: A dictionary of request metadata to be forwarded
                         to subsequent yet-to-be-made requests.
         :param security_cfg: A dictionary of parameters used to
@@ -38,6 +41,7 @@ class DirectConciergeSession(ConciergeSession):
                         connection.  Supplying this implies use of a secure
                         GRPC Channel.  If None, uses insecure channel.
         """
+        self.network_storage: ServiceAgentNetworkStorage = network_storage
         # These aren't used yet
         self._metadata: Dict[str, Any] = metadata
         self._security_cfg: Dict[str, Any] = security_cfg
@@ -51,8 +55,7 @@ class DirectConciergeSession(ConciergeSession):
                     protobuf structure. Has the following keys:
                 "agents" - the sequence of dictionaries describing available agents
         """
-        network_storage: ServiceAgentNetworkStorage = ServiceAgentNetworkStorage.get_instance()
-        agents_names: List[str] = network_storage.get_agent_names()
+        agents_names: List[str] = self.network_storage.get_agent_names()
         agents_list: List[Dict[str, Any]] = []
         for agent_name in agents_names:
             agents_list.append({"agent_name": agent_name, "description": ""})

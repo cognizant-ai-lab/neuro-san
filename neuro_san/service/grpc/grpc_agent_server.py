@@ -178,7 +178,8 @@ class GrpcAgentServer(AgentServer):
         concierge_service: ConciergeService = \
             ConciergeService(self.server_lifetime,
                              self.security_cfg,
-                             self.server_logging)
+                             self.server_logging,
+                             self.network_storage)
         concierge_pb2_grpc.add_ConciergeServiceServicer_to_server(
             concierge_service,
             server)
