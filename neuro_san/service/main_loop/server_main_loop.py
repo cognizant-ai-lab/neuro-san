@@ -168,7 +168,6 @@ class ServerMainLoop(ServerLoopCallbacks):
         # Start HTTP server side-car:
         http_sidecar = HttpSidecar(
             self.server.get_starting_event(),
-            self.port,
             self.http_port,
             self.service_openapi_spec_file,
             self.request_limit,

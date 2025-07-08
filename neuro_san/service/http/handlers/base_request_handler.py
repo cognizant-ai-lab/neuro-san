@@ -16,13 +16,10 @@ import http
 from typing import Any
 from typing import Dict
 from typing import List
-from typing import Tuple
 
 import json
 import os
 import asyncio
-
-import grpc
 
 import tornado
 from tornado.web import RequestHandler
@@ -41,12 +38,9 @@ class BaseRequestHandler(RequestHandler):
     request_id: int = 0
 
     # pylint: disable=attribute-defined-outside-init
-    # pylint: disable=too-many-arguments
-    # pylint: disable=too-many-positional-arguments
     def initialize(self,
                    agent_policy: AgentAuthorizer,
                    agents_updater: AgentsUpdater,
-                   port: int,
                    forwarded_request_metadata: List[str],
                    openapi_service_spec_path: str):
         """
@@ -55,14 +49,12 @@ class BaseRequestHandler(RequestHandler):
         :param agent_policy: abstract policy for agent requests
         :param agents_updater: abstract policy for updating
                                collection of agents being served
-        :param port: gRPC service port.
         :param forwarded_request_metadata: request metadata to forward.
         :param openapi_service_spec_path: file path to OpenAPI service spec.
         """
 
         self.agent_policy = agent_policy
         self.agents_updater = agents_updater
-        self.port: int = port
         self.forwarded_request_metadata: List[str] = forwarded_request_metadata
         self.openapi_service_spec_path: str = openapi_service_spec_path
         self.logger = HttpLogger(forwarded_request_metadata)
@@ -99,8 +91,7 @@ class BaseRequestHandler(RequestHandler):
 
     async def update_agents(self, metadata: Dict[str, Any]) -> bool:
         """
-        Update internal agents table by executing request
-        to underlying gRPC service.
+        Update internal agents table.
         :param metadata: metadata to be used for logging if necessary.
         :return: True if update was successful
                  False otherwise

@@ -44,8 +44,7 @@ from neuro_san.session.direct_concierge_session import DirectConciergeSession
 
 class HttpSidecar(AgentAuthorizer, AgentsUpdater):
     """
-    Class provides simple http endpoint for neuro-san API,
-    working as a client to neuro-san gRPC service.
+    Class provides simple http endpoint for neuro-san API.
     """
     # pylint: disable=too-many-instance-attributes
     # pylint: disable=too-many-arguments, too-many-positional-arguments
@@ -53,14 +52,13 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
     TIMEOUT_TO_START_SECONDS: int = 10
 
     def __init__(self, start_event: threading.Event,
-                 port: int, http_port: int,
+                 http_port: int,
                  openapi_service_spec_path: str,
                  requests_limit: int,
                  forwarded_request_metadata: str = AgentServer.DEFAULT_FORWARDED_REQUEST_METADATA):
         """
         Constructor:
         :param start_event: event to await before starting actual service;
-        :param port: port for gRPC neuro-san service;
         :param http_port: port for http neuro-san service;
         :param openapi_service_spec_path: path to a file with OpenAPI service specification;
         :param request_limit: The number of requests to service before shutting down.
@@ -71,7 +69,6 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
         """
         self.server_name_for_logs: str = "Http Server"
         self.start_event: threading.Event = start_event
-        self.port = port
         self.http_port = http_port
 
         # Randomize requests limit for this server instance.
@@ -99,7 +96,7 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
         self.logger = HttpLogger(self.forwarded_request_metadata)
         app = self.make_app(self.requests_limit, self.logger)
 
-        # Wait for "go" signal which will be set by gRPC server and corresponding machinery
+        # Wait for "go" signal which will be set by higher-level machinery
         # when everything is ready for servicing.
         while not self.start_event.wait(timeout=self.TIMEOUT_TO_START_SECONDS):
             self.logger.error({},
@@ -198,7 +195,6 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
         return {
             "agent_policy": self,
             "agents_updater": self,
-            "port": self.port,
             "forwarded_request_metadata": self.forwarded_request_metadata,
             "openapi_service_spec_path": self.openapi_service_spec_path
         }
