@@ -25,7 +25,6 @@ from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.dictionary_overlay import DictionaryOverlay
-from leaf_common.config.resolver import Resolver
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
@@ -34,6 +33,7 @@ from neuro_san.internals.run_context.langchain.llms.llm_info_restorer import Llm
 from neuro_san.internals.run_context.langchain.llms.standard_langchain_llm_factory import StandardLangChainLlmFactory
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
 from neuro_san.internals.run_context.langchain.util.argument_validator import ArgumentValidator
+from neuro_san.internals.utils.resolver_util import ResolverUtil
 
 
 class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
@@ -123,58 +123,14 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             raise ValueError(f"The value for the classes.factories key in {llm_info_file} "
                              "must be a list of strings")
 
-        # Resolve the factory class
-        llm_factory_class: Type[LangChainLlmFactory] = self._resolve_class_from_path(
-            class_path=llm_factory_class_name,
-            expected_base=LangChainLlmFactory,
-            source_file=llm_info_file,
-            description="classes.factories"
+        # Resolve and instantiate the factory class
+        llm_factory = ResolverUtil.create_instance(
+            class_name=llm_factory_class_name,
+            class_name_source=llm_info_file,
+            type_of_class=LangChainLlmFactory
         )
 
-        # Instantiate it
-        try:
-            llm_factory: LangChainLlmFactory = llm_factory_class()
-        except TypeError as exception:
-            raise ValueError(f"Class {llm_factory_class_name} in {llm_info_file} "
-                             "must have a no-args constructor") from exception
-
-        # Make sure its the correct type
-        if not isinstance(llm_factory, LangChainLlmFactory):
-            raise ValueError(f"Class {llm_factory_class_name} in {llm_info_file} "
-                             "must be of type LangChainLlmFactory")
         return llm_factory
-
-    def _resolve_class_from_path(
-            self,
-            class_path: str,
-            expected_base: Type,
-            source_file: str,
-            description: str
-    ) -> Type:
-
-        parts: List[str] = class_path.split(".")
-        if len(parts) <= 2:
-            raise ValueError(
-                f"Value for '{description}' in {source_file} must be of the form "
-                "<package>.<module>.<ClassName>"
-            )
-
-        module_name: str = parts[-2]
-        class_name: str = parts[-1]
-        packages: str = [".".join(parts[:-2])]
-        resolver = Resolver(packages)
-
-        try:
-            cls: Type = resolver.resolve_class_in_module(class_name, module_name=module_name)
-        except AttributeError as e:
-            raise ValueError(f"Class {class_path} in {source_file} not found in PYTHONPATH") from e
-
-        if not issubclass(cls, expected_base):
-            raise ValueError(
-                f"Class {class_path} in {source_file} must be a subclass of {expected_base.__name__}"
-            )
-
-        return cls
 
     def create_llm(
             self,
@@ -363,11 +319,10 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             raise ValueError("'class' in llm_config must be a string")
 
         # Resolve the 'class'
-        llm_class: Type[BaseLanguageModel] = self._resolve_class_from_path(
-            class_path=class_path,
-            expected_base=BaseLanguageModel,
-            source_file="agent network hocon file",
-            description="llm_config"
+        llm_class: Type[BaseLanguageModel] = ResolverUtil.create_class(
+            class_name=class_path,
+            class_name_source="agent network hocon file",
+            type_of_class=BaseLanguageModel
         )
 
         # Copy the config, take 'class' out, and add callbacks
