@@ -104,12 +104,12 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
                               self.TIMEOUT_TO_START_SECONDS)
 
         app.listen(self.http_port)
-        self.logger.info({}, "HTTP server is running on port %d", self.http_port)
-        self.logger.info({}, "HTTP server is shutting down after %d requests", self.requests_limit)
         # Construct initial "allowed" list of agents:
         # no metadata to use here yet.
         self.update_agents(metadata={})
         self.logger.debug({}, "Serving agents: %s", repr(self.allowed_agents.keys()))
+        self.logger.info({}, "HTTP server is running on port %d", self.http_port)
+        self.logger.info({}, "HTTP server is shutting down after %d requests", self.requests_limit)
 
         IOLoop.current().start()
         self.logger.info({}, "Http server stopped.")
