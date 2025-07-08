@@ -46,7 +46,7 @@ class DirectAgentSessionFactory:
         """
         manifest_restorer = RegistryManifestRestorer()
         self.manifest_networks: Dict[str, AgentNetwork] = manifest_restorer.restore()
-        self.network_storage: ServiceAgentNetworkStorage = ServiceAgentNetworkStorage.get_instance()
+        self.network_storage = ServiceAgentNetworkStorage()
         for agent_name, agent_network in self.manifest_networks.items():
             self.network_storage.add_agent_network(agent_name, agent_network)
 

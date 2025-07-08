@@ -62,7 +62,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.manifest_update_period_seconds: int = 0
         self.server: GrpcAgentServer = None
         self.manifest_files: List[str] = []
-        self.network_storage: ServiceAgentNetworkStorage = ServiceAgentNetworkStorage.get_instance()
+        self.network_storage = ServiceAgentNetworkStorage()
 
     def parse_args(self):
         """
