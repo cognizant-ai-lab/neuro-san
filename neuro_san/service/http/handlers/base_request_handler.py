@@ -63,7 +63,7 @@ class BaseRequestHandler(RequestHandler):
         self.forwarded_request_metadata: List[str] = forwarded_request_metadata
         self.openapi_service_spec_path: str = openapi_service_spec_path
         self.logger = HttpLogger(forwarded_request_metadata)
-        self.network_storage: ServiceAgentNetworkStorage = self.network_storage
+        self.network_storage: ServiceAgentNetworkStorage = network_storage
 
         # Set default request_id for this request handler in case we will need it:
         BaseRequestHandler.request_id += 1
