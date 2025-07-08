@@ -23,7 +23,7 @@ from neuro_san.api.grpc import agent_pb2
 from neuro_san.api.grpc import concierge_pb2_grpc
 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
-from neuro_san.internals.network_providers.service_agent_network_storage import ServiceAgentNetworkStorage
+from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.grpc.agent_servicer_to_server import AgentServicerToServer
 from neuro_san.service.grpc.concierge_service import ConciergeService
@@ -51,6 +51,7 @@ class GrpcAgentServer(AgentServer):
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self, port: int,
                  server_loop_callbacks: ServerLoopCallbacks,
+                 network_storage: AgentNetworkStorage,
                  agent_networks: Dict[str, AgentNetwork],
                  server_name: str = DEFAULT_SERVER_NAME,
                  server_name_for_logs: str = DEFAULT_SERVER_NAME_FOR_LOGS,
@@ -64,6 +65,8 @@ class GrpcAgentServer(AgentServer):
         :param server_loop_callbacks: The ServerLoopCallbacks instance for
                 break out methods in main serving loop.
         :param agent_networks: A dictionary of agent name to AgentNetwork to use for the session.
+        :param network_storage: A AgentNetworkStorage instance which keeps all
+                                the AgentNetwork instances.
         :param server_name: The name of the service
         :param server_name_for_logs: The name of the service for log files
         :param max_concurrent_requests: The maximum number of requests to handle at a time.
@@ -81,6 +84,7 @@ class GrpcAgentServer(AgentServer):
 
         self.logger = logging.getLogger(__name__)
 
+        self.network_storage: AgentNetworkStorage = network_storage
         self.agent_networks: Dict[str, AgentNetwork] = agent_networks
         self.server_name: str = server_name
         self.server_name_for_logs: str = server_name_for_logs
@@ -107,25 +111,14 @@ class GrpcAgentServer(AgentServer):
         """
         return self.notify_started
 
-    def setup_agent_network_storage(self):
-        """
-        Initialize ServiceAgentNetworkStorage with AgentNetworks
-        we have parsed in server manifest file.
-        """
-        network_storage: ServiceAgentNetworkStorage =\
-            ServiceAgentNetworkStorage.get_instance()
-        network_storage.setup_agent_networks(self.agent_networks)
-
     def agent_added(self, agent_name: str):
         """
         Agent is being added to the service.
         :param agent_name: name of an agent
         """
-        network_storage: ServiceAgentNetworkStorage =\
-            ServiceAgentNetworkStorage.get_instance()
         service = GrpcAgentService(self.server_lifetime, self.security_cfg,
                                    agent_name,
-                                   network_storage.get_agent_network_provider(agent_name),
+                                   self.network_storage.get_agent_network_provider(agent_name),
                                    self.server_logging)
         self.services.append(service)
         servicer_to_server = AgentServicerToServer(service)
@@ -172,13 +165,12 @@ class GrpcAgentServer(AgentServer):
         # New-style service
         self.security_cfg = None     # ... yet
 
-        network_storage: ServiceAgentNetworkStorage = \
-            ServiceAgentNetworkStorage.get_instance()
         # Add listener to handle adding per-agent gRPC services
         # to our dynamic router:
-        network_storage.add_listener(self)
+        self.network_storage.add_listener(self)
 
-        self.setup_agent_network_storage()
+        # DEF - It's possible this could move outside this class.
+        self.network_storage.setup_agent_networks(self.agent_networks)
 
         # Add DynamicAgentRouter instance as a generic RPC handler for our server:
         server.add_generic_rpc_handlers((self.service_router,))
@@ -186,7 +178,8 @@ class GrpcAgentServer(AgentServer):
         concierge_service: ConciergeService = \
             ConciergeService(self.server_lifetime,
                              self.security_cfg,
-                             self.server_logging)
+                             self.server_logging,
+                             self.network_storage)
         concierge_pb2_grpc.add_ConciergeServiceServicer_to_server(
             concierge_service,
             server)
