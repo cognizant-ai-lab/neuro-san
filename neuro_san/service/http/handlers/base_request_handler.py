@@ -35,7 +35,6 @@ class BaseRequestHandler(RequestHandler):
     Provides logic to inject neuro-san service specific data
     into local handler context.
     """
-
     request_id: int = 0
 
     # pylint: disable=attribute-defined-outside-init
@@ -65,7 +64,12 @@ class BaseRequestHandler(RequestHandler):
         if os.environ.get("AGENT_ALLOW_CORS_HEADERS") is not None:
             self.set_header("Access-Control-Allow-Origin", "*")
             self.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            self.set_header("Access-Control-Allow-Headers", "Content-Type, Transfer-Encoding, User_id")
+            headers: str = "Content-Type, Transfer-Encoding"
+            metadata_headers: str = ", ".join(forwarded_request_metadata)
+            if len(metadata_headers) > 0:
+                headers += f", {metadata_headers}"
+            # Set all allowed headers:
+            self.set_header("Access-Control-Allow-Headers", headers)
 
     def get_metadata(self) -> Dict[str, Any]:
         """
