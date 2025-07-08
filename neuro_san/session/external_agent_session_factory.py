@@ -29,13 +29,17 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
     Creates AgentSessions for external agents.
     """
 
-    def __init__(self, use_direct: bool = False):
+    def __init__(self, use_direct: bool = False,
+                 network_storage: ServiceAgentNetworkStorage = None):
         """
         Constructor
 
         :param use_direct: When True, will use a Direct session for
                     external agents that would reside on the same server.
+        :param network_storage: A ServiceAgentNetworkStorage instance which keeps all
+                                the AgentNetwork instances.  Only used with use_direct=True.
         """
+        self.network_storage: ServiceAgentNetworkStorage = network_storage
         self.use_direct: bool = use_direct
 
     def create_session(self, agent_url: str,
@@ -80,9 +84,8 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
             # Optimization: We want to create a different kind of session to minimize socket usage
             # and potentially relieve the direct user of the burden of having to start a server
 
-            network_storage: ServiceAgentNetworkStorage = ServiceAgentNetworkStorage.get_instance()
             agent_network_provider: AgentNetworkProvider = \
-                network_storage.get_agent_network_provider(agent_name)
+                self.network_storage.get_agent_network_provider(agent_name)
             agent_network: AgentNetwork = agent_network_provider.get_agent_network()
             session = AsyncDirectAgentSession(agent_network, invocation_context, metadata=metadata)
 

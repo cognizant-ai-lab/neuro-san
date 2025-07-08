@@ -46,9 +46,9 @@ class DirectAgentSessionFactory:
         """
         manifest_restorer = RegistryManifestRestorer()
         self.manifest_networks: Dict[str, AgentNetwork] = manifest_restorer.restore()
-        network_storage: ServiceAgentNetworkStorage = ServiceAgentNetworkStorage.get_instance()
+        self.network_storage: ServiceAgentNetworkStorage = ServiceAgentNetworkStorage.get_instance()
         for agent_name, agent_network in self.manifest_networks.items():
-            network_storage.add_agent_network(agent_name, agent_network)
+            self.network_storage.add_agent_network(agent_name, agent_network)
 
     def create_session(self, agent_name: str, use_direct: bool = False,
                        metadata: Dict[str, str] = None, umbrella_timeout: Timeout = None) -> AgentSession:
@@ -73,7 +73,7 @@ class DirectAgentSessionFactory:
         llm_factory.load()
         toolbox_factory.load()
 
-        factory = ExternalAgentSessionFactory(use_direct=use_direct)
+        factory = ExternalAgentSessionFactory(use_direct=use_direct, network_storage=self.network_storage)
         invocation_context = SessionInvocationContext(factory, llm_factory, toolbox_factory, metadata)
         invocation_context.start()
         session: DirectAgentSession = DirectAgentSession(agent_network=agent_network,
@@ -100,10 +100,8 @@ class DirectAgentSessionFactory:
             agent_network = restorer.restore(file_reference=agent_name)
         else:
             # Use the standard stuff available via the manifest file.
-            network_storage: ServiceAgentNetworkStorage =\
-                ServiceAgentNetworkStorage.get_instance()
             agent_network_provider: AgentNetworkProvider =\
-                network_storage.get_agent_network_provider(agent_name)
+                self.network_storage.get_agent_network_provider(agent_name)
             agent_network = agent_network_provider.get_agent_network()
 
         # Common place for nice error messages when networks are not found
