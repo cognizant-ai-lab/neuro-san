@@ -28,12 +28,19 @@ class ManifestPeriodicUpdater:
     """
     use_polling: bool = True
 
-    def __init__(self, manifest_path: str, update_period_seconds: int):
+    def __init__(self,
+                 network_storage: ServiceAgentNetworkStorage,
+                 manifest_path: str,
+                 update_period_seconds: int):
         """
         Constructor.
+
+        :param network_storage: A ServiceAgentNetworkStorage instance which keeps all
+                                the AgentNetwork instances.
         :param manifest_path: file path to server manifest file
         :param update_period_seconds: update period in seconds
         """
+        self.network_storage: ServiceAgentNetworkStorage = network_storage
         self.manifest_path: str = manifest_path
         self.update_period_seconds: int = update_period_seconds
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -43,7 +50,6 @@ class ManifestPeriodicUpdater:
             self.observer = RegistryPollingObserver(self.manifest_path, poll_interval)
         else:
             self.observer = RegistryEventObserver(self.manifest_path)
-        self.network_storage: ServiceAgentNetworkStorage = ServiceAgentNetworkStorage.get_instance()
         self.go_run: bool = True
 
     def _run(self):

@@ -55,6 +55,7 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
                  http_port: int,
                  openapi_service_spec_path: str,
                  requests_limit: int,
+                 network_storage: ServiceAgentNetworkStorage,
                  forwarded_request_metadata: str = AgentServer.DEFAULT_FORWARDED_REQUEST_METADATA):
         """
         Constructor:
@@ -64,12 +65,15 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
         :param request_limit: The number of requests to service before shutting down.
                         This is useful to be sure production environments can handle
                         a service occasionally going down.
+        :param network_storage: A ServiceAgentNetworkStorage instance which keeps all
+                                the AgentNetwork instances.
         :param forwarded_request_metadata: A space-delimited list of http metadata request keys
                to forward to logs/other requests
         """
         self.server_name_for_logs: str = "Http Server"
         self.start_event: threading.Event = start_event
         self.http_port = http_port
+        self.network_storage: ServiceAgentNetworkStorage = network_storage
 
         # Randomize requests limit for this server instance.
         # Lower and upper bounds for number of requests before shutting down
@@ -171,7 +175,7 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
         :param agent_name: name of an agent
         """
         agent_network_provider: SingleAgentNetworkProvider = \
-            ServiceAgentNetworkStorage.get_instance().get_agent_network_provider(agent_name)
+            self.network_storage.get_agent_network_provider(agent_name)
         # Convert back to a single string as required by constructor
         request_metadata_str: str = " ".join(self.forwarded_request_metadata)
         agent_server_logging: AgentServerLogging = \
