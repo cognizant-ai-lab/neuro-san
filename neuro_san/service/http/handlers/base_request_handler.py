@@ -40,6 +40,8 @@ class BaseRequestHandler(RequestHandler):
     request_id: int = 0
 
     # pylint: disable=attribute-defined-outside-init
+    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-positional-arguments
     def initialize(self,
                    agent_policy: AgentAuthorizer,
                    agents_updater: AgentsUpdater,
