@@ -8,6 +8,7 @@ def configure_llm_provider_keys(request, monkeypatch):
 
     is_non_default = request.node.get_closest_marker("non_default_llm_provider")
     is_anthropic = request.node.get_closest_marker("anthropic")
+    is_azure = request.node.get_closest_marker("azure")
     is_gemini = request.node.get_closest_marker("gemini")
 
     if is_non_default:
@@ -17,6 +18,9 @@ def configure_llm_provider_keys(request, monkeypatch):
         if is_anthropic:
             if not os.getenv("ANTHROPIC_API_KEY"):
                 pytest.skip("Missing ANTHROPIC_API_KEY for test marked 'anthropic'")
+        elif is_azure:
+            if not os.getenv("AZURE_OPENAI_API_KEY"):
+                pytest.skip("Missing AZURE_OPENAI_API_KEY for test marked 'azure'")
         elif is_gemini:
             if not os.getenv("GOOGLE_API_KEY"):
                 pytest.skip("Missing GOOGLE_API_KEY for test marked 'gemini'")

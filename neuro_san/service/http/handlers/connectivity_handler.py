@@ -45,7 +45,7 @@ class ConnectivityHandler(BaseRequestHandler):
             data: Dict[str, Any] = {}
             result_dict: Dict[str, Any] = await service.connectivity(data, metadata)
 
-            # Return gRPC response to the HTTP client
+            # Return response to the HTTP client
             self.set_header("Content-Type", "application/json")
             self.write(result_dict)
 

@@ -16,13 +16,10 @@ import http
 from typing import Any
 from typing import Dict
 from typing import List
-from typing import Tuple
 
 import json
 import os
 import asyncio
-
-import grpc
 
 import tornado
 from tornado.web import RequestHandler
@@ -38,26 +35,13 @@ class BaseRequestHandler(RequestHandler):
     Provides logic to inject neuro-san service specific data
     into local handler context.
     """
-    grpc_to_http = {
-        grpc.StatusCode.INVALID_ARGUMENT: 400,
-        grpc.StatusCode.UNAUTHENTICATED: 401,
-        grpc.StatusCode.PERMISSION_DENIED: 403,
-        grpc.StatusCode.NOT_FOUND: 404,
-        grpc.StatusCode.ALREADY_EXISTS: 409,
-        grpc.StatusCode.INTERNAL: 500,
-        grpc.StatusCode.UNAVAILABLE: 503,
-        grpc.StatusCode.DEADLINE_EXCEEDED: 504
-    }
 
     request_id: int = 0
 
     # pylint: disable=attribute-defined-outside-init
-    # pylint: disable=too-many-arguments
-    # pylint: disable=too-many-positional-arguments
     def initialize(self,
                    agent_policy: AgentAuthorizer,
                    agents_updater: AgentsUpdater,
-                   port: int,
                    forwarded_request_metadata: List[str],
                    openapi_service_spec_path: str):
         """
@@ -66,14 +50,12 @@ class BaseRequestHandler(RequestHandler):
         :param agent_policy: abstract policy for agent requests
         :param agents_updater: abstract policy for updating
                                collection of agents being served
-        :param port: gRPC service port.
         :param forwarded_request_metadata: request metadata to forward.
         :param openapi_service_spec_path: file path to OpenAPI service spec.
         """
 
         self.agent_policy = agent_policy
         self.agents_updater = agents_updater
-        self.port: int = port
         self.forwarded_request_metadata: List[str] = forwarded_request_metadata
         self.openapi_service_spec_path: str = openapi_service_spec_path
         self.logger = HttpLogger(forwarded_request_metadata)
@@ -105,8 +87,7 @@ class BaseRequestHandler(RequestHandler):
 
     async def update_agents(self, metadata: Dict[str, Any]) -> bool:
         """
-        Update internal agents table by executing request
-        to underlying gRPC service.
+        Update internal agents table.
         :param metadata: metadata to be used for logging if necessary.
         :return: True if update was successful
                  False otherwise
@@ -117,19 +98,6 @@ class BaseRequestHandler(RequestHandler):
         except Exception as exc:  # pylint: disable=broad-exception-caught
             self.process_exception(exc)
             return False
-
-    def extract_grpc_error_info(self, exc: grpc.aio.AioRpcError) -> Tuple[int, str, str]:
-        """
-        Extract user-friendly information from gRPC exception
-        :param exc: gRPC service exception
-        :return: tuple of 3 values:
-            corresponding HTTP error code;
-            name of gRPC code;
-            string with additional error details.
-        """
-        code = exc.code()
-        http_code = BaseRequestHandler.grpc_to_http.get(code, 500)
-        return http_code, code.name, exc.details()
 
     def process_exception(self, exc: Exception):
         """
@@ -142,15 +110,6 @@ class BaseRequestHandler(RequestHandler):
             self.set_status(400)
             self.write({"error": "Invalid JSON format"})
             self.logger.error(self.get_metadata(), "error: Invalid JSON format")
-            return
-
-        if isinstance(exc, grpc.aio.AioRpcError):
-            http_status, err_name, err_details =\
-                self.extract_grpc_error_info(exc)
-            self.set_status(http_status)
-            err_msg: str = f"status: {http_status} grpc: {err_name} details: {err_details}"
-            self.write({"error": err_msg})
-            self.logger.error(self.get_metadata(), "Http server error: %s", err_msg)
             return
 
         # General exception case:
