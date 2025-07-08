@@ -118,8 +118,10 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.max_concurrent_requests = args.max_concurrent_requests
         self.request_limit = args.request_limit
         self.forwarded_request_metadata = args.forwarded_request_metadata
+        if not self.forwarded_request_metadata:
+            self.forwarded_request_metadata = ""
         self.usage_logger_metadata = args.usage_logger_metadata
-        if len(self.usage_logger_metadata) == 0:
+        if not self.usage_logger_metadata:
             self.usage_logger_metadata = self.forwarded_request_metadata
         self.service_openapi_spec_file = args.openapi_service_spec_path
         self.manifest_update_period_seconds = args.manifest_update_period_seconds
