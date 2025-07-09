@@ -25,6 +25,7 @@ from leaf_server_common.server.server_loop_callbacks import ServerLoopCallbacks
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.utils.file_of_class import FileOfClass
 from neuro_san.service.grpc.grpc_agent_server import DEFAULT_SERVER_NAME
 from neuro_san.service.grpc.grpc_agent_server import DEFAULT_SERVER_NAME_FOR_LOGS
@@ -61,6 +62,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.manifest_update_period_seconds: int = 0
         self.server: GrpcAgentServer = None
         self.manifest_files: List[str] = []
+        self.network_storage = AgentNetworkStorage()
 
     def parse_args(self):
         """
@@ -118,8 +120,10 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.max_concurrent_requests = args.max_concurrent_requests
         self.request_limit = args.request_limit
         self.forwarded_request_metadata = args.forwarded_request_metadata
+        if not self.forwarded_request_metadata:
+            self.forwarded_request_metadata = ""
         self.usage_logger_metadata = args.usage_logger_metadata
-        if len(self.usage_logger_metadata) == 0:
+        if not self.usage_logger_metadata:
             self.usage_logger_metadata = self.forwarded_request_metadata
         self.service_openapi_spec_file = args.openapi_service_spec_path
         self.manifest_update_period_seconds = args.manifest_update_period_seconds
@@ -152,6 +156,7 @@ class ServerMainLoop(ServerLoopCallbacks):
 
         self.server = GrpcAgentServer(self.port,
                                       server_loop_callbacks=self,
+                                      network_storage=self.network_storage,
                                       agent_networks=self.agent_networks,
                                       server_name=self.server_name,
                                       server_name_for_logs=self.server_name_for_logs,
@@ -162,7 +167,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         if self.manifest_update_period_seconds > 0:
             manifest_file: str = self.manifest_files[0]
             updater: ManifestPeriodicUpdater =\
-                ManifestPeriodicUpdater(manifest_file, self.manifest_update_period_seconds)
+                ManifestPeriodicUpdater(self.network_storage, manifest_file, self.manifest_update_period_seconds)
             updater.start()
 
         # Start HTTP server side-car:
@@ -171,6 +176,7 @@ class ServerMainLoop(ServerLoopCallbacks):
             self.http_port,
             self.service_openapi_spec_file,
             self.request_limit,
+            self.network_storage,
             forwarded_request_metadata=metadata_str)
         http_server_thread = threading.Thread(target=http_sidecar, args=(self.server,), daemon=True)
         http_server_thread.start()
