@@ -621,6 +621,11 @@
         "knowledge_cutoff": "09/2024",
     },
     
+    # Bedrock
+    "us.anthropic.claude-3-7-sonnet-20250219-v1:0": {
+        "class": "bedrock",
+        "max_output_tokens": 8192,
+    }
 
     # These are data for each LLM class, so they don't have to be repeated for each
     # LLM info entry above.
@@ -711,6 +716,7 @@
                 "num_gpu": null,
                 "num_thread": null,
                 "num_predict": null,        # Will use max_tokens
+                "reasoning": null,
                 "repeat_last_n": null,
                 "repeat_penalty": null,
                 "temperature": null,
