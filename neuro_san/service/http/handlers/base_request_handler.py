@@ -24,6 +24,7 @@ import asyncio
 import tornado
 from tornado.web import RequestHandler
 
+from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.http.interfaces.agent_authorizer import AgentAuthorizer
 from neuro_san.service.http.interfaces.agents_updater import AgentsUpdater
 from neuro_san.service.http.logging.http_logger import HttpLogger
@@ -35,15 +36,17 @@ class BaseRequestHandler(RequestHandler):
     Provides logic to inject neuro-san service specific data
     into local handler context.
     """
-
     request_id: int = 0
 
     # pylint: disable=attribute-defined-outside-init
+    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-positional-arguments
     def initialize(self,
                    agent_policy: AgentAuthorizer,
                    agents_updater: AgentsUpdater,
                    forwarded_request_metadata: List[str],
-                   openapi_service_spec_path: str):
+                   openapi_service_spec_path: str,
+                   network_storage: AgentNetworkStorage):
         """
         This method is called by Tornado framework to allow
         injecting service-specific data into local handler context.
@@ -52,6 +55,8 @@ class BaseRequestHandler(RequestHandler):
                                collection of agents being served
         :param forwarded_request_metadata: request metadata to forward.
         :param openapi_service_spec_path: file path to OpenAPI service spec.
+        :param network_storage: A AgentNetworkStorage instance which keeps all
+                                the AgentNetwork instances.
         """
 
         self.agent_policy = agent_policy
@@ -59,13 +64,20 @@ class BaseRequestHandler(RequestHandler):
         self.forwarded_request_metadata: List[str] = forwarded_request_metadata
         self.openapi_service_spec_path: str = openapi_service_spec_path
         self.logger = HttpLogger(forwarded_request_metadata)
+        self.network_storage: AgentNetworkStorage = network_storage
+
         # Set default request_id for this request handler in case we will need it:
         BaseRequestHandler.request_id += 1
 
         if os.environ.get("AGENT_ALLOW_CORS_HEADERS") is not None:
             self.set_header("Access-Control-Allow-Origin", "*")
             self.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            self.set_header("Access-Control-Allow-Headers", "Content-Type, Transfer-Encoding, User_id")
+            headers: str = "Content-Type, Transfer-Encoding"
+            metadata_headers: str = ", ".join(forwarded_request_metadata)
+            if len(metadata_headers) > 0:
+                headers += f", {metadata_headers}"
+            # Set all allowed headers:
+            self.set_header("Access-Control-Allow-Headers", headers)
 
     def get_metadata(self) -> Dict[str, Any]:
         """
