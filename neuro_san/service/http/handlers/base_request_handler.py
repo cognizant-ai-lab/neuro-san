@@ -24,6 +24,8 @@ import asyncio
 import tornado
 from tornado.web import RequestHandler
 
+from neuro_san.service.generic.async_agent_service import AsyncAgentService
+from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 from neuro_san.service.http.interfaces.agent_authorizer import AgentAuthorizer
 from neuro_san.service.http.interfaces.agents_updater import AgentsUpdater
 from neuro_san.service.http.logging.http_logger import HttpLogger
@@ -89,6 +91,26 @@ class BaseRequestHandler(RequestHandler):
                 result[item_name] = "None"
         return result
 
+    async def get_service(self, agent_name: str, metadata: Dict[str, Any]) -> AsyncAgentService:
+        """
+        Get agent's AsyncAgentService for request execution
+        :param agent_name: agent name
+        :param metadata: metadata to be used for logging if necessary.
+        :return: instance of AsyncAgentService if it is defined for this agent
+                 None otherwise
+        """
+        update_done: bool = await self.update_agents(metadata=metadata)
+        if not update_done:
+            return None
+
+        service_provider: AsyncAgentServiceProvider = self.agent_policy.allow(agent_name)
+        if service_provider is None:
+            self.set_status(404)
+            self.logger.error(metadata, "error: Invalid request path %s", self.request.path)
+            self.do_finish()
+            return None
+        return service_provider.get_service()
+
     async def update_agents(self, metadata: Dict[str, Any]) -> bool:
         """
         Update internal agents table.
@@ -136,7 +158,7 @@ class BaseRequestHandler(RequestHandler):
             self.do_finish()
             return
 
-        self.logger.info(self.get_metadata(), f"[REQUEST RECEIVED] {self.request.method} {self.request.uri}")
+        self.logger.debug(self.get_metadata(), f"[REQUEST RECEIVED] {self.request.method} {self.request.uri}")
 
     def do_finish(self):
         """
