@@ -27,7 +27,7 @@ API_KEY_EXCEPTIONS: Dict[str, List] = {
                               "Connection error"],
     "OPENAI_API_VERSION": ["validation error", "api_version", "OPENAI_API_VERSION", "Error code: 404",
                            "Resource not found"],
-    "deployment_name": ["Error code: 404", "Resource not found", "API deployment for this resource does not exist"],
+    "AZURE_OPENAI_DEPLOYMENT_NAME": ["Error code: 404", "Resource not found", "API deployment for this resource does not exist"],
 }
 
 
