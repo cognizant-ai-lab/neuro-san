@@ -13,7 +13,6 @@
 from typing import Any
 from typing import Dict
 from typing import List
-from typing import Optional
 from typing import Type
 
 import os
@@ -26,7 +25,6 @@ from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.dictionary_overlay import DictionaryOverlay
-from leaf_common.config.resolver import Resolver
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
@@ -34,6 +32,8 @@ from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import
 from neuro_san.internals.run_context.langchain.llms.llm_info_restorer import LlmInfoRestorer
 from neuro_san.internals.run_context.langchain.llms.standard_langchain_llm_factory import StandardLangChainLlmFactory
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
+from neuro_san.internals.run_context.langchain.util.argument_validator import ArgumentValidator
+from neuro_san.internals.utils.resolver_util import ResolverUtil
 
 
 class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
@@ -63,7 +63,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                                     the model description in this class.
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: Dict[str, Any] = None):
         """
         Constructor
 
@@ -123,39 +123,20 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             raise ValueError(f"The value for the classes.factories key in {llm_info_file} "
                              "must be a list of strings")
 
-        class_split: List[str] = llm_factory_class_name.split(".")
-        if len(class_split) <= 2:
-            raise ValueError(f"Value in the classes.factories in {llm_info_file} must be of the form "
-                             "<package_name>.<module_name>.<ClassName>")
+        # Resolve and instantiate the factory class
+        llm_factory = ResolverUtil.create_instance(
+            class_name=llm_factory_class_name,
+            class_name_source=llm_info_file,
+            type_of_class=LangChainLlmFactory
+        )
 
-        # Create a list of a single package given the name in the value
-        packages: List[str] = [".".join(class_split[:-2])]
-        class_name: str = class_split[-1]
-        resolver = Resolver(packages)
-
-        # Resolve the class name
-        llm_factory_class: Type[LangChainLlmFactory] = None
-        try:
-            llm_factory_class: Type[LangChainLlmFactory] = \
-                resolver.resolve_class_in_module(class_name, module_name=class_split[-2])
-        except AttributeError as exception:
-            raise ValueError(f"Class {llm_factory_class_name} in {llm_info_file} "
-                             "not found in PYTHONPATH") from exception
-
-        # Instantiate it
-        try:
-            llm_factory: LangChainLlmFactory = llm_factory_class()
-        except TypeError as exception:
-            raise ValueError(f"Class {llm_factory_class_name} in {llm_info_file} "
-                             "must have a no-args constructor") from exception
-
-        # Make sure its the correct type
-        if not isinstance(llm_factory, LangChainLlmFactory):
-            raise ValueError(f"Class {llm_factory_class_name} in {llm_info_file} "
-                             "must be of type LangChainLlmFactory")
         return llm_factory
 
-    def create_llm(self, config: Dict[str, Any], callbacks: List[BaseCallbackHandler] = None) -> BaseLanguageModel:
+    def create_llm(
+            self,
+            config: Dict[str, Any],
+            callbacks: List[BaseCallbackHandler] = None
+    ) -> BaseLanguageModel:
         """
         Creates a langchain LLM based on the 'model_name' value of
         the config passed in.
@@ -176,6 +157,28 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         :param config: The llm_config from the user
         :return: The fully specified config with defaults filled in.
         """
+
+        class_from_llm_config: str = config.get("class")
+        if class_from_llm_config:
+            if not isinstance(class_from_llm_config, str):
+                raise ValueError("Value of 'class' has to be string.")
+            # A "class" key in the config indicates the user has specified a particular LLM implementation.
+            # However, the config may only contain partial arguments (e.g., {"arg_1": 0.5}) and omit others.
+            #
+            # In the standard factory, LLM classes are instantiated like:
+            #   ChatOpenAI(arg_1=config.get("arg_1"), arg_2=config.get("arg_2"))
+            # If a required argument like "arg_2" is missing in the config, config.get("arg_2") returns None,
+            # which may raise an error during instantiation if the argument has no default.
+            #
+            # To prevent this, we first fetch the default arguments for the given class from llm_info,
+            # then merge them with the user-provided config. This ensures all expected arguments are present,
+            # and the user’s config values take precedence over the defaults.
+            config_from_class_in_llm_info: Dict[str, Any] = self.get_chat_class_args(class_from_llm_config)
+
+            # Merge the defaults from llm_info with the user-defined config,
+            # giving priority to values in config.
+            return self.overlayer.overlay(config_from_class_in_llm_info, config)
+
         default_config: Dict[str, Any] = self.llm_infos.get("default_config")
         use_config = self.overlayer.overlay(default_config, config)
 
@@ -215,7 +218,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         return full_config
 
-    def get_chat_class_args(self, chat_class_name: str, use_model_name: str) -> Dict[str, Any]:
+    def get_chat_class_args(self, chat_class_name: str, use_model_name: str = None) -> Dict[str, Any]:
         """
         :param chat_class_name: string name of the chat class to look up.
         :param use_model_name: the original model name that prompted the chat class lookups
@@ -227,8 +230,13 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         chat_classes: Dict[str, Any] = self.llm_infos.get("classes")
         chat_class: Dict[str, Any] = chat_classes.get(chat_class_name)
         if chat_class is None:
-            raise ValueError(f"llm info entry for {use_model_name} uses a 'class' of {chat_class_name} "
-                             "which is not defined in the 'classes' table.")
+            if use_model_name is not None:
+                # If use_model_name is given, it must have a "class" in "classes"
+                raise ValueError(f"llm info entry for {use_model_name} uses a 'class' of {chat_class_name} "
+                                 "which is not defined in the 'classes' table.")
+            # If use_model_name is not provided and chat_class_name is not in "classes" in llm_info,
+            # it could be a user-specified langchain model class
+            return {}
 
         # Get the args from the chat class
         args: Dict[str, Any] = chat_class.get("args")
@@ -244,7 +252,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
     def create_base_chat_model(self, config: Dict[str, Any],
                                callbacks: List[BaseCallbackHandler] = None) -> BaseLanguageModel:
         """
-        Create a BaseLanguageModel from the fully-specified llm config.
+        Create a BaseLanguageModel from the fully-specified llm config either from standard LLM factory,
+        user-defined LLM factory, or user-specified langchain model class.
         :param config: The fully specified llm config which is a product of
                     _create_full_llm_config() above.
         :param callbacks: A list of BaseCallbackHandlers to add to the chat model.
@@ -279,10 +288,53 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 # Let the next model have a crack
                 found_exception = exception
 
+        # Try resolving via 'class' in config if factories failed
+        class_path: str = config.get("class")
+        if llm is None and found_exception is not None and class_path:
+            llm = self.create_base_chat_model_from_user_class(class_path, config)
+            found_exception = None
+
         if found_exception is not None:
             raise found_exception
 
         return llm
+
+    def create_base_chat_model_from_user_class(
+            self,
+            class_path: str,
+            config: Dict[str, Any],
+            callbacks: List[BaseCallbackHandler] = None
+    ) -> BaseLanguageModel:
+        """
+        Create a BaseLanguageModel from the user-specified langchain model class.
+        :param class_path: A string in the form of <package>.<module>.<Class>
+        :param config: The fully specified llm config which is a product of
+                    _create_full_llm_config() above.
+        :param callbacks: A list of BaseCallbackHandlers to add to the chat model.
+
+        :return: A BaseLanguageModel
+        """
+
+        if not isinstance(class_path, str):
+            raise ValueError("'class' in llm_config must be a string")
+
+        # Resolve the 'class'
+        llm_class: Type[BaseLanguageModel] = ResolverUtil.create_class(
+            class_name=class_path,
+            class_name_source="agent network hocon file",
+            type_of_class=BaseLanguageModel
+        )
+
+        # Copy the config, take 'class' out, and add callbacks
+        # Then unpack into llm constructor
+        user_config: Dict[str, Any] = config.copy()
+        user_config.pop("class")
+        user_config["callbacks"] = callbacks
+
+        # Check for invalid args and throw error if found
+        ArgumentValidator.check_invalid_args(llm_class, user_config)
+
+        return llm_class(**user_config)
 
     def get_max_prompt_tokens(self, config: Dict[str, Any]) -> int:
         """

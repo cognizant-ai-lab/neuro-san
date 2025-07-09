@@ -23,9 +23,8 @@ from copy import copy
 from logging import Logger
 from logging import getLogger
 
-from openai import APIError
-from anthropic import BadRequestError
-from anthropic import AuthenticationError
+from openai import APIError as OpenAI_APIError
+from anthropic import APIError as Anthropic_APIError
 
 from pydantic_core import ValidationError
 
@@ -495,7 +494,7 @@ class LangChainRunContext(RunContext):
         while return_dict is None and retries > 0:
             try:
                 return_dict: Dict[str, Any] = await agent_executor.ainvoke(inputs, invoke_config)
-            except (APIError, BadRequestError, AuthenticationError, ChatGoogleGenerativeAIError) as api_error:
+            except (OpenAI_APIError, Anthropic_APIError, ChatGoogleGenerativeAIError) as api_error:
                 message: str = ApiKeyErrorCheck.check_for_api_key_exception(api_error)
                 if message is not None:
                     raise ValueError(message) from api_error
