@@ -27,6 +27,7 @@ from neuro_san.api.grpc import agent_pb2 as service_messages
 from neuro_san.api.grpc import agent_pb2_grpc
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
+from neuro_san.service.generic.agent_service_provider import AgentServiceProvider
 from neuro_san.service.generic.agent_service import AgentService
 
 
@@ -60,18 +61,23 @@ class GrpcAgentService(agent_pb2_grpc.AgentServiceServicer):
                         their logging.
         """
         self.forwarder: GrpcMetadataForwarder = server_logging.get_forwarder()
-        self.service: AgentService =\
-            AgentService(request_logger,
-                         security_cfg,
-                         agent_name,
-                         agent_network_provider,
-                         server_logging)
+        self.service_provider: AgentServiceProvider =\
+            AgentServiceProvider(
+                request_logger,
+                security_cfg,
+                agent_name,
+                agent_network_provider,
+                server_logging)
 
     def get_request_count(self) -> int:
         """
         :return: The number of currently active requests
         """
-        return self.service.get_request_count()
+        if not self.service_provider.service_created():
+            # Service is not yet instantiated - it has no requests
+            return 0
+        service: AgentService = self.service_provider.get_service()
+        return service.get_request_count()
 
     # pylint: disable=no-member
     def Function(self, request: service_messages.FunctionRequest,
@@ -89,7 +95,9 @@ class GrpcAgentService(agent_pb2_grpc.AgentServiceServicer):
 
         # Get our args in order to pass to grpc-free session level
         request_dict: Dict[str, Any] = MessageToDict(request)
-        response_dict: Dict[str, Any] = self.service.function(request_dict, request_metadata, context)
+        service: AgentService = self.service_provider.get_service()
+        response_dict: Dict[str, Any] =\
+            service.function(request_dict, request_metadata, context)
 
         # Convert the response dictionary to a grpc message
         response_string = json.dumps(response_dict)
@@ -113,7 +121,8 @@ class GrpcAgentService(agent_pb2_grpc.AgentServiceServicer):
 
         # Get our args in order to pass to grpc-free session level
         request_dict: Dict[str, Any] = MessageToDict(request)
-        response_dict: Dict[str, Any] = self.service.connectivity(request_dict, request_metadata, context)
+        service: AgentService = self.service_provider.get_service()
+        response_dict: Dict[str, Any] = service.connectivity(request_dict, request_metadata, context)
 
         # Convert the response dictionary to a grpc message
         response_string = json.dumps(response_dict)
@@ -136,8 +145,9 @@ class GrpcAgentService(agent_pb2_grpc.AgentServiceServicer):
 
         # Get our args in order to pass to grpc-free session level
         request_dict: Dict[str, Any] = MessageToDict(request)
+        service: AgentService = self.service_provider.get_service()
         response_dict_iterator: Iterator[Dict[str, Any]] =\
-            self.service.streaming_chat(request_dict, request_metadata, context)
+            service.streaming_chat(request_dict, request_metadata, context)
         for response_dict in response_dict_iterator:
             # Convert the response dictionary to a grpc message
             response_string = json.dumps(response_dict)

@@ -26,7 +26,7 @@ from neuro_san.interfaces.concierge_session import ConciergeSession
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.network_providers.single_agent_network_provider import SingleAgentNetworkProvider
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
-from neuro_san.service.generic.async_agent_service import AsyncAgentService
+from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 from neuro_san.service.http.handlers.health_check_handler import HealthCheckHandler
 from neuro_san.service.http.handlers.connectivity_handler import ConnectivityHandler
 from neuro_san.service.http.handlers.function_handler import FunctionHandler
@@ -88,7 +88,7 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
         self.logger = None
         self.openapi_service_spec_path: str = openapi_service_spec_path
         self.forwarded_request_metadata: List[str] = forwarded_request_metadata.split(" ")
-        self.allowed_agents: Dict[str, AsyncAgentService] = {}
+        self.allowed_agents: Dict[str, AsyncAgentServiceProvider] = {}
         self.lock = None
 
     def __call__(self, other_server: AgentServer):
@@ -107,13 +107,13 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
                               "Timeout (%d sec) waiting for signal to HTTP server to start",
                               self.TIMEOUT_TO_START_SECONDS)
 
-        app.listen(self.http_port)
-        self.logger.info({}, "HTTP server is running on port %d", self.http_port)
-        self.logger.info({}, "HTTP server is shutting down after %d requests", self.requests_limit)
         # Construct initial "allowed" list of agents:
         # no metadata to use here yet.
         self.update_agents(metadata={})
         self.logger.debug({}, "Serving agents: %s", repr(self.allowed_agents.keys()))
+        app.listen(self.http_port)
+        self.logger.info({}, "HTTP server is running on port %d", self.http_port)
+        self.logger.info({}, "HTTP server is shutting down after %d requests", self.requests_limit)
 
         IOLoop.current().start()
         self.logger.info({}, "Http server stopped.")
@@ -142,7 +142,7 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
 
         return HttpServerApp(handlers, requests_limit, logger)
 
-    def allow(self, agent_name) -> AsyncAgentService:
+    def allow(self, agent_name) -> AsyncAgentServiceProvider:
         return self.allowed_agents.get(agent_name, None)
 
     def update_agents(self, metadata: Dict[str, Any]):
@@ -181,9 +181,14 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
         request_metadata_str: str = " ".join(self.forwarded_request_metadata)
         agent_server_logging: AgentServerLogging = \
             AgentServerLogging(self.server_name_for_logs, request_metadata_str)
-        agent_service: AsyncAgentService = \
-            AsyncAgentService(self.logger, None, agent_name, agent_network_provider, agent_server_logging)
-        self.allowed_agents[agent_name] = agent_service
+        agent_service_provider: AsyncAgentServiceProvider = \
+            AsyncAgentServiceProvider(
+                self.logger,
+                None,
+                agent_name,
+                agent_network_provider,
+                agent_server_logging)
+        self.allowed_agents[agent_name] = agent_service_provider
 
     def remove_agent(self, agent_name: str):
         """
