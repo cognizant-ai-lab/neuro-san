@@ -26,6 +26,7 @@ from neuro_san.interfaces.concierge_session import ConciergeSession
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.network_providers.single_agent_network_provider import SingleAgentNetworkProvider
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
+from neuro_san.service.main_loop.server_status import ServerStatus
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 from neuro_san.service.http.handlers.health_check_handler import HealthCheckHandler
 from neuro_san.service.http.handlers.connectivity_handler import ConnectivityHandler
@@ -42,7 +43,7 @@ from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
 from neuro_san.session.direct_concierge_session import DirectConciergeSession
 
 
-class HttpSidecar(AgentAuthorizer, AgentsUpdater):
+class HttpServer(AgentAuthorizer, AgentsUpdater):
     """
     Class provides simple http endpoint for neuro-san API.
     """
@@ -51,7 +52,8 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
 
     TIMEOUT_TO_START_SECONDS: int = 10
 
-    def __init__(self, start_event: threading.Event,
+    def __init__(self,
+                 server_status: ServerStatus,
                  http_port: int,
                  openapi_service_spec_path: str,
                  requests_limit: int,
@@ -59,7 +61,7 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
                  forwarded_request_metadata: str = AgentServer.DEFAULT_FORWARDED_REQUEST_METADATA):
         """
         Constructor:
-        :param start_event: event to await before starting actual service;
+        :param server_status: server status to register the state of http server
         :param http_port: port for http neuro-san service;
         :param openapi_service_spec_path: path to a file with OpenAPI service specification;
         :param request_limit: The number of requests to service before shutting down.
@@ -71,9 +73,9 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
                to forward to logs/other requests
         """
         self.server_name_for_logs: str = "Http Server"
-        self.start_event: threading.Event = start_event
         self.http_port = http_port
         self.network_storage: AgentNetworkStorage = network_storage
+        self.server_status: ServerStatus = server_status
 
         # Randomize requests limit for this server instance.
         # Lower and upper bounds for number of requests before shutting down
@@ -100,18 +102,12 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
         self.logger = HttpLogger(self.forwarded_request_metadata)
         app = self.make_app(self.requests_limit, self.logger)
 
-        # Wait for "go" signal which will be set by higher-level machinery
-        # when everything is ready for servicing.
-        while not self.start_event.wait(timeout=self.TIMEOUT_TO_START_SECONDS):
-            self.logger.error({},
-                              "Timeout (%d sec) waiting for signal to HTTP server to start",
-                              self.TIMEOUT_TO_START_SECONDS)
-
         # Construct initial "allowed" list of agents:
         # no metadata to use here yet.
         self.update_agents(metadata={})
         self.logger.debug({}, "Serving agents: %s", repr(self.allowed_agents.keys()))
         app.listen(self.http_port)
+        self.server_status.set_http_status(True)
         self.logger.info({}, "HTTP server is running on port %d", self.http_port)
         self.logger.info({}, "HTTP server is shutting down after %d requests", self.requests_limit)
 
@@ -125,12 +121,21 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
         Construct tornado HTTP "application" to run.
         """
         request_data: Dict[str, Any] = self.build_request_data()
-        health_request_data: Dict[str, Any] = {
-            "forwarded_request_metadata": self.forwarded_request_metadata
+        live_request_data: Dict[str, Any] = {
+            "forwarded_request_metadata": self.forwarded_request_metadata,
+            "server_status": self.server_status,
+            "request": "live"
+        }
+        ready_request_data: Dict[str, Any] = {
+            "forwarded_request_metadata": self.forwarded_request_metadata,
+            "server_status": self.server_status,
+            "request": "ready"
         }
         handlers = []
-        handlers.append(("/", HealthCheckHandler, health_request_data))
-        handlers.append(("/healthz", HealthCheckHandler, health_request_data))
+        handlers.append(("/", HealthCheckHandler, ready_request_data))
+        handlers.append(("/healthz", HealthCheckHandler, ready_request_data))
+        handlers.append(("/readyz", HealthCheckHandler, ready_request_data))
+        handlers.append(("/livez", HealthCheckHandler, live_request_data))
         handlers.append(("/api/v1/list", ConciergeHandler, request_data))
         handlers.append(("/api/v1/docs", OpenApiPublishHandler, request_data))
 

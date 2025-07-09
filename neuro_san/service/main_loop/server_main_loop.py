@@ -33,7 +33,8 @@ from neuro_san.service.grpc.grpc_agent_server import DEFAULT_MAX_CONCURRENT_REQU
 from neuro_san.service.grpc.grpc_agent_server import DEFAULT_REQUEST_LIMIT
 from neuro_san.service.grpc.grpc_agent_server import GrpcAgentServer
 from neuro_san.service.grpc.grpc_agent_service import GrpcAgentService
-from neuro_san.service.http.server.http_sidecar import HttpSidecar
+from neuro_san.service.http.server.http_sidecar import HttpServer
+from neuro_san.service.main_loop.server_status import ServerStatus
 from neuro_san.service.registries_watcher.periodic_updater.manifest_periodic_updater import ManifestPeriodicUpdater
 
 
@@ -63,6 +64,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.server: GrpcAgentServer = None
         self.manifest_files: List[str] = []
         self.network_storage = AgentNetworkStorage()
+        self.server_status: ServerStatus = ServerStatus()
 
     def parse_args(self):
         """
@@ -158,6 +160,7 @@ class ServerMainLoop(ServerLoopCallbacks):
                                       server_loop_callbacks=self,
                                       network_storage=self.network_storage,
                                       agent_networks=self.agent_networks,
+                                      server_status=self.server_status,
                                       server_name=self.server_name,
                                       server_name_for_logs=self.server_name_for_logs,
                                       max_concurrent_requests=self.max_concurrent_requests,
@@ -167,18 +170,26 @@ class ServerMainLoop(ServerLoopCallbacks):
         if self.manifest_update_period_seconds > 0:
             manifest_file: str = self.manifest_files[0]
             updater: ManifestPeriodicUpdater =\
-                ManifestPeriodicUpdater(self.network_storage, manifest_file, self.manifest_update_period_seconds)
+                ManifestPeriodicUpdater(
+                    self.network_storage,
+                    manifest_file,
+                    self.manifest_update_period_seconds,
+                    self.server_status)
             updater.start()
+        else:
+            # We don't use manifest updater,
+            # so set it to "ready" not to mess up overall status.
+            self.server_status.set_updater_status(True)
 
         # Start HTTP server side-car:
-        http_sidecar = HttpSidecar(
-            self.server.get_starting_event(),
+        http_server = HttpServer(
+            self.server_status,
             self.http_port,
             self.service_openapi_spec_file,
             self.request_limit,
             self.network_storage,
             forwarded_request_metadata=metadata_str)
-        http_server_thread = threading.Thread(target=http_sidecar, args=(self.server,), daemon=True)
+        http_server_thread = threading.Thread(target=http_server, args=(self.server,), daemon=True)
         http_server_thread.start()
 
         self.server.serve()

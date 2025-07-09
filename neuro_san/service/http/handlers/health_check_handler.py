@@ -22,6 +22,7 @@ from importlib.metadata import version as library_version
 from importlib.metadata import PackageNotFoundError
 
 from tornado.web import RequestHandler
+from neuro_san.service.main_loop.server_status import ServerStatus
 from neuro_san.service.http.logging.http_logger import HttpLogger
 
 
@@ -31,13 +32,21 @@ class HealthCheckHandler(RequestHandler):
     """
 
     # pylint: disable=attribute-defined-outside-init
-    def initialize(self, forwarded_request_metadata: List[str]):
+    def initialize(self,
+                   forwarded_request_metadata: List[str],
+                   server_status: ServerStatus,
+                   request: str):
         """
         This method is called by Tornado framework to allow
         injecting service-specific data into local handler context.
         Here we use it to inject CORS headers if so configured.
         """
         self.logger = HttpLogger(forwarded_request_metadata)
+        if request == "ready":
+            self.status = server_status.is_server_ready()
+        else:
+            self.status = server_status.is_server_live()
+
         if os.environ.get("AGENT_ALLOW_CORS_HEADERS") is not None:
             self.set_header("Access-Control-Allow-Origin", "*")
             self.set_header("Access-Control-Allow-Methods", "GET, OPTIONS")
@@ -49,14 +58,19 @@ class HealthCheckHandler(RequestHandler):
         """
 
         try:
-            versions: Dict[str, Any] = self.determine_versions()
-            result_dict: Dict[str, Any] = {
-                "service": "neuro-san agents",
-                "status": "healthy",
-                "versions": versions
-            }
-            self.set_header("Content-Type", "application/json")
-            self.write(result_dict)
+            if self.status:
+                versions: Dict[str, Any] = self.determine_versions()
+                result_dict: Dict[str, Any] = {
+                    "service": "neuro-san agents",
+                    "status": "ok",
+                    "versions": versions
+                }
+                self.set_header("Content-Type", "application/json")
+                self.write(result_dict)
+            else:
+                # Set "service unavailable" status
+                self.set_status(503)
+                self.write({"error": "Service Unavailable"})
         except Exception:  # pylint: disable=broad-exception-caught
             # Handle unexpected errors
             self.set_status(500)
