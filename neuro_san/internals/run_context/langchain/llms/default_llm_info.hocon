@@ -746,6 +746,7 @@
                 "num_gpu": null,
                 "num_thread": null,
                 "num_predict": null,        # Will use max_tokens
+                "reasoning": null,          # Controls the reasoning/thinking mode for supported models. If None (Default), The model will use its default reasoning behavior.
                 "repeat_last_n": null,
                 "repeat_penalty": null,
                 "temperature": null,
