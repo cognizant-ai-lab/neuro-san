@@ -185,6 +185,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                             num_gpu=config.get("num_gpu"),
                             num_thread=config.get("num_thread"),
                             num_predict=config.get("num_predict", config.get("max_tokens")),
+                            reasoning=config.get("reasoning"),
                             repeat_last_n=config.get("repeat_last_n"),
                             repeat_penalty=config.get("repeat_penalty"),
                             temperature=config.get("temperature"),
