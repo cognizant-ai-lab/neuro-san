@@ -25,6 +25,7 @@ from leaf_server_common.server.server_loop_callbacks import ServerLoopCallbacks
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.utils.file_of_class import FileOfClass
 from neuro_san.service.grpc.grpc_agent_server import DEFAULT_SERVER_NAME
 from neuro_san.service.grpc.grpc_agent_server import DEFAULT_SERVER_NAME_FOR_LOGS
@@ -55,11 +56,13 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.server_name_for_logs: str = DEFAULT_SERVER_NAME_FOR_LOGS
         self.max_concurrent_requests: int = DEFAULT_MAX_CONCURRENT_REQUESTS
         self.request_limit: int = DEFAULT_REQUEST_LIMIT
-        self.forwarded_request_metadata: int = GrpcAgentServer.DEFAULT_FORWARDED_REQUEST_METADATA
+        self.forwarded_request_metadata: str = GrpcAgentServer.DEFAULT_FORWARDED_REQUEST_METADATA
+        self.usage_logger_metadata: str = ""
         self.service_openapi_spec_file: str = self._get_default_openapi_spec_path()
         self.manifest_update_period_seconds: int = 0
         self.server: GrpcAgentServer = None
         self.manifest_files: List[str] = []
+        self.network_storage = AgentNetworkStorage()
 
     def parse_args(self):
         """
@@ -92,6 +95,10 @@ class ServerMainLoop(ServerLoopCallbacks):
                                                        self.forwarded_request_metadata),
                                 help="Space-delimited list of http request metadata keys to forward "
                                      "to logs/other requests")
+        arg_parser.add_argument("--usage_logger_metadata", type=str,
+                                default=os.environ.get("AGENT_USAGE_LOGGER_METADATA", ""),
+                                help="Space-delimited list of http request metadata keys to forward "
+                                     "to models usage statistics logger")
         arg_parser.add_argument("--openapi_service_spec_path", type=str,
                                 default=os.environ.get("AGENT_OPENAPI_SPEC",
                                                        self.service_openapi_spec_file),
@@ -113,6 +120,11 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.max_concurrent_requests = args.max_concurrent_requests
         self.request_limit = args.request_limit
         self.forwarded_request_metadata = args.forwarded_request_metadata
+        if not self.forwarded_request_metadata:
+            self.forwarded_request_metadata = ""
+        self.usage_logger_metadata = args.usage_logger_metadata
+        if not self.usage_logger_metadata:
+            self.usage_logger_metadata = self.forwarded_request_metadata
         self.service_openapi_spec_file = args.openapi_service_spec_path
         self.manifest_update_period_seconds = args.manifest_update_period_seconds
 
@@ -136,29 +148,36 @@ class ServerMainLoop(ServerLoopCallbacks):
         """
         self.parse_args()
 
+        # Construct forwarded metadata list as a union of
+        # self.forwarded_request_metadata and self.usage_logger_metadata
+        metadata_set = set(self.forwarded_request_metadata.split())
+        metadata_set = metadata_set | set(self.usage_logger_metadata.split())
+        metadata_str: str = " ".join(sorted(metadata_set))
+
         self.server = GrpcAgentServer(self.port,
                                       server_loop_callbacks=self,
+                                      network_storage=self.network_storage,
                                       agent_networks=self.agent_networks,
                                       server_name=self.server_name,
                                       server_name_for_logs=self.server_name_for_logs,
                                       max_concurrent_requests=self.max_concurrent_requests,
                                       request_limit=self.request_limit,
-                                      forwarded_request_metadata=self.forwarded_request_metadata)
+                                      forwarded_request_metadata=metadata_str)
 
         if self.manifest_update_period_seconds > 0:
             manifest_file: str = self.manifest_files[0]
             updater: ManifestPeriodicUpdater =\
-                ManifestPeriodicUpdater(manifest_file, self.manifest_update_period_seconds)
+                ManifestPeriodicUpdater(self.network_storage, manifest_file, self.manifest_update_period_seconds)
             updater.start()
 
         # Start HTTP server side-car:
         http_sidecar = HttpSidecar(
             self.server.get_starting_event(),
-            self.port,
             self.http_port,
             self.service_openapi_spec_file,
             self.request_limit,
-            forwarded_request_metadata=self.forwarded_request_metadata)
+            self.network_storage,
+            forwarded_request_metadata=metadata_str)
         http_server_thread = threading.Thread(target=http_sidecar, args=(self.server,), daemon=True)
         http_server_thread.start()
 

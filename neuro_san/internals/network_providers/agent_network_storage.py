@@ -20,31 +20,19 @@ from neuro_san.internals.interfaces.agent_state_listener import AgentStateListen
 from neuro_san.internals.network_providers.single_agent_network_provider import SingleAgentNetworkProvider
 
 
-class ServiceAgentNetworkStorage:
+class AgentNetworkStorage:
     """
-    Service-wide storage for AgentNetworkProviders.
-    This class is a global singleton containing
+    Service-wide storage for AgentNetworkProviders containing
     a table of currently active AgentNetworks for each agent registered to the service.
     Note: a mapping from an agent to its AgentNetwork is dynamic,
-          as we can change agents definitions at service run-time.
+          as it is possible to change agents definitions at service run-time.
     """
-
-    instance = None
 
     def __init__(self):
         self.agents_table: Dict[str, AgentNetwork] = {}
         self.logger = logging.getLogger(self.__class__.__name__)
         self.lock = threading.Lock()
         self.listeners: List[AgentStateListener] = []
-
-    @classmethod
-    def get_instance(cls):
-        """
-        Get a singleton instance of this class
-        """
-        if not ServiceAgentNetworkStorage.instance:
-            ServiceAgentNetworkStorage.instance = ServiceAgentNetworkStorage()
-        return ServiceAgentNetworkStorage.instance
 
     def add_listener(self, listener: AgentStateListener):
         """

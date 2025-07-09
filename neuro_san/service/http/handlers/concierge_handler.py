@@ -33,10 +33,10 @@ class ConciergeHandler(BaseRequestHandler):
         self.application.start_client_request(metadata, "/api/v1/list")
         try:
             data: Dict[str, Any] = {}
-            session: ConciergeSession = DirectConciergeSession(metadata=metadata)
+            session: ConciergeSession = DirectConciergeSession(self.network_storage, metadata=metadata)
             result_dict: Dict[str, Any] = session.list(data)
 
-            # Return gRPC response to the HTTP client
+            # Return response to the HTTP client
             self.set_header("Content-Type", "application/json")
             self.write(result_dict)
 

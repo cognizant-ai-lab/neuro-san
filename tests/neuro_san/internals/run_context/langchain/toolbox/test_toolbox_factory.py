@@ -18,6 +18,12 @@ import pytest
 
 from neuro_san.internals.run_context.langchain.toolbox.toolbox_factory import ToolboxFactory
 
+RESOLVER_PATH = "leaf_common.config.resolver.Resolver.resolve_class_in_module"
+VALIDATIOR_PATH = (
+    "neuro_san.internals.run_context.langchain.util.argument_validator."
+    "ArgumentValidator.check_invalid_args"
+)
+
 
 class TestBaseToolFactory:
     """Simplified test suite for ToolboxFactory."""
@@ -43,8 +49,7 @@ class TestBaseToolFactory:
         # Mock user-provided arguments
         user_args = {"param2": "user_value", "param3": "extra_value"}
 
-        with patch("leaf_common.config.resolver.Resolver.resolve_class_in_module") as mock_resolver, \
-                patch.object(factory, "_check_invalid_args") as mock_check_invalid:
+        with patch(RESOLVER_PATH) as mock_resolver, patch(VALIDATIOR_PATH) as mock_check_invalid:
             mock_tool_class = MagicMock(spec=BaseTool)
             mock_resolver.return_value = mock_tool_class
 
@@ -80,8 +85,7 @@ class TestBaseToolFactory:
         # Mock user-provided arguments
         user_args = {"param2": "user_value", "param3": "extra_value"}
 
-        with patch("leaf_common.config.resolver.Resolver.resolve_class_in_module") as mock_resolver, \
-                patch.object(factory, "_check_invalid_args") as mock_check_invalid:
+        with patch(RESOLVER_PATH) as mock_resolver, patch(VALIDATIOR_PATH) as mock_check_invalid:
             mock_toolkit_class = MagicMock(spec=BaseToolkit)
             mock_resolver.return_value = mock_toolkit_class
 
@@ -119,8 +123,7 @@ class TestBaseToolFactory:
         # Mock user-provided arguments
         user_args = {"param2": "user_value", "param3": "extra_value"}
 
-        with patch("leaf_common.config.resolver.Resolver.resolve_class_in_module") as mock_resolver, \
-                patch.object(factory, "_check_invalid_args") as mock_check_invalid:
+        with patch(RESOLVER_PATH) as mock_resolver, patch(VALIDATIOR_PATH) as mock_check_invalid:
             # Mock the toolkit class
             mock_toolkit_class = MagicMock()
             mock_resolver.return_value = mock_toolkit_class

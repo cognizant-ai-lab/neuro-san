@@ -70,7 +70,10 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         if chat_class is not None:
             chat_class = chat_class.lower()
 
-        model_name: str = config.get("model_name")
+        # Check for key "model_name", "model", and "model_id" to use as model name
+        # If the config is from default_llm_info, this is always "model_name"
+        # but with user-specified config, it is possible to have the other keys will be specifed instead.
+        model_name: str = config.get("model_name") or config.get("model") or config.get("model_id")
 
         if chat_class == "openai":
             llm = ChatOpenAI(

@@ -23,7 +23,7 @@ from neuro_san.internals.run_context.factory.master_llm_factory import MasterLlm
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
-from neuro_san.internals.network_providers.service_agent_network_storage import ServiceAgentNetworkStorage
+from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.session.direct_agent_session import DirectAgentSession
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
 from neuro_san.session.missing_agent_check import MissingAgentCheck
@@ -35,7 +35,7 @@ class DirectAgentSessionFactory:
     Sets up everything needed to use a DirectAgentSession more as a library.
     This includes:
         * Some reading of AgentNetworks
-        * Setting up ServiceAgentNetworkStorage with agent networks
+        * Setting up AgentNetworkStorage with agent networks
           which were read in
         * Initializing an LlmFactory
     """
@@ -46,9 +46,9 @@ class DirectAgentSessionFactory:
         """
         manifest_restorer = RegistryManifestRestorer()
         self.manifest_networks: Dict[str, AgentNetwork] = manifest_restorer.restore()
-        network_storage: ServiceAgentNetworkStorage = ServiceAgentNetworkStorage.get_instance()
+        self.network_storage = AgentNetworkStorage()
         for agent_name, agent_network in self.manifest_networks.items():
-            network_storage.add_agent_network(agent_name, agent_network)
+            self.network_storage.add_agent_network(agent_name, agent_network)
 
     def create_session(self, agent_name: str, use_direct: bool = False,
                        metadata: Dict[str, str] = None, umbrella_timeout: Timeout = None) -> AgentSession:
@@ -73,7 +73,7 @@ class DirectAgentSessionFactory:
         llm_factory.load()
         toolbox_factory.load()
 
-        factory = ExternalAgentSessionFactory(use_direct=use_direct)
+        factory = ExternalAgentSessionFactory(use_direct=use_direct, network_storage=self.network_storage)
         invocation_context = SessionInvocationContext(factory, llm_factory, toolbox_factory, metadata)
         invocation_context.start()
         session: DirectAgentSession = DirectAgentSession(agent_network=agent_network,
@@ -100,10 +100,8 @@ class DirectAgentSessionFactory:
             agent_network = restorer.restore(file_reference=agent_name)
         else:
             # Use the standard stuff available via the manifest file.
-            network_storage: ServiceAgentNetworkStorage =\
-                ServiceAgentNetworkStorage.get_instance()
             agent_network_provider: AgentNetworkProvider =\
-                network_storage.get_agent_network_provider(agent_name)
+                self.network_storage.get_agent_network_provider(agent_name)
             agent_network = agent_network_provider.get_agent_network()
 
         # Common place for nice error messages when networks are not found
