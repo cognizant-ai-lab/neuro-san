@@ -107,11 +107,11 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
                               "Timeout (%d sec) waiting for signal to HTTP server to start",
                               self.TIMEOUT_TO_START_SECONDS)
 
-        app.listen(self.http_port)
         # Construct initial "allowed" list of agents:
         # no metadata to use here yet.
         self.update_agents(metadata={})
         self.logger.debug({}, "Serving agents: %s", repr(self.allowed_agents.keys()))
+        app.listen(self.http_port)
         self.logger.info({}, "HTTP server is running on port %d", self.http_port)
         self.logger.info({}, "HTTP server is shutting down after %d requests", self.requests_limit)
 
