@@ -370,9 +370,44 @@
         # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
         "capabilities": [ "tools" ],
         "context_window_size": 200000,
-        "max_output_tokens": 8192,
+        "max_output_tokens": 64000,
         "knowledge_cutoff": "11/2024",
     },
+
+    "claude-sonnet-4-0": {
+        "use_model_name": "claude-sonnet-4-20250514"
+    },
+    "claude-sonnet-4-20250514": {
+        "class": "anthropic",
+        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
+        "capabilities": [ "tools" ],
+        "context_window_size": 200000,
+        "max_output_tokens": 64000,
+        "knowledge_cutoff": "03/2025",
+    },
+
+    "claude-opus-4-0": {
+        "use_model_name": "claude-opus-4-20250514"
+    },
+    "claude-opus-4-20250514": {
+        "class": "anthropic",
+        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
+        "capabilities": [ "tools" ],
+        "context_window_size": 200000,
+        "max_output_tokens": 32000,
+        "knowledge_cutoff": "03/2025",
+    },
+
 
     # Ollama models
     # See https://ollama.com/search?c=tools for latest in tool-supporting Ollama models
