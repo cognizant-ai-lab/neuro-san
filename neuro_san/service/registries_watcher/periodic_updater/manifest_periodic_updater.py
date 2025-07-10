@@ -8,11 +8,11 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
+from typing import Dict
 
 import logging
 import time
 import threading
-from typing import Dict
 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
@@ -29,18 +29,19 @@ class ManifestPeriodicUpdater:
     use_polling: bool = True
 
     def __init__(self,
-                 network_storage: AgentNetworkStorage,
+                 network_storage_dict: Dict[str, AgentNetworkStorage],
                  manifest_path: str,
                  update_period_seconds: int):
         """
         Constructor.
 
-        :param network_storage: A AgentNetworkStorage instance which keeps all
-                                the AgentNetwork instances.
+        :param network_storage_dict: A dictionary of string (descripting scope) to
+                    AgentNetworkStorage instance which keeps all the AgentNetwork instances
+                    of a particular grouping.
         :param manifest_path: file path to server manifest file
         :param update_period_seconds: update period in seconds
         """
-        self.network_storage: AgentNetworkStorage = network_storage
+        self.network_storage_dict: Dict[str, AgentNetworkStorage] = network_storage_dict
         self.manifest_path: str = manifest_path
         self.update_period_seconds: int = update_period_seconds
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -70,9 +71,12 @@ class ManifestPeriodicUpdater:
             self.logger.info("Observed events: modified %d, added %d, deleted %d",
                              modified, added, deleted)
             self.logger.info("Updating manifest file: %s", self.manifest_path)
+
             agent_networks: Dict[str, AgentNetwork] = \
                 RegistryManifestRestorer().restore(self.manifest_path)
-            self.network_storage.setup_agent_networks(agent_networks)
+
+            public_storage: AgentNetworkStorage = self.network_storage_dict.get("public")
+            public_storage.setup_agent_networks(agent_networks)
 
     def compute_polling_interval(self, update_period_seconds: int) -> int:
         """

@@ -55,7 +55,7 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
                  http_port: int,
                  openapi_service_spec_path: str,
                  requests_limit: int,
-                 network_storage: AgentNetworkStorage,
+                 network_storage_dict: Dict[str, AgentNetworkStorage],
                  forwarded_request_metadata: str = AgentServer.DEFAULT_FORWARDED_REQUEST_METADATA):
         """
         Constructor:
@@ -65,15 +65,16 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
         :param request_limit: The number of requests to service before shutting down.
                         This is useful to be sure production environments can handle
                         a service occasionally going down.
-        :param network_storage: A AgentNetworkStorage instance which keeps all
-                                the AgentNetwork instances.
+        :param network_storage_dict: A dictionary of string (descripting scope) to
+                    AgentNetworkStorage instance which keeps all the AgentNetwork instances
+                    of a particular grouping.
         :param forwarded_request_metadata: A space-delimited list of http metadata request keys
                to forward to logs/other requests
         """
         self.server_name_for_logs: str = "Http Server"
         self.start_event: threading.Event = start_event
         self.http_port = http_port
-        self.network_storage: AgentNetworkStorage = network_storage
+        self.network_storage_dict: Dict[str, AgentNetworkStorage] = network_storage_dict
 
         # Randomize requests limit for this server instance.
         # Lower and upper bounds for number of requests before shutting down
@@ -152,8 +153,10 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
         :return: nothing
         """
         data: Dict[str, Any] = {}
-        # Why do we need the Concierge if we already have access to network_storage?
-        session: ConciergeSession = DirectConciergeSession(self.network_storage, metadata=metadata)
+
+        public_storage: AgentNetworkStorage = self.network_storage_dict.get("public")
+        # Why do we need the Concierge if we already have access to public_storage?
+        session: ConciergeSession = DirectConciergeSession(public_storage, metadata=metadata)
         agents_dict: Dict[str, List[Dict[str, str]]] = session.list(data)
         agents_list: List[Dict[str, str]] = agents_dict["agents"]
         agents: List[str] = []
@@ -175,8 +178,9 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
         Add agent to the map of known agents
         :param agent_name: name of an agent
         """
+        public_storage: AgentNetworkStorage = self.network_storage_dict.get("public")
         agent_network_provider: SingleAgentNetworkProvider = \
-            self.network_storage.get_agent_network_provider(agent_name)
+            public_storage.get_agent_network_provider(agent_name)
         # Convert back to a single string as required by constructor
         request_metadata_str: str = " ".join(self.forwarded_request_metadata)
         agent_server_logging: AgentServerLogging = \
@@ -207,5 +211,5 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
             "agents_updater": self,
             "forwarded_request_metadata": self.forwarded_request_metadata,
             "openapi_service_spec_path": self.openapi_service_spec_path,
-            "network_storage": self.network_storage
+            "network_storage_dict": self.network_storage_dict
         }

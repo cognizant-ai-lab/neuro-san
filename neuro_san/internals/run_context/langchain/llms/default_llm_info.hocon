@@ -549,6 +549,18 @@
         "max_output_tokens": 4096,      # ???
         "knowledge_cutoff": "unknown",
     },
+    "qwen3:8b": {
+        "class": "ollama",
+        "model_info_url": "https://ollama.com/library/qwen3",
+        "modalities": {
+            "input": [ "text" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 40960,
+        "max_output_tokens": 32768,
+        "knowledge_cutoff": "unknown",
+    },
 
     # NVIDIA models
 
