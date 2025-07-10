@@ -9,10 +9,12 @@
 #
 # END COPYRIGHT
 
-import logging
-import threading
 from typing import Dict
 from typing import List
+
+import logging
+import threading
+import time
 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
@@ -33,6 +35,7 @@ class AgentNetworkStorage:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.lock = threading.Lock()
         self.listeners: List[AgentStateListener] = []
+        self.last_modified: float = time.time()
 
     def add_listener(self, listener: AgentStateListener):
         """
@@ -57,6 +60,8 @@ class AgentNetworkStorage:
         with self.lock:
             is_new = self.agents_table.get(agent_name, None) is None
             self.agents_table[agent_name] = agent_network
+            self.last_modified = time.time()
+
         # Notify listeners about this state change:
         # do it outside of internal lock
         for listener in self.listeners:
@@ -89,6 +94,8 @@ class AgentNetworkStorage:
         """
         with self.lock:
             self.agents_table.pop(agent_name, None)
+            self.last_modified = time.time()
+
         # Notify listeners about this state change:
         # do it outside of internal lock
         for listener in self.listeners:
@@ -109,3 +116,9 @@ class AgentNetworkStorage:
         with self.lock:
             # Create static snapshot of agents names collection
             return list(self.agents_table.keys())
+
+    def get_last_modified(self) -> float:
+        """
+        :return: A float timestamp from time.time() as to when the instance was last modified.
+        """
+        return self.last_modified

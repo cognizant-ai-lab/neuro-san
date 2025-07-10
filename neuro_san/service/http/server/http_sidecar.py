@@ -19,10 +19,10 @@ from typing import List
 
 import random
 import threading
+import time
 
 from tornado.ioloop import IOLoop
 
-from neuro_san.interfaces.concierge_session import ConciergeSession
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.network_providers.single_agent_network_provider import SingleAgentNetworkProvider
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
@@ -39,7 +39,6 @@ from neuro_san.service.http.logging.http_logger import HttpLogger
 from neuro_san.service.http.server.http_server_app import HttpServerApp
 from neuro_san.service.interfaces.agent_server import AgentServer
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
-from neuro_san.session.direct_concierge_session import DirectConciergeSession
 
 
 class HttpSidecar(AgentAuthorizer, AgentsUpdater):
@@ -90,6 +89,7 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
         self.openapi_service_spec_path: str = openapi_service_spec_path
         self.forwarded_request_metadata: List[str] = forwarded_request_metadata.split(" ")
         self.allowed_agents: Dict[str, AsyncAgentServiceProvider] = {}
+        self.allowed_last_modified: float = 0
         self.lock = None
 
     def __call__(self, other_server: AgentServer):
@@ -144,7 +144,24 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
         return HttpServerApp(handlers, requests_limit, logger)
 
     def allow(self, agent_name) -> AsyncAgentServiceProvider:
-        return self.allowed_agents.get(agent_name, None)
+        return self.allowed_agents.get(agent_name)
+
+    def is_needing_allowed_update(self) -> bool:
+        """
+        Quick low-impact check to see if the allowed list of agents need updating.
+
+        :return: True if the allowed_agents list needs updating. False otherwise
+        """
+        # Start by taking a snapshot of when we were last modified without the lock
+        last_modified: float = self.allowed_last_modified
+
+        for network_storage in self.network_storage_dict.values():
+            if last_modified < network_storage.get_last_modified():
+                # Something has changed since the last time we looked
+                return True
+
+        # Nothing has changed
+        return False
 
     def update_agents(self, metadata: Dict[str, Any]):
         """
@@ -152,26 +169,39 @@ class HttpSidecar(AgentAuthorizer, AgentsUpdater):
         :param metadata: metadata to be used for logging if necessary.
         :return: nothing
         """
-        data: Dict[str, Any] = {}
+        _ = metadata
 
-        public_storage: AgentNetworkStorage = self.network_storage_dict.get("public")
-        # Why do we need the Concierge if we already have access to public_storage?
-        session: ConciergeSession = DirectConciergeSession(public_storage, metadata=metadata)
-        agents_dict: Dict[str, List[Dict[str, str]]] = session.list(data)
-        agents_list: List[Dict[str, str]] = agents_dict["agents"]
-        agents: List[str] = []
-        for agent_dict in agents_list:
-            agents.append(agent_dict["agent_name"])
+        # First do a quick check against network storage timestamps to see if
+        # we need to anything more heavyweight.
+        if not self.is_needing_allowed_update():
+            return
+
+        # Keep a list of the new allowed agents.
+        new_allowed_names: List[str] = []
+        for network_storage in self.network_storage_dict.values():
+            # Add to the list of agents from the storage as the new allowed set.
+            agent_names: List[str] = network_storage.get_agent_names()
+            new_allowed_names.extend(agent_names)
+
         with self.lock:
-            # We assume all agents from "agents" list are enabled:
-            for agent_name in agents:
-                if self.allowed_agents.get(agent_name, None) is None:
+
+            modified: bool = False
+
+            # We assume all agents from "new_allowed_names" list are enabled:
+            for agent_name in new_allowed_names:
+                if self.allowed_agents.get(agent_name) is None:
                     self.add_agent(agent_name)
+                    modified = True
+
             # All other agents are disabled:
             allowed_set = set(self.allowed_agents.keys())
             for agent_name in allowed_set:
-                if agent_name not in agents:
+                if agent_name not in new_allowed_names:
                     self.remove_agent(agent_name)
+                    modified = True
+
+            if modified:
+                self.allowed_last_modified = time.time()
 
     def add_agent(self, agent_name: str):
         """
