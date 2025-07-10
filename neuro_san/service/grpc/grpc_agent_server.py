@@ -21,7 +21,6 @@ from leaf_server_common.server.server_loop_callbacks import ServerLoopCallbacks
 from neuro_san.api.grpc import agent_pb2
 from neuro_san.api.grpc import concierge_pb2_grpc
 
-from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.main_loop.server_status import ServerStatus

@@ -27,6 +27,7 @@ class ManifestPeriodicUpdater:
     Class implementing periodic manifest directory updates
     by watching agent files and manifest file itself.
     """
+    # pylint: disable=too-many-instance-attributes
     use_polling: bool = True
 
     def __init__(self,

@@ -22,7 +22,6 @@ import threading
 
 from tornado.ioloop import IOLoop
 
-from neuro_san.interfaces.concierge_session import ConciergeSession
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.network_providers.single_agent_network_provider import SingleAgentNetworkProvider
