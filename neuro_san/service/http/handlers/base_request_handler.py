@@ -48,7 +48,7 @@ class BaseRequestHandler(RequestHandler):
                    agents_updater: AgentsUpdater,
                    forwarded_request_metadata: List[str],
                    openapi_service_spec_path: str,
-                   network_storage: AgentNetworkStorage):
+                   network_storage_dict: Dict[str, AgentNetworkStorage]):
         """
         This method is called by Tornado framework to allow
         injecting service-specific data into local handler context.
@@ -57,8 +57,9 @@ class BaseRequestHandler(RequestHandler):
                                collection of agents being served
         :param forwarded_request_metadata: request metadata to forward.
         :param openapi_service_spec_path: file path to OpenAPI service spec.
-        :param network_storage: A AgentNetworkStorage instance which keeps all
-                                the AgentNetwork instances.
+        :param network_storage_dict: A dictionary of string (descripting scope) to
+                    AgentNetworkStorage instance which keeps all the AgentNetwork instances
+                    of a particular grouping.
         """
 
         self.agent_policy = agent_policy
@@ -66,7 +67,7 @@ class BaseRequestHandler(RequestHandler):
         self.forwarded_request_metadata: List[str] = forwarded_request_metadata
         self.openapi_service_spec_path: str = openapi_service_spec_path
         self.logger = HttpLogger(forwarded_request_metadata)
-        self.network_storage: AgentNetworkStorage = network_storage
+        self.network_storage_dict: Dict[str, AgentNetworkStorage] = network_storage_dict
 
         # Set default request_id for this request handler in case we will need it:
         BaseRequestHandler.request_id += 1

@@ -62,7 +62,11 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.manifest_update_period_seconds: int = 0
         self.server: GrpcAgentServer = None
         self.manifest_files: List[str] = []
-        self.network_storage = AgentNetworkStorage()
+
+        # Dictionary is string key (describing scope) to AgentNetworkStorage grouping.
+        self.network_storage_dict: Dict[str, AgentNetworkStorage] = {
+            "public": AgentNetworkStorage()
+        }
 
     def parse_args(self):
         """
@@ -156,7 +160,7 @@ class ServerMainLoop(ServerLoopCallbacks):
 
         self.server = GrpcAgentServer(self.port,
                                       server_loop_callbacks=self,
-                                      network_storage=self.network_storage,
+                                      network_storage_dict=self.network_storage_dict,
                                       agent_networks=self.agent_networks,
                                       server_name=self.server_name,
                                       server_name_for_logs=self.server_name_for_logs,
@@ -167,7 +171,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         if self.manifest_update_period_seconds > 0:
             manifest_file: str = self.manifest_files[0]
             updater: ManifestPeriodicUpdater =\
-                ManifestPeriodicUpdater(self.network_storage, manifest_file, self.manifest_update_period_seconds)
+                ManifestPeriodicUpdater(self.network_storage_dict, manifest_file, self.manifest_update_period_seconds)
             updater.start()
 
         # Start HTTP server side-car:
@@ -176,7 +180,7 @@ class ServerMainLoop(ServerLoopCallbacks):
             self.http_port,
             self.service_openapi_spec_file,
             self.request_limit,
-            self.network_storage,
+            self.network_storage_dict,
             forwarded_request_metadata=metadata_str)
         http_server_thread = threading.Thread(target=http_sidecar, args=(self.server,), daemon=True)
         http_server_thread.start()

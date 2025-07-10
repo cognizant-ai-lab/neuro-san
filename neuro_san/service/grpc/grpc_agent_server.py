@@ -23,6 +23,7 @@ from neuro_san.api.grpc import agent_pb2
 from neuro_san.api.grpc import concierge_pb2_grpc
 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.grpc.agent_servicer_to_server import AgentServicerToServer
@@ -43,7 +44,7 @@ DEFAULT_REQUEST_LIMIT: int = 1000 * 1000
 
 
 # pylint: disable=too-many-instance-attributes
-class GrpcAgentServer(AgentServer):
+class GrpcAgentServer(AgentServer, AgentStateListener):
     """
     Server implementation for the Agent gRPC Service.
     """
@@ -51,7 +52,7 @@ class GrpcAgentServer(AgentServer):
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self, port: int,
                  server_loop_callbacks: ServerLoopCallbacks,
-                 network_storage: AgentNetworkStorage,
+                 network_storage_dict: Dict[str, AgentNetworkStorage],
                  agent_networks: Dict[str, AgentNetwork],
                  server_name: str = DEFAULT_SERVER_NAME,
                  server_name_for_logs: str = DEFAULT_SERVER_NAME_FOR_LOGS,
@@ -65,8 +66,9 @@ class GrpcAgentServer(AgentServer):
         :param server_loop_callbacks: The ServerLoopCallbacks instance for
                 break out methods in main serving loop.
         :param agent_networks: A dictionary of agent name to AgentNetwork to use for the session.
-        :param network_storage: A AgentNetworkStorage instance which keeps all
-                                the AgentNetwork instances.
+        :param network_storage_dict: A dictionary of string (descripting scope) to
+                    AgentNetworkStorage instance which keeps all the AgentNetwork instances
+                    of a particular grouping.
         :param server_name: The name of the service
         :param server_name_for_logs: The name of the service for log files
         :param max_concurrent_requests: The maximum number of requests to handle at a time.
@@ -84,7 +86,8 @@ class GrpcAgentServer(AgentServer):
 
         self.logger = logging.getLogger(__name__)
 
-        self.network_storage: AgentNetworkStorage = network_storage
+        self.network_storage_dict: Dict[str, AgentNetworkStorage] = network_storage_dict
+        # Below is now odd.
         self.agent_networks: Dict[str, AgentNetwork] = agent_networks
         self.server_name: str = server_name
         self.server_name_for_logs: str = server_name_for_logs
@@ -116,9 +119,10 @@ class GrpcAgentServer(AgentServer):
         Agent is being added to the service.
         :param agent_name: name of an agent
         """
+        public_storage: AgentNetworkStorage = self.network_storage_dict.get("public")
         service = GrpcAgentService(self.server_lifetime, self.security_cfg,
                                    agent_name,
-                                   self.network_storage.get_agent_network_provider(agent_name),
+                                   public_storage.get_agent_network_provider(agent_name),
                                    self.server_logging)
         self.services.append(service)
         servicer_to_server = AgentServicerToServer(service)
@@ -167,10 +171,11 @@ class GrpcAgentServer(AgentServer):
 
         # Add listener to handle adding per-agent gRPC services
         # to our dynamic router:
-        self.network_storage.add_listener(self)
+        public_storage: AgentNetworkStorage = self.network_storage_dict.get("public")
+        public_storage.add_listener(self)
 
         # DEF - It's possible this could move outside this class.
-        self.network_storage.setup_agent_networks(self.agent_networks)
+        public_storage.setup_agent_networks(self.agent_networks)
 
         # Add DynamicAgentRouter instance as a generic RPC handler for our server:
         server.add_generic_rpc_handlers((self.service_router,))
@@ -179,7 +184,7 @@ class GrpcAgentServer(AgentServer):
             ConciergeService(self.server_lifetime,
                              self.security_cfg,
                              self.server_logging,
-                             self.network_storage)
+                             public_storage)
         concierge_pb2_grpc.add_ConciergeServiceServicer_to_server(
             concierge_service,
             server)
