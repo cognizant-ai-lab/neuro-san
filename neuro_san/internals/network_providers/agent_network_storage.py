@@ -58,7 +58,7 @@ class AgentNetworkStorage:
         """
         is_new: bool = False
         with self.lock:
-            is_new = self.agents_table.get(agent_name, None) is None
+            is_new = self.agents_table.get(agent_name) is None
             self.agents_table[agent_name] = agent_network
             self.last_modified = time.time()
 
