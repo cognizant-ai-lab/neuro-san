@@ -23,6 +23,7 @@ import threading
 from tornado.ioloop import IOLoop
 
 from neuro_san.interfaces.concierge_session import ConciergeSession
+from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.network_providers.single_agent_network_provider import SingleAgentNetworkProvider
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
@@ -35,15 +36,13 @@ from neuro_san.service.http.handlers.streaming_chat_handler import StreamingChat
 from neuro_san.service.http.handlers.concierge_handler import ConciergeHandler
 from neuro_san.service.http.handlers.openapi_publish_handler import OpenApiPublishHandler
 from neuro_san.service.http.interfaces.agent_authorizer import AgentAuthorizer
-from neuro_san.service.http.interfaces.agents_updater import AgentsUpdater
 from neuro_san.service.http.logging.http_logger import HttpLogger
 from neuro_san.service.http.server.http_server_app import HttpServerApp
 from neuro_san.service.interfaces.agent_server import AgentServer
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
-from neuro_san.session.direct_concierge_session import DirectConciergeSession
 
 
-class HttpServer(AgentAuthorizer, AgentsUpdater):
+class HttpServer(AgentAuthorizer, AgentStateListener):
     """
     Class provides simple http endpoint for neuro-san API.
     """
@@ -88,24 +87,23 @@ class HttpServer(AgentAuthorizer, AgentsUpdater):
             request_limit_upper = round(requests_limit * 1.10)
             self.requests_limit = random.randint(request_limit_lower, request_limit_upper)
 
-        self.logger = None
         self.openapi_service_spec_path: str = openapi_service_spec_path
         self.forwarded_request_metadata: List[str] = forwarded_request_metadata.split(" ")
+        self.logger = HttpLogger(self.forwarded_request_metadata)
         self.allowed_agents: Dict[str, AsyncAgentServiceProvider] = {}
-        self.lock = None
+        self.lock = threading.Lock()
+        # Add listener to handle adding per-agent http service
+        # (services map is defined by self.allowed_agents dictionary)
+        public_storage: AgentNetworkStorage = self.network_storage_dict.get("public")
+        public_storage.add_listener(self)
 
     def __call__(self, other_server: AgentServer):
         """
         Method to be called by a thread running tornado HTTP server
         to actually start serving requests.
         """
-        self.lock = threading.Lock()
-        self.logger = HttpLogger(self.forwarded_request_metadata)
         app = self.make_app(self.requests_limit, self.logger)
 
-        # Construct initial "allowed" list of agents:
-        # no metadata to use here yet.
-        self.update_agents(metadata={})
         self.logger.debug({}, "Serving agents: %s", repr(self.allowed_agents.keys()))
         app.listen(self.http_port)
         self.server_status.set_http_status(True)
@@ -151,33 +149,6 @@ class HttpServer(AgentAuthorizer, AgentsUpdater):
     def allow(self, agent_name) -> AsyncAgentServiceProvider:
         return self.allowed_agents.get(agent_name, None)
 
-    def update_agents(self, metadata: Dict[str, Any]):
-        """
-        Update list of agents for which serving is allowed.
-        :param metadata: metadata to be used for logging if necessary.
-        :return: nothing
-        """
-        data: Dict[str, Any] = {}
-
-        public_storage: AgentNetworkStorage = self.network_storage_dict.get("public")
-        # Why do we need the Concierge if we already have access to public_storage?
-        session: ConciergeSession = DirectConciergeSession(public_storage, metadata=metadata)
-        agents_dict: Dict[str, List[Dict[str, str]]] = session.list(data)
-        agents_list: List[Dict[str, str]] = agents_dict["agents"]
-        agents: List[str] = []
-        for agent_dict in agents_list:
-            agents.append(agent_dict["agent_name"])
-        with self.lock:
-            # We assume all agents from "agents" list are enabled:
-            for agent_name in agents:
-                if self.allowed_agents.get(agent_name, None) is None:
-                    self.add_agent(agent_name)
-            # All other agents are disabled:
-            allowed_set = set(self.allowed_agents.keys())
-            for agent_name in allowed_set:
-                if agent_name not in agents:
-                    self.remove_agent(agent_name)
-
     def agent_added(self, agent_name: str):
         """
         Add agent to the map of known agents
@@ -198,6 +169,7 @@ class HttpServer(AgentAuthorizer, AgentsUpdater):
                 agent_network_provider,
                 agent_server_logging)
         self.allowed_agents[agent_name] = agent_service_provider
+        self.logger.info({}, "Added agent %s to allowed http service list", agent_name)
 
     def agent_removed(self, agent_name: str):
         """
@@ -205,6 +177,7 @@ class HttpServer(AgentAuthorizer, AgentsUpdater):
         :param agent_name: name of an agent
         """
         self.allowed_agents.pop(agent_name, None)
+        self.logger.info({}, "Removed agent %s from allowed http service list", agent_name)
 
     def agent_modified(self, agent_name: str):
         """
@@ -222,7 +195,6 @@ class HttpServer(AgentAuthorizer, AgentsUpdater):
         """
         return {
             "agent_policy": self,
-            "agents_updater": self,
             "forwarded_request_metadata": self.forwarded_request_metadata,
             "openapi_service_spec_path": self.openapi_service_spec_path,
             "network_storage_dict": self.network_storage_dict

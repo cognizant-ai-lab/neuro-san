@@ -18,8 +18,6 @@ from typing import List
 import os
 import threading
 
-import time
-
 from argparse import ArgumentParser
 
 from leaf_server_common.server.server_loop_callbacks import ServerLoopCallbacks
@@ -50,7 +48,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         """
         Constructor
         """
-        self.port: int = 0
+        self.grpc_port: int = 0
         self.http_port: int = 0
 
         self.agent_networks: Dict[str, AgentNetwork] = {}
@@ -121,7 +119,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         # Incorrectly flagged as Path Traversal 3, 7
         # See destination below ~ line 139, 154 for explanation.
         args = arg_parser.parse_args()
-        self.port = args.port
+        self.grpc_port = args.port
         self.http_port = args.http_port
         self.server_name = args.server_name
         self.server_name_for_logs = args.server_name_for_logs
@@ -162,16 +160,15 @@ class ServerMainLoop(ServerLoopCallbacks):
         metadata_set = metadata_set | set(self.usage_logger_metadata.split())
         metadata_str: str = " ".join(sorted(metadata_set))
 
-        self.server = GrpcAgentServer(self.port,
-                                      server_loop_callbacks=self,
-                                      network_storage_dict=self.network_storage_dict,
-                                      agent_networks=self.agent_networks,
-                                      server_status=self.server_status,
-                                      server_name=self.server_name,
-                                      server_name_for_logs=self.server_name_for_logs,
-                                      max_concurrent_requests=self.max_concurrent_requests,
-                                      request_limit=self.request_limit,
-                                      forwarded_request_metadata=metadata_str)
+        self.grpc_server = GrpcAgentServer(self.grpc_port,
+                                           server_loop_callbacks=self,
+                                           network_storage_dict=self.network_storage_dict,
+                                           server_status=self.server_status,
+                                           server_name=self.server_name,
+                                           server_name_for_logs=self.server_name_for_logs,
+                                           max_concurrent_requests=self.max_concurrent_requests,
+                                           request_limit=self.request_limit,
+                                           forwarded_request_metadata=metadata_str)
         self.grpc_server.prepare_for_serving()
 
         if self.manifest_update_period_seconds > 0:
@@ -196,10 +193,16 @@ class ServerMainLoop(ServerLoopCallbacks):
             self.request_limit,
             self.network_storage_dict,
             forwarded_request_metadata=metadata_str)
+
+        # Now - our servers (gRPC and http) are created and listen to updates of network_storage
+        # Perform the initial setup
+        public_storage: AgentNetworkStorage = self.network_storage_dict.get("public")
+        public_storage.setup_agent_networks(self.agent_networks)
+
+        # Start all services:
         http_server_thread = threading.Thread(target=http_server, args=(self.grpc_server,), daemon=True)
         http_server_thread.start()
 
-        time.sleep(90)
         self.grpc_server.serve()
 
     def loop_callback(self) -> bool:
