@@ -66,7 +66,10 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.grpc_server: GrpcAgentServer = None
         self.http_server: HttpServer = None
         self.manifest_files: List[str] = []
-        self.network_storage = AgentNetworkStorage()
+        # Dictionary is string key (describing scope) to AgentNetworkStorage grouping.
+        self.network_storage_dict: Dict[str, AgentNetworkStorage] = {
+            "public": AgentNetworkStorage()
+        }
         self.server_status: ServerStatus = ServerStatus()
 
     def parse_args(self):
@@ -159,23 +162,23 @@ class ServerMainLoop(ServerLoopCallbacks):
         metadata_set = metadata_set | set(self.usage_logger_metadata.split())
         metadata_str: str = " ".join(sorted(metadata_set))
 
-        self.grpc_server = GrpcAgentServer(self.port,
-                                           server_loop_callbacks=self,
-                                           network_storage=self.network_storage,
-                                           agent_networks=self.agent_networks,
-                                           server_status=self.server_status,
-                                           server_name=self.server_name,
-                                           server_name_for_logs=self.server_name_for_logs,
-                                           max_concurrent_requests=self.max_concurrent_requests,
-                                           request_limit=self.request_limit,
-                                           forwarded_request_metadata=metadata_str)
+        self.server = GrpcAgentServer(self.port,
+                                      server_loop_callbacks=self,
+                                      network_storage_dict=self.network_storage_dict,
+                                      agent_networks=self.agent_networks,
+                                      server_status=self.server_status,
+                                      server_name=self.server_name,
+                                      server_name_for_logs=self.server_name_for_logs,
+                                      max_concurrent_requests=self.max_concurrent_requests,
+                                      request_limit=self.request_limit,
+                                      forwarded_request_metadata=metadata_str)
         self.grpc_server.prepare_for_serving()
 
         if self.manifest_update_period_seconds > 0:
             manifest_file: str = self.manifest_files[0]
             updater: ManifestPeriodicUpdater =\
                 ManifestPeriodicUpdater(
-                    self.network_storage,
+                    self.network_storage_dict,
                     manifest_file,
                     self.manifest_update_period_seconds,
                     self.server_status)
@@ -191,7 +194,7 @@ class ServerMainLoop(ServerLoopCallbacks):
             self.http_port,
             self.service_openapi_spec_file,
             self.request_limit,
-            self.network_storage,
+            self.network_storage_dict,
             forwarded_request_metadata=metadata_str)
         http_server_thread = threading.Thread(target=http_server, args=(self.grpc_server,), daemon=True)
         http_server_thread.start()

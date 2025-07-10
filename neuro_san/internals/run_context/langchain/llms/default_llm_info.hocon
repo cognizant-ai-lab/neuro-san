@@ -549,6 +549,18 @@
         "max_output_tokens": 4096,      # ???
         "knowledge_cutoff": "unknown",
     },
+    "qwen3:8b": {
+        "class": "ollama",
+        "model_info_url": "https://ollama.com/library/qwen3",
+        "modalities": {
+            "input": [ "text" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 40960,
+        "max_output_tokens": 32768,
+        "knowledge_cutoff": "unknown",
+    },
 
     # NVIDIA models
 
@@ -746,6 +758,7 @@
                 "num_gpu": null,
                 "num_thread": null,
                 "num_predict": null,        # Will use max_tokens
+                "reasoning": null,          # Controls the reasoning/thinking mode for supported models. If None (Default), The model will use its default reasoning behavior.
                 "repeat_last_n": null,
                 "repeat_penalty": null,
                 "temperature": null,
