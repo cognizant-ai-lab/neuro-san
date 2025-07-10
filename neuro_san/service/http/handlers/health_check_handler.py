@@ -35,14 +35,14 @@ class HealthCheckHandler(RequestHandler):
     def initialize(self,
                    forwarded_request_metadata: List[str],
                    server_status: ServerStatus,
-                   request: str):
+                   op: str):
         """
         This method is called by Tornado framework to allow
         injecting service-specific data into local handler context.
         Here we use it to inject CORS headers if so configured.
         """
         self.logger = HttpLogger(forwarded_request_metadata)
-        if request == "ready":
+        if op == "ready":
             self.status = server_status.is_server_ready()
         else:
             self.status = server_status.is_server_live()

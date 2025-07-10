@@ -124,12 +124,12 @@ class HttpServer(AgentAuthorizer, AgentsUpdater):
         live_request_data: Dict[str, Any] = {
             "forwarded_request_metadata": self.forwarded_request_metadata,
             "server_status": self.server_status,
-            "request": "live"
+            "op": "live"
         }
         ready_request_data: Dict[str, Any] = {
             "forwarded_request_metadata": self.forwarded_request_metadata,
             "server_status": self.server_status,
-            "request": "ready"
+            "op": "ready"
         }
         handlers = []
         handlers.append(("/", HealthCheckHandler, ready_request_data))
@@ -175,7 +175,7 @@ class HttpServer(AgentAuthorizer, AgentsUpdater):
                 if agent_name not in agents:
                     self.remove_agent(agent_name)
 
-    def add_agent(self, agent_name: str):
+    def agent_added(self, agent_name: str):
         """
         Add agent to the map of known agents
         :param agent_name: name of an agent
@@ -195,12 +195,21 @@ class HttpServer(AgentAuthorizer, AgentsUpdater):
                 agent_server_logging)
         self.allowed_agents[agent_name] = agent_service_provider
 
-    def remove_agent(self, agent_name: str):
+    def agent_removed(self, agent_name: str):
         """
         Remove agent from the map of known agents
         :param agent_name: name of an agent
         """
         self.allowed_agents.pop(agent_name, None)
+
+    def agent_modified(self, agent_name: str):
+        """
+        Agent is being modified in the service scope.
+        :param agent_name: name of an agent
+        """
+        # Endpoints configuration has not changed,
+        # so nothing to do here, actually.
+        _ = agent_name
 
     def build_request_data(self) -> Dict[str, Any]:
         """

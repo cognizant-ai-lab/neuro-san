@@ -23,6 +23,7 @@ from neuro_san.api.grpc import concierge_pb2_grpc
 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
+from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.service.main_loop.server_status import ServerStatus
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.grpc.agent_servicer_to_server import AgentServicerToServer
@@ -43,7 +44,7 @@ DEFAULT_REQUEST_LIMIT: int = 1000 * 1000
 
 
 # pylint: disable=too-many-instance-attributes
-class GrpcAgentServer(AgentServer):
+class GrpcAgentServer(AgentServer, AgentStateListener):
     """
     Server implementation for the Agent gRPC Service.
     """
@@ -138,9 +139,9 @@ class GrpcAgentServer(AgentServer):
         agent_service_name: str = AgentServiceStub.prepare_service_name(agent_name)
         self.service_router.remove_service(agent_service_name)
 
-    def serve(self):
+    def prepare_for_serving(self):
         """
-        Start serving gRPC requests
+        Prepare server for running.
         """
         values = agent_pb2.DESCRIPTOR.services_by_name.values()
         self.server_lifetime = ServerLifetime(
@@ -179,6 +180,10 @@ class GrpcAgentServer(AgentServer):
             concierge_service,
             server)
 
+    def serve(self):
+        """
+        Start serving gRPC requests
+        """
         self.server_status.set_grpc_status(True)
         self.server_lifetime.run()
 
@@ -186,5 +191,6 @@ class GrpcAgentServer(AgentServer):
         """
         Stop the server.
         """
+        self.server_status.set_grpc_status(False)
         # pylint: disable=protected-access
         self.server_lifetime._stop_serving()
