@@ -12,7 +12,7 @@
 """
 See class comment for details
 """
-from neuro_san.service.generic.async_agent_service import AsyncAgentService
+from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 
 
 class AgentAuthorizer:
@@ -21,7 +21,7 @@ class AgentAuthorizer:
     of allowing to route incoming requests to an agent.
     """
 
-    def allow(self, agent_name) -> AsyncAgentService:
+    def allow(self, agent_name) -> AsyncAgentServiceProvider:
         """
         :param agent_name: name of an agent
         :return: instance of AsyncAgentService if routing requests is allowed for this agent;

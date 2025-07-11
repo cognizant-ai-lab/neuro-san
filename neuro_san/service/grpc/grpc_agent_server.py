@@ -12,7 +12,6 @@
 
 from typing import Dict
 from typing import List
-import threading
 
 import logging
 
@@ -22,9 +21,9 @@ from leaf_server_common.server.server_loop_callbacks import ServerLoopCallbacks
 from neuro_san.api.grpc import agent_pb2
 from neuro_san.api.grpc import concierge_pb2_grpc
 
-from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
+from neuro_san.service.main_loop.server_status import ServerStatus
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.grpc.agent_servicer_to_server import AgentServicerToServer
 from neuro_san.service.grpc.concierge_service import ConciergeService
@@ -53,7 +52,7 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
     def __init__(self, port: int,
                  server_loop_callbacks: ServerLoopCallbacks,
                  network_storage_dict: Dict[str, AgentNetworkStorage],
-                 agent_networks: Dict[str, AgentNetwork],
+                 server_status: ServerStatus,
                  server_name: str = DEFAULT_SERVER_NAME,
                  server_name_for_logs: str = DEFAULT_SERVER_NAME_FOR_LOGS,
                  max_concurrent_requests: int = DEFAULT_MAX_CONCURRENT_REQUESTS,
@@ -65,10 +64,10 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
         :param port: The integer port number for the service to listen on
         :param server_loop_callbacks: The ServerLoopCallbacks instance for
                 break out methods in main serving loop.
-        :param agent_networks: A dictionary of agent name to AgentNetwork to use for the session.
         :param network_storage_dict: A dictionary of string (descripting scope) to
                     AgentNetworkStorage instance which keeps all the AgentNetwork instances
                     of a particular grouping.
+        :param server_status: server status to register the state of gRPC server
         :param server_name: The name of the service
         :param server_name_for_logs: The name of the service for log files
         :param max_concurrent_requests: The maximum number of requests to handle at a time.
@@ -88,31 +87,22 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
 
         self.network_storage_dict: Dict[str, AgentNetworkStorage] = network_storage_dict
         # Below is now odd.
-        self.agent_networks: Dict[str, AgentNetwork] = agent_networks
         self.server_name: str = server_name
         self.server_name_for_logs: str = server_name_for_logs
         self.max_concurrent_requests: int = max_concurrent_requests
         self.request_limit: int = request_limit
+        self.server_status: ServerStatus = server_status
 
         self.server_lifetime = None
         self.security_cfg = None
         self.services: List[GrpcAgentService] = []
         self.service_router: DynamicAgentRouter = DynamicAgentRouter()
-        # Event to notify that we have started serving
-        self.notify_started: threading.Event = threading.Event()
-        self.logger.info("agent_networks found: %s", str(list(self.agent_networks.keys())))
 
     def get_services(self) -> List[GrpcAgentService]:
         """
         :return: A list of the AgentServices being served up by this instance
         """
         return self.services
-
-    def get_starting_event(self) -> threading.Event:
-        """
-        Get event signalling that server has started work.
-        """
-        return self.notify_started
 
     def agent_added(self, agent_name: str):
         """
@@ -147,9 +137,9 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
         agent_service_name: str = AgentServiceStub.prepare_service_name(agent_name)
         self.service_router.remove_service(agent_service_name)
 
-    def serve(self):
+    def prepare_for_serving(self):
         """
-        Start serving gRPC requests
+        Prepare server for running.
         """
         values = agent_pb2.DESCRIPTOR.services_by_name.values()
         self.server_lifetime = ServerLifetime(
@@ -174,9 +164,6 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
         public_storage: AgentNetworkStorage = self.network_storage_dict.get("public")
         public_storage.add_listener(self)
 
-        # DEF - It's possible this could move outside this class.
-        public_storage.setup_agent_networks(self.agent_networks)
-
         # Add DynamicAgentRouter instance as a generic RPC handler for our server:
         server.add_generic_rpc_handlers((self.service_router,))
 
@@ -189,12 +176,17 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
             concierge_service,
             server)
 
-        self.notify_started.set()
+    def serve(self):
+        """
+        Start serving gRPC requests
+        """
+        self.server_status.set_grpc_status(True)
         self.server_lifetime.run()
 
     def stop(self):
         """
         Stop the server.
         """
+        self.server_status.set_grpc_status(False)
         # pylint: disable=protected-access
         self.server_lifetime._stop_serving()
