@@ -35,14 +35,7 @@ from neuro_san.internals.run_context.langchain.util.api_key_error_check import A
 from neuro_san.internals.run_context.langchain.util.argument_validator import ArgumentValidator
 from neuro_san.internals.utils.resolver_util import ResolverUtil
 
-KEYS_TO_REMOVE_FOR_USER_CLASS = {
-    "class",
-    "error_formatter",
-    "error_fragments",
-    "max_execution_seconds",
-    "max_iterations",
-    "verbose"
-}
+KEYS_TO_REMOVE_FOR_USER_CLASS = {"class", "verbose"}
 
 
 class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
@@ -334,9 +327,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             type_of_class=BaseLanguageModel
         )
 
-        # Create a copy of the config, removing "class" and other Neuro-SAN-specific keys:
-        # "error_formatter", "error_fragments", "max_execution_seconds", "max_iterations", and "verbose".
-        # These keys are valid in the Neuro-SAN config but may not be accepted by the LLM constructor.
+        # Create a copy of the config, removing "class" and "verbose".
         # Note: "verbose" is valid for both Neuro-SAN and LangChain chat models, but when specified by the user,
         # it should only apply to Neuro-SAN (e.g. AgentExecutor) — not passed into the LLM constructor.
         user_config: Dict[str, Any] = {
