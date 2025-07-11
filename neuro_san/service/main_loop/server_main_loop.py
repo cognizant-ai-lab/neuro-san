@@ -33,7 +33,8 @@ from neuro_san.service.grpc.grpc_agent_server import DEFAULT_MAX_CONCURRENT_REQU
 from neuro_san.service.grpc.grpc_agent_server import DEFAULT_REQUEST_LIMIT
 from neuro_san.service.grpc.grpc_agent_server import GrpcAgentServer
 from neuro_san.service.grpc.grpc_agent_service import GrpcAgentService
-from neuro_san.service.http.server.http_sidecar import HttpSidecar
+from neuro_san.service.http.server.http_server import HttpServer
+from neuro_san.service.main_loop.server_status import ServerStatus
 from neuro_san.service.registries_watcher.periodic_updater.manifest_periodic_updater import ManifestPeriodicUpdater
 
 
@@ -47,7 +48,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         """
         Constructor
         """
-        self.port: int = 0
+        self.grpc_port: int = 0
         self.http_port: int = 0
 
         self.agent_networks: Dict[str, AgentNetwork] = {}
@@ -60,13 +61,14 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.usage_logger_metadata: str = ""
         self.service_openapi_spec_file: str = self._get_default_openapi_spec_path()
         self.manifest_update_period_seconds: int = 0
-        self.server: GrpcAgentServer = None
+        self.grpc_server: GrpcAgentServer = None
+        self.http_server: HttpServer = None
         self.manifest_files: List[str] = []
-
         # Dictionary is string key (describing scope) to AgentNetworkStorage grouping.
         self.network_storage_dict: Dict[str, AgentNetworkStorage] = {
             "public": AgentNetworkStorage()
         }
+        self.server_status: ServerStatus = None
 
     def parse_args(self):
         """
@@ -117,7 +119,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         # Incorrectly flagged as Path Traversal 3, 7
         # See destination below ~ line 139, 154 for explanation.
         args = arg_parser.parse_args()
-        self.port = args.port
+        self.grpc_port = args.port
         self.http_port = args.http_port
         self.server_name = args.server_name
         self.server_name_for_logs = args.server_name_for_logs
@@ -129,6 +131,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.usage_logger_metadata = args.usage_logger_metadata
         if not self.usage_logger_metadata:
             self.usage_logger_metadata = self.forwarded_request_metadata
+        self.server_status = ServerStatus(self.server_name)
         self.service_openapi_spec_file = args.openapi_service_spec_path
         self.manifest_update_period_seconds = args.manifest_update_period_seconds
 
@@ -158,34 +161,50 @@ class ServerMainLoop(ServerLoopCallbacks):
         metadata_set = metadata_set | set(self.usage_logger_metadata.split())
         metadata_str: str = " ".join(sorted(metadata_set))
 
-        self.server = GrpcAgentServer(self.port,
-                                      server_loop_callbacks=self,
-                                      network_storage_dict=self.network_storage_dict,
-                                      agent_networks=self.agent_networks,
-                                      server_name=self.server_name,
-                                      server_name_for_logs=self.server_name_for_logs,
-                                      max_concurrent_requests=self.max_concurrent_requests,
-                                      request_limit=self.request_limit,
-                                      forwarded_request_metadata=metadata_str)
+        self.grpc_server = GrpcAgentServer(self.grpc_port,
+                                           server_loop_callbacks=self,
+                                           network_storage_dict=self.network_storage_dict,
+                                           server_status=self.server_status,
+                                           server_name=self.server_name,
+                                           server_name_for_logs=self.server_name_for_logs,
+                                           max_concurrent_requests=self.max_concurrent_requests,
+                                           request_limit=self.request_limit,
+                                           forwarded_request_metadata=metadata_str)
+        self.grpc_server.prepare_for_serving()
 
         if self.manifest_update_period_seconds > 0:
             manifest_file: str = self.manifest_files[0]
             updater: ManifestPeriodicUpdater =\
-                ManifestPeriodicUpdater(self.network_storage_dict, manifest_file, self.manifest_update_period_seconds)
+                ManifestPeriodicUpdater(
+                    self.network_storage_dict,
+                    manifest_file,
+                    self.manifest_update_period_seconds,
+                    self.server_status)
             updater.start()
+        else:
+            # We don't use manifest updater,
+            # so set it to "ready" not to mess up overall status.
+            self.server_status.set_updater_status(True)
 
         # Start HTTP server side-car:
-        http_sidecar = HttpSidecar(
-            self.server.get_starting_event(),
+        http_server = HttpServer(
+            self.server_status,
             self.http_port,
             self.service_openapi_spec_file,
             self.request_limit,
             self.network_storage_dict,
             forwarded_request_metadata=metadata_str)
-        http_server_thread = threading.Thread(target=http_sidecar, args=(self.server,), daemon=True)
+
+        # Now - our servers (gRPC and http) are created and listen to updates of network_storage
+        # Perform the initial setup
+        public_storage: AgentNetworkStorage = self.network_storage_dict.get("public")
+        public_storage.setup_agent_networks(self.agent_networks)
+
+        # Start all services:
+        http_server_thread = threading.Thread(target=http_server, args=(self.grpc_server,), daemon=True)
         http_server_thread.start()
 
-        self.server.serve()
+        self.grpc_server.serve()
 
     def loop_callback(self) -> bool:
         """
@@ -194,7 +213,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         # Report back on service activity so the ServerLifetime that calls
         # this method can properly yield/sleep depending on how many requests
         # are in motion.
-        agent_services: List[GrpcAgentService] = self.server.get_services()
+        agent_services: List[GrpcAgentService] = self.grpc_server.get_services()
         for agent_service in agent_services:
             if agent_service.get_request_count() > 0:
                 return True
