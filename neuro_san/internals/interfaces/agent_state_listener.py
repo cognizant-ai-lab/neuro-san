@@ -9,6 +9,8 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
+from typing import Any
+
 
 class AgentStateListener:
     """
@@ -16,23 +18,26 @@ class AgentStateListener:
     when an agent is being added or removed from the service.
     """
 
-    def agent_added(self, agent_name: str):
+    def agent_added(self, agent_name: str, source: Any):
         """
         Agent is being added to the service.
         :param agent_name: name of an agent
+        :param source: The AgentNetworkStorage source of the message
         """
         raise NotImplementedError
 
-    def agent_modified(self, agent_name: str):
+    def agent_modified(self, agent_name: str, source: Any):
         """
         Existing agent has been modified in service scope.
         :param agent_name: name of an agent
+        :param source: The AgentNetworkStorage source of the message
         """
         raise NotImplementedError
 
-    def agent_removed(self, agent_name: str):
+    def agent_removed(self, agent_name: str, source: Any):
         """
         Agent is being removed from the service.
         :param agent_name: name of an agent
+        :param source: The AgentNetworkStorage source of the message
         """
         raise NotImplementedError
