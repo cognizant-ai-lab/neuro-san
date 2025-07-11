@@ -240,7 +240,7 @@ Set the `class` key to one of the values listed below, then specify the model us
 
 Set the `class` key to the full Python path of the desired LangChain-compatible chat model class in the format:
 
-```
+```hocon
 <langchain_package>.<module>.<ChatModelClass>
 ```
 
@@ -475,6 +475,7 @@ Some considerations might include:
 - Use of specially trained LLMs when subject matter expertise is required.
 - Use of securely sequestered LLMs when sensitive information is appropos to a single agent's chat stream.
 
+<!--- pyml disable-next-line no-duplicate-heading -->
 ### class
 
 Optional string specifying a Python class which implements the
