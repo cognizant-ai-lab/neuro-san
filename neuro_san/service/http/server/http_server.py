@@ -118,30 +118,30 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
         """
         Construct tornado HTTP "application" to run.
         """
-        request_data: Dict[str, Any] = self.build_request_data()
-        live_request_data: Dict[str, Any] = {
+        request_initialize_data: Dict[str, Any] = self.build_request_data()
+        live_request_initialize_data: Dict[str, Any] = {
             "forwarded_request_metadata": self.forwarded_request_metadata,
             "server_status": self.server_status,
             "op": "live"
         }
-        ready_request_data: Dict[str, Any] = {
+        ready_request_initialize_data: Dict[str, Any] = {
             "forwarded_request_metadata": self.forwarded_request_metadata,
             "server_status": self.server_status,
             "op": "ready"
         }
         handlers = []
-        handlers.append(("/", HealthCheckHandler, ready_request_data))
-        handlers.append(("/healthz", HealthCheckHandler, ready_request_data))
-        handlers.append(("/readyz", HealthCheckHandler, ready_request_data))
-        handlers.append(("/livez", HealthCheckHandler, live_request_data))
-        handlers.append(("/api/v1/list", ConciergeHandler, request_data))
-        handlers.append(("/api/v1/docs", OpenApiPublishHandler, request_data))
+        handlers.append(("/", HealthCheckHandler, ready_request_initialize_data))
+        handlers.append(("/healthz", HealthCheckHandler, ready_request_initialize_data))
+        handlers.append(("/readyz", HealthCheckHandler, ready_request_initialize_data))
+        handlers.append(("/livez", HealthCheckHandler, live_request_initialize_data))
+        handlers.append(("/api/v1/list", ConciergeHandler, request_initialize_data))
+        handlers.append(("/api/v1/docs", OpenApiPublishHandler, request_initialize_data))
 
         # Register templated request paths for agent API methods:
         # regexp format used here is that of Python Re standard library.
-        handlers.append((r"/api/v1/([^/]+)/function", FunctionHandler, request_data))
-        handlers.append((r"/api/v1/([^/]+)/connectivity", ConnectivityHandler, request_data))
-        handlers.append((r"/api/v1/([^/]+)/streaming_chat", StreamingChatHandler, request_data))
+        handlers.append((r"/api/v1/([^/]+)/function", FunctionHandler, request_initialize_data))
+        handlers.append((r"/api/v1/([^/]+)/connectivity", ConnectivityHandler, request_initialize_data))
+        handlers.append((r"/api/v1/([^/]+)/streaming_chat", StreamingChatHandler, request_initialize_data))
 
         return HttpServerApp(handlers, requests_limit, logger)
 

@@ -40,12 +40,18 @@ class HealthCheckHandler(RequestHandler):
         This method is called by Tornado framework to allow
         injecting service-specific data into local handler context.
         Here we use it to inject CORS headers if so configured.
+        :param forwarded_request_metadata: list of client metadata keys;
+        :param server_status: current server status to query;
+        :param op: requested healthcheck operation:
+                   "ready" for /readyz query
+                   "live" for /livez query
         """
         self.logger = HttpLogger(forwarded_request_metadata)
         if op == "ready":
             self.status = server_status.is_server_ready()
         else:
             self.status = server_status.is_server_live()
+        self.server_name = server_status.get_server_name()
 
         if os.environ.get("AGENT_ALLOW_CORS_HEADERS") is not None:
             self.set_header("Access-Control-Allow-Origin", "*")
@@ -61,7 +67,7 @@ class HealthCheckHandler(RequestHandler):
             if self.status:
                 versions: Dict[str, Any] = self.determine_versions()
                 result_dict: Dict[str, Any] = {
-                    "service": "neuro-san agents",
+                    "service": self.server_name,
                     "status": "ok",
                     "versions": versions
                 }

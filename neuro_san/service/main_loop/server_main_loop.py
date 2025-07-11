@@ -68,7 +68,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.network_storage_dict: Dict[str, AgentNetworkStorage] = {
             "public": AgentNetworkStorage()
         }
-        self.server_status: ServerStatus = ServerStatus()
+        self.server_status: ServerStatus = None
 
     def parse_args(self):
         """
@@ -131,6 +131,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.usage_logger_metadata = args.usage_logger_metadata
         if not self.usage_logger_metadata:
             self.usage_logger_metadata = self.forwarded_request_metadata
+        self.server_status = ServerStatus(self.server_name)
         self.service_openapi_spec_file = args.openapi_service_spec_path
         self.manifest_update_period_seconds = args.manifest_update_period_seconds
 

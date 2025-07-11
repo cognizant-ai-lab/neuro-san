@@ -16,10 +16,11 @@ class ServerStatus:
     primarily for interaction with external deployment environment.
     """
 
-    def __init__(self):
+    def __init__(self, server_name: str):
         """
         Constructor.
         """
+        self.server_name: str = server_name
         self.grpc_service_ready: bool = False
         self.http_service_ready: bool = False
         self.updater_ready: bool = False
@@ -55,3 +56,9 @@ class ServerStatus:
         """
         # If somebody calls this, we are at least alive
         return self.grpc_service_ready and self.http_service_ready and self.updater_ready
+
+    def get_server_name(self) -> str:
+        """
+        Return server name
+        """
+        return self.server_name
