@@ -23,6 +23,7 @@ import threading
 from tornado.ioloop import IOLoop
 
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
+from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.network_providers.single_agent_network_provider import SingleAgentNetworkProvider
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
@@ -148,15 +149,14 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
     def allow(self, agent_name) -> AsyncAgentServiceProvider:
         return self.allowed_agents.get(agent_name, None)
 
-    def agent_added(self, agent_name: str, source: Any):
+    def agent_added(self, agent_name: str, source: AgentStorageSource):
         """
         Add agent to the map of known agents
         :param agent_name: name of an agent
-        :param source: The AgentNetworkStorage source of the message
+        :param source: The AgentStorageSource source of the message
         """
-        network_storage: AgentNetworkStorage = source
-        agent_network_provider: SingleAgentNetworkProvider = \
-            network_storage.get_agent_network_provider(agent_name)
+        agent_network_provider: SingleAgentNetworkProvider = source.get_agent_network_provider(agent_name)
+
         # Convert back to a single string as required by constructor
         request_metadata_str: str = " ".join(self.forwarded_request_metadata)
         agent_server_logging: AgentServerLogging = \
@@ -171,20 +171,20 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
         self.allowed_agents[agent_name] = agent_service_provider
         self.logger.info({}, "Added agent %s to allowed http service list", agent_name)
 
-    def agent_removed(self, agent_name: str, source: Any):
+    def agent_removed(self, agent_name: str, source: AgentStorageSource):
         """
         Remove agent from the map of known agents
         :param agent_name: name of an agent
-        :param source: The AgentNetworkStorage source of the message
+        :param source: The AgentStorageSource source of the message
         """
         self.allowed_agents.pop(agent_name, None)
         self.logger.info({}, "Removed agent %s from allowed http service list", agent_name)
 
-    def agent_modified(self, agent_name: str, source: Any):
+    def agent_modified(self, agent_name: str, source: AgentStorageSource):
         """
         Agent is being modified in the service scope.
         :param agent_name: name of an agent
-        :param source: The AgentNetworkStorage source of the message
+        :param source: The AgentStorageSource source of the message
         """
         # Endpoints configuration has not changed,
         # so nothing to do here, actually.
