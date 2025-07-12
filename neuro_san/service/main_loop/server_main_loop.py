@@ -119,9 +119,16 @@ class ServerMainLoop(ServerLoopCallbacks):
         # Incorrectly flagged as Path Traversal 3, 7
         # See destination below ~ line 139, 154 for explanation.
         args = arg_parser.parse_args()
-        self.grpc_port = args.port
-        self.http_port = args.http_port
         self.server_name = args.server_name
+        self.server_status = ServerStatus(self.server_name)
+
+        self.grpc_port = args.port
+        if self.grpc_port == 0:
+            self.server_status.grpc_service.set_requested(False)
+        self.http_port = args.http_port
+        if self.http_port == 0:
+            self.server_status.http_service.set_requested(False)
+
         self.server_name_for_logs = args.server_name_for_logs
         self.max_concurrent_requests = args.max_concurrent_requests
         self.request_limit = args.request_limit
@@ -131,9 +138,11 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.usage_logger_metadata = args.usage_logger_metadata
         if not self.usage_logger_metadata:
             self.usage_logger_metadata = self.forwarded_request_metadata
-        self.server_status = ServerStatus(self.server_name)
         self.service_openapi_spec_file = args.openapi_service_spec_path
         self.manifest_update_period_seconds = args.manifest_update_period_seconds
+        if self.manifest_update_period_seconds <= 0:
+            # Periodic manifest updater is disabled:
+            self.server_status.updater.set_requested(False)
 
         manifest_restorer = RegistryManifestRestorer()
         manifest_agent_networks: Dict[str, AgentNetwork] = manifest_restorer.restore()
@@ -155,24 +164,32 @@ class ServerMainLoop(ServerLoopCallbacks):
         """
         self.parse_args()
 
+        # Make for easy running from the neuro-san repo
+        if os.environ.get("AGENT_SERVICE_LOG_JSON") is None:
+            # Use the log file that is local to the repo
+            file_of_class = FileOfClass(__file__, path_to_basis="../../deploy")
+            os.environ["AGENT_SERVICE_LOG_JSON"] = file_of_class.get_file_in_basis("logging.json")
+
         # Construct forwarded metadata list as a union of
         # self.forwarded_request_metadata and self.usage_logger_metadata
         metadata_set = set(self.forwarded_request_metadata.split())
         metadata_set = metadata_set | set(self.usage_logger_metadata.split())
         metadata_str: str = " ".join(sorted(metadata_set))
 
-        self.grpc_server = GrpcAgentServer(self.grpc_port,
-                                           server_loop_callbacks=self,
-                                           network_storage_dict=self.network_storage_dict,
-                                           server_status=self.server_status,
-                                           server_name=self.server_name,
-                                           server_name_for_logs=self.server_name_for_logs,
-                                           max_concurrent_requests=self.max_concurrent_requests,
-                                           request_limit=self.request_limit,
-                                           forwarded_request_metadata=metadata_str)
-        self.grpc_server.prepare_for_serving()
+        if self.server_status.grpc_service.is_requested():
+            self.grpc_server = GrpcAgentServer(
+                self.grpc_port,
+                server_loop_callbacks=self,
+                network_storage_dict=self.network_storage_dict,
+                server_status=self.server_status,
+                server_name=self.server_name,
+                server_name_for_logs=self.server_name_for_logs,
+                max_concurrent_requests=self.max_concurrent_requests,
+                request_limit=self.request_limit,
+                forwarded_request_metadata=metadata_str)
+            self.grpc_server.prepare_for_serving()
 
-        if self.manifest_update_period_seconds > 0:
+        if self.server_status.updater.is_requested():
             manifest_file: str = self.manifest_files[0]
             updater: ManifestPeriodicUpdater =\
                 ManifestPeriodicUpdater(
@@ -181,19 +198,16 @@ class ServerMainLoop(ServerLoopCallbacks):
                     self.manifest_update_period_seconds,
                     self.server_status)
             updater.start()
-        else:
-            # We don't use manifest updater,
-            # so set it to "ready" not to mess up overall status.
-            self.server_status.set_updater_status(True)
 
-        # Start HTTP server side-car:
-        http_server = HttpServer(
-            self.server_status,
-            self.http_port,
-            self.service_openapi_spec_file,
-            self.request_limit,
-            self.network_storage_dict,
-            forwarded_request_metadata=metadata_str)
+        if self.server_status.http_service.is_requested():
+            # Create HTTP server;
+            self.http_server = HttpServer(
+                self.server_status,
+                self.http_port,
+                self.service_openapi_spec_file,
+                self.request_limit,
+                self.network_storage_dict,
+                forwarded_request_metadata=metadata_str)
 
         # Now - our servers (gRPC and http) are created and listen to updates of network_storage
         # Perform the initial setup
@@ -201,10 +215,16 @@ class ServerMainLoop(ServerLoopCallbacks):
         public_storage.setup_agent_networks(self.agent_networks)
 
         # Start all services:
-        http_server_thread = threading.Thread(target=http_server, args=(self.grpc_server,), daemon=True)
-        http_server_thread.start()
+        http_server_thread = None
+        if self.server_status.http_service.is_requested():
+            http_server_thread = threading.Thread(target=self.http_server, args=(self.grpc_server,), daemon=True)
+            http_server_thread.start()
 
-        self.grpc_server.serve()
+        if self.server_status.grpc_service.is_requested():
+            self.grpc_server.serve()
+
+        if http_server_thread is not None:
+            http_server_thread.join()
 
     def loop_callback(self) -> bool:
         """
