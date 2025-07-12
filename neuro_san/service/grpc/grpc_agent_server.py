@@ -184,7 +184,7 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
         """
         Start serving gRPC requests
         """
-        self.server_status.set_grpc_status(True)
+        self.server_status.grpc_service.set_status(True)
         self.server_lifetime.run()
 
     def stop(self):
