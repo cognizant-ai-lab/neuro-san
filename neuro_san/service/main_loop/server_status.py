@@ -10,6 +10,9 @@
 #
 # END COPYRIGHT
 
+from neuro_san.service.main_loop.service_status import ServiceStatus
+
+
 class ServerStatus:
     """
     Class for registering and reporting overall status of the server,
@@ -21,27 +24,9 @@ class ServerStatus:
         Constructor.
         """
         self.server_name: str = server_name
-        self.grpc_service_ready: bool = False
-        self.http_service_ready: bool = False
-        self.updater_ready: bool = False
-
-    def set_grpc_status(self, status: bool):
-        """
-        Set the status of gRPC service
-        """
-        self.grpc_service_ready = status
-
-    def set_http_status(self, status: bool):
-        """
-        Set the status of http service
-        """
-        self.http_service_ready = status
-
-    def set_updater_status(self, status: bool):
-        """
-        Set the status of dynamic agents registry updater
-        """
-        self.updater_ready = status
+        self.grpc_service: ServiceStatus = ServiceStatus("gRPC")
+        self.http_service: ServiceStatus = ServiceStatus("http")
+        self.updater: ServiceStatus = ServiceStatus("updater")
 
     def is_server_live(self) -> bool:
         """
@@ -54,8 +39,10 @@ class ServerStatus:
         """
         Return "ready" status for the server
         """
-        # If somebody calls this, we are at least alive
-        return self.grpc_service_ready and self.http_service_ready and self.updater_ready
+        return \
+            (not self.grpc_service.is_requested() or self.grpc_service.is_ready()) and \
+            (not self.http_service.is_requested() or self.http_service.is_ready()) and \
+            (not self.updater.is_requested() or self.updater.is_ready())
 
     def get_server_name(self) -> str:
         """

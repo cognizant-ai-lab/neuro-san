@@ -106,7 +106,7 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
 
         self.logger.debug({}, "Serving agents: %s", repr(self.allowed_agents.keys()))
         app.listen(self.http_port)
-        self.server_status.set_http_status(True)
+        self.server_status.http_service.set_status(True)
         self.logger.info({}, "HTTP server is running on port %d", self.http_port)
         self.logger.info({}, "HTTP server is shutting down after %d requests", self.requests_limit)
 
