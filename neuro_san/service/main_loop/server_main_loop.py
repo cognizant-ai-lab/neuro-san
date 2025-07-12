@@ -21,6 +21,7 @@ import threading
 from argparse import ArgumentParser
 
 from leaf_server_common.server.server_loop_callbacks import ServerLoopCallbacks
+from leaf_server_common.logging.logging_setup import setup_logging
 
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
@@ -190,6 +191,12 @@ class ServerMainLoop(ServerLoopCallbacks):
             self.grpc_server.prepare_for_serving()
 
         if self.server_status.updater.is_requested():
+            if not self.server_status.grpc_service.is_requested():
+                current_dir: str = os.path.dirname(os.path.abspath(__file__))
+                setup_logging(self.server_status.updater.get_service_name(),
+                              current_dir,
+                              'AGENT_SERVICE_LOG_JSON',
+                              'AGENT_SERVICE_LOG_LEVEL')
             manifest_file: str = self.manifest_files[0]
             updater: ManifestPeriodicUpdater =\
                 ManifestPeriodicUpdater(
