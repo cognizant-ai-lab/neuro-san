@@ -208,7 +208,9 @@ class AsyncAgentService:
 
         # Prepare
         factory = ExternalAgentSessionFactory(use_direct=False)
-        invocation_context = SessionInvocationContext(factory, self.llm_factory, self.toolbox_factory, metadata)
+        invocation_context = SessionInvocationContext(factory, self.llm_factory,
+                                                      self.toolbox_factory, metadata,
+                                                      originates_from_async=True)
         invocation_context.start()
 
         # Set up logging inside async thread

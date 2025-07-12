@@ -35,10 +35,12 @@ class SessionInvocationContext(InvocationContext):
     service call or library call.
     """
 
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self, async_session_factory: AsyncAgentSessionFactory,
                  llm_factory: ContextTypeLlmFactory,
                  toolbox_factory: ContextTypeToolboxFactory = None,
-                 metadata: Dict[str, str] = None):
+                 metadata: Dict[str, str] = None,
+                 originates_from_async: bool = False):
         """
         Constructor
 
@@ -48,6 +50,9 @@ class SessionInvocationContext(InvocationContext):
         :param metadata: A grpc metadata of key/value pairs to be inserted into
                          the header. Default is None. Preferred format is a
                          dictionary of string keys to string values.
+        :param origininates_from_async: Optional boolean that tells us if we are
+                        being used from within an async environment already.
+                        This effects close() behavior.
         """
 
         self.async_session_factory: AsyncAgentSessionFactory = async_session_factory
@@ -60,6 +65,7 @@ class SessionInvocationContext(InvocationContext):
         self.request_reporting: Dict[str, Any] = {}
         self.llm_factory: ContextTypeLlmFactory = llm_factory
         self.toolbox_factory: ContextTypeToolboxFactory = toolbox_factory
+        self.originates_from_async: bool = originates_from_async
 
     def start(self):
         """
@@ -119,7 +125,8 @@ class SessionInvocationContext(InvocationContext):
         Release resources owned by this context
         """
         if self.asyncio_executor is not None:
-            self.asyncio_executor.shutdown()
+            if not self.originates_from_async:
+                self.asyncio_executor.shutdown()
             self.asyncio_executor = None
         if self.queue is not None:
             self.queue.close()
