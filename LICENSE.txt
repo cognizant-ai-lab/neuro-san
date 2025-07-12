@@ -2,6 +2,7 @@ License
 The following license governs the use of neuro-san SDK Software in academic
 and educational environments. Commercial use requires a commercial license from
 Cognizant Technology Solutions Corp, www.cognizant.com.
+Contact NeuroSanLicensing@cognizant.com to enquire about commercial licensing.
 
 ACADEMIC PUBLIC LICENSE
 Written by Andras Varga (license text is in public domain)
