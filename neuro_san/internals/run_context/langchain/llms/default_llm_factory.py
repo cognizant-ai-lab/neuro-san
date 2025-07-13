@@ -13,6 +13,7 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Set
 from typing import Type
 
 import os
@@ -35,7 +36,7 @@ from neuro_san.internals.run_context.langchain.util.api_key_error_check import A
 from neuro_san.internals.run_context.langchain.util.argument_validator import ArgumentValidator
 from neuro_san.internals.utils.resolver_util import ResolverUtil
 
-KEYS_TO_REMOVE_FOR_USER_CLASS = {"class", "verbose"}
+KEYS_TO_REMOVE_FOR_USER_CLASS: Set = {"class", "verbose"}
 
 
 class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
@@ -330,10 +331,11 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         # Create a copy of the config, removing "class" and "verbose".
         # Note: "verbose" is valid for both Neuro-SAN and LangChain chat models, but when specified by the user,
         # it should only apply to Neuro-SAN (e.g. AgentExecutor) — not passed into the LLM constructor.
-        user_config: Dict[str, Any] = {
-           key: value for key, value in config.items()
-           if key not in KEYS_TO_REMOVE_FOR_USER_CLASS
-        }
+        user_config: Dict[str, Any] = {}
+        for llm_config_key, llm_config_value in config.items():
+            if llm_config_key not in KEYS_TO_REMOVE_FOR_USER_CLASS:
+                user_config[llm_config_key] = llm_config_value
+
         # Add callbacks
         user_config["callbacks"] = callbacks
 
