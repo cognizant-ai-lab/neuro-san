@@ -22,6 +22,7 @@ from neuro_san.api.grpc import agent_pb2
 from neuro_san.api.grpc import concierge_pb2_grpc
 
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
+from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.main_loop.server_status import ServerStatus
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
@@ -104,15 +105,15 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
         """
         return self.services
 
-    def agent_added(self, agent_name: str):
+    def agent_added(self, agent_name: str, source: AgentStorageSource):
         """
         Agent is being added to the service.
         :param agent_name: name of an agent
+        :param source: The AgentStorageSource source of the message
         """
-        public_storage: AgentNetworkStorage = self.network_storage_dict.get("public")
         service = GrpcAgentService(self.server_lifetime, self.security_cfg,
                                    agent_name,
-                                   public_storage.get_agent_network_provider(agent_name),
+                                   source.get_agent_network_provider(agent_name),
                                    self.server_logging)
         self.services.append(service)
         servicer_to_server = AgentServicerToServer(service)
@@ -120,19 +121,21 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
         agent_service_name: str = AgentServiceStub.prepare_service_name(agent_name)
         self.service_router.add_service(agent_service_name, agent_rpc_handlers)
 
-    def agent_modified(self, agent_name: str):
+    def agent_modified(self, agent_name: str, source: AgentStorageSource):
         """
         Agent is being modified in the service scope.
         :param agent_name: name of an agent
+        :param source: The AgentStorageSource source of the message
         """
         # Endpoints configuration has not changed,
         # so nothing to do here, actually.
         _ = agent_name
 
-    def agent_removed(self, agent_name: str):
+    def agent_removed(self, agent_name: str, source: AgentStorageSource):
         """
         Agent is being removed from the service.
         :param agent_name: name of an agent
+        :param source: The AgentStorageSource source of the message
         """
         agent_service_name: str = AgentServiceStub.prepare_service_name(agent_name)
         self.service_router.remove_service(agent_service_name)
@@ -162,7 +165,8 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
         # Add listener to handle adding per-agent gRPC services
         # to our dynamic router:
         public_storage: AgentNetworkStorage = self.network_storage_dict.get("public")
-        public_storage.add_listener(self)
+        for network_storage in self.network_storage_dict.values():
+            network_storage.add_listener(self)
 
         # Add DynamicAgentRouter instance as a generic RPC handler for our server:
         server.add_generic_rpc_handlers((self.service_router,))
