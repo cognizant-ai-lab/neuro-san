@@ -36,7 +36,7 @@ from neuro_san.internals.run_context.langchain.util.api_key_error_check import A
 from neuro_san.internals.run_context.langchain.util.argument_validator import ArgumentValidator
 from neuro_san.internals.utils.resolver_util import ResolverUtil
 
-KEYS_TO_REMOVE_FOR_USER_CLASS: Set = {"class", "verbose"}
+KEYS_TO_REMOVE_FOR_USER_CLASS: Set[str] = {"class", "verbose"}
 
 
 class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
