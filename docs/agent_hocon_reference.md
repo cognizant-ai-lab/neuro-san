@@ -236,7 +236,8 @@ Set the `class` key to one of the values listed below, then specify the model us
 | Ollma         | ollama        |
 | OpenAI        | openai        |
 
-You may only provide parameters that are explicitly defined for that provider's class under the `classes.<class>.args` section of  
+You may only provide parameters that are explicitly defined for that provider's class under the
+`classes.<class>.args` section of  
 [`default_llm_info.hocon`](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon).  
 Unsupported parameters will be ignored
 
