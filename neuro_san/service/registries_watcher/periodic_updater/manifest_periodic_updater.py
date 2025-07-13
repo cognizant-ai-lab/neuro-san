@@ -66,7 +66,7 @@ class ManifestPeriodicUpdater:
             # We should not run at all.
             return
         while self.go_run:
-            self.server_status.set_updater_status(True)
+            self.server_status.updater.set_status(True)
             time.sleep(self.update_period_seconds)
             # Check events that may have been triggered in target registry:
             modified, added, deleted = self.observer.reset_event_counters()

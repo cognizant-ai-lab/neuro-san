@@ -118,7 +118,7 @@ class WrappedUsageLogger(UsageLogger):
         if keys_string is None or len(keys_string) == 0:
             return minimized
 
-        keys: List[str] = keys_string.split[" "]
+        keys: List[str] = keys_string.split(" ")
         for key in keys:
             if key is None or len(key) == 0:
                 # Skip any empty key split from the list. Allows for multi-spaces.
