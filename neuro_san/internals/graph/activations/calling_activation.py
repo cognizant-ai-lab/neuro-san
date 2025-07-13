@@ -85,8 +85,6 @@ class CallingActivation(AbstractCallableActivation, ToolCaller):
         overlayer = DictionaryOverlay()
         llm_config = agent_network_config.get("llm_config", empty)
         llm_config = overlayer.overlay(llm_config, spec_llm_config)
-        if len(llm_config.keys()) == 0:
-            llm_config = None
 
         run_context_config: Dict[str, Any] = {
             "context_type": agent_network_config.get("context_type"),
