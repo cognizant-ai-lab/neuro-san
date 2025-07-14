@@ -86,7 +86,7 @@ class StorageWatcher(Startable):
         """
         Start running periodic manifest updater.
         """
-        self.logger.info("Starting watcher updater for %s with %d seconds period",
+        self.logger.info("Starting storage watcher for %s with %d seconds period",
                          self.manifest_path, self.update_period_seconds)
 
         for storage_updater in self.storage_updaters:
