@@ -17,7 +17,7 @@ import threading
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
-from neuro_san.service.watcher.registries.event_registryobserver import EventRegistryObserver
+from neuro_san.service.watcher.registries.event_registry_observer import EventRegistryObserver
 from neuro_san.service.watcher.registries.polling_registry_observer import PollingRegistryObserver
 from neuro_san.service.watcher.registries.registry_observer import RegistryObserver
 from neuro_san.service.main_loop.server_status import ServerStatus
