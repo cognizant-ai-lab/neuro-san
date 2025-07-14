@@ -14,7 +14,7 @@ from typing import Tuple
 from pathlib import Path
 from watchdog.observers.polling import PollingObserver
 
-from neuro_san.service.registries_watcher.periodic_updater.registry_change_handler import RegistryChangeHandler
+from neuro_san.service.watcher.registries.registry_change_handler import RegistryChangeHandler
 
 
 class RegistryPollingObserver:

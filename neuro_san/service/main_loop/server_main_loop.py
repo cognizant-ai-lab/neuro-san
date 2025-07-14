@@ -36,7 +36,7 @@ from neuro_san.service.grpc.grpc_agent_server import GrpcAgentServer
 from neuro_san.service.grpc.grpc_agent_service import GrpcAgentService
 from neuro_san.service.http.server.http_server import HttpServer
 from neuro_san.service.main_loop.server_status import ServerStatus
-from neuro_san.service.registries_watcher.periodic_updater.manifest_periodic_updater import ManifestPeriodicUpdater
+from neuro_san.service.watcher.updater.storage_updater import StorageUpdater
 
 
 # pylint: disable=too-many-instance-attributes
@@ -198,8 +198,7 @@ class ServerMainLoop(ServerLoopCallbacks):
                               'AGENT_SERVICE_LOG_JSON',
                               'AGENT_SERVICE_LOG_LEVEL')
             manifest_file: str = self.manifest_files[0]
-            updater: ManifestPeriodicUpdater =\
-                ManifestPeriodicUpdater(
+            updater: StorageUpdater = StorageUpdater(
                     self.network_storage_dict,
                     manifest_file,
                     self.manifest_update_period_seconds,
