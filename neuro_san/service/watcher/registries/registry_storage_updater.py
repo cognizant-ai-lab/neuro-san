@@ -17,7 +17,7 @@ import logging
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
-from neuro_san.service.updater.interfaces.storage_updater import StorageUpdater
+from neuro_san.service.watcher.interfaces.storage_updater import StorageUpdater
 
 
 class RegistryStorageUpdater(StorageUpdater):
