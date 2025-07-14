@@ -17,15 +17,16 @@ import threading
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
-from neuro_san.service.registries_watcher.periodic_updater.registry_event_observer import RegistryEventObserver
-from neuro_san.service.registries_watcher.periodic_updater.registry_polling_observer import RegistryPollingObserver
+from neuro_san.service.watcher.registries.registry_event_observer import RegistryEventObserver
+from neuro_san.service.watcher.registries.registry_polling_observer import RegistryPollingObserver
 from neuro_san.service.main_loop.server_status import ServerStatus
 
 
-class ManifestPeriodicUpdater:
+class StorageUpdater:
     """
-    Class implementing periodic manifest directory updates
-    by watching agent files and manifest file itself.
+    Class implementing periodic server updates
+    by watching agent files and manifest file itself
+    and other changes to AgentNetworkStorage instances.
     """
     # pylint: disable=too-many-instance-attributes
     use_polling: bool = True
