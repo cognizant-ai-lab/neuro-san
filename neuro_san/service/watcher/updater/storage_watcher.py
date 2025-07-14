@@ -18,11 +18,12 @@ import threading
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.main_loop.server_status import ServerStatus
 from neuro_san.service.watcher.interfaces.startable import Startable
+from neuro_san.service.watcher.interfaces.storage_updater import StorageUpdater
 from neuro_san.service.watcher.registries.registry_storage_updater import RegistryStorageUpdater
 
 
 # pylint: disable=too-many-instance-attributes
-class StorageUpdater(Startable):
+class StorageWatcher(Startable):
     """
     Class implementing periodic server updates
     by watching agent files and manifest file itself
@@ -56,7 +57,7 @@ class StorageUpdater(Startable):
         ]
 
         self.server_status: ServerStatus = server_status
-        self.go_run: bool = True
+        self.keep_running: bool = True
 
     def _run(self):
         """
@@ -66,7 +67,7 @@ class StorageUpdater(Startable):
             # We should not run at all.
             return
 
-        while self.go_run:
+        while self.keep_running:
             self.server_status.updater.set_status(True)
             time.sleep(self.update_period_seconds)
             for storage_updater in self.storage_updaters:
@@ -85,7 +86,7 @@ class StorageUpdater(Startable):
         """
         Start running periodic manifest updater.
         """
-        self.logger.info("Starting manifest updater for %s with %d seconds period",
+        self.logger.info("Starting watcher updater for %s with %d seconds period",
                          self.manifest_path, self.update_period_seconds)
 
         for storage_updater in self.storage_updaters:
