@@ -66,24 +66,33 @@ class StorageUpdater:
         if self.update_period_seconds <= 0:
             # We should not run at all.
             return
+
         while self.go_run:
             self.server_status.updater.set_status(True)
             time.sleep(self.update_period_seconds)
-            # Check events that may have been triggered in target registry:
-            modified, added, deleted = self.observer.reset_event_counters()
-            if modified == added == deleted == 0:
-                # Nothing happened - go on observing
-                continue
-            # Some events were triggered - reload manifest file
-            self.logger.info("Observed events: modified %d, added %d, deleted %d",
-                             modified, added, deleted)
-            self.logger.info("Updating manifest file: %s", self.manifest_path)
+            self.check_file_observer()
+            # We will eventually have more here
 
-            agent_networks: Dict[str, AgentNetwork] = \
-                RegistryManifestRestorer().restore(self.manifest_path)
+    def check_file_observer(self):
+        """
+        Take a look at the file system observer and perform any updates
+        to relevant AgentNetworkStorage from changes there.
+        """
+        # Check events that may have been triggered in target registry:
+        modified, added, deleted = self.observer.reset_event_counters()
+        if modified == added == deleted == 0:
+            # Nothing happened - go on observing
+            return
 
-            public_storage: AgentNetworkStorage = self.network_storage_dict.get("public")
-            public_storage.setup_agent_networks(agent_networks)
+        # Some events were triggered - reload manifest file
+        self.logger.info("Observed events: modified %d, added %d, deleted %d",
+                         modified, added, deleted)
+        self.logger.info("Updating manifest file: %s", self.manifest_path)
+
+        agent_networks: Dict[str, AgentNetwork] = RegistryManifestRestorer().restore(self.manifest_path)
+
+        public_storage: AgentNetworkStorage = self.network_storage_dict.get("public")
+        public_storage.setup_agent_networks(agent_networks)
 
     def compute_polling_interval(self, update_period_seconds: int) -> int:
         """
