@@ -21,3 +21,9 @@ class Startable:
         Perform start up.
         """
         raise NotImplementedError
+
+    def stop(self):
+        """
+        Perform steps to stop/shut-down
+        By default this does nothing
+        """
