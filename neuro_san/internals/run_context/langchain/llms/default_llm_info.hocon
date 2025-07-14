@@ -370,9 +370,44 @@
         # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
         "capabilities": [ "tools" ],
         "context_window_size": 200000,
-        "max_output_tokens": 8192,
+        "max_output_tokens": 64000,
         "knowledge_cutoff": "11/2024",
     },
+
+    "claude-sonnet-4-0": {
+        "use_model_name": "claude-sonnet-4-20250514"
+    },
+    "claude-sonnet-4-20250514": {
+        "class": "anthropic",
+        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
+        "capabilities": [ "tools" ],
+        "context_window_size": 200000,
+        "max_output_tokens": 64000,
+        "knowledge_cutoff": "03/2025",
+    },
+
+    "claude-opus-4-0": {
+        "use_model_name": "claude-opus-4-20250514"
+    },
+    "claude-opus-4-20250514": {
+        "class": "anthropic",
+        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
+        "capabilities": [ "tools" ],
+        "context_window_size": 200000,
+        "max_output_tokens": 32000,
+        "knowledge_cutoff": "03/2025",
+    },
+
 
     # Ollama models
     # See https://ollama.com/search?c=tools for latest in tool-supporting Ollama models
@@ -512,6 +547,18 @@
         "capabilities": [ "tools" ],
         "context_window_size": 128000,  # ???
         "max_output_tokens": 4096,      # ???
+        "knowledge_cutoff": "unknown",
+    },
+    "qwen3:8b": {
+        "class": "ollama",
+        "model_info_url": "https://ollama.com/library/qwen3",
+        "modalities": {
+            "input": [ "text" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 40960,
+        "max_output_tokens": 32768,
         "knowledge_cutoff": "unknown",
     },
 
@@ -716,7 +763,7 @@
                 "num_gpu": null,
                 "num_thread": null,
                 "num_predict": null,        # Will use max_tokens
-                "reasoning": null,
+                "reasoning": null,          # Controls the reasoning/thinking mode for supported models. If None (Default), The model will use its default reasoning behavior.
                 "repeat_last_n": null,
                 "repeat_penalty": null,
                 "temperature": null,

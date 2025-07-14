@@ -16,6 +16,7 @@ from typing import Any
 from typing import Dict
 
 from neuro_san.interfaces.concierge_session import ConciergeSession
+from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
 from neuro_san.session.direct_concierge_session import DirectConciergeSession
 
@@ -31,12 +32,13 @@ class ConciergeHandler(BaseRequestHandler):
         """
         metadata: Dict[str, Any] = self.get_metadata()
         self.application.start_client_request(metadata, "/api/v1/list")
+        public_storage: AgentNetworkStorage = self.network_storage_dict.get("public")
         try:
             data: Dict[str, Any] = {}
-            session: ConciergeSession = DirectConciergeSession(metadata=metadata)
+            session: ConciergeSession = DirectConciergeSession(public_storage, metadata=metadata)
             result_dict: Dict[str, Any] = session.list(data)
 
-            # Return gRPC response to the HTTP client
+            # Return response to the HTTP client
             self.set_header("Content-Type", "application/json")
             self.write(result_dict)
 

@@ -1,4 +1,3 @@
-
 # Copyright (C) 2023-2025 Cognizant Digital Business, Evolutionary AI.
 # All Rights Reserved.
 # Issued under the Academic Public License.
@@ -9,23 +8,18 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
-"""
-See class comment for details
-"""
-from typing import Any
-from typing import Dict
+
+from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 
 
-class AgentsUpdater:
+class AgentStorageSource:
     """
-    Abstract interface for updating current collection of agents
-    being served.
+    Interface onto AgentNetworkStorage so that there is not a tangle with the service side.
     """
 
-    def update_agents(self, metadata: Dict[str, Any]):
+    def get_agent_network_provider(self, agent_name: str) -> AgentNetworkProvider:
         """
-        Update list of agents for which serving is allowed.
-        :param metadata: metadata to be used for logging if necessary.
-        :return: nothing
+        Get AgentNetworkProvider for a specific agent
+        :param agent_name: name of an agent
         """
         raise NotImplementedError

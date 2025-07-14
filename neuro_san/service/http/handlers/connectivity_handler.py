@@ -29,15 +29,8 @@ class ConnectivityHandler(BaseRequestHandler):
         Implementation of GET request handler for "connectivity" API call.
         """
         metadata: Dict[str, Any] = self.get_metadata()
-        update_done: bool = await self.update_agents(metadata=metadata)
-        if not update_done:
-            return
-
-        service: AsyncAgentService = self.agent_policy.allow(agent_name)
+        service: AsyncAgentService = await self.get_service(agent_name, metadata)
         if service is None:
-            self.set_status(404)
-            self.logger.error({}, "error: Invalid request path %s", self.request.path)
-            self.do_finish()
             return
 
         self.application.start_client_request(metadata, f"{agent_name}/connectivity")
@@ -45,7 +38,7 @@ class ConnectivityHandler(BaseRequestHandler):
             data: Dict[str, Any] = {}
             result_dict: Dict[str, Any] = await service.connectivity(data, metadata)
 
-            # Return gRPC response to the HTTP client
+            # Return response to the HTTP client
             self.set_header("Content-Type", "application/json")
             self.write(result_dict)
 

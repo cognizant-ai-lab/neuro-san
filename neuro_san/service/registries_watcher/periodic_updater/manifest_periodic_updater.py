@@ -8,17 +8,18 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
+from typing import Dict
 
 import logging
 import time
 import threading
-from typing import Dict
 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
-from neuro_san.internals.network_providers.service_agent_network_storage import ServiceAgentNetworkStorage
+from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.registries_watcher.periodic_updater.registry_event_observer import RegistryEventObserver
 from neuro_san.service.registries_watcher.periodic_updater.registry_polling_observer import RegistryPollingObserver
+from neuro_san.service.main_loop.server_status import ServerStatus
 
 
 class ManifestPeriodicUpdater:
@@ -26,14 +27,25 @@ class ManifestPeriodicUpdater:
     Class implementing periodic manifest directory updates
     by watching agent files and manifest file itself.
     """
+    # pylint: disable=too-many-instance-attributes
     use_polling: bool = True
 
-    def __init__(self, manifest_path: str, update_period_seconds: int):
+    def __init__(self,
+                 network_storage_dict: Dict[str, AgentNetworkStorage],
+                 manifest_path: str,
+                 update_period_seconds: int,
+                 server_status: ServerStatus):
         """
         Constructor.
+
+        :param network_storage_dict: A dictionary of string (descripting scope) to
+                    AgentNetworkStorage instance which keeps all the AgentNetwork instances
+                    of a particular grouping.
         :param manifest_path: file path to server manifest file
         :param update_period_seconds: update period in seconds
+        :param server_status: server status to register the state of updater
         """
+        self.network_storage_dict: Dict[str, AgentNetworkStorage] = network_storage_dict
         self.manifest_path: str = manifest_path
         self.update_period_seconds: int = update_period_seconds
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -43,7 +55,7 @@ class ManifestPeriodicUpdater:
             self.observer = RegistryPollingObserver(self.manifest_path, poll_interval)
         else:
             self.observer = RegistryEventObserver(self.manifest_path)
-        self.network_storage: ServiceAgentNetworkStorage = ServiceAgentNetworkStorage.get_instance()
+        self.server_status: ServerStatus = server_status
         self.go_run: bool = True
 
     def _run(self):
@@ -54,6 +66,7 @@ class ManifestPeriodicUpdater:
             # We should not run at all.
             return
         while self.go_run:
+            self.server_status.updater.set_status(True)
             time.sleep(self.update_period_seconds)
             # Check events that may have been triggered in target registry:
             modified, added, deleted = self.observer.reset_event_counters()
@@ -64,9 +77,12 @@ class ManifestPeriodicUpdater:
             self.logger.info("Observed events: modified %d, added %d, deleted %d",
                              modified, added, deleted)
             self.logger.info("Updating manifest file: %s", self.manifest_path)
+
             agent_networks: Dict[str, AgentNetwork] = \
                 RegistryManifestRestorer().restore(self.manifest_path)
-            self.network_storage.setup_agent_networks(agent_networks)
+
+            public_storage: AgentNetworkStorage = self.network_storage_dict.get("public")
+            public_storage.setup_agent_networks(agent_networks)
 
     def compute_polling_interval(self, update_period_seconds: int) -> int:
         """

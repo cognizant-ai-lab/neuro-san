@@ -17,34 +17,23 @@ from typing import List
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
+from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.internals.network_providers.single_agent_network_provider import SingleAgentNetworkProvider
 
 
-class ServiceAgentNetworkStorage:
+class AgentNetworkStorage(AgentStorageSource):
     """
-    Service-wide storage for AgentNetworkProviders.
-    This class is a global singleton containing
+    Service-wide storage for AgentNetworkProviders containing
     a table of currently active AgentNetworks for each agent registered to the service.
     Note: a mapping from an agent to its AgentNetwork is dynamic,
-          as we can change agents definitions at service run-time.
+          as it is possible to change agents definitions at service run-time.
     """
-
-    instance = None
 
     def __init__(self):
         self.agents_table: Dict[str, AgentNetwork] = {}
         self.logger = logging.getLogger(self.__class__.__name__)
         self.lock = threading.Lock()
         self.listeners: List[AgentStateListener] = []
-
-    @classmethod
-    def get_instance(cls):
-        """
-        Get a singleton instance of this class
-        """
-        if not ServiceAgentNetworkStorage.instance:
-            ServiceAgentNetworkStorage.instance = ServiceAgentNetworkStorage()
-        return ServiceAgentNetworkStorage.instance
 
     def add_listener(self, listener: AgentStateListener):
         """
@@ -73,10 +62,10 @@ class ServiceAgentNetworkStorage:
         # do it outside of internal lock
         for listener in self.listeners:
             if is_new:
-                listener.agent_added(agent_name)
+                listener.agent_added(agent_name, self)
                 self.logger.info("ADDED network for agent %s", agent_name)
             else:
-                listener.agent_modified(agent_name)
+                listener.agent_modified(agent_name, self)
                 self.logger.info("REPLACED network for agent %s", agent_name)
 
     def setup_agent_networks(self, agent_networks: Dict[str, AgentNetwork]):
@@ -104,7 +93,7 @@ class ServiceAgentNetworkStorage:
         # Notify listeners about this state change:
         # do it outside of internal lock
         for listener in self.listeners:
-            listener.agent_removed(agent_name)
+            listener.agent_removed(agent_name, self)
         self.logger.info("REMOVED network for agent %s", agent_name)
 
     def get_agent_network_provider(self, agent_name: str) -> AgentNetworkProvider:
