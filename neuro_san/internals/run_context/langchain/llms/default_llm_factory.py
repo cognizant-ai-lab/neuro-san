@@ -13,6 +13,7 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Set
 from typing import Type
 
 import os
@@ -34,6 +35,8 @@ from neuro_san.internals.run_context.langchain.llms.standard_langchain_llm_facto
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
 from neuro_san.internals.run_context.langchain.util.argument_validator import ArgumentValidator
 from neuro_san.internals.utils.resolver_util import ResolverUtil
+
+KEYS_TO_REMOVE_FOR_USER_CLASS: Set[str] = {"class", "verbose"}
 
 
 class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
@@ -325,15 +328,21 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             type_of_class=BaseLanguageModel
         )
 
-        # Copy the config, take 'class' out, and add callbacks
-        # Then unpack into llm constructor
-        user_config: Dict[str, Any] = config.copy()
-        user_config.pop("class")
+        # Create a copy of the config, removing "class" and "verbose".
+        # Note: "verbose" is valid for both Neuro-SAN and LangChain chat models, but when specified by the user,
+        # it should only apply to Neuro-SAN (e.g. AgentExecutor) — not passed into the LLM constructor.
+        user_config: Dict[str, Any] = {}
+        for llm_config_key, llm_config_value in config.items():
+            if llm_config_key not in KEYS_TO_REMOVE_FOR_USER_CLASS:
+                user_config[llm_config_key] = llm_config_value
+
+        # Add callbacks
         user_config["callbacks"] = callbacks
 
         # Check for invalid args and throw error if found
         ArgumentValidator.check_invalid_args(llm_class, user_config)
 
+        # Unpack user_config  into llm constructor
         return llm_class(**user_config)
 
     def get_max_prompt_tokens(self, config: Dict[str, Any]) -> int:
