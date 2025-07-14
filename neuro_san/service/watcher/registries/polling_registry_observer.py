@@ -9,9 +9,12 @@
 #
 # END COPYRIGHT
 
-import logging
 from typing import Tuple
+
+import logging
+
 from pathlib import Path
+
 from watchdog.observers.polling import PollingObserver
 
 from neuro_san.service.watcher.registries.registry_change_handler import RegistryChangeHandler
