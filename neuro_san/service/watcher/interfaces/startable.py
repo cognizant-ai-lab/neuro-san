@@ -10,24 +10,14 @@
 #
 # END COPYRIGHT
 
-from typing import Tuple
 
-from neuro_san.service.watcher.interfaces.startable import Startable
-
-
-class RegistryObserver(Startable):
+class Startable:
     """
-    Interface for specific kinds of filesystem observing
+    Interface for objects which have a specific starting phase.
     """
 
     def start(self):
         """
-        Start running observer
-        """
-        raise NotImplementedError
-
-    def reset_event_counters(self) -> Tuple[int, int, int]:
-        """
-        Reset event counters and return current counters.
+        Perform start up.
         """
         raise NotImplementedError

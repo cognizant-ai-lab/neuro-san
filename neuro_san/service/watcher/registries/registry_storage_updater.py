@@ -9,7 +9,6 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
-from typing import Any
 from typing import Dict
 
 import logging
@@ -18,6 +17,9 @@ from neuro_san.internals.graph.persistence.registry_manifest_restorer import Reg
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.watcher.interfaces.storage_updater import StorageUpdater
+from neuro_san.service.watcher.registries.event_registry_observer import EventRegistryObserver
+from neuro_san.service.watcher.registries.polling_registry_observer import PollingRegistryObserver
+from neuro_san.service.watcher.registries.registry_observer import RegistryObserver
 
 
 class RegistryStorageUpdater(StorageUpdater):
@@ -26,14 +28,30 @@ class RegistryStorageUpdater(StorageUpdater):
     from changes in the file system.
     """
 
+    use_polling: bool = True
+
     def __init__(self, network_storage_dict: Dict[str, AgentNetworkStorage],
-                 observer: Any,
-                 manifest_path: str):
+                 manifest_path: str,
+                 poll_interval: int):
+        """
+        Constructor
+        """
 
         self.logger = logging.getLogger(self.__class__.__name__)
         self.network_storage_dict: Dict[str, AgentNetworkStorage] = network_storage_dict
-        self.observer = observer
         self.manifest_path: str = manifest_path
+
+        self.observer: RegistryObserver = None
+        if self.use_polling:
+            self.observer = PollingRegistryObserver(self.manifest_path, poll_interval)
+        else:
+            self.observer = EventRegistryObserver(self.manifest_path)
+
+    def start(self):
+        """
+        Perform start up.
+        """
+        self.observer.start()
 
     def update_storage(self):
         """
