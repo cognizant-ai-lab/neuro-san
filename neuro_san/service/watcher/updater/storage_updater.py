@@ -9,29 +9,25 @@
 #
 # END COPYRIGHT
 from typing import Dict
+from typing import List
 
 import logging
 import time
 import threading
 
-from neuro_san.internals.graph.registry.agent_network import AgentNetwork
-from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
-from neuro_san.service.watcher.registries.event_registry_observer import EventRegistryObserver
-from neuro_san.service.watcher.registries.polling_registry_observer import PollingRegistryObserver
-from neuro_san.service.watcher.registries.registry_observer import RegistryObserver
 from neuro_san.service.main_loop.server_status import ServerStatus
+from neuro_san.service.watcher.interfaces.startable import Startable
+from neuro_san.service.watcher.registries.registry_storage_updater import RegistryStorageUpdater
 
 
-class StorageUpdater:
+# pylint: disable=too-many-instance-attributes
+class StorageUpdater(Startable):
     """
     Class implementing periodic server updates
     by watching agent files and manifest file itself
     and other changes to AgentNetworkStorage instances.
     """
-    # pylint: disable=too-many-instance-attributes
-    use_polling: bool = True
-
     def __init__(self,
                  network_storage_dict: Dict[str, AgentNetworkStorage],
                  manifest_path: str,
@@ -51,14 +47,13 @@ class StorageUpdater:
         self.manifest_path: str = manifest_path
         self.update_period_seconds: int = update_period_seconds
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.updater = threading.Thread(target=self._run, daemon=True)
+        self.updater_thread = threading.Thread(target=self._run, daemon=True)
 
-        self.observer: RegistryObserver = None
-        if self.use_polling:
-            poll_interval: int = self.compute_polling_interval(update_period_seconds)
-            self.observer = PollingRegistryObserver(self.manifest_path, poll_interval)
-        else:
-            self.observer = EventRegistryObserver(self.manifest_path)
+        poll_interval: int = self.compute_polling_interval(update_period_seconds)
+        self.storage_updaters: List[StorageUpdater] = [
+            RegistryStorageUpdater(network_storage_dict, manifest_path, poll_interval)
+            # We will eventually have more here
+        ]
 
         self.server_status: ServerStatus = server_status
         self.go_run: bool = True
@@ -74,29 +69,8 @@ class StorageUpdater:
         while self.go_run:
             self.server_status.updater.set_status(True)
             time.sleep(self.update_period_seconds)
-            self.check_file_observer()
-            # We will eventually have more here
-
-    def check_file_observer(self):
-        """
-        Take a look at the file system observer and perform any updates
-        to relevant AgentNetworkStorage from changes there.
-        """
-        # Check events that may have been triggered in target registry:
-        modified, added, deleted = self.observer.reset_event_counters()
-        if modified == added == deleted == 0:
-            # Nothing happened - go on observing
-            return
-
-        # Some events were triggered - reload manifest file
-        self.logger.info("Observed events: modified %d, added %d, deleted %d",
-                         modified, added, deleted)
-        self.logger.info("Updating manifest file: %s", self.manifest_path)
-
-        agent_networks: Dict[str, AgentNetwork] = RegistryManifestRestorer().restore(self.manifest_path)
-
-        public_storage: AgentNetworkStorage = self.network_storage_dict.get("public")
-        public_storage.setup_agent_networks(agent_networks)
+            for storage_updater in self.storage_updaters:
+                storage_updater.update_storage()
 
     def compute_polling_interval(self, update_period_seconds: int) -> int:
         """
@@ -113,5 +87,8 @@ class StorageUpdater:
         """
         self.logger.info("Starting manifest updater for %s with %d seconds period",
                          self.manifest_path, self.update_period_seconds)
-        self.observer.start()
-        self.updater.start()
+
+        for storage_updater in self.storage_updaters:
+            storage_updater.start()
+
+        self.updater_thread.start()

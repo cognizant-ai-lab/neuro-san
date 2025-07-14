@@ -10,8 +10,10 @@
 #
 # END COPYRIGHT
 
+from neuro_san.service.watcher.interfaces.startable import Startable
 
-class StorageUpdater:
+
+class StorageUpdater(Startable):
     """
     Interface for specific updating jobs that the Watcher performs.
     """
@@ -19,5 +21,11 @@ class StorageUpdater:
     def update_storage(self):
         """
         Perform an update
+        """
+        raise NotImplementedError
+
+    def start(self):
+        """
+        Perform start up.
         """
         raise NotImplementedError
