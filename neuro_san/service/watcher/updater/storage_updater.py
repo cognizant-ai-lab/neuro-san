@@ -17,8 +17,9 @@ import threading
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
-from neuro_san.service.watcher.registries.registry_event_observer import RegistryEventObserver
-from neuro_san.service.watcher.registries.registry_polling_observer import RegistryPollingObserver
+from neuro_san.service.watcher.registries.event_registryobserver import EventRegistryObserver
+from neuro_san.service.watcher.registries.polling_registry_observer import PollingRegistryObserver
+from neuro_san.service.watcher.registries.registry_observer import RegistryObserver
 from neuro_san.service.main_loop.server_status import ServerStatus
 
 
@@ -51,11 +52,14 @@ class StorageUpdater:
         self.update_period_seconds: int = update_period_seconds
         self.logger = logging.getLogger(self.__class__.__name__)
         self.updater = threading.Thread(target=self._run, daemon=True)
+
+        self.observer: RegistryObserver = None
         if self.use_polling:
             poll_interval: int = self.compute_polling_interval(update_period_seconds)
-            self.observer = RegistryPollingObserver(self.manifest_path, poll_interval)
+            self.observer = PollingRegistryObserver(self.manifest_path, poll_interval)
         else:
-            self.observer = RegistryEventObserver(self.manifest_path)
+            self.observer = EventRegistryObserver(self.manifest_path)
+
         self.server_status: ServerStatus = server_status
         self.go_run: bool = True
 

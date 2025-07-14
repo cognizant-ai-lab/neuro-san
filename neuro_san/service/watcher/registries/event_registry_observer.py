@@ -12,22 +12,22 @@
 import logging
 from typing import Tuple
 from pathlib import Path
-from watchdog.observers.polling import PollingObserver
+from watchdog.observers import Observer
 
 from neuro_san.service.watcher.registries.registry_change_handler import RegistryChangeHandler
+from neuro_san.service.watcher.registries.registry_observer import RegistryObserver
 
 
-class RegistryPollingObserver:
+class EventRegistryObserver(RegistryObserver):
     """
     Observer class for manifest file and its directory.
     """
 
-    def __init__(self, manifest_path: str, poll_seconds: int):
+    def __init__(self, manifest_path: str):
         self.manifest_path: str = str(Path(manifest_path).resolve())
         self.registry_path: str = str(Path(self.manifest_path).parent)
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.poll_seconds = poll_seconds
-        self.observer: PollingObserver = PollingObserver(timeout=self.poll_seconds)
+        self.observer: Observer = Observer()
         self.event_handler: RegistryChangeHandler = RegistryChangeHandler()
 
     def start(self):
@@ -36,8 +36,8 @@ class RegistryPollingObserver:
         """
         self.observer.schedule(self.event_handler, path=self.registry_path, recursive=False)
         self.observer.start()
-        self.logger.info("Registry polling watchdog started on: %s for manifest %s with polling every %d sec",
-                         self.registry_path, self.manifest_path, self.poll_seconds)
+        self.logger.info("Registry watchdog started on: %s for manifest %s",
+                         self.registry_path, self.manifest_path)
 
     def reset_event_counters(self) -> Tuple[int, int, int]:
         """
