@@ -36,7 +36,7 @@ from neuro_san.service.grpc.grpc_agent_server import GrpcAgentServer
 from neuro_san.service.grpc.grpc_agent_service import GrpcAgentService
 from neuro_san.service.http.server.http_server import HttpServer
 from neuro_san.service.main_loop.server_status import ServerStatus
-from neuro_san.service.watcher.updater.storage_watcher import StorageWatcher
+from neuro_san.service.watcher.main_loop.storage_watcher import StorageWatcher
 
 
 # pylint: disable=too-many-instance-attributes
