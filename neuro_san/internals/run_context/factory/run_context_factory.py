@@ -61,7 +61,7 @@ class RunContextFactory:
             "model_name": "gpt-4o",
             "verbose": False
         }
-        default_llm_config = use_config.get("llm_config", default_llm_config)
+        default_llm_config = use_config.get("llm_config") or default_llm_config
 
         # Prepare for sanity in checks below
         context_type: str = MasterLlmFactory.get_context_type(use_config)
