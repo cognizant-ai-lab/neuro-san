@@ -16,10 +16,10 @@ jobs:
         ports:
           - 11434:11434
         options: >-
-          --health-cmd "curl --silent http://localhost:11434"
+          --health-cmd "curl --fail --silent http://localhost:11434/api/tags || exit 1"
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 10
 
     # 🔧 Your actual job container
     container:
@@ -35,17 +35,19 @@ jobs:
           pip install -r requirements-build.txt
           pip install -r requirements.txt
 
-      - name: Pull Ollama model (qwen3:8b)
+      - name: Wait for Ollama service to become responsive
         run: |
           for i in {1..10}; do
-            if curl -s http://ollama:11434 | grep -q 'models'; then
-              echo "Ollama is ready!"
-              break
-            fi
-            echo "Waiting for Ollama..."
+            echo "Checking if Ollama API is ready..."
+            curl --fail --silent http://ollama:11434/api/tags && break
+            echo "Waiting 5s..."
             sleep 5
           done
-          curl http://ollama:11434/api/pull -d '{ "name": "qwen3:8b" }'
+
+      - name: Pull Ollama model (qwen3:8b)
+        run: |
+          curl http://ollama:11434/api/pull \
+            -d '{ "name": "qwen3:8b" }'
       
       - name: Show installed packages
         run: pip freeze
