@@ -15,7 +15,8 @@ from neuro_san.service.watcher.interfaces.storage_updater import StorageUpdater
 
 class AbstractStorageUpdater(StorageUpdater):
     """
-    Interface for specific updating jobs that the Watcher performs.
+    Abstract base class for StorageUpdater implementations for common policy
+    about checking for when it is needed to do update_storage().
     """
 
     def __init__(self, update_period_in_seconds: int):
