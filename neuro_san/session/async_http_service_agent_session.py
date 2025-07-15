@@ -14,8 +14,10 @@ from typing import Any
 from typing import Dict
 from typing import Generator
 
+import asyncio
 import json
 
+from aiohttp import ClientOSError
 from aiohttp import ClientSession
 from aiohttp import ClientTimeout
 
@@ -111,5 +113,16 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
                         if unicode_line.strip():    # Skip empty lines
                             result_dict = json.loads(unicode_line)
                             yield result_dict
+
+        except (asyncio.TimeoutError, ClientOSError) as exc:
+            # Pass on a couple of asserts that are known to represent 
+            # real problems that a client has to deal with.
+            # We figure this is OK for streaming_chat() because normally
+            # in order to get to using streaming_chat() clients will most
+            # often call function() first, and that will have the blanket
+            # helpful asserts for the newly initiated.
+            raise exc
+
         except Exception as exc:  # pylint: disable=broad-exception-caught
+            # Assume the newly initiated need some more help.
             raise ValueError(self.help_message(path)) from exc
