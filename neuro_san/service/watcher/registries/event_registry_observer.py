@@ -9,15 +9,19 @@
 #
 # END COPYRIGHT
 
-import logging
 from typing import Tuple
+
+import logging
+
 from pathlib import Path
+
 from watchdog.observers import Observer
 
-from neuro_san.service.registries_watcher.periodic_updater.registry_change_handler import RegistryChangeHandler
+from neuro_san.service.watcher.registries.registry_change_handler import RegistryChangeHandler
+from neuro_san.service.watcher.registries.registry_observer import RegistryObserver
 
 
-class RegistryEventObserver:
+class EventRegistryObserver(RegistryObserver):
     """
     Observer class for manifest file and its directory.
     """
