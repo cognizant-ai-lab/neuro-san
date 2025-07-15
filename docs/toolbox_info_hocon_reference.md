@@ -27,7 +27,7 @@ keys. For dictionary-type values, their sub-keys will be described in the next h
             - [display_as](#display_as-optional-1)
     - [Extending Toolbox Info](#extending-toolbox-info)
         - [AGENT_TOOLBOX_INFO_FILE environment variable](#agent_toolbox_info_file-environment-variable)
-        - [toolbox_info_file key in specific agent hocon files](#agent_toolbox_info_file-and-toolbox_info_file-keys-in-agent-network-hocon)
+        - [toolbox_info_file key in specific agent hocon files](#toolbox_info_file-keys-in-agent-network-hocon)
 
 <!--TOC-->
 
@@ -194,14 +194,10 @@ export AGENT_TOOLBOX_INFO_FILE=/path/to/your/toolbox_info.hocon
 This method is ideal for system-wide setups where multiple agents share the same toolset.
 It lets you apply changes across the board without editing each agent configuration individually.
 
-### `agent_toolbox_info_file` and `toolbox_info_file` Keys in Agent Network HOCON
+### `toolbox_info_file` Keys in Agent Network HOCON
 
 If you need more flexibility, you can specify a custom toolbox file directly in an agent’s HOCON config
-using one of the following keys:
+using [`toolbox_info_file`](./agent_hocon_reference.md#toolbox_info_file) key.
 
-- [`agent_toolbox_info_file`](./agent_hocon_reference.md#agent_toolbox_info_file) – preferred key
-
-- [`toolbox_info_file`](./agent_hocon_reference.md#toolbox_info_file) – used as a fallback
-
-These per-agent settings override any value set via the `AGENT_TOOLBOX_INFO_FILE` environment variable.
+This per-agent setting overrides any value set via the `AGENT_TOOLBOX_INFO_FILE` environment variable.
 This is useful when individual agents require specialized or isolated tool configurations.

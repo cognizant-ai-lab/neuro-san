@@ -20,9 +20,7 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
     - [commondefs](#commondefs)
         - [replacement_strings](#replacement_strings)
         - [replacement_values](#replacement_values)
-    - [agent_llm_info_file](#agent_llm_info_file)
     - [llm_info_file](#llm_info_file)
-    - [agent_toolbox_info_file](#agent_toolbox_info_file)
     - [toolbox_info_file](#toolbox_info_file)
     - [llm_config](#llm_config)
         - [model_name](#model_name)
@@ -141,30 +139,20 @@ This results in a final interpretation where the `function` value is:
 Value replacement only happens once, but you can have replacement_strings references within
 your string values within your replacement_values and things will work out as you might expect.
 
-### agent_llm_info_file
+### llm_info_file
 
-The `agent_llm_info_file` key allows you to specify a custom HOCON file that extends the default list of available LLMs used
+The `llm_info_file` key allows you to specify a custom HOCON file that extends the default list of available LLMs used
 by agents in a neuro-san network. This is especially useful if you're using models or providers that are not included in
 the default configuration (e.g., newly released models or organization-specific endpoints).
 
 For more information on selecting and customizing models, see the [model_name](#model_name) and [class](#class) section below.
 
-### llm_info_file
-
-A fallback to `agent_llm_info_file`.
-If `agent_llm_info_file` is not set, this key will be used to load additional LLM definitions.
-
-### agent_toolbox_info_file
+### toolbox_info_file
 
 The `toolbox_info_file` key lets you define a custom HOCON file that adds to the default set of tools available to agents
 within a neuro-san network. This is particularly helpful when you have tools shared across multiple agent networks.
 
 For further details, refer to the [toolbox](#toolbox) section below.
-
-### toolbox_info_file
-
-A fallback to `agent_toolbox_info_file`.
-Used only if `agent_toolbox_info_file` is not provided.
 
 ### llm_config
 
@@ -205,8 +193,8 @@ to expose secrets by checking them in.
 If your favorite model, or new hotness is not listed in `default_llm_info.hocon`,
 you can still use it by specifying the [class](#class) key directly, or by extending the list in one of two ways:
 
-(1) Set the absolute path to your extension HOCON file using the [agent_llm_info_file](#agent_llm_info_file)
-or [llm_info_file](#llm_info_file) keys in the agent network HOCON file.
+(1) Set the absolute path to your extension HOCON file using the or
+[llm_info_file](#llm_info_file) keys in the agent network HOCON file.
 
 (2) Set the extension HOCON file to the environment variable
 [AGENT_LLM_INFO_FILE](./llm_info_hocon_reference.md#AGENT_LLM_INFO_FILE-environment-variable).
@@ -540,7 +528,6 @@ The default toolbox configuration is located at [toolbox_info.hocon](../neuro_sa
 
 To use your own tools, create a custom toolbox `.hocon` file and reference it in one of the following ways:
 
-- Setting the `agent_toolbox_info_file` key in the agent network `.hocon` file.
 - Setting the `toolbox_info_file` key in the agent network `.hocon` file.
 - Defining the `AGENT_TOOLBOX_INFO_FILE` environment variable.
 

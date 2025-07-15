@@ -36,7 +36,7 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
         - [default_config](#default_config)
     - [Extending LLM Info Specifications](#extending-llm-info-specifications)
         - [AGENT_LLM_INFO_FILE environment variable](#agent_llm_info_file-environment-variable)
-        - [agent_llm_info_file key in specific agent hocon files](#agent_llm_info_file-and-llm_info_file-keys-in-agent-network-hocon)
+        - [llm_info_file key in specific agent hocon files](#llm_info_file-keys-in-agent-network-hocon)
 
 <!--TOC-->
 
@@ -247,17 +247,13 @@ Use this approach if:
 
 - You’re managing deployment at the server or container level.
 
-### `agent_llm_info_file` and `llm_info_file` Keys in Agent Network HOCON
+### `llm_info_file` Keys in Agent Network HOCON
 
-You can define a different llm info file for each agent by setting the:
+You can define a different llm info file for each agent by setting the
+[`llm_info_file`](./agent_hocon_reference.md#llm_info_file)
+key within the agent network HOCON file.
 
-- [`agent_llm_info_file`](./agent_hocon_reference.md#agent_llm_info_file) (preferred), or
-
-- [`llm_info_file`](./agent_hocon_reference.md#llm_info_file) (fallback)
-
-within the agent network HOCON file.
-
-> Note: These keys take **precedence over** the `AGENT_LLM_INFO_FILE` environment variable.
+> Note: This key takes **precedence over** the `AGENT_LLM_INFO_FILE` environment variable.
 
 Use this approach if:
 
