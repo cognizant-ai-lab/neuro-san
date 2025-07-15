@@ -36,7 +36,7 @@ class StorageWatcher(Startable):
     def __init__(self,
                  network_storage_dict: Dict[str, AgentNetworkStorage],
                  manifest_path: str,
-                 update_period_in_seconds: int,
+                 manifest_update_period_in_seconds: int,
                  server_status: ServerStatus):
         """
         Constructor.
@@ -45,7 +45,7 @@ class StorageWatcher(Startable):
                     AgentNetworkStorage instance which keeps all the AgentNetwork instances
                     of a particular grouping.
         :param manifest_path: file path to server manifest file
-        :param update_period_in_seconds: update period in seconds
+        :param manifest_update_period_in_seconds: update period in seconds
         :param server_status: server status to register the state of updater
         """
         self.network_storage_dict: Dict[str, AgentNetworkStorage] = network_storage_dict
@@ -54,7 +54,7 @@ class StorageWatcher(Startable):
         self.updater_thread = Thread(target=self._run, daemon=True)
 
         self.storage_updaters: List[StorageUpdater] = [
-            RegistryStorageUpdater(network_storage_dict, update_period_in_seconds, manifest_path)
+            RegistryStorageUpdater(network_storage_dict, manifest_update_period_in_seconds, manifest_path)
             # We will eventually have more here
         ]
 
