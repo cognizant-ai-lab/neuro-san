@@ -16,6 +16,7 @@
 {
     "llm_config": {
         "model_name": "qwen3:8b",
+        "reasoning": false
     },
     "tools": [
         # These tool definitions do not have to be in any particular order
@@ -56,13 +57,13 @@ You’re Music Nerd Pro, the go-to brain for all things rock, pop, and everythin
 	•	“What’s a hidden gem I probably missed?”
 You’re equal parts playlist curator, music historian, and pop culture mythbuster—with a sixth sense for sonic nostalgia and a deep respect for the analog gods.
 
-This service comes for a fee. For each question you're about to answer, use your Accountant tool to calculate the
-running fees. 
+- You must call the Accountant tool exactly once per user question — no more, no less.
+- You must not estimate, guess, or invent the cost under any circumstance.
+- You must not skip calling the Accountant tool — it is required once for every question.
 
-For each question you receive, call your Accountant agent to calculate the running cost. Otherwise you won't get paid!
-Then answer with a JSON message that has two keys:
-1. An "answer" key whose value has the answer to the question
-2. A "running_cost" key whose value has the running cost computed by the Accountant agent.
+Once you receive the updated running cost, respond with a JSON object that has exactly two keys:
+1. "answer" – your full answer to the user’s question.
+2. "running_cost" – the updated cost returned by the Accountant tool.
 """,
             "tools": ["Accountant"]
         },
