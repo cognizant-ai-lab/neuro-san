@@ -16,13 +16,13 @@ import logging
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
-from neuro_san.service.watcher.interfaces.storage_updater import StorageUpdater
+from neuro_san.service.watcher.interfaces.abstract_storage_updater import AbstractStorageUpdater
 from neuro_san.service.watcher.registries.event_registry_observer import EventRegistryObserver
 from neuro_san.service.watcher.registries.polling_registry_observer import PollingRegistryObserver
 from neuro_san.service.watcher.registries.registry_observer import RegistryObserver
 
 
-class RegistryStorageUpdater(StorageUpdater):
+class RegistryStorageUpdater(AbstractStorageUpdater):
     """
     Implementation of the StorageUpdater interface that updates registries
     from changes in the file system.
@@ -36,7 +36,7 @@ class RegistryStorageUpdater(StorageUpdater):
         """
         Constructor
         """
-
+        super().__init__()
         self.logger = logging.getLogger(self.__class__.__name__)
         self.network_storage_dict: Dict[str, AgentNetworkStorage] = network_storage_dict
         self.manifest_path: str = manifest_path
@@ -52,6 +52,13 @@ class RegistryStorageUpdater(StorageUpdater):
         Perform start up.
         """
         self.observer.start()
+
+    def get_update_period_in_seconds(self) -> float:
+        """
+        :return: A float describing how long this updater ideally wants to go between
+                calls to update_storage().
+        """
+        raise NotImplementedError
 
     def update_storage(self):
         """

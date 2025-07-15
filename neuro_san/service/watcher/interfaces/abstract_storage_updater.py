@@ -10,13 +10,19 @@
 #
 # END COPYRIGHT
 
-from neuro_san.service.watcher.interfaces.startable import Startable
+from neuro_san.service.watcher.interfaces.storage_updater import StorageUpdater
 
 
-class StorageUpdater(Startable):
+class AbstractStorageUpdater(StorageUpdater):
     """
     Interface for specific updating jobs that the Watcher performs.
     """
+
+    def __init__(self):
+        """
+        Constructor
+        """
+        self.last_update: float = 0.0
 
     def start(self):
         """
@@ -31,16 +37,27 @@ class StorageUpdater(Startable):
         """
         raise NotImplementedError
 
+    def update_storage(self):
+        """
+        Perform an update
+        """
+        raise NotImplementedError
+
     def needs_updating(self, time_now_in_seconds: float) -> bool:
         """
         :param time_now_in_seconds: The current time in seconds.
                     We expect this to be from time.time()
         :return: True if this instance needs updating. False otherwise.
         """
-        raise NotImplementedError
+        update_period: float = self.get_update_period_in_seconds()
+        if update_period <= 0.0:
+            # Never
+            return False
 
-    def update_storage(self):
-        """
-        Perform an update
-        """
-        raise NotImplementedError
+        next_update: float = self.last_update + self.get_update_period_in_seconds()
+        if time_now_in_seconds < next_update:
+            # Not yet
+            return False
+
+        self.last_update = time_now_in_seconds
+        return True

@@ -70,8 +70,11 @@ class StorageWatcher(Startable):
         while self.keep_running:
             self.server_status.updater.set_status(True)
             time.sleep(self.update_period_seconds)
+
+            time_now_in_seconds: float = time.time()
             for storage_updater in self.storage_updaters:
-                storage_updater.update_storage()
+                if storage_updater.needs_updating(time_now_in_seconds):
+                    storage_updater.update_storage()
 
     def compute_polling_interval(self, update_period_seconds: int) -> int:
         """
