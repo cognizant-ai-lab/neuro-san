@@ -9,23 +9,21 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
-"""
-See class comment for details
-"""
-from typing import Any
-from typing import Dict
 
 
-class AgentsUpdater:
+class Startable:
     """
-    Abstract interface for updating current collection of agents
-    being served.
+    Interface for objects which have a specific starting phase.
     """
 
-    def update_agents(self, metadata: Dict[str, Any]):
+    def start(self):
         """
-        Update list of agents for which serving is allowed.
-        :param metadata: metadata to be used for logging if necessary.
-        :return: nothing
+        Perform start up.
         """
         raise NotImplementedError
+
+    def stop(self):
+        """
+        Perform steps to stop/shut-down
+        By default this does nothing
+        """

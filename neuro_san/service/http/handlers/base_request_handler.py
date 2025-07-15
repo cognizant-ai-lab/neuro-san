@@ -28,7 +28,6 @@ from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.http.interfaces.agent_authorizer import AgentAuthorizer
-from neuro_san.service.http.interfaces.agents_updater import AgentsUpdater
 from neuro_san.service.http.logging.http_logger import HttpLogger
 
 
@@ -45,28 +44,25 @@ class BaseRequestHandler(RequestHandler):
     # pylint: disable=too-many-positional-arguments
     def initialize(self,
                    agent_policy: AgentAuthorizer,
-                   agents_updater: AgentsUpdater,
                    forwarded_request_metadata: List[str],
                    openapi_service_spec_path: str,
-                   network_storage: AgentNetworkStorage):
+                   network_storage_dict: Dict[str, AgentNetworkStorage]):
         """
         This method is called by Tornado framework to allow
         injecting service-specific data into local handler context.
         :param agent_policy: abstract policy for agent requests
-        :param agents_updater: abstract policy for updating
-                               collection of agents being served
         :param forwarded_request_metadata: request metadata to forward.
         :param openapi_service_spec_path: file path to OpenAPI service spec.
-        :param network_storage: A AgentNetworkStorage instance which keeps all
-                                the AgentNetwork instances.
+        :param network_storage_dict: A dictionary of string (descripting scope) to
+                    AgentNetworkStorage instance which keeps all the AgentNetwork instances
+                    of a particular grouping.
         """
 
         self.agent_policy = agent_policy
-        self.agents_updater = agents_updater
         self.forwarded_request_metadata: List[str] = forwarded_request_metadata
         self.openapi_service_spec_path: str = openapi_service_spec_path
         self.logger = HttpLogger(forwarded_request_metadata)
-        self.network_storage: AgentNetworkStorage = network_storage
+        self.network_storage_dict: Dict[str, AgentNetworkStorage] = network_storage_dict
 
         # Set default request_id for this request handler in case we will need it:
         BaseRequestHandler.request_id += 1
@@ -107,10 +103,6 @@ class BaseRequestHandler(RequestHandler):
         :return: instance of AsyncAgentService if it is defined for this agent
                  None otherwise
         """
-        update_done: bool = await self.update_agents(metadata=metadata)
-        if not update_done:
-            return None
-
         service_provider: AsyncAgentServiceProvider = self.agent_policy.allow(agent_name)
         if service_provider is None:
             self.set_status(404)
@@ -118,20 +110,6 @@ class BaseRequestHandler(RequestHandler):
             self.do_finish()
             return None
         return service_provider.get_service()
-
-    async def update_agents(self, metadata: Dict[str, Any]) -> bool:
-        """
-        Update internal agents table.
-        :param metadata: metadata to be used for logging if necessary.
-        :return: True if update was successful
-                 False otherwise
-        """
-        try:
-            self.agents_updater.update_agents(metadata=metadata)
-            return True
-        except Exception as exc:  # pylint: disable=broad-exception-caught
-            self.process_exception(exc)
-            return False
 
     def process_exception(self, exc: Exception):
         """

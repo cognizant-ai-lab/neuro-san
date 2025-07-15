@@ -1,4 +1,3 @@
-
 # Copyright (C) 2023-2025 Cognizant Digital Business, Evolutionary AI.
 # All Rights Reserved.
 # Issued under the Academic Public License.
@@ -9,22 +8,18 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
-"""
-See class comment for details
-"""
-from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
+
+from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 
 
-class AgentAuthorizer:
+class AgentStorageSource:
     """
-    Abstract interface implementing some policy
-    of allowing to route incoming requests to an agent.
+    Interface onto AgentNetworkStorage so that there is not a tangle with the service side.
     """
 
-    def allow(self, agent_name) -> AsyncAgentServiceProvider:
+    def get_agent_network_provider(self, agent_name: str) -> AgentNetworkProvider:
         """
+        Get AgentNetworkProvider for a specific agent
         :param agent_name: name of an agent
-        :return: instance of AsyncAgentService if routing requests is allowed for this agent;
-                 None otherwise
         """
         raise NotImplementedError
