@@ -36,7 +36,7 @@ from neuro_san.service.grpc.grpc_agent_server import GrpcAgentServer
 from neuro_san.service.grpc.grpc_agent_service import GrpcAgentService
 from neuro_san.service.http.server.http_server import HttpServer
 from neuro_san.service.main_loop.server_status import ServerStatus
-from neuro_san.service.registries_watcher.periodic_updater.manifest_periodic_updater import ManifestPeriodicUpdater
+from neuro_san.service.watcher.main_loop.storage_watcher import StorageWatcher
 
 
 # pylint: disable=too-many-instance-attributes
@@ -142,7 +142,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.service_openapi_spec_file = args.openapi_service_spec_path
         self.manifest_update_period_seconds = args.manifest_update_period_seconds
         if self.manifest_update_period_seconds <= 0:
-            # Periodic manifest updater is disabled:
+            # StorageWatcher is disabled:
             self.server_status.updater.set_requested(False)
 
         manifest_restorer = RegistryManifestRestorer()
@@ -198,13 +198,12 @@ class ServerMainLoop(ServerLoopCallbacks):
                               'AGENT_SERVICE_LOG_JSON',
                               'AGENT_SERVICE_LOG_LEVEL')
             manifest_file: str = self.manifest_files[0]
-            updater: ManifestPeriodicUpdater =\
-                ManifestPeriodicUpdater(
+            watcher = StorageWatcher(
                     self.network_storage_dict,
                     manifest_file,
                     self.manifest_update_period_seconds,
                     self.server_status)
-            updater.start()
+            watcher.start()
 
         if self.server_status.http_service.is_requested():
             # Create HTTP server;
