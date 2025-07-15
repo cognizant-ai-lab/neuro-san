@@ -24,14 +24,15 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
     - [toolbox_info_file](#toolbox_info_file)
     - [llm_config](#llm_config)
         - [model_name](#model_name)
-        - [fallbacks](#fallbacks)
-        - [max_iterations](#max_iterations)
-        - [max_execution_seconds](#max_execution_seconds)
         - [temperature](#temperature)
         - [Other LLM-specific Parameters](#other-llm-specific-parameters)
-        - [verbose](#verbose)
-        - [error_formatter](#error_formatter)
-        - [error_fragments](#error_fragments)
+        - [class](#class)
+        - [fallbacks](#fallbacks)
+    - [verbose](#verbose)
+    - [max_iterations](#max_iterations)
+    - [max_execution_seconds](#max_execution_seconds)
+    - [error_formatter](#error_formatter)
+    - [error_fragments](#error_fragments)
     - [tools](#tools)
 - [Single Agent Specification](#single-agent-specification)
     - [name](#name)
@@ -47,7 +48,7 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
     - [tools (agents)](#tools-agents)
         - [External Agents](#external-agents)
     - [llm_config](#llm_config-1)
-    - [class](#class)
+    - [class](#class-1)
     - [toolbox](#toolbox)
     - [args](#args)
     - [allow](#allow)
@@ -60,6 +61,9 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
             - [sly_data](#sly_data-2)
     - [display_as](#display_as)
     - [max_message_history](#max_message_history)
+    - [verbose](#verbose-1)
+    - [max_iterations](#max_iterations-1)
+    - [max_execution_seconds](#max_execution_seconds-1)
     - [error_formatter](#error_formatter-1)
     - [error_fragments](#error_fragments-1)
     - [structure_formats](#structure_formats)
@@ -76,7 +80,7 @@ A dictionary describing common definitions to be used throughout the particular 
 
 #### replacement_strings
 
-A commondefs dictionary where keys are strings to be found within braces within strings
+A `commondefs` dictionary where keys are strings to be found within braces within strings
 and the values of the dictionary are to replace those keys anywhere throughout the dictionary where string
 values are to be found.  Example:
 
@@ -94,14 +98,14 @@ values are to be found.  Example:
 }
 ```
 
-This results in a final interpretation where the "instructions" value is "Perform the addition operation."
+This results in a final interpretation where the `instructions` value is "Perform the addition operation."
 
 Multiple passes are made for string replacements, so you can have string replacement values that also have
 string replacement keys in them.
 
 #### replacement_values
 
-A commondefs dictionary where keys are strings to be found as full-values (no braces) and the values
+A `commondefs` dictionary where keys are strings to be found as full-values (no braces) and the values
 of the dictionary are to replace those keys anywhere throughout the dictionary with the value defined
 whenever an exact match of the string value is found.
 values are to be found.  Example:
@@ -123,7 +127,7 @@ values are to be found.  Example:
 }
 ```
 
-This results in a final interpretation where the "function" value is:
+This results in a final interpretation where the `function` value is:
 
 ```json
 "function": {
@@ -137,7 +141,7 @@ your string values within your replacement_values and things will work out as yo
 
 ### agent_llm_info_file
 
-The agent_llm_info_file key allows you to specify a custom HOCON file that extends the default list of available LLMs used
+The `agent_llm_info_file` key allows you to specify a custom HOCON file that extends the default list of available LLMs used
 by agents in a neuro-san network. This is especially useful if you're using models that are not included in the default
 configuration (e.g., newly released models or organization-specific endpoints).
 
@@ -145,7 +149,7 @@ For more information on selecting and customizing models, see the [model_name](#
 
 ### toolbox_info_file
 
-The toolbox_info_file key lets you define a custom HOCON file that adds to the default set of tools available to agents
+The `toolbox_info_file` key lets you define a custom HOCON file that adds to the default set of tools available to agents
 within a neuro-san network. This is particularly helpful when you have tools shared across multiple agent networks.
 
 For further details, refer to the [toolbox](#toolbox) section below.
@@ -167,8 +171,8 @@ file included with the neuro-san distribution without any further modification.
 
 While you can use any model you like for any agent within a neuro-san agent network,
 you will need to use a model that has been specifically trained for "tool use" for any agent that
-branches off work to any other agent/tool.  You can browse the "capabilities" section of the
-default_llm_info.hocon to be sure the llm you choose can use tools.
+branches off work to any other agent/tool.  You can browse the `capabilities` section of the
+`default_llm_info.hocon` to be sure the llm you choose can use tools.
 
 Note that you will need your own access key set as an environment variable in order
 to use LLMs from various providers.
@@ -186,41 +190,17 @@ Note: _We strongly recommend to **not** set secrets as values within any source 
 These files tend to creep into source control repos, and it is **very** bad practice
 to expose secrets by checking them in.
 
-If your favorite model, or new hotness is not listed in default_llm_info.hocon,
-you can extend the list in two ways:
+If your favorite model, or new hotness is not listed in `default_llm_info.hocon`,
+you can still use it by specifying the [class](#class) key directly, or by extending the list in one of two ways:
 
-(1) Set the absolute path to your extension HOCON file using the [agent_llm_info_file](#agent_llm_info_file]
+(1) Set the absolute path to your extension HOCON file using the [agent_llm_info_file](#agent_llm_info_file)
 key in the agent network HOCON file.
 
 (2) Set the extension HOCON file to the environment variable
 [AGENT_LLM_INFO_FILE](./llm_info_hocon_reference.md#AGENT_LLM_INFO_FILE-environment-variable).
 
-For complete information on adding your own llms, see the [llm_info_hocon_reference](./llm_info_hocon_reference.md).
-
-#### fallbacks
-
-Fallbacks is a list of [llm_config](#llm_config) dictionaries to use in priority order.
-When the an llm_config in the list fails for any reason, the next in the list is tried.
-
-An simple example usage is given in [esp_decision_assistant.hocon](../neuro_san/registries/esp_decision_assistant.hocon).
-
-You cannot have fallbacks listed within fallbacks.
-
-#### max_iterations
-
-An integer controlling the max_iterations of the langchain
-[AgentExecutor](https://api.python.langchain.com/en/latest/agents/langchain.agents.agent.AgentExecutor.html)
-used for the agent.  Default is 20.
-
-We don't recommend deviating too far from the default of 20.
-Some folks find it useful to _temporarily_ boost this waaaaay up when there is "network weather"
-effecting your favorite LLM provider and you start to see "Agent stopped due to max iterations" errors.
-
-#### max_execution_seconds
-
-An integer controlling the maximum amount of wall clock time (in seconds) to spend in the langchain
-[AgentExecutor](https://api.python.langchain.com/en/latest/agents/langchain.agents.agent.AgentExecutor.html)
-used for the agent.  Default is set for 2 minutes.
+For complete information on adding your own llm models or providers to the default llm info,
+see the [llm_info_hocon_reference](./llm_info_hocon_reference.md).
 
 #### temperature
 
@@ -239,27 +219,89 @@ Note: _We strongly recommend to **not** set secrets as values within any source 
 These files tend to creep into source control repos, and it is **very** bad practice
 to expose secrets by checking them in.
 
-#### verbose
+#### class
+
+You can use the `class` key in two ways:
+
+**1. For supported providers (predefined in `default_llm_info.hocon`)**
+
+Set the `class` key to one of the values listed below, then specify the model using the `model_name` key.
+
+| LLM Provider  | Class Value   |
+|:--------------|:--------------|
+| Anthropic     | anthropic     |
+| Azure OpenAI  | azure_openai  |
+| Google Gemini | gemini        |
+| NVidia        | nvidiea       |
+| Ollma         | ollama        |
+| OpenAI        | openai        |
+
+You may only provide parameters that are explicitly defined for that provider's class under the
+`classes.<class>.args` section of  
+[`default_llm_info.hocon`](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon).  
+Unsupported parameters will be ignored
+
+**2. For custom providers (not in `default_llm_info.hocon`)**
+
+Set the `class` key to the full Python path of the desired LangChain-compatible chat model class in the format:
+
+```hocon
+<langchain_package>.<module>.<ChatModelClass>
+```
+
+Then, provide any constructor arguments supported by that class in `llm_config`.
+
+For a full list of available chat model classes and their parameters, refer to:  
+[LangChain Chat Integrations Documentation](https://python.langchain.com/docs/integrations/chat/)
+
+> _Note: Neuro-SAN requires models that support **tool-calling** capabilities._
+
+#### fallbacks
+
+Fallbacks is a list of [llm_config](#llm_config) dictionaries to use in priority order.
+When the an llm_config in the list fails for any reason, the next in the list is tried.
+
+An simple example usage is given in [esp_decision_assistant.hocon](../neuro_san/registries/esp_decision_assistant.hocon).
+
+You cannot have fallbacks listed within fallbacks.
+
+### verbose
 
 Controls server-side logging of agent chatter.
 
 By default this is false, indicating no server-side logging is desired.
 When true, basic langchain AgentExecutor verbosity is turned on for the agent.
-There is an "extra" level of logging which enables a lanchain LoggingCallbackHandler for the agent.
+There is an `extra` level of logging which enables a lanchain LoggingCallbackHandler for the agent.
 
 Whenever any logging is turned on, it can be quite chatty, so this is not really a setting appropriate
 for a production environment.  It's worth noting that most of the same information obtained by turning
 on verbose can also be obtained by AGENT ChatMessages returned when the client's chat_filter is set to
 MAXIMAL.
 
-#### error_formatter
+### max_iterations
+
+An integer controlling the max_iterations of the langchain
+[AgentExecutor](https://api.python.langchain.com/en/latest/agents/langchain.agents.agent.AgentExecutor.html)
+used for the agent.  Default is 20.
+
+We don't recommend deviating too far from the default of 20.
+Some folks find it useful to _temporarily_ boost this waaaaay up when there is "network weather"
+effecting your favorite LLM provider and you start to see "Agent stopped due to max iterations" errors.
+
+### max_execution_seconds
+
+An integer controlling the maximum amount of wall clock time (in seconds) to spend in the langchain
+[AgentExecutor](https://api.python.langchain.com/en/latest/agents/langchain.agents.agent.AgentExecutor.html)
+used for the agent.  Default is set for 2 minutes.
+
+### error_formatter
 
 String value which describes which error formatter to use by default for any agent in the network.
 
-The default value is "string" which indicates that when errors occur, they are reported upstream
+The default value is `string` which indicates that when errors occur, they are reported upstream
 in their original string format.
 
-An alternative value here is "json", which formats the error output into a predictable json dictionary
+An alternative value here is `json`, which formats the error output into a predictable json dictionary
 which contains the following keys:
 
 | Error Dictionary Key | Description |
@@ -268,7 +310,7 @@ which contains the following keys:
 | tool      | The name of the tool within the agent network that generated the error |
 | details   | Optional string descibing details of the error. Could include a Traceback, for instance|
 
-#### error_fragments
+### error_fragments
 
 A list of strings where if any one of the strings appears in agent output,
 it is considered an error and reported as such per the [error_formatter](#error_formatter).
@@ -312,8 +354,8 @@ benefit of its upstream caller's planning.
 
 Neuro-san largely follows the
 [OpenAI function spec](https://platform.openai.com/docs/guides/function-calling?api-mode=responses#defining-functions),
-however we do not require redefining the "name" (that is already given [above](#name))
-and we also do not require redefining the "type" as this is always the same for every agent.
+however we do not require redefining the `name` (that is already given [above](#name))
+and we also do not require redefining the `type` as this is always the same for every agent.
 
 What is defined in this dictionary is what is returned for the agent's Function() neuro-san web API call.
 
@@ -334,7 +376,7 @@ is anticipated as being called from other agent networks.
 
 ##### type
 
-The type of the parameters dictionary is always "object".
+The type of the parameters dictionary is always `object`.
 This lets the parsing system know that the [properties](#properties) will be described as a dictionary.
 
 ##### properties
@@ -417,13 +459,13 @@ It is possible for any agent to reference another agent on the same server by ad
 in front of the served agent's name.  This is typically the stem of an agent network hocon file in
 a deployment's registries directory.
 
-Example: "/website_search" or "/math_guy"
+Example: `/website_search` or `/math_guy`
 
 This allows common agent network definitions to be used as functions for other local networks.
 
 Furthermore, it is also possible to reference agents on other neuro-san _servers_ by using a URL as a tool reference.
 
-Example: "http://localhost:8080/math_guy"
+Example: `http://localhost:8080/math_guy`
 
 This enables entire ecosystems of agent webs.
 
@@ -438,6 +480,7 @@ Some considerations might include:
 - Use of specially trained LLMs when subject matter expertise is required.
 - Use of securely sequestered LLMs when sensitive information is appropos to a single agent's chat stream.
 
+<!--- pyml disable-next-line no-duplicate-heading -->
 ### class
 
 Optional string specifying a Python class which implements the
@@ -446,22 +489,22 @@ interface.
 
 <!-- pyml disable no-inline-html -->
 Implementations must be found in the directory where the class can be resolved by looking
-under the AGENT_TOOL_PATH environment variable setting as part of the PYTHONPATH.
-By default neuro-san deployments assume that PYTHONPATH is set to contain the
-top-level of your project's repo and that AGENT_TOOL_PATH is set to "<top-level>/coded_tools".
+under the `AGENT_TOOL_PATH` environment variable setting as part of the `PYTHONPATH`.
+By default neuro-san deployments assume that `PYTHONPATH` is set to contain the
+top-level of your project's repo and that `AGENT_TOOL_PATH` is set to `<top-level>/coded_tools`.
 In that directory each agent has its own folder and the value of the class is resolved
 from there.
 <!-- pyml enable no-inline-html -->
 
 For example:
-If the agent is called "math_guy" and the class is valued as "calculator.Calculator",
-The python file math_guy/calculator.py under AGENT_TOOL_PATH is expected to have
+If the agent is called `math_guy` and the class is valued as `calculator.Calculator`,
+The python file math_guy/calculator.py under `AGENT_TOOL_PATH` is expected to have
 a class called Calculator which implements the CodedTool interface.
 
 Implementations of the CodedTool interface must have implementations which:
 
 - have a no-args constructor
-- implement either the preferred async_invoke() or the discouraged synchronous invoke() method.
+- implement either the preferred `async_invoke()` or the discouraged synchronous `invoke()` method.
 
 Agents representing CodedTools have the arguments described their [function parameters](#parameters)
 populated by calling LLMs and passed in via the args dictionary of their async/invoke() method
@@ -625,6 +668,21 @@ This is useful when end-user conversations with agents are expected to be length
 topics frequently.
 
 <!--- pyml disable-next-line no-duplicate-heading -->
+### verbose
+
+Same as top-level [verbose](#verbose), except at single-agent scope.
+
+<!--- pyml disable-next-line no-duplicate-heading -->
+### max_iterations
+
+Same as top-level [max_iterations](#max_iterations), except at single-agent scope.
+
+<!--- pyml disable-next-line no-duplicate-heading -->
+### max_execution_seconds
+
+Same as top-level [max_execution_seconds](#max_execution_seconds), except at single-agent scope.
+
+<!--- pyml disable-next-line no-duplicate-heading -->
 ### error_formatter
 
 Same as top-level [error_formatter above](#error_formatter), except at single-agent scope.
@@ -649,7 +707,7 @@ parsing of that structure is removed from the ChatMessage text field.
 
 Supported values are:
 
-- "json"    Looks for JSON in the messages from the LLM and extracts
+- `json`    Looks for JSON in the messages from the LLM and extracts
 
 Currently, the front-man is the only agent node that ever needs to specify this aspect of the [function](#function)
 definition.
