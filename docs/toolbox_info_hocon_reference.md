@@ -180,7 +180,8 @@ If **omitted**, tools with a `description` are treated as `"coded_tool"`; otherw
 
 ## Extending Toolbox Info
 
-To customize the set of tools available to agents in the neuro-san system, you can provide your own toolbox info file. This allows you to add, override, or refine tool definitions beyond what's included by default, and can be done in two ways:
+To customize the set of tools available to agents in the neuro-san system, you can provide your own toolbox info file.
+This allows you to add, override, or refine tool definitions beyond what's included by default, and can be done in two ways:
 
 ### `AGENT_TOOLBOX_INFO_FILE` Environment Variable
 
@@ -190,14 +191,17 @@ You can configure a global toolbox info file for all agents by setting the `AGEN
 export AGENT_TOOLBOX_INFO_FILE=/path/to/your/toolbox_info.hocon
 ```
 
-This method is ideal for system-wide setups where multiple agents share the same toolset. It lets you apply changes across the board without editing each agent configuration individually.
+This method is ideal for system-wide setups where multiple agents share the same toolset.
+It lets you apply changes across the board without editing each agent configuration individually.
 
 ### `agent_toolbox_info_file` and `toolbox_info_file` Keys in Agent Network HOCON
 
-If you need more flexibility, you can specify a custom toolbox file directly in an agent’s HOCON config using one of the following keys:
+If you need more flexibility, you can specify a custom toolbox file directly in an agent’s HOCON config
+using one of the following keys:
 
 - [`agent_toolbox_info_file`](./agent_hocon_reference.md#agent_toolbox_info_file) – preferred key
 
 - [`toolbox_info_file`](./agent_hocon_reference.md#toolbox_info_file) – used as a fallback
 
-These per-agent settings override any value set via the `AGENT_TOOLBOX_INFO_FILE` environment variable. This is useful when individual agents require specialized or isolated tool configurations.
+These per-agent settings override any value set via the `AGENT_TOOLBOX_INFO_FILE` environment variable.
+This is useful when individual agents require specialized or isolated tool configurations.

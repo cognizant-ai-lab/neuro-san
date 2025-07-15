@@ -144,8 +144,8 @@ your string values within your replacement_values and things will work out as yo
 ### agent_llm_info_file
 
 The `agent_llm_info_file` key allows you to specify a custom HOCON file that extends the default list of available LLMs used
-by agents in a neuro-san network. This is especially useful if you're using models or providers that are not included in the default
-configuration (e.g., newly released models or organization-specific endpoints).
+by agents in a neuro-san network. This is especially useful if you're using models or providers that are not included in
+the default configuration (e.g., newly released models or organization-specific endpoints).
 
 For more information on selecting and customizing models, see the [model_name](#model_name) and [class](#class) section below.
 

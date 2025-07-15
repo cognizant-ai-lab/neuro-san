@@ -233,7 +233,8 @@ can be specified here.
 
 ## Extending LLM Info Specifications
 
-You can extend the list of LLMs available in the neuro-san system by providing your own llm info file in one of the following ways:
+You can extend the list of LLMs available in the neuro-san system by providing your own llm info file
+in one of the following ways:
 
 ### `AGENT_LLM_INFO_FILE` Environment Variable
 
