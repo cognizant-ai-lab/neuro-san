@@ -112,6 +112,7 @@ class UnitTestAssertForwarder(AssertForwarder):
         :param container: Container comparison element
         :param msg: optional string message
         """
+        self.assertIsNotNone(container, msg=msg)
         self.test_case.assertIn(member, container, msg=msg)
 
     def assertNotIn(self, member: Any, container: Any, msg: str = None):
@@ -122,6 +123,7 @@ class UnitTestAssertForwarder(AssertForwarder):
         :param container: Container comparison element
         :param msg: optional string message
         """
+        self.assertIsNotNone(container, msg=msg)
         self.test_case.assertNotIn(member, container, msg=msg)
 
     # pylint: disable=invalid-name
