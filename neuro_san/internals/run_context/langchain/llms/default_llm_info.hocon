@@ -818,7 +818,7 @@
                 "credentials_profile_name": null,
                 "custom_get_token_ids": null,
                 "endpoint_url": null,
-                "guardrails": null,
+                "guardrails": {"guardrailIdentifier": null, "guardrailVersion": null, "trace": null},
                 "max_tokens": null,
                 "metadata": null,
                 "provider": null,
