@@ -78,10 +78,28 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         """
         self.toolbox_infos: Dict[str, Any] = {}
         self.overlayer = DictionaryOverlay()
+
+        # Get user toolbox info file path with the following priority:
+        # 1. "agent_toolbox_info_file" from agent network hocon
+        # 2. "toolbox_info_file" from agent network hocon
+        # 3. "AGENT_TOOLBOX_INFO_FILE" from environment variable
         if config:
-            self.toolbox_info_file: str = config.get("toolbox_info_file")
+            raw_toolbox_info_file: str = (
+                config.get("agent_toolbox_info_file")
+                or config.get("toolbox_info_file")
+                or os.getenv("AGENT_TOOLBOX_INFO_FILE")
+            )
         else:
-            self.toolbox_info_file = None
+            raw_toolbox_info_file = os.getenv("AGENT_TOOLBOX_INFO_FILE")
+
+        if raw_toolbox_info_file is not None and not isinstance(raw_toolbox_info_file, str):
+            raise TypeError(
+                "The values of 'agent_toolbox_info_file', 'toolbox_info_file', and "
+                "the 'AGENT_TOOLBOX_INFO_FILE' environment variable must be strings. "
+                f"Got {type(raw_toolbox_info_file).__name__} instead."
+            )
+
+        self.toolbox_info_file: str = raw_toolbox_info_file
 
     def load(self):
         """
@@ -91,16 +109,9 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         self.toolbox_infos = restorer.restore()
 
         # Mix in user-specified toolbox info, if available.
-        # First check "toolbox_info_file" key from agent network hocon.
-        # If that is unavailable, fallback to env variable.
-        toolbox_info_file: str = self.toolbox_info_file
-        if not toolbox_info_file:
-            toolbox_info_file = os.getenv("AGENT_TOOLBOX_INFO_FILE")
-        if toolbox_info_file is not None and len(toolbox_info_file) > 0:
-            extra_toolbox_infos: Dict[str, Any] = restorer.restore(file_reference=toolbox_info_file)
+        if self.toolbox_info_file:
+            extra_toolbox_infos: Dict[str, Any] = restorer.restore(file_reference=self.toolbox_info_file)
             self.toolbox_infos = self.overlayer.overlay(self.toolbox_infos, extra_toolbox_infos)
-
-            self.toolbox_info_file = toolbox_info_file
 
     def create_tool_from_toolbox(
             self,
