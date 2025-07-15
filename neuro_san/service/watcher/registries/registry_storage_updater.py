@@ -31,34 +31,45 @@ class RegistryStorageUpdater(AbstractStorageUpdater):
     use_polling: bool = True
 
     def __init__(self, network_storage_dict: Dict[str, AgentNetworkStorage],
-                 manifest_path: str,
-                 poll_interval: int):
+                 update_period_in_seconds: int,
+                 manifest_path: str):
         """
         Constructor
+
+        :param network_storage_dict: A dictionary of string (descripting scope) to
+                    AgentNetworkStorage instance which keeps all the AgentNetwork instances
+                    of a particular grouping.
+        :param update_period_in_seconds: An int describing how long this instance
+                ideally wants to go between calls to update_storage().
+        :param manifest_path: file path to server manifest file
         """
-        super().__init__()
+        super().__init__(update_period_in_seconds)
+
         self.logger = logging.getLogger(self.__class__.__name__)
         self.network_storage_dict: Dict[str, AgentNetworkStorage] = network_storage_dict
         self.manifest_path: str = manifest_path
 
         self.observer: RegistryObserver = None
         if self.use_polling:
+            poll_interval: int = self.compute_polling_interval()
             self.observer = PollingRegistryObserver(self.manifest_path, poll_interval)
         else:
             self.observer = EventRegistryObserver(self.manifest_path)
+
+    def compute_polling_interval(self) -> int:
+        """
+        :return: Polling interval for polling observer given requested manifest update period
+        """
+        update_period_seconds: int = self.get_update_period_in_seconds()
+        if update_period_seconds <= 5:
+            return 1
+        return int(round(update_period_seconds / 4))
 
     def start(self):
         """
         Perform start up.
         """
         self.observer.start()
-
-    def get_update_period_in_seconds(self) -> float:
-        """
-        :return: A float describing how long this updater ideally wants to go between
-                calls to update_storage().
-        """
-        raise NotImplementedError
 
     def update_storage(self):
         """

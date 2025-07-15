@@ -24,9 +24,9 @@ class StorageUpdater(Startable):
         """
         raise NotImplementedError
 
-    def get_update_period_in_seconds(self) -> float:
+    def get_update_period_in_seconds(self) -> int:
         """
-        :return: A float describing how long this updater ideally wants to go between
+        :return: An int describing how long this updater ideally wants to go between
                 calls to update_storage().
         """
         raise NotImplementedError
