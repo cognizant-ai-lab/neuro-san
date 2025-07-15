@@ -69,6 +69,8 @@ class RegistryStorageUpdater(AbstractStorageUpdater):
         """
         Perform start up.
         """
+        self.logger.info("Starting RegistryStorageUpdater for %s with %d seconds period",
+                         self.manifest_path, self.update_period_in_seconds)
         self.observer.start()
 
     def update_storage(self):
