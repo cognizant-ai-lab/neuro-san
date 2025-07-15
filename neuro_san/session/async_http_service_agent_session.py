@@ -115,7 +115,7 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
                             yield result_dict
 
         except (asyncio.TimeoutError, ClientOSError) as exc:
-            # Pass on a couple of asserts that are known to represent 
+            # Pass on a couple of asserts that are known to represent
             # real problems that a client has to deal with.
             # We figure this is OK for streaming_chat() because normally
             # in order to get to using streaming_chat() clients will most
