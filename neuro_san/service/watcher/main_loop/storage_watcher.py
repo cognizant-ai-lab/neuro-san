@@ -58,6 +58,7 @@ class StorageWatcher(Startable):
             # We will eventually have more here
         ]
 
+        # Figure out what the top-level update period should be.
         update_periods: List[int] = []
         for storage_updater in self.storage_updaters:
             update_period: int = storage_updater.get_update_period_in_seconds()
