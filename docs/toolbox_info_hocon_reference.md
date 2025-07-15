@@ -1,7 +1,7 @@
 # Toolbox Info HOCON File Reference
 
-This document describes the specifications for the `toolbox_info.hocon` file used in the **neuro-san** system. This file
-allows you to extend or override the default tools shipped with the `neuro-san` library.
+This document describes the specifications for the toolbox info file used in the **neuro-san** system. This file
+allows you to extend or override the default tools shipped with the neuro-san library.
 
 The **neuro-san** system uses the HOCON (Human-Optimized Config Object Notation) format for data-driven configuration. HOCON
 is similar to JSON but includes enhancements such as comments and more concise syntax. You can explore the full
@@ -27,7 +27,7 @@ keys. For dictionary-type values, their sub-keys will be described in the next h
             - [display_as](#display_as-optional-1)
     - [Extending Toolbox Info](#extending-toolbox-info)
         - [AGENT_TOOLBOX_INFO_FILE environment variable](#agent_toolbox_info_file-environment-variable)
-        - [toolbox_info_file key in specific agent hocon files](#toolbox_info_file-key-in-specific-agent-hocon-files)
+        - [toolbox_info_file key in specific agent hocon files](#agent_toolbox_info_file-and-toolbox_info_file-keys-in-agent-network-hocon)
 
 <!--TOC-->
 
@@ -53,7 +53,7 @@ in your own configuration files.
 
 ## Tool Definition Schema
 
-Each top-level key in the `toolbox_info.hocon` file represents a usable tool name. These names can be referenced in the
+Each top-level key in the toolbox info file represents a usable tool name. These names can be referenced in the
 agent network’s [`toolbox`](./agent_hocon_reference.md#toolbox).
 
 The value for each key is a dictionary describing the tool's properties. The schema differs slightly between
@@ -180,20 +180,24 @@ If **omitted**, tools with a `description` are treated as `"coded_tool"`; otherw
 
 ## Extending Toolbox Info
 
-### AGENT_TOOLBOX_INFO_FILE environment variable
+To customize the set of tools available to agents in the neuro-san system, you can provide your own toolbox info file. This allows you to add, override, or refine tool definitions beyond what's included by default, and can be done in two ways:
 
-To add or override tools in the system, you can supply your own `toolbox_info.hocon` file and specify its path via the environment
-variable:
+### `AGENT_TOOLBOX_INFO_FILE` Environment Variable
+
+You can configure a global toolbox info file for all agents by setting the `AGENT_TOOLBOX_INFO_FILE` environment variable:
 
 ```bash
-AGENT_TOOLBOX_INFO_FILE=/path/to/your/toolbox_info.hocon
+export AGENT_TOOLBOX_INFO_FILE=/path/to/your/toolbox_info.hocon
 ```
 
-This allows you to customize the set of available tools without modifying the built-in configuration.
+This method is ideal for system-wide setups where multiple agents share the same toolset. It lets you apply changes across the board without editing each agent configuration individually.
 
-### toolbox_info_file key in specific agent hocon files
+### `agent_toolbox_info_file` and `toolbox_info_file` Keys in Agent Network HOCON
 
-You can use a separate `toolbox_info.hocon` file for each agent HOCON file by setting the [`toolbox_info_file`]
-(./agent_hocon_reference.md#toolbox_info_file) key to your custom file path.
+If you need more flexibility, you can specify a custom toolbox file directly in an agent’s HOCON config using one of the following keys:
 
-This setting takes precedence over the `AGENT_TOOLBOX_INFO_FILE` environment variable and will override it if both are defined.
+- [`agent_toolbox_info_file`](./agent_hocon_reference.md#agent_toolbox_info_file) – preferred key
+
+- [`toolbox_info_file`](./agent_hocon_reference.md#toolbox_info_file) – used as a fallback
+
+These per-agent settings override any value set via the `AGENT_TOOLBOX_INFO_FILE` environment variable. This is useful when individual agents require specialized or isolated tool configurations.
