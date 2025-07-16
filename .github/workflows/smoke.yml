@@ -31,7 +31,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          apt-get update && apt-get install -y curl shellcheck netcat-openbsd
+          apt-get update && apt-get install -y curl shellcheck
           pip install -r requirements-build.txt
           pip install -r requirements.txt
 
@@ -52,11 +52,11 @@ jobs:
       - name: Wait for Ollama port to be ready (post-pull)
         run: |
           for i in {1..60}; do
-            nc -z ollama 11434 && break
+            echo "Checking if Ollama API is ready..."
+            curl --fail --silent http://ollama:11434/api/tags && break
             echo "Waiting 5s..."
             sleep 5
           done
-          nc -z ollama 11434 || (echo "❌ Timeout waiting for Ollama port after pull" && exit 1
       
       - name: Show installed packages
         run: pip freeze
