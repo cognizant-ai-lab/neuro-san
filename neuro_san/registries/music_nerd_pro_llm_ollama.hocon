@@ -65,7 +65,10 @@ Once you receive the updated running cost, respond with a JSON object that has e
 1. "answer" – your full answer to the user’s question.
 2. "running_cost" – the updated cost returned by the Accountant tool.
 """,
-            "tools": ["Accountant"]
+            "tools": ["Accountant"],
+
+            # Parse any JSON in responses into the structure field of the ChatMessage.
+            "structure_formats": "json"
         },
         {
             "name": "Accountant",

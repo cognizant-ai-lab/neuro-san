@@ -37,7 +37,7 @@
                         "keywords": "Beatles"
                     },
                     "running_cost": {
-                        "value": 3.0
+                        "value": "3.0"
                     }
                 }
             }
@@ -53,7 +53,7 @@
                         "keywords": "Liverpool"
                     },
                     "running_cost": {
-                        "value": 6.0
+                        "value": "6.0"
                     }
                 }
             }
