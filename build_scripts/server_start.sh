@@ -38,25 +38,10 @@ for i in {1..30}; do
   sleep 1
 done
 
-
-for i in {1..20}; do
-  echo "⏳ Checking Ollama on ollama:11434 ($i/20)…"
-  if nc -z ollama 11434; then
-    echo "✅ Ollama port is up!"
-    break
-  fi
-  sleep 5
-done
-
-if ! nc -z localhost 8080 || ! nc -z localhost 30011 || ! nc -z localhost 11434; then
+if ! nc -z localhost 8080 || ! nc -z localhost 30011; then
   echo "❌ Timeout: One or both ports failed to open after $i seconds"
   exit 1
 fi
-
-until curl -s http://localhost:11434/health > /dev/null; do
-  echo "Waiting for server health endpoint..."
-  sleep 1
-done
 
 until curl -s http://localhost:8080/health > /dev/null; do
   echo "Waiting for server health endpoint..."
