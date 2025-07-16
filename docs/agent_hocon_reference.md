@@ -139,6 +139,11 @@ This results in a final interpretation where the `function` value is:
 Value replacement only happens once, but you can have replacement_strings references within
 your string values within your replacement_values and things will work out as you might expect.
 
+### agent_llm_info_file
+
+Deprecated since version 0.5.46: Use `llm_info_file` instead. It will not be removed until `neuro-san==0.6.0`.
+
+
 ### llm_info_file
 
 The `llm_info_file` key allows you to specify a custom HOCON file that extends the default list of available LLMs used
@@ -146,6 +151,10 @@ by agents in a neuro-san network. This is especially useful if you're using mode
 the default configuration (e.g., newly released models or organization-specific endpoints).
 
 For more information on selecting and customizing models, see the [model_name](#model_name) and [class](#class) section below.
+
+### agent_toolbox_info_file
+
+Deprecated since version 0.5.46: Use `toolbox_info_file` instead. It will not be removed until `neuro-san==0.6.0`.
 
 ### toolbox_info_file
 
