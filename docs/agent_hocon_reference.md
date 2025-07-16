@@ -143,7 +143,6 @@ your string values within your replacement_values and things will work out as yo
 
 Deprecated since version 0.5.46: Use `llm_info_file` instead. It will not be removed until `neuro-san==0.6.0`.
 
-
 ### llm_info_file
 
 The `llm_info_file` key allows you to specify a custom HOCON file that extends the default list of available LLMs used
