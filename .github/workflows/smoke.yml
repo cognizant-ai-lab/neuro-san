@@ -65,7 +65,7 @@ jobs:
           PYTHONPATH: ${{ env.PYTHONPATH }}:.
         run: |
           build_scripts/server_start.sh
-          pytest -s --verbose -m "smoke" --timer-top-n 100 -n auto
+          pytest -s --verbose -m "smoke" --timer-top-n 100
 
       - name: Notify Slack on success
         if: success()
