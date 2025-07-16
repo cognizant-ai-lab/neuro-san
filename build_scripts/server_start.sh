@@ -29,23 +29,41 @@ for i in {1..30}; do
     PORT_30011_READY=true
   fi
 
-  if nc -z localhost 11434; then
-    PORT_11434_READY=true
-  fi
-
-  if [ "$PORT_8080_READY" = true ] && [ "$PORT_30011_READY" = true ]  && [ "$PORT_11434_READY" = true ]; then
+  if [ "$PORT_8080_READY" = true ] && [ "$PORT_30011_READY" = true ]; then
     echo "✅ Both ports are ready after awaiting $i seconds"
     break
   fi
 
-  echo "⏳ Waiting for ports 8080 and 30011 and 11434 ... ($i/30)"
+  echo "⏳ Waiting for ports 8080 and 30011... ($i/30)"
   sleep 1
 done
 
-if ! nc -z localhost 8080 || ! nc -z localhost 30011 ! nc -z localhost 11434; then
+
+for i in {1..180}; do
+  PORT_11434_READY=false
+
+  if nc -z localhost 11434; then
+    PORT_11434_READY=true
+  fi
+
+  if [ "$PORT_11434_READY" = true ]; then
+    echo "✅ Both ports are ready after awaiting $i seconds"
+    break
+  fi
+
+  echo "⏳ Waiting for ports 8080 and 30011... ($i/180)"
+  sleep 1
+done
+
+if ! nc -z localhost 8080 || ! nc -z localhost 30011 || ! nc -z localhost 11434; then
   echo "❌ Timeout: One or both ports failed to open after $i seconds"
   exit 1
 fi
+
+until curl -s http://localhost:11434/health > /dev/null; do
+  echo "Waiting for server health endpoint..."
+  sleep 1
+done
 
 until curl -s http://localhost:8080/health > /dev/null; do
   echo "Waiting for server health endpoint..."
@@ -54,6 +72,6 @@ done
 
 echo "✅ Server is healthy and ready"
 
-netstat -tuln | grep -E '8080|30011|11434'
+netstat -tuln | grep -E '8080|30011'
 
 
