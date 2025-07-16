@@ -79,8 +79,11 @@ class NameCorrectionConfigFilter(ConfigFilter):
 
             new_agent_tools: List[str] = []
             for agent_tool in agent_tools:
-                if agent_tool in corrections:
-                    new_agent_tools.append(corrections.get(agent_tool))
+                if isinstance(agent_tool, str):
+                    if agent_tool in corrections:
+                        new_agent_tools.append(corrections.get(agent_tool))
+                    else:
+                        new_agent_tools.append(agent_tool)
                 else:
                     new_agent_tools.append(agent_tool)
 

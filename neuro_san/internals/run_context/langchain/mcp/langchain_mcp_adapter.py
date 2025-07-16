@@ -45,7 +45,7 @@ class LangchainMCPAdapter:
         )
 
         # The get_tools() method returns a list of StructuredTool instances, which are subclasses of BaseTool.
-        mcp_tools = await client.get_tools()
+        mcp_tools: List[BaseTool] = await client.get_tools()
 
         # If allowed_tools is provided, filter the list to include only those tools.
         if allowed_tools:

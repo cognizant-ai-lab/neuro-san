@@ -298,6 +298,11 @@ class LangChainRunContext(RunContext):
         agent_spec: Dict[str, Any] = inspector.get_agent_tool_spec(name)
         if agent_spec is None:
 
+            if isinstance(name, dict):
+                server_url = name.get("server_url")
+                allowed_tools = name.get("allowed_tools")
+                return await LangchainMCPAdapter.get_mcp_tools(server_url, allowed_tools)
+
             # See if the agent name given could reference an external agent.
             if not ExternalAgentParsing.is_external_agent(name):
                 return None
@@ -345,9 +350,9 @@ class LangChainRunContext(RunContext):
                     self.logger.info(message)
                     return None
             elif mcp:
-                server_url = mcp.get("server_url")                    
+                server_url = mcp.get("server_url")
                 allowed_tools = mcp.get("allowed_tools")
-                return LangchainMCPAdapter.get_mcp_tools(server_url, allowed_tools)
+                return await LangchainMCPAdapter.get_mcp_tools(server_url, allowed_tools)
             else:
                 function_json = agent_spec.get("function")
 
