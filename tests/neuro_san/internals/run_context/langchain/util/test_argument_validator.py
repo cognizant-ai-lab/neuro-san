@@ -22,7 +22,7 @@ from neuro_san.internals.run_context.langchain.util.argument_validator import Ar
 
 # ----------- Sample Models and Functions for Testing -----------
 
-class TestModel(BaseModel):
+class SampleModel(BaseModel):
     """Used for get_base_model_args method testing"""
     name: str
     age: int = Field(alias="years")
@@ -43,7 +43,7 @@ class TestArgumentValidator:
         Test that get_base_model_args returns both the original field names
         and their aliases from a Pydantic BaseModel.
         """
-        result: Set[str] = ArgumentValidator.get_base_model_args(TestModel)
+        result: Set[str] = ArgumentValidator.get_base_model_args(SampleModel)
         # Expect both the field name 'name' and the alias 'years' to be included
         assert "name" in result
         assert "years" in result
@@ -56,7 +56,7 @@ class TestArgumentValidator:
         """
         args: Dict[str, Any] = {"name": "Alice", "years": 30}
         # Should not raise
-        ArgumentValidator.check_invalid_args(TestModel, args)
+        ArgumentValidator.check_invalid_args(SampleModel, args)
 
     def test_check_invalid_args_with_invalid_model_args_raises(self):
         """
@@ -65,7 +65,7 @@ class TestArgumentValidator:
         """
         args: Dict[str, Any] = {"name": "Alice", "invalid_field": "oops"}
         with pytest.raises(ValueError) as excinfo:
-            ArgumentValidator.check_invalid_args(TestModel, args)
+            ArgumentValidator.check_invalid_args(SampleModel, args)
         assert "invalid_field" in str(excinfo.value)
 
     def test_check_invalid_args_with_valid_function_args_passes(self):
