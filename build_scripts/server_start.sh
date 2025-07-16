@@ -39,20 +39,13 @@ for i in {1..30}; do
 done
 
 
-for i in {1..180}; do
-  PORT_11434_READY=false
-
-  if nc -z localhost 11434; then
-    PORT_11434_READY=true
-  fi
-
-  if [ "$PORT_11434_READY" = true ]; then
-    echo "✅ Both ports are ready after awaiting $i seconds"
+for i in {1..20}; do
+  echo "⏳ Checking Ollama on ollama:11434 ($i/20)…"
+  if nc -z ollama 11434; then
+    echo "✅ Ollama port is up!"
     break
   fi
-
-  echo "⏳ Waiting for ports 8080 and 30011... ($i/180)"
-  sleep 1
+  sleep 5
 done
 
 if ! nc -z localhost 8080 || ! nc -z localhost 30011 || ! nc -z localhost 11434; then
