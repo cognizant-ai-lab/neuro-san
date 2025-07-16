@@ -89,9 +89,14 @@ class ThinkingFileMessageProcessor(MessageProcessor):
         text: str = response.get("text")
         structure: Dict[str, Any] = response.get("structure")
 
+        if text is None:
+            text = ""
+
         if structure is not None:
             # There is no real text, but there is a structure. JSON-ify it.
-            text = json.dumps(structure, indent=4, sort_keys=True)
+            if len(text) > 0:
+                text += "\n"
+            text += f"```json\n{json.dumps(structure, indent=4, sort_keys=True)}\n```"
 
         # Figure out how we are going to report the origin given the message.
         use_origin: str = self._determine_origin_reporting(response, origin_str)

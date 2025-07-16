@@ -1,4 +1,3 @@
-
 # Copyright (C) 2023-2025 Cognizant Digital Business, Evolutionary AI.
 # All Rights Reserved.
 # Issued under the Academic Public License.
@@ -13,7 +12,6 @@
 from typing import Dict
 from typing import List
 
-
 # Dictionary with provider key env var -> strings to look for
 API_KEY_EXCEPTIONS: Dict[str, List] = {
     "OPENAI_API_KEY": ["OPENAI_API_KEY", "Incorrect API key provided"],
@@ -27,7 +25,19 @@ API_KEY_EXCEPTIONS: Dict[str, List] = {
                               "Connection error"],
     "OPENAI_API_VERSION": ["validation error", "api_version", "OPENAI_API_VERSION", "Error code: 404",
                            "Resource not found"],
-    "deployment_name": ["Error code: 404", "Resource not found", "API deployment for this resource does not exist"],
+    "AZURE_OPENAI_DEPLOYMENT_NAME": ["Error code: 404", "Resource not found",
+                                     "API deployment for this resource does not exist"],
+}
+
+AZURE_DOCUMENTATION: str = "https://learn.microsoft.com/en-us/azure/ai-services/openai/"
+"chatgpt-quickstart?tabs=keyless%2Ctypescript-keyless%2Cpython-new%2Ccommand-line&pivots=programming-language-python"
+
+# Dictionary with provider key env var -> link to documentation
+API_KEY_DOCUMENTATION: Dict[str, List] = {
+    "AZURE_OPENAI_API_KEY": AZURE_DOCUMENTATION,
+    "AZURE_OPENAI_ENDPOINT": AZURE_DOCUMENTATION,
+    "OPENAI_API_VERSION": AZURE_DOCUMENTATION,
+    "AZURE_OPENAI_DEPLOYMENT_NAME": AZURE_DOCUMENTATION,
 }
 
 
@@ -46,6 +56,7 @@ class ApiKeyErrorCheck:
 
         exception_message: str = str(exception)
         matched_keys: List[str] = []
+        matched_documentation_link: str = ""
 
         # Collect all keys that have any associated string in the exception message
         # since there could be multiple keys with the exact same message.
@@ -53,6 +64,7 @@ class ApiKeyErrorCheck:
             for find_string in string_list:
                 if find_string in exception_message:
                     matched_keys.append(api_key)
+                    matched_documentation_link = API_KEY_DOCUMENTATION.get(api_key, "")
                     # No need to check the remaining strings for this key
                     break
 
@@ -64,7 +76,7 @@ server or run-time enviroment in order to use this agent network.
 
 Some things to try:
 1) Double check that your value for {keys_str} is set correctly
-2) If you do not have a value for {keys_str}, visit the LLM provider's website to get one.
+2) If you do not have a value for {keys_str}, visit the LLM provider's website to get one {matched_documentation_link}
 3) It's possible that your credit balance on your account with the LLM provider is too low
    to make the request.  Check that.
 4) Sometimes these errors happen because of firewall blockages to the site that hosts the LLM.

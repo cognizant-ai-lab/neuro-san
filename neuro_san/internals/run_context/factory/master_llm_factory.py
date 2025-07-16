@@ -37,10 +37,10 @@ class MasterLlmFactory:
         if context_type.startswith("openai"):
             llm_factory = None
         elif context_type.startswith("langchain"):
-            llm_factory = DefaultLlmFactory()
+            llm_factory = DefaultLlmFactory(config)
         else:
             # Default case
-            llm_factory = DefaultLlmFactory()
+            llm_factory = DefaultLlmFactory(config)
 
         return llm_factory
 

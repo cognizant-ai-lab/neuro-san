@@ -70,7 +70,10 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         if chat_class is not None:
             chat_class = chat_class.lower()
 
-        model_name: str = config.get("model_name")
+        # Check for key "model_name", "model", and "model_id" to use as model name
+        # If the config is from default_llm_info, this is always "model_name"
+        # but with user-specified config, it is possible to have the other keys will be specifed instead.
+        model_name: str = config.get("model_name") or config.get("model") or config.get("model_id")
 
         if chat_class == "openai":
             llm = ChatOpenAI(
@@ -139,7 +142,8 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                             # Azure-specific
                             azure_endpoint=self.get_value_or_env(config, "azure_endpoint",
                                                                  "AZURE_OPENAI_ENDPOINT"),
-                            deployment_name=config.get("deployment_name"),
+                            deployment_name=self.get_value_or_env(config, "deployment_name",
+                                                                  "AZURE_OPENAI_DEPLOYMENT_NAME"),
                             openai_api_version=self.get_value_or_env(config, "openai_api_version",
                                                                      "OPENAI_API_VERSION"),
 
@@ -181,6 +185,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                             num_gpu=config.get("num_gpu"),
                             num_thread=config.get("num_thread"),
                             num_predict=config.get("num_predict", config.get("max_tokens")),
+                            reasoning=config.get("reasoning"),
                             repeat_last_n=config.get("repeat_last_n"),
                             repeat_penalty=config.get("repeat_penalty"),
                             temperature=config.get("temperature"),

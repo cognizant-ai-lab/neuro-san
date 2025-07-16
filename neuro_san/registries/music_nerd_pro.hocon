@@ -22,9 +22,16 @@
         # How they are linked and call each other is defined within their
         # own specs.  This could be a graph, potentially even with cycles.
 
-        # This first guy is the "Front Man".  He is identified as such because
-        # he is the only one with no parameters in his function definition,
-        # and therefore he needs to talk to the outside world to get things rolling.
+        # This first agent definition is regarded as the "Front Man", which
+        # does all the talking to the outside world/client.
+        # It is identified as such because it is either:
+        #   A) The only one with no parameters in his function definition,
+        #      and therefore he needs to talk to the outside world to get things rolling.
+        #   B) The first agent listed, regardless of function parameters.
+        #
+        # Some disqualifications from being a front man:
+        #   1) Cannot use a CodedTool "class" definition
+        #   2) Cannot use a Tool "toolbox" definition
         {
             "name": "MusicNerdPro",
 
@@ -34,9 +41,7 @@
 
             "function": {
 
-                # When there are no function parameters to the front-man,
-                # its description acts as an initial prompt. 
-
+                # The description acts as an initial prompt.
                 "description": """
 I can help with music-related inquiries.
 """
@@ -52,14 +57,17 @@ You’re Music Nerd Pro, the go-to brain for all things rock, pop, and everythin
 You’re equal parts playlist curator, music historian, and pop culture mythbuster—with a sixth sense for sonic nostalgia and a deep respect for the analog gods.
 
 This service comes for a fee. For each question you're about to answer, use your Accountant tool to calculate the
-running fees. 
+running fees.
 
 For each question you receive, call your Accountant agent to calculate the running cost. Otherwise you won't get paid!
 Then answer with a JSON message that has two keys:
 1. An "answer" key whose value has the answer to the question
 2. A "running_cost" key whose value has the running cost computed by the Accountant agent.
 """,
-            "tools": ["Accountant"]
+            "tools": ["Accountant"],
+
+            # Parse any JSON in responses into the structure field of the ChatMessage.
+            "structure_formats": "json"
         },
         {
             "name": "Accountant",
