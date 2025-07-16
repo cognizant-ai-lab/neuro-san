@@ -197,7 +197,7 @@ class LangChainRunContext(RunContext):
                     else:
                         self.tools.append(tool)
 
-        prompt_template: ChatPromptTemplate = await self._create_prompt_template(instructions, assignments)
+        prompt_template: ChatPromptTemplate = await self._create_prompt_template(instructions)
 
         self.agent = self.create_agent_with_fallbacks(prompt_template, callbacks)
 
@@ -364,7 +364,7 @@ class LangChainRunContext(RunContext):
                                                                                  self.tool_caller)
         return function_tool
 
-    async def _create_prompt_template(self, instructions: str, assignments: str) -> ChatPromptTemplate:
+    async def _create_prompt_template(self, instructions: str) -> ChatPromptTemplate:
         """
         Creates a ChatPromptTemplate given the generic instructions
         """
@@ -375,12 +375,6 @@ class LangChainRunContext(RunContext):
         if not self.chat_history:
             await self.journal.write_message(system_message)
         message_list.append(("system", instructions))
-
-        # If we have assignments, add them
-        if assignments is not None and len(assignments) > 0:
-            system_message = SystemMessage(assignments)
-            await self.journal.write_message(system_message)
-            message_list.append(("system", assignments))
 
         # Fill out the rest of the prompt per the docs for create_tooling_agent()
         # Note we are not write_message()-ing the chat history because that is redundant

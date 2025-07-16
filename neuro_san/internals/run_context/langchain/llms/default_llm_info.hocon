@@ -669,9 +669,45 @@
     },
     
     # Bedrock
+
+    "us.anthropic.claude-opus-4-20250514-v1:0": {
+        "class": "bedrock",
+        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
+        "capabilities": [ "tools" ],
+        "context_window_size": 200000,
+        "max_output_tokens": 32000,
+        "knowledge_cutoff": "03/2025",
+    },
+    "us.anthropic.claude-sonnet-4-20250514-v1:0": {
+        "class": "bedrock",
+        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
+        "capabilities": [ "tools" ],
+        "context_window_size": 200000,
+        "max_output_tokens": 64000,
+        "knowledge_cutoff": "03/2025",
+    },
     "us.anthropic.claude-3-7-sonnet-20250219-v1:0": {
         "class": "bedrock",
-        "max_output_tokens": 8192,
+        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
+        "capabilities": [ "tools" ],
+        "context_window_size": 200000,
+        "max_output_tokens": 64000,
+        "knowledge_cutoff": "11/2024",
     }
 
     # These are data for each LLM class, so they don't have to be repeated for each

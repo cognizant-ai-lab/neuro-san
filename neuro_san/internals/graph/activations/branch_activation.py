@@ -124,6 +124,9 @@ class BranchActivation(CallingActivation, CallableActivation):
         await self.create_resources(unique_name, instructions, assignments)
 
         command = self.get_command()
+        # If there is assignments, combine it with command to be used as HumanMessage.
+        if assignments:
+            command = assignments + "\n" + command
         run: Run = await self.run_context.submit_message(command)
         run = await self.run_context.wait_on_run(run, self.journal)
 
