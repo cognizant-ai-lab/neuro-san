@@ -9,10 +9,13 @@
 #
 # END COPYRIGHT
 
-import logging
-from threading import Lock
 from typing import Dict
 from typing import Tuple
+
+import logging
+
+from threading import Lock
+
 from watchdog.events import FileSystemEventHandler
 
 

@@ -78,10 +78,28 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         self.llm_factories: List[LangChainLlmFactory] = [
             StandardLangChainLlmFactory()
         ]
+
+        # Get user LLM info file path with the following priority:
+        # 1. "agent_llm_info_file" from agent network hocon
+        # 2. "llm_info_file" from agent network hocon
+        # 3. "AGENT_LLM_INFO_FILE" from environment variable
         if config:
-            self.llm_info_file: str = config.get("agent_llm_info_file")
+            raw_llm_info_file: str = (
+                config.get("agent_llm_info_file")
+                or config.get("llm_info_file")
+                or os.getenv("AGENT_LLM_INFO_FILE")
+            )
         else:
-            self.llm_info_file = None
+            raw_llm_info_file = os.getenv("AGENT_LLM_INFO_FILE")
+
+        if raw_llm_info_file is not None and not isinstance(raw_llm_info_file, str):
+            raise TypeError(
+                "The values of 'agent_llm_info_file', 'llm_info_file', and "
+                "the 'AGENT_LLM_INFO_FILE' environment variable must be strings. "
+                f"Got {type(raw_llm_info_file).__name__} instead."
+            )
+
+        self.llm_info_file: str = raw_llm_info_file
 
     def load(self):
         """
@@ -91,13 +109,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         self.llm_infos = restorer.restore()
 
         # Mix in user-specified llm info, if available.
-        # First check "agent_llm_info_file" key from agent network hocon.
-        # If that is unavailable, fallback to env variable.
-        llm_info_file: str = self.llm_info_file
-        if not llm_info_file:
-            llm_info_file = os.getenv("AGENT_LLM_INFO_FILE")
-        if llm_info_file is not None and len(llm_info_file) > 0:
-            extra_llm_infos: Dict[str, Any] = restorer.restore(file_reference=llm_info_file)
+        if self.llm_info_file:
+            extra_llm_infos: Dict[str, Any] = restorer.restore(file_reference=self.llm_info_file)
             self.llm_infos = self.overlayer.overlay(self.llm_infos, extra_llm_infos)
 
         # sanitize the llm_infos keys
@@ -108,10 +121,10 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         llm_factory_classes: List[str] = []
         llm_factory_classes = extractor.get("classes.factories", llm_factory_classes)
         if not isinstance(llm_factory_classes, List):
-            raise ValueError(f"The classes.factories key in {llm_info_file} must be a list of strings")
+            raise ValueError(f"The classes.factories key in {self.llm_info_file} must be a list of strings")
 
         for llm_factory_class_name in llm_factory_classes:
-            llm_factory: LangChainLlmFactory = self.resolve_one_llm_factory(llm_factory_class_name, llm_info_file)
+            llm_factory: LangChainLlmFactory = self.resolve_one_llm_factory(llm_factory_class_name, self.llm_info_file)
             # Success. Tack it on to the list
             self.llm_factories.append(llm_factory)
 
