@@ -144,7 +144,7 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
         handlers.append((r"/api/v1/([^/]+)/connectivity", ConnectivityHandler, request_initialize_data))
         handlers.append((r"/api/v1/([^/]+)/streaming_chat", StreamingChatHandler, request_initialize_data))
 
-        return HttpServerApp(handlers, requests_limit, logger)
+        return HttpServerApp(handlers, requests_limit, logger, self.forwarded_request_metadata)
 
     def allow(self, agent_name) -> AsyncAgentServiceProvider:
         return self.allowed_agents.get(agent_name, None)
