@@ -75,7 +75,7 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{
               "model": "qwen3:8b",
-              "prompt": "hello",
+              "prompt": "Briefly define reinforcement learning.",
               "stream": false
             }'
       
