@@ -93,7 +93,8 @@ jobs:
           OPENAI_API_VERSION: ${{ vars.OPENAI_API_VERSION }}
           AGENT_TOOL_PATH: "./neuro_san/coded_tools"
           PYTHONPATH: ${{ env.PYTHONPATH }}:.
-        continue-on-error: true
+        # Option to set to ignore test failure status
+        # continue-on-error: true
         run: |
           build_scripts/server_start.sh
           pytest -s --verbose -m "smoke" --timer-top-n 100
