@@ -16,13 +16,13 @@ import logging
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
-from neuro_san.service.watcher.interfaces.storage_updater import StorageUpdater
+from neuro_san.service.watcher.interfaces.abstract_storage_updater import AbstractStorageUpdater
 from neuro_san.service.watcher.registries.event_registry_observer import EventRegistryObserver
 from neuro_san.service.watcher.registries.polling_registry_observer import PollingRegistryObserver
 from neuro_san.service.watcher.registries.registry_observer import RegistryObserver
 
 
-class RegistryStorageUpdater(StorageUpdater):
+class RegistryStorageUpdater(AbstractStorageUpdater):
     """
     Implementation of the StorageUpdater interface that updates registries
     from changes in the file system.
@@ -31,11 +31,19 @@ class RegistryStorageUpdater(StorageUpdater):
     use_polling: bool = True
 
     def __init__(self, network_storage_dict: Dict[str, AgentNetworkStorage],
-                 manifest_path: str,
-                 poll_interval: int):
+                 update_period_in_seconds: int,
+                 manifest_path: str):
         """
         Constructor
+
+        :param network_storage_dict: A dictionary of string (descripting scope) to
+                    AgentNetworkStorage instance which keeps all the AgentNetwork instances
+                    of a particular grouping.
+        :param update_period_in_seconds: An int describing how long this instance
+                ideally wants to go between calls to update_storage().
+        :param manifest_path: file path to server manifest file
         """
+        super().__init__(update_period_in_seconds)
 
         self.logger = logging.getLogger(self.__class__.__name__)
         self.network_storage_dict: Dict[str, AgentNetworkStorage] = network_storage_dict
@@ -43,14 +51,26 @@ class RegistryStorageUpdater(StorageUpdater):
 
         self.observer: RegistryObserver = None
         if self.use_polling:
+            poll_interval: int = self.compute_polling_interval()
             self.observer = PollingRegistryObserver(self.manifest_path, poll_interval)
         else:
             self.observer = EventRegistryObserver(self.manifest_path)
+
+    def compute_polling_interval(self) -> int:
+        """
+        :return: Polling interval for polling observer given requested manifest update period
+        """
+        update_period_seconds: int = self.get_update_period_in_seconds()
+        if update_period_seconds <= 5:
+            return 1
+        return int(round(update_period_seconds / 4))
 
     def start(self):
         """
         Perform start up.
         """
+        self.logger.info("Starting RegistryStorageUpdater for %s with %d seconds period",
+                         self.manifest_path, self.update_period_in_seconds)
         self.observer.start()
 
     def update_storage(self):
