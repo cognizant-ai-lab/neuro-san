@@ -9,7 +9,7 @@ jobs:
   smoke-test:
     runs-on: ubuntu-latest
     
-    🚀 Ollama Service runs alongside main container
+    # 🚀 Ollama Service runs alongside main container
     services:
       ollama:
         image: ollama/ollama
