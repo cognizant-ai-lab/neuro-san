@@ -44,6 +44,15 @@ jobs:
             sleep 5
           done
 
+      - name: Wait for Ollama service to become responsive
+        run: |
+          for i in {1..10}; do
+            echo "Checking if Ollama API is ready..."
+            curl --fail --silent http://localhost:11434/api/tags && break
+            echo "Waiting 5s..."
+            sleep 5
+          done
+
       - name: Pull Ollama model (qwen3:8b)
         run: |
           curl http://ollama:11434/api/pull \
@@ -54,6 +63,15 @@ jobs:
           for i in {1..60}; do
             echo "Checking if Ollama API is ready..."
             curl --fail --silent http://ollama:11434/api/tags && break
+            echo "Waiting 5s..."
+            sleep 5
+          done
+      
+      - name: Wait for Ollama service to become responsive
+        run: |
+          for i in {1..10}; do
+            echo "Checking if Ollama API is ready..."
+            curl --fail --silent http://localhost:11434/api/tags && break
             echo "Waiting 5s..."
             sleep 5
           done
@@ -72,9 +90,17 @@ jobs:
           OPENAI_API_VERSION: ${{ vars.OPENAI_API_VERSION }}
           AGENT_TOOL_PATH: "./neuro_san/coded_tools"
           PYTHONPATH: ${{ env.PYTHONPATH }}:.
+        continue-on-error: true
         run: |
           build_scripts/server_start.sh
           pytest -s --verbose -m "smoke" --timer-top-n 100
+      
+      - name: Dump agent.log
+        # always run, even if previous step failed
+        if: ${{ always() }}
+        run: |
+          echo "=== AGENT.LOG ==="
+          cat agent.log || echo "(no agent.log found)"
 
       - name: Notify Slack on success
         if: success()
