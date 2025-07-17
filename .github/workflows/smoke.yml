@@ -15,11 +15,6 @@ jobs:
         image: ollama/ollama
         ports:
           - 11434:11434
-        # options: >-
-        #   --health-cmd "curl --fail --silent http://localhost:11434/api/tags || exit 1"
-        #   --health-interval 10s
-        #   --health-timeout 5s
-        #   --health-retries 10
 
     # 🔧 Your actual job container
     container:
@@ -67,14 +62,20 @@ jobs:
             sleep 5
           done
       
-      - name: Wait for Ollama service to become responsive
+      - name: Test Ollama model inference
         run: |
           for i in {1..10}; do
-            echo "Checking if Ollama API is ready..."
-            curl --fail --silent http://localhost:11434/api/tags && break
-            echo "Waiting 5s..."
+            echo "Sending a test prompt to Ollama model..."
+            RESPONSE=$(curl --fail --silent http://ollama:11434/api/generate -d '{ "model": "qwen3:8b", "prompt": "Hello" }')
+            if echo "$RESPONSE" | grep -q "response"; then
+              echo "Model responded successfully."
+              exit 0
+            fi
+            echo "Waiting 5s for model to become responsive..."
             sleep 5
           done
+          echo "Model Fail to response"
+          exit 1
       
       - name: Show installed packages
         run: pip freeze
