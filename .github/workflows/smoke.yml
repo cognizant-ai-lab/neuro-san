@@ -105,7 +105,7 @@ jobs:
       
       #  2) Dump agent.log—but only if smoke reported failure.
       - name: Dump agent.log
-        if: steps.smoke.outputs.failed == 'true'
+        if: steps.smoke.outputs.failed != 'true'
         run: |
           echo "=== AGENT.LOG ==="
           cat agent.log || echo "(no agent.log found)"
