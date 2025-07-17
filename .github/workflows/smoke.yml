@@ -9,6 +9,19 @@ jobs:
   smoke-test:
     runs-on: ubuntu-latest
     
+    🚀 Ollama Service runs alongside main container
+    services:
+      ollama:
+        image: ollama/ollama
+        ports:
+          - 11434:11434
+        # options: >-
+        #   --health-cmd "curl --fail --silent http://localhost:11434/api/tags || exit 1"
+        #   --health-interval 10s
+        #   --health-timeout 5s
+        #   --health-retries 10
+
+    # 🔧 Your actual job container
     container:
       image: python:3.12-slim
 
