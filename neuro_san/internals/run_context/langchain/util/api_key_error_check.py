@@ -40,6 +40,8 @@ API_KEY_DOCUMENTATION: Dict[str, List] = {
     "AZURE_OPENAI_DEPLOYMENT_NAME": AZURE_DOCUMENTATION,
 }
 
+INTERNAL_ERRORS_LIST: List[str] = ["bound to a different event loop"]
+
 
 class ApiKeyErrorCheck:
     """
@@ -85,3 +87,18 @@ Some things to try:
 """
 
         return None
+
+    @staticmethod
+    def check_for_internal_error(exception_traceback: str) -> bool:
+        """
+        Check if exception traceback points to some internal LLM stack problem,
+        not necessarily related to API keys being absent or invalid.
+        This function used as an additional check while using check_for_api_key_exception()
+        :param exception_traceback: exception traceback string;
+        :return: True if exception seems to be caused by some internal problems,
+                 False otherwise
+        """
+        for err_msg in INTERNAL_ERRORS_LIST:
+            if err_msg in exception_traceback:
+                return True
+        return False
