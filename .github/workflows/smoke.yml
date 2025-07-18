@@ -100,11 +100,12 @@ jobs:
             echo "=== Server_Sevice_Agent.LOG ==="
             cat agent.log || echo "(no agent.log found)"
             echo "===================================================="
+            ls /tmp/
             echo "=== Agent_thinking MusicNerdPro.LOG ==="
-            cat /private/tmp/agent_thinking/MusicNerdPro || echo "(no agent_music_thinking.log found)"
+            cat /tmp/agent_thinking/MusicNerdPro || echo "(no agent_music_thinking.log found)"
             echo "===================================================="
             echo "=== Agent_thinking MusicNerdPro_Accountant.LOG ==="
-            cat /private/tmp/agent_thinking/MusicNerdPro.Accountant || echo "(no agent_account_thinking.log found)"
+            cat /tmp/agent_thinking/MusicNerdPro.Accountant || echo "(no agent_account_thinking.log found)"
             exit 1
           fi
 
