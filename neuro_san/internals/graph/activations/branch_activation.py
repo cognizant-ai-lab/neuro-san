@@ -121,7 +121,7 @@ class BranchActivation(CallingActivation, CallableActivation):
         uuid_str = str(uuid.uuid4())
         component_name = self.get_name()
         unique_name = f"{uuid_str}_{component_name}"
-        await self.create_resources(unique_name, instructions, assignments)
+        await self.create_resources(unique_name, instructions, None)
 
         command = self.get_command()
         # If there is assignments, combine it with command to be used as HumanMessage.
