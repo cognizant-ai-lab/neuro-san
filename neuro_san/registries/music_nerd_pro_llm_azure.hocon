@@ -66,6 +66,9 @@ Then answer with a JSON message that has two keys:
 2. A "running_cost" key whose value has the running cost computed by the Accountant agent.
 """,
             "tools": ["Accountant"]
+
+            # Parse any JSON in responses into the structure field of the ChatMessage.
+            "structure_formats": "json"
         },
         {
             "name": "Accountant",
