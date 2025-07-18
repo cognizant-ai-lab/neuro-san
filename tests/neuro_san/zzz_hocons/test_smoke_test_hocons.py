@@ -121,7 +121,7 @@ class TestSmokeTestHocons(TestCase):
     @pytest.mark.needs_server
     @pytest.mark.non_default_llm_provider
     @pytest.mark.ollama
-    def test_hocon_with_server(self, test_name: str, test_hocon: str):
+    def test_hocon_with_server_non_default_llm(self, test_name: str, test_hocon: str):
         """
         Test method for a single parameterized test case specified by a hocon file.
         Arguments to this method are given by the iteration that happens as a result
