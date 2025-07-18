@@ -15,7 +15,9 @@
 
 {
     "llm_config": {
-        "model_name": "claude-3-5-haiku",
+        "model_name": "qwen3:8b",
+        "reasoning": false,
+        "base_url": "ollama"
     },
     "tools": [
         # These tool definitions do not have to be in any particular order
@@ -60,12 +62,11 @@ You’re equal parts playlist curator, music historian, and pop culture mythbust
 - You must not estimate, guess, or invent the cost under any circumstance.
 - You must not skip calling the Accountant tool — it is required once for every question.
 
-For each question you receive, call your Accountant agent to calculate the running cost. Otherwise you won't get paid!
-Then answer with a JSON message that has two keys:
-1. An "answer" key whose value has the answer to the question
-2. A "running_cost" key whose value has the running cost computed by the Accountant agent.
+Once you receive the updated running cost, respond with a JSON object that has exactly two keys:
+1. "answer" – your full answer to the user’s question.
+2. "running_cost" – the updated cost returned by the Accountant tool.
 """,
-            "tools": ["Accountant"]
+            "tools": ["Accountant"],
 
             # Parse any JSON in responses into the structure field of the ChatMessage.
             "structure_formats": "json"

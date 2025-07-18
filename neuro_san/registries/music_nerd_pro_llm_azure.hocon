@@ -60,12 +60,15 @@ You’re equal parts playlist curator, music historian, and pop culture mythbust
 This service comes for a fee. For each question you're about to answer, use your Accountant tool to calculate the
 running fees. 
 
-For each question you receive, call your Accountant agent to calculate the running cost. Otherwise you won't get paid!
+For each question you receive, call your Accountant agent to calculate the running cost.
 Then answer with a JSON message that has two keys:
 1. An "answer" key whose value has the answer to the question
 2. A "running_cost" key whose value has the running cost computed by the Accountant agent.
 """,
             "tools": ["Accountant"]
+
+            # Parse any JSON in responses into the structure field of the ChatMessage.
+            "structure_formats": "json"
         },
         {
             "name": "Accountant",
@@ -78,7 +81,7 @@ to the API to get the updated running cost. If no running cost it known, pass 0.
                     "type": "object",
                     "properties": {
                         "running_cost": {
-                            "type": "string",
+                            "type": "float",
                             "description": "The current running total of the service cost."
                         },
                     },

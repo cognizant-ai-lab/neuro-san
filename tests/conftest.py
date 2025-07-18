@@ -10,6 +10,7 @@ def configure_llm_provider_keys(request, monkeypatch):
     is_anthropic = request.node.get_closest_marker("anthropic")
     is_azure = request.node.get_closest_marker("azure")
     is_gemini = request.node.get_closest_marker("gemini")
+    is_ollama = request.node.get_closest_marker("ollama")
 
     if is_non_default:
         # For any non-default provider: clear OPENAI key to prevent accidental use
@@ -24,6 +25,8 @@ def configure_llm_provider_keys(request, monkeypatch):
         elif is_gemini:
             if not os.getenv("GOOGLE_API_KEY"):
                 pytest.skip("Missing GOOGLE_API_KEY for test marked 'gemini'")
+        elif is_ollama:
+            print("No key needed for test marked 'ollama'")
         else:
             pytest.skip("Unknown non-default provider; test requires explicit key handling.")
     else:

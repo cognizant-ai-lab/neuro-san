@@ -8,6 +8,15 @@ on:
 jobs:
   smoke-test:
     runs-on: ubuntu-latest
+    
+    # 🚀 Ollama Service runs alongside main container
+    services:
+      ollama:
+        image: ollama/ollama
+        ports:
+          - 11434:11434
+
+    # 🔧 Your actual job container
     container:
       image: python:3.12-slim
 
@@ -17,14 +26,62 @@ jobs:
 
       - name: Install dependencies
         run: |
-          apt-get update && apt-get install -y shellcheck
+          apt-get update && apt-get install -y curl shellcheck
           pip install -r requirements-build.txt
           pip install -r requirements.txt
 
+      - name: Wait for Ollama service to become responsive
+        run: |
+          for i in {1..10}; do
+            echo "Checking if Ollama API is ready..."
+            curl --fail --silent http://ollama:11434/api/tags && break
+            echo "Waiting 5s..."
+            sleep 5
+          done
+
+      - name: Pull Ollama model (qwen3:8b)
+        run: |
+          curl http://ollama:11434/api/pull \
+            -d '{ "name": "qwen3:8b" }'
+    
+      - name: Wait for Ollama port to be ready (post-pull)
+        run: |
+          for i in {1..60}; do
+            echo "Checking if Ollama API is ready..."
+            curl --fail --silent http://ollama:11434/api/tags && break
+            echo "Waiting 5s..."
+            sleep 5
+          done
+      
+      - name: Generate text as ollama with retry (every 30s up to 3m)
+        run: |
+          SUCCESS=0
+          for i in $(seq 1 6); do
+            echo "⏳ Attempt #$i: Generating text…"
+            if curl --fail --silent http://ollama:11434/api/generate \
+                 -X POST \
+                 -H "Content-Type: application/json" \
+                 -d '{
+                   "model": "qwen3:8b",
+                   "prompt": "Briefly define reinforcement learning.",
+                   "stream": false
+                 }'; then
+              echo "✅ Generation succeeded on attempt #$i"
+              SUCCESS=1
+              break
+            fi
+            echo "⏱  Waiting 30s before retry…"
+            sleep 30
+          done
+          if [ "$SUCCESS" -ne 1 ]; then
+            echo "❌ Timeout: failed to generate after 3 minutes"
+            exit 1
+          fi
+      
       - name: Show installed packages
         run: pip freeze
 
-      - name: Start agent server service AND run smoke test cases in parallel
+      - name: Start server & run smoke tests
         shell: bash
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -37,7 +94,15 @@ jobs:
           PYTHONPATH: ${{ env.PYTHONPATH }}:.
         run: |
           build_scripts/server_start.sh
-          pytest -s --verbose -m "smoke" --timer-top-n 100 -n auto
+
+          if ! pytest -s --verbose -m "smoke" --timer-top-n 100; then
+            echo "===================================================="
+            echo "===================================================="
+            echo "=== Server_Sevice_Agent.LOG ==="
+            cat agent.log || echo "(no agent.log found)"
+            echo "===================================================="
+            exit 1
+          fi
 
       - name: Notify Slack on success
         if: success()
