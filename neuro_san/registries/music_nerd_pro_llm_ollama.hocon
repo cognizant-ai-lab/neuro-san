@@ -16,7 +16,8 @@
 {
     "llm_config": {
         "model_name": "qwen3:8b",
-        "reasoning": false
+        "reasoning": false,
+        "base_url": "ollama"
     },
     "tools": [
         # These tool definitions do not have to be in any particular order
