@@ -53,7 +53,32 @@ jobs:
             sleep 5
           done
       
-      - name: Generate text with retry (every 10s up to 3m)
+      - name: Generate text as ollama with retry (every 10s up to 3m)
+        run: |
+          SUCCESS=0
+          for i in $(seq 1 18); do
+            echo "⏳ Attempt #$i: Generating text…"
+            if curl --fail --silent http://ollama:11434/api/generate \
+                 -X POST \
+                 -H "Content-Type: application/json" \
+                 -d '{
+                   "model": "qwen3:8b",
+                   "prompt": "Briefly define reinforcement learning.",
+                   "stream": false
+                 }'; then
+              echo "✅ Generation succeeded on attempt #$i"
+              SUCCESS=1
+              break
+            fi
+            echo "⏱  Waiting 30s before retry…"
+            sleep 30
+          done
+          if [ "$SUCCESS" -ne 1 ]; then
+            echo "❌ Timeout: failed to generate after 3 minutes"
+            exit 1
+          fi
+      
+      - name: Generate text as localhost with retry (every 10s up to 3m)
         run: |
           SUCCESS=0
           for i in $(seq 1 18); do
@@ -70,8 +95,8 @@ jobs:
               SUCCESS=1
               break
             fi
-            echo "⏱  Waiting 10s before retry…"
-            sleep 10
+            echo "⏱  Waiting 30s before retry…"
+            sleep 30
           done
           if [ "$SUCCESS" -ne 1 ]; then
             echo "❌ Timeout: failed to generate after 3 minutes"
