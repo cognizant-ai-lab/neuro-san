@@ -14,6 +14,7 @@ See class comment for details
 """
 from typing import Any
 from typing import Dict
+from typing import List
 
 import time
 
@@ -21,8 +22,10 @@ from threading import Lock
 from threading import Thread
 
 from tornado.web import Application
+from tornado.web import ErrorHandler
 from tornado.ioloop import IOLoop
 
+from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
 
 
@@ -34,10 +37,16 @@ class HttpServerApp(Application):
     # pylint: disable=too-many-instance-attributes
     SHUTDOWN_TIMEOUT_SECONDS: int = 30
 
-    def __init__(self, handlers, requests_limit: int, logger: EventLoopLogger):
+    def __init__(self, handlers,
+                 requests_limit: int,
+                 logger: EventLoopLogger,
+                 forwarded_request_metadata: List[str]):
         """
         Constructor:
         :param handlers: list of request handlers
+        :param requests_limit: limit for number of requests we can execute
+        :param logger: logger to use
+        :param forwarded_request_metadata: list of client metadata keys
         """
         # Call the base constructor
         super().__init__(handlers=handlers)
@@ -46,6 +55,7 @@ class HttpServerApp(Application):
         self.requests_stats: Dict[str, int] = {}
         self.requests_limit: int = requests_limit
         self.logger: EventLoopLogger = logger
+        self.forwarded_request_metadata: List[str] = forwarded_request_metadata
         self.serving: bool = True
         self.shutdown_initiated: bool = False
         self.lock: Lock = Lock()
@@ -137,10 +147,23 @@ class HttpServerApp(Application):
         return str(stats_dict)
 
     def log_request(self, handler):
-        request = handler.request
-        metadata: Dict[str, Any] = handler.get_metadata()
-        status = handler.get_status()
-        duration = 1000 * request.request_time()  # in milliseconds
-        # handler.logger is our custom HttpLogger
-        handler.logger.info(metadata, "%d %s %s (%s) %.2fms",
-                            status, request.method, request.uri, request.remote_ip, duration)
+        if isinstance(handler, BaseRequestHandler):
+            request = handler.request
+            metadata: Dict[str, Any] = handler.get_metadata()
+            status = handler.get_status()
+            duration = 1000 * request.request_time()  # in milliseconds
+            # handler.logger is our custom HttpLogger
+            handler.logger.info(metadata, "%d %s %s (%s) %.2fms",
+                                status, request.method, request.uri, request.remote_ip, duration)
+        elif isinstance(handler, ErrorHandler):
+            request = handler.request
+            metadata: Dict[str, Any] =\
+                BaseRequestHandler.get_request_metadata(request, self.forwarded_request_metadata)
+            status = handler.get_status()
+            duration = 1000 * request.request_time()  # in milliseconds
+            # handler.logger is our custom HttpLogger
+            self.logger.error(metadata, "%d %s %s (%s) %.2fms",
+                              status, request.method, request.uri, request.remote_ip, duration)
+        else:
+            # Fall back to base request logger:
+            super().log_request(handler)
