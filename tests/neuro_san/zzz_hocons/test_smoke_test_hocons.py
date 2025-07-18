@@ -58,6 +58,7 @@ class TestSmokeTestHocons(TestCase):
     #     # Ideally more basic functionality will come first.
     #     # Barring that, try to stick to alphabetical order.
     #     "music_nerd_pro/combination_responses_with_history_grpc.hocon",
+    #     "music_nerd_pro/combination_responses_with_history_http.hocon",
 
     #     # List more hocon files as they become available here.
     # ]))
@@ -85,6 +86,7 @@ class TestSmokeTestHocons(TestCase):
     #     "music_nerd_pro_llm_anthropic/combination_responses_with_history_direct.hocon",
     #     "music_nerd_pro_llm_gemini/combination_responses_with_history_direct.hocon",
     #     "music_nerd_pro_llm_azure/combination_responses_with_history_direct.hocon",
+    #     "music_nerd_pro_llm_ollama/combination_responses_with_history_direct.hocon"
 
     #     # List more hocon files as they become available here.
     # ]))
