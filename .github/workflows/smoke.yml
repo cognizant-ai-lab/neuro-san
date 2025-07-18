@@ -8,6 +8,8 @@ on:
 jobs:
   smoke-test:
     runs-on: ubuntu-latest
+    # don't run this job in sync'd clones
+    if: github.repository == 'cognizant-ai-lab/neuro-san'
     container:
       image: python:3.12-slim
 
