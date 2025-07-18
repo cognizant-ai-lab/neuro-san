@@ -58,7 +58,7 @@ jobs:
           SUCCESS=0
           for i in $(seq 1 18); do
             echo "⏳ Attempt #$i: Generating text…"
-            if curl --fail --silent http://ollama:11434/api/generate \
+            if curl --fail --silent http://localhost:11434/api/generate \
                  -X POST \
                  -H "Content-Type: application/json" \
                  -d '{
