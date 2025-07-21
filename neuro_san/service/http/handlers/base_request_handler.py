@@ -83,9 +83,20 @@ class BaseRequestHandler(RequestHandler):
         from incoming request.
         :return: dictionary of user request metadata; possibly empty
         """
-        headers: Dict[str, Any] = self.request.headers
+        return BaseRequestHandler.get_request_metadata(self.request, self.forwarded_request_metadata)
+
+    @classmethod
+    def get_request_metadata(cls, request, forwarded_request_metadata: List[str]) -> Dict[str, Any]:
+        """
+        Extract user metadata defined by forwarded_request_metadata list
+        from incoming request.
+        :param request: incoming http request
+        :param forwarded_request_metadata: list of metadata keys
+        :return: dictionary of user request metadata; possibly empty
+        """
+        headers: Dict[str, Any] = request.headers
         result: Dict[str, Any] = {}
-        for item_name in self.forwarded_request_metadata:
+        for item_name in forwarded_request_metadata:
             if item_name in headers.keys():
                 result[item_name] = headers[item_name]
             elif item_name == "request_id":
