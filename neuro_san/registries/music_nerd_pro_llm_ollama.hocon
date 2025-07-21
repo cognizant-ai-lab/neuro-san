@@ -21,8 +21,8 @@
         "base_url": "ollama"
     },
 
-    # Set agent executor timeout to 100 mins
-    "max_execution_seconds": 6000,
+    # Set agent executor timeout to 10 mins [default is 2 mins]
+    "max_execution_seconds": 600,
 
     "tools": [
         # These tool definitions do not have to be in any particular order
