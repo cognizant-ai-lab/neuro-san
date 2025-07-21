@@ -24,6 +24,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check for NVIDIA GPU
+        run: |
+          if command -v nvidia-smi &>/dev/null; then
+            echo "✅ nvidia-smi found:"
+            nvidia-smi
+          else
+            echo "⚠️  No NVIDIA GPU detected (nvidia-smi not in PATH)"
+            exit 1
+          fi
+      
       - name: check available memory
         shell: bash
         run: |
