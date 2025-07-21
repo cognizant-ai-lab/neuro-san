@@ -17,11 +17,13 @@
     "llm_config": {
         "model_name": "qwen3:8b",
         "reasoning": false,
-        # Set to be used in Docker container
+        # Setting for docker env
         "base_url": "ollama"
-        # Set agent executor timeout to 100 mins
-        "max_execution_seconds": 6000,
     },
+
+    # Set agent executor timeout to 100 mins
+    "max_execution_seconds": 6000,
+
     "tools": [
         # These tool definitions do not have to be in any particular order
         # How they are linked and call each other is defined within their
