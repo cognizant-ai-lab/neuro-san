@@ -75,7 +75,7 @@ class ActivationFactory(AgentToolFactory):
                 # Trust what we have already
                 best_path = agent_tool_path
             else:
-                pythonpath_split = pythonpath.split(":")
+                pythonpath_split = pythonpath.split(os.pathsep)
                 for one_path in pythonpath_split:
                     resolved_path: str = str(Path(one_path).resolve())
                     if resolved_tool_path.startswith(resolved_path) and \
