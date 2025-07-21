@@ -21,7 +21,10 @@
         "base_url": "ollama"
     },
 
-    # Set agent executor timeout to 10 mins [default is 2 mins]
+    # Ollama runs entirely on your local CPU by default, which makes inference much slower than cloud-hosted LLMs. 
+    # Because our nightly CI uses a CPU-only machine, we need a much longer timeout.
+    # If you’re on a GPU machine, feel free to shorten this.
+    # Ollama on CPU is slow—extend timeout to 10 mins (default 2 mins)
     "max_execution_seconds": 600,
 
     "tools": [
