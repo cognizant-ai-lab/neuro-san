@@ -57,12 +57,10 @@ class TestSmokeTestHocons(TestCase):
         # These can be in any order.
         # Ideally more basic functionality will come first.
         # Barring that, try to stick to alphabetical order.
-        
         # http has been covered by integration test
         # "music_nerd_pro/combination_responses_with_history_http.hocon",
         "music_nerd_pro/combination_responses_with_history_grpc.hocon",
         
-
         # List more hocon files as they become available here.
     ]))
     @pytest.mark.timeout(30)  # 30 seconds for this test
