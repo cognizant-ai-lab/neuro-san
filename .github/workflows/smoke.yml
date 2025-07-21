@@ -25,6 +25,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check for NVIDIA GPU
+        shell: bash
         run: |
           if command -v nvidia-smi &>/dev/null; then
             echo "✅ nvidia-smi found:"
