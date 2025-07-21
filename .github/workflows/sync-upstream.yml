@@ -1,0 +1,38 @@
+name: Nightly Sync from Public Repo
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Every night at 03:00 UTC
+  workflow_dispatch:     # Allow manual runs
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout private repo (sandbox)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Git identity
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+      - name: Add upstream public repo
+        run: |
+          git remote add upstream https://github.com/cognizant-ai-lab/neuro-san.git
+          git fetch upstream
+
+      - name: Merge upstream changes
+        run: |
+          git merge upstream/main --allow-unrelated-histories -m "🔄 Nightly sync from public neuro-san"
+          
+      - name: Push changes to private repo (authenticated)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
+          git push origin main
