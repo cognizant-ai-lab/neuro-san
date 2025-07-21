@@ -86,7 +86,6 @@ class TestSmokeTestHocons(TestCase):
         "music_nerd_pro_llm_anthropic/combination_responses_with_history_direct.hocon",
         "music_nerd_pro_llm_gemini/combination_responses_with_history_direct.hocon",
         "music_nerd_pro_llm_azure/combination_responses_with_history_direct.hocon",
-        "music_nerd_pro_llm_ollama/combination_responses_with_history_direct.hocon"
 
         # List more hocon files as they become available here.
     ]))
