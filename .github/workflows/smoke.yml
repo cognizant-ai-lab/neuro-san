@@ -24,6 +24,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: check available memory
+        shell: bash
+        run: |
+          build_scripts/check_memory.sh
+
       - name: Install dependencies
         run: |
           apt-get update && apt-get install -y curl shellcheck
