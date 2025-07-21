@@ -30,53 +30,58 @@ jobs:
           pip install -r requirements-build.txt
           pip install -r requirements.txt
 
-      - name: Wait for Ollama service to become responsive
+      - name: Set Ollama model to be used for this test
+        shell: bash
         run: |
-          for i in {1..10}; do
-            echo "Checking if Ollama API is ready..."
-            curl --fail --silent http://ollama:11434/api/tags && break
-            echo "Waiting 5s..."
-            sleep 5
-          done
-
-      - name: Pull Ollama model (qwen3:8b)
-        run: |
-          curl http://ollama:11434/api/pull \
-            -d '{ "name": "qwen3:8b" }'
-    
-      - name: Wait for Ollama port to be ready (post-pull)
-        run: |
-          for i in {1..60}; do
-            echo "Checking if Ollama API is ready..."
-            curl --fail --silent http://ollama:11434/api/tags && break
-            echo "Waiting 5s..."
-            sleep 5
-          done
+          build_scripts/set_ollama_model.sh
       
-      - name: Generate text as ollama with retry (every 30s up to 3m)
-        run: |
-          SUCCESS=0
-          for i in $(seq 1 6); do
-            echo "⏳ Attempt #$i: Generating text…"
-            if curl --fail --silent http://ollama:11434/api/generate \
-                 -X POST \
-                 -H "Content-Type: application/json" \
-                 -d '{
-                   "model": "qwen3:8b",
-                   "prompt": "Briefly define reinforcement learning.",
-                   "stream": false
-                 }'; then
-              echo "✅ Generation succeeded on attempt #$i"
-              SUCCESS=1
-              break
-            fi
-            echo "⏱  Waiting 30s before retry…"
-            sleep 30
-          done
-          if [ "$SUCCESS" -ne 1 ]; then
-            echo "❌ Timeout: failed to generate after 3 minutes"
-            exit 1
-          fi
+      # - name: Wait for Ollama service to become responsive
+      #   run: |
+      #     for i in {1..10}; do
+      #       echo "Checking if Ollama API is ready..."
+      #       curl --fail --silent http://ollama:11434/api/tags && break
+      #       echo "Waiting 5s..."
+      #       sleep 5
+      #     done
+
+      # - name: Pull Ollama model (qwen3:8b)
+      #   run: |
+      #     curl http://ollama:11434/api/pull \
+      #       -d '{ "name": "qwen3:8b" }'
+    
+      # - name: Wait for Ollama port to be ready (post-pull)
+      #   run: |
+      #     for i in {1..60}; do
+      #       echo "Checking if Ollama API is ready..."
+      #       curl --fail --silent http://ollama:11434/api/tags && break
+      #       echo "Waiting 5s..."
+      #       sleep 5
+      #     done
+      
+      # - name: Generate text as ollama with retry (every 30s up to 3m)
+      #   run: |
+      #     SUCCESS=0
+      #     for i in $(seq 1 6); do
+      #       echo "⏳ Attempt #$i: Generating text…"
+      #       if curl --fail --silent http://ollama:11434/api/generate \
+      #            -X POST \
+      #            -H "Content-Type: application/json" \
+      #            -d '{
+      #              "model": "qwen3:8b",
+      #              "prompt": "Briefly define reinforcement learning.",
+      #              "stream": false
+      #            }'; then
+      #         echo "✅ Generation succeeded on attempt #$i"
+      #         SUCCESS=1
+      #         break
+      #       fi
+      #       echo "⏱  Waiting 30s before retry…"
+      #       sleep 30
+      #     done
+      #     if [ "$SUCCESS" -ne 1 ]; then
+      #       echo "❌ Timeout: failed to generate after 3 minutes"
+      #       exit 1
+      #     fi
       
       - name: Show installed packages
         run: pip freeze
