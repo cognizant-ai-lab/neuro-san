@@ -101,7 +101,7 @@ Use "accounting_tool" to update the running cost.
 """,
             "function": {
                 "description": """
-                    Calculate the running cost. If no running cost it known, pass 0.00
+                    Calculate the running cost. If no running cost is known, pass 0.00
                 """,
                 "parameters": {
                     "type": "object",
@@ -121,7 +121,7 @@ Use "accounting_tool" to update the running cost.
             "function": {
                 "description": """
 An API that keeps track of the running cost of the MusicNerdPro service. Pass the current running cost
-to the API to get the updated running cost. If no running cost it known, pass 0.00.
+to the API to get the updated running cost. If no running cost is known, pass 0.00.
                 """,
                 "parameters": {
                     "type": "object",
