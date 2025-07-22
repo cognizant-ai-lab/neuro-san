@@ -197,6 +197,10 @@ Some suggestions:
                 pretty_sly: str = json.dumps(state.get('sly_data'), indent=4, sort_keys=True)
                 print(f"Returned sly_data is: {pretty_sly}")
 
+            if self.args.tokens:
+                print("Token Accounting:")
+                print(f"{json.dumps(state.get('token_accounting'), indent=4, sort_keys=True)}")
+
             if self.args.response_output_file is not None:
                 output_path: Path = Path(self.args.response_output_file)
                 with output_path.open('w', encoding="utf-8") as output_file:
@@ -333,6 +337,8 @@ Have external tools that can be found in the local agent manifest use a service 
         group = arg_parser.add_argument_group(title="Other Modes of Operation")
         group.add_argument("--connectivity", default=False, dest="connectivity", action="store_true",
                            help="List the connectivity of agent network nodes")
+        group.add_argument("--tokens", default=False, dest="tokens", action="store_true",
+                           help="Print token accounting info with every response")
         self.arg_groups[group.title] = group
 
     def open_session(self):
