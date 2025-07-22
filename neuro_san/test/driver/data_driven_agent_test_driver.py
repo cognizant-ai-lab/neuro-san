@@ -17,6 +17,7 @@ from typing import Union
 
 from copy import copy
 from datetime import datetime
+from os import environ
 
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.persistence.easy.easy_hocon_persistence import EasyHoconPersistence
@@ -159,8 +160,14 @@ Need at least {num_need_success} to consider {hocon_file} test to be successful.
 
         # Collect other session information
         use_direct: bool = test_case.get("use_direct", False)
-        metadata: Dict[str, Any] = test_case.get("metadata", None)
         timeout_in_seconds: float = test_case.get("timeout_in_seconds", None)
+        metadata: Dict[str, Any] = test_case.get("metadata", None)
+        if metadata is None:
+            # Use a default from the user's environment to at least let
+            # a server know who is doing the querying.
+            metadata = {
+                "user_id": environ.get("USER")
+            }
 
         for connection in connections:
 
