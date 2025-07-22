@@ -88,7 +88,7 @@ class OriginatingJournal(Journal):
                 message = AIMessage(content=message.content)
 
             # Langchain automatically adds the system prompt to the beginning of the chat history.
-            # Don’t add it here to avoid duplication.
+            # Ensure that the system message does not get added into the chat history.
             if not isinstance(message, SystemMessage):
                 self.chat_history.append(message)
 
