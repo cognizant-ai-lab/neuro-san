@@ -51,5 +51,3 @@ done
 echo "✅ Server is healthy and ready"
 
 netstat -tuln | grep -E '8080|30011'
-
-

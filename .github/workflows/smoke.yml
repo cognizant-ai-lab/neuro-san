@@ -8,6 +8,18 @@ on:
 jobs:
   smoke-test:
     runs-on: ubuntu-latest
+    
+    # 🚀 Ollama Service runs alongside main container
+    services:
+      ollama:
+        image: ollama/ollama
+        ports:
+          - 11434:11434
+
+    # 🔧 Your actual job container
+
+    # don't run this job in sync'd clones
+    if: github.repository == 'cognizant-ai-lab/neuro-san'
     container:
       image: python:3.12-slim
 
@@ -15,16 +27,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check for NVIDIA GPU
+        shell: bash
+        run: |
+          build_scripts/check_gpu.sh
+      
+      - name: check available memory
+        shell: bash
+        run: |
+          build_scripts/check_memory.sh
+
       - name: Install dependencies
         run: |
-          apt-get update && apt-get install -y shellcheck
+          apt-get update && apt-get install -y curl shellcheck
           pip install -r requirements-build.txt
           pip install -r requirements.txt
 
+      - name: Set Ollama model to be used for related test case
+        shell: bash
+        run: |
+          build_scripts/set_ollama_model.sh
+      
       - name: Show installed packages
         run: pip freeze
 
-      - name: Start agent server service AND run smoke test cases in parallel
+      - name: Start server & run smoke tests & print server-log if any failure
         shell: bash
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -37,7 +64,15 @@ jobs:
           PYTHONPATH: ${{ env.PYTHONPATH }}:.
         run: |
           build_scripts/server_start.sh
-          pytest -s --verbose -m "smoke" --timer-top-n 100 -n auto
+
+          if ! pytest -s --verbose -m "smoke" --timer-top-n 100 -n auto; then
+            echo "===================================================="
+            echo "===================================================="
+            echo "=== Server_Sevice_Agent.LOG ==="
+            cat agent.log || echo "(no agent.log found)"
+            echo "===================================================="
+            exit 1
+          fi
 
       - name: Notify Slack on success
         if: success()

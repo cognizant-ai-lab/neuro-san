@@ -482,14 +482,17 @@ class LangChainRunContext(RunContext):
             try:
                 return_dict: Dict[str, Any] = await agent_executor.ainvoke(inputs, invoke_config)
             except (OpenAI_APIError, Anthropic_APIError, ChatGoogleGenerativeAIError) as api_error:
-                message: str = ApiKeyErrorCheck.check_for_api_key_exception(api_error)
+                backtrace = traceback.format_exc()
+                message: str = None
+                if not ApiKeyErrorCheck.check_for_internal_error(backtrace):
+                    # Does not look like internal LLM stack error:
+                    message = ApiKeyErrorCheck.check_for_api_key_exception(api_error)
                 if message is not None:
                     raise ValueError(message) from api_error
-
+                # Continue with regular retry logic:
                 self.logger.warning("retrying from {api_error.__class__.__name__}")
                 retries = retries - 1
                 exception = api_error
-                backtrace = traceback.format_exc()
             except KeyError as key_error:
                 self.logger.warning("retrying from KeyError")
                 retries = retries - 1
