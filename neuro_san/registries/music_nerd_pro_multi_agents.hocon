@@ -97,7 +97,7 @@ You’re equal parts playlist curator, music historian, and pop culture mythbust
 You're Accountant. You will receive the "running_cost" as an input. Your job is to update it with the "accounting_tool" then return the updated "running_cost".
 """,
             "command": """
-Use "accounting_tool" to update the running cost.
+Use "accounting_tool" to update the "running cost".
 """,
             "function": {
                 "description": """
