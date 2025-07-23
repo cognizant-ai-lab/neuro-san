@@ -670,6 +670,9 @@
     
     # Bedrock
 
+    "bedrock-claude-opus-4": {
+        "use_model_name": "us.anthropic.claude-opus-4-20250514-v1:0"
+    },
     "us.anthropic.claude-opus-4-20250514-v1:0": {
         "class": "bedrock",
         "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
@@ -683,6 +686,9 @@
         "max_output_tokens": 32000,
         "knowledge_cutoff": "03/2025",
     },
+    "bedrock-claude-sonnet-4": {
+        "use_model_name": "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    },
     "us.anthropic.claude-sonnet-4-20250514-v1:0": {
         "class": "bedrock",
         "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
@@ -695,6 +701,9 @@
         "context_window_size": 200000,
         "max_output_tokens": 64000,
         "knowledge_cutoff": "03/2025",
+    },
+    "bedrock-claude-3-7-sonnet": {
+        "use_model_name": "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
     },
     "us.anthropic.claude-3-7-sonnet-20250219-v1:0": {
         "class": "bedrock",
