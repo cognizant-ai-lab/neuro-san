@@ -15,11 +15,12 @@ from typing import Dict
 from typing import List
 
 from langchain_anthropic.chat_models import ChatAnthropic
-from langchain_google_genai.chat_models import ChatGoogleGenerativeAI
-from langchain_ollama import ChatOllama
-from langchain_nvidia_ai_endpoints import ChatNVIDIA
+from langchain_aws import ChatBedrock
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.language_models.base import BaseLanguageModel
+from langchain_google_genai.chat_models import ChatGoogleGenerativeAI
+from langchain_nvidia_ai_endpoints import ChatNVIDIA
+from langchain_ollama import ChatOllama
 from langchain_openai.chat_models.azure import AzureChatOpenAI
 from langchain_openai.chat_models.base import ChatOpenAI
 
@@ -226,6 +227,31 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                             top_k=config.get("top_k"),
                             top_p=config.get("top_p"),
                             callbacks=callbacks)
+        elif chat_class == "bedrock":
+            llm = ChatBedrock(
+                model=model_name,
+                aws_access_key_id=self.get_value_or_env(config, "aws_access_key_id", "AWS_ACCESS_KEY_ID"),
+                aws_secret_access_key=self.get_value_or_env(config, "aws_secret_access_key", "AWS_SECRET_ACCESS_KEY"),
+                aws_session_token=self.get_value_or_env(config, "aws_session_token", "AWS_SESSION_TOKEN"),
+                base_model_id=config.get("base_model_id"),
+                beta_use_converse_api=config.get("beta_use_converse_api"),
+                cache=config.get("cache"),
+                config=config.get("config"),
+                credentials_profile_name=config.get("credentials_profile_name"),
+                custom_get_token_ids=config.get("custom_get_token_ids"),
+                endpoint_url=config.get("endpoint_url"),
+                guardrails=config.get("guardrails"),
+                max_tokens=config.get("max_tokens"),
+                metadata=config.get("metadata"),
+                provider=config.get("provider"),
+                rate_limiter=config.get("rate_limiter"),
+                region_name=config.get("region_name"),
+                stop_sequences=config.get("stop_sequences"),
+                streaming=True,
+                system_prompt_with_tools=config.get("system_prompt_with_tools"),
+                tags=config.get("tags"),
+                temperature=config.get("temperature"),
+                callbacks=callbacks)
         elif chat_class is None:
             raise ValueError(f"Class name {chat_class} for model_name {model_name} is unspecified.")
         else:
