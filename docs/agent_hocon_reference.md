@@ -185,14 +185,15 @@ branches off work to any other agent/tool.  You can browse the `capabilities` se
 Note that you will need your own access key set as an environment variable in order
 to use LLMs from various providers.
 
-| LLM Provider  | API Key environment variable  |
-|:--------------|:------------------------------|
-| Anthropic     | ANTHROPIC_API_KEY             |
-| Azure OpenAI  | AZURE_OPENAI_API_KEY          |
-| Google Gemini | GOOGLE_API_KEY                |
-| NVidia        | NVIDIA_API_KEY                |
-| Ollma         | &lt;None required&gt;         |
-| OpenAI        | OPENAI_API_KEY                |
+| LLM Provider  | API Key environment variable                   |
+|:--------------|:-----------------------------------------------|
+| Amazon Bedrock| AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY    |
+| Anthropic     | ANTHROPIC_API_KEY                              |
+| Azure OpenAI  | AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT |
+| Google Gemini | GOOGLE_API_KEY                                 |
+| NVidia        | NVIDIA_API_KEY                                 |
+| Ollma         | &lt;None required&gt;                          |
+| OpenAI        | OPENAI_API_KEY                                 |
 
 Note: _We strongly recommend to **not** set secrets as values within any source file._
 These files tend to creep into source control repos, and it is **very** bad practice
