@@ -20,13 +20,10 @@ API_KEY_EXCEPTIONS: Dict[str, List] = {
 
     # Azure OpenAI requires several parameters; all can be set via environment variables
     # except "deployment_name", which must be provided explicitly.
-    "AZURE_OPENAI_API_KEY": ["Error code: 401", "invalid subscription key", "wrong API endpoint", "Connection error"],
-    "AZURE_OPENAI_ENDPOINT": ["validation error", "base_url", "azure_endpoint", "AZURE_OPENAI_ENDPOINT",
-                              "Connection error"],
-    "OPENAI_API_VERSION": ["validation error", "api_version", "OPENAI_API_VERSION", "Error code: 404",
-                           "Resource not found"],
-    "AZURE_OPENAI_DEPLOYMENT_NAME": ["Error code: 404", "Resource not found",
-                                     "API deployment for this resource does not exist"],
+    "AZURE_OPENAI_API_KEY": ["invalid subscription key", "wrong API endpoint"],
+    "AZURE_OPENAI_ENDPOINT": ["base_url", "azure_endpoint", "AZURE_OPENAI_ENDPOINT"],
+    "OPENAI_API_VERSION": ["api_version", "OPENAI_API_VERSION"],
+    "AZURE_OPENAI_DEPLOYMENT_NAME": ["API deployment for this resource does not exist"],
 }
 
 AZURE_DOCUMENTATION: str = "https://learn.microsoft.com/en-us/azure/ai-services/openai/"
