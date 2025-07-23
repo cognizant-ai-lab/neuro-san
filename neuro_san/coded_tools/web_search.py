@@ -15,7 +15,7 @@ from typing import Union
 
 import logging
 
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 
 from neuro_san.interfaces.coded_tool import CodedTool
 
