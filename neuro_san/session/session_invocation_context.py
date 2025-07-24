@@ -17,6 +17,7 @@ from asyncio import Future
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_server_common.logging.logging_setup import setup_extra_logging_fields
 
+from neuro_san.service.generic.asyncio_executor_pool import AsyncioExecutorPool
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
@@ -36,6 +37,7 @@ class SessionInvocationContext(InvocationContext):
     """
 
     def __init__(self, async_session_factory: AsyncAgentSessionFactory,
+                 async_executors_pool: AsyncioExecutorPool,
                  llm_factory: ContextTypeLlmFactory,
                  toolbox_factory: ContextTypeToolboxFactory = None,
                  metadata: Dict[str, str] = None):
@@ -44,6 +46,8 @@ class SessionInvocationContext(InvocationContext):
 
         :param async_session_factory: The AsyncAgentSessionFactory to use
                         when connecting with external agents.
+        :param async_executors_pool: pool of AsyncioExecutors to use for obtaining
+                         an executor instance to use for this context;
         :param llm_factory: The ContextTypeLlmFactory instance
         :param metadata: A grpc metadata of key/value pairs to be inserted into
                          the header. Default is None. Preferred format is a
@@ -51,8 +55,9 @@ class SessionInvocationContext(InvocationContext):
         """
 
         self.async_session_factory: AsyncAgentSessionFactory = async_session_factory
+        self.async_executors_pool: AsyncioExecutorPool = async_executors_pool
         # Get an async executor to run all tasks for this session instance:
-        self.asyncio_executor: AsyncioExecutor = AsyncioExecutor()
+        self.asyncio_executor: AsyncioExecutor = self.async_executors_pool.get_executor()
         self.origination: Origination = Origination()
         self.queue: AsyncCollatingQueue = AsyncCollatingQueue()
         self.journal: Journal = MessageJournal(self.queue)
@@ -66,6 +71,7 @@ class SessionInvocationContext(InvocationContext):
         Starts the active components of this invocation context.
         Do this separately from constructor for more control.
         Currently, we only start internal AsyncioExecutor.
+        It could be already running, but starting it twice is allowed.
         """
         self.asyncio_executor.start()
 
@@ -119,7 +125,7 @@ class SessionInvocationContext(InvocationContext):
         Release resources owned by this context
         """
         if self.asyncio_executor is not None:
-            self.asyncio_executor.shutdown()
+            self.async_executors_pool.return_executor(self.asyncio_executor)
             self.asyncio_executor = None
         if self.queue is not None:
             self.queue.close()

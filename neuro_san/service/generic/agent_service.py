@@ -33,6 +33,7 @@ from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.chat_message_converter import ChatMessageConverter
 from neuro_san.service.usage.usage_logger_factory import UsageLoggerFactory
 from neuro_san.service.usage.wrapped_usage_logger import WrappedUsageLogger
+from neuro_san.service.generic.asyncio_executor_pool import AsyncioExecutorPool
 from neuro_san.session.direct_agent_session import DirectAgentSession
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
 from neuro_san.session.session_invocation_context import SessionInvocationContext
@@ -41,6 +42,9 @@ from neuro_san.session.session_invocation_context import SessionInvocationContex
 # Some of these can be way too chatty
 DO_NOT_LOG_REQUESTS = [
 ]
+
+# No limit on number of concurrently running executors
+MAX_CONCURRENT_EXECUTORS = 0
 
 
 # pylint: disable=too-many-instance-attributes
@@ -86,6 +90,7 @@ class AgentService:
         config: Dict[str, Any] = agent_network.get_config()
         self.llm_factory: ContextTypeLlmFactory = MasterLlmFactory.create_llm_factory(config)
         self.toolbox_factory: ContextTypeToolboxFactory = MasterToolboxFactory.create_toolbox_factory(config)
+        self.async_executors_pool: AsyncioExecutorPool = AsyncioExecutorPool(MAX_CONCURRENT_EXECUTORS)
         # Load once
         self.llm_factory.load()
         self.toolbox_factory.load()
@@ -214,7 +219,12 @@ class AgentService:
 
         # Prepare
         factory = ExternalAgentSessionFactory(use_direct=False)
-        invocation_context = SessionInvocationContext(factory, self.llm_factory, self.toolbox_factory, metadata)
+        invocation_context = SessionInvocationContext(
+            factory,
+            self.async_executors_pool,
+            self.llm_factory,
+            self.toolbox_factory,
+            metadata)
         invocation_context.start()
 
         # Set up logging inside async thread
