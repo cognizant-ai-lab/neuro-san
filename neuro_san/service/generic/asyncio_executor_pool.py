@@ -10,6 +10,7 @@
 #
 # END COPYRIGHT
 
+import logging
 import threading
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 
@@ -31,6 +32,9 @@ class AsyncioExecutorPool:
         self.reuse_mode: bool = reuse_mode
         self.pool = []
         self.lock: threading.Lock = threading.Lock()
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger.info("AsyncioExecutorPool created: %s reuse: %s max concurrent: %d",
+                         id(self), str(self.reuse_mode), self.max_concurrent)
 
     def get_executor(self) -> AsyncioExecutor:
         """
@@ -41,9 +45,11 @@ class AsyncioExecutorPool:
             result: AsyncioExecutor = None
             if self.reuse_mode and len(self.pool) > 0:
                 result = self.pool.pop(0)
+                self.logger.info("Reusing AsyncExecutor %s", id(result))
             else:
                 result = AsyncioExecutor()
                 result.start()
+                self.logger.info("Creating AsyncExecutor %s", id(result))
             return result
 
     def return_executor(self, executor: AsyncioExecutor):
@@ -54,5 +60,7 @@ class AsyncioExecutorPool:
         if self.reuse_mode:
             with self.lock:
                 self.pool.append(executor)
+                self.logger.info("Returned to pool: AsyncExecutor %s pool size: %d" , id(executor), len(self.pool))
         else:
+            self.logger.info("Shutting down: AsyncExecutor %s", id(executor))
             executor.shutdown()
