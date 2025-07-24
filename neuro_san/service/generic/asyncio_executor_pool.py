@@ -18,12 +18,17 @@ class AsyncioExecutorPool:
     Class maintaining a dynamic set of reusable AsyncioExecutor instances.
     """
 
-    def __init__(self, max_concurrent: int):
+    def __init__(self, max_concurrent: int, reuse_mode: bool = True):
         """
         Constructor.
         :param max_concurrent: maximum allowed number of concurrently running AsyncioExecutors.
+        :param reuse_mode: True, if requested executor instances
+                                 are taken from pool of available ones (pool mode);
+                           False, if requested executor instances are created new
+                                 and shutdown on return (backward compatible mode)
         """
         self.max_concurrent = max_concurrent
+        self.reuse_mode: bool = reuse_mode
         self.pool = []
         self.lock: threading.Lock = threading.Lock()
 
@@ -34,7 +39,7 @@ class AsyncioExecutorPool:
         """
         with self.lock:
             result: AsyncioExecutor = None
-            if len(self.pool) > 0:
+            if self.reuse_mode and len(self.pool) > 0:
                 result = self.pool.pop(0)
             else:
                 result = AsyncioExecutor()
@@ -46,5 +51,8 @@ class AsyncioExecutorPool:
         Return AsyncioExecutor instance back to the pool of available instances.
         :param executor: AsyncioExecutor to return.
         """
-        with self.lock:
-            self.pool.append(executor)
+        if self.reuse_mode:
+            with self.lock:
+                self.pool.append(executor)
+        else:
+            executor.shutdown()
