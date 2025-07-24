@@ -42,16 +42,18 @@ class AsyncioExecutorPool:
         Get active (running) executor from the pool
         :return: AsyncioExecutor instance
         """
-        with self.lock:
-            result: AsyncioExecutor = None
-            if self.reuse_mode and len(self.pool) > 0:
-                result = self.pool.pop(0)
-                self.logger.info("Reusing AsyncExecutor %s", id(result))
-            else:
-                result = AsyncioExecutor()
-                result.start()
-                self.logger.info("Creating AsyncExecutor %s", id(result))
-            return result
+        if self.reuse_mode:
+            with self.lock:
+                if len(self.pool) > 0:
+                    result = self.pool.pop(0)
+                    self.logger.info("Reusing AsyncExecutor %s", id(result))
+                    return result
+        # Create AsyncioExecutor outside of lock
+        # to avoid potentially longer locked periods
+        result = AsyncioExecutor()
+        result.start()
+        self.logger.info("Creating AsyncExecutor %s", id(result))
+        return result
 
     def return_executor(self, executor: AsyncioExecutor):
         """
@@ -63,5 +65,7 @@ class AsyncioExecutorPool:
                 self.pool.append(executor)
                 self.logger.info("Returned to pool: AsyncExecutor %s pool size: %d", id(executor), len(self.pool))
         else:
+            # Shutdown AsyncioExecutor outside of lock
+            # to avoid potentially longer locked periods
             self.logger.info("Shutting down: AsyncExecutor %s", id(executor))
             executor.shutdown()
