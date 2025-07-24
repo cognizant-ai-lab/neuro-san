@@ -76,7 +76,7 @@ class DirectAgentSessionFactory:
 
         factory = ExternalAgentSessionFactory(use_direct=use_direct, network_storage=self.network_storage)
         executors_pool: AsyncioExecutorPool = AsyncioExecutorPool(0)
-        invocation_context = SessionInvocationContext(factory, executors_pool, allm_factory, toolbox_factory, metadata)
+        invocation_context = SessionInvocationContext(factory, executors_pool, llm_factory, toolbox_factory, metadata)
         invocation_context.start()
         session: DirectAgentSession = DirectAgentSession(agent_network=agent_network,
                                                          invocation_context=invocation_context,
