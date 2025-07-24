@@ -24,6 +24,7 @@ from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNe
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
+from neuro_san.service.generic.asyncio_executor_pool import AsyncioExecutorPool
 from neuro_san.session.direct_agent_session import DirectAgentSession
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
 from neuro_san.session.missing_agent_check import MissingAgentCheck
@@ -74,7 +75,8 @@ class DirectAgentSessionFactory:
         toolbox_factory.load()
 
         factory = ExternalAgentSessionFactory(use_direct=use_direct, network_storage=self.network_storage)
-        invocation_context = SessionInvocationContext(factory, llm_factory, toolbox_factory, metadata)
+        executors_pool: AsyncioExecutorPool = AsyncioExecutorPool(0)
+        invocation_context = SessionInvocationContext(factory, executors_pool, allm_factory, toolbox_factory, metadata)
         invocation_context.start()
         session: DirectAgentSession = DirectAgentSession(agent_network=agent_network,
                                                          invocation_context=invocation_context,
