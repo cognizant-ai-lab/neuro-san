@@ -14,6 +14,7 @@ import logging
 import threading
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 
+
 class AsyncioExecutorPool:
     """
     Class maintaining a dynamic set of reusable AsyncioExecutor instances.
@@ -60,7 +61,7 @@ class AsyncioExecutorPool:
         if self.reuse_mode:
             with self.lock:
                 self.pool.append(executor)
-                self.logger.info("Returned to pool: AsyncExecutor %s pool size: %d" , id(executor), len(self.pool))
+                self.logger.info("Returned to pool: AsyncExecutor %s pool size: %d", id(executor), len(self.pool))
         else:
             self.logger.info("Shutting down: AsyncExecutor %s", id(executor))
             executor.shutdown()

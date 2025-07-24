@@ -36,6 +36,8 @@ class SessionInvocationContext(InvocationContext):
     service call or library call.
     """
 
+    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-positional-arguments
     def __init__(self, async_session_factory: AsyncAgentSessionFactory,
                  async_executors_pool: AsyncioExecutorPool,
                  llm_factory: ContextTypeLlmFactory,
