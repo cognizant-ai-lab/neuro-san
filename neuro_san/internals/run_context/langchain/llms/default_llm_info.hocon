@@ -607,6 +607,30 @@
 
     # Google Gemini
 
+    "gemini-2.5-pro": {
+        "class": "gemini",
+        "model_info_url": "https://ai.google.dev/gemini-api/docs/models#gemini-2.5-pro",
+        "modalities": {
+            "input": [ "text", "images", "video", "audio", "pdf"],
+            "output": [ "text"],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1048576,
+        "max_output_tokens": 65536,
+        "knowledge_cutoff": "01/2025",
+    },
+    "gemini-2.5-flash": {
+        "class": "gemini",
+        "model_info_url": "https://ai.google.dev/gemini-api/docs/models#gemini-2.5-flash",
+        "modalities": {
+            "input": [ "text", "images", "video", "audio" ],
+            "output": [ "text"],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1048576,
+        "max_output_tokens": 65536,
+        "knowledge_cutoff": "01/2025",
+    },
     "gemini-2.0-flash": {
         "class": "gemini",
         "model_info_url": "https://ai.google.dev/gemini-api/docs/models#gemini-2.0-flash",
