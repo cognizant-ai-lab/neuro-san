@@ -36,7 +36,7 @@ from neuro_san.internals.run_context.langchain.util.api_key_error_check import A
 from neuro_san.internals.run_context.langchain.util.argument_validator import ArgumentValidator
 from neuro_san.internals.utils.resolver_util import ResolverUtil
 
-DEFAULT_LLM_CLASS: Set[str] = {"anthropic", "azure-openai", "bedrock", "gemini", "ollama", "openai", "nvidia"}
+DEFAULT_LLM_CLASSES: Set[str] = {"anthropic", "azure-openai", "bedrock", "gemini", "ollama", "openai", "nvidia"}
 KEYS_TO_REMOVE_FOR_USER_CLASS: Set[str] = {"class", "verbose"}
 
 
@@ -318,7 +318,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         if (
             llm is None
             and found_exception is not None
-            and class_path not in DEFAULT_LLM_CLASS
+            and class_path not in DEFAULT_LLM_CLASSES
         ):
             llm = self.create_base_chat_model_from_user_class(class_path, config)
             found_exception = None
