@@ -205,7 +205,12 @@ class DataDrivenChatSession:
         # and it doesn't need to wait for any more messages.
         # The consumer await-s for queue.get()
         queue: AsyncCollatingQueue = invocation_context.get_queue()
-        await queue.put_final_item()
+
+        # The synchronous=True is necessary when an async HTTP request is at the get()-ing end of the queue,
+        # as the journal messages come from inside a separate event loop from that request. The lock
+        # taken here ends up being harmless in the synchronous request case (like for gRPC) because
+        # we would only be blocking our own event loop.
+        await queue.put_final_item(synchronous=True)
 
     async def delete_resources(self):
         """
