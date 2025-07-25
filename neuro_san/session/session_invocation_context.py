@@ -15,9 +15,9 @@ from typing import Dict
 from asyncio import Future
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
+from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
 from leaf_server_common.logging.logging_setup import setup_extra_logging_fields
 
-from neuro_san.service.generic.asyncio_executor_pool import AsyncioExecutorPool
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
