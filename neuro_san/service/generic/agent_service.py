@@ -19,6 +19,7 @@ import json
 import uuid
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
+from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
 
 from leaf_server_common.server.atomic_counter import AtomicCounter
 from leaf_server_common.server.request_logger import RequestLogger
@@ -29,6 +30,7 @@ from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextT
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.run_context.factory.master_toolbox_factory import MasterToolboxFactory
 from neuro_san.internals.run_context.factory.master_llm_factory import MasterLlmFactory
+from neuro_san.internals.utils.asyncio_executor_pool_provider import AsyncioExecutorPoolProvider
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.chat_message_converter import ChatMessageConverter
 from neuro_san.service.usage.usage_logger_factory import UsageLoggerFactory
@@ -86,6 +88,7 @@ class AgentService:
         config: Dict[str, Any] = agent_network.get_config()
         self.llm_factory: ContextTypeLlmFactory = MasterLlmFactory.create_llm_factory(config)
         self.toolbox_factory: ContextTypeToolboxFactory = MasterToolboxFactory.create_toolbox_factory(config)
+        self.async_executors_pool: AsyncioExecutorPool = AsyncioExecutorPoolProvider.get_executors_pool()
         # Load once
         self.llm_factory.load()
         self.toolbox_factory.load()
@@ -214,7 +217,12 @@ class AgentService:
 
         # Prepare
         factory = ExternalAgentSessionFactory(use_direct=False)
-        invocation_context = SessionInvocationContext(factory, self.llm_factory, self.toolbox_factory, metadata)
+        invocation_context = SessionInvocationContext(
+            factory,
+            self.async_executors_pool,
+            self.llm_factory,
+            self.toolbox_factory,
+            metadata)
         invocation_context.start()
 
         # Set up logging inside async thread
