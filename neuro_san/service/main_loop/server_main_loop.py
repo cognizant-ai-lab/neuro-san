@@ -28,6 +28,7 @@ from neuro_san.internals.graph.persistence.registry_manifest_restorer import Reg
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.utils.file_of_class import FileOfClass
+from neuro_san.internals.utils.asyncio_executor_pool_provider import AsyncioExecutorPoolProvider
 from neuro_san.service.grpc.grpc_agent_server import DEFAULT_SERVER_NAME
 from neuro_san.service.grpc.grpc_agent_server import DEFAULT_SERVER_NAME_FOR_LOGS
 from neuro_san.service.grpc.grpc_agent_server import DEFAULT_MAX_CONCURRENT_REQUESTS
@@ -176,6 +177,8 @@ class ServerMainLoop(ServerLoopCallbacks):
         metadata_set = set(self.forwarded_request_metadata.split())
         metadata_set = metadata_set | set(self.usage_logger_metadata.split())
         metadata_str: str = " ".join(sorted(metadata_set))
+
+        AsyncioExecutorPoolProvider.set_executors_pool(reuse_mode=True)
 
         if self.server_status.grpc_service.is_requested():
             self.grpc_server = GrpcAgentServer(
