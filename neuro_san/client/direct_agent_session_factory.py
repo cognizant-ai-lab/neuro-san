@@ -13,6 +13,7 @@ from typing import Any
 from typing import Dict
 
 from leaf_common.time.timeout import Timeout
+from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
 
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
@@ -74,7 +75,8 @@ class DirectAgentSessionFactory:
         toolbox_factory.load()
 
         factory = ExternalAgentSessionFactory(use_direct=use_direct, network_storage=self.network_storage)
-        invocation_context = SessionInvocationContext(factory, llm_factory, toolbox_factory, metadata)
+        executors_pool: AsyncioExecutorPool = AsyncioExecutorPool()
+        invocation_context = SessionInvocationContext(factory, executors_pool, llm_factory, toolbox_factory, metadata)
         invocation_context.start()
         session: DirectAgentSession = DirectAgentSession(agent_network=agent_network,
                                                          invocation_context=invocation_context,
