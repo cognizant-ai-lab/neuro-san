@@ -25,8 +25,14 @@ class AsyncioExecutorPoolProvider:
 
     @classmethod
     def set_executors_pool(cls, reuse_mode: bool = True):
+        """
+        Set AsyncioExecutorPool instance to use.
+        """
         cls._executors_pool = AsyncioExecutorPool(reuse_mode=reuse_mode)
 
     @classmethod
     def get_executors_pool(cls):
+        """
+        Get AsyncioExecutorPool instance
+        """
         return cls._executors_pool
