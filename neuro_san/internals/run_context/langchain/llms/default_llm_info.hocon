@@ -694,7 +694,8 @@
     
     # Bedrock
 
-    "bedrock-claude-opus-4": {
+    # These models require access to AWS endpoints in either us-east-1, us-east-2, or us-west-2
+    "bedrock-us-claude-opus-4": {
         "use_model_name": "us.anthropic.claude-opus-4-20250514-v1:0"
     },
     "us.anthropic.claude-opus-4-20250514-v1:0": {
@@ -710,7 +711,7 @@
         "max_output_tokens": 32000,
         "knowledge_cutoff": "03/2025",
     },
-    "bedrock-claude-sonnet-4": {
+    "bedrock-us-claude-sonnet-4": {
         "use_model_name": "us.anthropic.claude-sonnet-4-20250514-v1:0"
     },
     "us.anthropic.claude-sonnet-4-20250514-v1:0": {
@@ -726,7 +727,7 @@
         "max_output_tokens": 64000,
         "knowledge_cutoff": "03/2025",
     },
-    "bedrock-claude-3-7-sonnet": {
+    "bedrock-us-claude-3-7-sonnet": {
         "use_model_name": "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
     },
     "us.anthropic.claude-3-7-sonnet-20250219-v1:0": {
