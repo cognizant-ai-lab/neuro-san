@@ -15,7 +15,6 @@
 
 {
     "llm_config": {
-        "class": "gemini",
         "model_name": "gemini-2.5-flash",
     },
     "tools": [
