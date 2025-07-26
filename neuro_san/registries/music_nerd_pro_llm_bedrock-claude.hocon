@@ -17,7 +17,7 @@
     "llm_config": {
         "model_name": "bedrock-us-claude-3-7-sonnet",
         "credentials_profile_name": "daiDev",
-        "region_name": "us-east-1"
+        "region_name": "us-west-2"
     },
     "tools": [
         # These tool definitions do not have to be in any particular order
