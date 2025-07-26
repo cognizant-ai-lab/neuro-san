@@ -87,7 +87,7 @@ class TestSmokeTestHocons(TestCase):
         "music_nerd_pro_llm_anthropic/combination_responses_with_history_direct.hocon",
         "music_nerd_pro_llm_gemini/combination_responses_with_history_direct.hocon",
         "music_nerd_pro_llm_azure/combination_responses_with_history_direct.hocon",
-        "music_nerd_pro_llm_bedrock-claude/combination_responses_with_history_direct.hocon",
+        "music_nerd_pro_llm_bedrock_claude/combination_responses_with_history_direct.hocon",
 
         # List more hocon files as they become available here.
     ]))
@@ -97,6 +97,7 @@ class TestSmokeTestHocons(TestCase):
     @pytest.mark.anthropic
     @pytest.mark.gemini
     @pytest.mark.azure
+    @pytest.mark.bedrock_claude
     def test_hocon_with_non_default_llm(self, test_name: str, test_hocon: str):
         """
         Test method for a single parameterized test case specified by a hocon file.
