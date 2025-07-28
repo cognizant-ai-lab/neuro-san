@@ -10,7 +10,7 @@
 #
 # END COPYRIGHT
 
-from neuro_san.service.main_loop.service_status import ServiceStatus
+from neuro_san.service.util.service_status import ServiceStatus
 
 
 class ServerStatus:

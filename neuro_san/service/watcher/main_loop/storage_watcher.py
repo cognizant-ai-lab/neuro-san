@@ -19,10 +19,10 @@ from time import sleep
 from time import time
 
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
-from neuro_san.service.main_loop.server_status import ServerStatus
 from neuro_san.service.watcher.interfaces.startable import Startable
 from neuro_san.service.watcher.interfaces.storage_updater import StorageUpdater
 from neuro_san.service.watcher.registries.registry_storage_updater import RegistryStorageUpdater
+from neuro_san.service.util.server_status import ServerStatus
 
 
 # pylint: disable=too-many-instance-attributes

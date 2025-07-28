@@ -27,7 +27,6 @@ from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSour
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.network_providers.single_agent_network_provider import SingleAgentNetworkProvider
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
-from neuro_san.service.main_loop.server_status import ServerStatus
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 from neuro_san.service.http.handlers.health_check_handler import HealthCheckHandler
 from neuro_san.service.http.handlers.connectivity_handler import ConnectivityHandler
@@ -40,6 +39,7 @@ from neuro_san.service.http.logging.http_logger import HttpLogger
 from neuro_san.service.http.server.http_server_app import HttpServerApp
 from neuro_san.service.interfaces.agent_server import AgentServer
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
+from neuro_san.service.util.server_status import ServerStatus
 
 
 class HttpServer(AgentAuthorizer, AgentStateListener):
