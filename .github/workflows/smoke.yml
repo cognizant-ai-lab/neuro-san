@@ -90,7 +90,7 @@ jobs:
           # Start server
           build_scripts/server_start.sh
 
-          if ! pytest -s --verbose -m "smoke" --timer-top-n 100 -n auto; then
+          if ! pytest -s --verbose -m "smoke" --timer-top-n 100; then
             echo "===================================================="
             echo "===================================================="
             echo "=== Server_Sevice_Agent.LOG ==="
