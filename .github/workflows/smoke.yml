@@ -27,15 +27,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check for NVIDIA GPU
-        shell: bash
-        run: |
-          build_scripts/check_gpu.sh
+      # - name: Check for NVIDIA GPU
+      #   shell: bash
+      #   run: |
+      #     build_scripts/check_gpu.sh
       
-      - name: check available memory
-        shell: bash
-        run: |
-          build_scripts/check_memory.sh
+      # - name: check available memory
+      #   shell: bash
+      #   run: |
+      #     build_scripts/check_memory.sh
 
       - name: Install dependencies
         run: |
@@ -43,10 +43,10 @@ jobs:
           pip install -r requirements-build.txt
           pip install -r requirements.txt
 
-      - name: Set Ollama model to be used for related test case
-        shell: bash
-        run: |
-          build_scripts/set_ollama_model.sh
+      # - name: Set Ollama model to be used for related test case
+      #   shell: bash
+      #   run: |
+      #     build_scripts/set_ollama_model.sh
       
       - name: Show installed packages
         run: pip freeze
