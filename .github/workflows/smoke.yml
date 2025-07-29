@@ -5,6 +5,11 @@ on:
     - cron: '0 12 * * *'  # 12:00 PM UTC = 4:00 AM PT (standard)
   workflow_dispatch:      # enables manual triggering
 
+# 1) Grant the workflow OIDC permission
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   smoke-test:
     runs-on: ubuntu-latest
