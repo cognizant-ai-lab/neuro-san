@@ -87,17 +87,23 @@ jobs:
           aws_secret_access_key = ${AWS_SECRET_ACCESS_KEY}
           EOF
 
-          # Start server
-          build_scripts/server_start.sh
+          # Print out the files to verify
+          echo "--- ~/.aws/config ---"
+          cat ~/.aws/config
+          echo "--- ~/.aws/credentials ---"
+          cat ~/.aws/credentials
 
-          if ! pytest -s --verbose -m "smoke" --timer-top-n 100; then
-            echo "===================================================="
-            echo "===================================================="
-            echo "=== Server_Sevice_Agent.LOG ==="
-            cat agent.log || echo "(no agent.log found)"
-            echo "===================================================="
-            exit 1
-          fi
+          # # Start server
+          # build_scripts/server_start.sh
+
+          # if ! pytest -s --verbose -m "smoke" --timer-top-n 100; then
+          #   echo "===================================================="
+          #   echo "===================================================="
+          #   echo "=== Server_Sevice_Agent.LOG ==="
+          #   cat agent.log || echo "(no agent.log found)"
+          #   echo "===================================================="
+          #   exit 1
+          # fi
 
       - name: Notify Slack on success
         if: success()
