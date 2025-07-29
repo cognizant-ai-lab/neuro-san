@@ -191,7 +191,7 @@ ENV AGENT_REQUEST_LIMIT=-1
 # agent registry files could be added or deleted from registry directory
 # with corresponding changes in manifest file.
 # Update will be done every AGENT_MANIFEST_UPDATE_PERIOD_SECONDS seconds;
-# if value is not specified or <= 0, no dynamic updates will be executed.
+# if value is not specified or <= 0, no such dynamic updates will be executed.
 ENV AGENT_MANIFEST_UPDATE_PERIOD_SECONDS=0
 
 # By default, the HTTP service reports the neuro-san library pip version in its health-check response.
