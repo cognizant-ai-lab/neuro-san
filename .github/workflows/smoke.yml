@@ -94,7 +94,9 @@ jobs:
           cat ~/.aws/credentials
 
           # debug
-          echo "OPENAI_API_VERSION = ${OPENAI_API_VERSION}"
+          echo "OPENAI_API_VERSION = "${OPENAI_API_VERSION}""
+          echo "OPENAI_API_KEY = "${OPENAI_API_KEY}""
+          echo "AWS_SECRET_ACCESS_KEY = "${AWS_SECRET_ACCESS_KEY}""
 
           # # Start server
           # build_scripts/server_start.sh
