@@ -27,15 +27,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # - name: Check for NVIDIA GPU
-      #   shell: bash
-      #   run: |
-      #     build_scripts/check_gpu.sh
+      - name: Check for NVIDIA GPU
+        shell: bash
+        run: |
+          build_scripts/check_gpu.sh
       
-      # - name: check available memory
-      #   shell: bash
-      #   run: |
-      #     build_scripts/check_memory.sh
+      - name: check available memory
+        shell: bash
+        run: |
+          build_scripts/check_memory.sh
 
       - name: Install dependencies
         run: |
@@ -43,25 +43,13 @@ jobs:
           pip install -r requirements-build.txt
           pip install -r requirements.txt
 
-      # - name: Set Ollama model to be used for related test case
-      #   shell: bash
-      #   run: |
-      #     build_scripts/set_ollama_model.sh
-      
-      # - name: Show installed packages
-      #   run: pip freeze
-
-      - name: Configure AWS creds & list Bedrock models
-        uses: aws-actions/configure-aws-credentials@v3
-        with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ vars.AWS_REGION }}
+      - name: Set Ollama model to be used for related test case
+        shell: bash
         run: |
-          echo "AWS_ACCESS_KEY_ID     = $AWS_ACCESS_KEY_ID"
-          echo "AWS_SECRET_ACCESS_KEY = $AWS_SECRET_ACCESS_KEY"
-          echo "AWS_REGION            = $AWS_REGION"
-          aws bedrock list-foundation-models --profile daiDev
+          build_scripts/set_ollama_model.sh
+      
+      - name: Show installed packages
+        run: pip freeze
 
       - name: Start server & run smoke tests & print server-log if any failure
         shell: bash
@@ -72,56 +60,19 @@ jobs:
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
           AZURE_OPENAI_ENDPOINT: ${{ vars.AZURE_OPENAI_ENDPOINT }}
           OPENAI_API_VERSION: ${{ vars.OPENAI_API_VERSION }}
-          # AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AGENT_TOOL_PATH: "./neuro_san/coded_tools"
           PYTHONPATH: ${{ env.PYTHONPATH }}:.
         run: |
-          # Set up AWS config & credentials
-          mkdir -p ~/.aws
-          
-          # AWS CLI config with default and daiDev profile
-          cat > ~/.aws/config <<EOF
-          [default]
-          region=us-west-2
-          output=json
+          build_scripts/server_start.sh
 
-          [profile daiDev]
-          role_arn=arn:aws:iam::613076437200:role/LeafDev
-          region=us-west-2
-          source_profile=default
-          EOF
-
-          # AWS credentials (pulled from env)
-          cat > ~/.aws/credentials <<EOF
-          [default]
-          aws_access_key_id = ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws_secret_access_key = ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          EOF
-
-          # Print out the files to verify
-          echo "--- ~/.aws/config ---"
-          cat ~/.aws/config
-          echo "--- ~/.aws/credentials ---"
-          cat ~/.aws/credentials
-
-          # debug
-          echo "OPENAI_API_VERSION = "${OPENAI_API_VERSION}""
-          echo "OPENAI_API_KEY = "${OPENAI_API_KEY}""
-          echo "AWS_SECRET_ACCESS_KEY = "${AWS_SECRET_ACCESS_KEY}""
-          echo "aws_secret_access_key = "${aws_secret_access_key}""
-
-          # # Start server
-          # build_scripts/server_start.sh
-
-          # if ! pytest -s --verbose -m "smoke" --timer-top-n 100; then
-          #   echo "===================================================="
-          #   echo "===================================================="
-          #   echo "=== Server_Sevice_Agent.LOG ==="
-          #   cat agent.log || echo "(no agent.log found)"
-          #   echo "===================================================="
-          #   exit 1
-          # fi
+          if ! pytest -s --verbose -m "smoke" --timer-top-n 100 -n auto; then
+            echo "===================================================="
+            echo "===================================================="
+            echo "=== Server_Sevice_Agent.LOG ==="
+            cat agent.log || echo "(no agent.log found)"
+            echo "===================================================="
+            exit 1
+          fi
 
       - name: Notify Slack on success
         if: success()
