@@ -51,6 +51,43 @@ jobs:
       - name: Show installed packages
         run: pip freeze
 
+      name: Set up AWS config & credentials
+        env:
+          AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          mkdir -p ~/.aws
+
+          # AWS CLI config with default and daiDev profile
+          cat > ~/.aws/config <<EOF
+          [default]
+          region=us-west-2
+          output=json
+
+          [profile daiDev]
+          role_arn=arn:aws:iam::111111:role/testonly
+          region=us-west-2
+          source_profile=default
+          EOF
+
+          # AWS credentials (pulled from env)
+          cat > ~/.aws/credentials <<EOF
+          [default]
+          aws_access_key_id = ${AWS_ACCESS_KEY_ID}
+          aws_secret_access_key = ${AWS_SECRET_ACCESS_KEY}
+          EOF
+
+          # Tighten permissions
+          chmod 700 ~/.aws
+          chmod 600 ~/.aws/config
+          chmod 600 ~/.aws/credentials
+
+          # Print out the files to verify
+          echo "--- ~/.aws/config ---"
+          cat ~/.aws/config
+          echo "--- ~/.aws/credentials ---"
+          cat ~/.aws/credentials
+
       - name: Start server & run smoke tests & print server-log if any failure
         shell: bash
         env:
