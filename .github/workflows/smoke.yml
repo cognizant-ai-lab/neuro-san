@@ -51,26 +51,20 @@ jobs:
       - name: Show installed packages
         run: pip freeze
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials & print
         uses: aws-actions/configure-aws-credentials@v3
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: Start server & run smoke tests & print server-log if any failure
-        shell: bash
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
-          AZURE_OPENAI_ENDPOINT: ${{ vars.AZURE_OPENAI_ENDPOINT }}
-          OPENAI_API_VERSION: ${{ vars.OPENAI_API_VERSION }}
-          # AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AGENT_TOOL_PATH: "./neuro_san/coded_tools"
-          PYTHONPATH: ${{ env.PYTHONPATH }}:.
+          aws-region:            ${{ vars.AWS_REGION }}
+        # anything under `run:` must be at the same indent as `with:`
+        run: |
+          echo "AWS_ACCESS_KEY_ID     = $AWS_ACCESS_KEY_ID"
+          echo "AWS_SECRET_ACCESS_KEY = $AWS_SECRET_ACCESS_KEY"
+          echo "AWS_REGION            = $AWS_REGION"
+          aws bedrock list-foundation-models --profile daiDev
+      
+      - name: Set up AWS config & credentials
         run: |
           # Set up AWS config & credentials
           mkdir -p ~/.aws
@@ -99,6 +93,21 @@ jobs:
           cat ~/.aws/config
           echo "--- ~/.aws/credentials ---"
           cat ~/.aws/credentials
+
+      - name: Start server & run smoke tests & print server-log if any failure
+        shell: bash
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ vars.AZURE_OPENAI_ENDPOINT }}
+          OPENAI_API_VERSION: ${{ vars.OPENAI_API_VERSION }}
+          # AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AGENT_TOOL_PATH: "./neuro_san/coded_tools"
+          PYTHONPATH: ${{ env.PYTHONPATH }}:.
+        
 
           # debug
           echo "OPENAI_API_VERSION = "${OPENAI_API_VERSION}""
