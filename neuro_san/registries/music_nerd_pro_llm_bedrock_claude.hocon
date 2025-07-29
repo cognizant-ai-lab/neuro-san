@@ -16,7 +16,6 @@
 {
     "llm_config": {
         "model_name": "bedrock-us-claude-3-7-sonnet",
-        "credentials_profile_name": "daiDev",
         "region_name": "us-west-2"
     },
     "tools": [
