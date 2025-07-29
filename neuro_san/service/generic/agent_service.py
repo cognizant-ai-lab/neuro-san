@@ -30,11 +30,11 @@ from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextT
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.run_context.factory.master_toolbox_factory import MasterToolboxFactory
 from neuro_san.internals.run_context.factory.master_llm_factory import MasterLlmFactory
-from neuro_san.internals.utils.asyncio_executor_pool_provider import AsyncioExecutorPoolProvider
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.chat_message_converter import ChatMessageConverter
 from neuro_san.service.usage.usage_logger_factory import UsageLoggerFactory
 from neuro_san.service.usage.wrapped_usage_logger import WrappedUsageLogger
+from neuro_san.service.utils.service_context import ServiceContext
 from neuro_san.session.direct_agent_session import DirectAgentSession
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
 from neuro_san.session.session_invocation_context import SessionInvocationContext
@@ -58,7 +58,8 @@ class AgentService:
                  security_cfg: Dict[str, Any],
                  agent_name: str,
                  agent_network_provider: AgentNetworkProvider,
-                 server_logging: AgentServerLogging):
+                 server_logging: AgentServerLogging,
+                 service_context: ServiceContext):
         """
         Set the gRPC interface up for health checking so that the service
         will be opened to callers when the mesh sees it operational, if this
@@ -75,6 +76,7 @@ class AgentService:
         :param server_logging: An AgentServerLogging instance initialized so that
                         spawned asyncrhonous threads can also properly initialize
                         their logging.
+        :param service_context: The ServiceContext containing global-ish state
         """
         self.request_logger = request_logger
         self.security_cfg = security_cfg
@@ -88,7 +90,7 @@ class AgentService:
         config: Dict[str, Any] = agent_network.get_config()
         self.llm_factory: ContextTypeLlmFactory = MasterLlmFactory.create_llm_factory(config)
         self.toolbox_factory: ContextTypeToolboxFactory = MasterToolboxFactory.create_toolbox_factory(config)
-        self.async_executors_pool: AsyncioExecutorPool = AsyncioExecutorPoolProvider.get_executors_pool()
+        self.async_executor_pool: AsyncioExecutorPool = service_context.get_executor_pool()
         # Load once
         self.llm_factory.load()
         self.toolbox_factory.load()
@@ -219,7 +221,7 @@ class AgentService:
         factory = ExternalAgentSessionFactory(use_direct=False)
         invocation_context = SessionInvocationContext(
             factory,
-            self.async_executors_pool,
+            self.async_executor_pool,
             self.llm_factory,
             self.toolbox_factory,
             metadata)

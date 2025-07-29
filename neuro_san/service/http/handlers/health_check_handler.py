@@ -23,7 +23,7 @@ from importlib.metadata import PackageNotFoundError
 
 from tornado.web import RequestHandler
 from neuro_san.service.http.logging.http_logger import HttpLogger
-from neuro_san.service.util.server_status import ServerStatus
+from neuro_san.service.utils.server_status import ServerStatus
 
 
 class HealthCheckHandler(RequestHandler):
