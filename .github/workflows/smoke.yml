@@ -14,7 +14,7 @@ jobs:
     env:
       # AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
       # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION:            ${{ vars.AWS_REGION }}
+      AWS_REGION:            ${{ vars.AWS_REGIO }}
     
     # 🚀 Ollama Service runs alongside main container
     services:
@@ -75,28 +75,29 @@ jobs:
         run: |
           mkdir -p ~/.aws
 
-          # Print to verify the vars are in the environment
-          echo "ENV CHECK: AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}"
+          # # Print to verify the vars are in the environment
+          # echo "ENV CHECK: AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}"
 
           # Write config
-          printf "[default]\nregion=%s\noutput=json" \
+          printf "[default]\nregion=%s\noutput=json\n" \
                  "$AWS_REGION" "$AWS_REGION" \
             > ~/.aws/config
 
-      #     # Write credentials
-      #     printf "[default]\naws_access_key_id = %s\naws_secret_access_key = %s\n" \
-      #            "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY" \
-      #       > ~/.aws/credentials
+          # # Write credentials
+          # printf "[default]\naws_access_key_id = %s\naws_secret_access_key = %s\n" \
+          #        "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY" \
+          #   > ~/.aws/credentials
 
           chmod 700 ~/.aws
-          chmod 600 ~/.aws/config
+          chmod 600 ~/.aws/config 
+          # chmod 600 ~/.aws/credentials
 
           echo "--- ~/.aws/config ---" && cat ~/.aws/config
-      #     echo "--- ~/.aws/credentials ---" && cat ~/.aws/credentials
+          # echo "--- ~/.aws/credentials ---" && cat ~/.aws/credentials
 
       
       - name: List Bedrock foundation models
-        run: aws bedrock list-foundation-models
+        run: aws bedrock list-foundation-models --profile daiDev
 
       # - name: Start server & run smoke tests & print server-log if any failure
       #   shell: bash
