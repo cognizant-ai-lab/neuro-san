@@ -107,8 +107,7 @@ jobs:
           # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AGENT_TOOL_PATH: "./neuro_san/coded_tools"
           PYTHONPATH: ${{ env.PYTHONPATH }}:.
-        
-
+        run: |
           # debug
           echo "OPENAI_API_VERSION = "${OPENAI_API_VERSION}""
           echo "OPENAI_API_KEY = "${OPENAI_API_KEY}""
