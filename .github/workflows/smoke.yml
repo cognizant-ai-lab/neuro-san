@@ -75,18 +75,15 @@ jobs:
         run: |
           mkdir -p ~/.aws
 
-          # sanity check that the JOB‑LEVEL env is visible
-          echo "ENV CHECK: AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID"
-          echo "ENV CHECK: AWS_REGION=$AWS_REGION"
+          # Print to verify the vars are in the environment
+          echo "ENV CHECK: AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}"
 
-          # write config
-          printf "[default]\nregion=%s\noutput=json\n\n[profile daiDev]\n" \
-                 "role_arn=arn:aws:iam::613076437200:role/LeafDev\n" \
-                 "region=%s\nsource_profile=default\n" \
-            "$AWS_REGION" "$AWS_REGION" \
+          # Write config
+          printf "[default]\nregion=%s\noutput=json\n\n[profile daiDev]\nrole_arn=arn:aws:iam::613076437200:role/LeafDev\nregion=%s\nsource_profile=default\n" \
+                 "$AWS_REGION" "$AWS_REGION" \
             > ~/.aws/config
 
-          # write credentials
+          # Write credentials
           printf "[default]\naws_access_key_id = %s\naws_secret_access_key = %s\n" \
                  "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY" \
             > ~/.aws/credentials
