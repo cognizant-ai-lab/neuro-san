@@ -12,6 +12,7 @@ jobs:
     # Make sure AWS_REGION is set, e.g. in your repo vars or here:
     env:
       AWS_REGION: us-west-2
+      AWS_ROLL: arn:aws:iam::613076437200:role/LeafDev
     
     # 🚀 Ollama Service runs alongside main container
     services:
@@ -62,6 +63,7 @@ jobs:
           aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}   # if using static creds
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }} # if using static creds
           # 🔑 THIS IS MANDATORY:
+          role-to-assume:        ${{ env.AWS_ROLL }}
           aws-region:            ${{ env.AWS_REGION }}
 
       - name: Verify creds & list Bedrock models
