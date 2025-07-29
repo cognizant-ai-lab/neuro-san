@@ -73,22 +73,22 @@ jobs:
 
           # AWS CLI config with default and daiDev profile
           cat > ~/.aws/config <<EOF
-          [default]
-          region=us-west-2
-          output=json
+[default]
+region=us-west-2
+output=json
 
-          [profile daiDev]
-          role_arn=arn:aws:iam::613076437200:role/LeafDev
-          region=us-west-2
-          source_profile=default
-          EOF
+[profile daiDev]
+role_arn=arn:aws:iam::613076437200:role/LeafDev
+region=us-west-2
+source_profile=default
+EOF
 
           # AWS credentials (pulled from env)
           cat > ~/.aws/credentials <<EOF
-          [default]
-          aws_access_key_id = ${AWS_ACCESS_KEY_ID}
-          aws_secret_access_key = ${AWS_SECRET_ACCESS_KEY}
-          EOF
+[default]
+aws_access_key_id = $AWS_ACCESS_KEY_ID
+aws_secret_access_key = $AWS_SECRET_ACCESS_KEY
+EOF
 
           # Tighten permissions
           chmod 700 ~/.aws
@@ -100,6 +100,7 @@ jobs:
           cat ~/.aws/config
           echo "--- ~/.aws/credentials ---"
           cat ~/.aws/credentials
+
       
       - name: List Bedrock foundation models
         run: aws bedrock list-foundation-models --profile daiDev
