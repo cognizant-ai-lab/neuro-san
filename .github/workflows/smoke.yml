@@ -93,6 +93,9 @@ jobs:
           echo "--- ~/.aws/credentials ---"
           cat ~/.aws/credentials
 
+          # debug
+          echo "OPENAI_API_VERSION = ${OPENAI_API_VERSION}"
+
           # # Start server
           # build_scripts/server_start.sh
 
