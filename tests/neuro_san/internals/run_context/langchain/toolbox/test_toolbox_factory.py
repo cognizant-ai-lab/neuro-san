@@ -25,7 +25,7 @@ VALIDATIOR_PATH = (
 )
 
 
-class TestBaseToolFactory:
+class TestToolboxFactory:
     """Simplified test suite for ToolboxFactory."""
 
     @pytest.fixture
