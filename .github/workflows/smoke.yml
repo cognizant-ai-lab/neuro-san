@@ -97,7 +97,7 @@ jobs:
 
       
       - name: List Bedrock foundation models
-        run: aws bedrock list-foundation-models --profile daiDev
+        run: aws bedrock list-foundation-models
 
       # - name: Start server & run smoke tests & print server-log if any failure
       #   shell: bash
