@@ -446,7 +446,7 @@ class LangChainRunContext(RunContext):
         base_journal: Journal = self.invocation_context.get_journal()
         origination: Origination = self.invocation_context.get_origination()
         callbacks: List[BaseCallbackHandler] = [
-            JournalingCallbackHandler(base_journal, self.journal, parent_origin, origination)
+            JournalingCallbackHandler(self.journal, base_journal, parent_origin, origination)
         ]
         # Consult the agent spec for level of verbosity as it pertains to callbacks.
         agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
