@@ -5,10 +5,10 @@ on:
     - cron: '0 12 * * *'  # 12:00 PM UTC = 4:00 AM PT (standard)
   workflow_dispatch:      # enables manual triggering
 
-# 1) Grant the workflow OIDC permission
-permissions:
-  id-token: write
-  contents: read
+# # 1) Grant the workflow OIDC permission
+# permissions:
+#   id-token: write
+#   contents: read
 
 jobs:
   smoke-test:
@@ -18,6 +18,14 @@ jobs:
     env:
       AWS_REGION: us-west-2
       AWS_ROLL: arn:aws:iam::613076437200:role/LeafDev
+      aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}   # if using static creds
+      aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }} # if using static creds
+
+    run: |
+      echo "AWS-ACCESS-KEY-ID     = $AWS-ACCESS-KEY-ID"
+      echo "AWS-SECRET-ACCESS-KEY = $AWS-SECRET-ACCESS-KEY"
+      echo "aws-access-key-id     = $aws-access-key-id"
+      echo "aws-secret-access-key = $aws-secret-access-key"
     
     # 🚀 Ollama Service runs alongside main container
     services:
@@ -61,15 +69,15 @@ jobs:
       # - name: Show installed packages
       #   run: pip freeze
       
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v3
-        with:
-          # Required credentials or OIDC settings:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}   # if using static creds
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }} # if using static creds
-          # 🔑 THIS IS MANDATORY:
-          role-to-assume:        ${{ env.AWS_ROLL }}
-          aws-region:            ${{ env.AWS_REGION }}
+      # - name: Configure AWS credentials
+      #   uses: aws-actions/configure-aws-credentials@v3
+      #   with:
+      #     # Required credentials or OIDC settings:
+      #     aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}   # if using static creds
+      #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }} # if using static creds
+      #     # 🔑 THIS IS MANDATORY:
+      #     role-to-assume:        ${{ env.AWS_ROLL }}
+      #     aws-region:            ${{ env.AWS_REGION }}
 
       - name: Verify creds & list Bedrock models
         run: |
@@ -87,10 +95,23 @@ jobs:
           source_profile=default
           EOF
 
-          echo "AWS_ACCESS_KEY_ID     = $AWS_ACCESS_KEY_ID"
-          echo "AWS_SECRET_ACCESS_KEY = $AWS_SECRET_ACCESS_KEY"
-          echo "AWS_REGION            = $AWS_REGION"
-          aws bedrock list-foundation-models --profile daiDev
+          echo "AWS-ACCESS-KEY-ID     = $AWS-ACCESS-KEY-ID"
+          echo "AWS-SECRET-ACCESS-KEY = $AWS-SECRET-ACCESS-KEY"
+
+           # AWS credentials (pulled from env)
+          cat > ~/.aws/credentials <<EOF
+          [default]
+          aws_access_key_id = ${AWS-ACCESS-KEY-ID}
+          aws_secret_access_key = ${AWS-SECRET-ACCESS-KEY}
+          EOF
+
+          # Print out the files to verify
+          echo "--- ~/.aws/config ---"
+          cat ~/.aws/config
+          echo "--- ~/.aws/credentials ---"
+          cat ~/.aws/credentials
+
+          aws bedrock list-foundation-models --profile daiDev 
 
       - name: Start server & run smoke tests & print server-log if any failure
         shell: bash
