@@ -9,12 +9,12 @@ jobs:
   smoke-test:
     runs-on: ubuntu-latest
 
-    # # ─── Job‑level ENV ─────────────────────────────────────────
-    # # every step below will have these in its shell environment
-    # env:
-    #   AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-    #   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-    #   AWS_REGION:            ${{ vars.AWS_REGION }}
+    # ─── Job‑level ENV ─────────────────────────────────────────
+    # every step below will have these in its shell environment
+    env:
+      # AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+      # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION:            ${{ vars.AWS_REGION }}
     
     # 🚀 Ollama Service runs alongside main container
     services:
@@ -71,27 +71,27 @@ jobs:
           ./aws/install
           aws --version
 
-      # - name: Set up AWS config & credentials
-      #   run: |
-      #     mkdir -p ~/.aws
+      - name: Set up AWS config & credentials
+        run: |
+          mkdir -p ~/.aws
 
-      #     # Print to verify the vars are in the environment
-      #     echo "ENV CHECK: AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}"
+          # Print to verify the vars are in the environment
+          echo "ENV CHECK: AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}"
 
-      #     # Write config
-      #     printf "[default]\nregion=%s\noutput=json\n\n[profile daiDev]\nrole_arn=arn:aws:iam::613076437200:role/LeafDev\nregion=%s\nsource_profile=default\n" \
-      #            "$AWS_REGION" "$AWS_REGION" \
-      #       > ~/.aws/config
+          # Write config
+          printf "[default]\nregion=%s\noutput=json" \
+                 "$AWS_REGION" "$AWS_REGION" \
+            > ~/.aws/config
 
       #     # Write credentials
       #     printf "[default]\naws_access_key_id = %s\naws_secret_access_key = %s\n" \
       #            "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY" \
       #       > ~/.aws/credentials
 
-      #     chmod 700 ~/.aws
-      #     chmod 600 ~/.aws/config ~/.aws/credentials
+          chmod 700 ~/.aws
+          chmod 600 ~/.aws/config
 
-      #     echo "--- ~/.aws/config ---" && cat ~/.aws/config
+          echo "--- ~/.aws/config ---" && cat ~/.aws/config
       #     echo "--- ~/.aws/credentials ---" && cat ~/.aws/credentials
 
       
