@@ -51,7 +51,7 @@ jobs:
       - name: Show installed packages
         run: pip freeze
 
-      name: Set up AWS config & credentials
+      - name: Set up AWS config & credentials
         env:
           AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
