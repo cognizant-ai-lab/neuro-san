@@ -12,8 +12,8 @@ jobs:
     # ─── Job‑level ENV ─────────────────────────────────────────
     # every step below will have these in its shell environment
     env:
-      # AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-      # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION:            ${{ vars.AWS_REGION }}
     
     # 🚀 Ollama Service runs alongside main container
