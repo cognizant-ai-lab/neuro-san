@@ -18,9 +18,9 @@ from neuro_san.internals.network_providers.agent_network_storage import AgentNet
 from neuro_san.service.utils.server_status import ServerStatus
 
 
-class ServiceContext:
+class ServerContext:
     """
-    Class that contains global-ish state for each instance of a service.
+    Class that contains global-ish state for each instance of a server.
     """
 
     def __init__(self):

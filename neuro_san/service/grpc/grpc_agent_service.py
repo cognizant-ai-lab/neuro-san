@@ -29,7 +29,7 @@ from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkPr
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.agent_service_provider import AgentServiceProvider
 from neuro_san.service.generic.agent_service import AgentService
-from neuro_san.service.utils.service_context import ServiceContext
+from neuro_san.service.utils.server_context import ServerContext
 
 
 class GrpcAgentService(agent_pb2_grpc.AgentServiceServicer):
@@ -44,7 +44,7 @@ class GrpcAgentService(agent_pb2_grpc.AgentServiceServicer):
                  agent_name: str,
                  agent_network_provider: AgentNetworkProvider,
                  server_logging: AgentServerLogging,
-                 service_context: ServiceContext):
+                 server_context: ServerContext):
         """
         Set the gRPC interface up for health checking so that the service
         will be opened to callers when the mesh sees it operational, if this
@@ -61,7 +61,7 @@ class GrpcAgentService(agent_pb2_grpc.AgentServiceServicer):
         :param server_logging: An AgentServerLogging instance initialized so that
                         spawned asyncrhonous threads can also properly initialize
                         their logging.
-        :param service_context: The ServiceContext object containing global-ish state
+        :param server_context: The ServerContext object containing global-ish state
         """
         self.forwarder: GrpcMetadataForwarder = server_logging.get_forwarder()
         self.service_provider: AgentServiceProvider =\
@@ -71,7 +71,7 @@ class GrpcAgentService(agent_pb2_grpc.AgentServiceServicer):
                 agent_name,
                 agent_network_provider,
                 server_logging,
-                service_context)
+                server_context)
 
     def get_request_count(self) -> int:
         """

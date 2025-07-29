@@ -30,7 +30,7 @@ from neuro_san.service.grpc.concierge_service import ConciergeService
 from neuro_san.service.grpc.dynamic_agent_router import DynamicAgentRouter
 from neuro_san.service.grpc.grpc_agent_service import GrpcAgentService
 from neuro_san.service.interfaces.agent_server import AgentServer
-from neuro_san.service.utils.service_context import ServiceContext
+from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.session.agent_service_stub import AgentServiceStub
 
 DEFAULT_SERVER_NAME: str = 'neuro-san.Agent'
@@ -52,7 +52,7 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self, port: int,
                  server_loop_callbacks: ServerLoopCallbacks,
-                 service_context: ServiceContext,
+                 server_context: ServerContext,
                  server_name: str = DEFAULT_SERVER_NAME,
                  server_name_for_logs: str = DEFAULT_SERVER_NAME_FOR_LOGS,
                  max_concurrent_requests: int = DEFAULT_MAX_CONCURRENT_REQUESTS,
@@ -64,7 +64,7 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
         :param port: The integer port number for the service to listen on
         :param server_loop_callbacks: The ServerLoopCallbacks instance for
                 break out methods in main serving loop.
-        :param service_context: ServiceContext carrying global-ish state
+        :param server_context: ServerContext carrying global-ish state
         :param server_name: The name of the service
         :param server_name_for_logs: The name of the service for log files
         :param max_concurrent_requests: The maximum number of requests to handle at a time.
@@ -87,7 +87,7 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
         self.server_name_for_logs: str = server_name_for_logs
         self.max_concurrent_requests: int = max_concurrent_requests
         self.request_limit: int = request_limit
-        self.service_context: ServiceContext = service_context
+        self.server_context: ServerContext = server_context
 
         self.server_lifetime = None
         self.security_cfg = None
@@ -110,7 +110,7 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
                                    agent_name,
                                    source.get_agent_network_provider(agent_name),
                                    self.server_logging,
-                                   self.service_context)
+                                   self.server_context)
         self.services.append(service)
         servicer_to_server = AgentServicerToServer(service)
         agent_rpc_handlers = servicer_to_server.build_rpc_handlers()
@@ -160,7 +160,7 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
 
         # Add listener to handle adding per-agent gRPC services
         # to our dynamic router:
-        network_storage_dict: Dict[str, AgentNetworkStorage] = self.service_context.get_network_storage_dict()
+        network_storage_dict: Dict[str, AgentNetworkStorage] = self.server_context.get_network_storage_dict()
         public_storage: AgentNetworkStorage = network_storage_dict.get("public")
         for network_storage in network_storage_dict.values():
             network_storage.add_listener(self)
@@ -181,13 +181,13 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
         """
         Start serving gRPC requests
         """
-        self.service_context.get_server_status().grpc_service.set_status(True)
+        self.server_context.get_server_status().grpc_service.set_status(True)
         self.server_lifetime.run()
 
     def stop(self):
         """
         Stop the server.
         """
-        self.service_context.get_server_status().set_grpc_status(False)
+        self.server_context.get_server_status().set_grpc_status(False)
         # pylint: disable=protected-access
         self.server_lifetime._stop_serving()

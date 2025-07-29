@@ -37,7 +37,7 @@ from neuro_san.service.grpc.grpc_agent_service import GrpcAgentService
 from neuro_san.service.http.server.http_server import HttpServer
 from neuro_san.service.watcher.main_loop.storage_watcher import StorageWatcher
 from neuro_san.service.utils.server_status import ServerStatus
-from neuro_san.service.utils.service_context import ServiceContext
+from neuro_san.service.utils.server_context import ServerContext
 
 
 # pylint: disable=too-many-instance-attributes
@@ -66,7 +66,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.grpc_server: GrpcAgentServer = None
         self.http_server: HttpServer = None
         self.manifest_files: List[str] = []
-        self.service_context = ServiceContext()
+        self.server_context = ServerContext()
 
     def parse_args(self):
         """
@@ -119,7 +119,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         args = arg_parser.parse_args()
         self.server_name = args.server_name
         server_status = ServerStatus(self.server_name)
-        self.service_context.set_server_status(server_status)
+        self.server_context.set_server_status(server_status)
 
         self.grpc_port = args.port
         if self.grpc_port == 0:
@@ -175,13 +175,13 @@ class ServerMainLoop(ServerLoopCallbacks):
         metadata_set = metadata_set | set(self.usage_logger_metadata.split())
         metadata_str: str = " ".join(sorted(metadata_set))
 
-        server_status: ServerStatus = self.service_context.get_server_status()
+        server_status: ServerStatus = self.server_context.get_server_status()
 
         if server_status.grpc_service.is_requested():
             self.grpc_server = GrpcAgentServer(
                 self.grpc_port,
                 server_loop_callbacks=self,
-                service_context=self.service_context,
+                server_context=self.server_context,
                 server_name=self.server_name,
                 server_name_for_logs=self.server_name_for_logs,
                 max_concurrent_requests=self.max_concurrent_requests,
@@ -200,13 +200,13 @@ class ServerMainLoop(ServerLoopCallbacks):
             watcher = StorageWatcher(
                     manifest_file,
                     self.manifest_update_period_seconds,
-                    self.service_context)
+                    self.server_context)
             watcher.start()
 
         if server_status.http_service.is_requested():
             # Create HTTP server;
             self.http_server = HttpServer(
-                self.service_context,
+                self.server_context,
                 self.http_port,
                 self.service_openapi_spec_file,
                 self.request_limit,
@@ -214,7 +214,7 @@ class ServerMainLoop(ServerLoopCallbacks):
 
         # Now - our servers (gRPC and http) are created and listen to updates of network_storage
         # Perform the initial setup
-        public_storage: AgentNetworkStorage = self.service_context.get_network_storage_dict().get("public")
+        public_storage: AgentNetworkStorage = self.server_context.get_network_storage_dict().get("public")
         public_storage.setup_agent_networks(self.agent_networks)
 
         # Start all services:

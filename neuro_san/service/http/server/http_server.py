@@ -39,7 +39,7 @@ from neuro_san.service.http.server.http_server_app import HttpServerApp
 from neuro_san.service.interfaces.agent_server import AgentServer
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
 from neuro_san.service.utils.server_status import ServerStatus
-from neuro_san.service.utils.service_context import ServiceContext
+from neuro_san.service.utils.server_context import ServerContext
 
 
 class HttpServer(AgentAuthorizer, AgentStateListener):
@@ -52,14 +52,14 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
     TIMEOUT_TO_START_SECONDS: int = 10
 
     def __init__(self,
-                 service_context: ServiceContext,
+                 server_context: ServerContext,
                  http_port: int,
                  openapi_service_spec_path: str,
                  requests_limit: int,
                  forwarded_request_metadata: str = AgentServer.DEFAULT_FORWARDED_REQUEST_METADATA):
         """
         Constructor:
-        :param service_context: ServiceContext with global-ish state
+        :param server_context: ServerContext with global-ish state
         :param http_port: port for http neuro-san service;
         :param openapi_service_spec_path: path to a file with OpenAPI service specification;
         :param request_limit: The number of requests to service before shutting down.
@@ -70,7 +70,7 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
         """
         self.server_name_for_logs: str = "Http Server"
         self.http_port = http_port
-        self.service_context: ServiceContext = service_context
+        self.server_context: ServerContext = server_context
 
         # Randomize requests limit for this server instance.
         # Lower and upper bounds for number of requests before shutting down
@@ -89,7 +89,7 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
         self.lock = threading.Lock()
         # Add listener to handle adding per-agent http service
         # (services map is defined by self.allowed_agents dictionary)
-        for network_storage in self.service_context.get_network_storage_dict().values():
+        for network_storage in self.server_context.get_network_storage_dict().values():
             network_storage.add_listener(self)
 
     def __call__(self, other_server: AgentServer):
@@ -101,7 +101,7 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
 
         self.logger.debug({}, "Serving agents: %s", repr(self.allowed_agents.keys()))
         app.listen(self.http_port)
-        server_status: ServerStatus = self.service_context.get_server_status()
+        server_status: ServerStatus = self.server_context.get_server_status()
         server_status.http_service.set_status(True)
         self.logger.info({}, "HTTP server is running on port %d", self.http_port)
         self.logger.info({}, "HTTP server is shutting down after %d requests", self.requests_limit)
@@ -118,12 +118,12 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
         request_initialize_data: Dict[str, Any] = self.build_request_data()
         live_request_initialize_data: Dict[str, Any] = {
             "forwarded_request_metadata": self.forwarded_request_metadata,
-            "server_status": self.service_context.get_server_status(),
+            "server_status": self.server_context.get_server_status(),
             "op": "live"
         }
         ready_request_initialize_data: Dict[str, Any] = {
             "forwarded_request_metadata": self.forwarded_request_metadata,
-            "server_status": self.service_context.get_server_status(),
+            "server_status": self.server_context.get_server_status(),
             "op": "ready"
         }
         handlers = []
@@ -164,7 +164,7 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
                 agent_name,
                 agent_network_provider,
                 agent_server_logging,
-                self.service_context)
+                self.server_context)
         self.allowed_agents[agent_name] = agent_service_provider
         self.logger.info({}, "Added agent %s to allowed http service list", agent_name)
 
@@ -196,5 +196,5 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
             "agent_policy": self,
             "forwarded_request_metadata": self.forwarded_request_metadata,
             "openapi_service_spec_path": self.openapi_service_spec_path,
-            "network_storage_dict": self.service_context.get_network_storage_dict()
+            "network_storage_dict": self.server_context.get_network_storage_dict()
         }

@@ -20,7 +20,7 @@ from time import time
 from neuro_san.service.watcher.interfaces.startable import Startable
 from neuro_san.service.watcher.interfaces.storage_updater import StorageUpdater
 from neuro_san.service.watcher.registries.registry_storage_updater import RegistryStorageUpdater
-from neuro_san.service.utils.service_context import ServiceContext
+from neuro_san.service.utils.server_context import ServerContext
 
 
 # pylint: disable=too-many-instance-attributes
@@ -33,20 +33,20 @@ class StorageWatcher(Startable):
     def __init__(self,
                  manifest_path: str,
                  manifest_update_period_in_seconds: int,
-                 service_context: ServiceContext):
+                 server_context: ServerContext):
         """
         Constructor.
 
         :param manifest_path: file path to server manifest file
         :param manifest_update_period_in_seconds: update period in seconds
-        :param service_context: ServiceContext for global-ish state
+        :param server_context: ServerContext for global-ish state
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.updater_thread = Thread(target=self._run, daemon=True)
-        self.service_context: ServiceContext = service_context
+        self.server_context: ServerContext = server_context
 
         self.storage_updaters: List[StorageUpdater] = [
-            RegistryStorageUpdater(self.service_context.get_network_storage_dict(),
+            RegistryStorageUpdater(self.server_context.get_network_storage_dict(),
                                    manifest_update_period_in_seconds,
                                    manifest_path),
             # We will eventually have more here
@@ -101,7 +101,7 @@ class StorageWatcher(Startable):
         sleep_for_seconds: float = self.update_period_in_seconds
         while self.keep_running:
 
-            self.service_context.get_server_status().updater.set_status(True)
+            self.server_context.get_server_status().updater.set_status(True)
 
             sleep(sleep_for_seconds)
 

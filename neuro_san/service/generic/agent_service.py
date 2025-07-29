@@ -34,7 +34,7 @@ from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.chat_message_converter import ChatMessageConverter
 from neuro_san.service.usage.usage_logger_factory import UsageLoggerFactory
 from neuro_san.service.usage.wrapped_usage_logger import WrappedUsageLogger
-from neuro_san.service.utils.service_context import ServiceContext
+from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.session.direct_agent_session import DirectAgentSession
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
 from neuro_san.session.session_invocation_context import SessionInvocationContext
@@ -59,7 +59,7 @@ class AgentService:
                  agent_name: str,
                  agent_network_provider: AgentNetworkProvider,
                  server_logging: AgentServerLogging,
-                 service_context: ServiceContext):
+                 server_context: ServerContext):
         """
         Set the gRPC interface up for health checking so that the service
         will be opened to callers when the mesh sees it operational, if this
@@ -76,7 +76,7 @@ class AgentService:
         :param server_logging: An AgentServerLogging instance initialized so that
                         spawned asyncrhonous threads can also properly initialize
                         their logging.
-        :param service_context: The ServiceContext containing global-ish state
+        :param server_context: The ServerContext containing global-ish state
         """
         self.request_logger = request_logger
         self.security_cfg = security_cfg
@@ -90,7 +90,7 @@ class AgentService:
         config: Dict[str, Any] = agent_network.get_config()
         self.llm_factory: ContextTypeLlmFactory = MasterLlmFactory.create_llm_factory(config)
         self.toolbox_factory: ContextTypeToolboxFactory = MasterToolboxFactory.create_toolbox_factory(config)
-        self.async_executor_pool: AsyncioExecutorPool = service_context.get_executor_pool()
+        self.async_executor_pool: AsyncioExecutorPool = server_context.get_executor_pool()
         # Load once
         self.llm_factory.load()
         self.toolbox_factory.load()
