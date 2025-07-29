@@ -51,17 +51,17 @@ jobs:
       # - name: Show installed packages
       #   run: pip freeze
 
-      # - name: Configure AWS creds & list Bedrock models
-      #   uses: aws-actions/configure-aws-credentials@v3
-      #   with:
-      #     aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-      #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      #     aws-region:            ${{ vars.AWS_REGION }}
-      #   run: |
-      #     echo "AWS_ACCESS_KEY_ID     = $AWS_ACCESS_KEY_ID"
-      #     echo "AWS_SECRET_ACCESS_KEY = $AWS_SECRET_ACCESS_KEY"
-      #     echo "AWS_REGION            = $AWS_REGION"
-      #     aws bedrock list-foundation-models --profile daiDev
+      - name: Configure AWS creds & list Bedrock models
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ vars.AWS_REGION }}
+        run: |
+          echo "AWS_ACCESS_KEY_ID     = $AWS_ACCESS_KEY_ID"
+          echo "AWS_SECRET_ACCESS_KEY = $AWS_SECRET_ACCESS_KEY"
+          echo "AWS_REGION            = $AWS_REGION"
+          aws bedrock list-foundation-models --profile daiDev
 
       - name: Start server & run smoke tests & print server-log if any failure
         shell: bash
