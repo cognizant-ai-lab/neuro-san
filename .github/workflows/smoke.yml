@@ -71,24 +71,24 @@ jobs:
         run: |
           mkdir -p ~/.aws
 
-          # AWS CLI config
-          printf "[default]\nregion=us-west-2\noutput=json\n\n" \
-                "[profile daiDev]\nrole_arn=arn:aws:iam::613076437200:role/LeafDev\n" \
-                "region=us-west-2\nsource_profile=default\n" \
+          # Print to verify the vars are in the environment
+          echo "ENV CHECK: AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}"
+
+          # Write config
+          printf "[default]\nregion=%s\noutput=json\n\n[profile daiDev]\nrole_arn=arn:aws:iam::613076437200:role/LeafDev\nregion=%s\nsource_profile=default\n" \
+                 "$AWS_REGION" "$AWS_REGION" \
             > ~/.aws/config
 
-          # AWS credentials (pulled from env)
+          # Write credentials
           printf "[default]\naws_access_key_id = %s\naws_secret_access_key = %s\n" \
-                "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY" \
+                 "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY" \
             > ~/.aws/credentials
 
           chmod 700 ~/.aws
           chmod 600 ~/.aws/config ~/.aws/credentials
 
-          echo "--- ~/.aws/config ---"
-          cat ~/.aws/config
-          echo "--- ~/.aws/credentials ---"
-          cat ~/.aws/credentials
+          echo "--- ~/.aws/config ---" && cat ~/.aws/config
+          echo "--- ~/.aws/credentials ---" && cat ~/.aws/credentials
 
       
       - name: List Bedrock foundation models
