@@ -313,7 +313,7 @@ class LangChainRunContext(RunContext):
             if toolbox:
                 toolbox_factory: ContextTypeToolboxFactory = self.invocation_context.get_toolbox_factory()
                 try:
-                    tool_from_toolbox = toolbox_factory.create_tool_from_toolbox(toolbox, agent_spec.get("args"))
+                    tool_from_toolbox = toolbox_factory.create_tool_from_toolbox(toolbox, agent_spec.get("args"), name)
                     # If the tool from toolbox is base tool or list of base tool, return the tool as is
                     # since tool's definition and args schema are predefined in these the class of the tool.
                     if isinstance(tool_from_toolbox, BaseTool) or (
@@ -441,9 +441,12 @@ class LangChainRunContext(RunContext):
             "input": self.recent_human_message
         }
 
-        # Create the list of callbacks to pass to the LLM ChatModel
+        # Create the list of callbacks to pass when invoking
+        parent_origin: List[Dict[str, Any]] = self.get_origin()
+        base_journal: Journal = self.invocation_context.get_journal()
+        origination: Origination = self.invocation_context.get_origination()
         callbacks: List[BaseCallbackHandler] = [
-            JournalingCallbackHandler(self, self.journal)
+            JournalingCallbackHandler(base_journal, self.journal, parent_origin, origination)
         ]
         # Consult the agent spec for level of verbosity as it pertains to callbacks.
         agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
@@ -452,6 +455,8 @@ class LangChainRunContext(RunContext):
             # This particular class adds a *lot* of very detailed messages
             # to the logs.  Add this because some people are interested in it.
             callbacks.append(LoggingCallbackHandler(self.logger))
+
+        # Add callbacks as an invoke config
         invoke_config = {
             "configurable": {
                 "session_id": run.get_id()
