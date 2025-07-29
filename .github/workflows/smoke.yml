@@ -16,10 +16,9 @@ jobs:
 
     # Make sure AWS_REGION is set, e.g. in your repo vars or here:
     env:
-      AWS_REGION: us-west-2
-      AWS_ROLL: arn:aws:iam::613076437200:role/LeafDev
-      aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}   # if using static creds
-      aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }} # if using static creds
+      aws_access_key_id:     ${{ secrets.AWS_ACCESS_KEY_ID }}   # if using static creds
+      aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }} # if using static creds
+      
     
     # 🚀 Ollama Service runs alongside main container
     services:
@@ -89,16 +88,14 @@ jobs:
           source_profile=default
           EOF
 
-          echo "AWS-ACCESS-KEY-ID     = $AWS-ACCESS-KEY-ID"
-          echo "AWS-SECRET-ACCESS-KEY = $AWS-SECRET-ACCESS-KEY"
-          echo "aws-access-key-id     = $aws-access-key-id"
-          echo "aws-secret-access-key = $aws-secret-access-key"
+          echo "AWS_ACCESS_KEY_ID     = $AWS_ACCESS_KEY_ID"
+          echo "AWS_SECRET_ACCESS_KEY = $AWS_SECRET_ACCESS_KEY"
 
            # AWS credentials (pulled from env)
           cat > ~/.aws/credentials <<EOF
           [default]
-          aws_access_key_id = ${AWS-ACCESS-KEY-ID}
-          aws_secret_access_key = ${AWS-SECRET-ACCESS-KEY}
+          aws_access_key_id = ${AWS_ACCESS_KEY_ID}
+          aws_secret_access_key = ${AWS_SECRET_ACCESS_KEY}
           EOF
 
           # Print out the files to verify
