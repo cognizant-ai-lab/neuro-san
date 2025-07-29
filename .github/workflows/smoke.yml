@@ -51,12 +51,27 @@ jobs:
       # - name: Show installed packages
       #   run: pip freeze
 
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up variables
+        id: set-vars
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "image_tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+            echo "target_environment=staging" >> $GITHUB_OUTPUT
+          else
+            SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+            echo "image_tag=${SHORT_SHA}" >> $GITHUB_OUTPUT
+            echo "target_environment=dev" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v3
         with:
           aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # aws-region:            ${{ vars.AWS_REGION }}
+          aws-region:            ${{ vars.AWS_REGION }}
 
       - name: Verify creds & list Bedrock models
         run: |
@@ -76,7 +91,7 @@ jobs:
 
           echo "AWS_ACCESS_KEY_ID     = $AWS_ACCESS_KEY_ID"
           echo "AWS_SECRET_ACCESS_KEY = $AWS_SECRET_ACCESS_KEY"
-          # echo "AWS_REGION            = $AWS_REGION"
+          echo "AWS_REGION            = $AWS_REGION"
           aws bedrock list-foundation-models --profile daiDev
 
       - name: Start server & run smoke tests & print server-log if any failure
