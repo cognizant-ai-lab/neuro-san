@@ -59,24 +59,24 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
 
     def __init__(
             self,
-            base_journal: Journal,
             calling_agent_journal: Journal,
+            base_journal: Journal,
             parent_origin: List[Dict[str, Any]],
             origination: Origination
     ):
         """
         Constructor
 
+        :param calling_agent_journal: The journal of the calling agent
         :param base_journal: The Journal instance that allows message reporting during the course of the AgentSession.
             This is used to construct the langchain_tool_journal.
-        :param calling_agent_journal: The journal of the calling agent
         :param parent_origin: A List of origin dictionaries indicating the origin of the run
             This is used to construct the langchain_tool_journal.
         :param origination: The Origination instance carrying state about tool instantation
             during the course of the AgentSession. This is used to construct the langchain_tool_journal.
         """
-        self.base_journal: Journal = base_journal
         self.calling_agent_journal: Journal = calling_agent_journal
+        self.base_journal: Journal = base_journal
         self.parent_origin: List[Dict[str, Any]] = parent_origin
         self.origination: Origination = origination
         self.langchain_tool_journal: Journal = None
