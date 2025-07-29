@@ -71,31 +71,20 @@ jobs:
         run: |
           mkdir -p ~/.aws
 
-          # AWS CLI config with default and daiDev profile
-          cat > ~/.aws/config <<EOF
-[default]
-region=us-west-2
-output=json
-
-[profile daiDev]
-role_arn=arn:aws:iam::613076437200:role/LeafDev
-region=us-west-2
-source_profile=default
-EOF
+          # AWS CLI config
+          printf "[default]\nregion=us-west-2\noutput=json\n\n" \
+                "[profile daiDev]\nrole_arn=arn:aws:iam::613076437200:role/LeafDev\n" \
+                "region=us-west-2\nsource_profile=default\n" \
+            > ~/.aws/config
 
           # AWS credentials (pulled from env)
-          cat > ~/.aws/credentials <<EOF
-[default]
-aws_access_key_id = $AWS_ACCESS_KEY_ID
-aws_secret_access_key = $AWS_SECRET_ACCESS_KEY
-EOF
+          printf "[default]\naws_access_key_id = %s\naws_secret_access_key = %s\n" \
+                "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY" \
+            > ~/.aws/credentials
 
-          # Tighten permissions
           chmod 700 ~/.aws
-          chmod 600 ~/.aws/config
-          chmod 600 ~/.aws/credentials
+          chmod 600 ~/.aws/config ~/.aws/credentials
 
-          # Print out the files to verify
           echo "--- ~/.aws/config ---"
           cat ~/.aws/config
           echo "--- ~/.aws/credentials ---"
