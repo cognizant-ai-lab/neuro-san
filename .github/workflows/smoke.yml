@@ -53,8 +53,8 @@ jobs:
 
       - name: Install AWS CLI prerequisites
         run: |
-          sudo apt-get update
-          sudo apt-get install -y unzip zip
+          apt-get update
+          apt-get install -y unzip zip
 
       # 1) Install AWS CLI v2 (which includes the Bedrock commands)
       - name: Install AWS CLI v2
