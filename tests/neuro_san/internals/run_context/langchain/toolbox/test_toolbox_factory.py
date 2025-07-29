@@ -54,6 +54,8 @@ class TestBaseToolFactory:
             mock_resolver.return_value = mock_tool_class
 
             mock_instance = MagicMock(spec=BaseTool)
+            mock_instance.name = MagicMock(spec=str)
+            mock_instance.tags = MagicMock(spec=list)
             mock_tool_class.return_value = mock_instance
 
             tool = factory.create_tool_from_toolbox("test_tool", user_args)
@@ -90,7 +92,13 @@ class TestBaseToolFactory:
             mock_resolver.return_value = mock_toolkit_class
 
             mock_instance = MagicMock()
-            mock_tools = [MagicMock(spec=BaseTool), MagicMock(spec=BaseTool)]
+            mock_tool_1 = MagicMock(spec=BaseTool)
+            mock_tool_1.name = MagicMock(spec=str)
+            mock_tool_1.tags = MagicMock(spec=list)
+            mock_tool_2 = MagicMock(spec=BaseTool)
+            mock_tool_2.name = MagicMock(spec=str)
+            mock_tool_2.tags = MagicMock(spec=list)
+            mock_tools = [mock_tool_1, mock_tool_2]
             mock_instance.get_tools.return_value = mock_tools
             mock_toolkit_class.return_value = mock_instance
 
@@ -134,7 +142,11 @@ class TestBaseToolFactory:
 
             # Mock get_tools() returning a list of tools
             mock_tool_1 = MagicMock(spec=BaseTool)
+            mock_tool_1.name = MagicMock(spec=str)
+            mock_tool_1.tags = MagicMock(spec=list)
             mock_tool_2 = MagicMock(spec=BaseTool)
+            mock_tool_2.name = MagicMock(spec=str)
+            mock_tool_2.tags = MagicMock(spec=list)
             mock_toolkit_instance.get_tools.return_value = [mock_tool_1, mock_tool_2]
 
             # Call the factory method
