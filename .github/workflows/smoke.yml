@@ -8,6 +8,10 @@ on:
 jobs:
   smoke-test:
     runs-on: ubuntu-latest
+
+    # Make sure AWS_REGION is set, e.g. in your repo vars or here:
+    env:
+      AWS_REGION: us-west-2
     
     # 🚀 Ollama Service runs alongside main container
     services:
@@ -57,9 +61,8 @@ jobs:
           # Required credentials or OIDC settings:
           aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}   # if using static creds
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }} # if using static creds
-          audience:              sts.amazonaws.com                   # if you’re assuming via OIDC
           # 🔑 THIS IS MANDATORY:
-          aws-region:            ${{ vars.AWS_REGION }}
+          aws-region:            ${{ env.AWS_REGION }}
 
       - name: Verify creds & list Bedrock models
         run: |
