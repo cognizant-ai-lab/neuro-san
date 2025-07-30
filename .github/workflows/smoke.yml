@@ -59,7 +59,9 @@ jobs:
         run: pip freeze
 
       - name: Install and check access to Bedrock models
-        run: set_test_aws_cli_list_bedrock_models.sh
+        shell: bash
+        run: |
+          set_test_aws_cli_list_bedrock_models.sh
 
       - name: Start server & run smoke tests & print server-log if any failure
         shell: bash
