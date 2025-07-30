@@ -15,6 +15,7 @@ from re import Match
 from typing import Any
 from typing import Dict
 from typing import Optional
+from typing import Tuple
 
 from json.decoder import JSONDecodeError
 from json_repair import loads
@@ -67,7 +68,7 @@ class JsonStructureParser(StructureParser):
 
         return structure
 
-    def _extract_delimited_block(self, text: str, delimiters: Dict[str, str]) -> tuple[Optional[str], str]:
+    def _extract_delimited_block(self, text: str, delimiters: Dict[str, str]) -> Tuple[Optional[str], str]:
         """
         Extracts a block of text from the input string "text" that is enclosed between any
         of the provided delimiter pairs. Returns a tuple of:
