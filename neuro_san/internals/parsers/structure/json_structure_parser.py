@@ -11,6 +11,7 @@
 # END COPYRIGHT
 
 import re
+from re import Match
 from typing import Any
 from typing import Dict
 from typing import Optional
@@ -50,16 +51,19 @@ class JsonStructureParser(StructureParser):
 
         # Attempt parsing the structure from the meat
         structure: Dict[str, Any] = None
-        if meat:
-            try:
-                structure = loads(meat)
-                if not isinstance(structure, Dict):
-                    # json_repair seems to sometimes return an empty string if there is nothing
-                    # for it to grab onto.
-                    structure = None
-            except JSONDecodeError:
-                # Couldn't parse
-                self.remainder = None
+
+        try:
+            structure = loads(meat)
+            if not isinstance(structure, Dict):
+                # json_repair seems to sometimes return an empty string if there is nothing
+                # for it to grab onto.
+                structure = None
+        except JSONDecodeError:
+            # Couldn't parse
+            self.remainder = None
+        except TypeError:
+            # meat is None
+            self.remainder = None
 
         return structure
 
@@ -80,22 +84,19 @@ class JsonStructureParser(StructureParser):
             # Build a regex pattern to find content between start and end delimiters
             # - re.escape ensures special characters like "{" are treated literally
             # - (.*) is a greedy match for any characters between the delimiters
-            pattern = re.escape(start) + r"(.*)" + re.escape(end)
+            pattern: str = re.escape(start) + r"(.*)" + re.escape(end)
 
             # Perform regex search across multiple lines if needed (DOTALL allows "." to match newlines)
-            match = re.search(pattern, text, re.DOTALL)
+            match: Match[str] = re.search(pattern, text, re.DOTALL)
 
             if match:
                 # Extract the matched content (including the delimiters), removing leading/trailing whitespace
-                main = match.group(0).strip()
+                main: str = match.group(0).strip()
 
                 # Remove the matched block (including delimiters) from the input string
-                remainder = text[:match.start()] + text[match.end():]
+                remainder: str = text[:match.start()] + text[match.end():]
 
-                # Clean up extra whitespace in the remainder (collapse multiple spaces)
-                remainder = re.sub(r"\s+", " ", remainder).strip()
-
-                return main, remainder
+                return main, remainder.strip()
 
         # If no matching delimiters were found, return None and the full cleaned-up input
         return None, text.strip()
