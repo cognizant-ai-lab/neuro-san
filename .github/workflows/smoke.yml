@@ -8,6 +8,13 @@ on:
 jobs:
   smoke-test:
     runs-on: ubuntu-latest
+
+    # ─── Job‑level ENV ─────────────────────────────────────────
+    # every step below will have these in its shell environment
+    env:
+      AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION:            ${{ vars.AWS_REGION }}
     
     # 🚀 Ollama Service runs alongside main container
     services:
@@ -47,6 +54,11 @@ jobs:
         shell: bash
         run: |
           build_scripts/set_ollama_model.sh
+
+      - name: Check access to Bedrock models
+        shell: bash
+        run: |
+          build_scripts/check_list_bedrock_models_profile_single.sh
       
       - name: Show installed packages
         run: pip freeze
