@@ -130,6 +130,11 @@ class ToolboxFactory(ContextTypeToolboxFactory):
                  - A list of tools if "class of "tool_name points to a BaseToolkit class.
                  - A dict of tool's "description" and "parameters" if tool_name points to a CodedTool
         """
+
+        # agent_name is required when the tool is used as an internal agent.
+        # However, tools from the toolbox could potentially be used as external tools,
+        # in which case agent_name may not be needed.
+
         empty: Dict[str, Any] = {}
 
         tool_info: Dict[str, Any] = self.toolbox_infos.get(tool_name)
