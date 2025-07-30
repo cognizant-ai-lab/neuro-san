@@ -54,14 +54,14 @@ jobs:
         shell: bash
         run: |
           build_scripts/set_ollama_model.sh
+
+      - name: Check access to Bedrock models
+        shell: bash
+        run: |
+          build_scripts/check_list_bedrock_models_profile_single.sh
       
       - name: Show installed packages
         run: pip freeze
-
-      - name: Install and check access to Bedrock models
-        shell: bash
-        run: |
-          set_test_aws_cli_list_bedrock_models.sh
 
       - name: Start server & run smoke tests & print server-log if any failure
         shell: bash
