@@ -63,7 +63,7 @@ class AgentNetwork(AgentNetworkInspector):
 
         if name in self.agent_spec_map:
             message: str = f"""
-The agent named "{name}" appears to have a duplicate entry in its hocon file.
+The agent named "{name}" appears to have a duplicate entry in its hocon file for {self.name}.
 Agent names must be unique within the scope of a single hocon file.
 
 Some things to try:
@@ -135,8 +135,8 @@ Some things to try:
                 valid_front_men.remove(front_man)
 
         if len(valid_front_men) == 0:
-            raise ValueError("""
-No front man found.
+            raise ValueError(f"""
+No front man found for the {self.name} agent network.
 Here are some pre-conditions for an agent in your network to be a potential front man:
 1) The agent's "function" does not have any "parameters" defined OR
 2) The agent is the first listed among the "tools" of your agent hocon file
@@ -147,7 +147,8 @@ Disqualifiers. A front man cannot:
 """)
 
         if len(valid_front_men) > 1:
-            raise ValueError(f"Found > 1 front man for chat. Possibilities: {valid_front_men}")
+            raise ValueError(f"Found > 1 front man for chat for the {self.name} network." +
+                             f" Possibilities: {valid_front_men}")
 
         front_man: str = valid_front_men[0]
 
