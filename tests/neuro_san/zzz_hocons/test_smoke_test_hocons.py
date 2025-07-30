@@ -91,7 +91,7 @@ class TestSmokeTestHocons(TestCase):
 
         # List more hocon files as they become available here.
     ]))
-    @pytest.mark.timeout(5 * 60)  # in seconds for this test
+    @pytest.mark.timeout(60)  # in seconds for this test
     @pytest.mark.smoke
     @pytest.mark.non_default_llm_provider
     @pytest.mark.anthropic
