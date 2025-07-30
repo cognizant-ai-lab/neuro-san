@@ -24,6 +24,7 @@ from tornado.ioloop import IOLoop
 
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
+from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.network_providers.single_agent_network_provider import SingleAgentNetworkProvider
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
@@ -89,7 +90,8 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
         self.lock = threading.Lock()
         # Add listener to handle adding per-agent http service
         # (services map is defined by self.allowed_agents dictionary)
-        for network_storage in self.server_context.get_network_storage_dict().values():
+        network_storage_dict: Dict[str, AgentNetworkStorage] = self.server_context.get_network_storage_dict()
+        for network_storage in network_storage_dict.values():
             network_storage.add_listener(self)
 
     def __call__(self, other_server: AgentServer):

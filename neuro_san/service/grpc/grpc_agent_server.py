@@ -31,6 +31,7 @@ from neuro_san.service.grpc.dynamic_agent_router import DynamicAgentRouter
 from neuro_san.service.grpc.grpc_agent_service import GrpcAgentService
 from neuro_san.service.interfaces.agent_server import AgentServer
 from neuro_san.service.utils.server_context import ServerContext
+from neuro_san.service.utils.server_status import ServerStatus
 from neuro_san.session.agent_service_stub import AgentServiceStub
 
 DEFAULT_SERVER_NAME: str = 'neuro-san.Agent'
@@ -181,13 +182,15 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
         """
         Start serving gRPC requests
         """
-        self.server_context.get_server_status().grpc_service.set_status(True)
+        server_status: ServerStatus = self.server_context.get_server_status()
+        server_status.grpc_service.set_status(True)
         self.server_lifetime.run()
 
     def stop(self):
         """
         Stop the server.
         """
-        self.server_context.get_server_status().set_grpc_status(False)
+        server_status: ServerStatus = self.server_context.get_server_status()
+        server_status.grpc_service.set_status(False)
         # pylint: disable=protected-access
         self.server_lifetime._stop_serving()

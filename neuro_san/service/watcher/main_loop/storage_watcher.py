@@ -21,6 +21,7 @@ from neuro_san.service.watcher.interfaces.startable import Startable
 from neuro_san.service.watcher.interfaces.storage_updater import StorageUpdater
 from neuro_san.service.watcher.registries.registry_storage_updater import RegistryStorageUpdater
 from neuro_san.service.utils.server_context import ServerContext
+from neuro_san.service.utils.server_status import ServerStatus
 
 
 # pylint: disable=too-many-instance-attributes
@@ -101,7 +102,8 @@ class StorageWatcher(Startable):
         sleep_for_seconds: float = self.update_period_in_seconds
         while self.keep_running:
 
-            self.server_context.get_server_status().updater.set_status(True)
+            server_status: ServerStatus = self.server_context.get_server_status()
+            server_status.updater.set_status(True)
 
             sleep(sleep_for_seconds)
 

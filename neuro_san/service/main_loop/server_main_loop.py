@@ -214,7 +214,8 @@ class ServerMainLoop(ServerLoopCallbacks):
 
         # Now - our servers (gRPC and http) are created and listen to updates of network_storage
         # Perform the initial setup
-        public_storage: AgentNetworkStorage = self.server_context.get_network_storage_dict().get("public")
+        network_storage_dict: Dict[str, AgentNetworkStorage] = self.server_context.get_network_storage_dict()
+        public_storage: AgentNetworkStorage = network_storage_dict.get("public")
         public_storage.setup_agent_networks(self.agent_networks)
 
         # Start all services:
