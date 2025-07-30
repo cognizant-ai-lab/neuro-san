@@ -5,6 +5,9 @@ on:
     - cron: '0 3 * * *'  # Every night at 03:00 UTC
   workflow_dispatch:     # Allow manual runs
 
+permissions:
+  contents: write  # Allow GITHUB_TOKEN to push
+
 jobs:
   sync:
     runs-on: ubuntu-latest
