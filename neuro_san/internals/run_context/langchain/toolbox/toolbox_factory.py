@@ -173,14 +173,16 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         if hasattr(instance, "get_tools") and callable(instance.get_tools):
             toolkit: List[BaseTool] = instance.get_tools()
             for tool in toolkit:
-                # Prefix the name of the agent to each tool
-                tool.name = f"{agent_name}_{tool.name}"
+                if agent_name:
+                    # Prefix the name of the agent to each tool
+                    tool.name = f"{agent_name}_{tool.name}"
                 # Add "langchain_tool" tags so journal callback can idenitify it
                 tool.tags = ["langchain_tool"]
             return toolkit
 
-        # Replace langchain tool's name with agent name
-        instance.name = agent_name
+        if agent_name:
+            # Replace langchain tool's name with agent name
+            instance.name = agent_name
         # Add "langchain_tool" tags so journal callback can idenitify it
         instance.tags = ["langchain_tool"]
         return instance

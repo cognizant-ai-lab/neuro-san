@@ -75,6 +75,16 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
         :param origination: The Origination instance carrying state about tool instantation
             during the course of the AgentSession. This is used to construct the langchain_tool_journal.
         """
+
+        # The calling-agent journal logs the execution flow from the perspective of the agent invoking the tool
+        # (e.g., MusicNerdPro). In contrast, the LangChain tool journal represents the tool's own execution
+        # context—similar to how coded tools like Accountant have their own journal tied to their run context.
+
+        # LangChain tools don’t instantiate their own RunContext, so they lack a dedicated journal by default.
+        # To maintain consistency with how other tools are tracked, we explicitly create a langchain_tool_journal
+        # when the tool starts. This ensures tool-specific inputs and outputs are captured independently,
+        # while still allowing the calling agent to log its own perspective.
+
         self.calling_agent_journal: Journal = calling_agent_journal
         self.base_journal: Journal = base_journal
         self.parent_origin: List[Dict[str, Any]] = parent_origin
