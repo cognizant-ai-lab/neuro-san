@@ -168,19 +168,8 @@ class LangChainRunContext(RunContext):
         # DEF - Remove the arg if possible
         _ = agent_name
 
-        # Create the list of callbacks to pass to the LLM ChatModel
-        callbacks: List[BaseCallbackHandler] = [
-            JournalingCallbackHandler(self.journal)
-        ]
         full_name: str = Origination.get_full_name_from_origin(self.origin)
-
-        # Consult the agent spec for level of verbosity as it pertains to callbacks.
         agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
-        verbose: Union[bool, str] = agent_spec.get("verbose", False)
-        if isinstance(verbose, str) and verbose.lower() in ("extra", "logging"):
-            # This particular class adds a *lot* of very detailed messages
-            # to the logs.  Add this because some people are interested in it.
-            callbacks.append(LoggingCallbackHandler(self.logger))
 
         # Now that we have a name, we can create an ErrorDetector for the output.
         self.error_detector = ErrorDetector(full_name,
@@ -199,14 +188,12 @@ class LangChainRunContext(RunContext):
 
         prompt_template: ChatPromptTemplate = await self._create_prompt_template(instructions)
 
-        self.agent = self.create_agent_with_fallbacks(prompt_template, callbacks)
+        self.agent = self.create_agent_with_fallbacks(prompt_template)
 
-    def create_agent_with_fallbacks(self, prompt_template: ChatPromptTemplate,
-                                    callbacks: List[BaseCallbackHandler]) -> Agent:
+    def create_agent_with_fallbacks(self, prompt_template: ChatPromptTemplate) -> Agent:
         """
         Creates an agent with potential fallback llms to use.
         :param prompt_template: The ChatPromptTemplate to use for the agent
-        :param callbacks: The list of callbacks to use when creating any LLM via the factory
         :return: An Agent (Runnable)
         """
         # Initialize our return value
@@ -226,7 +213,7 @@ class LangChainRunContext(RunContext):
         for index, fallback in enumerate(fallbacks):
 
             # Create a model we might use.
-            one_llm: BaseLanguageModel = llm_factory.create_llm(fallback, callbacks=callbacks)
+            one_llm: BaseLanguageModel = llm_factory.create_llm(fallback)
             one_agent: Agent = self.create_agent(prompt_template, one_llm)
 
             if index == 0:
@@ -324,7 +311,7 @@ class LangChainRunContext(RunContext):
             if toolbox:
                 toolbox_factory: ContextTypeToolboxFactory = self.invocation_context.get_toolbox_factory()
                 try:
-                    tool_from_toolbox = toolbox_factory.create_tool_from_toolbox(toolbox, agent_spec.get("args"))
+                    tool_from_toolbox = toolbox_factory.create_tool_from_toolbox(toolbox, agent_spec.get("args"), name)
                     # If the tool from toolbox is base tool or list of base tool, return the tool as is
                     # since tool's definition and args schema are predefined in these the class of the tool.
                     if isinstance(tool_from_toolbox, BaseTool) or (
@@ -451,10 +438,28 @@ class LangChainRunContext(RunContext):
             "chat_history": previous_chat_history,
             "input": self.recent_human_message
         }
+
+        # Create the list of callbacks to pass when invoking
+        parent_origin: List[Dict[str, Any]] = self.get_origin()
+        base_journal: Journal = self.invocation_context.get_journal()
+        origination: Origination = self.invocation_context.get_origination()
+        callbacks: List[BaseCallbackHandler] = [
+            JournalingCallbackHandler(self.journal, base_journal, parent_origin, origination)
+        ]
+        # Consult the agent spec for level of verbosity as it pertains to callbacks.
+        agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
+        verbose: Union[bool, str] = agent_spec.get("verbose", False)
+        if isinstance(verbose, str) and verbose.lower() in ("extra", "logging"):
+            # This particular class adds a *lot* of very detailed messages
+            # to the logs.  Add this because some people are interested in it.
+            callbacks.append(LoggingCallbackHandler(self.logger))
+
+        # Add callbacks as an invoke config
         invoke_config = {
             "configurable": {
                 "session_id": run.get_id()
-            }
+            },
+            "callbacks": callbacks
         }
 
         # Chat history is updated in write_message
