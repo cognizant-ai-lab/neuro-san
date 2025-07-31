@@ -27,7 +27,6 @@ from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSour
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.network_providers.single_agent_network_provider import SingleAgentNetworkProvider
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
-from neuro_san.service.main_loop.server_status import ServerStatus
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 from neuro_san.service.http.handlers.health_check_handler import HealthCheckHandler
 from neuro_san.service.http.handlers.connectivity_handler import ConnectivityHandler
@@ -40,6 +39,8 @@ from neuro_san.service.http.logging.http_logger import HttpLogger
 from neuro_san.service.http.server.http_server_app import HttpServerApp
 from neuro_san.service.interfaces.agent_server import AgentServer
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
+from neuro_san.service.utils.server_status import ServerStatus
+from neuro_san.service.utils.server_context import ServerContext
 
 
 class HttpServer(AgentAuthorizer, AgentStateListener):
@@ -52,30 +53,25 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
     TIMEOUT_TO_START_SECONDS: int = 10
 
     def __init__(self,
-                 server_status: ServerStatus,
+                 server_context: ServerContext,
                  http_port: int,
                  openapi_service_spec_path: str,
                  requests_limit: int,
-                 network_storage_dict: Dict[str, AgentNetworkStorage],
                  forwarded_request_metadata: str = AgentServer.DEFAULT_FORWARDED_REQUEST_METADATA):
         """
         Constructor:
-        :param server_status: server status to register the state of http server
+        :param server_context: ServerContext with global-ish state
         :param http_port: port for http neuro-san service;
         :param openapi_service_spec_path: path to a file with OpenAPI service specification;
         :param request_limit: The number of requests to service before shutting down.
                         This is useful to be sure production environments can handle
                         a service occasionally going down.
-        :param network_storage_dict: A dictionary of string (descripting scope) to
-                    AgentNetworkStorage instance which keeps all the AgentNetwork instances
-                    of a particular grouping.
         :param forwarded_request_metadata: A space-delimited list of http metadata request keys
                to forward to logs/other requests
         """
         self.server_name_for_logs: str = "Http Server"
         self.http_port = http_port
-        self.network_storage_dict: Dict[str, AgentNetworkStorage] = network_storage_dict
-        self.server_status: ServerStatus = server_status
+        self.server_context: ServerContext = server_context
 
         # Randomize requests limit for this server instance.
         # Lower and upper bounds for number of requests before shutting down
@@ -94,7 +90,8 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
         self.lock = threading.Lock()
         # Add listener to handle adding per-agent http service
         # (services map is defined by self.allowed_agents dictionary)
-        for network_storage in self.network_storage_dict.values():
+        network_storage_dict: Dict[str, AgentNetworkStorage] = self.server_context.get_network_storage_dict()
+        for network_storage in network_storage_dict.values():
             network_storage.add_listener(self)
 
     def __call__(self, other_server: AgentServer):
@@ -106,7 +103,8 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
 
         self.logger.debug({}, "Serving agents: %s", repr(self.allowed_agents.keys()))
         app.listen(self.http_port)
-        self.server_status.http_service.set_status(True)
+        server_status: ServerStatus = self.server_context.get_server_status()
+        server_status.http_service.set_status(True)
         self.logger.info({}, "HTTP server is running on port %d", self.http_port)
         self.logger.info({}, "HTTP server is shutting down after %d requests", self.requests_limit)
 
@@ -122,12 +120,12 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
         request_initialize_data: Dict[str, Any] = self.build_request_data()
         live_request_initialize_data: Dict[str, Any] = {
             "forwarded_request_metadata": self.forwarded_request_metadata,
-            "server_status": self.server_status,
+            "server_status": self.server_context.get_server_status(),
             "op": "live"
         }
         ready_request_initialize_data: Dict[str, Any] = {
             "forwarded_request_metadata": self.forwarded_request_metadata,
-            "server_status": self.server_status,
+            "server_status": self.server_context.get_server_status(),
             "op": "ready"
         }
         handlers = []
@@ -167,7 +165,8 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
                 None,
                 agent_name,
                 agent_network_provider,
-                agent_server_logging)
+                agent_server_logging,
+                self.server_context)
         self.allowed_agents[agent_name] = agent_service_provider
         self.logger.info({}, "Added agent %s to allowed http service list", agent_name)
 
@@ -199,5 +198,5 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
             "agent_policy": self,
             "forwarded_request_metadata": self.forwarded_request_metadata,
             "openapi_service_spec_path": self.openapi_service_spec_path,
-            "network_storage_dict": self.network_storage_dict
+            "network_storage_dict": self.server_context.get_network_storage_dict()
         }
