@@ -9,7 +9,15 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
+
+import ast
+import re
+from re import Match
+from typing import Any
+from typing import Dict
 from typing import List
+from typing import Optional
+from typing import Tuple
 from typing import TypeVar
 
 from pydantic import ConfigDict
@@ -77,8 +85,30 @@ class JournalingToolsAgentOutputParser(ToolsAgentOutputParser):
         if isinstance(result, List):
             for action in result:
                 if action.log is not None and len(action.log) > 0:
-                    message = AgentMessage(content=action.log.strip())
+                    agent_name, params_str = self._extract_agent_and_params(action.log)
+                    params: Dict[str, Any] = ast.literal_eval(params_str)
+                    action_dict: Dict[str, Any] = {
+                        "invokingStart": True,
+                        "invoked_agent_name": agent_name,
+                        "params": params
+                    }
+                    message = AgentMessage(content=action.log.strip(), structure=action_dict)
                     await self.journal.write_message(message)
 
         # Note: We do not care about AgentFinish
         return result
+
+    def _extract_agent_and_params(self, text: str) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Extracts the agent name and parameters string from a sentence formatted as:
+        "Invoking `<agent_name>` with `<params>`".
+
+        :param text: Input text in the format "Invoking agent_name with params".
+
+        :return: A tuple of (agent_name, params) if matched; otherwise (None, None).
+        """
+        match: Match = re.search(r"Invoking:\s+`(.*)`\s+with\s+`(.*)`", text)
+        if match:
+            agent, params = match.groups()
+            return agent.strip(), params.strip()
+        return None, None

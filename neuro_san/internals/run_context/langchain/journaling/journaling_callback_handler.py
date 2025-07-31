@@ -152,7 +152,11 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
 
             # Create a journal entry for this invocation and log the combined inputs
             self.langchain_tool_journal = OriginatingJournal(self.base_journal, origin)
-            message: BaseMessage = AgentMessage(content=f"Received arguments {combined_args}")
+            combined_args_dict: Dict[str, Any] = {
+                "toolStart": True,
+                "tool_args": combined_args
+            }
+            message: BaseMessage = AgentMessage(content="Received arguments:", structure=combined_args_dict)
             await self.langchain_tool_journal.write_message(message)
 
     async def on_tool_end(self, output: Any, tags: List[str] = None, **kwargs: Any) -> None:
@@ -172,7 +176,11 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
             await self.calling_agent_journal.write_message(AIMessage(content=output))
 
             # Also log the tool output to the LangChain tool-specific journal
-            message: BaseMessage = AgentMessage(content=f"Got result: {output}")
+            output_dict: Dict[str, Any] = {
+                "toolEnd": True,
+                "tool_output": output
+            }
+            message: BaseMessage = AgentMessage(content="Got result:", structure=output_dict)
             await self.langchain_tool_journal.write_message(message)
 
     async def on_agent_action(self, action: AgentAction,
