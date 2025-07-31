@@ -10,7 +10,6 @@
 #
 # END COPYRIGHT
 
-import ast
 import re
 from re import Match
 from typing import Any
@@ -28,6 +27,7 @@ from langchain_core.outputs import Generation
 
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.messages.agent_message import AgentMessage
+from neuro_san.internals.parsers.structure.json_structure_parser import JsonStructureParser
 
 # Bizarre convention from the superclass to adhere to overridden method.
 T = TypeVar("T")
@@ -90,9 +90,8 @@ class JournalingToolsAgentOutputParser(ToolsAgentOutputParser):
                     # Attempt to parse params_str as a Python dict literal.
                     # It is expected to be a string representation of a dictionary (e.g., "{'key': 'value'}").
                     # If parsing fails, fall back to using the original string.
-                    try:
-                        params: Union[Dict[str, Any], str] = ast.literal_eval(params_str)
-                    except (ValueError, SyntaxError):
+                    params: Union[Dict[str, Any], str] = JsonStructureParser().parse_structure(params_str)
+                    if not params:
                         # Fallback: treat params_str as a plain string if it's not a valid Python literal.
                         params = params_str
                     action_dict: Dict[str, Any] = {
