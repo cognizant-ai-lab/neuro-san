@@ -93,7 +93,7 @@ class JournalingToolsAgentOutputParser(ToolsAgentOutputParser):
                     try:
                         params: Union[Dict[str, Any], str] = ast.literal_eval(params_str)
                     except (ValueError, SyntaxError):
-                    # Fallback: treat params_str as a plain string if it's not a valid Python literal.
+                        # Fallback: treat params_str as a plain string if it's not a valid Python literal.
                         params = params_str
                     action_dict: Dict[str, Any] = {
                         "invokingStart": True,
