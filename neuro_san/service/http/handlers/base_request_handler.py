@@ -63,6 +63,7 @@ class BaseRequestHandler(RequestHandler):
         self.openapi_service_spec_path: str = openapi_service_spec_path
         self.logger = HttpLogger(forwarded_request_metadata)
         self.network_storage_dict: Dict[str, AgentNetworkStorage] = network_storage_dict
+        self.show_absent: bool = os.environ.get("SHOW_ABSENT_METADATA") is not None
 
         # Set default request_id for this request handler in case we will need it:
         BaseRequestHandler.request_id += 1
@@ -83,15 +84,27 @@ class BaseRequestHandler(RequestHandler):
         from incoming request.
         :return: dictionary of user request metadata; possibly empty
         """
-        return BaseRequestHandler.get_request_metadata(self.request, self.forwarded_request_metadata)
+        return BaseRequestHandler.get_request_metadata(
+            self.request,
+            self.forwarded_request_metadata,
+            self.show_absent,
+            self.logger)
 
     @classmethod
-    def get_request_metadata(cls, request, forwarded_request_metadata: List[str]) -> Dict[str, Any]:
+    def get_request_metadata(cls, request,
+                             forwarded_request_metadata: List[str],
+                             show_absent: bool = False,
+                             logger: HttpLogger = None
+                             ) -> Dict[str, Any]:
         """
         Extract user metadata defined by forwarded_request_metadata list
         from incoming request.
         :param request: incoming http request
         :param forwarded_request_metadata: list of metadata keys
+        :param show_absent: if True, will provide debug printout
+               for all request metadata keys absent from incoming request headers;
+               if False does nothing.
+        :param logger: logger to use
         :return: dictionary of user request metadata; possibly empty
         """
         headers: Dict[str, Any] = request.headers
@@ -103,6 +116,8 @@ class BaseRequestHandler(RequestHandler):
                 # Generate unique id so we have some way to track this request:
                 result[item_name] = f"request-{BaseRequestHandler.request_id}"
             else:
+                if show_absent and logger:
+                    logger.warning({}, "MISSING METADATA VALUE: %s request %s", item_name, request.uri)
                 result[item_name] = "None"
         return result
 
