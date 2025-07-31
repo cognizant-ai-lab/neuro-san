@@ -10,9 +10,12 @@
 #
 # END COPYRIGHT
 
+import re
+from re import Match
 from typing import Any
 from typing import Dict
-from typing import List
+from typing import Optional
+from typing import Tuple
 
 from json.decoder import JSONDecodeError
 from json_repair import loads
@@ -45,44 +48,11 @@ class JsonStructureParser(StructureParser):
             "{": "}",
         }
 
-        for start_delim, end_delim in delimiters.items():
-            if start_delim in content:
-
-                # Note: This code assumes we only have one delimited JSON structure to parse
-                #       within the content.
-
-                # Well-formed per delimiter
-                split_header: List[str] = content.split(start_delim)
-
-                # Start the remainder off with everything before the json backtick business
-                self.remainder = split_header[0]
-
-                # Find the end of the backticks if any
-                if end_delim != start_delim:
-                    split_footer: List[str] = split_header[-1].split(end_delim)
-                    meat = split_footer[0]
-                    if len(split_footer) > 1:
-                        # Add to the remainder anything outside the delimiting backticks
-                        self.remainder += split_footer[-1]
-                else:
-                    meat = split_header[1]
-                    if len(split_header) > 2:
-                        # Add the remaining with the end delimiter.
-                        # We are only parsing the first we find.
-                        self.remainder += end_delim.join(split_header[2:])
-
-                # Meat is everything in between, maybe with start and end delims on either end.
-                meat = meat.strip()
-
-                # Maybe add the delimiters back to help parsing the meat.
-                use_delims: bool = start_delim != end_delim
-                if use_delims:
-                    meat = f"{start_delim}{meat}{end_delim}"
-
-                break
+        meat, self.remainder = self._extract_delimited_block(content, delimiters)
 
         # Attempt parsing the structure from the meat
         structure: Dict[str, Any] = None
+
         try:
             structure = loads(meat)
             if not isinstance(structure, Dict):
@@ -92,9 +62,42 @@ class JsonStructureParser(StructureParser):
         except JSONDecodeError:
             # Couldn't parse
             self.remainder = None
-
-        # Strip any whitespace of the ends of any remainder.
-        if self.remainder is not None:
-            self.remainder = self.remainder.strip()
+        except TypeError:
+            # meat is None
+            self.remainder = None
 
         return structure
+
+    def _extract_delimited_block(self, text: str, delimiters: Dict[str, str]) -> Tuple[Optional[str], str]:
+        """
+        Extracts a block of text from the input string "text" that is enclosed between any
+        of the provided delimiter pairs. Returns a tuple of:
+            - The extracted main block with delimiters, or None if no match
+            - The remaining string with the block removed and extra whitespace collapsed
+
+        :param text: The input string potentially containing a delimited block
+        :param delimiters: A dictionary mapping starting delimiters to ending delimiters
+
+        :return: A tuple of (main block content, remainder string)
+        """
+        # Try each delimiter pair in order
+        for start, end in delimiters.items():
+            # Build a regex pattern to find content between start and end delimiters
+            # - re.escape ensures special characters like "{" are treated literally
+            # - (.*) is a greedy match for any characters between the delimiters
+            pattern: str = re.escape(start) + r"(.*)" + re.escape(end)
+
+            # Perform regex search across multiple lines if needed (DOTALL allows "." to match newlines)
+            match: Match[str] = re.search(pattern, text, re.DOTALL)
+
+            if match:
+                # Extract the matched content (including the delimiters), removing leading/trailing whitespace
+                main: str = match.group(0).strip()
+
+                # Remove the matched block (including delimiters) from the input string
+                remainder: str = text[:match.start()] + text[match.end():]
+
+                return main, remainder.strip()
+
+        # If no matching delimiters were found, return None and the full cleaned-up input
+        return None, text.strip()
