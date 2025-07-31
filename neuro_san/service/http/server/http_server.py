@@ -22,7 +22,7 @@ import threading
 
 from tornado.ioloop import IOLoop
 
-from neuro_san.internals.network_providers.agent_network_provider import AgentNetworkProvider
+from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
