@@ -9,9 +9,11 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
+from typing import Any
 from typing import Dict
 
-import logging
+from logging import getLogger
+from logging import Logger
 
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -31,23 +33,20 @@ class RegistryStorageUpdater(AbstractStorageUpdater):
     use_polling: bool = True
 
     def __init__(self, network_storage_dict: Dict[str, AgentNetworkStorage],
-                 update_period_in_seconds: int,
-                 manifest_path: str):
+                 watcher_config: Dict[str, Any]):
         """
         Constructor
 
         :param network_storage_dict: A dictionary of string (descripting scope) to
                     AgentNetworkStorage instance which keeps all the AgentNetwork instances
                     of a particular grouping.
-        :param update_period_in_seconds: An int describing how long this instance
-                ideally wants to go between calls to update_storage().
-        :param manifest_path: file path to server manifest file
+        :param watcher_config: A config dict for StorageUpdaters
         """
-        super().__init__(update_period_in_seconds)
+        super().__init__(watcher_config.get("manifest_update_period_seconds"))
 
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self.network_storage_dict: Dict[str, AgentNetworkStorage] = network_storage_dict
-        self.manifest_path: str = manifest_path
+        self.manifest_path: str = watcher_config.get("manifest_path")
 
         self.observer: RegistryObserver = None
         if self.use_polling:
