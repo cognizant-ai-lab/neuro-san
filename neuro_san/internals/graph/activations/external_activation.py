@@ -125,7 +125,7 @@ class ExternalActivation(AbstractCallableActivation):
             "toolStart": True,
             "tool_args": self.arguments
         }
-        message = AgentMessage(content="Received arguments", structure=arguments_dict)
+        message = AgentMessage(content="Received arguments:", structure=arguments_dict)
         await self.journal.write_message(message)
 
         # Create an AsyncAgentSession if necessary
