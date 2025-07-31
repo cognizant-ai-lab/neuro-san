@@ -89,7 +89,7 @@ class JournalingToolsAgentOutputParser(ToolsAgentOutputParser):
                     agent_name, params_str = self._extract_agent_and_params(action.log)
                     # Attempt to parse params_str as a Python dict literal.
                     # It is expected to be a string representation of a dictionary (e.g., "{'key': 'value'}").
-                    # If parsing fails, fall back to using the original string. 
+                    # If parsing fails, fall back to using the original string.
                     try:
                         params: Union[Dict[str, Any], str] = ast.literal_eval(params_str)
                     except (ValueError, SyntaxError):
