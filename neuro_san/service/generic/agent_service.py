@@ -19,6 +19,7 @@ import json
 import uuid
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
+from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
 
 from leaf_server_common.server.atomic_counter import AtomicCounter
 from leaf_server_common.server.request_logger import RequestLogger
@@ -33,6 +34,7 @@ from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.chat_message_converter import ChatMessageConverter
 from neuro_san.service.usage.usage_logger_factory import UsageLoggerFactory
 from neuro_san.service.usage.wrapped_usage_logger import WrappedUsageLogger
+from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.session.direct_agent_session import DirectAgentSession
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
 from neuro_san.session.session_invocation_context import SessionInvocationContext
@@ -56,7 +58,8 @@ class AgentService:
                  security_cfg: Dict[str, Any],
                  agent_name: str,
                  agent_network_provider: AgentNetworkProvider,
-                 server_logging: AgentServerLogging):
+                 server_logging: AgentServerLogging,
+                 server_context: ServerContext):
         """
         Set the gRPC interface up for health checking so that the service
         will be opened to callers when the mesh sees it operational, if this
@@ -73,6 +76,7 @@ class AgentService:
         :param server_logging: An AgentServerLogging instance initialized so that
                         spawned asyncrhonous threads can also properly initialize
                         their logging.
+        :param server_context: The ServerContext containing global-ish state
         """
         self.request_logger = request_logger
         self.security_cfg = security_cfg
@@ -86,6 +90,7 @@ class AgentService:
         config: Dict[str, Any] = agent_network.get_config()
         self.llm_factory: ContextTypeLlmFactory = MasterLlmFactory.create_llm_factory(config)
         self.toolbox_factory: ContextTypeToolboxFactory = MasterToolboxFactory.create_toolbox_factory(config)
+        self.async_executor_pool: AsyncioExecutorPool = server_context.get_executor_pool()
         # Load once
         self.llm_factory.load()
         self.toolbox_factory.load()
@@ -214,7 +219,12 @@ class AgentService:
 
         # Prepare
         factory = ExternalAgentSessionFactory(use_direct=False)
-        invocation_context = SessionInvocationContext(factory, self.llm_factory, self.toolbox_factory, metadata)
+        invocation_context = SessionInvocationContext(
+            factory,
+            self.async_executor_pool,
+            self.llm_factory,
+            self.toolbox_factory,
+            metadata)
         invocation_context.start()
 
         # Set up logging inside async thread

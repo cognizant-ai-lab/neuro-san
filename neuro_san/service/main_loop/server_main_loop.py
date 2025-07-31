@@ -9,9 +9,7 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
-"""
-See class comment for details
-"""
+from typing import Any
 from typing import Dict
 from typing import List
 
@@ -35,8 +33,9 @@ from neuro_san.service.grpc.grpc_agent_server import DEFAULT_REQUEST_LIMIT
 from neuro_san.service.grpc.grpc_agent_server import GrpcAgentServer
 from neuro_san.service.grpc.grpc_agent_service import GrpcAgentService
 from neuro_san.service.http.server.http_server import HttpServer
-from neuro_san.service.main_loop.server_status import ServerStatus
 from neuro_san.service.watcher.main_loop.storage_watcher import StorageWatcher
+from neuro_san.service.utils.server_status import ServerStatus
+from neuro_san.service.utils.server_context import ServerContext
 
 
 # pylint: disable=too-many-instance-attributes
@@ -61,15 +60,10 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.forwarded_request_metadata: str = GrpcAgentServer.DEFAULT_FORWARDED_REQUEST_METADATA
         self.usage_logger_metadata: str = ""
         self.service_openapi_spec_file: str = self._get_default_openapi_spec_path()
-        self.manifest_update_period_seconds: int = 0
         self.grpc_server: GrpcAgentServer = None
         self.http_server: HttpServer = None
-        self.manifest_files: List[str] = []
-        # Dictionary is string key (describing scope) to AgentNetworkStorage grouping.
-        self.network_storage_dict: Dict[str, AgentNetworkStorage] = {
-            "public": AgentNetworkStorage()
-        }
-        self.server_status: ServerStatus = None
+        self.server_context = ServerContext()
+        self.watcher_config: Dict[str, Any] = {}
 
     def parse_args(self):
         """
@@ -121,14 +115,15 @@ class ServerMainLoop(ServerLoopCallbacks):
         # See destination below ~ line 139, 154 for explanation.
         args = arg_parser.parse_args()
         self.server_name = args.server_name
-        self.server_status = ServerStatus(self.server_name)
+        server_status = ServerStatus(self.server_name)
+        self.server_context.set_server_status(server_status)
 
         self.grpc_port = args.port
         if self.grpc_port == 0:
-            self.server_status.grpc_service.set_requested(False)
+            server_status.grpc_service.set_requested(False)
         self.http_port = args.http_port
         if self.http_port == 0:
-            self.server_status.http_service.set_requested(False)
+            server_status.http_service.set_requested(False)
 
         self.server_name_for_logs = args.server_name_for_logs
         self.max_concurrent_requests = args.max_concurrent_requests
@@ -140,14 +135,18 @@ class ServerMainLoop(ServerLoopCallbacks):
         if not self.usage_logger_metadata:
             self.usage_logger_metadata = self.forwarded_request_metadata
         self.service_openapi_spec_file = args.openapi_service_spec_path
-        self.manifest_update_period_seconds = args.manifest_update_period_seconds
-        if self.manifest_update_period_seconds <= 0:
+        if args.manifest_update_period_seconds <= 0:
             # StorageWatcher is disabled:
-            self.server_status.updater.set_requested(False)
+            server_status.updater.set_requested(False)
 
         manifest_restorer = RegistryManifestRestorer()
         manifest_agent_networks: Dict[str, AgentNetwork] = manifest_restorer.restore()
-        self.manifest_files = manifest_restorer.get_manifest_files()
+        manifest_files: List[str] = manifest_restorer.get_manifest_files()
+
+        self.watcher_config = {
+            "manifest_path": manifest_files[0],    # For now, only one
+            "manifest_update_period_seconds": args.manifest_update_period_seconds,
+        }
 
         self.agent_networks = manifest_agent_networks
 
@@ -177,12 +176,13 @@ class ServerMainLoop(ServerLoopCallbacks):
         metadata_set = metadata_set | set(self.usage_logger_metadata.split())
         metadata_str: str = " ".join(sorted(metadata_set))
 
-        if self.server_status.grpc_service.is_requested():
+        server_status: ServerStatus = self.server_context.get_server_status()
+
+        if server_status.grpc_service.is_requested():
             self.grpc_server = GrpcAgentServer(
                 self.grpc_port,
                 server_loop_callbacks=self,
-                network_storage_dict=self.network_storage_dict,
-                server_status=self.server_status,
+                server_context=self.server_context,
                 server_name=self.server_name,
                 server_name_for_logs=self.server_name_for_logs,
                 max_concurrent_requests=self.max_concurrent_requests,
@@ -190,43 +190,38 @@ class ServerMainLoop(ServerLoopCallbacks):
                 forwarded_request_metadata=metadata_str)
             self.grpc_server.prepare_for_serving()
 
-        if self.server_status.updater.is_requested():
-            if not self.server_status.grpc_service.is_requested():
+        if server_status.updater.is_requested():
+            if not server_status.grpc_service.is_requested():
                 current_dir: str = os.path.dirname(os.path.abspath(__file__))
-                setup_logging(self.server_status.updater.get_service_name(),
+                setup_logging(server_status.updater.get_service_name(),
                               current_dir,
                               'AGENT_SERVICE_LOG_JSON',
                               'AGENT_SERVICE_LOG_LEVEL')
-            manifest_file: str = self.manifest_files[0]
-            watcher = StorageWatcher(
-                    self.network_storage_dict,
-                    manifest_file,
-                    self.manifest_update_period_seconds,
-                    self.server_status)
+            watcher = StorageWatcher(self.watcher_config, self.server_context)
             watcher.start()
 
-        if self.server_status.http_service.is_requested():
+        if server_status.http_service.is_requested():
             # Create HTTP server;
             self.http_server = HttpServer(
-                self.server_status,
+                self.server_context,
                 self.http_port,
                 self.service_openapi_spec_file,
                 self.request_limit,
-                self.network_storage_dict,
                 forwarded_request_metadata=metadata_str)
 
         # Now - our servers (gRPC and http) are created and listen to updates of network_storage
         # Perform the initial setup
-        public_storage: AgentNetworkStorage = self.network_storage_dict.get("public")
+        network_storage_dict: Dict[str, AgentNetworkStorage] = self.server_context.get_network_storage_dict()
+        public_storage: AgentNetworkStorage = network_storage_dict.get("public")
         public_storage.setup_agent_networks(self.agent_networks)
 
         # Start all services:
         http_server_thread = None
-        if self.server_status.http_service.is_requested():
+        if server_status.http_service.is_requested():
             http_server_thread = threading.Thread(target=self.http_server, args=(self.grpc_server,), daemon=True)
             http_server_thread.start()
 
-        if self.server_status.grpc_service.is_requested():
+        if server_status.grpc_service.is_requested():
             self.grpc_server.serve()
 
         if http_server_thread is not None:

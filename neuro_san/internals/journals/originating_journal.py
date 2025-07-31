@@ -15,6 +15,7 @@ from typing import List
 
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
+from langchain_core.messages.system import SystemMessage
 
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.messages.agent_tool_result_message import AgentToolResultMessage
@@ -84,9 +85,11 @@ class OriginatingJournal(Journal):
             # when appending it chathistory but allow it to be written in the journal as is to
             # to maintain the information on tool origin.
             if isinstance(message, AgentToolResultMessage):
-                ai_message = AIMessage(content=message.content)
-                self.chat_history.append(ai_message)
-            else:
+                message = AIMessage(content=message.content)
+
+            # Langchain automatically adds the system prompt to the beginning of the chat history.
+            # Ensure that the system message does not get added into the chat history.
+            if not isinstance(message, SystemMessage):
                 self.chat_history.append(message)
 
         if self.pending is not None:

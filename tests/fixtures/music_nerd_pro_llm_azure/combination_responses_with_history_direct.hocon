@@ -14,6 +14,9 @@
     # Describes what agent to test against.
     "agent": "music_nerd_pro_llm_azure",
 
+    # Connect to the agent via a server
+    "connections": ["direct"],
+
     # Interactions are a series of dictionaries with request elements paired with
     # descriptions of response checks.
     "interactions": [
@@ -23,13 +26,20 @@
 
             # The response block treats how we are going to test what comes back
             "response": {
-                # Text block says how we are going to examine the text of the response.
-                "text": {
-                    # Keywords says we are going to look for exact matches for each
-                    # element in a list of strings.  All elements need to show up
-                    # in order to pass.
-                    "keywords": ["Beatles", "3.0"]
-                }     
+                # Structure block says how we are going to examine the structure
+                # (dictionary) returned as part of the response.               
+                "structure": {
+                    # "answer" is a key that is supposed to be in the dictionary.
+                    "answer": {
+                        # Keywords says we are going to look for exact matches for each
+                        # element in a list of strings.  All elements need to show up
+                        # in order to pass.
+                        "keywords": "Beatles"
+                    },
+                    "running_cost": {
+                        "value": 3.0
+                    }
+                }
             }
         },
         {
@@ -38,8 +48,13 @@
             # interaction.
             "text": "Where were they from?",
             "response": {
-                "text": {
-                    "keywords": ["Liverpool", "6.0"]
+                "structure": {
+                    "answer": {
+                        "keywords": "Liverpool"
+                    },
+                    "running_cost": {
+                        "value": 6.0
+                    }
                 }
             }
         }

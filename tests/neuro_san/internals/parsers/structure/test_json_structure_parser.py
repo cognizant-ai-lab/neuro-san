@@ -308,3 +308,88 @@ This has minimal structure in it.
         remainder: str = parser.get_remainder()
         self.assertIsNotNone(remainder)
         self.assertEqual(remainder, "")
+
+    def test_json_backtick_nested_no_remainder(self):
+        """
+        Tests standard json backtick/markdown in response.
+        """
+        test: str = """
+```json
+{
+    "key_1": "value_1",
+    "key_2": {
+        "key_3": "value_3"
+    }
+}
+```
+"""
+        parser = JsonStructureParser()
+
+        structure: Dict[str, Any] = parser.parse_structure(test)
+        self.assertIsNotNone(structure)
+        value_1: str = structure.get("key_1")
+        self.assertEqual(value_1, "value_1")
+        value_2: Dict[str, str] = structure.get("key_2")
+        self.assertEqual(value_2, {"key_3": "value_3"})
+        value_3: str = structure.get("key_2").get("key_3")
+        self.assertEqual(value_3, "value_3")
+
+        remainder: str = parser.get_remainder()
+        self.assertIsNotNone(remainder)
+        self.assertEqual(remainder, "")
+
+    def test_no_backtick_nested_no_remainder(self):
+        """
+        Tests no backtick/markdown in response.
+        """
+        test: str = """
+{
+    "key_1": "value_1",
+    "key_2": {
+        "key_3": "value_3"
+    }
+}
+"""
+        parser = JsonStructureParser()
+
+        structure: Dict[str, Any] = parser.parse_structure(test)
+        self.assertIsNotNone(structure)
+        value_1: str = structure.get("key_1")
+        self.assertEqual(value_1, "value_1")
+        value_2: Dict[str, str] = structure.get("key_2")
+        self.assertEqual(value_2, {"key_3": "value_3"})
+        value_3: str = structure.get("key_2").get("key_3")
+        self.assertEqual(value_3, "value_3")
+
+        remainder: str = parser.get_remainder()
+        self.assertIsNotNone(remainder)
+        self.assertEqual(remainder, "")
+
+    def test_just_backtick_nested_no_remainder(self):
+        """
+        Tests no backtick/markdown in response.
+        """
+        test: str = """
+```
+{
+    "key_1": "value_1",
+    "key_2": {
+        "key_3": "value_3"
+    }
+}
+```
+"""
+        parser = JsonStructureParser()
+
+        structure: Dict[str, Any] = parser.parse_structure(test)
+        self.assertIsNotNone(structure)
+        value_1: str = structure.get("key_1")
+        self.assertEqual(value_1, "value_1")
+        value_2: Dict[str, str] = structure.get("key_2")
+        self.assertEqual(value_2, {"key_3": "value_3"})
+        value_3: str = structure.get("key_2").get("key_3")
+        self.assertEqual(value_3, "value_3")
+
+        remainder: str = parser.get_remainder()
+        self.assertIsNotNone(remainder)
+        self.assertEqual(remainder, "")

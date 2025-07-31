@@ -8,6 +8,7 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
+from typing import Any
 from typing import Dict
 from typing import List
 
@@ -18,11 +19,11 @@ from threading import Thread
 from time import sleep
 from time import time
 
-from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
-from neuro_san.service.main_loop.server_status import ServerStatus
 from neuro_san.service.watcher.interfaces.startable import Startable
 from neuro_san.service.watcher.interfaces.storage_updater import StorageUpdater
 from neuro_san.service.watcher.registries.registry_storage_updater import RegistryStorageUpdater
+from neuro_san.service.utils.server_context import ServerContext
+from neuro_san.service.utils.server_status import ServerStatus
 
 
 # pylint: disable=too-many-instance-attributes
@@ -33,32 +34,25 @@ class StorageWatcher(Startable):
     and other changes to AgentNetworkStorage instances.
     """
     def __init__(self,
-                 network_storage_dict: Dict[str, AgentNetworkStorage],
-                 manifest_path: str,
-                 manifest_update_period_in_seconds: int,
-                 server_status: ServerStatus):
+                 watcher_config: Dict[str, Any],
+                 server_context: ServerContext):
         """
         Constructor.
 
-        :param network_storage_dict: A dictionary of string (descripting scope) to
-                    AgentNetworkStorage instance which keeps all the AgentNetwork instances
-                    of a particular grouping.
-        :param manifest_path: file path to server manifest file
-        :param manifest_update_period_in_seconds: update period in seconds
-        :param server_status: server status to register the state of updater
+        :param watcher_config: A config dict for StorageUpdaters
+        :param server_context: ServerContext for global-ish state
         """
-        self.network_storage_dict: Dict[str, AgentNetworkStorage] = network_storage_dict
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.updater_thread = Thread(target=self._run, daemon=True)
+        self.server_context: ServerContext = server_context
 
         self.storage_updaters: List[StorageUpdater] = [
-            RegistryStorageUpdater(network_storage_dict, manifest_update_period_in_seconds, manifest_path),
+            RegistryStorageUpdater(self.server_context.get_network_storage_dict(), watcher_config),
             # We will eventually have more here
         ]
 
         self.update_period_in_seconds: int = self.compute_update_period_in_seconds(self.storage_updaters)
 
-        self.server_status: ServerStatus = server_status
         self.keep_running: bool = True
 
     @staticmethod
@@ -106,7 +100,8 @@ class StorageWatcher(Startable):
         sleep_for_seconds: float = self.update_period_in_seconds
         while self.keep_running:
 
-            self.server_status.updater.set_status(True)
+            server_status: ServerStatus = self.server_context.get_server_status()
+            server_status.updater.set_status(True)
 
             sleep(sleep_for_seconds)
 

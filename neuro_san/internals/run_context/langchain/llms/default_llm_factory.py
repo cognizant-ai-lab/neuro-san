@@ -304,9 +304,22 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 # Let the next model have a crack
                 found_exception = exception
 
-        # Try resolving via 'class' in config if factories failed
+        # Try resolving via "class" in config if llm factories failed
+        #
+        # Note: config["class"] is always set — if the user intended to use a default LLMs,
+        # it will point to a known default like "openai" or "bedrock". In those cases,
+        # we avoid re-resolving it here to prevent masking the original error with
+        # a new one from create_base_chat_model_from_user_class.
+        #
+        # This fallback only applies when the user provides a non-default class path
+        # and factory resolution failed.
         class_path: str = config.get("class")
-        if llm is None and found_exception is not None and class_path:
+        default_llm_classes: Set[str] = set(self.llm_infos.get("classes"))
+        if (
+            llm is None
+            and found_exception is not None
+            and class_path not in default_llm_classes
+        ):
             llm = self.create_base_chat_model_from_user_class(class_path, config)
             found_exception = None
 
