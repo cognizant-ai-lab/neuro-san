@@ -34,6 +34,8 @@ from neuro_san.service.http.handlers.function_handler import FunctionHandler
 from neuro_san.service.http.handlers.streaming_chat_handler import StreamingChatHandler
 from neuro_san.service.http.handlers.concierge_handler import ConciergeHandler
 from neuro_san.service.http.handlers.openapi_publish_handler import OpenApiPublishHandler
+from neuro_san.service.http.handlers.text_to_speech_handler import TextToSpeechHandler
+from neuro_san.service.http.handlers.speech_to_text_handler import SpeechToTextHandler
 from neuro_san.service.http.interfaces.agent_authorizer import AgentAuthorizer
 from neuro_san.service.http.logging.http_logger import HttpLogger
 from neuro_san.service.http.server.http_server_app import HttpServerApp
@@ -135,6 +137,10 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
         handlers.append(("/livez", HealthCheckHandler, live_request_initialize_data))
         handlers.append(("/api/v1/list", ConciergeHandler, request_initialize_data))
         handlers.append(("/api/v1/docs", OpenApiPublishHandler, request_initialize_data))
+
+        # Register speech processing endpoints:
+        handlers.append(("/api/v1/text_to_speech", TextToSpeechHandler, request_initialize_data))
+        handlers.append(("/api/v1/speech_to_text", SpeechToTextHandler, request_initialize_data))
 
         # Register templated request paths for agent API methods:
         # regexp format used here is that of Python Re standard library.
