@@ -34,13 +34,11 @@ class StorageWatcher(Startable):
     and other changes to AgentNetworkStorage instances.
     """
     def __init__(self,
-                 manifest_path: str,
                  watcher_config: Dict[str, Any],
                  server_context: ServerContext):
         """
         Constructor.
 
-        :param manifest_path: file path to server manifest file
         :param watcher_config: A config dict for StorageUpdaters
         :param server_context: ServerContext for global-ish state
         """
@@ -49,7 +47,7 @@ class StorageWatcher(Startable):
         self.server_context: ServerContext = server_context
 
         self.storage_updaters: List[StorageUpdater] = [
-            RegistryStorageUpdater(self.server_context.get_network_storage_dict(), watcher_config, manifest_path),
+            RegistryStorageUpdater(self.server_context.get_network_storage_dict(), watcher_config),
             # We will eventually have more here
         ]
 

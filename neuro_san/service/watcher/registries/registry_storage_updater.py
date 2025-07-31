@@ -33,8 +33,7 @@ class RegistryStorageUpdater(AbstractStorageUpdater):
     use_polling: bool = True
 
     def __init__(self, network_storage_dict: Dict[str, AgentNetworkStorage],
-                 watcher_config: Dict[str, Any],
-                 manifest_path: str):
+                 watcher_config: Dict[str, Any]):
         """
         Constructor
 
@@ -42,13 +41,12 @@ class RegistryStorageUpdater(AbstractStorageUpdater):
                     AgentNetworkStorage instance which keeps all the AgentNetwork instances
                     of a particular grouping.
         :param watcher_config: A config dict for StorageUpdaters
-        :param manifest_path: file path to server manifest file
         """
         super().__init__(watcher_config.get("manifest_update_period_seconds"))
 
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.network_storage_dict: Dict[str, AgentNetworkStorage] = network_storage_dict
-        self.manifest_path: str = manifest_path
+        self.manifest_path: str = watcher_config.get("manifest_path")
 
         self.observer: RegistryObserver = None
         if self.use_polling:
