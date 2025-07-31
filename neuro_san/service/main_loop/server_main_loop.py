@@ -9,9 +9,7 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
-"""
-See class comment for details
-"""
+from typing import Any
 from typing import Dict
 from typing import List
 
@@ -62,11 +60,10 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.forwarded_request_metadata: str = GrpcAgentServer.DEFAULT_FORWARDED_REQUEST_METADATA
         self.usage_logger_metadata: str = ""
         self.service_openapi_spec_file: str = self._get_default_openapi_spec_path()
-        self.manifest_update_period_seconds: int = 0
         self.grpc_server: GrpcAgentServer = None
         self.http_server: HttpServer = None
-        self.manifest_files: List[str] = []
         self.server_context = ServerContext()
+        self.watcher_config: Dict[str, Any] = {}
 
     def parse_args(self):
         """
@@ -138,14 +135,18 @@ class ServerMainLoop(ServerLoopCallbacks):
         if not self.usage_logger_metadata:
             self.usage_logger_metadata = self.forwarded_request_metadata
         self.service_openapi_spec_file = args.openapi_service_spec_path
-        self.manifest_update_period_seconds = args.manifest_update_period_seconds
-        if self.manifest_update_period_seconds <= 0:
+        if args.manifest_update_period_seconds <= 0:
             # StorageWatcher is disabled:
             server_status.updater.set_requested(False)
 
         manifest_restorer = RegistryManifestRestorer()
         manifest_agent_networks: Dict[str, AgentNetwork] = manifest_restorer.restore()
-        self.manifest_files = manifest_restorer.get_manifest_files()
+        manifest_files: List[str] = manifest_restorer.get_manifest_files()
+
+        self.watcher_config = {
+            "manifest_path": manifest_files[0],    # For now, only one
+            "manifest_update_period_seconds": args.manifest_update_period_seconds,
+        }
 
         self.agent_networks = manifest_agent_networks
 
@@ -196,11 +197,7 @@ class ServerMainLoop(ServerLoopCallbacks):
                               current_dir,
                               'AGENT_SERVICE_LOG_JSON',
                               'AGENT_SERVICE_LOG_LEVEL')
-            manifest_file: str = self.manifest_files[0]
-            watcher = StorageWatcher(
-                    manifest_file,
-                    self.manifest_update_period_seconds,
-                    self.server_context)
+            watcher = StorageWatcher(self.watcher_config, self.server_context)
             watcher.start()
 
         if server_status.http_service.is_requested():

@@ -8,6 +8,8 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
+from typing import Any
+from typing import Dict
 from typing import List
 
 from logging import getLogger
@@ -32,14 +34,12 @@ class StorageWatcher(Startable):
     and other changes to AgentNetworkStorage instances.
     """
     def __init__(self,
-                 manifest_path: str,
-                 manifest_update_period_in_seconds: int,
+                 watcher_config: Dict[str, Any],
                  server_context: ServerContext):
         """
         Constructor.
 
-        :param manifest_path: file path to server manifest file
-        :param manifest_update_period_in_seconds: update period in seconds
+        :param watcher_config: A config dict for StorageUpdaters
         :param server_context: ServerContext for global-ish state
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
@@ -47,9 +47,7 @@ class StorageWatcher(Startable):
         self.server_context: ServerContext = server_context
 
         self.storage_updaters: List[StorageUpdater] = [
-            RegistryStorageUpdater(self.server_context.get_network_storage_dict(),
-                                   manifest_update_period_in_seconds,
-                                   manifest_path),
+            RegistryStorageUpdater(self.server_context.get_network_storage_dict(), watcher_config),
             # We will eventually have more here
         ]
 
