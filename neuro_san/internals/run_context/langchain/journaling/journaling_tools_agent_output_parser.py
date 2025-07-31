@@ -19,6 +19,7 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 from typing import TypeVar
+from typing import Union
 
 from pydantic import ConfigDict
 
@@ -86,7 +87,14 @@ class JournalingToolsAgentOutputParser(ToolsAgentOutputParser):
             for action in result:
                 if action.log is not None and len(action.log) > 0:
                     agent_name, params_str = self._extract_agent_and_params(action.log)
-                    params: Dict[str, Any] = ast.literal_eval(params_str)
+                    # Attempt to parse params_str as a Python dict literal.
+                    # It is expected to be a string representation of a dictionary (e.g., "{'key': 'value'}").
+                    # If parsing fails, fall back to using the original string. 
+                    try:
+                        params: Union[Dict[str, Any], str] = ast.literal_eval(params_str)
+                    except (ValueError, SyntaxError):
+                    # Fallback: treat params_str as a plain string if it's not a valid Python literal.
+                        params = params_str
                     action_dict: Dict[str, Any] = {
                         "invokingStart": True,
                         "invoked_agent_name": agent_name,
