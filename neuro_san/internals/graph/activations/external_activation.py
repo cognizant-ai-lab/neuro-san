@@ -122,7 +122,7 @@ class ExternalActivation(AbstractCallableActivation):
         message_list: List[Dict[str, Any]] = []
 
         arguments_dict: Dict[str, Any] = {
-            "toolStart": True,
+            "tool_start": True,
             "tool_args": self.arguments
         }
         message = AgentMessage(content="Received arguments:", structure=arguments_dict)
@@ -175,7 +175,7 @@ class ExternalActivation(AbstractCallableActivation):
         self.sly_data = redactor.filter_config(returned_sly_data)
 
         answer_dict: Dict[str, Any] = {
-            "toolEnd": True,
+            "tool_end": True,
             "tool_output": answer
         }
         message = AgentMessage(content="Got result:", structure=answer_dict)

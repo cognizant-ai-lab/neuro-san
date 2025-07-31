@@ -228,7 +228,7 @@ Some hints:
         retval: Any = None
 
         arguments_dict: Dict[str, Any] = {
-            "toolStart": True,
+            "tool_start": True,
             "tool_args": arguments
         }
         message = AgentMessage(content="Received arguments:", structure=arguments_dict)
@@ -257,7 +257,7 @@ This can lead to performance problems when running within a server. Consider por
             retval = await loop.run_in_executor(None, coded_tool.invoke, arguments, sly_data)
 
         retval_dict: Dict[str, Any] = {
-            "toolEnd": True,
+            "tool_end": True,
             "tool_output": retval
         }
         message = AgentMessage(content="Got result:", structure=retval_dict)

@@ -95,7 +95,7 @@ class JournalingToolsAgentOutputParser(ToolsAgentOutputParser):
                         # Fallback: treat params_str as a plain string if it's not a valid Python literal.
                         params = params_str
                     action_dict: Dict[str, Any] = {
-                        "invokingStart": True,
+                        "invoking_start": True,
                         "invoked_agent_name": agent_name,
                         "params": params
                     }
