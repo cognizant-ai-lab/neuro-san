@@ -227,7 +227,11 @@ Some hints:
         """
         retval: Any = None
 
-        message = AgentMessage(content=f"Received arguments {arguments}")
+        arguments_dict: Dict[str, Any] = {
+            "tool_start": True,
+            "tool_args": arguments
+        }
+        message = AgentMessage(content="Received arguments:", structure=arguments_dict)
         await self.journal.write_message(message)
 
         try:
@@ -252,7 +256,11 @@ This can lead to performance problems when running within a server. Consider por
             loop: AbstractEventLoop = executor.get_event_loop()
             retval = await loop.run_in_executor(None, coded_tool.invoke, arguments, sly_data)
 
-        message = AgentMessage(content=f"Got result: {retval}")
+        retval_dict: Dict[str, Any] = {
+            "tool_end": True,
+            "tool_output": retval
+        }
+        message = AgentMessage(content="Got result:", structure=retval_dict)
         await self.journal.write_message(message)
 
         return retval
