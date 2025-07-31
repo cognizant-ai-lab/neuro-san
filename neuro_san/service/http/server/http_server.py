@@ -22,10 +22,10 @@ import threading
 
 from tornado.ioloop import IOLoop
 
+from neuro_san.internals.network_providers.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
-from neuro_san.internals.network_providers.single_agent_network_provider import SingleAgentNetworkProvider
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 from neuro_san.service.http.handlers.health_check_handler import HealthCheckHandler
@@ -88,6 +88,7 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
         self.logger = HttpLogger(self.forwarded_request_metadata)
         self.allowed_agents: Dict[str, AsyncAgentServiceProvider] = {}
         self.lock = threading.Lock()
+
         # Add listener to handle adding per-agent http service
         # (services map is defined by self.allowed_agents dictionary)
         network_storage_dict: Dict[str, AgentNetworkStorage] = self.server_context.get_network_storage_dict()
@@ -145,7 +146,7 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
         return HttpServerApp(handlers, requests_limit, logger, self.forwarded_request_metadata)
 
     def allow(self, agent_name) -> AsyncAgentServiceProvider:
-        return self.allowed_agents.get(agent_name, None)
+        return self.allowed_agents.get(agent_name)
 
     def agent_added(self, agent_name: str, source: AgentStorageSource):
         """
@@ -153,7 +154,7 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
         :param agent_name: name of an agent
         :param source: The AgentStorageSource source of the message
         """
-        agent_network_provider: SingleAgentNetworkProvider = source.get_agent_network_provider(agent_name)
+        agent_network_provider: AgentNetworkProvider = source.get_agent_network_provider(agent_name)
 
         # Convert back to a single string as required by constructor
         request_metadata_str: str = " ".join(self.forwarded_request_metadata)

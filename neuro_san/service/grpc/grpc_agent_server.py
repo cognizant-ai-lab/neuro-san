@@ -107,7 +107,8 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
         :param agent_name: name of an agent
         :param source: The AgentStorageSource source of the message
         """
-        service = GrpcAgentService(self.server_lifetime, self.security_cfg,
+        service = GrpcAgentService(self.server_lifetime,
+                                   self.security_cfg,
                                    agent_name,
                                    source.get_agent_network_provider(agent_name),
                                    self.server_logging,
