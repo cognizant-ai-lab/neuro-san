@@ -9,9 +9,7 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
-"""
-See class comment for details
-"""
+from typing import Any
 from typing import Dict
 from typing import List
 
@@ -67,6 +65,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.http_server: HttpServer = None
         self.manifest_files: List[str] = []
         self.server_context = ServerContext()
+        self.watcher_config: Dict[str, Any] = {}
 
     def parse_args(self):
         """
@@ -138,8 +137,11 @@ class ServerMainLoop(ServerLoopCallbacks):
         if not self.usage_logger_metadata:
             self.usage_logger_metadata = self.forwarded_request_metadata
         self.service_openapi_spec_file = args.openapi_service_spec_path
-        self.manifest_update_period_seconds = args.manifest_update_period_seconds
-        if self.manifest_update_period_seconds <= 0:
+
+        self.watcher_config = {
+            "manifest_update_period_seconds": args.manifest_update_period_seconds
+        }
+        if args.manifest_update_period_seconds <= 0:
             # StorageWatcher is disabled:
             server_status.updater.set_requested(False)
 
@@ -199,7 +201,7 @@ class ServerMainLoop(ServerLoopCallbacks):
             manifest_file: str = self.manifest_files[0]
             watcher = StorageWatcher(
                     manifest_file,
-                    self.manifest_update_period_seconds,
+                    self.watcher_config,
                     self.server_context)
             watcher.start()
 
