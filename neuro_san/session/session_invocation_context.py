@@ -51,6 +51,7 @@ class SessionInvocationContext(InvocationContext):
         :param async_executors_pool: pool of AsyncioExecutors to use for obtaining
                          an executor instance to use for this context;
         :param llm_factory: The ContextTypeLlmFactory instance
+        :param toolbox_factory: The ContextTypeToolboxFactory instance
         :param metadata: A grpc metadata of key/value pairs to be inserted into
                          the header. Default is None. Preferred format is a
                          dictionary of string keys to string values.
