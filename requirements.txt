@@ -47,8 +47,7 @@ tiktoken>=0.8.0,<1.0
 bs4>=0.0.2,<0.1
 pydantic>=2.9.2,<3.0
 
-# httpx pinned only for this reason: https://github.com/openai/openai-python/issues/1903
-httpx==0.27.2
+httpx>=0.28.1
 
 # HTTP server part
 tornado>=6.4.2
