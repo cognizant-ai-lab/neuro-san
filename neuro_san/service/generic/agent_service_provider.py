@@ -12,8 +12,9 @@
 
 from typing import Any
 from typing import Dict
+
+from copy import deepcopy
 from threading import Lock
-import copy
 
 from leaf_server_common.server.request_logger import RequestLogger
 
@@ -54,7 +55,7 @@ class AgentServiceProvider:
         :param server_context: The ServerContext object with global-ish state
         """
         self.request_logger = request_logger
-        self.security_cfg = copy.deepcopy(security_cfg)
+        self.security_cfg = deepcopy(security_cfg)
         self.server_logging: AgentServerLogging = server_logging
         self.agent_network_provider: AgentNetworkProvider = agent_network_provider
         self.agent_name: str = agent_name

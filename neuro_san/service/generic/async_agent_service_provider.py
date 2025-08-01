@@ -12,8 +12,9 @@
 
 from typing import Any
 from typing import Dict
+
+from copy import deepcopy
 from threading import Lock
-import copy
 
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
@@ -53,7 +54,7 @@ class AsyncAgentServiceProvider:
         :param server_context: The ServerContext object containing global-ish state
         """
         self.request_logger = request_logger
-        self.security_cfg = copy.deepcopy(security_cfg)
+        self.security_cfg = deepcopy(security_cfg)
         self.server_logging: AgentServerLogging = server_logging
         self.agent_network_provider: AgentNetworkProvider = agent_network_provider
         self.agent_name: str = agent_name
