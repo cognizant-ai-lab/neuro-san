@@ -12,11 +12,9 @@
 
 from typing import Any
 from typing import Dict
-from typing import List
 
 from langchain_anthropic.chat_models import ChatAnthropic
 from langchain_aws import ChatBedrock
-from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_google_genai.chat_models import ChatGoogleGenerativeAI
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
@@ -54,13 +52,11 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                                     the model description in this class.
     """
 
-    def create_base_chat_model(self, config: Dict[str, Any],
-                               callbacks: List[BaseCallbackHandler] = None) -> BaseLanguageModel:
+    def create_base_chat_model(self, config: Dict[str, Any]) -> BaseLanguageModel:
         """
         Create a BaseLanguageModel from the fully-specified llm config.
         :param config: The fully specified llm config which is a product of
                     _create_full_llm_config() above.
-        :param callbacks: A list of BaseCallbackHandlers to add to the chat model.
         :return: A BaseLanguageModel (can be Chat or LLM)
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
@@ -78,34 +74,34 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
 
         if chat_class == "openai":
             llm = ChatOpenAI(
-                            model_name=model_name,
-                            temperature=config.get("temperature"),
-                            openai_api_key=self.get_value_or_env(config, "openai_api_key",
-                                                                 "OPENAI_API_KEY"),
-                            openai_api_base=self.get_value_or_env(config, "openai_api_base",
-                                                                  "OPENAI_API_BASE"),
-                            openai_organization=self.get_value_or_env(config, "openai_organization",
-                                                                      "OPENAI_ORG_ID"),
-                            openai_proxy=self.get_value_or_env(config, "openai_organization",
-                                                               "OPENAI_PROXY"),
-                            request_timeout=config.get("request_timeout"),
-                            max_retries=config.get("max_retries"),
-                            presence_penalty=config.get("presence_penalty"),
-                            frequency_penalty=config.get("frequency_penalty"),
-                            seed=config.get("seed"),
-                            logprobs=config.get("logprobs"),
-                            top_logprobs=config.get("top_logprobs"),
-                            logit_bias=config.get("logit_bias"),
-                            streaming=True,     # streaming is always on. Without it token counting will not work.
-                            n=1,                # n is always 1.  neuro-san will only ever consider one chat completion.
-                            top_p=config.get("top_p"),
-                            max_tokens=config.get("max_tokens"),    # This is always for output
-                            tiktoken_model_name=config.get("tiktoken_model_name"),
-                            stop=config.get("stop"),
+                model_name=model_name,
+                temperature=config.get("temperature"),
+                openai_api_key=self.get_value_or_env(config, "openai_api_key",
+                                                     "OPENAI_API_KEY"),
+                openai_api_base=self.get_value_or_env(config, "openai_api_base",
+                                                      "OPENAI_API_BASE"),
+                openai_organization=self.get_value_or_env(config, "openai_organization",
+                                                          "OPENAI_ORG_ID"),
+                openai_proxy=self.get_value_or_env(config, "openai_organization",
+                                                   "OPENAI_PROXY"),
+                request_timeout=config.get("request_timeout"),
+                max_retries=config.get("max_retries"),
+                presence_penalty=config.get("presence_penalty"),
+                frequency_penalty=config.get("frequency_penalty"),
+                seed=config.get("seed"),
+                logprobs=config.get("logprobs"),
+                top_logprobs=config.get("top_logprobs"),
+                logit_bias=config.get("logit_bias"),
+                streaming=True,     # streaming is always on. Without it token counting will not work.
+                n=1,                # n is always 1.  neuro-san will only ever consider one chat completion.
+                top_p=config.get("top_p"),
+                max_tokens=config.get("max_tokens"),    # This is always for output
+                tiktoken_model_name=config.get("tiktoken_model_name"),
+                stop=config.get("stop"),
 
-                            # Set stream_usage to True in order to get token counting chunks.
-                            stream_usage=True,
-                            callbacks=callbacks)
+                # Set stream_usage to True in order to get token counting chunks.
+                stream_usage=True
+            )
         elif chat_class == "azure-openai":
             model_kwargs: Dict[str, Any] = {
                 "stream_options": {
@@ -116,117 +112,116 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
             if openai_api_key is None:
                 openai_api_key = self.get_value_or_env(config, "openai_api_key", "OPENAI_API_KEY")
             llm = AzureChatOpenAI(
-                            model_name=model_name,
-                            temperature=config.get("temperature"),
-                            openai_api_key=openai_api_key,
-                            openai_api_base=self.get_value_or_env(config, "openai_api_base",
-                                                                  "OPENAI_API_BASE"),
-                            openai_organization=self.get_value_or_env(config, "openai_organization",
-                                                                      "OPENAI_ORG_ID"),
-                            openai_proxy=self.get_value_or_env(config, "openai_organization",
-                                                               "OPENAI_PROXY"),
-                            request_timeout=config.get("request_timeout"),
-                            max_retries=config.get("max_retries"),
-                            presence_penalty=config.get("presence_penalty"),
-                            frequency_penalty=config.get("frequency_penalty"),
-                            seed=config.get("seed"),
-                            logprobs=config.get("logprobs"),
-                            top_logprobs=config.get("top_logprobs"),
-                            logit_bias=config.get("logit_bias"),
-                            streaming=True,     # streaming is always on. Without it token counting will not work.
-                            n=1,                # n is always 1.  neuro-san will only ever consider one chat completion.
-                            top_p=config.get("top_p"),
-                            max_tokens=config.get("max_tokens"),    # This is always for output
-                            tiktoken_model_name=config.get("tiktoken_model_name"),
-                            stop=config.get("stop"),
+                model_name=model_name,
+                temperature=config.get("temperature"),
+                openai_api_key=openai_api_key,
+                openai_api_base=self.get_value_or_env(config, "openai_api_base",
+                                                      "OPENAI_API_BASE"),
+                openai_organization=self.get_value_or_env(config, "openai_organization",
+                                                          "OPENAI_ORG_ID"),
+                openai_proxy=self.get_value_or_env(config, "openai_organization",
+                                                   "OPENAI_PROXY"),
+                request_timeout=config.get("request_timeout"),
+                max_retries=config.get("max_retries"),
+                presence_penalty=config.get("presence_penalty"),
+                frequency_penalty=config.get("frequency_penalty"),
+                seed=config.get("seed"),
+                logprobs=config.get("logprobs"),
+                top_logprobs=config.get("top_logprobs"),
+                logit_bias=config.get("logit_bias"),
+                streaming=True,     # streaming is always on. Without it token counting will not work.
+                n=1,                # n is always 1.  neuro-san will only ever consider one chat completion.
+                top_p=config.get("top_p"),
+                max_tokens=config.get("max_tokens"),    # This is always for output
+                tiktoken_model_name=config.get("tiktoken_model_name"),
+                stop=config.get("stop"),
 
-                            # Azure-specific
-                            azure_endpoint=self.get_value_or_env(config, "azure_endpoint",
-                                                                 "AZURE_OPENAI_ENDPOINT"),
-                            deployment_name=self.get_value_or_env(config, "deployment_name",
-                                                                  "AZURE_OPENAI_DEPLOYMENT_NAME"),
-                            openai_api_version=self.get_value_or_env(config, "openai_api_version",
-                                                                     "OPENAI_API_VERSION"),
+                # Azure-specific
+                azure_endpoint=self.get_value_or_env(config, "azure_endpoint",
+                                                     "AZURE_OPENAI_ENDPOINT"),
+                deployment_name=self.get_value_or_env(config, "deployment_name",
+                                                      "AZURE_OPENAI_DEPLOYMENT_NAME"),
+                openai_api_version=self.get_value_or_env(config, "openai_api_version",
+                                                         "OPENAI_API_VERSION"),
 
-                            # AD here means "ActiveDirectory"
-                            azure_ad_token=self.get_value_or_env(config, "azure_ad_token",
-                                                                 "AZURE_OPENAI_AD_TOKEN"),
-                            model_version=config.get("model_version"),
-                            openai_api_type=self.get_value_or_env(config, "openai_api_type",
-                                                                  "OPENAI_API_TYPE"),
-                            # Needed for token counting
-                            model_kwargs=model_kwargs,
-                            callbacks=callbacks)
+                # AD here means "ActiveDirectory"
+                azure_ad_token=self.get_value_or_env(config, "azure_ad_token",
+                                                     "AZURE_OPENAI_AD_TOKEN"),
+                model_version=config.get("model_version"),
+                openai_api_type=self.get_value_or_env(config, "openai_api_type",
+                                                      "OPENAI_API_TYPE"),
+                # Needed for token counting
+                model_kwargs=model_kwargs,
+            )
         elif chat_class == "anthropic":
             llm = ChatAnthropic(
-                            model_name=model_name,
-                            max_tokens=config.get("max_tokens"),    # This is always for output
-                            temperature=config.get("temperature"),
-                            top_k=config.get("top_k"),
-                            top_p=config.get("top_p"),
-                            default_request_timeout=config.get("default_request_timeout"),
-                            max_retries=config.get("max_retries"),
-                            stop_sequences=config.get("stop_sequences"),
-                            anthropic_api_url=self.get_value_or_env(config, "anthropic_api_url",
-                                                                    "ANTHROPIC_API_URL"),
-                            anthropic_api_key=self.get_value_or_env(config, "anthropic_api_key",
-                                                                    "ANTHROPIC_API_KEY"),
-                            streaming=True,     # streaming is always on. Without it token counting will not work.
-                            # Set stream_usage to True in order to get token counting chunks.
-                            stream_usage=True,
-                            callbacks=callbacks)
+                model_name=model_name,
+                max_tokens=config.get("max_tokens"),    # This is always for output
+                temperature=config.get("temperature"),
+                top_k=config.get("top_k"),
+                top_p=config.get("top_p"),
+                default_request_timeout=config.get("default_request_timeout"),
+                max_retries=config.get("max_retries"),
+                stop_sequences=config.get("stop_sequences"),
+                anthropic_api_url=self.get_value_or_env(config, "anthropic_api_url",
+                                                        "ANTHROPIC_API_URL"),
+                anthropic_api_key=self.get_value_or_env(config, "anthropic_api_key",
+                                                        "ANTHROPIC_API_KEY"),
+                streaming=True,     # streaming is always on. Without it token counting will not work.
+                # Set stream_usage to True in order to get token counting chunks.
+                stream_usage=True,
+            )
         elif chat_class == "ollama":
             # Higher temperature is more random
             llm = ChatOllama(
-                            model=model_name,
-                            mirostat=config.get("mirostat"),
-                            mirostat_eta=config.get("mirostat_eta"),
-                            mirostat_tau=config.get("mirostat_tau"),
-                            num_ctx=config.get("num_ctx"),
-                            num_gpu=config.get("num_gpu"),
-                            num_thread=config.get("num_thread"),
-                            num_predict=config.get("num_predict", config.get("max_tokens")),
-                            reasoning=config.get("reasoning"),
-                            repeat_last_n=config.get("repeat_last_n"),
-                            repeat_penalty=config.get("repeat_penalty"),
-                            temperature=config.get("temperature"),
-                            seed=config.get("seed"),
-                            stop=config.get("stop"),
-                            tfs_z=config.get("tfs_z"),
-                            top_k=config.get("top_k"),
-                            top_p=config.get("top_p"),
-                            keep_alive=config.get("keep_alive"),
-                            base_url=config.get("base_url"),
-
-                            callbacks=callbacks)
+                model=model_name,
+                mirostat=config.get("mirostat"),
+                mirostat_eta=config.get("mirostat_eta"),
+                mirostat_tau=config.get("mirostat_tau"),
+                num_ctx=config.get("num_ctx"),
+                num_gpu=config.get("num_gpu"),
+                num_thread=config.get("num_thread"),
+                num_predict=config.get("num_predict", config.get("max_tokens")),
+                reasoning=config.get("reasoning"),
+                repeat_last_n=config.get("repeat_last_n"),
+                repeat_penalty=config.get("repeat_penalty"),
+                temperature=config.get("temperature"),
+                seed=config.get("seed"),
+                stop=config.get("stop"),
+                tfs_z=config.get("tfs_z"),
+                top_k=config.get("top_k"),
+                top_p=config.get("top_p"),
+                keep_alive=config.get("keep_alive"),
+                base_url=config.get("base_url")
+            )
         elif chat_class == "nvidia":
             # Higher temperature is more random
             llm = ChatNVIDIA(
-                            base_url=config.get("base_url"),
-                            model=model_name,
-                            temperature=config.get("temperature"),
-                            max_tokens=config.get("max_tokens"),
-                            top_p=config.get("top_p"),
-                            seed=config.get("seed"),
-                            stop=config.get("stop"),
-                            nvidia_api_key=self.get_value_or_env(config, "nvidia_api_key",
-                                                                 "NVIDIA_API_KEY"),
-                            nvidia_base_url=self.get_value_or_env(config, "nvidia_base_url",
-                                                                  "NVIDIA_BASE_URL"),
-                            callbacks=callbacks)
+                base_url=config.get("base_url"),
+                model=model_name,
+                temperature=config.get("temperature"),
+                max_tokens=config.get("max_tokens"),
+                top_p=config.get("top_p"),
+                seed=config.get("seed"),
+                stop=config.get("stop"),
+                nvidia_api_key=self.get_value_or_env(config, "nvidia_api_key",
+                                                     "NVIDIA_API_KEY"),
+                nvidia_base_url=self.get_value_or_env(config, "nvidia_base_url",
+                                                      "NVIDIA_BASE_URL"),
+            )
         elif chat_class == "gemini":
             llm = ChatGoogleGenerativeAI(
-                            model=model_name,
-                            google_api_key=self.get_value_or_env(config, "google_api_key",
-                                                                 "GOOGLE_API_KEY"),
-                            max_retries=config.get("max_retries"),
-                            max_tokens=config.get("max_tokens"),    # This is always for output
-                            n=config.get("n"),
-                            temperature=config.get("temperature"),
-                            timeout=config.get("timeout"),
-                            top_k=config.get("top_k"),
-                            top_p=config.get("top_p"),
-                            callbacks=callbacks)
+                model=model_name,
+                google_api_key=self.get_value_or_env(config, "google_api_key",
+                                                     "GOOGLE_API_KEY"),
+                max_retries=config.get("max_retries"),
+                max_tokens=config.get("max_tokens"),    # This is always for output
+                n=config.get("n"),
+                temperature=config.get("temperature"),
+                timeout=config.get("timeout"),
+                top_k=config.get("top_k"),
+                top_p=config.get("top_p"),
+            )
         elif chat_class == "bedrock":
             llm = ChatBedrock(
                 model=model_name,
@@ -251,7 +246,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 system_prompt_with_tools=config.get("system_prompt_with_tools"),
                 tags=config.get("tags"),
                 temperature=config.get("temperature"),
-                callbacks=callbacks)
+            )
         elif chat_class is None:
             raise ValueError(f"Class name {chat_class} for model_name {model_name} is unspecified.")
         else:
