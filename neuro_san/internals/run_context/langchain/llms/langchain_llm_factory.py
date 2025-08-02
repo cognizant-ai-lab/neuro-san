@@ -12,11 +12,9 @@
 
 from typing import Any
 from typing import Dict
-from typing import List
 
 import os
 
-from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.language_models.base import BaseLanguageModel
 
 
@@ -47,13 +45,11 @@ class LangChainLlmFactory:
                                     the model description in this class.
     """
 
-    def create_base_chat_model(self, config: Dict[str, Any],
-                               callbacks: List[BaseCallbackHandler] = None) -> BaseLanguageModel:
+    def create_base_chat_model(self, config: Dict[str, Any]) -> BaseLanguageModel:
         """
         Create a BaseLanguageModel from the fully-specified llm config.
         :param config: The fully specified llm config which is a product of
                     _create_full_llm_config() above.
-        :param callbacks: A list of BaseCallbackHandlers to add to the chat model.
         :return: A BaseLanguageModel (can be Chat or LLM)
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
