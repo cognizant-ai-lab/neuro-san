@@ -502,7 +502,8 @@ under the `AGENT_TOOL_PATH` environment variable setting as part of the `PYTHONP
 By default neuro-san deployments assume that `PYTHONPATH` is set to contain the
 top-level of your project's repo and that `AGENT_TOOL_PATH` is set to `<top-level>/coded_tools`.
 In that directory each agent has its own folder and the value of the class is resolved
-from there.
+from there:  `<top-level>/coded_tools/<agent-name>`.  If there is no appropriate class found there,
+then a shared coded tool is looked for one level up in `<top-level>/coded_tools`.
 <!-- pyml enable no-inline-html -->
 
 For example:
