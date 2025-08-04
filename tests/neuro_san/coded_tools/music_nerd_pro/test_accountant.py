@@ -1,6 +1,6 @@
-import pytest
-
 from unittest import TestCase
+
+import pytest
 
 from neuro_san.coded_tools.music_nerd_pro.accountant import Accountant
 
