@@ -20,15 +20,15 @@ from langchain_core.agents import AgentAction
 from langchain_core.agents import AgentFinish
 from langchain_core.callbacks.base import AsyncCallbackHandler
 from langchain_core.documents import Document
-from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 from langchain_core.outputs import LLMResult
 from langchain_core.outputs.chat_generation import ChatGeneration
 
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.journals.originating_journal import OriginatingJournal
-from neuro_san.internals.messages.origination import Origination
 from neuro_san.internals.messages.agent_message import AgentMessage
+from neuro_san.internals.messages.agent_tool_result_message import AgentToolResultMessage
+from neuro_san.internals.messages.origination import Origination
 
 
 # pylint: disable=too-many-ancestors
@@ -90,6 +90,7 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
         self.parent_origin: List[Dict[str, Any]] = parent_origin
         self.origination: Origination = origination
         self.langchain_tool_journal: Journal = None
+        self.origin: List[Dict[str, Any]] = None
 
     async def on_llm_end(self, response: LLMResult,
                          **kwargs: Any) -> None:
@@ -142,16 +143,16 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
             agent_name: str = serialized.get("name")
 
             # Build the origin path
-            origin: List[Dict[str, Any]] = self.origination.add_spec_name_to_origin(self.parent_origin, agent_name)
-            full_name: str = self.origination.get_full_name_from_origin(origin)
+            self.origin: List[Dict[str, Any]] = self.origination.add_spec_name_to_origin(self.parent_origin, agent_name)
+            full_name: str = self.origination.get_full_name_from_origin(self.origin)
 
             # Combine the original tool inputs with origin metadata
             combined_args: Dict[str, Any] = inputs.copy()
-            combined_args["origin"] = origin
+            combined_args["origin"] = self.origin
             combined_args["origin_str"] = full_name
 
             # Create a journal entry for this invocation and log the combined inputs
-            self.langchain_tool_journal = OriginatingJournal(self.base_journal, origin)
+            self.langchain_tool_journal = OriginatingJournal(self.base_journal, self.origin)
             combined_args_dict: Dict[str, Any] = {
                 "tool_start": True,
                 "tool_args": combined_args
@@ -173,7 +174,9 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
 
         if "langchain_tool" in tags:
             # Log the tool output to the calling agent's journal
-            await self.calling_agent_journal.write_message(AIMessage(content=output))
+            await self.calling_agent_journal.write_message(
+                AgentToolResultMessage(content=output, tool_result_origin=self.origin)
+            )
 
             # Also log the tool output to the LangChain tool-specific journal
             output_dict: Dict[str, Any] = {
