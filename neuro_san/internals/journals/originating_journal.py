@@ -82,15 +82,17 @@ class OriginatingJournal(Journal):
             #   to include additional metadata like `tool_result_origin` when supported.
             #
             # To avoid problem with any other LLMs, convert "AgentToolResultMessage" to "AIMessage"
-            # when appending it chathistory but allow it to be written in the journal as is to
+            # when appending it chat history but allow it to be written in the journal as is to
             # to maintain the information on tool origin.
             if isinstance(message, AgentToolResultMessage):
-                message = AIMessage(content=message.content)
+                chat_history_message: BaseMessage = AIMessage(content=message.content)
+            else:
+                chat_history_message = message
 
             # Langchain automatically adds the system prompt to the beginning of the chat history.
             # Ensure that the system message does not get added into the chat history.
-            if not isinstance(message, SystemMessage):
-                self.chat_history.append(message)
+            if not isinstance(chat_history_message, SystemMessage):
+                self.chat_history.append(chat_history_message)
 
         if self.pending is not None:
             # Avoid cases where two different kinds of message hold the same content.
