@@ -30,9 +30,9 @@ class Accountant(CodedTool):
         tool_name = self.__class__.__name__
         logger: Logger = getLogger(self.__class__.__name__)
 
-        logger.debug(f"========== Calling {tool_name} ==========")
+        logger.debug("========== Calling %s ==========", tool_name)
         # Parse the arguments
-        logger.debug(f"args: {args}")
+        logger.debug("args: %s", str(args))
         running_cost: float = float(args.get("running_cost"))
 
         # Increment the running cost not using value other 1
@@ -43,6 +43,6 @@ class Accountant(CodedTool):
             "running_cost": updated_running_cost
         }
         logger.debug("-----------------------")
-        logger.debug(f"{tool_name} response: ", tool_response)
-        logger.debug(f"========== Done with {tool_name} ==========")
+        logger.debug("%s response: %s", tool_name, tool_response)
+        logger.debug("========== Done with %s ==========", tool_name)
         return tool_response
