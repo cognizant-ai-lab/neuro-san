@@ -2,7 +2,7 @@ from unittest import TestCase
 
 import pytest
 
-from neuro_san.coded_tools.music_nerd_pro.accountant import Accountant
+from neuro_san.coded_tools.accountant import Accountant
 
 
 class TestAccountant(TestCase):
