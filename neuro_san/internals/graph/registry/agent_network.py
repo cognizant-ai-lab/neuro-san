@@ -101,26 +101,26 @@ Some things to try:
     def find_front_man(self) -> str:
         """
         :return: A single tool name to use as the root of the chat agent.
-                 This guy will be user facing.  If there are none or > 1,
+                 This guy will be user facing. If there are none,
                  an exception will be raised.
         """
 
-        # Initially all agents are front-man candidates.
-        front_men: List[str] = list(self.agent_spec_map.keys())
+        # List all agents in the same order as agent network HOCON.
+        agent_list: List[str] = list(self.agent_spec_map.keys())
 
         # Check for validity of our front-man candidates.
-        valid_front_men: List[str] = copy(front_men)
-        for front_man in front_men:
+        valid_front_men: List[str] = copy(agent_list)
+        for agent in agent_list:
 
             # Check the agent spec of the front man for validity
-            agent_spec: Dict[str, Any] = self.get_agent_tool_spec(front_man)
+            agent_spec: Dict[str, Any] = self.get_agent_tool_spec(agent)
 
             if agent_spec.get("class") is not None:
                 # Currently, front man cannot be a coded tool
-                valid_front_men.remove(front_man)
+                valid_front_men.remove(agent)
             elif agent_spec.get("toolbox") is not None:
                 # Currently, front man cannot from a toolbox
-                valid_front_men.remove(front_man)
+                valid_front_men.remove(agent)
 
         if len(valid_front_men) == 0:
             raise ValueError(f"""
