@@ -83,7 +83,7 @@ Once you receive the updated running cost, respond with a JSON object that has e
             "name": "Accountant",
             "function": {
                 "description": """
-You are an API that keeps track of the ruinning cost of the MusicNerdPro service. Pass the current running cost
+You are an API that keeps track of the running cost of the MusicNerdPro service. Pass the current running cost
 to the API to get the updated running cost. If no running cost it known, pass 0.00.
                 """,
                 "parameters": {
