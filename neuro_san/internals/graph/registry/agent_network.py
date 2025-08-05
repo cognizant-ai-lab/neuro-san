@@ -126,11 +126,12 @@ Some things to try:
             raise ValueError(f"""
 No front man found for the {self.name} agent network.
 
-The agent is the first listed among the "tools" of your agent hocon file
+The front man is the first agent listed under the "tools" section of your agent HOCON file.
+However, the front man must not be:
 
-Disqualifiers. A front man cannot:
-* be a CodedTool with a "class" definition
-* be a tool with a "toolbox" definition
+- A CodedTool (i.e., an agent defined with a "class" field)
+
+- A toolbox agent (i.e., defined with a "toolbox" field)
 """)
 
         # The front-man is the first agent that is not coded tool ("class")
