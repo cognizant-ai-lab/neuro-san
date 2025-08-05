@@ -128,10 +128,8 @@ No front man found for the {self.name} agent network.
 
 The front man is the first agent listed under the "tools" section of your agent HOCON file.
 However, the front man must not be:
-
-- A CodedTool (i.e., an agent defined with a "class" field)
-
-- A toolbox agent (i.e., defined with a "toolbox" field)
+* A CodedTool (i.e., an agent defined with a "class" field)
+* A toolbox agent (i.e., defined with a "toolbox" field)
 """)
 
         # The front-man is the first agent that is not coded tool ("class")
