@@ -523,7 +523,7 @@ class LangChainRunContext(RunContext):
                     exception = value_error
                     backtrace = traceback.format_exc()
 
-        output: Union[str, List[str]] = None
+        output: Union[str, List[Dict[str, Any]]] = None
         if return_dict is None and exception is not None:
             output = f"Agent stopped due to exception {exception}"
         else:
