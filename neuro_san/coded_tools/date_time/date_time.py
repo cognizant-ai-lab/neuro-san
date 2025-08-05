@@ -9,11 +9,14 @@
 #
 # END COPYRIGHT
 
-from datetime import datetime
-from datetime import timezone
 from typing import Any
 from typing import Dict
 from typing import Union
+
+from datetime import datetime
+from datetime import timezone
+from logging import getLogger
+from logging import Logger
 
 from neuro_san.interfaces.coded_tool import CodedTool
 
@@ -23,7 +26,7 @@ class DateTime(CodedTool):
     CodedTool implementation which provides a current date and time
     """
 
-    def invoke(self, args: Dict[str, Any], sly_data: Dict[str, Any]) -> str:
+    async def async_invoke(self, args: Dict[str, Any], sly_data: Dict[str, Any]) -> Union[Dict[str, Any], str]:
         """
         :param args: An argument dictionary whose keys are the parameters
                 to the coded tool and whose values are the values passed for them
@@ -58,9 +61,7 @@ class DateTime(CodedTool):
         # Format it in a user-friendly way
         friendly_time = now.strftime("%A, %B %d, %Y at %I:%M %p %Z")
 
-        print("Current UTC date and time:", friendly_time)
+        logger: Logger = getLogger(self.__class__.__name__)
+        logger.debug("Current UTC date and time: %s", friendly_time)
 
         return str(now)
-
-    async def async_invoke(self, args: Dict[str, Any], sly_data: Dict[str, Any]) -> Union[Dict[str, Any], str]:
-        raise NotImplementedError

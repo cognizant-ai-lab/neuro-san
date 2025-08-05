@@ -3,6 +3,7 @@
 
 # Tests
 pytest==8.3.3
+pytest-asyncio==1.1.0
 pytest-timer==1.0.0
 pytest-timeout>=2.3.1
 timeout-decorator==0.5.0
