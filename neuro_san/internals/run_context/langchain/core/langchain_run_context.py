@@ -523,7 +523,7 @@ class LangChainRunContext(RunContext):
                     exception = value_error
                     backtrace = traceback.format_exc()
 
-        output: str = None
+        output: Union[str, List[Dict[str, Any]]] = None
         if return_dict is None and exception is not None:
             output = f"Agent stopped due to exception {exception}"
         else:
@@ -531,6 +531,13 @@ class LangChainRunContext(RunContext):
             # "chat_history" and "input".
             output = return_dict.get("output", "")
             backtrace = None
+
+        # In general, output is a string. but output from Anthropic can either be
+        # a single string or a list of content blocks.
+        # If it is a list, "text" is a key of a dictionary which is the first element of
+        # the list. For more details: https://python.langchain.com/docs/integrations/chat/anthropic/#content-blocks
+        if isinstance(output, list):
+            output = output[0].get("text", "")
 
         output = self.error_detector.handle_error(output, backtrace)
 
