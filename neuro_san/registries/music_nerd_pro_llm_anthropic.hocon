@@ -15,7 +15,7 @@
 
 {
     "llm_config": {
-        "model_name": "claude-3-5-haiku",
+        "model_name": "claude-3-7-sonnet",
     },
     "tools": [
         # These tool definitions do not have to be in any particular order
