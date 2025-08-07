@@ -64,6 +64,36 @@
         "max_output_tokens": 32768,
         "knowledge_cutoff": "09/30/2023",
     },
+    "gpt-5": {
+        "use_model_name": "gpt-5-2025-08-07",
+    },
+    "gpt-5-2025-08-07": {
+        "class": "openai",
+        "model_info_url": "https://platform.openai.com/docs/models/gpt-5",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 400000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "09/30/2024",
+    },
+    "gpt-5-mini": {
+        "use_model_name": "gpt-5-mini-2025-08-07",
+    },
+    "gpt-5-mini-2025-08-07": {
+        "class": "openai",
+        "model_info_url": "https://platform.openai.com/docs/models/gpt-5-mini",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 400000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "05/30/2024",
+    },
     "gpt-4.1": {
         "use_model_name": "gpt-4.1-2025-04-14",
     },
