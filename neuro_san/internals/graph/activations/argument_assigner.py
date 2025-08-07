@@ -22,15 +22,6 @@ class ArgumentAssigner:
     information from one agent to the next.
     """
 
-    def __init__(self, properties: Dict[str, Any]):
-        """
-        Constructor
-
-        :param properties: The dictionary of function properties to fulfill,
-                as described in the callee agent spec.
-        """
-        self.properties: Dict[str, Any] = properties
-
     def assign(self, arguments: Dict[str, Any]) -> List[str]:
         """
         :param arguments: The arguments dictionary with the values as determined
@@ -40,45 +31,49 @@ class ArgumentAssigner:
         """
         assignments: List[str] = []
 
-        # Start to build the list of assignments, with one sentence for each property
-        # listed (exception for name and description).
-        for one_property, attributes in self.properties.items():
+        # Start to build the list of assignments, with one sentence for each argument
+        for args_name, args_value in arguments.items():
 
-            if one_property in ("name", "description"):
-                # Skip, as this does not need to be in the attribution list
+            # Skip if the value of the argument is None or empty
+            if args_value in (None, "", [], {}):
                 continue
 
-            args_value: Any = arguments.get(one_property)
-            if args_value is None:
-                # If we do not have an argument value for the property,
-                # do not add anything to the attribution list
-                continue
-
-            args_value_str: str = self.get_args_value_as_string(args_value,
-                                                                attributes.get("type"))
+            args_value_str: str = self.get_args_value_as_string(args_value)
 
             # No specific attribution text, so we make up a boilerplate
-            # one where it give the property/arg name <is/are> and the value.
+            # one where it give the arg name <is/are> and the value.
 
             # Figure out the attribution verb for singular vs plural
             assignment_verb: str = "is"
-            if attributes.get("type") == "array":
+            if isinstance(args_value, (dict, list)):
                 assignment_verb = "are"
 
             # Put together the assignment statement
-            assignment: str = f"The {one_property} {assignment_verb} {args_value_str}."
+            assignment: str = f"The {args_name} {assignment_verb} {args_value_str}."
 
             assignments.append(assignment)
 
         return assignments
 
-    def get_args_value_as_string(self, args_value: Any, value_type: str = None) -> str:
+    def get_args_value_as_string(self, args_value: Any) -> str:
         """
-        Get the string value of the value provided in the arguments
+        Convert an argument value to a formatted string representation.
+
+        Handles various input types to produce a string suitable for insertion into
+        prompts or code templates, while minimizing formatting issues such as
+        unwanted placeholder interpretation (e.g., curly braces).
+
+        - For dictionaries: returns a JSON-style string with outer braces removed.
+        - For lists: recursively stringifies each element and joins them with commas.
+        - For strings: wraps in single quotes and escapes curly braces (for templating).
+        - For other types: falls back to str().
+
+        :param args_value: The argument value to convert.
+        :return: A string representation of the argument.
         """
         args_value_str: str = None
 
-        if value_type == "dict" or isinstance(args_value, Dict):
+        if isinstance(args_value, dict):
             args_value_str = json.dumps(args_value)
             # Strip the begin/end braces as gpt-4o doesn't like them.
             # This means that anything within the json-y braces for a dictionary
@@ -87,14 +82,14 @@ class ArgumentAssigner:
             # Unclear why this is an issue with gpt-4o and not gpt-4-turbo.
             args_value_str = args_value_str[1:-1]
 
-        elif value_type == "array" or isinstance(args_value, List):
+        elif isinstance(args_value, list):
             str_values = []
             for item in args_value:
                 item_str: str = self.get_args_value_as_string(item)
                 str_values.append(item_str)
             args_value_str = ", ".join(str_values)
 
-        elif value_type == "string":
+        elif isinstance(args_value, str):
             # For a long time, this had been:
             #       args_value_str = f'"{args_value}"'
             # ... but as of 6/19/25 we are experimenting with new quoting
