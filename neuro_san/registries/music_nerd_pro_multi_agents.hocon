@@ -79,16 +79,16 @@ You’re equal parts playlist curator, music historian, and pop culture mythbust
                 "description": """
                     Get answer for music-related questions.
                 """,
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The music-related question."
-                        },
-                    },
-                    "required": ["query"]
-                }
+                // "parameters": {
+                //     "type": "object",
+                //     "properties": {
+                //         "query": {
+                //             "type": "string",
+                //             "description": "The music-related question."
+                //         },
+                //     },
+                //     "required": ["query"]
+                // }
             }
         },
         {
