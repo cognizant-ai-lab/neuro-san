@@ -120,7 +120,12 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
 
         server_status: ServerStatus = self.server_context.get_server_status()
         server_status.http_service.set_status(True)
-        self.logger.info({}, "HTTP server is running on port %d", self.http_port)
+        self.logger.info({}, "HTTP server is running %d instances on port %d with backlog %d",
+                         self.server_config.http_server_instances,
+                         self.http_port,
+                         self.server_config.http_connections_backlog)
+        self.logger.info({}, "HTTP server idle connections timeout: %d seconds",
+                         self.server_config.http_idle_connection_timeout_seconds)
         self.logger.info({}, "HTTP server is shutting down after %d requests", self.requests_limit)
 
         tornado.ioloop.IOLoop.current().start()
