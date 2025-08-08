@@ -20,7 +20,7 @@ from typing import List
 import random
 import threading
 
-from tornado.ioloop import IOLoop
+import tornado
 
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
@@ -41,6 +41,7 @@ from neuro_san.service.interfaces.agent_server import AgentServer
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
 from neuro_san.service.utils.server_status import ServerStatus
 from neuro_san.service.utils.server_context import ServerContext
+from neuro_san.service.http.config.http_server_config import HttpServerConfig
 
 
 class HttpServer(AgentAuthorizer, AgentStateListener):
@@ -54,23 +55,24 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
 
     def __init__(self,
                  server_context: ServerContext,
-                 http_port: int,
+                 server_config: HttpServerConfig,
                  openapi_service_spec_path: str,
                  requests_limit: int,
                  forwarded_request_metadata: str = AgentServer.DEFAULT_FORWARDED_REQUEST_METADATA):
         """
         Constructor:
         :param server_context: ServerContext with global-ish state
-        :param http_port: port for http neuro-san service;
+        :param server_config: http server run-time configuration
         :param openapi_service_spec_path: path to a file with OpenAPI service specification;
-        :param request_limit: The number of requests to service before shutting down.
+        :param requests_limit: The number of requests to service before shutting down.
                         This is useful to be sure production environments can handle
                         a service occasionally going down.
         :param forwarded_request_metadata: A space-delimited list of http metadata request keys
                to forward to logs/other requests
         """
         self.server_name_for_logs: str = "Http Server"
-        self.http_port = http_port
+        self.server_config = server_config
+        self.http_port = self.server_config.http_port
         self.server_context: ServerContext = server_context
 
         # Randomize requests limit for this server instance.
@@ -103,13 +105,30 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
         app = self.make_app(self.requests_limit, self.logger)
 
         self.logger.debug({}, "Serving agents: %s", repr(self.allowed_agents.keys()))
-        app.listen(self.http_port)
+
+        # Create an HTTP server with run-time parameters
+        server = tornado.httpserver.HTTPServer(
+            app,
+            idle_connection_timeout=self.server_config.http_idle_connection_timeout_seconds
+        )
+
+        # Bind the socket with a custom backlog
+        server.bind(self.http_port, backlog=self.server_config.http_connections_backlog)
+
+        # Start N child processes (0 = one per CPU core)
+        server.start(self.server_config.http_server_instances)
+
         server_status: ServerStatus = self.server_context.get_server_status()
         server_status.http_service.set_status(True)
-        self.logger.info({}, "HTTP server is running on port %d", self.http_port)
+        self.logger.info({}, "HTTP server is running %d instances on port %d with backlog %d",
+                         self.server_config.http_server_instances,
+                         self.http_port,
+                         self.server_config.http_connections_backlog)
+        self.logger.info({}, "HTTP server idle connections timeout: %d seconds",
+                         self.server_config.http_idle_connection_timeout_seconds)
         self.logger.info({}, "HTTP server is shutting down after %d requests", self.requests_limit)
 
-        IOLoop.current().start()
+        tornado.ioloop.IOLoop.current().start()
         self.logger.info({}, "Http server stopped.")
         if other_server is not None:
             other_server.stop()
