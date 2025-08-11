@@ -19,6 +19,7 @@ from neuro_san.message_processing.answer_message_processor import AnswerMessageP
 from neuro_san.message_processing.chat_context_message_processor import ChatContextMessageProcessor
 from neuro_san.message_processing.composite_message_processor import CompositeMessageProcessor
 from neuro_san.message_processing.message_processor import MessageProcessor
+from neuro_san.message_processing.token_accounting_message_processor import TokenAccountingMessageProcessor
 
 
 class BasicMessageProcessor(CompositeMessageProcessor):
@@ -38,10 +39,12 @@ class BasicMessageProcessor(CompositeMessageProcessor):
 
         self.answer = AnswerMessageProcessor()
         self.chat_context = ChatContextMessageProcessor()
+        self.token_accounting = TokenAccountingMessageProcessor()
 
         # These always go first because they should never be blocked
         self.message_processors.insert(0, self.chat_context)
         self.message_processors.insert(0, self.answer)
+        self.message_processors.append(self.token_accounting)
 
     def get_answer(self) -> str:
         """
@@ -93,3 +96,9 @@ class BasicMessageProcessor(CompositeMessageProcessor):
             compiled += f"\n```json\n{string_struct}\n```"
 
         return compiled
+
+    def get_token_accounting(self) -> Dict[str, Any]:
+        """
+        :return: The token accounting dictionary from the streaming_chat() session.
+        """
+        return self.token_accounting.get_token_accounting()

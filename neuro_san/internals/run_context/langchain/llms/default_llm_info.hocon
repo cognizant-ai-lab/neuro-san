@@ -64,6 +64,36 @@
         "max_output_tokens": 32768,
         "knowledge_cutoff": "09/30/2023",
     },
+    "gpt-5": {
+        "use_model_name": "gpt-5-2025-08-07",
+    },
+    "gpt-5-2025-08-07": {
+        "class": "openai",
+        "model_info_url": "https://platform.openai.com/docs/models/gpt-5",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 400000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "09/30/2024",
+    },
+    "gpt-5-mini": {
+        "use_model_name": "gpt-5-mini-2025-08-07",
+    },
+    "gpt-5-mini-2025-08-07": {
+        "class": "openai",
+        "model_info_url": "https://platform.openai.com/docs/models/gpt-5-mini",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 400000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "05/30/2024",
+    },
     "gpt-4.1": {
         "use_model_name": "gpt-4.1-2025-04-14",
     },
@@ -408,6 +438,23 @@
         "knowledge_cutoff": "03/2025",
     },
 
+    "claude-opus-4-1": {
+        "use_model_name": "claude-opus-4-1-20250805"
+    },
+    "claude-opus-4-1-20250805": {
+        "class": "anthropic",
+        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
+        "capabilities": [ "tools" ],
+        "context_window_size": 200000,
+        "max_output_tokens": 32000,
+        "knowledge_cutoff": "03/2025",
+    },
+
 
     # Ollama models
     # See https://ollama.com/search?c=tools for latest in tool-supporting Ollama models
@@ -607,6 +654,30 @@
 
     # Google Gemini
 
+    "gemini-2.5-pro": {
+        "class": "gemini",
+        "model_info_url": "https://ai.google.dev/gemini-api/docs/models#gemini-2.5-pro",
+        "modalities": {
+            "input": [ "text", "images", "video", "audio", "pdf"],
+            "output": [ "text"],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1048576,
+        "max_output_tokens": 65536,
+        "knowledge_cutoff": "01/2025",
+    },
+    "gemini-2.5-flash": {
+        "class": "gemini",
+        "model_info_url": "https://ai.google.dev/gemini-api/docs/models#gemini-2.5-flash",
+        "modalities": {
+            "input": [ "text", "images", "video", "audio" ],
+            "output": [ "text"],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1048576,
+        "max_output_tokens": 65536,
+        "knowledge_cutoff": "01/2025",
+    },
     "gemini-2.0-flash": {
         "class": "gemini",
         "model_info_url": "https://ai.google.dev/gemini-api/docs/models#gemini-2.0-flash",
@@ -668,6 +739,57 @@
         "knowledge_cutoff": "09/2024",
     },
     
+    # Bedrock
+
+    # These models require access to AWS endpoints in either us-east-1, us-east-2, or us-west-2
+    "bedrock-us-claude-opus-4": {
+        "use_model_name": "us.anthropic.claude-opus-4-20250514-v1:0"
+    },
+    "us.anthropic.claude-opus-4-20250514-v1:0": {
+        "class": "bedrock",
+        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
+        "capabilities": [ "tools" ],
+        "context_window_size": 200000,
+        "max_output_tokens": 32000,
+        "knowledge_cutoff": "03/2025",
+    },
+    "bedrock-us-claude-sonnet-4": {
+        "use_model_name": "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    },
+    "us.anthropic.claude-sonnet-4-20250514-v1:0": {
+        "class": "bedrock",
+        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
+        "capabilities": [ "tools" ],
+        "context_window_size": 200000,
+        "max_output_tokens": 64000,
+        "knowledge_cutoff": "03/2025",
+    },
+    "bedrock-us-claude-3-7-sonnet": {
+        "use_model_name": "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+    },
+    "us.anthropic.claude-3-7-sonnet-20250219-v1:0": {
+        "class": "bedrock",
+        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
+        "capabilities": [ "tools" ],
+        "context_window_size": 200000,
+        "max_output_tokens": 64000,
+        "knowledge_cutoff": "11/2024",
+    }
 
     # These are data for each LLM class, so they don't have to be repeated for each
     # LLM info entry above.
@@ -797,6 +919,33 @@
                 "timeout": null,
                 "top_k": null, 
                 "top_p": null,
+            }
+        },
+        "bedrock": {
+            "args": {
+                # Note that we can only supply arguments that are "Just Data" in nature.
+                # See https://python.langchain.com/api_reference/aws/chat_models/langchain_aws.chat_models.bedrock.ChatBedrock.html
+                "aws_access_key_id": null,
+                "aws_secret_access_key": null,
+                "aws_session_token": null,
+                "base_model_id": null,
+                "beta_use_converse_api": false,
+                "cache": null,
+                "config": null,
+                "credentials_profile_name": null,
+                "custom_get_token_ids": null,
+                "endpoint_url": null,
+                "guardrails": {"guardrailIdentifier": null, "guardrailVersion": null, "trace": null},
+                "max_tokens": null,
+                "metadata": null,
+                "provider": null,
+                "rate_limiter": null,
+                "region_name": null,
+                "stop_sequences": null,
+                # streaming is always on. Without it token counting will not work.
+                "system_prompt_with_tools": "",
+                "tags": null,
+                "temperature": null
             }
         }
     }

@@ -22,7 +22,6 @@ from google.auth.exceptions import DefaultCredentialsError
 from openai import OpenAIError
 from pydantic_core import ValidationError
 
-from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.dictionary_overlay import DictionaryOverlay
@@ -150,8 +149,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
     def create_llm(
             self,
-            config: Dict[str, Any],
-            callbacks: List[BaseCallbackHandler] = None
+            config: Dict[str, Any]
     ) -> BaseLanguageModel:
         """
         Creates a langchain LLM based on the 'model_name' value of
@@ -159,13 +157,12 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         :param config: A dictionary which describes which LLM to use.
                 See the class comment for details.
-        :param callbacks: A list of BaseCallbackHandlers to add to the chat model.
         :return: A BaseLanguageModel (can be Chat or LLM)
                 Can raise a ValueError if the config's model_name value is
                 unknown to this method.
         """
         full_config: Dict[str, Any] = self.create_full_llm_config(config)
-        llm: BaseLanguageModel = self.create_base_chat_model(full_config, callbacks)
+        llm: BaseLanguageModel = self.create_base_chat_model(full_config)
         return llm
 
     def create_full_llm_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -265,14 +262,12 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         return args
 
-    def create_base_chat_model(self, config: Dict[str, Any],
-                               callbacks: List[BaseCallbackHandler] = None) -> BaseLanguageModel:
+    def create_base_chat_model(self, config: Dict[str, Any]) -> BaseLanguageModel:
         """
         Create a BaseLanguageModel from the fully-specified llm config either from standard LLM factory,
         user-defined LLM factory, or user-specified langchain model class.
         :param config: The fully specified llm config which is a product of
                     _create_full_llm_config() above.
-        :param callbacks: A list of BaseCallbackHandlers to add to the chat model.
         :return: A BaseLanguageModel (can be Chat or LLM)
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
@@ -284,7 +279,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         found_exception: Exception = None
         for llm_factory in self.llm_factories:
             try:
-                llm = llm_factory.create_base_chat_model(config, callbacks)
+                llm = llm_factory.create_base_chat_model(config)
                 if llm is not None and isinstance(llm, BaseLanguageModel):
                     # We found what we were looking for
                     found_exception = None
@@ -304,9 +299,22 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 # Let the next model have a crack
                 found_exception = exception
 
-        # Try resolving via 'class' in config if factories failed
+        # Try resolving via "class" in config if llm factories failed
+        #
+        # Note: config["class"] is always set — if the user intended to use a default LLMs,
+        # it will point to a known default like "openai" or "bedrock". In those cases,
+        # we avoid re-resolving it here to prevent masking the original error with
+        # a new one from create_base_chat_model_from_user_class.
+        #
+        # This fallback only applies when the user provides a non-default class path
+        # and factory resolution failed.
         class_path: str = config.get("class")
-        if llm is None and found_exception is not None and class_path:
+        default_llm_classes: Set[str] = set(self.llm_infos.get("classes"))
+        if (
+            llm is None
+            and found_exception is not None
+            and class_path not in default_llm_classes
+        ):
             llm = self.create_base_chat_model_from_user_class(class_path, config)
             found_exception = None
 
@@ -319,14 +327,12 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             self,
             class_path: str,
             config: Dict[str, Any],
-            callbacks: List[BaseCallbackHandler] = None
     ) -> BaseLanguageModel:
         """
         Create a BaseLanguageModel from the user-specified langchain model class.
         :param class_path: A string in the form of <package>.<module>.<Class>
         :param config: The fully specified llm config which is a product of
                     _create_full_llm_config() above.
-        :param callbacks: A list of BaseCallbackHandlers to add to the chat model.
 
         :return: A BaseLanguageModel
         """
@@ -348,9 +354,6 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         for llm_config_key, llm_config_value in config.items():
             if llm_config_key not in KEYS_TO_REMOVE_FOR_USER_CLASS:
                 user_config[llm_config_key] = llm_config_value
-
-        # Add callbacks
-        user_config["callbacks"] = callbacks
 
         # Check for invalid args and throw error if found
         ArgumentValidator.check_invalid_args(llm_class, user_config)

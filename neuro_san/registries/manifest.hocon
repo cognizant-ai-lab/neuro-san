@@ -17,16 +17,19 @@
     # Currently we list each hocon file we want to serve as a key with a boolean value.
     # Eventually we might have a dictionary value with server specifications for each.
 
-    "esp_decision_assistant.hocon": false,
-    "hello_world.hocon": false,
-    "intranet_agents.hocon": false,
-    "math_guy.hocon": false,
-    "math_guy_passthrough.hocon": false,
-    "music_nerd.hocon": false,
-    "music_nerd_pro.hocon": false,
-    "music_nerd_pro_llm_anthropic.hocon": false,
-    "music_nerd_pro_llm_gemini.hocon": false,
-    "music_nerd_pro_llm_azure.hocon": false,
+    "esp_decision_assistant.hocon": true,
+    "hello_world.hocon": true,
+    "intranet_agents.hocon": true,
+    "math_guy.hocon": true,
+    "math_guy_passthrough.hocon": true,
+    "music_nerd.hocon": true,
+    "music_nerd_pro.hocon": true,
+    "music_nerd_pro_llm_anthropic.hocon": true,
+    "music_nerd_pro_llm_gemini.hocon": true,
+    "music_nerd_pro_llm_azure.hocon": true,
+    "music_nerd_pro_llm_ollama.hocon": true,
+    "music_nerd_pro_multi_agents.hocon": true,
+    "music_nerd_pro_llm_bedrock_claude.hocon": true,
 
     # This one is an example of agents calling tools that has no parameters.
     "date_time.hocon": false,

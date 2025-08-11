@@ -4,7 +4,7 @@ from typing import Union
 
 import logging
 
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 
 from neuro_san.interfaces.coded_tool import CodedTool
 
@@ -16,6 +16,14 @@ class WebsiteSearch(CodedTool):
 
     def __init__(self):
         self.top_n = 5
+
+    async def async_invoke(self, args: Dict[str, Any], sly_data: Dict[str, Any]) -> Union[Dict[str, Any], str]:
+        """
+        As much as we'd prefer an asynchronous entry point, the code below uses synchronous
+        calls for a simple example. Asynchronous calls make for a more performant server
+        environment.
+        """
+        raise NotImplementedError
 
     def invoke(self, args: Dict[str, Any], sly_data: Dict[str, Any]) -> Union[Dict[str, Any], str]:
         """
@@ -65,9 +73,6 @@ class WebsiteSearch(CodedTool):
         logger.info(">>>>>>>>>>>>>>>>>>>DONE !!!>>>>>>>>>>>>>>>>>>")
         return links_str
 
-    async def async_invoke(self, args: Dict[str, Any], sly_data: Dict[str, Any]) -> Union[Dict[str, Any], str]:
-        raise NotImplementedError
-
     def search_web(self, query: str, num_results: int = 5) -> list:
         """
         Search the web for a given query using DuckDuckGo Search
@@ -79,6 +84,8 @@ class WebsiteSearch(CodedTool):
         """
         # Use duckduckgo_search to retrieve results
         search = DDGS()
+        # Synchronous call below!
+        # Try to use asynchronous calls for a more performant neuro-san server
         results = search.text(query, max_results=num_results)
 
         # Extract and return only the URLs from the returned list of dictionaries

@@ -121,7 +121,11 @@ class ExternalActivation(AbstractCallableActivation):
         """
         message_list: List[Dict[str, Any]] = []
 
-        message = AgentMessage(content=f"Received arguments {self.arguments}")
+        arguments_dict: Dict[str, Any] = {
+            "tool_start": True,
+            "tool_args": self.arguments
+        }
+        message = AgentMessage(content="Received arguments:", structure=arguments_dict)
         await self.journal.write_message(message)
 
         # Create an AsyncAgentSession if necessary
@@ -170,7 +174,11 @@ class ExternalActivation(AbstractCallableActivation):
         #       This ends up needing to be re-integrated in the RunContext.
         self.sly_data = redactor.filter_config(returned_sly_data)
 
-        message = AgentMessage(content=f"Got result: {answer}")
+        answer_dict: Dict[str, Any] = {
+            "tool_end": True,
+            "tool_output": answer
+        }
+        message = AgentMessage(content="Got result:", structure=answer_dict)
         await self.journal.write_message(message)
 
         # In terms of sending tool results back up the graph,

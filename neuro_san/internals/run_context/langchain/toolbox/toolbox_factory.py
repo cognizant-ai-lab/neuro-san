@@ -116,17 +116,25 @@ class ToolboxFactory(ContextTypeToolboxFactory):
     def create_tool_from_toolbox(
             self,
             tool_name: str,
-            user_args: Dict[str, Any] = None
+            user_args: Dict[str, Any] = None,
+            agent_name: str = None
     ) -> Union[BaseTool, Dict[str, Any], List[BaseTool]]:
         """
         Resolves dependencies and instantiates the requested tool.
 
         :param tool_name: The name of the tool to instantiate.
         :param user_args: Arguments provided by the user, which override the config file.
+        :param agent_name: The name of the agent to prefix each BaseTool's name in BaseToolkit with,
+            ensuring tool names are unique and traceable to their agent.
         :return: - Instantiated tool if "class" of tool_name points to a BaseTool class
                  - A list of tools if "class of "tool_name points to a BaseToolkit class.
                  - A dict of tool's "description" and "parameters" if tool_name points to a CodedTool
         """
+
+        # agent_name is required when the tool is used as an internal agent.
+        # However, tools from the toolbox could potentially be used as external tools,
+        # in which case agent_name may not be needed.
+
         empty: Dict[str, Any] = {}
 
         tool_info: Dict[str, Any] = self.toolbox_infos.get(tool_name)
@@ -168,8 +176,20 @@ class ToolboxFactory(ContextTypeToolboxFactory):
 
         # If the instantiated class has "get_tools()", assume it's a toolkit and return a list of tools
         if hasattr(instance, "get_tools") and callable(instance.get_tools):
-            return instance.get_tools()
+            toolkit: List[BaseTool] = instance.get_tools()
+            for tool in toolkit:
+                if agent_name:
+                    # Prefix the name of the agent to each tool
+                    tool.name = f"{agent_name}_{tool.name}"
+                # Add "langchain_tool" tags so journal callback can idenitify it
+                tool.tags = ["langchain_tool"]
+            return toolkit
 
+        if agent_name:
+            # Replace langchain tool's name with agent name
+            instance.name = agent_name
+        # Add "langchain_tool" tags so journal callback can idenitify it
+        instance.tags = ["langchain_tool"]
         return instance
 
     def _resolve_args(self, args: Dict[str, Any]) -> Dict[str, Any]:

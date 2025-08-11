@@ -51,4 +51,8 @@ class MessageJournal(Journal):
 
         # Queue Producer from this:
         #   https://stackoverflow.com/questions/74130544/asyncio-yielding-results-from-multiple-futures-as-they-arrive
-        await self.hopper.put(message_dict)
+        # The synchronous=True is necessary when an async HTTP request is at the get()-ing end of the queue,
+        # as the journal messages come from inside a separate event loop from that request. The lock
+        # taken here ends up being harmless in the synchronous request case (like for gRPC) because
+        # we would only be blocking our own event loop.
+        await self.hopper.put(message_dict, synchronous=True)

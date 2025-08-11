@@ -24,13 +24,14 @@ from neuro_san.api.grpc import concierge_pb2_grpc
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
-from neuro_san.service.main_loop.server_status import ServerStatus
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.grpc.agent_servicer_to_server import AgentServicerToServer
 from neuro_san.service.grpc.concierge_service import ConciergeService
 from neuro_san.service.grpc.dynamic_agent_router import DynamicAgentRouter
 from neuro_san.service.grpc.grpc_agent_service import GrpcAgentService
 from neuro_san.service.interfaces.agent_server import AgentServer
+from neuro_san.service.utils.server_context import ServerContext
+from neuro_san.service.utils.server_status import ServerStatus
 from neuro_san.session.agent_service_stub import AgentServiceStub
 
 DEFAULT_SERVER_NAME: str = 'neuro-san.Agent'
@@ -52,8 +53,7 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self, port: int,
                  server_loop_callbacks: ServerLoopCallbacks,
-                 network_storage_dict: Dict[str, AgentNetworkStorage],
-                 server_status: ServerStatus,
+                 server_context: ServerContext,
                  server_name: str = DEFAULT_SERVER_NAME,
                  server_name_for_logs: str = DEFAULT_SERVER_NAME_FOR_LOGS,
                  max_concurrent_requests: int = DEFAULT_MAX_CONCURRENT_REQUESTS,
@@ -65,10 +65,7 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
         :param port: The integer port number for the service to listen on
         :param server_loop_callbacks: The ServerLoopCallbacks instance for
                 break out methods in main serving loop.
-        :param network_storage_dict: A dictionary of string (descripting scope) to
-                    AgentNetworkStorage instance which keeps all the AgentNetwork instances
-                    of a particular grouping.
-        :param server_status: server status to register the state of gRPC server
+        :param server_context: ServerContext carrying global-ish state
         :param server_name: The name of the service
         :param server_name_for_logs: The name of the service for log files
         :param max_concurrent_requests: The maximum number of requests to handle at a time.
@@ -86,13 +83,12 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
 
         self.logger = logging.getLogger(__name__)
 
-        self.network_storage_dict: Dict[str, AgentNetworkStorage] = network_storage_dict
         # Below is now odd.
         self.server_name: str = server_name
         self.server_name_for_logs: str = server_name_for_logs
         self.max_concurrent_requests: int = max_concurrent_requests
         self.request_limit: int = request_limit
-        self.server_status: ServerStatus = server_status
+        self.server_context: ServerContext = server_context
 
         self.server_lifetime = None
         self.security_cfg = None
@@ -111,10 +107,12 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
         :param agent_name: name of an agent
         :param source: The AgentStorageSource source of the message
         """
-        service = GrpcAgentService(self.server_lifetime, self.security_cfg,
+        service = GrpcAgentService(self.server_lifetime,
+                                   self.security_cfg,
                                    agent_name,
                                    source.get_agent_network_provider(agent_name),
-                                   self.server_logging)
+                                   self.server_logging,
+                                   self.server_context)
         self.services.append(service)
         servicer_to_server = AgentServicerToServer(service)
         agent_rpc_handlers = servicer_to_server.build_rpc_handlers()
@@ -164,8 +162,9 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
 
         # Add listener to handle adding per-agent gRPC services
         # to our dynamic router:
-        public_storage: AgentNetworkStorage = self.network_storage_dict.get("public")
-        for network_storage in self.network_storage_dict.values():
+        network_storage_dict: Dict[str, AgentNetworkStorage] = self.server_context.get_network_storage_dict()
+        public_storage: AgentNetworkStorage = network_storage_dict.get("public")
+        for network_storage in network_storage_dict.values():
             network_storage.add_listener(self)
 
         # Add DynamicAgentRouter instance as a generic RPC handler for our server:
@@ -184,13 +183,15 @@ class GrpcAgentServer(AgentServer, AgentStateListener):
         """
         Start serving gRPC requests
         """
-        self.server_status.grpc_service.set_status(True)
+        server_status: ServerStatus = self.server_context.get_server_status()
+        server_status.grpc_service.set_status(True)
         self.server_lifetime.run()
 
     def stop(self):
         """
         Stop the server.
         """
-        self.server_status.set_grpc_status(False)
+        server_status: ServerStatus = self.server_context.get_server_status()
+        server_status.grpc_service.set_status(False)
         # pylint: disable=protected-access
         self.server_lifetime._stop_serving()

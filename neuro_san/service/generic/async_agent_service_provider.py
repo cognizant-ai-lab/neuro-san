@@ -12,15 +12,18 @@
 
 from typing import Any
 from typing import Dict
-from threading import Lock
-import copy
 
-from neuro_san.service.generic.async_agent_service import AsyncAgentService
+from copy import deepcopy
+from threading import Lock
+
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
+from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
+from neuro_san.service.utils.server_context import ServerContext
 
 
+# pylint: disable=too-many-instance-attributes
 class AsyncAgentServiceProvider:
     """
     Class providing lazy construction of AsyncAgentService instance
@@ -33,7 +36,8 @@ class AsyncAgentServiceProvider:
                  security_cfg: Dict[str, Any],
                  agent_name: str,
                  agent_network_provider: AgentNetworkProvider,
-                 server_logging: AgentServerLogging):
+                 server_logging: AgentServerLogging,
+                 server_context: ServerContext):
         """
         Constructor.
         :param request_logger: The instance of the EventLoopLogger that helps
@@ -47,13 +51,15 @@ class AsyncAgentServiceProvider:
         :param server_logging: An AgentServerLogging instance initialized so that
                         spawned asynchronous threads can also properly initialize
                         their logging.
+        :param server_context: The ServerContext object containing global-ish state
         """
         self.request_logger = request_logger
-        self.security_cfg = copy.deepcopy(security_cfg)
+        self.security_cfg = deepcopy(security_cfg)
         self.server_logging: AgentServerLogging = server_logging
         self.agent_network_provider: AgentNetworkProvider = agent_network_provider
         self.agent_name: str = agent_name
         self.lock: Lock = Lock()
+        self.server_context: ServerContext = server_context
         self.service_instance: AsyncAgentService = None
 
     def get_service(self) -> AsyncAgentService:
@@ -69,7 +75,8 @@ class AsyncAgentServiceProvider:
                         self.security_cfg,
                         self.agent_name,
                         self.agent_network_provider,
-                        self.server_logging)
+                        self.server_logging,
+                        self.server_context)
         return self.service_instance
 
     def service_created(self) -> bool:

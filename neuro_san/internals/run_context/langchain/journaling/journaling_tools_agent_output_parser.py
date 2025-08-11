@@ -9,8 +9,16 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
+
+import re
+from re import Match
+from typing import Any
+from typing import Dict
 from typing import List
+from typing import Optional
+from typing import Tuple
 from typing import TypeVar
+from typing import Union
 
 from pydantic import ConfigDict
 
@@ -19,6 +27,7 @@ from langchain_core.outputs import Generation
 
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.messages.agent_message import AgentMessage
+from neuro_san.internals.parsers.structure.json_structure_parser import JsonStructureParser
 
 # Bizarre convention from the superclass to adhere to overridden method.
 T = TypeVar("T")
@@ -77,8 +86,36 @@ class JournalingToolsAgentOutputParser(ToolsAgentOutputParser):
         if isinstance(result, List):
             for action in result:
                 if action.log is not None and len(action.log) > 0:
-                    message = AgentMessage(content=action.log.strip())
+                    agent_name, params_str = self._extract_agent_and_params(action.log)
+                    # Attempt to parse params_str as a Python dict literal.
+                    # It is expected to be a string representation of a dictionary (e.g., "{'key': 'value'}").
+                    # If parsing fails, fall back to using the original string.
+                    params: Union[Dict[str, Any], str] = JsonStructureParser().parse_structure(params_str)
+                    if not params:
+                        # Fallback: treat params_str as a plain string if it's not a valid Python literal.
+                        params = params_str
+                    action_dict: Dict[str, Any] = {
+                        "invoking_start": True,
+                        "invoked_agent_name": agent_name,
+                        "params": params
+                    }
+                    message = AgentMessage(content=action.log.strip(), structure=action_dict)
                     await self.journal.write_message(message)
 
         # Note: We do not care about AgentFinish
         return result
+
+    def _extract_agent_and_params(self, text: str) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Extracts the agent name and parameters string from a sentence formatted as:
+        "Invoking `<agent_name>` with `<params>`".
+
+        :param text: Input text in the format "Invoking agent_name with params".
+
+        :return: A tuple of (agent_name, params) if matched; otherwise (None, None).
+        """
+        match: Match = re.search(r"Invoking:\s+`(.*)`\s+with\s+`(.*)`", text)
+        if match:
+            agent, params = match.groups()
+            return agent.strip(), params.strip()
+        return None, None

@@ -9,10 +9,11 @@
 #
 # END COPYRIGHT
 
-import logging
-import threading
 from typing import Dict
 from typing import List
+
+import logging
+import threading
 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
@@ -56,8 +57,9 @@ class AgentNetworkStorage(AgentStorageSource):
         """
         is_new: bool = False
         with self.lock:
-            is_new = self.agents_table.get(agent_name, None) is None
+            is_new = self.agents_table.get(agent_name) is None
             self.agents_table[agent_name] = agent_network
+
         # Notify listeners about this state change:
         # do it outside of internal lock
         for listener in self.listeners:
@@ -90,6 +92,7 @@ class AgentNetworkStorage(AgentStorageSource):
         """
         with self.lock:
             self.agents_table.pop(agent_name, None)
+
         # Notify listeners about this state change:
         # do it outside of internal lock
         for listener in self.listeners:

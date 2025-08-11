@@ -66,21 +66,36 @@ class AsyncCollatingQueue(AsyncIterator, AsyncHopper):
 
         return message
 
-    async def put(self, item: Any):
+    async def put(self, item: Any, synchronous: bool = False):
         """
         Fulfills AsyncHopper interface
 
         :param item: The item to put on the queue.
+        :param synchronous: When False (the default), we use the asynchronous-side
+                of the queue for our put() operation.  This is generally what
+                would be expected inside an async call, which is why it is the default.
+                When True, we use the synchronous side of the queue for put().
+                This ends up being necessary when each end of the queue is serviced
+                in a different asyncio event loop.
         """
-        self.queue.sync_q.put(item)
+        if synchronous:
+            self.queue.sync_q.put(item)
+        else:
+            await self.queue.async_q.put(item)
 
-    async def put_final_item(self):
+    async def put_final_item(self, synchronous: bool = False):
         """
         Puts the final item on the queue indicating that no more data will
         be on the queue and the consumer's iteration can cease when it sees
         this item.
+        :param synchronous: When False (the default), we use the asynchronous-side
+                of the queue for our put() operation.  This is generally what
+                would be expected inside an async call, which is why it is the default.
+                When True, we use the synchronous side of the queue for put().
+                This ends up being necessary when each end of the queue is serviced
+                in a different asyncio event loop.
         """
-        await self.put(self.END_MESSAGE)
+        await self.put(self.END_MESSAGE, synchronous)
 
     def is_final_item(self, item: Any) -> bool:
         """
