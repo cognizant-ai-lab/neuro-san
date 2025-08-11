@@ -28,7 +28,6 @@ class NameCorrectionConfigFilter(ConfigFilter):
     agent names within a single registry.
     """
 
-    # pylint: disable=too-many-branches
     def filter_config(self, basis_config: Dict[str, Any]) \
             -> Dict[str, Any]:
         """
@@ -80,11 +79,8 @@ class NameCorrectionConfigFilter(ConfigFilter):
 
             new_agent_tools: List[str] = []
             for agent_tool in agent_tools:
-                if isinstance(agent_tool, str):
-                    if agent_tool in corrections:
-                        new_agent_tools.append(corrections.get(agent_tool))
-                    else:
-                        new_agent_tools.append(agent_tool)
+                if agent_tool in corrections:
+                    new_agent_tools.append(corrections.get(agent_tool))
                 else:
                     new_agent_tools.append(agent_tool)
 

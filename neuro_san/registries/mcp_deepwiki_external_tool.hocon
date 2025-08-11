@@ -33,7 +33,16 @@
              }
             "tools": [
                 {
-                    "server_url": "https://mcp.deepwiki.com/mcp"
+                    # Only support streamable http protocal
+                    # For other modes of transport, use coded tool implementation
+                    "server_url": "https://mcp.deepwiki.com/mcp",
+
+                    # Optional: restricts which tools are available.
+                    # If omitted, all tools are enabled.
+                    "allowed_tools": ["read_wiki_structure", "read_wiki_contents", "ask_question"]
+
+                    # Optional: specify a key for the environment variable that stores credentials.
+                    # This allows secure handling of authentication without hardcoding sensitive data.
                 }
             ]
         }
