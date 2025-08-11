@@ -28,6 +28,7 @@ class NameCorrectionConfigFilter(ConfigFilter):
     agent names within a single registry.
     """
 
+    # pylint: disable=too-many-branches
     def filter_config(self, basis_config: Dict[str, Any]) \
             -> Dict[str, Any]:
         """

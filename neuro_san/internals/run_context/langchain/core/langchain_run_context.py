@@ -272,6 +272,8 @@ class LangChainRunContext(RunContext):
 
         return agent
 
+    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-return-statements
     async def _create_base_tool(self, name: str) -> BaseTool:
         """
         :param name: The name of the tool to create
