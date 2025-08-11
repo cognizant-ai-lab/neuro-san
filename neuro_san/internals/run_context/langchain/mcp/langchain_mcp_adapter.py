@@ -24,7 +24,11 @@ class LangchainMCPAdapter:
     """
 
     @staticmethod
-    async def get_mcp_tools(server_url: str, allowed_tools: Optional[List[str]] = None) -> List[BaseTool]:
+    async def get_mcp_tools(
+         server_url: str,
+         allowed_tools: Optional[List[str]] = None,
+         agent_name: str = None
+    ) -> List[BaseTool]:
         """
         Fetches tools from the given MCP server and returns them as a list of LangChain-compatible tools.
 
@@ -50,5 +54,12 @@ class LangchainMCPAdapter:
         # If allowed_tools is provided, filter the list to include only those tools.
         if allowed_tools:
             mcp_tools = [tool for tool in mcp_tools if tool.name in allowed_tools]
+
+        for tool in mcp_tools:
+            if agent_name:
+                # Prefix the name of the agent to each tool
+                tool.name = f"{agent_name}_{tool.name}"
+            # Add "langchain_tool" tags so journal callback can idenitify it
+            tool.tags = ["langchain_tool"]
 
         return mcp_tools

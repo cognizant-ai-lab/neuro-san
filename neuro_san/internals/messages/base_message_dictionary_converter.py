@@ -60,7 +60,6 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         :param obj: The BaseMessage to convert
         :return: The ChatMessage in dictionary form
         """
-
         message: BaseMessage = obj
         message_type: ChatMessageType = ChatMessageType.from_message(message)
         chat_message: Dict[str, Any] = {
@@ -97,7 +96,14 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
             # the list. For more details: https://python.langchain.com/docs/integrations/chat/anthropic/#content-blocks
             if src == "content" and isinstance(value, list):
                 if len(value) > 0:
-                    value = value[0].get("text", "")
+                    if isinstance(value[0], dict):
+                        value = value[0].get("text", "")
+                    elif all(isinstance(item, str) for item in value):
+                        # If content is a list of str, join them with ","
+                        value = ", ".join(value)
+                    else:
+                        # Otherwise, use the first element
+                        value = value[0]
                 else:
                     value = None
 

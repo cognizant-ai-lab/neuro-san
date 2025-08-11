@@ -339,7 +339,7 @@ class LangChainRunContext(RunContext):
             elif mcp:
                 server_url = mcp.get("server_url")
                 allowed_tools = mcp.get("allowed_tools")
-                return await LangchainMCPAdapter.get_mcp_tools(server_url, allowed_tools)
+                return await LangchainMCPAdapter.get_mcp_tools(server_url, allowed_tools, name)
             else:
                 function_json = agent_spec.get("function")
 
