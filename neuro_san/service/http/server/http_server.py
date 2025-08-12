@@ -53,7 +53,6 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
     # pylint: disable=too-many-arguments, too-many-positional-arguments
 
     TIMEOUT_TO_START_SECONDS: int = 10
-    LOG_RESOURCES_USAGE: bool = True
 
     def __init__(self,
                  server_context: ServerContext,
@@ -130,7 +129,7 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
                          self.server_config.http_idle_connection_timeout_seconds)
         self.logger.info({}, "HTTP server is shutting down after %d requests", self.requests_limit)
 
-        if self.LOG_RESOURCES_USAGE:
+        if self.server_config.http_server_monitor_interval_seconds > 0:
             # Start periodic logging of server resources used:
             tornado.ioloop.PeriodicCallback(
                 self.log_resources_usage,
