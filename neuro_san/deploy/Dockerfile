@@ -237,4 +237,11 @@ ENV AGENT_HTTP_IDLE_CONNECTIONS_TIMEOUT=3600
 # start(N) → Manually specifies number of worker processes.
 ENV AGENT_HTTP_SERVER_INSTANCES=1
 
+# If set to a value>0, will start periodic logging of currently used
+# run-time server resources:
+# open file descriptors;
+# open connections for server port.
+# Logging period is specified in seconds.
+ENV AGENT_HTTP_RESOURCES_MONITOR_INTERVAL=0
+
 ENTRYPOINT "${APP_ENTRYPOINT}"

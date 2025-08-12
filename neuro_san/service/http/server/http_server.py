@@ -42,6 +42,7 @@ from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
 from neuro_san.service.utils.server_status import ServerStatus
 from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.service.http.config.http_server_config import HttpServerConfig
+from neuro_san.service.utils.service_resources import ServiceResources
 
 
 class HttpServer(AgentAuthorizer, AgentStateListener):
@@ -128,10 +129,28 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
                          self.server_config.http_idle_connection_timeout_seconds)
         self.logger.info({}, "HTTP server is shutting down after %d requests", self.requests_limit)
 
+        if self.server_config.http_server_monitor_interval_seconds > 0:
+            # Start periodic logging of server resources used:
+            tornado.ioloop.PeriodicCallback(
+                self.log_resources_usage,
+                self.server_config.http_server_monitor_interval_seconds * 1000).start()
+
         tornado.ioloop.IOLoop.current().start()
         self.logger.info({}, "Http server stopped.")
         if other_server is not None:
             other_server.stop()
+
+    def log_resources_usage(self):
+        """
+        Log current usage of server run-time resources:
+        file descriptors and open inet connections on server port.
+        """
+        # Get used file descriptors:
+        fds, soft_limit, hard_limit = ServiceResources.get_fd_usage()
+        # Get active TCP connections to our http port:
+        conn = ServiceResources.active_tcp_on_port(self.http_port)
+        self.logger.info({}, "Used: file descriptors %d (%d, %d) connections: %d",
+                         fds, soft_limit, hard_limit, conn)
 
     def make_app(self, requests_limit: int, logger: EventLoopLogger):
         """
