@@ -32,28 +32,29 @@
     "music_nerd_pro_llm_bedrock_claude.hocon": true,
 
     # This one is an example of agents calling tools that has no parameters.
-    "date_time.hocon": false,
+    "date_time.hocon": true,
 
     # These next 2 go together as an example for agents calling other agents.
     # They are the only reason we have duckduckgo_search listed in the dependencies.
-    "website_search.hocon": false,
+    "website_search.hocon": true,
     "website_search_usage_example.hocon": true,
 
     # The next one is an example of agents calling langchain base tools from toolbox.
-    "bing_search.hocon": false,
+    "bing_search.hocon": true,
 
     # This one is an example of agents calling shared coded tools.
     # In other words, these coded tools can be used in any agent network.
     # These tools are also predefined in the toolbox.
     "google_serper.hocon": true,
-    "website_rag.hocon": false,
+    "website_rag.hocon": true,
 
+    # These 2 agents are examples of calling MCP tools as internal and external tools, respectively.
     "mcp_deepwiki.hocon": true,
     "mcp_deepwiki_external_tool.hocon": true,
 
     # Agents having to do with test infrastructure
-    "gist.hocon": false,
-    "assess_failure.hocon": false,
+    "gist.hocon": true,
+    "assess_failure.hocon": true,
 
     # STOP AND READ: YOU PROBABLY DON'T WANT TO ADD YOUR .hocon FILE HERE.
     #

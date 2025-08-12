@@ -15,7 +15,7 @@
 
 {
     "llm_config": {
-        "model_name": "gpt-4.1",
+        "model_name": "gpt-4o",
     },
     "tools": [
         # These tool definitions do not have to be in any particular order
@@ -28,9 +28,9 @@
         {
             "name": "searcher",
             "instructions": "Use your tool to respond to the inquiry.",
-             "function": {
-                "description": "Assist user with answer from deepwiki."
-             }
+            "function": {
+            "description": "Assist user with answer from deepwiki."
+            }
             "tools": ["deepwiki_tool"]
         },
         {
@@ -42,7 +42,7 @@
 
                 # Optional: restricts which tools are available.
                 # If omitted, all tools are enabled.
-                "allowed_tools": ["read_wiki_structure", "read_wiki_contents", "ask_question"]
+                "allowed_tools": ["read_wiki_structure", "ask_question"]
 
                 # Optional: specify a key for the environment variable that stores credentials.
                 # This allows secure handling of authentication without hardcoding sensitive data.
