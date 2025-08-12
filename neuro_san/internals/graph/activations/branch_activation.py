@@ -16,6 +16,8 @@ from typing import List
 import json
 import uuid
 
+from leaf_common.parsers.field_extractor import FieldExtractor
+
 from neuro_san.internals.graph.activations.argument_assigner import ArgumentAssigner
 from neuro_san.internals.graph.activations.calling_activation import CallingActivation
 from neuro_san.internals.graph.interfaces.agent_tool_factory import AgentToolFactory
@@ -59,8 +61,16 @@ class BranchActivation(CallingActivation, CallableActivation):
         """
         :return: The string prompt for assigning values to the arguments to the agent.
         """
+        # Get the properties of the function
+        extractor: FieldExtractor = FieldExtractor()
+        empty: Dict[str, Any] = {}
 
-        assigner = ArgumentAssigner()
+        agent_spec = self.get_agent_tool_spec()
+
+        # Properties describe the function arguments
+        properties: Dict[str, Any] = extractor.get_field(agent_spec, "function.parameters.properties", empty)
+
+        assigner = ArgumentAssigner(properties)
         assignments: List[str] = assigner.assign(self.arguments)
 
         # Start to build a single assignments string, with one sentence for each property
@@ -73,6 +83,11 @@ class BranchActivation(CallingActivation, CallableActivation):
         :return: A string describing the objective of the component.
         """
         agent_spec = self.get_agent_tool_spec()
+
+        # The command will be combined with assignments (arguments from an upstream agent)
+        # to direct the agent toward a specific task.
+        # Optional: if omitted, the agent will choose an action based on the assignments
+        # and the list of available tools.
         return agent_spec.get("command")
 
     async def integrate_callable_response(self, run: Run, messages: List[Any]) -> List[Any]:
