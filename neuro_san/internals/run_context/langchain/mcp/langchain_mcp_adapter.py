@@ -17,7 +17,7 @@ from langchain_core.tools import BaseTool
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
 
-class LangchainMCPAdapter:
+class LangChainMCPAdapter:
     """
     Adapter class to fetch tools from a Multi-Client Protocol (MCP) server and return them as
     LangChain-compatible tools. This class provides static methods for interacting with MCP servers.

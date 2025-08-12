@@ -64,7 +64,7 @@ from neuro_san.internals.run_context.langchain.core.langchain_run import LangCha
 from neuro_san.internals.run_context.langchain.journaling.journaling_callback_handler import JournalingCallbackHandler
 from neuro_san.internals.run_context.langchain.journaling.journaling_tools_agent_output_parser \
     import JournalingToolsAgentOutputParser
-from neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter import LangchainMCPAdapter
+from neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter import LangChainMCPAdapter
 from neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter import LangChainTokenCounter
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
 from neuro_san.internals.run_context.utils.external_agent_parsing import ExternalAgentParsing
@@ -351,7 +351,7 @@ class LangChainRunContext(RunContext):
         server_url: str = mcp_dict.get("server_url")
         allowed_tools: List[str] = mcp_dict.get("allowed_tools")
 
-        return await LangchainMCPAdapter.get_mcp_tools(server_url, allowed_tools)
+        return await LangChainMCPAdapter.get_mcp_tools(server_url, allowed_tools)
 
     async def _create_toolbox_tool(self, toolbox: str, agent_spec: Dict[str, Any], name: str) -> BaseTool:
         """Create tool from toolbox"""
