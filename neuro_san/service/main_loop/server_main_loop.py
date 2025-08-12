@@ -30,6 +30,11 @@ from neuro_san.service.grpc.grpc_agent_server import DEFAULT_SERVER_NAME
 from neuro_san.service.grpc.grpc_agent_server import DEFAULT_SERVER_NAME_FOR_LOGS
 from neuro_san.service.grpc.grpc_agent_server import DEFAULT_MAX_CONCURRENT_REQUESTS
 from neuro_san.service.grpc.grpc_agent_server import DEFAULT_REQUEST_LIMIT
+from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_CONNECTIONS_BACKLOG
+from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_IDLE_CONNECTIONS_TIMEOUT_SECONDS
+from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_INSTANCES
+from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS
+from neuro_san.service.http.config.http_server_config import HttpServerConfig
 from neuro_san.service.grpc.grpc_agent_server import GrpcAgentServer
 from neuro_san.service.grpc.grpc_agent_service import GrpcAgentService
 from neuro_san.service.http.server.http_server import HttpServer
@@ -63,6 +68,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.grpc_server: GrpcAgentServer = None
         self.http_server: HttpServer = None
         self.server_context = ServerContext()
+        self.http_server_config = HttpServerConfig()
         self.watcher_config: Dict[str, Any] = {}
 
     def parse_args(self):
@@ -108,6 +114,25 @@ class ServerMainLoop(ServerLoopCallbacks):
                                 default=int(os.environ.get("AGENT_MANIFEST_UPDATE_PERIOD_SECONDS", "0")),
                                 help="Periodic run-time update period for manifest in seconds."
                                      " Value <= 0 disables updates.")
+        arg_parser.add_argument("--http_connections_backlog", type=int,
+                                default=int(os.environ.get("AGENT_HTTP_CONNECTIONS_BACKLOG",
+                                                           DEFAULT_HTTP_CONNECTIONS_BACKLOG)),
+                                help="Size of backlog for TCP connections to http server.")
+        arg_parser.add_argument("--http_idle_connections_timeout", type=int,
+                                default=int(os.environ.get("AGENT_HTTP_IDLE_CONNECTIONS_TIMEOUT",
+                                                           DEFAULT_HTTP_IDLE_CONNECTIONS_TIMEOUT_SECONDS)),
+                                help="Timeout in seconds before idle and alive connection to http server"
+                                     "will be closed")
+        arg_parser.add_argument("--http_server_instances", type=int,
+                                default=int(os.environ.get("AGENT_HTTP_SERVER_INSTANCES",
+                                                           DEFAULT_HTTP_SERVER_INSTANCES)),
+                                help="Number of http server instances to be created "
+                                     "one instance per separate process")
+        arg_parser.add_argument("--http_resources_monitor_interval_seconds", type=int,
+                                default=int(os.environ.get("AGENT_HTTP_RESOURCES_MONITOR_INTERVAL",
+                                                           DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS)),
+                                help="Http server resources monitoring/logging interval in seconds "
+                                     "0 means no logging")
 
         # Actually parse the args into class variables
 
@@ -138,6 +163,12 @@ class ServerMainLoop(ServerLoopCallbacks):
         if args.manifest_update_period_seconds <= 0:
             # StorageWatcher is disabled:
             server_status.updater.set_requested(False)
+
+        self.http_server_config.http_connections_backlog = args.http_connections_backlog
+        self.http_server_config.http_idle_connection_timeout_seconds = args.http_idle_connections_timeout
+        self.http_server_config.http_server_instances = args.http_server_instances
+        self.http_server_config.http_server_monitor_interval_seconds = args.http_resources_monitor_interval_seconds
+        self.http_server_config.http_port = args.http_port
 
         manifest_restorer = RegistryManifestRestorer()
         manifest_agent_networks: Dict[str, AgentNetwork] = manifest_restorer.restore()
@@ -204,7 +235,7 @@ class ServerMainLoop(ServerLoopCallbacks):
             # Create HTTP server;
             self.http_server = HttpServer(
                 self.server_context,
-                self.http_port,
+                self.http_server_config,
                 self.service_openapi_spec_file,
                 self.request_limit,
                 forwarded_request_metadata=metadata_str)

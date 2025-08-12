@@ -215,4 +215,33 @@ ENV AGENT_USAGE_LOGGER=""
 # AGENT_FORWARDED_REQUEST_METADATA
 ENV AGENT_USAGE_LOGGER_METADATA=""
 
+# Size of backlog for TCP connections to http server.
+# Sets the maximum number of pending TCP connections waiting to be accepted by the server.
+# Impact:
+# Higher values allow the kernel to queue more incoming connections during traffic spikes,
+# reducing the chance of refused connections.
+ENV AGENT_HTTP_CONNECTIONS_BACKLOG=128
+
+# Sets the maximum idle time (in seconds) before Tornado closes a keep-alive connection.
+# Impact:
+# Shorter timeouts free up resources faster under high load.
+# Longer timeouts reduce reconnections for clients that make periodic requests.
+ENV AGENT_HTTP_IDLE_CONNECTIONS_TIMEOUT=3600
+
+# Forks multiple worker processes, each with its own Tornado event loop, all sharing the same listening socket.
+# Impact:
+# Allows utilization of multiple CPU cores.
+# Improves concurrency without blocking a single IOLoop.
+# Typical Usage:
+# start(0) → Automatically spawns one process per CPU core.
+# start(N) → Manually specifies number of worker processes.
+ENV AGENT_HTTP_SERVER_INSTANCES=1
+
+# If set to a value>0, will start periodic logging of currently used
+# run-time server resources:
+# open file descriptors;
+# open connections for server port.
+# Logging period is specified in seconds.
+ENV AGENT_HTTP_RESOURCES_MONITOR_INTERVAL=0
+
 ENTRYPOINT "${APP_ENTRYPOINT}"
