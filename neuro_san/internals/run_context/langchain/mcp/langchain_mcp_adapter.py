@@ -10,6 +10,8 @@
 #
 # END COPYRIGHT
 
+from typing import Any
+from typing import Dict
 from typing import List
 from typing import Optional
 
@@ -25,9 +27,10 @@ class LangChainMCPAdapter:
 
     @staticmethod
     async def get_mcp_tools(
-         server_url: str,
-         allowed_tools: Optional[List[str]] = None,
-         agent_name: str = None
+        server_url: str,
+        headers: Dict[str, Any] = None,
+        allowed_tools: Optional[List[str]] = None,
+        agent_name: str = None
     ) -> List[BaseTool]:
         """
         Fetches tools from the given MCP server and returns them as a list of LangChain-compatible tools.
@@ -43,7 +46,8 @@ class LangChainMCPAdapter:
             {
                 "mcp_tool": {
                     "url": server_url,
-                    "transport": "streamable_http"
+                    "transport": "streamable_http",
+                    "headers": headers
                 }
             }
         )

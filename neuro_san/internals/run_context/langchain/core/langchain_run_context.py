@@ -336,7 +336,7 @@ class LangChainRunContext(RunContext):
 
         # Handle MCP-based tools
         if mcp:
-            return await self._create_mcp_tool(mcp)
+            return await self._create_mcp_tool(mcp, name)
 
         # Handle function-based tools
         function_json = agent_spec.get("function")
@@ -345,13 +345,14 @@ class LangChainRunContext(RunContext):
 
         return self._create_function_tool(function_json, name)
 
-    async def _create_mcp_tool(self, mcp_dict: dict) -> List[BaseTool]:
+    async def _create_mcp_tool(self, mcp_dict: dict, agent_name: str = None) -> List[BaseTool]:
         """MCP tool creation with information from mcp dictionary"""
 
         server_url: str = mcp_dict.get("server_url")
         allowed_tools: List[str] = mcp_dict.get("allowed_tools")
+        headers: Dict[str, Any] = mcp_dict.get("headers")
 
-        return await LangChainMCPAdapter.get_mcp_tools(server_url, allowed_tools)
+        return await LangChainMCPAdapter.get_mcp_tools(server_url, headers, allowed_tools, agent_name)
 
     async def _create_toolbox_tool(self, toolbox: str, agent_spec: Dict[str, Any], name: str) -> BaseTool:
         """Create tool from toolbox"""
