@@ -33,6 +33,7 @@ from neuro_san.service.grpc.grpc_agent_server import DEFAULT_REQUEST_LIMIT
 from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_CONNECTIONS_BACKLOG
 from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_IDLE_CONNECTIONS_TIMEOUT_SECONDS
 from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_INSTANCES
+from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS
 from neuro_san.service.http.config.http_server_config import HttpServerConfig
 from neuro_san.service.grpc.grpc_agent_server import GrpcAgentServer
 from neuro_san.service.grpc.grpc_agent_service import GrpcAgentService
@@ -127,6 +128,11 @@ class ServerMainLoop(ServerLoopCallbacks):
                                                            DEFAULT_HTTP_SERVER_INSTANCES)),
                                 help="Number of http server instances to be created "
                                      "one instance per separate process")
+        arg_parser.add_argument("--http_resources_monitor_interval_seconds", type=int,
+                                default=int(os.environ.get("AGENT_HTTP_RESOURCES_MONITOR_INTERVAL",
+                                                           DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS)),
+                                help="Http server resources monitoring/logging interval in seconds "
+                                     "0 means no logging")
 
         # Actually parse the args into class variables
 
@@ -161,6 +167,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.http_server_config.http_connections_backlog = args.http_connections_backlog
         self.http_server_config.http_idle_connection_timeout_seconds = args.http_idle_connections_timeout
         self.http_server_config.http_server_instances = args.http_server_instances
+        self.http_server_config.http_server_monitor_interval_seconds = args.http_resources_monitor_interval_seconds
         self.http_server_config.http_port = args.http_port
 
         manifest_restorer = RegistryManifestRestorer()
