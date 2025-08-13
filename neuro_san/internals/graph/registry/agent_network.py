@@ -108,33 +108,29 @@ Some things to try:
         # List all agents in the same order as agent network HOCON.
         agent_list: List[str] = list(self.agent_spec_map.keys())
 
-        # Check for validity of our front-man candidates.
-        valid_front_men: List[str] = copy(agent_list)
-        for agent in agent_list:
+        # Front-man is the **first** agent in the agent list
+        front_man: str = agent_list[0]
 
-            # Check the agent spec of the front man for validity
-            agent_spec: Dict[str, Any] = self.get_agent_tool_spec(agent)
+        # Check the agent spec of the front man for validity
+        is_front_man_valid = True
+        agent_spec: Dict[str, Any] = self.get_agent_tool_spec(front_man)
 
-            if agent_spec.get("class") is not None:
-                # Currently, front man cannot be a coded tool
-                valid_front_men.remove(agent)
-            elif agent_spec.get("toolbox") is not None:
-                # Currently, front man cannot from a toolbox
-                valid_front_men.remove(agent)
+        if agent_spec.get("class") is not None:
+            # Currently, front man cannot be a coded tool
+            is_front_man_valid = False
+        elif agent_spec.get("toolbox") is not None:
+            # Currently, front man cannot from a toolbox
+            is_front_man_valid = False
 
-        if len(valid_front_men) == 0:
+        if is_front_man_valid is False:
             raise ValueError(f"""
-No front man found for the {self.name} agent network.
+No valid front man found for the {self.name} agent network.
 
 The front man is the first agent listed under the "tools" section of your agent HOCON file.
 However, the front man must not be:
 * A CodedTool (i.e., an agent defined with a "class" field)
 * A toolbox agent (i.e., defined with a "toolbox" field)
 """)
-
-        # The front-man is the first agent that is not coded tool ("class")
-        # or tool from toolbox ("toolbox").
-        front_man: str = valid_front_men[0]
 
         return front_man
 
