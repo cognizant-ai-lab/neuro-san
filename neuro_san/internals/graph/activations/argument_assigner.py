@@ -51,6 +51,9 @@ class ArgumentAssigner:
             args_value_type: str = None
             if self.properties:
                 atttribute: Dict[str, Any] = self.properties.get(args_name)
+                # Skip if the argument name from llm does not match with that of properties
+                if not atttribute:
+                    continue
                 args_value_type = atttribute.get("type")
             args_value_str: str = self.get_args_value_as_string(args_value, args_value_type)
 
