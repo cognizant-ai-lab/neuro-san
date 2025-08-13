@@ -108,18 +108,23 @@ Some things to try:
         # List all agents in the same order as agent network HOCON.
         agent_list: List[str] = list(self.agent_spec_map.keys())
 
-        # Front-man is the **first** agent in the agent list
-        front_man: str = agent_list[0]
-
-        # Check the agent spec of the front man for validity
         is_front_man_valid = True
-        agent_spec: Dict[str, Any] = self.get_agent_tool_spec(front_man)
+        if len(agent_list) > 0:
 
-        if agent_spec.get("class") is not None:
-            # Currently, front man cannot be a coded tool
-            is_front_man_valid = False
-        elif agent_spec.get("toolbox") is not None:
-            # Currently, front man cannot from a toolbox
+            # Front-man is the **first** agent in the agent list
+            front_man: str = agent_list[0]
+
+            # Check the agent spec of the front man for validity
+            agent_spec: Dict[str, Any] = self.get_agent_tool_spec(front_man)
+
+            if agent_spec.get("class") is not None:
+                # Currently, front man cannot be a coded tool
+                is_front_man_valid = False
+            elif agent_spec.get("toolbox") is not None:
+                # Currently, front man cannot from a toolbox
+                is_front_man_valid = False
+        else:
+            # agent_list is empty! No agent specified
             is_front_man_valid = False
 
         if is_front_man_valid is False:
