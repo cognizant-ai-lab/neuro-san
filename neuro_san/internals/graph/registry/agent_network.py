@@ -8,7 +8,9 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
-from typing import Any, Dict, List
+from typing import Any
+from typing import Dict
+from typing import List
 
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
