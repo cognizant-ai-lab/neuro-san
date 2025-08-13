@@ -18,20 +18,17 @@
         "model_name": "gpt-4o",
     },
     "tools": [
-        # These tool definitions do not have to be in any particular order
-        # How they are linked and call each other is defined within their
-        # own specs.  This could be a graph, potentially even with cycles.
-
         # This first agent definition is regarded as the "Front Man", which
         # does all the talking to the outside world/client.
-        # It is identified as such because it is either:
-        #   A) The only one with no parameters in his function definition,
-        #      and therefore he needs to talk to the outside world to get things rolling.
-        #   B) The first agent listed, regardless of function parameters.
         #
         # Some disqualifications from being a front man:
         #   1) Cannot use a CodedTool "class" definition
         #   2) Cannot use a Tool "toolbox" definition
+        #
+        # Besides the first agent being the front man, these tool definitions
+        # do not have to be in any particular order. How they are linked and
+        # call each other is defined within their own specs.
+        # This could be a graph, potentially even with cycles.
         {
             "name": "announcer",
 

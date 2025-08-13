@@ -1,4 +1,3 @@
-
 # Copyright (C) 2023-2025 Cognizant Digital Business, Evolutionary AI.
 # All Rights Reserved.
 # Issued under the Academic Public License.
@@ -13,11 +12,10 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-from copy import copy
-
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
-from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
+from neuro_san.internals.run_context.interfaces.agent_network_inspector import \
+    AgentNetworkInspector
 
 
 class AgentNetwork(AgentNetworkInspector):
@@ -108,33 +106,36 @@ Some things to try:
         # List all agents in the same order as agent network HOCON.
         agent_list: List[str] = list(self.agent_spec_map.keys())
 
-        # Check for validity of our front-man candidates.
-        valid_front_men: List[str] = copy(agent_list)
-        for agent in agent_list:
+        is_front_man_valid = True
+        if len(agent_list) > 0:
+
+            # Front-man is the **first** agent in the agent list
+            front_man: str = agent_list[0]
 
             # Check the agent spec of the front man for validity
-            agent_spec: Dict[str, Any] = self.get_agent_tool_spec(agent)
+            agent_spec: Dict[str, Any] = self.get_agent_tool_spec(front_man)
 
             if agent_spec.get("class") is not None:
                 # Currently, front man cannot be a coded tool
-                valid_front_men.remove(agent)
+                is_front_man_valid = False
             elif agent_spec.get("toolbox") is not None:
                 # Currently, front man cannot from a toolbox
-                valid_front_men.remove(agent)
+                is_front_man_valid = False
+        else:
+            # agent_list is empty! No agent specified
+            is_front_man_valid = False
 
-        if len(valid_front_men) == 0:
-            raise ValueError(f"""
-No front man found for the {self.name} agent network.
+        if is_front_man_valid is False:
+            raise ValueError(
+                f"""
+No valid front man found for the {self.name} agent network.
 
 The front man is the first agent listed under the "tools" section of your agent HOCON file.
 However, the front man must not be:
 * A CodedTool (i.e., an agent defined with a "class" field)
 * A toolbox agent (i.e., defined with a "toolbox" field)
-""")
-
-        # The front-man is the first agent that is not coded tool ("class")
-        # or tool from toolbox ("toolbox").
-        front_man: str = valid_front_men[0]
+"""
+            )
 
         return front_man
 
