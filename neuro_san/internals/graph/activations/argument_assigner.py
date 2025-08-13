@@ -44,7 +44,7 @@ class ArgumentAssigner:
         for args_name, args_value in arguments.items():
 
             # Skip if the value of the argument is None or empty
-            if args_value in (None, "", [], {}):
+            if args_value is None:
                 continue
 
             # Get argument value type from properties if possible
@@ -62,7 +62,7 @@ class ArgumentAssigner:
 
             # Figure out the attribution verb for singular vs plural
             assignment_verb: str = "is"
-            if (args_value_type == "array") or isinstance(args_value, list):
+            if args_value_type == "array" or isinstance(args_value, list):
                 assignment_verb = "are"
 
             # Put together the assignment statement

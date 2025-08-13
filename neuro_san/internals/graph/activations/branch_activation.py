@@ -71,6 +71,7 @@ class BranchActivation(CallingActivation, CallableActivation):
         properties: Dict[str, Any] = extractor.get_field(agent_spec, "function.parameters.properties", empty)
 
         assigner = ArgumentAssigner(properties)
+        # The assigner will skip any arguments that the value is None.
         assignments: List[str] = assigner.assign(self.arguments)
 
         # Start to build a single assignments string, with one sentence for each property
