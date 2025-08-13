@@ -1,4 +1,3 @@
-
 # Copyright (C) 2023-2025 Cognizant Digital Business, Evolutionary AI.
 # All Rights Reserved.
 # Issued under the Academic Public License.
@@ -9,15 +8,12 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
-from typing import Any
-from typing import Dict
-from typing import List
-
-from copy import copy
+from typing import Any, Dict, List
 
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
-from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
+from neuro_san.internals.run_context.interfaces.agent_network_inspector import \
+    AgentNetworkInspector
 
 
 class AgentNetwork(AgentNetworkInspector):
@@ -128,14 +124,16 @@ Some things to try:
             is_front_man_valid = False
 
         if is_front_man_valid is False:
-            raise ValueError(f"""
+            raise ValueError(
+                f"""
 No valid front man found for the {self.name} agent network.
 
 The front man is the first agent listed under the "tools" section of your agent HOCON file.
 However, the front man must not be:
 * A CodedTool (i.e., an agent defined with a "class" field)
 * A toolbox agent (i.e., defined with a "toolbox" field)
-""")
+"""
+            )
 
         return front_man
 
