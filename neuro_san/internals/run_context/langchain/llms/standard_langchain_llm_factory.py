@@ -98,6 +98,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 max_tokens=config.get("max_tokens"),    # This is always for output
                 tiktoken_model_name=config.get("tiktoken_model_name"),
                 stop=config.get("stop"),
+                verbose=config.get("verbose"),
 
                 # Set stream_usage to True in order to get token counting chunks.
                 stream_usage=True
@@ -135,6 +136,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 max_tokens=config.get("max_tokens"),    # This is always for output
                 tiktoken_model_name=config.get("tiktoken_model_name"),
                 stop=config.get("stop"),
+                verbose=config.get("verbose"),
 
                 # Azure-specific
                 azure_endpoint=self.get_value_or_env(config, "azure_endpoint",
@@ -170,6 +172,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 streaming=True,     # streaming is always on. Without it token counting will not work.
                 # Set stream_usage to True in order to get token counting chunks.
                 stream_usage=True,
+                verbose=config.get("verbose"),
             )
         elif chat_class == "ollama":
             # Higher temperature is more random
@@ -192,7 +195,8 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 top_k=config.get("top_k"),
                 top_p=config.get("top_p"),
                 keep_alive=config.get("keep_alive"),
-                base_url=config.get("base_url")
+                base_url=config.get("base_url"),
+                verbose=config.get("verbose"),
             )
         elif chat_class == "nvidia":
             # Higher temperature is more random
@@ -204,6 +208,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 top_p=config.get("top_p"),
                 seed=config.get("seed"),
                 stop=config.get("stop"),
+                verbose=config.get("verbose"),
                 nvidia_api_key=self.get_value_or_env(config, "nvidia_api_key",
                                                      "NVIDIA_API_KEY"),
                 nvidia_base_url=self.get_value_or_env(config, "nvidia_base_url",
@@ -221,6 +226,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 timeout=config.get("timeout"),
                 top_k=config.get("top_k"),
                 top_p=config.get("top_p"),
+                verbose=config.get("verbose"),
             )
         elif chat_class == "bedrock":
             llm = ChatBedrock(
@@ -246,6 +252,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 system_prompt_with_tools=config.get("system_prompt_with_tools"),
                 tags=config.get("tags"),
                 temperature=config.get("temperature"),
+                verbose=config.get("verbose"),
             )
         elif chat_class is None:
             raise ValueError(f"Class name {chat_class} for model_name {model_name} is unspecified.")
