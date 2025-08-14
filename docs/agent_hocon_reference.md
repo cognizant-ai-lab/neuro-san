@@ -345,6 +345,7 @@ between them, consider elevating sub-networks to [external agent](#external-agen
 
 An optional dictionary containing metadata about the agent network.
 Any metadata is by definition merely informational and non-functional.
+At least some of the keys mentioned below can be transmitted back to a Concierge service client
 
 #### description
 
