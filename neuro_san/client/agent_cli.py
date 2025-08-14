@@ -242,7 +242,7 @@ Some suggestions:
         Adds arguments.  Allows subclasses a chance to add their own.
         :param arg_parser: The argparse.ArgumentParser to add.
         """
-        # What agent/service are we talking to?
+        # What agent are we talking to?
         arg_parser.add_argument("--agent", type=str, default="esp_decision_assistant",
                                 help="Name of the agent to talk to")
 
