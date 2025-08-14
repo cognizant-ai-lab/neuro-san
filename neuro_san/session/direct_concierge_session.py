@@ -71,8 +71,8 @@ class DirectConciergeSession(ConciergeSession):
             agent_spec: Dict[str, Any] = agent_network.get_config()
             extractor = DictionaryExtractor(agent_spec)
 
-            # It's concievable we could get the description from the front man's function
-            # We haven't done that yet, though, so deferring until a hew a cry emerges.
+            # It's concievable we could get the description from the front man's function.
+            # We haven't done that yet, though, so deferring until a hew and cry emerges.
             description: str = extractor.get("metadata.description", "")
             tags: List[str] = extractor.get("metadata.tags", empty_list)
 
