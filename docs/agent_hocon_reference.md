@@ -34,6 +34,9 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
     - [error_formatter](#error_formatter)
     - [error_fragments](#error_fragments)
     - [tools](#tools)
+    - [metadata](#metadata)
+        - [decription](#decription)
+        - [tags](#tags)
 - [Single Agent Specification](#single-agent-specification)
     - [name](#name)
     - [function](#function)
@@ -337,6 +340,19 @@ Typically any agent that is not the front-man is considered an implementation de
 to the agent network definition. It is not possible to call these internal agents except from within
 the agent network that defines them.  If you find your agent networks have some shared functionality
 between them, consider elevating sub-networks to [external agent](#external-agents) status.
+
+### metadata
+
+An optional dictionary containing metadata about the agent network.
+Any metadata is by definition merely informational and non-functional.
+
+#### description
+
+A string description of the agent network.
+
+#### tags
+
+A list of strings that describe grouping attributes of the agent network.
 
 ## Single Agent Specification
 
