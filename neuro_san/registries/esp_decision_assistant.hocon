@@ -14,6 +14,11 @@
 # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md
 
 {
+    # Optional metadata describing this agent network
+    "metadata": {
+        "description": "Example of generic decision-making broken down into Context, Actions and Outcomes attributes.",
+        "tags": ["example"],
+    },
     "llm_config": {
         # Demonstration of the config for llm fallbacks.
         # This is a list of llm configs where the order describes which LLM
