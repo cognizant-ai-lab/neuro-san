@@ -14,7 +14,11 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
+
 from neuro_san.interfaces.concierge_session import ConciergeSession
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 
 
@@ -56,13 +60,27 @@ class DirectConciergeSession(ConciergeSession):
                 "agents" - the sequence of dictionaries describing available agents
         """
         agents_names: List[str] = self.network_storage.get_agent_names()
+        empty_list: List[str] = []
 
         agents_list: List[Dict[str, Any]] = []
         for agent_name in agents_names:
+
+            # Get the spec for the agent network
+            provider: AgentNetworkProvider = self.network_storage.get_agent_network(agent_name)
+            agent_network: AgentNetwork = provider.get_agent_network()
+            agent_spec: Dict[str, Any] = agent_network.get_config()
+            extractor = DictionaryExtractor(agent_spec)
+
+            # It's concievable we could get the description from the front man's function
+            # We haven't done that yet, though, so deferring until a hew a cry emerges.
+            description: str = extractor.get("metadata.description", "")
+            tags: List[str] = extractor.get("metadata.tags", empty_list)
+
+            # Construct an AgentInfo entry
             agent_info: Dict[str, Any] = {
                 "agent_name": agent_name,
-                "description": "",
-                "tags": []
+                "description": description,
+                "tags": tags,
             }
             agents_list.append(agent_info)
 
