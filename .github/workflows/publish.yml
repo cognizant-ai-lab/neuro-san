@@ -1,5 +1,8 @@
 name: Publish to PyPI
 
+permissions:
+    contents: read
+
 on:
   release:
     types: [published]  # Trigger only when a GitHub Release is published.
