@@ -67,8 +67,6 @@ class AbstractHttpServiceAgentSession(AgentSessionConstants):
         if port is not None:
             self.use_port = port
 
-        if agent_name is None:
-            raise ValueError("agent_name is None")
         self.agent_name: str = agent_name
 
         self.timeout_in_seconds: int = timeout_in_seconds

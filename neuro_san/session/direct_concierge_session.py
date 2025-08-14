@@ -66,7 +66,7 @@ class DirectConciergeSession(ConciergeSession):
         for agent_name in agents_names:
 
             # Get the spec for the agent network
-            provider: AgentNetworkProvider = self.network_storage.get_agent_network(agent_name)
+            provider: AgentNetworkProvider = self.network_storage.get_agent_network_provider(agent_name)
             agent_network: AgentNetwork = provider.get_agent_network()
             agent_spec: Dict[str, Any] = agent_network.get_config()
             extractor = DictionaryExtractor(agent_spec)
