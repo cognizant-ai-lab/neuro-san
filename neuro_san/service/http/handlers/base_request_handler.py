@@ -90,8 +90,10 @@ class BaseRequestHandler(RequestHandler):
                 self.show_absent,
                 self.logger)
         # Put in our own unique id so we have some way to track this request:
-        if "request_id" not in metadata_dict:
-            metadata_dict["request_id"] = self.request_id
+        user_request_id: str = metadata_dict.get("request_id", "None")
+        if user_request_id == "None":
+            metadata_dict["request_id"] = f"request-{self.request_id}"
+        return metadata_dict
 
     @classmethod
     def get_request_metadata(cls, request,
