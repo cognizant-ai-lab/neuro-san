@@ -71,6 +71,7 @@ class BranchActivation(CallingActivation, CallableActivation):
         properties: Dict[str, Any] = extractor.get_field(agent_spec, "function.parameters.properties", empty)
 
         assigner = ArgumentAssigner(properties)
+        # The assigner will skip any arguments that the value is None.
         assignments: List[str] = assigner.assign(self.arguments)
 
         # Start to build a single assignments string, with one sentence for each property
@@ -83,7 +84,12 @@ class BranchActivation(CallingActivation, CallableActivation):
         :return: A string describing the objective of the component.
         """
         agent_spec = self.get_agent_tool_spec()
-        return agent_spec.get("command", "Perform your instructions to the best of your ability.")
+
+        # The command will be combined with assignments (arguments from an upstream agent)
+        # to direct the agent toward a specific task.
+        # Optional: if omitted, the agent will choose an action based on the assignments
+        # and the list of available tools.
+        return agent_spec.get("command")
 
     async def integrate_callable_response(self, run: Run, messages: List[Any]) -> List[Any]:
         """
@@ -124,10 +130,11 @@ class BranchActivation(CallingActivation, CallableActivation):
         await self.create_resources(unique_name, instructions, None)
 
         command = self.get_command()
-        # If there is assignments, combine it with command to be used as HumanMessage.
-        if assignments:
-            command = assignments + "\n" + command
-        run: Run = await self.run_context.submit_message(command)
+
+        # If there is command, combine it with assignment to be used as HumanMessage.
+        if command:
+            assignments = assignments + "\n" + command
+        run: Run = await self.run_context.submit_message(assignments)
         run = await self.run_context.wait_on_run(run, self.journal)
 
         messages = await self.run_context.get_response()
