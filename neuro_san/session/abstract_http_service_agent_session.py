@@ -84,6 +84,8 @@ class AbstractHttpServiceAgentSession(AgentSessionConstants):
         if self.security_cfg is not None:
             scheme = "https"
 
+        if self.agent_name is None:
+            return f"{scheme}://{self.use_host}:{self.use_port}/api/v1/{method}"
         return f"{scheme}://{self.use_host}:{self.use_port}/api/v1/{self.agent_name}/{method}"
 
     def get_headers(self) -> Dict[str, Any]:

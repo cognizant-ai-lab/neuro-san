@@ -27,8 +27,10 @@ from grpc import RpcError
 from grpc import StatusCode
 
 from neuro_san.client.agent_session_factory import AgentSessionFactory
+from neuro_san.client.concierge_session_factory import ConciergeSessionFactory
 from neuro_san.client.streaming_input_processor import StreamingInputProcessor
 from neuro_san.interfaces.agent_session import AgentSession
+from neuro_san.interfaces.concierge_session import ConciergeSession
 from neuro_san.internals.utils.file_of_class import FileOfClass
 
 
@@ -58,6 +60,12 @@ class AgentCli:
         Main entry point for command line user interaction
         """
         self.parse_args()
+
+        # See if we are doing a list operation
+        if self.args.list:
+            self.list()
+            return
+
         self.open_session()
         if self.args.connectivity:
             self.connectivity()
@@ -234,9 +242,11 @@ Some suggestions:
         Adds arguments.  Allows subclasses a chance to add their own.
         :param arg_parser: The argparse.ArgumentParser to add.
         """
-        # What agent are we talking to?
+        # What agent/service are we talking to?
         arg_parser.add_argument("--agent", type=str, default="esp_decision_assistant",
                                 help="Name of the agent to talk to")
+        arg_parser.add_argument("--list", default=False, dest="list", action="store_true",
+                                help="List available agents")
 
         # How will we connect to neuro-san?
         group = arg_parser.add_argument_group(title="Session Type",
@@ -405,6 +415,30 @@ Have external tools that can be found in the local agent manifest use a service 
             return True
 
         return False
+
+    def list(self):
+        """
+        List available agents via a concierge session
+        """
+        hostname = "localhost"
+        if self.args.host is not None or not self.args.local:
+            hostname = self.args.host
+
+        metadata: Dict[str, str] = {
+            "user_id": self.args.user_id
+        }
+
+        concierge_session: ConciergeSession = ConciergeSessionFactory().create_session(
+            self.args.connection,
+            hostname=hostname,
+            port=self.args.port,
+            metadata=metadata,
+            connection_timeout_in_seconds=self.args.timeout)
+
+        request_dict: Dict[str, Any] = {}
+        response_dict: Dict[str, Any] = concierge_session.list(request_dict)
+
+        print(f"Available agents:\n{json.dumps(response_dict, indent=4, sort_keys=True)}")
 
 
 if __name__ == '__main__':
