@@ -164,6 +164,8 @@ class BaseRequestHandler(RequestHandler):
         """
         return
 
+    # Tornado can handle both syns and async versions of "prepare" method
+    # pylint: disable=invalid-overridden-method
     async def prepare(self):
         if not self.application.is_serving():
             self.set_status(503)

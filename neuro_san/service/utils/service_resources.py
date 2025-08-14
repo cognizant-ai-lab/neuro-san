@@ -14,7 +14,6 @@ See class definition for comments.
 """
 from typing import Any
 from typing import Dict
-from typing import Set
 from typing import Tuple
 import os
 import resource
@@ -92,7 +91,6 @@ class ServiceResources:
             soft limit for file descriptors for current process;
             hard limit for file descriptors for current process;
         """
-        p = psutil.Process()
         fd_dict: Dict[str, int] = cls.classify_fds()
         soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
         return fd_dict, soft, hard
@@ -111,6 +109,13 @@ class ServiceResources:
 
     @classmethod
     def classify_outbound_sockets(cls, outbound_tcp) -> Dict[str, Any]:
+        """
+        Classify outbound process socket connections.
+        :param outbound_tcp: sequence of outbound connection objects
+        :return: dictionary grouping outbound sockets by:
+            external ip address - top level;
+            connection status - second level.
+        """
         result: Dict[str, Any] = {}
         for conn in outbound_tcp:
             sock_addr: str = f"{conn.raddr}"
@@ -123,6 +128,14 @@ class ServiceResources:
 
     @classmethod
     def classify_sockets(cls, server_port: int):
+        """
+        Classify active sockets bound to server port.
+        :param server_port: server port
+        :return: dictionary with keys:
+           "inbound_listen": number of inbound listening sockets;
+           "inbound_accepted": number of accepted inbound connections;
+           "outbound_tcp": dictionary describing outbound connections.
+        """
         p = psutil.Process()
         tcp = p.connections(kind="tcp")
 
@@ -133,11 +146,11 @@ class ServiceResources:
         for c in tcp:
             lport = c.laddr.port if c.laddr else None
             # LISTEN sockets on the server port(s)
-            if c.status == psutil.CONN_LISTEN and lport==server_port:
+            if c.status == psutil.CONN_LISTEN and lport == server_port:
                 inbound_listen.append(c)
                 continue
             # Accepted inbound sockets on the server port(s)
-            if lport==server_port and c.status != psutil.CONN_LISTEN:
+            if lport == server_port and c.status != psutil.CONN_LISTEN:
                 inbound_accepted.append(c)
                 continue
             # Everything else TCP is outbound (client) from this process
@@ -151,11 +164,13 @@ class ServiceResources:
 
     @classmethod
     def _fd_target(cls, fd: int) -> str | None:
-        """Best-effort: show what the fd points to via /proc or /dev/fd."""
+        """
+        Best-effort: show what the fd points to via /proc or /dev/fd.
+        """
         try:
             path = f"/proc/self/fd/{fd}" if sys.platform.startswith("linux") else f"/dev/fd/{fd}"
             return os.readlink(path)
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             return None
 
     @classmethod
@@ -202,32 +217,3 @@ class ServiceResources:
             })
 
         return items
-
-    # if __name__ == "__main__":
-    #     items, counts = classify_unix_sockets()
-    #
-    #     total = sum(counts.values())
-    #     print(f"Unix domain sockets in this process: {total}")
-    #     for k in ("named", "abstract", "unnamed"):
-    #         if counts[k]:
-    #             print(f"  {k:8s}: {counts[k]}")
-    #
-    #     # Show a few examples for each category
-    #     print("\nExamples:")
-    #     by_kind = {"named": [], "abstract": [], "unnamed": []}
-    #     for it in items:
-    #         if len(by_kind[it["kind"]]) < 5:
-    #             by_kind[it["kind"]].append(it)
-    #
-    #     for k in ("named", "abstract", "unnamed"):
-    #         if not by_kind[k]:
-    #             continue
-    #         print(f"\n{k.upper()}:")
-    #         for it in by_kind[k]:
-    #             fd = it["fd"]
-    #             t = it["type"]
-    #             addr = it["address"] or "(no path)"
-    #             tgt = it["fd_target"] or "(n/a)"
-    #             print(f"  fd={fd} type={t:<9} addr={addr}  target={tgt}")
-
-
