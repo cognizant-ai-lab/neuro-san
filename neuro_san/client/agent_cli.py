@@ -62,7 +62,7 @@ class AgentCli:
         self.parse_args()
 
         # See if we are doing a list operation
-        if self.args.list:
+        if self.args.list or self.args.tags or self.args.tag:
             self.list()
             return
 
@@ -245,8 +245,16 @@ Some suggestions:
         # What agent/service are we talking to?
         arg_parser.add_argument("--agent", type=str, default="esp_decision_assistant",
                                 help="Name of the agent to talk to")
-        arg_parser.add_argument("--list", default=False, dest="list", action="store_true",
-                                help="List available agents")
+
+        # What agents can we connect to?
+        group = arg_parser.add_argument_group(title="Agent Listings",
+                                              description="What agents can we connect to?")
+        group.add_argument("--list", default=False, dest="list", action="store_true",
+                           help="List all available agents")
+        group.add_argument("--tag", type=str,
+                           help="List all agents marked with the given tag.")
+        group.add_argument("--tags", default=False, dest="tags", action="store_true",
+                           help="List all tags associated with agents")
 
         # How will we connect to neuro-san?
         group = arg_parser.add_argument_group(title="Session Type",
@@ -438,7 +446,23 @@ Have external tools that can be found in the local agent manifest use a service 
         request_dict: Dict[str, Any] = {}
         response_dict: Dict[str, Any] = concierge_session.list(request_dict)
 
-        print(f"Available agents:\n{json.dumps(response_dict, indent=4, sort_keys=True)}")
+        empty_list: List[Dict[str, Any]] = []
+        if self.args.tags:
+            tags = set()
+            for agent_info in response_dict.get("agents", empty_list):
+                agent_tags: List[str] = agent_info.get("tags", empty_list)
+                tags.update(agent_tags)
+            print(f"Available tags:\n{json.dumps(list(tags), indent=4, sort_keys=True)}")
+
+        elif self.args.tag:
+            print(f"Available agents for tag {self.args.tag}:\n")
+            for agent_info in response_dict.get("agents", empty_list):
+                agent_tags: List[str] = agent_info.get("tags", empty_list)
+                if self.args.tag in agent_tags:
+                    print(json.dumps(agent_info, indent=4, sort_keys=True))
+
+        else:
+            print(f"Available agents:\n{json.dumps(response_dict, indent=4, sort_keys=True)}")
 
 
 if __name__ == '__main__':
