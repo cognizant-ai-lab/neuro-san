@@ -40,7 +40,7 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
 - [Single Agent Specification](#single-agent-specification)
     - [name](#name)
     - [function](#function)
-        - [description](#description)
+        - [description](#description-1)
         - [parameters](#parameters)
             - [type](#type)
             - [properties](#properties)
@@ -384,6 +384,7 @@ and we also do not require redefining the `type` as this is always the same for 
 
 What is defined in this dictionary is what is returned for the agent's Function() neuro-san web API call.
 
+<!--- pyml disable-next-line no-duplicate-heading -->
 #### description
 
 Every agent _must_ have its function description filled out.
