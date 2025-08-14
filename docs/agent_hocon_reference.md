@@ -353,6 +353,8 @@ A string description of the agent network.
 #### tags
 
 A list of strings that describe grouping attributes of the agent network.
+The idea here is that any given server can describe groupings of agent networks
+however it wants to.
 
 ## Single Agent Specification
 
