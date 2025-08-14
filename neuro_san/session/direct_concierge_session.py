@@ -56,7 +56,17 @@ class DirectConciergeSession(ConciergeSession):
                 "agents" - the sequence of dictionaries describing available agents
         """
         agents_names: List[str] = self.network_storage.get_agent_names()
+
         agents_list: List[Dict[str, Any]] = []
         for agent_name in agents_names:
-            agents_list.append({"agent_name": agent_name, "description": ""})
-        return {"agents": agents_list}
+            agent_info: Dict[str, Any] = {
+                "agent_name": agent_name,
+                "description": "",
+                "tags": []
+            }
+            agents_list.append(agent_info)
+
+        response: Dict[str, Any] = {
+            "agents": agents_list
+        }
+        return response
