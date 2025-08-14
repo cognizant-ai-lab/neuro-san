@@ -433,7 +433,7 @@ Have external tools that can be found in the local agent manifest use a service 
             hostname=hostname,
             port=self.args.port,
             metadata=metadata,
-            connection_timeout_in_seconds=self.args.timeout)
+            connect_timeout_in_seconds=self.args.timeout)
 
         request_dict: Dict[str, Any] = {}
         response_dict: Dict[str, Any] = concierge_session.list(request_dict)

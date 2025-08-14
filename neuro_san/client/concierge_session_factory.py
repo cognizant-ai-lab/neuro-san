@@ -16,7 +16,7 @@ from leaf_common.time.timeout import Timeout
 
 from neuro_san.client.direct_agent_storage_util import DirectAgentStorageUtil
 from neuro_san.interfaces.concierge_session import ConciergeSession
-from neuro_san.internal.interfaces.agent_network_storage import AgentNetworkStorage
+from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.session.direct_concierge_session import DirectConciergeSession
 from neuro_san.session.grpc_concierge_session import GrpcConciergeSession
 from neuro_san.session.http_concierge_session import HttpConciergeSession
