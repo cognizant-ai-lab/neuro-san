@@ -34,10 +34,13 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
     - [error_formatter](#error_formatter)
     - [error_fragments](#error_fragments)
     - [tools](#tools)
+    - [metadata](#metadata)
+        - [decription](#decription)
+        - [tags](#tags)
 - [Single Agent Specification](#single-agent-specification)
     - [name](#name)
     - [function](#function)
-        - [description](#description)
+        - [description](#description-1)
         - [parameters](#parameters)
             - [type](#type)
             - [properties](#properties)
@@ -338,6 +341,22 @@ to the agent network definition. It is not possible to call these internal agent
 the agent network that defines them.  If you find your agent networks have some shared functionality
 between them, consider elevating sub-networks to [external agent](#external-agents) status.
 
+### metadata
+
+An optional dictionary containing metadata about the agent network.
+Any metadata is by definition merely informational and non-functional.
+At least some of the keys mentioned below can be transmitted back to a Concierge service client
+
+#### description
+
+A string description of the agent network.
+
+#### tags
+
+A list of strings that describe grouping attributes of the agent network.
+The idea here is that any given server can describe groupings of agent networks
+however it wants to.
+
 ## Single Agent Specification
 
 Settings for individual agents are specified by their own dictionary within the list of [tools](#tools) for the network.
@@ -368,6 +387,7 @@ and we also do not require redefining the `type` as this is always the same for 
 
 What is defined in this dictionary is what is returned for the agent's Function() neuro-san web API call.
 
+<!--- pyml disable-next-line no-duplicate-heading -->
 #### description
 
 Every agent _must_ have its function description filled out.

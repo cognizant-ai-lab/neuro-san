@@ -27,8 +27,10 @@ from grpc import RpcError
 from grpc import StatusCode
 
 from neuro_san.client.agent_session_factory import AgentSessionFactory
+from neuro_san.client.concierge_session_factory import ConciergeSessionFactory
 from neuro_san.client.streaming_input_processor import StreamingInputProcessor
 from neuro_san.interfaces.agent_session import AgentSession
+from neuro_san.interfaces.concierge_session import ConciergeSession
 from neuro_san.internals.utils.file_of_class import FileOfClass
 
 
@@ -58,6 +60,12 @@ class AgentCli:
         Main entry point for command line user interaction
         """
         self.parse_args()
+
+        # See if we are doing a list operation
+        if self.args.list or self.args.tags or self.args.tag:
+            self.list()
+            return
+
         self.open_session()
         if self.args.connectivity:
             self.connectivity()
@@ -238,6 +246,16 @@ Some suggestions:
         arg_parser.add_argument("--agent", type=str, default="esp_decision_assistant",
                                 help="Name of the agent to talk to")
 
+        # What agents can we connect to?
+        group = arg_parser.add_argument_group(title="Agent Listings",
+                                              description="What agents can we connect to?")
+        group.add_argument("--list", default=False, dest="list", action="store_true",
+                           help="List all available agents")
+        group.add_argument("--tag", type=str,
+                           help="List all agents marked with the given tag.")
+        group.add_argument("--tags", default=False, dest="tags", action="store_true",
+                           help="List all tags associated with agents")
+
         # How will we connect to neuro-san?
         group = arg_parser.add_argument_group(title="Session Type",
                                               description="How will we connect to neuro-san?")
@@ -405,6 +423,46 @@ Have external tools that can be found in the local agent manifest use a service 
             return True
 
         return False
+
+    def list(self):
+        """
+        List available agents via a concierge session
+        """
+        hostname = "localhost"
+        if self.args.host is not None or not self.args.local:
+            hostname = self.args.host
+
+        metadata: Dict[str, str] = {
+            "user_id": self.args.user_id
+        }
+
+        concierge_session: ConciergeSession = ConciergeSessionFactory().create_session(
+            self.args.connection,
+            hostname=hostname,
+            port=self.args.port,
+            metadata=metadata,
+            connect_timeout_in_seconds=self.args.timeout)
+
+        request_dict: Dict[str, Any] = {}
+        response_dict: Dict[str, Any] = concierge_session.list(request_dict)
+
+        empty_list: List[Dict[str, Any]] = []
+        if self.args.tags:
+            tags = set()
+            for agent_info in response_dict.get("agents", empty_list):
+                agent_tags: List[str] = agent_info.get("tags", empty_list)
+                tags.update(agent_tags)
+            print(f"Available tags:\n{json.dumps(list(tags), indent=4, sort_keys=True)}")
+
+        elif self.args.tag:
+            print(f"Available agents for tag {self.args.tag}:\n")
+            for agent_info in response_dict.get("agents", empty_list):
+                agent_tags: List[str] = agent_info.get("tags", empty_list)
+                if self.args.tag in agent_tags:
+                    print(json.dumps(agent_info, indent=4, sort_keys=True))
+
+        else:
+            print(f"Available agents:\n{json.dumps(response_dict, indent=4, sort_keys=True)}")
 
 
 if __name__ == '__main__':

@@ -26,7 +26,7 @@ _sym_db = _symbol_database.Default()
 from google.api import annotations_pb2 as google_dot_api_dot_annotations__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\"neuro_san/api/grpc/concierge.proto\x12-dev.cognizant_ai.neuro_san.api.grpc.concierge\x1a\x1cgoogle/api/annotations.proto\"\x12\n\x10\x43onciergeRequest\"M\n\tAgentInfo\x12\x1e\n\nagent_name\x18\x01 \x01(\tR\nagent_name\x12 \n\x0b\x64\x65scription\x18\x02 \x01(\tR\x0b\x64\x65scription\"e\n\x11\x43onciergeResponse\x12P\n\x06\x61gents\x18\x01 \x03(\x0b\x32\x38.dev.cognizant_ai.neuro_san.api.grpc.concierge.AgentInfoR\x06\x61gents2\xb4\x01\n\x10\x43onciergeService\x12\x9f\x01\n\x04List\x12?.dev.cognizant_ai.neuro_san.api.grpc.concierge.ConciergeRequest\x1a@.dev.cognizant_ai.neuro_san.api.grpc.concierge.ConciergeResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\x0c/api/v1/listBoZmgithub.com/cognizant-ai-lab/neuro_san/internal/gen/dev.cognizant_ai/neuro_san/api/grpc/concierge/v1;conciergeb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\"neuro_san/api/grpc/concierge.proto\x12-dev.cognizant_ai.neuro_san.api.grpc.concierge\x1a\x1cgoogle/api/annotations.proto\"\x12\n\x10\x43onciergeRequest\"a\n\tAgentInfo\x12\x1e\n\nagent_name\x18\x01 \x01(\tR\nagent_name\x12 \n\x0b\x64\x65scription\x18\x02 \x01(\tR\x0b\x64\x65scription\x12\x12\n\x04tags\x18\x03 \x03(\tR\x04tags\"e\n\x11\x43onciergeResponse\x12P\n\x06\x61gents\x18\x01 \x03(\x0b\x32\x38.dev.cognizant_ai.neuro_san.api.grpc.concierge.AgentInfoR\x06\x61gents2\xb4\x01\n\x10\x43onciergeService\x12\x9f\x01\n\x04List\x12?.dev.cognizant_ai.neuro_san.api.grpc.concierge.ConciergeRequest\x1a@.dev.cognizant_ai.neuro_san.api.grpc.concierge.ConciergeResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\x0c/api/v1/listBoZmgithub.com/cognizant-ai-lab/neuro_san/internal/gen/dev.cognizant_ai/neuro_san/api/grpc/concierge/v1;conciergeb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -39,9 +39,9 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _globals['_CONCIERGEREQUEST']._serialized_start=115
   _globals['_CONCIERGEREQUEST']._serialized_end=133
   _globals['_AGENTINFO']._serialized_start=135
-  _globals['_AGENTINFO']._serialized_end=212
-  _globals['_CONCIERGERESPONSE']._serialized_start=214
-  _globals['_CONCIERGERESPONSE']._serialized_end=315
-  _globals['_CONCIERGESERVICE']._serialized_start=318
-  _globals['_CONCIERGESERVICE']._serialized_end=498
+  _globals['_AGENTINFO']._serialized_end=232
+  _globals['_CONCIERGERESPONSE']._serialized_start=234
+  _globals['_CONCIERGERESPONSE']._serialized_end=335
+  _globals['_CONCIERGESERVICE']._serialized_start=338
+  _globals['_CONCIERGESERVICE']._serialized_end=518
 # @@protoc_insertion_point(module_scope)
