@@ -71,9 +71,9 @@ class ServerMainLoop(ServerLoopCallbacks):
         self.http_server_config = HttpServerConfig()
         self.watcher_config: Dict[str, Any] = {}
 
-    def parse_args(self):
+    def prepare_args(self) -> ArgumentParser:
         """
-        Parse command-line arguments into member variables
+        :return: An ArgumentParser set up to parse command-line arguments
         """
         # Set up the CLI parser
         arg_parser = ArgumentParser()
@@ -133,6 +133,13 @@ class ServerMainLoop(ServerLoopCallbacks):
                                                            DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS)),
                                 help="Http server resources monitoring/logging interval in seconds "
                                      "0 means no logging")
+        return arg_parser
+
+    def parse_args(self):
+        """
+        Parse command-line arguments into member variables
+        """
+        arg_parser: ArgumentParser = self.prepare_args()
 
         # Actually parse the args into class variables
 
