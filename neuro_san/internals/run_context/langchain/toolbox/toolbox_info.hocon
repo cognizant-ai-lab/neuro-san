@@ -32,30 +32,6 @@
     # - The specified class must be available in the server's PYTHONPATH.
     # - Additional dependencies (outside of langchain_community) must be installed separately.
 
-    # ---------------- Bing Search Tool ----------------
-    # This configuration defines the Bing Search tool.
-    # It initializes a BingSearchResults instance with:
-    # - api_wrapper: An instance of BingSearchAPIWrapper
-    # BingSearchResults(api_wrapper=BingSearchAPIWrapper())
-
-    "bing_search": {
-        # Fully qualified class path of the tool to be instantiated.
-        "class": "langchain_community.tools.bing_search.BingSearchResults",
-
-        # (Optional) URL for reference documentation about this tool.
-        "base_tool_info_url": "https://python.langchain.com/docs/integrations/tools/bing_search/",
-
-        # Arguments for the tool's constructor.
-        # These arguments will be used when instantiating the tool unless overridden in the agent HOCON file.
-        "args": {
-            "api_wrapper": {
-                # If the argument should be instantiated as a class, specify it using the "class" key.
-                # This tells the system to create an instance of the provided class instead of passing it as-is.
-                "class": "langchain_community.utilities.BingSearchAPIWrapper"
-            },
-        }
-    },
-
     # ---------------- Tavily Search Tool ----------------
     # This configuration sets up the Tavily Search tool.
     # It initializes a TavilySearchResults instance with:
@@ -246,19 +222,4 @@
         },
     },
 
-    # Tool for searching the web using the Google Serper.
-    "google_serper": {
-        "class": "google_serper.GoogleSerper",
-        "description": "Search the web using a keyword-based query.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search term or question to look up online."
-                }
-            },
-            "required": ["query"]
-        }
-    }
 }

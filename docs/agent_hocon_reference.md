@@ -567,7 +567,7 @@ For more information on tool schema, see the [toolbox_info_hocon_reference](./to
 
 Example networks using tools from toolbox:
 
-- [bing_search.hocon](../neuro_san/registries/bing_search.hocon)
+- [tavily_search.hocon](../neuro_san/registries/tavily_search.hocon)
 which uses a langchain's base tool
 - [website_rag.hocon](../neuro_san/registries/website_rag.hocon) which uses predefined
 coded tools.

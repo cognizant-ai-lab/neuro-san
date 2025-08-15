@@ -16,7 +16,7 @@
 {
     # Optional metadata describing this agent network
     "metadata": {
-        "description": "Example of web search using Bing Search.",
+        "description": "Example of web search using Tavily Search.",
         "tags": ["example", "web_search"],
     },
     "llm_config": {
@@ -45,49 +45,46 @@
         {
             "name": "search_tool",
             # The "toolbox" specifies which tool in the toolbox should be instantiated.
-            # In this case, "bing_search" is chosen, which allows querying Bing for search results.
+            # In this case, "tavily_search" is chosen, which allows querying Tavily for search results.
 
             # Note that tools in toolbox can be either langchain tools or coded tools
             
-            # Documentation on the Bing search tool:
-            # - LangChain's Bing Search Tool: https://python.langchain.com/docs/integrations/tools/bing_search
-            # - Microsoft Bing Search API: https://learn.microsoft.com/en-us/bing/search-apis/
+            # Documentation on the Tavily search tool:
+            # - LangChain's Tavily Search Tool: https://python.langchain.com/docs/integrations/tools/tavily_search/
             
-            "toolbox": "bing_search",
+            "toolbox": "tavily_search",
 
             # "args" contains the parameters that will be passed to the selected tool.
             # These arguments must align with the tool’s expected function signature.
             # 
-            # For "bing_search", one of the key parameters is "num_results", which determines 
-            # how many search results should be returned from Bing.
+            # For "tavily_search", one of the key parameters is "max_results", which determines 
+            # how many search results should be returned from Tavily.
             # 
             # Other tools will have different required/optional arguments, so be sure to refer to
             # the tool’s documentation to understand what parameters can be configured.
 
             "args": {
-                "num_results": 3
+                "max_results": 3
             }
 
             # -------------------------------------------------------------------------------
-            # CURRENTLY AVAILABLE TOOLS
+            # CURRENTLY AVAILABLE TOOLS IN TOOLBOX
             # The following tools can be used as values for "toolbox":
             #
             # Langchain Tools
             #
-            #   * "bing_search" - Uses Bing to perform web searches.
-            #   * "tavily_search" - Uses Tavily for search queries.
-            #   * "requests_get" - Makes an HTTP GET request.
-            #   * "requests_post" - Makes an HTTP POST request.
-            #   * "requests_patch" - Makes an HTTP PATCH request.
-            #   * "requests_put" - Makes an HTTP PUT request.
-            #   * "requests_delete" - Makes an HTTP DELETE request.
-            #   * "requests_toolkit" - Contains all of the request tools.
+            #   - "tavily_search": Uses Tavily for search queries.
+            #   - "requests_get": Makes an HTTP GET request.
+            #   - "requests_post": Makes an HTTP POST request.
+            #   - "requests_patch": Makes an HTTP PATCH request.
+            #   - "requests_put": Makes an HTTP PUT request.
+            #   - "requests_delete": Makes an HTTP DELETE request.
+            #   - "requests_toolkit": Contains all of the request tools.
             #
             # Coded Tools
             #
-            #   * "website_search" - Search internet with DuckduckgoSearch.
-            #   * "google_serper" - Search internet with Google Serper
-            #   * "rag_retriever" - Perform retrival-augmented generation on given urls.
+            #   - "website_search": Search internet with DuckduckgoSearch.
+            #   - "rag_retriever": Perform retrival-augmented generation on given urls.
             #
             # Each of these tools may require specific arguments in the "args" section.
             # Refer to the tool's documentation for more details.
@@ -96,9 +93,12 @@
             # -------------------------------------------------------------------------------
             # EXTENSIBILITY
             # - Tool registration can be done without modifying core code by specifying the 
-            #   tool configuration file (HOCON format) via the AGENT_TOOLBOX_INFO_FILE environment variable.
+            #   tool configuration file (HOCON format) via the AGENT_TOOLBOX_INFO_FILE environment variable
+            #   or key "toolbox_info_file" in the agent network hocon file.
             # - The default tool configuration file is located at: 
             #   neuro_san/internals/run_context/langchain/toolbox/toolbox_info.hocon
+            #
+            #   See https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/toolbox_info_hocon_reference.md
             # -------------------------------------------------------------------------------
 
         }
