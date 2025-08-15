@@ -24,6 +24,7 @@ import asyncio
 import tornado
 from tornado.web import RequestHandler
 
+from neuro_san.service.utils.async_atomic_counter import AsyncAtomicCounter
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
@@ -37,7 +38,7 @@ class BaseRequestHandler(RequestHandler):
     Provides logic to inject neuro-san service specific data
     into local handler context.
     """
-    request_id: int = 0
+    request_id_counter: AsyncAtomicCounter = AsyncAtomicCounter()
 
     # pylint: disable=attribute-defined-outside-init
     # pylint: disable=too-many-arguments
@@ -64,9 +65,7 @@ class BaseRequestHandler(RequestHandler):
         self.logger = HttpLogger(forwarded_request_metadata)
         self.network_storage_dict: Dict[str, AgentNetworkStorage] = network_storage_dict
         self.show_absent: bool = os.environ.get("SHOW_ABSENT_METADATA") is not None
-
-        # Set default request_id for this request handler in case we will need it:
-        BaseRequestHandler.request_id += 1
+        self.request_id: int = 0
 
         if os.environ.get("AGENT_ALLOW_CORS_HEADERS") is not None:
             self.set_header("Access-Control-Allow-Origin", "*")
@@ -84,11 +83,17 @@ class BaseRequestHandler(RequestHandler):
         from incoming request.
         :return: dictionary of user request metadata; possibly empty
         """
-        return BaseRequestHandler.get_request_metadata(
-            self.request,
-            self.forwarded_request_metadata,
-            self.show_absent,
-            self.logger)
+        metadata_dict: Dict[str, Any] =\
+            BaseRequestHandler.get_request_metadata(
+                self.request,
+                self.forwarded_request_metadata,
+                self.show_absent,
+                self.logger)
+        # Put in our own unique id so we have some way to track this request:
+        user_request_id: str = metadata_dict.get("request_id", "None")
+        if user_request_id == "None":
+            metadata_dict["request_id"] = f"request-{self.request_id}"
+        return metadata_dict
 
     @classmethod
     def get_request_metadata(cls, request,
@@ -112,9 +117,6 @@ class BaseRequestHandler(RequestHandler):
         for item_name in forwarded_request_metadata:
             if item_name in headers.keys():
                 result[item_name] = headers[item_name]
-            elif item_name == "request_id":
-                # Generate unique id so we have some way to track this request:
-                result[item_name] = f"request-{BaseRequestHandler.request_id}"
             else:
                 if show_absent and logger:
                     logger.warning({}, "MISSING METADATA VALUE: %s request %s", item_name, request.uri)
@@ -162,13 +164,18 @@ class BaseRequestHandler(RequestHandler):
         """
         return
 
-    def prepare(self):
+    # Tornado can handle both syns and async versions of "prepare" method
+    # pylint: disable=invalid-overridden-method
+    async def prepare(self):
         if not self.application.is_serving():
             self.set_status(503)
             self.write({"error": "Server is shutting down"})
             self.logger.error(self.get_metadata(), "Server is shutting down")
             self.do_finish()
             return
+
+        # Get unique request id in case we will need it:
+        self.request_id = await self.request_id_counter.next()
 
         self.logger.debug(self.get_metadata(), f"[REQUEST RECEIVED] {self.request.method} {self.request.uri}")
 

@@ -13,6 +13,7 @@
 See class comment for details
 """
 
+import json
 from typing import Any
 from typing import Dict
 from typing import List
@@ -146,11 +147,15 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
         file descriptors and open inet connections on server port.
         """
         # Get used file descriptors:
-        fds, soft_limit, hard_limit = ServiceResources.get_fd_usage()
-        # Get active TCP connections to our http port:
-        conn = ServiceResources.active_tcp_on_port(self.http_port)
-        self.logger.info({}, "Used: file descriptors %d (%d, %d) connections: %d",
-                         fds, soft_limit, hard_limit, conn)
+        fd_dict, soft_limit, hard_limit = ServiceResources.get_fd_usage()
+        sock_classes = ServiceResources.classify_sockets(self.http_port)
+        log_dict: Dict[str, Any] = {
+            "soft_limit": soft_limit,
+            "hard_limit": hard_limit,
+            "file_descroptors": fd_dict,
+            "sockets": sock_classes
+        }
+        self.logger.info({}, "Used: %s", json.dumps(log_dict, indent=4))
 
     def make_app(self, requests_limit: int, logger: EventLoopLogger):
         """
