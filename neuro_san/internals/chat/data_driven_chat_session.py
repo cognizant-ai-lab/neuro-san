@@ -315,5 +315,5 @@ class DataDrivenChatSession:
         except TypeError:
             # Not enough arguments to call close().
             logger: Logger = getLogger(self.__class__.__name__)
-            logger.error(f"Unable to close() {description}")
+            logger.error("Unable to close() %s", description)
             logger.error(traceback.format_exc())
