@@ -14,6 +14,8 @@ from typing import Any
 from typing import Dict
 
 from neuro_san.interfaces.coded_tool import CodedTool
+from neuro_san.coded_tools.math_guy.async_closeable import AsyncCloseable
+from neuro_san.coded_tools.math_guy.sync_closeable import SyncCloseable
 
 
 class Calculator(CodedTool):
@@ -77,5 +79,11 @@ class Calculator(CodedTool):
                 return "Can't divide by 0"
 
         sly_data["equals"] = retval
+
+        # Add close()-able objects to test closing of sly_data
+        # These are only to enhance testing coverage and are non-essential
+        # to the function of this coded tool.
+        sly_data["sync_closeable"] = SyncCloseable()
+        sly_data["async_closeable"] = AsyncCloseable()
 
         return "Check sly_data['equals'] for the result"
