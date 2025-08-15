@@ -186,6 +186,13 @@
           "description": {
             "type": "string",
             "description": "Outward-facing description of what the agent does."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional metadata describing where this agent falls into larger agent grouping(s)."
           }
         },
         "description": "Description of an agent's function"
