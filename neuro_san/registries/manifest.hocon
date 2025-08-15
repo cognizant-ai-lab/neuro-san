@@ -48,6 +48,10 @@
     "google_serper.hocon": true,
     "website_rag.hocon": true,
 
+    # These 2 agents are examples of calling MCP tools as internal and external tools, respectively.
+    "mcp_deepwiki.hocon": true,
+    "mcp_deepwiki_external_tool.hocon": true,
+
     # Agents having to do with test infrastructure
     "gist.hocon": true,
     "assess_failure.hocon": true,

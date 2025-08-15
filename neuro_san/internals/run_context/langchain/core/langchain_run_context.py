@@ -64,6 +64,7 @@ from neuro_san.internals.run_context.langchain.core.langchain_run import LangCha
 from neuro_san.internals.run_context.langchain.journaling.journaling_callback_handler import JournalingCallbackHandler
 from neuro_san.internals.run_context.langchain.journaling.journaling_tools_agent_output_parser \
     import JournalingToolsAgentOutputParser
+from neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter import LangChainMCPAdapter
 from neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter import LangChainTokenCounter
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
 from neuro_san.internals.run_context.utils.external_agent_parsing import ExternalAgentParsing
@@ -271,74 +272,115 @@ class LangChainRunContext(RunContext):
 
         return agent
 
-    async def _create_base_tool(self, name: str) -> BaseTool:
+    async def _create_base_tool(self, name: str) -> Union[BaseTool, List[BaseTool]]:
         """
         :param name: The name of the tool to create
         :return: The BaseTool associated with the name
         """
 
         inspector: AgentNetworkInspector = self.tool_caller.get_inspector()
-        function_json: Dict[str, Any] = None
 
         # Check our own local inspector. Most tools live in the neighborhood.
         agent_spec: Dict[str, Any] = inspector.get_agent_tool_spec(name)
+
         if agent_spec is None:
+            return await self._create_external_tool(name)
 
-            # See if the agent name given could reference an external agent.
-            if not ExternalAgentParsing.is_external_agent(name):
-                return None
+        return await self._create_internal_tool(name, agent_spec)
 
-            # Use the ExternalToolAdapter to get the function specification
-            # from the service call to the external agent.
-            # We should be able to use the same BaseTool for langchain integration
-            # purposes as we do for any other tool, though.
-            # Optimization:
-            #   It's possible we might want to cache these results somehow to minimize
-            #   network calls.
-            session_factory: AsyncAgentSessionFactory = self.invocation_context.get_async_session_factory()
-            adapter = ExternalToolAdapter(session_factory, name)
-            try:
-                function_json = await adapter.get_function_json(self.invocation_context)
-            except ValueError as exception:
-                # Could not reach the server for the external agent, so tell about it
-                message: str = f"Agent/tool {name} was unreachable. Not including it as a tool.\n"
-                message += str(exception)
-                agent_message = AgentMessage(content=message)
-                await self.journal.write_message(agent_message)
-                self.logger.info(message)
-        else:
-            toolbox: str = agent_spec.get("toolbox")
-            if toolbox:
-                toolbox_factory: ContextTypeToolboxFactory = self.invocation_context.get_toolbox_factory()
-                try:
-                    tool_from_toolbox = toolbox_factory.create_tool_from_toolbox(toolbox, agent_spec.get("args"), name)
-                    # If the tool from toolbox is base tool or list of base tool, return the tool as is
-                    # since tool's definition and args schema are predefined in these the class of the tool.
-                    if isinstance(tool_from_toolbox, BaseTool) or (
-                        isinstance(tool_from_toolbox, list) and
-                        all(isinstance(tool, BaseTool) for tool in tool_from_toolbox)
-                    ):
-                        return tool_from_toolbox
-                    # Otherwise, it is a shared coded tool.
-                    function_json = tool_from_toolbox
+    async def _create_external_tool(self, name: str) -> Union[BaseTool, List[BaseTool]]:
+        """External agent/tool creation"""
 
-                except ValueError as tool_creation_exception:
-                    # There are errors in tool creation process
-                    message: str = f"Failed to create Agent/tool '{name}': {tool_creation_exception}"
-                    agent_message = AgentMessage(content=message)
-                    await self.journal.write_message(agent_message)
-                    self.logger.info(message)
-                    return None
-            else:
-                function_json = agent_spec.get("function")
+        # Handle MCP-based tool as external tool
+        if isinstance(name, dict):
+            return await self._create_mcp_tool(name)
 
-        if function_json is None:
+        # See if the agent name given could reference an external agent.
+        if not ExternalAgentParsing.is_external_agent(name):
             return None
+
+        # Use the ExternalToolAdapter to get the function specification
+        # from the service call to the external agent.
+        # We should be able to use the same BaseTool for langchain integration
+        # purposes as we do for any other tool, though.
+        # Optimization:
+        #   It's possible we might want to cache these results somehow to minimize
+        #   network calls.
+        session_factory: AsyncAgentSessionFactory = self.invocation_context.get_async_session_factory()
+        adapter = ExternalToolAdapter(session_factory, name)
+        try:
+            function_json: Dict[str, Any] = await adapter.get_function_json(self.invocation_context)
+            return self._create_function_tool(function_json, name)
+        except ValueError as exception:
+            # Could not reach the server for the external agent, so tell about it
+            message: str = f"Agent/tool {name} was unreachable. Not including it as a tool.\n"
+            message += str(exception)
+            agent_message = AgentMessage(content=message)
+            await self.journal.write_message(agent_message)
+            self.logger.info(message)
+
+    async def _create_internal_tool(self, name: str, agent_spec: Dict[str, Any]) -> BaseTool:
+        """Internal agent/tool creation"""
 
         # In the case of an internal agent, the name passed in for lookup should be the
         # same as what is in the spec.
-        if agent_spec is not None and name != agent_spec.get("name"):
-            raise ValueError(f"Tool name mismatch.  name={name}  agent_spec.name={agent_spec.get('name')}")
+        if name != agent_spec.get("name"):
+            raise ValueError(f"Tool name mismatch. name={name} agent_spec.name={agent_spec.get('name')}")
+
+        toolbox: str = agent_spec.get("toolbox")
+        mcp: Dict[str, Any] = agent_spec.get("mcp")
+
+        # Handle toolbox-based tools
+        if toolbox:
+            return await self._create_toolbox_tool(toolbox, agent_spec, name)
+
+        # Handle MCP-based tools
+        if mcp:
+            return await self._create_mcp_tool(mcp, name)
+
+        # Handle function-based tools
+        function_json = agent_spec.get("function")
+        if function_json is None:
+            return None
+
+        return self._create_function_tool(function_json, name)
+
+    async def _create_mcp_tool(self, mcp_dict: dict, agent_name: str = None) -> List[BaseTool]:
+        """MCP tool creation with information from mcp dictionary"""
+
+        server_url: str = mcp_dict.get("server_url")
+        allowed_tools: List[str] = mcp_dict.get("allowed_tools")
+        headers: Dict[str, Any] = mcp_dict.get("headers")
+
+        return await LangChainMCPAdapter.get_mcp_tools(server_url, headers, allowed_tools, agent_name)
+
+    async def _create_toolbox_tool(self, toolbox: str, agent_spec: Dict[str, Any], name: str) -> BaseTool:
+        """Create tool from toolbox"""
+
+        toolbox_factory: ContextTypeToolboxFactory = self.invocation_context.get_toolbox_factory()
+        try:
+            tool_from_toolbox = toolbox_factory.create_tool_from_toolbox(toolbox, agent_spec.get("args"), name)
+            # If the tool from toolbox is base tool or list of base tool, return the tool as is
+            # since tool's definition and args schema are predefined in these the class of the tool.
+            if isinstance(tool_from_toolbox, BaseTool) or (
+                isinstance(tool_from_toolbox, list) and
+                all(isinstance(tool, BaseTool) for tool in tool_from_toolbox)
+            ):
+                return tool_from_toolbox
+
+            # Otherwise, it is a shared coded tool.
+            return self._create_function_tool(tool_from_toolbox, name)
+
+        except ValueError as tool_creation_exception:
+            # There are errors in tool creation process
+            message: str = f"Failed to create Agent/tool '{name}': {tool_creation_exception}"
+            agent_message = AgentMessage(content=message)
+            await self.journal.write_message(agent_message)
+            self.logger.info(message)
+            return None
+
+    def _create_function_tool(self, function_json: Dict[str, Any], name: str) -> BaseTool:
+        """Create a function tool from JSON specification"""
 
         # In the case of external agents, if they report a name at all, they will
         # report something different that does not identify them as external.
@@ -347,9 +389,7 @@ class LangChainRunContext(RunContext):
         # regardless of intent.
         function_json["name"] = name
 
-        function_tool: BaseTool = LangChainOpenAIFunctionTool.from_function_json(function_json,
-                                                                                 self.tool_caller)
-        return function_tool
+        return LangChainOpenAIFunctionTool.from_function_json(function_json, self.tool_caller)
 
     async def _create_prompt_template(self, instructions: str) -> ChatPromptTemplate:
         """

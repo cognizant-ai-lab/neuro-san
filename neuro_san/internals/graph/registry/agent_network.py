@@ -92,7 +92,7 @@ Some things to try:
         :param name: The name of the agent tool to get out of the registry
         :return: The dictionary representing the spec registered agent
         """
-        if name is None:
+        if name is None or not isinstance(name, str):
             return None
 
         return self.agent_spec_map.get(name)

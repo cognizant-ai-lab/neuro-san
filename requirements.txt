@@ -72,3 +72,6 @@ ddgs>=9.4.1
 
 # Structure parsing
 json-repair>=0.47.3,<1.0
+
+# MCP tools
+langchain-mcp-adapters>=0.1.7

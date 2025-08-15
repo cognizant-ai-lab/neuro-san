@@ -175,7 +175,7 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
         if "langchain_tool" in tags:
             # Log the tool output to the calling agent's journal
             await self.calling_agent_journal.write_message(
-                AgentToolResultMessage(content=output, tool_result_origin=self.origin)
+                AgentToolResultMessage(content=str(output), tool_result_origin=self.origin)
             )
 
             # Also log the tool output to the LangChain tool-specific journal

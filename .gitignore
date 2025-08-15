@@ -41,3 +41,6 @@ tmp_*
 
 # Transient openapi file
 neuro_san/api/grpc/openapi.yaml
+
+# notebook
+*.ipynb
