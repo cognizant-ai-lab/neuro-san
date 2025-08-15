@@ -98,7 +98,21 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 max_tokens=config.get("max_tokens"),    # This is always for output
                 tiktoken_model_name=config.get("tiktoken_model_name"),
                 stop=config.get("stop"),
-                verbose=config.get("verbose"),
+
+                # If omitted, this defaults to the global verbose value,
+                # accessible via langchain_core.globals.get_verbose():
+                # https://github.com/langchain-ai/langchain/blob/master/libs/core/langchain_core/globals.py#L53
+                #
+                # However, accessing the global verbose value during concurrent initialization
+                # can trigger the following warning:
+                #
+                # UserWarning: Importing verbose from langchain root module is no longer supported.
+                # Please use langchain.globals.set_verbose() / langchain.globals.get_verbose() instead.
+                # old_verbose = langchain.verbose
+                #
+                # To prevent this, we explicitly set verbose=False here (which matches the default
+                # global verbose value) so that the warning is never triggered.
+                verbose=False,
 
                 # Set stream_usage to True in order to get token counting chunks.
                 stream_usage=True
@@ -136,7 +150,21 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 max_tokens=config.get("max_tokens"),    # This is always for output
                 tiktoken_model_name=config.get("tiktoken_model_name"),
                 stop=config.get("stop"),
-                verbose=config.get("verbose"),
+
+                # If omitted, this defaults to the global verbose value,
+                # accessible via langchain_core.globals.get_verbose():
+                # https://github.com/langchain-ai/langchain/blob/master/libs/core/langchain_core/globals.py#L53
+                #
+                # However, accessing the global verbose value during concurrent initialization
+                # can trigger the following warning:
+                #
+                # UserWarning: Importing verbose from langchain root module is no longer supported.
+                # Please use langchain.globals.set_verbose() / langchain.globals.get_verbose() instead.
+                # old_verbose = langchain.verbose
+                #
+                # To prevent this, we explicitly set verbose=False here (which matches the default
+                # global verbose value) so that the warning is never triggered.
+                verbose=False,
 
                 # Azure-specific
                 azure_endpoint=self.get_value_or_env(config, "azure_endpoint",
@@ -172,7 +200,21 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 streaming=True,     # streaming is always on. Without it token counting will not work.
                 # Set stream_usage to True in order to get token counting chunks.
                 stream_usage=True,
-                verbose=config.get("verbose"),
+
+                # If omitted, this defaults to the global verbose value,
+                # accessible via langchain_core.globals.get_verbose():
+                # https://github.com/langchain-ai/langchain/blob/master/libs/core/langchain_core/globals.py#L53
+                #
+                # However, accessing the global verbose value during concurrent initialization
+                # can trigger the following warning:
+                #
+                # UserWarning: Importing verbose from langchain root module is no longer supported.
+                # Please use langchain.globals.set_verbose() / langchain.globals.get_verbose() instead.
+                # old_verbose = langchain.verbose
+                #
+                # To prevent this, we explicitly set verbose=False here (which matches the default
+                # global verbose value) so that the warning is never triggered.
+                verbose=False,
             )
         elif chat_class == "ollama":
             # Higher temperature is more random
@@ -196,7 +238,21 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 top_p=config.get("top_p"),
                 keep_alive=config.get("keep_alive"),
                 base_url=config.get("base_url"),
-                verbose=config.get("verbose"),
+
+                # If omitted, this defaults to the global verbose value,
+                # accessible via langchain_core.globals.get_verbose():
+                # https://github.com/langchain-ai/langchain/blob/master/libs/core/langchain_core/globals.py#L53
+                #
+                # However, accessing the global verbose value during concurrent initialization
+                # can trigger the following warning:
+                #
+                # UserWarning: Importing verbose from langchain root module is no longer supported.
+                # Please use langchain.globals.set_verbose() / langchain.globals.get_verbose() instead.
+                # old_verbose = langchain.verbose
+                #
+                # To prevent this, we explicitly set verbose=False here (which matches the default
+                # global verbose value) so that the warning is never triggered.
+                verbose=False,
             )
         elif chat_class == "nvidia":
             # Higher temperature is more random
@@ -208,7 +264,21 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 top_p=config.get("top_p"),
                 seed=config.get("seed"),
                 stop=config.get("stop"),
-                verbose=config.get("verbose"),
+
+                # If omitted, this defaults to the global verbose value,
+                # accessible via langchain_core.globals.get_verbose():
+                # https://github.com/langchain-ai/langchain/blob/master/libs/core/langchain_core/globals.py#L53
+                #
+                # However, accessing the global verbose value during concurrent initialization
+                # can trigger the following warning:
+                #
+                # UserWarning: Importing verbose from langchain root module is no longer supported.
+                # Please use langchain.globals.set_verbose() / langchain.globals.get_verbose() instead.
+                # old_verbose = langchain.verbose
+                #
+                # To prevent this, we explicitly set verbose=False here (which matches the default
+                # global verbose value) so that the warning is never triggered.
+                verbose=False,
                 nvidia_api_key=self.get_value_or_env(config, "nvidia_api_key",
                                                      "NVIDIA_API_KEY"),
                 nvidia_base_url=self.get_value_or_env(config, "nvidia_base_url",
@@ -226,7 +296,21 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 timeout=config.get("timeout"),
                 top_k=config.get("top_k"),
                 top_p=config.get("top_p"),
-                verbose=config.get("verbose"),
+
+                # If omitted, this defaults to the global verbose value,
+                # accessible via langchain_core.globals.get_verbose():
+                # https://github.com/langchain-ai/langchain/blob/master/libs/core/langchain_core/globals.py#L53
+                #
+                # However, accessing the global verbose value during concurrent initialization
+                # can trigger the following warning:
+                #
+                # UserWarning: Importing verbose from langchain root module is no longer supported.
+                # Please use langchain.globals.set_verbose() / langchain.globals.get_verbose() instead.
+                # old_verbose = langchain.verbose
+                #
+                # To prevent this, we explicitly set verbose=False here (which matches the default
+                # global verbose value) so that the warning is never triggered.
+                verbose=False,
             )
         elif chat_class == "bedrock":
             llm = ChatBedrock(
@@ -252,7 +336,21 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 system_prompt_with_tools=config.get("system_prompt_with_tools"),
                 tags=config.get("tags"),
                 temperature=config.get("temperature"),
-                verbose=config.get("verbose"),
+
+                # If omitted, this defaults to the global verbose value,
+                # accessible via langchain_core.globals.get_verbose():
+                # https://github.com/langchain-ai/langchain/blob/master/libs/core/langchain_core/globals.py#L53
+                #
+                # However, accessing the global verbose value during concurrent initialization
+                # can trigger the following warning:
+                #
+                # UserWarning: Importing verbose from langchain root module is no longer supported.
+                # Please use langchain.globals.set_verbose() / langchain.globals.get_verbose() instead.
+                # old_verbose = langchain.verbose
+                #
+                # To prevent this, we explicitly set verbose=False here (which matches the default
+                # global verbose value) so that the warning is never triggered.
+                verbose=False,
             )
         elif chat_class is None:
             raise ValueError(f"Class name {chat_class} for model_name {model_name} is unspecified.")

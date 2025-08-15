@@ -829,7 +829,6 @@
                 "max_tokens": null,         # This is always for output
                 "tiktoken_model_name": null,
                 "stop": null,
-                "verbose": false,
 
                 # If you really need more parameters, you will likely have to create your own LlmFactory.
             }
@@ -866,7 +865,6 @@
                 "stop_sequences": null,
                 "anthropic_api_url": "https://api.anthropic.com",
                 "anthropic_api_key": null,
-                "verbose": false,
                 # streaming is always set to True so that ...
                 # stream_usage is always set to True so that token counting can work correctly
             }
@@ -893,7 +891,6 @@
                 "top_p": null,
                 "keep_alive": null,
                 "base_url": null,
-                "verbose": false,
             }
         },
         "nvidia": {
@@ -908,7 +905,6 @@
                 "stop": null,
                 "nvidia_api_key": null,
                 "nvidia_base_url": null,
-                "verbose": false,
             }
         },
         "gemini": {
@@ -923,7 +919,6 @@
                 "timeout": null,
                 "top_k": null, 
                 "top_p": null,
-                "verbose": false,
             }
         },
         "bedrock": {
@@ -951,7 +946,6 @@
                 "system_prompt_with_tools": "",
                 "tags": null,
                 "temperature": null
-                "verbose": false,
             }
         }
     }
