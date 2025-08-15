@@ -1,5 +1,8 @@
 name: Integration
 
+permissions:
+    contents: read
+
 on:
   schedule:
     - cron: '0 12 * * *'  # 12:00 PM UTC = 4:00 AM PT (standard)
