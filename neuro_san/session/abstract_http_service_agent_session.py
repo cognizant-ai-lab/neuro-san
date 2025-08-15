@@ -67,8 +67,6 @@ class AbstractHttpServiceAgentSession(AgentSessionConstants):
         if port is not None:
             self.use_port = port
 
-        if agent_name is None:
-            raise ValueError("agent_name is None")
         self.agent_name: str = agent_name
 
         self.timeout_in_seconds: int = timeout_in_seconds
@@ -84,6 +82,8 @@ class AbstractHttpServiceAgentSession(AgentSessionConstants):
         if self.security_cfg is not None:
             scheme = "https"
 
+        if self.agent_name is None:
+            return f"{scheme}://{self.use_host}:{self.use_port}/api/v1/{method}"
         return f"{scheme}://{self.use_host}:{self.use_port}/api/v1/{self.agent_name}/{method}"
 
     def get_headers(self) -> Dict[str, Any]:

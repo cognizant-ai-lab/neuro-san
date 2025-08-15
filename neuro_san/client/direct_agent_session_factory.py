@@ -15,6 +15,7 @@ from typing import Dict
 from leaf_common.time.timeout import Timeout
 from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
 
+from neuro_san.client.direct_agent_storage_util import DirectAgentStorageUtil
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -22,7 +23,6 @@ from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeL
 from neuro_san.internals.run_context.factory.master_toolbox_factory import MasterToolboxFactory
 from neuro_san.internals.run_context.factory.master_llm_factory import MasterLlmFactory
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
-from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.session.direct_agent_session import DirectAgentSession
@@ -45,11 +45,7 @@ class DirectAgentSessionFactory:
         """
         Constructor
         """
-        manifest_restorer = RegistryManifestRestorer()
-        self.manifest_networks: Dict[str, AgentNetwork] = manifest_restorer.restore()
-        self.network_storage = AgentNetworkStorage()
-        for agent_name, agent_network in self.manifest_networks.items():
-            self.network_storage.add_agent_network(agent_name, agent_network)
+        self.network_storage: AgentNetworkStorage = DirectAgentStorageUtil.create_network_storage()
 
     def create_session(self, agent_name: str, use_direct: bool = False,
                        metadata: Dict[str, str] = None, umbrella_timeout: Timeout = None) -> AgentSession:

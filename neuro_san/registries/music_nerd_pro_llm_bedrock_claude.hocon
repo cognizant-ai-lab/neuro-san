@@ -14,6 +14,11 @@
 # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md
 
 {
+    # Optional metadata describing this agent network
+    "metadata": {
+        "description": "Simple agent network using a single Bedrock-based agent and a single CodedTool",
+        "tags": ["example", "llm_tests"],
+    },
     "llm_config": {
         "model_name": "bedrock-us-claude-3-7-sonnet",
     },

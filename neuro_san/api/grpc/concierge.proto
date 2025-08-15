@@ -47,6 +47,9 @@ message AgentInfo {
 
     // Outward-facing description of what the agent does.
     string description = 2 [json_name="description"];
+
+    // Optional metadata describing where this agent falls into larger agent grouping(s).
+    repeated string tags = 3 [json_name="tags"];
 }
 
 // Response structure for List gRPC method
