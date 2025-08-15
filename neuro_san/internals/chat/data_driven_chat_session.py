@@ -16,8 +16,11 @@ from typing import List
 from typing import Union
 
 import copy
-import logging
 import traceback
+
+from logging import getLogger
+from logging import Logger
+from inspect import iscoroutinefunction
 
 from openai import BadRequestError
 
@@ -134,7 +137,7 @@ class DataDrivenChatSession:
                 AgentFrameworkMessage(content="Patience, please. I'm working on it.")
             ]
 
-            logger = logging.getLogger(self.__class__.__name__)
+            logger: Logger = getLogger(self.__class__.__name__)
             logger.error(traceback.format_exc())
 
         converter = BaseMessageDictionaryConverter(origin=self.front_man.get_origin())
@@ -212,6 +215,9 @@ class DataDrivenChatSession:
         # we would only be blocking our own event loop.
         await queue.put_final_item(synchronous=True)
 
+        # Close any objects on sly data that can be closed.
+        await self.close_sly_data()
+
     async def delete_resources(self):
         """
         Frees up any service-side resources.
@@ -269,3 +275,45 @@ class DataDrivenChatSession:
         # Eventually this might be a CompositeMessageProcessor
         message_processor = StructureMessageProcessor(structure_formats)
         return message_processor
+
+    async def close_sly_data(self):
+        """
+        Close any sly data value that can be closed.
+        """
+        if self.sly_data is None or len(self.sly_data) == 0:
+            # Nothing to close
+            return
+
+        # Try closing anything that can be close()-d in the sly_data.
+        for key, value in self.sly_data.items():
+            # Note: It's possible we might want to try closing keys as well
+            description: str = f"sly_data[{key}]"
+            await self.close_one(value, description)
+
+    async def close_one(self, value: Any, description: str):
+        """
+        Close a single object if it can be closed.
+        :param value: The object to close
+        :param description: Where the object to close came from
+        """
+        if not hasattr(value, "close"):
+            # Nothing to close
+            return
+
+        close_method = getattr(value, "close")
+        if not callable(close_method):
+            # No method to call
+            return
+
+        # Call the close method
+        try:
+            if iscoroutinefunction(close_method):
+                await close_method()
+            else:
+                close_method()
+
+        except TypeError:
+            # Not enough arguments to call close().
+            logger: Logger = getLogger(self.__class__.__name__)
+            logger.error(f"Unable to close() {description}")
+            logger.error(traceback.format_exc())
