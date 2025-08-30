@@ -66,6 +66,9 @@ class BaseRequestHandler(RequestHandler):
         self.network_storage_dict: Dict[str, AgentNetworkStorage] = network_storage_dict
         self.show_absent: bool = os.environ.get("SHOW_ABSENT_METADATA") is not None
         self.request_id: int = 0
+        self.agent_service: AsyncAgentService = None
+        from neuro_san.interfaces.concierge_session import ConciergeSession
+
 
         if os.environ.get("AGENT_ALLOW_CORS_HEADERS") is not None:
             self.set_header("Access-Control-Allow-Origin", "*")

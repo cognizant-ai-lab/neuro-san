@@ -17,6 +17,8 @@ from typing import Dict
 from typing import Generator
 
 import json
+import asyncio
+import tornado
 
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
@@ -43,14 +45,17 @@ class StreamingChatHandler(BaseRequestHandler):
             return 0
 
         sent_out: int = 0
-        async for result_dict in generator:
-            result_str: str = json.dumps(result_dict) + "\n"
-            self.write(result_str)
-            flush_ok = await self.do_flush()
-            if not flush_ok:
-                return sent_out
-            sent_out += 1
-        return sent_out
+        try:
+            async with aclosing(generator):
+                async for result_dict in generator:
+                    result_str: str = json.dumps(result_dict) + "\n"
+                    self.write(result_str)
+                    flush_ok = await self.do_flush()
+                    if not flush_ok:
+                        return sent_out
+                    sent_out += 1
+        finally:
+            return sent_out
 
     async def post(self, agent_name: str):
         """
@@ -68,7 +73,8 @@ class StreamingChatHandler(BaseRequestHandler):
             data = json.loads(self.request.body)
             result_generator = service.streaming_chat(data, metadata)
             await self.stream_out(result_generator)
-
+        except (asyncio.CancelledError, tornado.iostream.StreamClosedError):
+            raise
         except Exception as exc:  # pylint: disable=broad-exception-caught
             self.process_exception(exc)
         finally:
