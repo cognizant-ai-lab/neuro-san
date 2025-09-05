@@ -1,6 +1,13 @@
 # We separate out requirements that are specific to the build, but not
 # necessary for operation to minimize the size of containers
 
+# For LLM Access
+langchain-anthropic>=0.3.11,<0.4
+langchain-aws>=0.2.27,<0.3
+langchain-google-genai>=2.1.8,<3.0
+langchain-nvidia-ai-endpoints>=0.3.8,<0.4
+langchain-ollama>=0.3.4,<0.4
+
 # Tests
 pytest==8.3.3
 pytest-asyncio==1.1.0

@@ -13,6 +13,8 @@ from typing import Any
 from typing import Awaitable
 from typing import Dict
 from typing import List
+from typing import Tuple
+from typing import Type
 from typing import Union
 
 from asyncio import Task
@@ -27,10 +29,9 @@ from langchain_community.callbacks.manager import openai_callback_var
 from langchain_core.callbacks import AsyncCallbackHandler
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.language_models.base import BaseLanguageModel
-from langchain_openai.chat_models.azure import AzureChatOpenAI
-from langchain_openai.chat_models.base import ChatOpenAI
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
+from leaf_common.config.resolver_util import ResolverUtil
 
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.originating_journal import OriginatingJournal
@@ -46,6 +47,12 @@ from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback
 # and we want to be sure these are in sync.
 # See: https://docs.python.org/3/library/contextvars.html
 ORIGIN_INFO: ContextVar[str] = ContextVar('origin_info', default=None)
+
+# Keep a single lazy resolution of OpenAI chat model types.
+OPENAI_CHAT_TYPES: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
+                                                "langchain_openai.chat_models.base.ChatOpenAI",
+                                                "langchain_openai.chat_models.azure.AzureChatOpenAI",
+                                           ])
 
 
 class LangChainTokenCounter:
@@ -197,7 +204,9 @@ class LangChainTokenCounter:
                 from "usage_metadata" but give "total_cost" = 0.
         """
 
-        if isinstance(llm, (ChatOpenAI, AzureChatOpenAI)):
+        if isinstance(llm, OPENAI_CHAT_TYPES):
+            # Use the context manager to count tokens as per
+            #   https://python.langchain.com/docs/how_to/llm_token_usage_tracking/#using-callbacks
             # Notes:
             #   * ChatOpenAI needs to have stream_usage=True configured
             #     in order to get good token info back reliably.
@@ -226,7 +235,7 @@ class LangChainTokenCounter:
                 If not an OpenAI or Anthropic model, use llm_token_callback_var.
         """
 
-        if isinstance(llm, (ChatOpenAI, AzureChatOpenAI)):
+        if isinstance(llm, OPENAI_CHAT_TYPES):
             return openai_callback_var
 
         # Collect tokens for models other than OpenAI

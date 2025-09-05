@@ -95,6 +95,8 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
             Note that responses to the chat input might be numerous and will come as they
             are produced until the system decides there are no more messages to be sent.
         """
+        separator: bytes = b"\n"
+        max_chunk_size: int = 64 * 1024
         path: str = self.get_request_path("streaming_chat")
         try:
             timeout: ClientTimeout = None
@@ -107,12 +109,42 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
                     # Check for successful response status
                     response.raise_for_status()
 
-                    # Iterate over the content stream line by line
-                    async for line in response.content:
-                        unicode_line = line.decode('utf-8')
-                        if unicode_line.strip():    # Skip empty lines
-                            result_dict = json.loads(unicode_line)
-                            yield result_dict
+                    # Iterate over the content stream as it comes in.
+                    # Note: We used to iterate over lines with the simpler:
+                    #           async for line in response.content:
+                    #               ... blah blah ...
+                    #       but that could fail with ValueError("Chunk too big")
+                    #       if a single line was too long.
+                    accumulator: bytes = b""
+                    async for data in response.content.iter_chunked(max_chunk_size):
+
+                        # Concatenate data as it comes in
+                        accumulator += data
+
+                        # Try to find our line separator
+                        index: int = accumulator.find(separator)
+                        while index >= 0:
+
+                            # Grab a single line
+                            line: bytes = accumulator[:index]
+                            unicode_line = line.decode("utf-8")
+                            if unicode_line.strip():    # Skip empty lines
+
+                                # We have a line with something in it.
+                                # Decode and yield as a dictionary
+                                result_dict = json.loads(unicode_line)
+                                yield result_dict
+
+                            # Remove the previous line from the accumulator
+                            accumulator = accumulator[index + len(separator):]
+
+                            # Allow for case of multiple lines in one chunk
+                            index = accumulator.find(separator)
+
+                    # If there is anything left in the accumulator, yield it
+                    if len(accumulator) > 0:
+                        result_dict = json.loads(accumulator.decode("utf-8"))
+                        yield result_dict
 
         except (asyncio.TimeoutError, ClientOSError) as exc:
             # Pass on a couple of asserts that are known to represent

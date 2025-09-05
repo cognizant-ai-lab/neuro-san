@@ -21,11 +21,12 @@ from argparse import ArgumentParser
 from leaf_server_common.server.server_loop_callbacks import ServerLoopCallbacks
 from leaf_server_common.logging.logging_setup import setup_logging
 
+from neuro_san import DEPLOY_DIR
+from neuro_san import TOP_LEVEL_DIR
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
-from neuro_san.internals.utils.file_of_class import FileOfClass
 from neuro_san.service.grpc.grpc_agent_server import DEFAULT_SERVER_NAME
 from neuro_san.service.grpc.grpc_agent_server import DEFAULT_SERVER_NAME_FOR_LOGS
 from neuro_san.service.grpc.grpc_agent_server import DEFAULT_MAX_CONCURRENT_REQUESTS
@@ -193,8 +194,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         Return a file path to default location of OpenAPI specification file
         for neuro-san service.
         """
-        file_of_class = FileOfClass(__file__, path_to_basis="../../api/grpc")
-        return file_of_class.get_file_in_basis("agent_service.json")
+        return TOP_LEVEL_DIR.get_file_in_basis("api/grpc/agent_service.json")
 
     def main_loop(self):
         """
@@ -205,8 +205,7 @@ class ServerMainLoop(ServerLoopCallbacks):
         # Make for easy running from the neuro-san repo
         if os.environ.get("AGENT_SERVICE_LOG_JSON") is None:
             # Use the log file that is local to the repo
-            file_of_class = FileOfClass(__file__, path_to_basis="../../deploy")
-            os.environ["AGENT_SERVICE_LOG_JSON"] = file_of_class.get_file_in_basis("logging.json")
+            os.environ["AGENT_SERVICE_LOG_JSON"] = DEPLOY_DIR.get_file_in_basis("logging.json")
 
         # Construct forwarded metadata list as a union of
         # self.forwarded_request_metadata and self.usage_logger_metadata

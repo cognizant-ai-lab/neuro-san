@@ -13,14 +13,9 @@
 from typing import Any
 from typing import Dict
 
-from langchain_anthropic.chat_models import ChatAnthropic
-from langchain_aws import ChatBedrock
 from langchain_core.language_models.base import BaseLanguageModel
-from langchain_google_genai.chat_models import ChatGoogleGenerativeAI
-from langchain_nvidia_ai_endpoints import ChatNVIDIA
-from langchain_ollama import ChatOllama
-from langchain_openai.chat_models.azure import AzureChatOpenAI
-from langchain_openai.chat_models.base import ChatOpenAI
+
+from leaf_common.config.resolver import Resolver
 
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
 
@@ -72,7 +67,20 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         # but with user-specified config, it is possible to have the other keys will be specifed instead.
         model_name: str = config.get("model_name") or config.get("model") or config.get("model_id")
 
+        # Set up a resolver to use to resolve lazy imports of classes from
+        # langchain_* packages to prevent installing the world.
+        resolver = Resolver()
+
         if chat_class == "openai":
+
+            # OpenAI is the one chat class that we do not require any extra installs.
+            # This is what we want to work out of the box.
+            # Nevertheless, have it go through the same lazy-loading resolver rigamarole as the others.
+
+            # pylint: disable=invalid-name
+            ChatOpenAI = resolver.resolve_class_in_module("ChatOpenAI",
+                                                          module_name="langchain_openai.chat_models.base",
+                                                          install_if_missing="langchain-openai")
             llm = ChatOpenAI(
                 model_name=model_name,
                 temperature=config.get("temperature"),
@@ -131,6 +139,12 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
             openai_api_key: str = self.get_value_or_env(config, "openai_api_key", "AZURE_OPENAI_API_KEY")
             if openai_api_key is None:
                 openai_api_key = self.get_value_or_env(config, "openai_api_key", "OPENAI_API_KEY")
+
+            # AzureChatOpenAI just happens to come with langchain_openai
+            # pylint: disable=invalid-name
+            AzureChatOpenAI = resolver.resolve_class_in_module("AzureChatOpenAI",
+                                                               module_name="langchain_openai.chat_models.azure",
+                                                               install_if_missing="langchain-openai")
             llm = AzureChatOpenAI(
                 model_name=model_name,
                 temperature=config.get("temperature"),
@@ -189,6 +203,12 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 model_kwargs=model_kwargs,
             )
         elif chat_class == "anthropic":
+
+            # Use lazy loading to prevent installing the world
+            # pylint: disable=invalid-name
+            ChatAnthropic = resolver.resolve_class_in_module("ChatAnthropic",
+                                                             module_name="langchain_anthropic.chat_models",
+                                                             install_if_missing="langchain-anthropic")
             llm = ChatAnthropic(
                 model_name=model_name,
                 max_tokens=config.get("max_tokens"),    # This is always for output
@@ -222,6 +242,12 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 verbose=False,
             )
         elif chat_class == "ollama":
+
+            # Use lazy loading to prevent installing the world
+            # pylint: disable=invalid-name
+            ChatOllama = resolver.resolve_class_in_module("ChatOllama",
+                                                          module_name="langchain_ollama",
+                                                          install_if_missing="langchain-ollama")
             # Higher temperature is more random
             llm = ChatOllama(
                 model=model_name,
@@ -260,6 +286,12 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 verbose=False,
             )
         elif chat_class == "nvidia":
+
+            # Use lazy loading to prevent installing the world
+            # pylint: disable=invalid-name
+            ChatNVIDIA = resolver.resolve_class_in_module("ChatNVIDIA",
+                                                          module_name="langchain_nvidia_ai_endpoints",
+                                                          install_if_missing="langchain-nvidia-ai-endpoints")
             # Higher temperature is more random
             llm = ChatNVIDIA(
                 base_url=config.get("base_url"),
@@ -290,6 +322,12 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                                                       "NVIDIA_BASE_URL"),
             )
         elif chat_class == "gemini":
+
+            # Use lazy loading to prevent installing the world
+            # pylint: disable=invalid-name
+            ChatGoogleGenerativeAI = resolver.resolve_class_in_module("ChatGoogleGenerativeAI",
+                                                                      module_name="langchain_google_genai.chat_models",
+                                                                      install_if_missing="langchain-google-genai")
             llm = ChatGoogleGenerativeAI(
                 model=model_name,
                 google_api_key=self.get_value_or_env(config, "google_api_key",
@@ -318,6 +356,12 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 verbose=False,
             )
         elif chat_class == "bedrock":
+
+            # Use lazy loading to prevent installing the world
+            # pylint: disable=invalid-name
+            ChatBedrock = resolver.resolve_class_in_module("ChatBedrock",
+                                                           module_name="langchain_aws",
+                                                           install_if_missing="langchain-aws")
             llm = ChatBedrock(
                 model=model_name,
                 aws_access_key_id=self.get_value_or_env(config, "aws_access_key_id", "AWS_ACCESS_KEY_ID"),

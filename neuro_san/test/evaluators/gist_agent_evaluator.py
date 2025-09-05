@@ -12,8 +12,8 @@
 
 from typing import Any
 
+from neuro_san import REGISTRIES_DIR
 from neuro_san.client.simple_one_shot import SimpleOneShot
-from neuro_san.internals.utils.file_of_class import FileOfClass
 from neuro_san.test.evaluators.abstract_agent_evaluator import AbstractAgentEvaluator
 from neuro_san.test.interfaces.assert_forwarder import AssertForwarder
 
@@ -23,8 +23,6 @@ class GistAgentEvaluator(AbstractAgentEvaluator):
     AbstractAgentEvaluator implementation that looks asks an LLM if the test values
     match the gist of the value to be verified against.
     """
-
-    SHIPPED_HOCONS = FileOfClass(__file__, path_to_basis="../../registries")
 
     def __init__(self, asserts: AssertForwarder, negate: bool = False,
                  discriminator_agent: str = None, connection_type: str = "direct"):
@@ -43,7 +41,7 @@ class GistAgentEvaluator(AbstractAgentEvaluator):
         self.discriminator_agent: str = discriminator_agent
 
         if discriminator_agent is None:
-            self.discriminator_agent = self.SHIPPED_HOCONS.get_file_in_basis("gist.hocon")
+            self.discriminator_agent = REGISTRIES_DIR.get_file_in_basis("gist.hocon")
 
     def test_one(self, verify_value: Any, test_value: Any):
         """

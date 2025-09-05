@@ -19,7 +19,7 @@ import os
 from leaf_server_common.logging.logging_setup import setup_logging
 from leaf_server_common.server.grpc_metadata_forwarder import GrpcMetadataForwarder
 
-from neuro_san.internals.utils.file_of_class import FileOfClass
+from neuro_san import DEPLOY_DIR
 
 
 class AgentServerLogging:
@@ -59,8 +59,7 @@ class AgentServerLogging:
         # Make for easy running from the neuro-san repo
         if os.environ.get("AGENT_SERVICE_LOG_JSON") is None:
             # Use the log file that is local to the repo
-            file_of_class = FileOfClass(__file__, path_to_basis="../../deploy")
-            os.environ["AGENT_SERVICE_LOG_JSON"] = file_of_class.get_file_in_basis("logging.json")
+            os.environ["AGENT_SERVICE_LOG_JSON"] = DEPLOY_DIR.get_file_in_basis("logging.json")
 
         # Need to initialize the forwarded metadata default values before our first
         # call to a logger (which is below!).

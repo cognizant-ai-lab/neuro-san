@@ -17,7 +17,6 @@ from neuro_san.internals.run_context.factory.master_llm_factory import MasterLlm
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
 from neuro_san.internals.run_context.langchain.core.langchain_run_context import LangChainRunContext
-from neuro_san.internals.run_context.openai.openai_run_context import OpenAIRunContext
 
 
 class RunContextFactory:
@@ -71,10 +70,9 @@ class RunContextFactory:
             use_invocation_context = parent_run_context.get_invocation_context()
 
         if context_type.startswith("openai"):
-            run_context = OpenAIRunContext(default_llm_config, parent_run_context,
-                                           tool_caller, use_invocation_context,
-                                           chat_context)
-        elif context_type.startswith("langchain"):
+            raise ValueError("OpenAI Assistants implementation is no longer supported by OpenAI.")
+
+        if context_type.startswith("langchain"):
             run_context = LangChainRunContext(default_llm_config, parent_run_context,
                                               tool_caller, use_invocation_context,
                                               chat_context)

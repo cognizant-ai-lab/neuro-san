@@ -20,6 +20,7 @@ from copy import copy
 from datetime import datetime
 from os import environ
 
+from leaf_common.config.file_of_class import FileOfClass
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.persistence.easy.easy_hocon_persistence import EasyHoconPersistence
 from leaf_common.time.timeout import Timeout
@@ -27,7 +28,6 @@ from leaf_common.time.timeout import Timeout
 from neuro_san.client.agent_session_factory import AgentSessionFactory
 from neuro_san.client.streaming_input_processor import StreamingInputProcessor
 from neuro_san.interfaces.agent_session import AgentSession
-from neuro_san.internals.utils.file_of_class import FileOfClass
 from neuro_san.message_processing.basic_message_processor import BasicMessageProcessor
 from neuro_san.session.direct_agent_session import DirectAgentSession
 from neuro_san.test.driver.assert_capture import AssertCapture

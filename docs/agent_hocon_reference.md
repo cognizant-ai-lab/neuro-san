@@ -35,7 +35,7 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
     - [error_fragments](#error_fragments)
     - [tools](#tools)
     - [metadata](#metadata)
-        - [decription](#decription)
+        - [description](#description)
         - [tags](#tags)
 - [Single Agent Specification](#single-agent-specification)
     - [name](#name)

@@ -15,10 +15,10 @@ from typing import List
 
 from unittest import TestCase
 
+from neuro_san import REGISTRIES_DIR
 from neuro_san.internals.chat.connectivity_reporter import ConnectivityReporter
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
-from neuro_san.internals.utils.file_of_class import FileOfClass
 
 
 class TestConnectivityReporter(TestCase):
@@ -38,8 +38,7 @@ class TestConnectivityReporter(TestCase):
         """
         :param hocon_file: A hocon file reference within this repo
         """
-        file_of_class = FileOfClass(__file__, "../../../../neuro_san/registries")
-        file_reference = file_of_class.get_file_in_basis(hocon_file)
+        file_reference = REGISTRIES_DIR.get_file_in_basis(hocon_file)
         restorer = AgentNetworkRestorer()
         agent_network: AgentNetwork = restorer.restore(file_reference=file_reference)
         return agent_network

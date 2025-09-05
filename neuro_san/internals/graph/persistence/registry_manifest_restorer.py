@@ -23,12 +23,13 @@ from pathlib import Path
 from pyparsing.exceptions import ParseException
 from pyparsing.exceptions import ParseSyntaxException
 
+from leaf_common.config.file_of_class import FileOfClass
 from leaf_common.persistence.easy.easy_hocon_persistence import EasyHoconPersistence
 from leaf_common.persistence.interface.restorer import Restorer
 
+from neuro_san import REGISTRIES_DIR
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
-from neuro_san.internals.utils.file_of_class import FileOfClass
 
 
 class RegistryManifestRestorer(Restorer):
@@ -53,8 +54,7 @@ class RegistryManifestRestorer(Restorer):
             manifest_file: str = os.environ.get("AGENT_MANIFEST_FILE")
             if manifest_file is None:
                 # No env var, so fallback to whatis coded in this repo.
-                file_of_class = FileOfClass(__file__, path_to_basis="../../../registries")
-                manifest_file = file_of_class.get_file_in_basis("manifest.hocon")
+                manifest_file = REGISTRIES_DIR.get_file_in_basis("manifest.hocon")
 
             # Add what was found above
             self.manifest_files.append(manifest_file)

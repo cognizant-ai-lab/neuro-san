@@ -19,6 +19,7 @@ from pathlib import Path
 from leaf_common.config.dictionary_overlay import DictionaryOverlay
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
+from neuro_san import TOP_LEVEL_DIR
 from neuro_san.internals.graph.activations.branch_activation import BranchActivation
 from neuro_san.internals.graph.activations.class_activation import ClassActivation
 from neuro_san.internals.graph.activations.external_activation import ExternalActivation
@@ -31,7 +32,6 @@ from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.front_man import FrontMan
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.internals.run_context.utils.external_agent_parsing import ExternalAgentParsing
-from neuro_san.internals.utils.file_of_class import FileOfClass
 
 
 class ActivationFactory(AgentToolFactory):
@@ -61,8 +61,7 @@ class ActivationFactory(AgentToolFactory):
 
         # Try reach-around directory if still nothing to start with
         if agent_tool_path is None:
-            file_of_class = FileOfClass(__file__, "../../../coded_tools")
-            agent_tool_path = file_of_class.get_basis()
+            agent_tool_path = TOP_LEVEL_DIR.get_file_in_basis("coded_tools")
 
         # If we are dealing with file paths, convert that to something resolvable
         if agent_tool_path.find(os.sep) >= 0:

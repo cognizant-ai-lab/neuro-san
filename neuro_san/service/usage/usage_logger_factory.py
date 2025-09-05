@@ -12,8 +12,9 @@
 
 from os import environ
 
+from leaf_common.config.resolver_util import ResolverUtil
+
 from neuro_san.interfaces.usage_logger import UsageLogger
-from neuro_san.internals.utils.resolver_util import ResolverUtil
 from neuro_san.service.usage.wrapped_usage_logger import WrappedUsageLogger
 
 

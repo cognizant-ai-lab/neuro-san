@@ -14,7 +14,8 @@ from typing import List
 
 from unittest import TestCase
 
-from neuro_san.internals.utils.file_of_class import FileOfClass
+from leaf_common.config.file_of_class import FileOfClass
+
 from neuro_san.test.driver.data_driven_agent_test_driver import DataDrivenAgentTestDriver
 from neuro_san.test.unittest.unit_test_assert_forwarder import UnitTestAssertForwarder
 

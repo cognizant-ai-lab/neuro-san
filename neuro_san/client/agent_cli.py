@@ -26,12 +26,13 @@ from timedinput import timedinput
 from grpc import RpcError
 from grpc import StatusCode
 
+from leaf_common.config.file_of_class import FileOfClass
+
 from neuro_san.client.agent_session_factory import AgentSessionFactory
 from neuro_san.client.concierge_session_factory import ConciergeSessionFactory
 from neuro_san.client.streaming_input_processor import StreamingInputProcessor
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.interfaces.concierge_session import ConciergeSession
-from neuro_san.internals.utils.file_of_class import FileOfClass
 
 
 class AgentCli:

@@ -21,7 +21,7 @@ from pyparsing.exceptions import ParseSyntaxException
 from leaf_common.persistence.easy.easy_hocon_persistence import EasyHoconPersistence
 from leaf_common.persistence.interface.restorer import Restorer
 
-from neuro_san.internals.utils.file_of_class import FileOfClass
+from neuro_san import TOP_LEVEL_DIR
 
 
 class ToolboxInfoRestorer(Restorer):
@@ -43,8 +43,7 @@ class ToolboxInfoRestorer(Restorer):
 
         if file_reference is None or len(file_reference) == 0:
             # Read from the default
-            file_of_class = FileOfClass(__file__, ".")
-            use_file = file_of_class.get_file_in_basis("toolbox_info.hocon")
+            use_file = TOP_LEVEL_DIR.get_file_in_basis("internals/run_context/langchain/toolbox/toolbox_info.hocon")
 
         try:
             if use_file.endswith(".json"):

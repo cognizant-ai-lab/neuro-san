@@ -15,16 +15,14 @@ from typing import Dict
 from typing import List
 from typing import Set
 from typing import Type
+from typing import Tuple
 
 import os
-
-from google.auth.exceptions import DefaultCredentialsError
-from openai import OpenAIError
-from pydantic_core import ValidationError
 
 from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.dictionary_overlay import DictionaryOverlay
+from leaf_common.config.resolver_util import ResolverUtil
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
@@ -33,9 +31,15 @@ from neuro_san.internals.run_context.langchain.llms.llm_info_restorer import Llm
 from neuro_san.internals.run_context.langchain.llms.standard_langchain_llm_factory import StandardLangChainLlmFactory
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
 from neuro_san.internals.run_context.langchain.util.argument_validator import ArgumentValidator
-from neuro_san.internals.utils.resolver_util import ResolverUtil
 
 KEYS_TO_REMOVE_FOR_USER_CLASS: Set[str] = {"class", "verbose"}
+
+# Lazily import specific errors from llm providers
+API_KEY_ERRORS: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
+                                            "google.auth.exceptions.DefaultCredentialsError",
+                                            "openai.OpenAIError",
+                                            "pydantic_core.ValidationError",
+                                        ])
 
 
 class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
@@ -287,7 +291,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
             # Catch some common wrong or missing API key errors in a single place
             # with some verbose error messaging.
-            except (DefaultCredentialsError, OpenAIError, ValidationError) as exception:
+            except API_KEY_ERRORS as exception:
                 # Will re-raise but with the right exception text it will
                 # also provide some more helpful failure text.
                 message: str = ApiKeyErrorCheck.check_for_api_key_exception(exception)

@@ -15,9 +15,9 @@ from typing import List
 
 import argparse
 
+from neuro_san import REGISTRIES_DIR
 from neuro_san.client.simple_one_shot import SimpleOneShot
 from neuro_san.interfaces.agent_session import AgentSession
-from neuro_san.internals.utils.file_of_class import FileOfClass
 from neuro_san.test.assessor.assessor_assert_forwarder import AssessorAssertForwarder
 from neuro_san.test.driver.data_driven_agent_test_driver import DataDrivenAgentTestDriver
 
@@ -27,8 +27,6 @@ class Assessor:
     Command line tool for assessing an agent network's response
     to an input test case.
     """
-
-    SHIPPED_HOCONS = FileOfClass(__file__, path_to_basis="../../registries")
 
     def __init__(self):
         """
@@ -74,7 +72,7 @@ class Assessor:
         self.add_args(arg_parser)
         self.args = arg_parser.parse_args()
         if self.args.assessor_agent is None:
-            self.args.assessor_agent = self.SHIPPED_HOCONS.get_file_in_basis("assess_failure.hocon")
+            self.args.assessor_agent = REGISTRIES_DIR.get_file_in_basis("assess_failure.hocon")
 
     def add_args(self, arg_parser: argparse.ArgumentParser):
         """

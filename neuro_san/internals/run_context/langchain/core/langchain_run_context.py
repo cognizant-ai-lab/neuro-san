@@ -13,6 +13,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Tuple
+from typing import Type
 from typing import Union
 
 import json
@@ -22,9 +23,6 @@ import uuid
 from copy import copy
 from logging import Logger
 from logging import getLogger
-
-from openai import APIError as OpenAI_APIError
-from anthropic import APIError as Anthropic_APIError
 
 from pydantic_core import ValidationError
 
@@ -41,7 +39,8 @@ from langchain_core.messages.system import SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
-from langchain_google_genai.chat_models import ChatGoogleGenerativeAIError
+
+from leaf_common.config.resolver_util import ResolverUtil
 
 from neuro_san.internals.errors.error_detector import ErrorDetector
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
@@ -71,6 +70,13 @@ from neuro_san.internals.run_context.utils.external_tool_adapter import External
 
 
 MINUTES: float = 60.0
+
+# Lazily import specific errors from llm providers
+API_ERROR_TYPES: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
+                                            "openai.APIError",
+                                            "anthropic.APIError",
+                                            "langchain_google_genai.chat_models.ChatGoogleGenerativeAIError",
+                                         ])
 
 
 # pylint: disable=too-many-instance-attributes
@@ -486,7 +492,7 @@ class LangChainRunContext(RunContext):
         while return_dict is None and retries > 0:
             try:
                 return_dict: Dict[str, Any] = await agent_executor.ainvoke(inputs, invoke_config)
-            except (OpenAI_APIError, Anthropic_APIError, ChatGoogleGenerativeAIError) as api_error:
+            except API_ERROR_TYPES as api_error:
                 backtrace = traceback.format_exc()
                 message: str = None
                 if not ApiKeyErrorCheck.check_for_internal_error(backtrace):
