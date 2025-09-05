@@ -18,6 +18,8 @@ from typing import Union
 import copy
 import traceback
 
+import asyncio
+
 from logging import getLogger
 from logging import Logger
 from inspect import iscoroutinefunction
@@ -166,57 +168,64 @@ class DataDrivenChatSession:
         :return: Nothing.  Response values are put on a queue whose consumtion is
                 managed by the Iterator aspect of AsyncCollatingQueue on the InvocationContext.
         """
-        if self.front_man is None:
-            await self.set_up(invocation_context, chat_context)
+        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> streaming_chat STARTED!")
+        try:
+            if self.front_man is None:
+                await self.set_up(invocation_context, chat_context)
 
-        # Save information about chat
-        chat_messages: Iterator[Dict[str, Any]] = await self.chat(user_input, invocation_context, sly_data)
-        message_list: List[Dict[str, Any]] = list(chat_messages)
+            # Save information about chat
+            chat_messages: Iterator[Dict[str, Any]] = await self.chat(user_input, invocation_context, sly_data)
+            message_list: List[Dict[str, Any]] = list(chat_messages)
 
-        # Determine the chat_context to enable continuing the conversation
-        return_chat_context: Dict[str, Any] = self.prepare_chat_context(message_list)
+            # Determine the chat_context to enable continuing the conversation
+            return_chat_context: Dict[str, Any] = self.prepare_chat_context(message_list)
 
-        # Get the front man spec. We will need it later for a few things.
-        front_man_spec: Dict[str, Any] = self.front_man.get_agent_tool_spec()
+            # Get the front man spec. We will need it later for a few things.
+            front_man_spec: Dict[str, Any] = self.front_man.get_agent_tool_spec()
 
-        # Get the formats we should parse from the final answer from the config for the network.
-        # As of 6/24/25, this is an unadvertised experimental feature.
-        structure_formats: Union[str, List[str]] = front_man_spec.get("structure_formats")
+            # Get the formats we should parse from the final answer from the config for the network.
+            # As of 6/24/25, this is an unadvertised experimental feature.
+            structure_formats: Union[str, List[str]] = front_man_spec.get("structure_formats")
 
-        # Find "the answer" and have that be the content of the last message we send
-        answer_processor = AnswerMessageProcessor(structure_formats=structure_formats)
-        answer_processor.process_messages(message_list)
-        answer: str = answer_processor.get_answer()
-        if answer is None:
-            # Can't have content as None or problems arise.
-            answer = ""
-        structure: Dict[str, Any] = answer_processor.get_structure()
+            # Find "the answer" and have that be the content of the last message we send
+            answer_processor = AnswerMessageProcessor(structure_formats=structure_formats)
+            answer_processor.process_messages(message_list)
+            answer: str = answer_processor.get_answer()
+            if answer is None:
+                # Can't have content as None or problems arise.
+                answer = ""
+            structure: Dict[str, Any] = answer_processor.get_structure()
 
-        # Send back sly_data as the front-man permits
-        redactor = SlyDataRedactor(front_man_spec,
-                                   config_keys=["allow.to_upstream.sly_data"],
-                                   allow_empty_dict=False)
-        return_sly_data: Dict[str, Any] = redactor.filter_config(self.sly_data)
+            # Send back sly_data as the front-man permits
+            redactor = SlyDataRedactor(front_man_spec,
+                                       config_keys=["allow.to_upstream.sly_data"],
+                                       allow_empty_dict=False)
+            return_sly_data: Dict[str, Any] = redactor.filter_config(self.sly_data)
 
-        # Stream over chat state as the last message
-        message = AgentFrameworkMessage(content=answer, chat_context=return_chat_context,
-                                        sly_data=return_sly_data, structure=structure)
-        journal: Journal = invocation_context.get_journal()
-        await journal.write_message(message, origin=None)
+            # Stream over chat state as the last message
+            message = AgentFrameworkMessage(content=answer, chat_context=return_chat_context,
+                                            sly_data=return_sly_data, structure=structure)
+            journal: Journal = invocation_context.get_journal()
+            await journal.write_message(message, origin=None)
 
-        # Put an end-marker on the queue to tell the consumer we truly are done
-        # and it doesn't need to wait for any more messages.
-        # The consumer await-s for queue.get()
-        queue: AsyncCollatingQueue = invocation_context.get_queue()
+            # Put an end-marker on the queue to tell the consumer we truly are done
+            # and it doesn't need to wait for any more messages.
+            # The consumer await-s for queue.get()
+            queue: AsyncCollatingQueue = invocation_context.get_queue()
 
-        # The synchronous=True is necessary when an async HTTP request is at the get()-ing end of the queue,
-        # as the journal messages come from inside a separate event loop from that request. The lock
-        # taken here ends up being harmless in the synchronous request case (like for gRPC) because
-        # we would only be blocking our own event loop.
-        await queue.put_final_item(synchronous=True)
-
+            # The synchronous=True is necessary when an async HTTP request is at the get()-ing end of the queue,
+            # as the journal messages come from inside a separate event loop from that request. The lock
+            # taken here ends up being harmless in the synchronous request case (like for gRPC) because
+            # we would only be blocking our own event loop.
+            await queue.put_final_item(synchronous=True)
+        except asyncio.exceptions.CancelledError:
+            print("================================================================== WE GOT IT!")
+            raise
+        
         # Close any objects on sly data that can be closed.
         await self.close_sly_data()
+        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> streaming_chat ENDED!")
+
 
     async def delete_resources(self):
         """
