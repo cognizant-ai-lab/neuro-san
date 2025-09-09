@@ -408,13 +408,13 @@ class LangChainRunContext(RunContext):
     # pylint: disable=too-many-locals
     async def wait_on_run(self, run: Run, journal: Journal = None) -> Run:
         """
-        Loops on the given run's status for model invokation.
+        Loops on the given run's status for model invocation.
 
         This truly is an asynchronous method.
 
         :param run: The run to wait on
         :param journal: The Journal which captures the "thinking" messages.
-        :return: An potentially updated run
+        :return: A potentially updated run
         """
 
         # Create an agent executor and invoke it with the most recent human message
@@ -654,6 +654,35 @@ class LangChainRunContext(RunContext):
         self.chat_history = []
         self.agent = None
         self.recent_human_message = None
+        print(">>>>>>>>>>>>>>>>>>>>>>>>> CLOSING LLM!")
+        client = getattr(self.llm, "client", None)  # OpenAI/AsyncOpenAI instance
+        print(f"~~~~~~~~~~~~~~~~~~ LLM={id(self.llm)} CLIENT={id(client)}  ROOT={id(client._client)}")
+
+        if client is not None:
+            print(f"CLIENT={client}")
+            # methods = [m for m in dir(client) if callable(getattr(client, m))]
+            # print(f"METHODS>>>>>>>> {methods}")
+            http_client = getattr(client, "_client", None)  # the root AsyncOpenAI
+            print(f"HTTP_CLIENT={http_client} {id(http_client)}")
+            # if http_client is not None:
+            #     print("HTTP CLOSING>>>>>>>>")
+            #     try:
+            #         http_client.close()
+            #     except Exception as exc:
+            #         print(f"$$$$$$$$$$$$$$$$$$$$ FAIL TO CLOSE CLIENT: {exc}")
+
+
+            # maybe_await = getattr(client, "close", None)
+            # print(f"AWAIT={maybe_await}")
+            # if maybe_await is not None:
+            #     if asyncio.iscoroutinefunction(maybe_await):
+            #         print(">>>>> CLIENT CLOSE async")
+            #         await client.close()
+            #     elif callable(maybe_await):
+            #         print(">>>>> CLIENT CLOSE sync")
+            #         client.close()
+        print(">>>>>>>>>>>>>>>>>>>>>>>>> CLOSED LLM!")
+
         self.llm = None
         self.journal = None
 

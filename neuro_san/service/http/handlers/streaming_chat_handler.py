@@ -24,6 +24,8 @@ import contextlib
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
 
+from neuro_san.internals.run_context.global_client import GlobalClient
+
 
 class StreamingChatHandler(BaseRequestHandler):
     """
@@ -85,4 +87,8 @@ class StreamingChatHandler(BaseRequestHandler):
                     await result_generator.aclose()
                     print("EEEEEEEEEEEEEEEE")
             self.do_finish()
+
+            print("============ CLOSING CLIENT...")
+            GlobalClient.close_client()
+
             self.application.finish_client_request(metadata, f"{agent_name}/streaming_chat", get_stats=True)

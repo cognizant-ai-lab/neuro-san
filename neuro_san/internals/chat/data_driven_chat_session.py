@@ -225,6 +225,7 @@ class DataDrivenChatSession:
             # taken here ends up being harmless in the synchronous request case (like for gRPC) because
             # we would only be blocking our own event loop.
             await queue.put_final_item(synchronous=True)
+            print("==== FINAL QUEUE out!")
         except asyncio.exceptions.CancelledError:
             print("================================================================== WE GOT IT!")
             raise

@@ -13,7 +13,12 @@
 from typing import Any
 from typing import Dict
 
+import httpx
+
+from openai import OpenAI
 from langchain_core.language_models.base import BaseLanguageModel
+
+from neuro_san.internals.run_context.global_client import GlobalClient
 
 from leaf_common.config.resolver import Resolver
 
@@ -81,11 +86,24 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
             ChatOpenAI = resolver.resolve_class_in_module("ChatOpenAI",
                                                           module_name="langchain_openai.chat_models.base",
                                                           install_if_missing="langchain-openai")
+            #http_client = httpx.Client()
+            http_client = GlobalClient.get_client()
+            print(f">>>>>> HTTP CLIENT CREATED: {id(http_client)}")
+            openai_api_key = self.get_value_or_env(config, "openai_api_key",
+                                                   "OPENAI_API_KEY")
+            openai_client = OpenAI(
+                api_key=openai_api_key,
+                base_url=None,  # or Azure endpoint / custom proxy if you need
+                organization=None,  # if you use orgs
+                http_client=http_client,
+            )
             llm = ChatOpenAI(
+                client=openai_client,
                 model_name=model_name,
                 temperature=config.get("temperature"),
-                openai_api_key=self.get_value_or_env(config, "openai_api_key",
-                                                     "OPENAI_API_KEY"),
+                #openai_api_key=str(openai_api_key),
+                # openai_api_key=self.get_value_or_env(config, "openai_api_key",
+                #                                      "OPENAI_API_KEY"),
                 openai_api_base=self.get_value_or_env(config, "openai_api_base",
                                                       "OPENAI_API_BASE"),
                 openai_organization=self.get_value_or_env(config, "openai_organization",
@@ -130,6 +148,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 # Set stream_usage to True in order to get token counting chunks.
                 stream_usage=True
             )
+            print(f"======================= Chat = {id(llm)}  OpenAI={id(openai_client)}  http={id(http_client)}")
         elif chat_class == "azure-openai":
             model_kwargs: Dict[str, Any] = {
                 "stream_options": {

@@ -46,10 +46,20 @@
                 "console"
             ],
             "propagate": "no"
+        },
+        "httpx": {
+            "level": "DEBUG",
+            "handlers": ["console"],
+            "propagate": false
+        },
+        "httpcore": {
+            "level": "DEBUG",
+            "handlers": ["console"],
+            "propagate": false
         }
     },
     "root": {
-        "level": "INFO",
+        "level": "DEBUG",
         "handlers": [
             "console"
         ]
