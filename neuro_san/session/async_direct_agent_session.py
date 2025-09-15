@@ -18,9 +18,12 @@ from typing import List
 
 from asyncio import Future
 from copy import copy
+import asyncio
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
+
+from neuro_san.internals.run_context.global_client import GlobalClient
 
 from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.internals.chat.connectivity_reporter import ConnectivityReporter
@@ -173,7 +176,7 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         queue_generator = self.invocation_context.get_queue()
         try:
             async for message in queue_generator:
-                print("Got message from QUEUE! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+                #print("Got message from QUEUE! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
                 response_dict: Dict[str, Any] = copy(template_response_dict)
                 if message_filter.allow(message):
                     # We expect the message to be a dictionary form of chat.ChatMessage
@@ -184,9 +187,23 @@ class AsyncDirectAgentSession(AsyncAgentSession):
                     response_dict["response"] = message
                     yield response_dict
         finally:
-            with contextlib.suppress(Exception):
+            loop = asyncio.get_running_loop()
+            print(f"FINALIZE AsyncDirectAgentSession on loop: {id(loop)}")
+            print("CLOSING OPENAI Client.")
+            #async_openai_client = GlobalClient.get_open_ai_client()
+            #await async_openai_client.aclose()
+
+            try:
                 print(">>>>>>>>>>>>>>> DELETE CHAT SESS RESOURCES.")
                 await chat_session.delete_resources()
+            except Exception as exc:
+                print(f"!!!!!!!!!!!!!!!! {exc}")
+            except BaseException as exc:
+                print(f"@@@@@@@@@@@@@@@@ {exc}")
+
+            # with contextlib.suppress(Exception):
+            #     print(">>>>>>>>>>>>>>> DELETE CHAT SESS RESOURCES.")
+            #     await chat_session.delete_resources()
 
     def reset(self):
         """

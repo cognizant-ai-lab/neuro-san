@@ -3,10 +3,11 @@
 import httpx
 import time
 import threading
+from typing import Dict
 
-class GuardedClient:
+class GuardedClient(httpx.AsyncClient):
     def __init__(self, *args, **kwargs):
-        self._orig: httpx.Client = httpx.Client(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._hard_closed = False
         self._lock = threading.Lock()
 
@@ -15,112 +16,88 @@ class GuardedClient:
             raise RuntimeError("This HTTP client has been closed and cannot be reused.")
 
     # Block *any* request once closed
-    def request(self, *args, **kwargs):
+    async def request(self, *args, **kwargs):
         print(f"^^^^^^^^^^^^^ request ***** {self._hard_closed} *********")
         self._ensure_open()
-        return self._orig.request(*args, **kwargs)
+        return await super().request(*args, **kwargs)
 
-    def send(self, *args, **kwargs):
+    async def send(self, *args, **kwargs):
         print(f"^^^^^^^^^^^^^ send **** {self._hard_closed} **********")
         self._ensure_open()
-        return self._orig.send(*args, **kwargs)
+        return await super().send(*args, **kwargs)
 
-    def stream(self, *args, **kwargs):
+    async def stream(self, *args, **kwargs):
         print(f"^^^^^^^^^^^^^ stream **** {self._hard_closed} **********")
         self._ensure_open()
-        return self._orig.stream(*args, **kwargs)
+        return await super().stream(*args, **kwargs)
 
-    def put(self, *args, **kwargs):
+    async def put(self, *args, **kwargs):
         print(f"^^^^^^^^^^^^^ put **** {self._hard_closed} **********")
         self._ensure_open()
-        return self._orig.put(*args, **kwargs)
+        return await super().put(*args, **kwargs)
 
-    def get(self, *args, **kwargs):
+    async def get(self, *args, **kwargs):
         print(f"^^^^^^^^^^^^^ get **** {self._hard_closed} **********")
         self._ensure_open()
-        return self._orig.get(*args, **kwargs)
+        return await super().get(*args, **kwargs)
 
-    def post(self, *args, **kwargs):
+    async def post(self, *args, **kwargs):
         print(f"^^^^^^^^^^^^^ post **** {self._hard_closed} **********")
         self._ensure_open()
-        return self._orig.post(*args, **kwargs)
+        return await super().post(*args, **kwargs)
 
-# class GuardedClient(httpx.Client):
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#         self._hard_closed = False
-#         self._lock = threading.Lock()
-#
-#     def _ensure_open(self):
-#         if self._hard_closed:
-#             raise RuntimeError("This HTTP client has been closed and cannot be reused.")
-#
-#     # Block *any* request once closed
-#     def request(self, *args, **kwargs):
-#         print(f"^^^^^^^^^^^^^ request ***** {self._hard_closed} *********")
-#         self._ensure_open()
-#         return super().request(*args, **kwargs)
-#
-#     def send(self, *args, **kwargs):
-#         print(f"^^^^^^^^^^^^^ send **** {self._hard_closed} **********")
-#         self._ensure_open()
-#         return super().send(*args, **kwargs)
-#
-#     def stream(self, *args, **kwargs):
-#         print(f"^^^^^^^^^^^^^ stream **** {self._hard_closed} **********")
-#         self._ensure_open()
-#         return super().stream(*args, **kwargs)
-#
-#     def put(self, *args, **kwargs):
-#         print(f"^^^^^^^^^^^^^ put **** {self._hard_closed} **********")
-#         self._ensure_open()
-#         return super().put(*args, **kwargs)
-#
-#     def get(self, *args, **kwargs):
-#         print(f"^^^^^^^^^^^^^ get **** {self._hard_closed} **********")
-#         self._ensure_open()
-#         return super().get(*args, **kwargs)
-#
-#     def post(self, *args, **kwargs):
-#         print(f"^^^^^^^^^^^^^ post **** {self._hard_closed} **********")
-#         self._ensure_open()
-#         return super().post(*args, **kwargs)
-#
-#     def close(self):
-#         with self._lock:
-#             if not self._hard_closed:
-#                 self._hard_closed = True
-#                 super().close()
-
-    def close(self):
+    async def aclose(self):
         with self._lock:
             if not self._hard_closed:
                 self._hard_closed = True
-                self._orig.close()
+                await super().aclose()
 
 
 class GlobalClient:
 
     client: GuardedClient = None
     waiter: threading.Thread = None
+    ai_client = None
+
+    clients: Dict[int, httpx.Client] = {}
 
     @classmethod
-    def get_client(cls):
-        if cls.client is None:
-            cls.client = GuardedClient()
-            print(f">>>>>>CREATED HTTP_CLIENT={id(cls.client)} {cls.client} {cls.client._hard_closed}")
-        else:
-            print(f">>>>>>REUSED HTTP_CLIENT={id(cls.client)} {cls.client} {cls.client._hard_closed}")
-        return cls.client
+    def get_client(cls, key: int):
+        client: httpx.Client = cls.clients.get(key, None)
+        if client is None:
+            raise RuntimeError(f"No httpx client for key: {key}")
+        return client
 
     @classmethod
-    def close_client(cls):
-        if cls.client is not None:
-            try:
-                cls.client.close()
-            except Exception as exc:
-                print(f">>>>>>>>>>>>>>>>>FAIL to close: {exc}")
-            finally:
-                print(f">>>>>>CLOSED HTTP_CLIENT={id(cls.client)} {cls.client} {cls.client._hard_closed}")
+    def put_client(cls, key: int, client: GuardedClient):
+        cls.clients[key] = client
+        return client
+
+    @classmethod
+    def make_client(cls) -> GuardedClient:
+        client: GuardedClient = GuardedClient()
+        return client
+
+
+
+    # @classmethod
+    # async def close_client(cls):
+    #     if cls.client is not None:
+    #         try:
+    #             await cls.client.aclose()
+    #         except Exception as exc:
+    #             print(f">>>>>>>>>>>>>>>>>FAIL to close: {exc}")
+    #         finally:
+    #             print(f">>>>>>CLOSED HTTP_CLIENT={id(cls.client)} {cls.client} {cls.client._hard_closed}")
+
+    # @classmethod
+    # def save_open_ai_client(cls, client):
+    #     cls.ai_client = client
+    #
+    # @classmethod
+    # def get_open_ai_client(cls):
+    #     return cls.ai_client
+
+
 
 

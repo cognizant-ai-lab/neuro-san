@@ -22,6 +22,8 @@ from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
 from leaf_common.utils.atomic_counter import AtomicCounter
 
+from neuro_san.internals.run_context.global_client import GlobalClient
+
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
@@ -259,8 +261,13 @@ class AsyncAgentService:
             # Ensure that our SessionInvocationContext is always closed,
             # even if generator is interrupted.
             print("ASD Closing invocation_context.close() in AsyncAgentService")
+
+
             invocation_context.close()
             invocation_context = None
+            # print("CLOSING OPENAI Client.")
+            # async_openai_client = GlobalClient.get_open_ai_client()
+            # await async_openai_client.aclose()
 
         # Maybe report token accounting to a UsageLogger
         token_dict: Dict[str, Any] = request_reporting.get("token_accounting")

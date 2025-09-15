@@ -19,6 +19,10 @@ from typing import Union
 import json
 import traceback
 import uuid
+import time
+
+import asyncio
+from neuro_san.internals.run_context.global_client import GlobalClient
 
 from copy import copy
 from logging import Logger
@@ -153,6 +157,10 @@ class LangChainRunContext(RunContext):
             base_journal: Journal = self.invocation_context.get_journal()
             self.journal = OriginatingJournal(base_journal, self.origin, self.chat_history)
 
+        self.resources_created: bool = False
+
+        print(f">>>>>>>>>>>> CREATE LangChainRunContext: {id(self)}")
+
     async def create_resources(self, agent_name: str,
                                instructions: str,
                                assignments: str,
@@ -172,6 +180,9 @@ class LangChainRunContext(RunContext):
                     Default is None implying no tool is to be called.
         """
         # DEF - Remove the arg if possible
+        if self.resources_created:
+            return
+
         _ = agent_name
 
         full_name: str = Origination.get_full_name_from_origin(self.origin)
@@ -195,6 +206,8 @@ class LangChainRunContext(RunContext):
         prompt_template: ChatPromptTemplate = await self._create_prompt_template(instructions)
 
         self.agent = self.create_agent_with_fallbacks(prompt_template)
+
+        self.resources_created = True
 
     def create_agent_with_fallbacks(self, prompt_template: ChatPromptTemplate) -> Agent:
         """
@@ -654,33 +667,16 @@ class LangChainRunContext(RunContext):
         self.chat_history = []
         self.agent = None
         self.recent_human_message = None
-        print(">>>>>>>>>>>>>>>>>>>>>>>>> CLOSING LLM!")
-        client = getattr(self.llm, "client", None)  # OpenAI/AsyncOpenAI instance
-        print(f"~~~~~~~~~~~~~~~~~~ LLM={id(self.llm)} CLIENT={id(client)}  ROOT={id(client._client)}")
 
-        if client is not None:
-            print(f"CLIENT={client}")
-            # methods = [m for m in dir(client) if callable(getattr(client, m))]
-            # print(f"METHODS>>>>>>>> {methods}")
-            http_client = getattr(client, "_client", None)  # the root AsyncOpenAI
-            print(f"HTTP_CLIENT={http_client} {id(http_client)}")
-            # if http_client is not None:
-            #     print("HTTP CLOSING>>>>>>>>")
-            #     try:
-            #         http_client.close()
-            #     except Exception as exc:
-            #         print(f"$$$$$$$$$$$$$$$$$$$$ FAIL TO CLOSE CLIENT: {exc}")
+        http_client = GlobalClient.get_client(id(self.llm))
+
+        loop = asyncio.get_running_loop()
+        print(f"LangChainRunContext.delete_resources loop: {id(loop)}>>>>>")
+        print(f">>>>>>>>>>>>>>>>>>>>>>>>> CLOSING LLM! on loop {id(loop)}")
+        await http_client.aclose()
 
 
-            # maybe_await = getattr(client, "close", None)
-            # print(f"AWAIT={maybe_await}")
-            # if maybe_await is not None:
-            #     if asyncio.iscoroutinefunction(maybe_await):
-            #         print(">>>>> CLIENT CLOSE async")
-            #         await client.close()
-            #     elif callable(maybe_await):
-            #         print(">>>>> CLIENT CLOSE sync")
-            #         client.close()
+        print(f"HTTP_CLIENT={http_client} {id(http_client)}")
         print(">>>>>>>>>>>>>>>>>>>>>>>>> CLOSED LLM!")
 
         self.llm = None

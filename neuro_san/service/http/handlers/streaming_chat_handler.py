@@ -88,7 +88,12 @@ class StreamingChatHandler(BaseRequestHandler):
                     print("EEEEEEEEEEEEEEEE")
             self.do_finish()
 
-            print("============ CLOSING CLIENT...")
-            GlobalClient.close_client()
+            # print("============ CLOSING CLIENT...")
+            # await GlobalClient.close_client()
+            # print("CLOSING OPENAI Client.")
+            # loop = asyncio.get_running_loop()
+            # print(f">>>>>>>>>>>>>>>>>>>>>>>>> CLOSING LLM! on loop {id(loop)}")
+            # async_openai_client = GlobalClient.get_open_ai_client()
+            # await async_openai_client.aclose()
 
             self.application.finish_client_request(metadata, f"{agent_name}/streaming_chat", get_stats=True)

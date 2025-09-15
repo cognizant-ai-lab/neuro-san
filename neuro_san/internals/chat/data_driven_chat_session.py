@@ -26,6 +26,8 @@ from logging import getLogger
 from logging import Logger
 from inspect import iscoroutinefunction
 
+from neuro_san.internals.run_context.global_client import GlobalClient
+
 from leaf_common.config.resolver_util import ResolverUtil
 
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
@@ -225,7 +227,6 @@ class DataDrivenChatSession:
             # taken here ends up being harmless in the synchronous request case (like for gRPC) because
             # we would only be blocking our own event loop.
             await queue.put_final_item(synchronous=True)
-            print("==== FINAL QUEUE out!")
         except asyncio.exceptions.CancelledError:
             print("================================================================== WE GOT IT!")
             raise
@@ -239,6 +240,12 @@ class DataDrivenChatSession:
         """
         Frees up any service-side resources.
         """
+
+        # print("CLOSING OPENAI Client.")
+        # async_openai_client = GlobalClient.get_open_ai_client()
+        # if async_openai_client is not None:
+        #     await async_openai_client.aclose()
+
         if self.front_man is not None:
             await self.front_man.delete_any_resources()
             self.front_man = None
