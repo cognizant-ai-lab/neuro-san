@@ -84,6 +84,13 @@ class AgentCli:
         for connectivity_info in response.get("connectivity_info", empty_list):
             print(f"{json.dumps(connectivity_info, indent=4, sort_keys=True)}")
 
+        metadata = response.get("metadata")
+        metadata_str: str = "<None>"
+        if metadata is not None:
+            metadata_str = json.dumps(metadata, indent=4, sort_keys=True)
+
+        print(f"\nNetwork Metadata: {metadata_str}")
+
     def chat(self):
         """
         Perform chat function

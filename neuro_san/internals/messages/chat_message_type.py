@@ -80,19 +80,6 @@ class ChatMessageType(IntEnum):
         return message_type
 
     @classmethod
-    def message_to_role(cls, base_message: BaseMessage) -> str:
-        """
-        This role stuff will be removed when the Logs() API is removed,
-        as the ChatMessageType and grpc definitions make it redundant.
-
-        :param base_message: A base message instance
-        :return: The role string corresponding to the base_message
-        """
-        base_message_type: Type[BaseMessage] = type(base_message)
-        role: str = _MESSAGE_TYPE_TO_ROLE.get(base_message_type)
-        return role
-
-    @classmethod
     def to_string(cls, chat_message_type: ChatMessageType) -> str:
         """
         :param chat_message_type: A ChatMessageType instance
@@ -114,15 +101,6 @@ _MESSAGE_TYPE_TO_CHAT_MESSAGE_TYPE: Dict[Type[BaseMessage], ChatMessageType] = {
     AgentMessage: ChatMessageType.AGENT,
     AgentFrameworkMessage: ChatMessageType.AGENT_FRAMEWORK,
     AgentToolResultMessage: ChatMessageType.AGENT_TOOL_RESULT,
-}
-
-_MESSAGE_TYPE_TO_ROLE: Dict[Type[BaseMessage], str] = {
-    AIMessage: "assistant",
-    HumanMessage: "user",
-    SystemMessage: "system",
-    AgentMessage: "agent",
-    AgentFrameworkMessage: "agent-framework",
-    AgentToolResultMessage: "agent-tool-result",
 }
 
 _CHAT_MESSAGE_TYPE_TO_STRING: Dict[ChatMessageType, str] = {

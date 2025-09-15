@@ -22,7 +22,7 @@
     "interactions": [
         {
             # This is what we send as input to streaming_chat()
-            "text": "times",
+            "text": "multiply",
 
             "sly_data": {
                 "x": 847,

@@ -18,6 +18,11 @@
     "metadata": {
         "description": "Simple agent network using a CodedTool and sly_data"
         "tags": ["example"],
+        "rai_scores": {
+            # These are not real scores, they are just an example
+            "bogosity": 0.9,
+            "safety": 0.8,    
+        }
     },
     "llm_config": {
         "model_name": "gpt-4o",
@@ -79,21 +84,33 @@ on the secret numbers.
             },
 
             "instructions": """
-Always call the calculator tool to populate the return sly_data correctly.
-Return verbatim whatever it returns.
+You are an interface for a calculator tool.
+Always call the real_calculator tool to perform the arithmetic calculation,
+but know that the operand values will always be hidden from you. Do not ask
+for them. Instead trust that the real_calculator tool will get the operands
+by some other means, and just pass the name of the operator to the real_calculator tool.
+Return verbatim whatever real_calculator returns.
 """,
             "allow": {
                 "to_upstream": {
                     "sly_data": ["equals"]
                 }
             },
-            "tools": ["calculator"]
+            "tools": ["real_calculator"],
+
+            "metadata": {
+                "rai_scores": {
+                    # These are not real scores, they are just an example
+                    "bogosity": 0.9,
+                    "safety": 0.8,    
+                }
+            }
         },
 
         # The calculator is a low-level CodedTool and does not call anyone else.
         # He is called by the front-man.
         {
-            "name": "calculator",
+            "name": "real_calculator",
             "function": {
                 "description": "Performs arithmetic on sly-data values x and y given the operator",
                 "parameters": {

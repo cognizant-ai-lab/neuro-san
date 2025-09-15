@@ -9,8 +9,9 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
-from typing import Any
 from typing import List
+
+from langchain_core.messages.base import BaseMessage
 
 from neuro_san.internals.graph.activations.calling_activation import CallingActivation
 from neuro_san.internals.interfaces.front_man import FrontMan
@@ -29,7 +30,7 @@ class FrontManActivation(CallingActivation, FrontMan):
         """
         await self.create_resources()
 
-    async def submit_message(self, user_input: str) -> List[Any]:
+    async def submit_message(self, user_input: str) -> List[BaseMessage]:
         """
         Entry-point method for callers of the root of the Activation tree.
 
@@ -37,7 +38,7 @@ class FrontManActivation(CallingActivation, FrontMan):
         :return: A list of response messages for the run
         """
         # Initialize our return value
-        messages: List[Any] = []
+        messages: List[BaseMessage] = []
 
         current_run: Run = await self.run_context.submit_message(user_input)
 

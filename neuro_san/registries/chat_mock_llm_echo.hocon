@@ -1,0 +1,54 @@
+
+# Copyright (C) 2023-2025 Cognizant Digital Business, Evolutionary AI.
+# All Rights Reserved.
+# Issued under the Academic Public License.
+#
+# You can be released from the terms, and requirements of the Academic Public
+# License by purchasing a commercial license.
+# Purchase of a commercial license is mandatory for any use of the
+# neuro-san SDK Software in commercial settings.
+#
+# END COPYRIGHT
+
+# The schema specifications for this file are documented here:
+# https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md
+
+{
+    # Optional metadata describing this agent network
+    "metadata": {
+        "description": "Testing neuro-san infrastructure by using a mock llm.",
+        "tags": ["test"],
+    },
+    "llm_config": {
+        "class": "neuro_san.test.llms.chat_mock_llm.ChatMockLlm",
+        # As of Oct 10, 2025 the model name can be anything since the model only echoes.
+        "model_name": "echo",
+    },
+    "tools": [
+        # This first agent definition is regarded as the "Front Man", which
+        # does all the talking to the outside world/client.
+        #
+        # Some disqualifications from being a front man:
+        #   1) Cannot use a CodedTool "class" definition
+        #   2) Cannot use a Tool "toolbox" definition
+        #
+        # Besides the first agent being the front man, these tool definitions
+        # do not have to be in any particular order. How they are linked and
+        # call each other is defined within their own specs.
+        # This could be a graph, potentially even with cycles.
+        {
+            "name": "echoer",
+
+            # Note that there are no parameters defined for this guy's "function" key.
+            # This is the primary way to identify this tool as a front-man,
+            # distinguishing it from the rest of the tools.
+
+            "function": {
+                # The description acts as an initial prompt. 
+                "description": "This is a mock llm that only echo the input.",
+            },
+
+            "instructions": "System prompt for the mock llm",
+        },
+    ]
+}

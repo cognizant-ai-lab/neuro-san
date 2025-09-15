@@ -361,6 +361,10 @@
           "display_as": {
             "type": "string",
             "description": "A string describing the nature of the agent so that a client UI can add an indication of its differences between other nodes in the graph. Values from the neuro-san include:  * llm_agent  (default)  * coded_tool  * langchain_tool  * external_agent ... however individual agent networks can define their own strings on a per-node basis to customize their own visualizations."
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Metadata for the node. This comes as a free-form dictionary which can have agent-network defined semantics. Some key/value pairs might eventually become standardized as part of the neuro-san API as time goes on, for instance for fine-grained Responsible AI (RAI) scores. As those keys become standardized, they will be added here in the docs."
           }
         }
       },
@@ -373,6 +377,10 @@
               "$ref": "#/components/schemas/ConnectivityInfo"
             },
             "description": "The description of the agent network's internal connectivity ... as far as the agent wants the outside world to know.."
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Metadata for the network as a whole. This comes as a free-form dictionary which can have agent-network defined semantics. Some key/value pairs might eventually become standardized as part of the neuro-san API as time goes on, for instance for network-level Responsible AI (RAI) scores. As those keys become standardized, they will be added here in the docs."
           }
         },
         "description": "Response structure for Connectivity gRPC method"

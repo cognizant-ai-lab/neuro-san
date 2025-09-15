@@ -17,6 +17,8 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from langchain_core.messages.base import BaseMessage
+
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.run_context.interfaces.agent_spec_provider import AgentSpecProvider
@@ -61,16 +63,21 @@ class RunContext(AgentSpecProvider):
         """
         raise NotImplementedError
 
-    async def get_response(self) -> List[Any]:
+    async def get_response(self) -> List[BaseMessage]:
         """
         :return: The list of messages from the instance's thread.
         """
         raise NotImplementedError
 
-    async def submit_tool_outputs(self, run: Run, tool_outputs: List[Any]) -> Run:
+    async def submit_tool_outputs(self, run: Run, tool_outputs: List[Dict[str, Any]]) -> Run:
         """
         :param run: The Run instance handling the execution of the agent
         :param tool_outputs: The tool outputs to submit
+                The component dictionaries can have the following keys:
+                    "origin"        A List of origin dictionaries indicating the origin of the run.
+                    "output"        A string representing the output of the tool call
+                    "sly_data"      Optional sly_data dictionary that might have returned from an external tool.
+                    "tool_call_id"  The string id of the tool_call being executed
         :return: A potentially updated run instance handle
         """
         raise NotImplementedError

@@ -110,8 +110,6 @@ class LangChainRunContext(RunContext):
         :param chat_context: A ChatContext dictionary that contains all the state necessary
                 to carry on a previous conversation, possibly from a different server.
         """
-        # This block contains top candidates for state storage that needs to be
-        # retained when session_ids go away.
         self.chat_history: List[BaseMessage] = []
         self.journal: OriginatingJournal = None
         self.llm: BaseLanguageModel = None
@@ -455,7 +453,7 @@ class LangChainRunContext(RunContext):
 
         inputs = {
             "chat_history": previous_chat_history,
-            "input": self.recent_human_message
+            "input": self.recent_human_message.content
         }
 
         # Create the list of callbacks to pass when invoking
@@ -565,17 +563,22 @@ class LangChainRunContext(RunContext):
         # Chat history is updated in write_message
         await self.journal.write_message(return_message)
 
-    async def get_response(self) -> List[Any]:
+    async def get_response(self) -> List[BaseMessage]:
         """
         :return: The list of messages from the instance's thread.
         """
         # Not sure if this is the right thing, as this will be langchain-y stuff.
         return self.chat_history
 
-    async def submit_tool_outputs(self, run: Run, tool_outputs: List[Any]) -> Run:
+    async def submit_tool_outputs(self, run: Run, tool_outputs: List[Dict[str, Any]]) -> Run:
         """
         :param run: The Run handling the execution of the agent
         :param tool_outputs: The tool outputs to submit
+                The component dictionaries can have the following keys:
+                    "origin"        A List of origin dictionaries indicating the origin of the run.
+                    "output"        A string representing the output of the tool call
+                    "sly_data"      Optional sly_data dictionary that might have returned from an external tool.
+                    "tool_call_id"  The string id of the tool_call being executed
         :return: A potentially updated run handle
         """
         if tool_outputs is not None and len(tool_outputs) > 0:

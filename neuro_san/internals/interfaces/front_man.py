@@ -13,6 +13,8 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from langchain_core.messages.base import BaseMessage
+
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 
 
@@ -51,7 +53,7 @@ class FrontMan:
         """
         raise NotImplementedError
 
-    async def submit_message(self, user_input: str) -> List[Any]:
+    async def submit_message(self, user_input: str) -> List[BaseMessage]:
         """
         Entry-point method for callers of the root of the Activation tree.
 

@@ -9,14 +9,14 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
-from unittest import TestCase
+from unittest import IsolatedAsyncioTestCase
 
 import pytest
 
 from neuro_san.coded_tools.accountant import Accountant
 
 
-class TestAccountant(TestCase):
+class TestAccountant(IsolatedAsyncioTestCase):
     """
     Unit tests for Accountant class.
     """

@@ -110,10 +110,14 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         }
 
         reporter = ConnectivityReporter(self.agent_network)
+        config: Dict[str, Any] = self.agent_network.get_config()
+        metadata: Dict[str, Any] = config.get("metadata")
         connectivity_info: List[Dict[str, Any]] = reporter.report_network_connectivity()
         response_dict = {
             "connectivity_info": connectivity_info,
         }
+        if metadata is not None:
+            response_dict["metadata"] = metadata
 
         return response_dict
 
