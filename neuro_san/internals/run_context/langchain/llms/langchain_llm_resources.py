@@ -10,7 +10,12 @@ from langchain_core.language_models.base import BaseLanguageModel
 
 class LangChainLlmResources:
 
-    def __init__(self, model: BaseLanguageModel, http_client: httpx.AsyncClient):
+    def __init__(self, model: BaseLanguageModel, http_client: httpx.AsyncClient = None):
+        """
+        Constructor.
+        :param model: Language model used.
+        :param http_client: optional httpx.AsyncClient used for model connections to LLM host.
+        """
         self.model = model
         self.http_client = http_client
 

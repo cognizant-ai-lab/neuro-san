@@ -13,6 +13,8 @@
 from typing import Any
 from typing import Dict
 
+from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
+
 
 class ContextTypeLlmFactory:
     """
@@ -48,12 +50,12 @@ class ContextTypeLlmFactory:
         """
         raise NotImplementedError
 
-    def create_llm(self, config: Dict[str, Any]) -> Any:
+    def create_llm(self, config: Dict[str, Any]) -> LangChainLlmResources:
         """
-        Create an llm instance BaseLanguageModel from the fully-specified llm config.
+        Create a llm instance BaseLanguageModel from the fully-specified llm config.
         :param config: The fully specified llm config from which the LLM instance
                     should be created.
-        :return: An llm instance native to the context type.
+        :return: An LangChainLlmResources instance containing a model native to the context type.
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
         """

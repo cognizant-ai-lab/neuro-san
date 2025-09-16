@@ -155,20 +155,22 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
     def create_llm(
             self,
             config: Dict[str, Any]
-    ) -> BaseLanguageModel:
+    ) -> LangChainLlmResources:
         """
         Creates a langchain LLM based on the 'model_name' value of
         the config passed in.
 
         :param config: A dictionary which describes which LLM to use.
                 See the class comment for details.
-        :return: A BaseLanguageModel (can be Chat or LLM)
-                Can raise a ValueError if the config's model_name value is
+        :return: A LangChainLlmResources instance containing
+                a BaseLanguageModel (can be Chat or LLM) and all related resources
+                necessary for managing the model run-time lifecycle.
+                Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
         """
         full_config: Dict[str, Any] = self.create_full_llm_config(config)
-        llm: BaseLanguageModel = self.create_base_chat_model(full_config)
-        return llm
+        llm_resources: LangChainLlmResources = self.create_base_chat_model(full_config)
+        return llm_resources
 
     def create_full_llm_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -267,7 +269,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         return args
 
-    def create_base_chat_model(self, config: Dict[str, Any]) -> BaseLanguageModel:
+    def create_base_chat_model(self, config: Dict[str, Any]) -> LangChainLlmResources:
         """
         Create a BaseLanguageModel from the fully-specified llm config either from standard LLM factory,
         user-defined LLM factory, or user-specified langchain model class.
@@ -279,15 +281,15 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
         """
-        llm: BaseLanguageModel = None
+        llm_resources: LangChainLlmResources = None
 
         # Loop through the loaded factories in order until we can find one
         # that can create the llm.
         found_exception: Exception = None
         for llm_factory in self.llm_factories:
             try:
-                llm = llm_factory.create_base_chat_model(config)
-                if llm is not None and isinstance(llm, BaseLanguageModel):
+                llm_resources = llm_factory.create_base_chat_model(config)
+                if llm_resources is not None and isinstance(llm_resources, LangChainLlmResources):
                     # We found what we were looking for
                     found_exception = None
                     break
@@ -318,17 +320,18 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         class_path: str = config.get("class")
         default_llm_classes: Set[str] = set(self.llm_infos.get("classes"))
         if (
-            llm is None
+            llm_resources is None
             and found_exception is not None
             and class_path not in default_llm_classes
         ):
-            llm = self.create_base_chat_model_from_user_class(class_path, config)
+            llm: BaseLanguageModel = self.create_base_chat_model_from_user_class(class_path, config)
+            llm_resources = LangChainLlmResources(llm)
             found_exception = None
 
         if found_exception is not None:
             raise found_exception
 
-        return llm
+        return llm_resources
 
     def create_base_chat_model_from_user_class(
             self,

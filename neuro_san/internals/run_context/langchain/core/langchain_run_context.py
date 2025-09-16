@@ -67,6 +67,7 @@ from neuro_san.internals.run_context.langchain.token_counting.langchain_token_co
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
 from neuro_san.internals.run_context.utils.external_agent_parsing import ExternalAgentParsing
 from neuro_san.internals.run_context.utils.external_tool_adapter import ExternalToolAdapter
+from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
 
 
 MINUTES: float = 60.0
@@ -109,6 +110,7 @@ class LangChainRunContext(RunContext):
         self.chat_history: List[BaseMessage] = []
         self.journal: OriginatingJournal = None
         self.llm: BaseLanguageModel = None
+        self.llm_resources: LangChainLlmResources = None
         self.agent: Agent = None
 
         # This might get modified in create_resources() (for now)
@@ -206,7 +208,7 @@ class LangChainRunContext(RunContext):
         # Get the factory we will use
         llm_factory: ContextTypeLlmFactory = self.invocation_context.get_llm_factory()
 
-        # Prepare a list of fallbacks.  By default the llm_config itself is a single-entry fallback list.
+        # Prepare a list of fallbacks.  By default, the llm_config itself is a single-entry fallback list.
         fallbacks: List[Dict[str, Any]] = [self.llm_config]
         fallbacks = self.llm_config.get("fallbacks", fallbacks)
 
@@ -217,14 +219,15 @@ class LangChainRunContext(RunContext):
         for index, fallback in enumerate(fallbacks):
 
             # Create a model we might use.
-            one_llm: BaseLanguageModel = llm_factory.create_llm(fallback)
+            one_llm: LangChainLlmResources = llm_factory.create_llm(fallback)
             one_agent: Agent = self.create_agent(prompt_template, one_llm)
 
             if index == 0:
                 # The first agent is the one we want to be our main guy.
                 agent = one_agent
                 # For now. Could be problems with different providers w/ token counting.
-                self.llm = one_llm
+                self.llm_resources = one_llm
+                self.llm = self.llm_resources.get_model()
             else:
                 # Anything later than the first guy is considered a fallback. Add it to the list.
                 chain_fallbacks.append(one_agent)

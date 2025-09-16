@@ -18,6 +18,7 @@ from langchain_core.language_models.base import BaseLanguageModel
 from leaf_common.config.resolver import Resolver
 
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
+from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
 
 
 class StandardLangChainLlmFactory(LangChainLlmFactory):
@@ -40,19 +41,21 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                                     which is a total count of message + response tokens
                                     which goes into the calculation involved in
                                     get_max_prompt_tokens().
-                                    By default the value is 0.5.
+                                    By default, the value is 0.5.
 
         "max_tokens"                The maximum number of tokens to use in
-                                    get_max_prompt_tokens(). By default this comes from
+                                    get_max_prompt_tokens(). By default, this comes from
                                     the model description in this class.
     """
 
-    def create_base_chat_model(self, config: Dict[str, Any]) -> BaseLanguageModel:
+    def create_base_chat_model(self, config: Dict[str, Any]) -> LangChainLlmResources:
         """
         Create a BaseLanguageModel from the fully-specified llm config.
         :param config: The fully specified llm config which is a product of
                     _create_full_llm_config() above.
-        :return: A BaseLanguageModel (can be Chat or LLM)
+        :return: A LangChainLlmResources instance containing
+                a BaseLanguageModel (can be Chat or LLM) and all related resources
+                necessary for managing the model run-time lifecycle.
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
         """
@@ -406,4 +409,4 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         else:
             raise ValueError(f"Class {chat_class} for model_name {model_name} is unrecognized.")
 
-        return llm
+        return LangChainLlmResources(llm, http_client=None)
