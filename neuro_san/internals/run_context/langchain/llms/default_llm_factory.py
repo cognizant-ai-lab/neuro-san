@@ -25,6 +25,7 @@ from leaf_common.config.dictionary_overlay import DictionaryOverlay
 from leaf_common.config.resolver_util import ResolverUtil
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
+from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
 from neuro_san.internals.run_context.langchain.llms.llm_info_restorer import LlmInfoRestorer
@@ -272,7 +273,9 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         user-defined LLM factory, or user-specified langchain model class.
         :param config: The fully specified llm config which is a product of
                     _create_full_llm_config() above.
-        :return: A BaseLanguageModel (can be Chat or LLM)
+        :return: A LangChainLlmResources instance containing
+                a BaseLanguageModel (can be Chat or LLM) and all related resources
+                necessary for managing the model run-time lifecycle.
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
         """
