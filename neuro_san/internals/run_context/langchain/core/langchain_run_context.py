@@ -220,7 +220,7 @@ class LangChainRunContext(RunContext):
 
             # Create a model we might use.
             one_llm: LangChainLlmResources = llm_factory.create_llm(fallback)
-            one_agent: Agent = self.create_agent(prompt_template, one_llm)
+            one_agent: Agent = self.create_agent(prompt_template, one_llm.get_model())
 
             if index == 0:
                 # The first agent is the one we want to be our main guy.
