@@ -61,6 +61,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
         """
+        # pylint: disable=too-many-locals
         # Construct the LLM
         llm: BaseLanguageModel = None
         chat_class: str = config.get("class")
@@ -89,8 +90,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                                                           install_if_missing="langchain-openai")
 
             # Our run-time model resource here is httpx client which we need to control directly:
-            openai_proxy = self.get_value_or_env(config, "openai_organization",
-                                                "OPENAI_PROXY")
+            openai_proxy = self.get_value_or_env(config, "openai_organization", "OPENAI_PROXY")
             request_timeout = config.get("request_timeout")
             http_client = httpx.AsyncClient(proxy=openai_proxy, timeout=request_timeout)
 

@@ -21,6 +21,7 @@ from langchain_core.language_models.base import BaseLanguageModel
 from langchain_openai.chat_models.base import ChatOpenAI
 
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
+from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
 
 
 class TestLlmFactory(LangChainLlmFactory):
@@ -51,13 +52,15 @@ class TestLlmFactory(LangChainLlmFactory):
     """
 
     def create_base_chat_model(self, config: Dict[str, Any],
-                               callbacks: List[BaseCallbackHandler] = None) -> BaseLanguageModel:
+                               callbacks: List[BaseCallbackHandler] = None) -> LangChainLlmResources:
         """
         Create a BaseLanguageModel from the fully-specified llm config.
         :param config: The fully specified llm config which is a product of
                     _create_full_llm_config() above.
         :param callbacks: A list of BaseCallbackHandlers to add to the chat model.
-        :return: A BaseLanguageModel (can be Chat or LLM)
+        :return: A LangChainLlmResources instance containing
+                a BaseLanguageModel (can be Chat or LLM) and all related resources
+                necessary for managing the model run-time lifecycle.
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
         """
@@ -106,4 +109,4 @@ class TestLlmFactory(LangChainLlmFactory):
         else:
             raise ValueError(f"Class {chat_class} for model_name {model_name} is unrecognized.")
 
-        return llm
+        return LangChainLlmResources(llm, http_client=None)
