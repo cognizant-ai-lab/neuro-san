@@ -2,8 +2,7 @@
 from typing import Any
 from typing import Dict
 
-import os
-
+import contextlib
 import httpx
 from langchain_core.language_models.base import BaseLanguageModel
 
@@ -30,3 +29,11 @@ class LangChainLlmResources:
         Get the http client used by the model
         """
         return self.http_client
+
+    async def release_resources(self):
+        """
+        Release the run-time resources used by the model
+        """
+        if self.http_client:
+            with contextlib.suppress(Exception):
+                await self.http_client.aclose()

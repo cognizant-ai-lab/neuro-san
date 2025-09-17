@@ -109,7 +109,6 @@ class LangChainRunContext(RunContext):
         """
         self.chat_history: List[BaseMessage] = []
         self.journal: OriginatingJournal = None
-        self.llm: BaseLanguageModel = None
         self.llm_resources: LangChainLlmResources = None
         self.agent: Agent = None
 
@@ -124,6 +123,8 @@ class LangChainRunContext(RunContext):
         self.invocation_context: InvocationContext = invocation_context
         self.chat_context: Dict[str, Any] = chat_context
         self.origin: List[Dict[str, Any]] = []
+        # Have we already created resources for this RunContext:
+        self.resources_created: bool = False
         # Default logger
         self.logger: Logger = getLogger(self.__class__.__name__)
 
@@ -172,6 +173,11 @@ class LangChainRunContext(RunContext):
                     Default is None implying no tool is to be called.
         """
         # DEF - Remove the arg if possible
+        if self.resources_created:
+            # Don't create RunContext resources twice -
+            # we could possibly leak some run-time resources.
+            return
+
         _ = agent_name
 
         full_name: str = Origination.get_full_name_from_origin(self.origin)
@@ -195,6 +201,7 @@ class LangChainRunContext(RunContext):
         prompt_template: ChatPromptTemplate = await self._create_prompt_template(instructions)
 
         self.agent = self.create_agent_with_fallbacks(prompt_template)
+        self.resources_created = True
 
     def create_agent_with_fallbacks(self, prompt_template: ChatPromptTemplate) -> Agent:
         """
@@ -227,7 +234,6 @@ class LangChainRunContext(RunContext):
                 agent = one_agent
                 # For now. Could be problems with different providers w/ token counting.
                 self.llm_resources = one_llm
-                self.llm = self.llm_resources.get_model()
             else:
                 # Anything later than the first guy is considered a fallback. Add it to the list.
                 chain_fallbacks.append(one_agent)
@@ -473,7 +479,8 @@ class LangChainRunContext(RunContext):
         await self.journal.write_message(self.recent_human_message)
 
         # Attempt to count tokens/costs while invoking the agent.
-        token_counter = LangChainTokenCounter(self.llm, self.invocation_context, self.journal)
+        llm: BaseLanguageModel = self.llm_resources.get_model()
+        token_counter = LangChainTokenCounter(llm, self.invocation_context, self.journal)
         await token_counter.count_tokens(self.ainvoke(agent_executor, inputs, invoke_config))
 
         return run
@@ -656,11 +663,16 @@ class LangChainRunContext(RunContext):
         :param parent_run_context: A parent RunContext perhaps the same instance,
                         but perhaps not.  Default is None
         """
+
+        # Release model related resources:
+        if self.llm_resources:
+            await self.llm_resources.release_resources()
+
         self.tools = []
         self.chat_history = []
         self.agent = None
         self.recent_human_message = None
-        self.llm = None
+        self.llm_resources = None
         self.journal = None
 
     def get_agent_tool_spec(self) -> Dict[str, Any]:

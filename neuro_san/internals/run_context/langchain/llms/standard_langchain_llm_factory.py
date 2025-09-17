@@ -1,4 +1,3 @@
-
 # Copyright (C) 2023-2025 Cognizant Digital Business, Evolutionary AI.
 # All Rights Reserved.
 # Issued under the Academic Public License.
@@ -12,6 +11,9 @@
 
 from typing import Any
 from typing import Dict
+
+import httpx
+from openai import AsyncOpenAI
 
 from langchain_core.language_models.base import BaseLanguageModel
 
@@ -74,6 +76,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         # langchain_* packages to prevent installing the world.
         resolver = Resolver()
 
+        http_client: httpx.AsyncClient = None
         if chat_class == "openai":
 
             # OpenAI is the one chat class that we do not require any extra installs.
@@ -84,29 +87,39 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
             ChatOpenAI = resolver.resolve_class_in_module("ChatOpenAI",
                                                           module_name="langchain_openai.chat_models.base",
                                                           install_if_missing="langchain-openai")
+
+            # Our run-time model resource here is httpx client which we need to control directly:
+            openai_proxy = self.get_value_or_env(config, "openai_organization",
+                                                "OPENAI_PROXY")
+            request_timeout = config.get("request_timeout")
+            http_client = httpx.AsyncClient(proxy=openai_proxy, timeout=request_timeout)
+
+            # Now build an OpenAI client using this resource:
+            async_openai_client: AsyncOpenAI = AsyncOpenAI(
+                api_key=self.get_value_or_env(config, "openai_api_key",
+                                              "OPENAI_API_KEY"),
+                base_url=self.get_value_or_env(config, "openai_api_base", "OPENAI_API_BASE"),
+                organization=self.get_value_or_env(config, "openai_organization", "OPENAI_ORG_ID"),
+                timeout=request_timeout,
+                max_retries=config.get("max_retries"),
+                http_client=http_client
+            )
+
+            # Now construct LLM chat model we will be using:
             llm = ChatOpenAI(
+                async_client=async_openai_client.chat.completions,
                 model_name=model_name,
                 temperature=config.get("temperature"),
-                openai_api_key=self.get_value_or_env(config, "openai_api_key",
-                                                     "OPENAI_API_KEY"),
-                openai_api_base=self.get_value_or_env(config, "openai_api_base",
-                                                      "OPENAI_API_BASE"),
-                openai_organization=self.get_value_or_env(config, "openai_organization",
-                                                          "OPENAI_ORG_ID"),
-                openai_proxy=self.get_value_or_env(config, "openai_organization",
-                                                   "OPENAI_PROXY"),
-                request_timeout=config.get("request_timeout"),
-                max_retries=config.get("max_retries"),
                 presence_penalty=config.get("presence_penalty"),
                 frequency_penalty=config.get("frequency_penalty"),
                 seed=config.get("seed"),
                 logprobs=config.get("logprobs"),
                 top_logprobs=config.get("top_logprobs"),
                 logit_bias=config.get("logit_bias"),
-                streaming=True,     # streaming is always on. Without it token counting will not work.
-                n=1,                # n is always 1.  neuro-san will only ever consider one chat completion.
+                streaming=True,  # streaming is always on. Without it token counting will not work.
+                n=1,  # n is always 1.  neuro-san will only ever consider one chat completion.
                 top_p=config.get("top_p"),
-                max_tokens=config.get("max_tokens"),    # This is always for output
+                max_tokens=config.get("max_tokens"),  # This is always for output
                 tiktoken_model_name=config.get("tiktoken_model_name"),
                 stop=config.get("stop"),
 
@@ -166,10 +179,10 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 logprobs=config.get("logprobs"),
                 top_logprobs=config.get("top_logprobs"),
                 logit_bias=config.get("logit_bias"),
-                streaming=True,     # streaming is always on. Without it token counting will not work.
-                n=1,                # n is always 1.  neuro-san will only ever consider one chat completion.
+                streaming=True,  # streaming is always on. Without it token counting will not work.
+                n=1,  # n is always 1.  neuro-san will only ever consider one chat completion.
                 top_p=config.get("top_p"),
-                max_tokens=config.get("max_tokens"),    # This is always for output
+                max_tokens=config.get("max_tokens"),  # This is always for output
                 tiktoken_model_name=config.get("tiktoken_model_name"),
                 stop=config.get("stop"),
 
@@ -214,7 +227,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                                                              install_if_missing="langchain-anthropic")
             llm = ChatAnthropic(
                 model_name=model_name,
-                max_tokens=config.get("max_tokens"),    # This is always for output
+                max_tokens=config.get("max_tokens"),  # This is always for output
                 temperature=config.get("temperature"),
                 top_k=config.get("top_k"),
                 top_p=config.get("top_p"),
@@ -225,7 +238,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                                                         "ANTHROPIC_API_URL"),
                 anthropic_api_key=self.get_value_or_env(config, "anthropic_api_key",
                                                         "ANTHROPIC_API_KEY"),
-                streaming=True,     # streaming is always on. Without it token counting will not work.
+                streaming=True,  # streaming is always on. Without it token counting will not work.
                 # Set stream_usage to True in order to get token counting chunks.
                 stream_usage=True,
 
@@ -336,7 +349,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 google_api_key=self.get_value_or_env(config, "google_api_key",
                                                      "GOOGLE_API_KEY"),
                 max_retries=config.get("max_retries"),
-                max_tokens=config.get("max_tokens"),    # This is always for output
+                max_tokens=config.get("max_tokens"),  # This is always for output
                 n=config.get("n"),
                 temperature=config.get("temperature"),
                 timeout=config.get("timeout"),
@@ -409,4 +422,4 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         else:
             raise ValueError(f"Class {chat_class} for model_name {model_name} is unrecognized.")
 
-        return LangChainLlmResources(llm, http_client=None)
+        return LangChainLlmResources(llm, http_client=http_client)
