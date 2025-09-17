@@ -263,7 +263,7 @@ class AsyncAgentService:
         if do_log:
             reporting: str = None
             if request_reporting is not None:
-                reporting = json.dumps(request_reporting, indent=4, sort_keys=True)
+                reporting = json.dumps(request_reporting, indent=4, sort_keys=False)
             self.request_logger.info(metadata, "Request reporting: %s", reporting)
             self.request_logger.info(
                 metadata,

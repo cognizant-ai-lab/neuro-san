@@ -13,6 +13,8 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from langchain_core.messages.base import BaseMessage
+
 from neuro_san.internals.graph.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.graph.interfaces.callable_activation import CallableActivation
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
@@ -93,10 +95,10 @@ class AbstractCallableActivation(CallableActivation):
             await self.run_context.delete_resources(parent_run_context)
             self.run_context = None
 
-    async def build(self) -> str:
+    async def build(self) -> List[BaseMessage]:
         """
         Main entry point to the class.
 
-        :return: A string representing a List of messages produced during this process.
+        :return: A List of BaseMessages produced during this process.
         """
         raise NotImplementedError

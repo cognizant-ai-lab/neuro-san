@@ -13,8 +13,9 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-import json
 import uuid
+
+from aiohttp.client_exceptions import ClientConnectionError
 
 from langchain_core.messages.base import BaseMessage
 
@@ -22,9 +23,10 @@ from leaf_common.parsers.field_extractor import FieldExtractor
 
 from neuro_san.internals.graph.activations.argument_assigner import ArgumentAssigner
 from neuro_san.internals.graph.activations.calling_activation import CallingActivation
-from neuro_san.internals.graph.activations.intra_agent_message_utils import IntraAgentMessageUtils
 from neuro_san.internals.graph.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.graph.interfaces.callable_activation import CallableActivation
+from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
+from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.run_context.interfaces.run import Run
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 
@@ -116,11 +118,11 @@ class BranchActivation(CallingActivation, CallableActivation):
 
         return new_messages
 
-    async def build(self) -> str:
+    async def build(self) -> List[BaseMessage]:
         """
         Main entry point to the class.
 
-        :return: A string representing a List of messages produced during this process.
+        :return: A List of BaseMessages produced during this process.
         """
 
         assignments: str = self.get_assignments()
@@ -143,8 +145,7 @@ class BranchActivation(CallingActivation, CallableActivation):
 
         messages = await self.integrate_callable_response(run, messages)
 
-        response: str = IntraAgentMessageUtils.generate_response(messages)
-        return response
+        return messages
 
     def get_origin(self) -> List[Dict[str, Any]]:
         """
@@ -176,10 +177,27 @@ class BranchActivation(CallingActivation, CallableActivation):
                                                                                        tool_name,
                                                                                        sly_data,
                                                                                        tool_args)
-        message: str = await callable_activation.build()
+        message_list: List[BaseMessage] = []
+        try:
+            # DEF - need to integrate sly_data
+            message_list: List[BaseMessage] = await callable_activation.build()
+
+        except ClientConnectionError as exception:
+            # There is a case where we could give a little more help.
+            invocation_context: InvocationContext = self.run_context.get_invocation_context()
+            async_factory: AsyncAgentSessionFactory = invocation_context.get_async_session_factory()
+            if not async_factory.is_use_direct() and tool_name.startswith("/"):
+                # Special case where we can give a hint about using direct
+                raise ValueError(f"""
+Attempt to call {tool_name} as an external agent network over http failed.
+If you are getting this from the agent_cli command line, consider adding the --local_externals_direct
+flag to your invocation.
+""") from exception
+
+            # Nope. Just a regular http connection failure given the tool_name. Can't help ya.
+            raise exception
 
         # We got a list of messages back as a string. Take the last.
-        message_list: List[Dict[str, Any]] = json.loads(message)
         message_dict: Dict[str, Any] = message_list[-1]
         content: str = message_dict.get("content")
 

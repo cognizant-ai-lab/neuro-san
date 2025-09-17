@@ -111,3 +111,41 @@ chat_context and add that to your next streaming_chat request:
     }'
 
 ... and back comes the next result for your conversation
+
+##### Adding Private Data to the User Request
+
+One strength of the neuro-san infrastructure is that you can add private data to the user request.
+This can be used to add context to the conversation that is not visible to the chat stream of any agent.
+The field you want to fill is called "sly_data". It is a dictionary of key-value pairs that can
+be different for each agent.
+
+As above, you can specify the agent name in the route. We will use a differnet sample agent
+called "math_guy" who is a simple calculartor agent that takes operands in the sly_data and
+the name of the operator in the regular chat stream. The result also comes back in the sly_data:
+
+    curl --request POST --url localhost:8080/api/v1/math_guy/streaming_chat --data '{
+        "user_message": {
+            "text": "multiply"
+        },
+        "sly_data": {
+            "x": 7,
+            "y": 6
+        }
+    }'
+
+The response looks like this:
+
+    ```json
+    {
+        "response": {
+            "type": "AGENT_FRAMEWORK",
+            "text": "\"Check sly_data['equals'] for the result\"",
+            "chat_context": {
+                <blah blah>
+            }
+            "sly_data": {
+                "equals": 42
+            }
+        }
+    }
+    ```

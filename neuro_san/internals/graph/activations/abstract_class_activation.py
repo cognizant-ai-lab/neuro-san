@@ -13,12 +13,13 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-import json
-
 from asyncio import AbstractEventLoop
 from copy import deepcopy
 from logging import getLogger
 from logging import Logger
+
+from langchain_core.messages.ai import AIMessage
+from langchain_core.messages.base import BaseMessage
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.config.resolver import Resolver
@@ -100,13 +101,13 @@ class AbstractClassActivation(AbstractCallableActivation):
         raise NotImplementedError
 
     # pylint: disable=too-many-locals
-    async def build(self) -> str:
+    async def build(self) -> List[BaseMessage]:
         """
         Main entry point to the class.
 
-        :return: A string representing a List of messages produced during this process.
+        :return: A List of BaseMessages produced during this process.
         """
-        messages: List[Any] = []
+        messages: List[BaseMessage] = []
 
         full_class_ref: str = self.get_full_class_ref()
         self.logger.info("Calling class %s", full_class_ref)
@@ -206,14 +207,10 @@ Some hints:
 
         # Change the result into a message
         retval_str: str = f"{retval}"
-        message: Dict[str, Any] = {
-            "role": "assistant",
-            "content": retval_str
-        }
+        message = AIMessage(content=retval_str)
         messages.append(message)
-        messages_str: str = json.dumps(messages)
 
-        return messages_str
+        return messages
 
     async def attempt_invoke(self, coded_tool: CodedTool, arguments: Dict[str, Any], sly_data: Dict[str, Any]) \
             -> Any:

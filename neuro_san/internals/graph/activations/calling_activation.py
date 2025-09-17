@@ -15,6 +15,8 @@ from typing import List
 
 import json
 
+from langchain_core.messages.base import BaseMessage
+
 from leaf_common.config.dictionary_overlay import DictionaryOverlay
 
 from neuro_san.internals.graph.activations.abstract_callable_activation import AbstractCallableActivation
@@ -221,7 +223,16 @@ context with which it will proces input, essentially telling it what to do.
             self.factory.create_agent_activation(self.run_context, our_agent_spec, use_tool_name,
                                                  self.sly_data, tool_arguments)
 
-        output: str = await callable_component.build()
+        message_list: List[BaseMessage] = await callable_component.build()
+
+        # We got a list of messages back as a string. Take the last.
+        last_message: BaseMessage = message_list[-1]
+        message_list = [{
+            "role": "assistant",
+            "content": last_message.content
+        }]
+        output: str = json.dumps(message_list)
+
         # Even though we get a string, run it through the json stuff again to more reliably
         # escape when the output itself has JSON in it.  When messing with this, it's worth
         # testing both esp_decision_assistant and intranet_agents_with_tools.
@@ -247,10 +258,10 @@ context with which it will proces input, essentially telling it what to do.
 
         return tool_output
 
-    async def build(self) -> str:
+    async def build(self) -> List[BaseMessage]:
         """
         Main entry point to the class.
 
-        :return: A string representing a List of messages produced during this process.
+        :return: A List of BaseMessages produced during this process.
         """
         raise NotImplementedError

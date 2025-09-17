@@ -13,6 +13,8 @@
 from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
+from typing import Any
+from typing import Dict
 from typing import Optional
 
 from langchain_core.tracers.context import register_configure_hook
@@ -28,7 +30,7 @@ register_configure_hook(llm_token_callback_var, inheritable=True)
 
 
 @contextmanager
-def get_llm_token_callback() -> Generator[LlmTokenCallbackHandler, None, None]:
+def get_llm_token_callback(llm_infos: Dict[str, Any]) -> Generator[LlmTokenCallbackHandler, None, None]:
     """Get llm token callback.
 
     Get context manager for tracking usage metadata across chat model calls using
@@ -37,8 +39,20 @@ def get_llm_token_callback() -> Generator[LlmTokenCallbackHandler, None, None]:
     This class is a modification of LangChain’s "UsageMetadataCallbackHandler":
     - https://python.langchain.com/api_reference/_modules/langchain_core/callbacks/usage.html
     #get_usage_metadata_callback
+
+    :param llm_infos: Dictionary containing configuration or metadata about the LLM
+                      (e.g., model name, class (provider), token cost).
+    :return: A generator-based context manager that yields an `LlmTokenCallbackHandler`
+             for tracking token usage within the context.
     """
-    cb = LlmTokenCallbackHandler()
+    # Create a new callback handler instance for tracking token usage
+    cb = LlmTokenCallbackHandler(llm_infos)
+
+    # Set the context variable to the newly created callback handler
     llm_token_callback_var.set(cb)
+
+    # Yield the callback handler to the context block
     yield cb
+
+    # Reset the context variable to None when the context exits
     llm_token_callback_var.set(None)

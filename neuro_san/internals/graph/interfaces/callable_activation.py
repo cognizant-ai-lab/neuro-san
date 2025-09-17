@@ -13,6 +13,8 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from langchain_core.messages.base import BaseMessage
+
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 
 
@@ -22,11 +24,11 @@ class CallableActivation:
     when invoking LLM function calls.
     """
 
-    async def build(self) -> str:
+    async def build(self) -> List[BaseMessage]:
         """
         Main entry point to the class.
 
-        :return: A string representing a List of messages produced during this process.
+        :return: A List of BaseMessages produced during this process.
         """
         raise NotImplementedError
 

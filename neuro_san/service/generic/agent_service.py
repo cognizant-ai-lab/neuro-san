@@ -268,7 +268,7 @@ class AgentService:
         if request_log is not None:
             reporting: str = None
             if request_reporting is not None:
-                reporting = json.dumps(request_reporting, indent=4, sort_keys=True)
+                reporting = json.dumps(request_reporting, indent=4, sort_keys=False)
             request_log.metrics("Request reporting: %s", reporting)
             self.request_logger.finish_request(f"{self.agent_name}.StreamingChat", log_marker, request_log)
 
