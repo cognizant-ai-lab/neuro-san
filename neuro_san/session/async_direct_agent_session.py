@@ -187,6 +187,7 @@ class AsyncDirectAgentSession(AsyncAgentSession):
                     response_dict["response"] = message
                     yield response_dict
         finally:
+            print("~~~~~~~~~~~~~~~ ASYNC_DIRECT_AGENT_SESSION CLOSED ~~~~~~~~~~~~~~~")
             with contextlib.suppress(Exception):
                 await chat_session.delete_resources()
 
