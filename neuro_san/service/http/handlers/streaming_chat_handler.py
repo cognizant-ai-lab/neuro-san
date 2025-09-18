@@ -93,7 +93,6 @@ class StreamingChatHandler(BaseRequestHandler):
             if result_generator is not None:
                 with contextlib.suppress(Exception):
                     await result_generator.aclose()
-                    print("CCCCCCCCCCCCCCCCCC")
                     result_generator = None
             self.logger.info(metadata, "Request handler cancelled/stream closed.")
             raise
@@ -101,12 +100,10 @@ class StreamingChatHandler(BaseRequestHandler):
         except Exception as exc:  # pylint: disable=broad-exception-caught
             with contextlib.suppress(Exception):
                 self.process_exception(exc)
-                print("DDDDDDDDDDDDDDDD")
 
         finally:
             # We are done with response stream:
             if result_generator is not None:
                 with contextlib.suppress(Exception):
                     await result_generator.aclose()
-                    print("EEEEEEEEEEEEEEEE")
             self.do_finish()
