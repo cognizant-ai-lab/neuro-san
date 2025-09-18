@@ -251,6 +251,11 @@ class AsyncAgentService:
                     response_dict["request"] = request_dict
                 yield response_dict
         finally:
+            # Put async generator cleanup logic in "finally" part of try-except block;
+            # this way we guarantee that underlying response_dict_generator will be closed
+            # whether we finish consuming its data stream normally
+            # OR we are interrupted downstream
+            # and have special "GeneratorExit" exception delivered to us.
             request_reporting: Dict[str, Any] = invocation_context.get_request_reporting()
             # Properly close our async generator:
             if response_dict_generator is not None:
