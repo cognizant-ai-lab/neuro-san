@@ -258,7 +258,6 @@ class AsyncAgentService:
                     await response_dict_generator.aclose()
             # Ensure that our SessionInvocationContext is always closed,
             # even if generator is interrupted.
-            print(">>>>> INVOCATION CONTEXT COMPLETE <<<<<")
             invocation_context.close()
             invocation_context = None
 

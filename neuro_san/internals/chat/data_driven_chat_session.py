@@ -231,7 +231,6 @@ class DataDrivenChatSession:
         """
         Frees up any service-side resources.
         """
-        print("^^^^^^^^^^^^^^^ DATA_DRIVEN_CHAT_SESSION DELETED ^^^^^^^^^^^^^")
         if self.front_man is not None:
             await self.front_man.delete_any_resources()
             self.front_man = None

@@ -48,4 +48,3 @@ class LangChainLlmResources:
         if self.http_client:
             with contextlib.suppress(Exception):
                 await self.http_client.aclose()
-                print("HTTP CLIENT CLOSED<<<<<<<<<<<<<<<<<<")
