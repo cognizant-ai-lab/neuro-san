@@ -78,6 +78,9 @@ class StreamingChatHandler(BaseRequestHandler):
             # Flush headers immediately
             flush_ok: bool = await self.do_flush()
             if not flush_ok:
+                # If we failed to flush our output,
+                # most probably it's because connection is closed by a client.
+                # Raise accordingly - we will handle this exception:
                 raise tornado.iostream.StreamClosedError()
 
             async for result_dict in result_generator:
@@ -85,12 +88,15 @@ class StreamingChatHandler(BaseRequestHandler):
                 self.write(result_str)
                 flush_ok = await self.do_flush()
                 if not flush_ok:
+                    # Raise exception to be handled as a general
+                    # "stream abruptly closed" case:
                     raise tornado.iostream.StreamClosedError()
 
         except (asyncio.CancelledError, tornado.iostream.StreamClosedError):
             # ensure generator is closed promptly
             # and re-raise as recommended
             if result_generator is not None:
+                # Suppress possible exceptions: they are of no interest here.
                 with contextlib.suppress(Exception):
                     await result_generator.aclose()
                     result_generator = None
@@ -98,6 +104,7 @@ class StreamingChatHandler(BaseRequestHandler):
             raise
 
         except Exception as exc:  # pylint: disable=broad-exception-caught
+            # Suppress possible exceptions: they are of no interest here.
             with contextlib.suppress(Exception):
                 self.process_exception(exc)
 
@@ -105,6 +112,8 @@ class StreamingChatHandler(BaseRequestHandler):
             # We are done with response stream:
             if result_generator is not None:
                 with contextlib.suppress(Exception):
+                    # It is possible we will call .aclose() twice
+                    # on our result_generator - it is allowed and has no effect.
                     await result_generator.aclose()
             self.do_finish()
             self.application.finish_client_request(metadata, f"{agent_name}/streaming_chat", get_stats=True)
