@@ -107,3 +107,5 @@ class StreamingChatHandler(BaseRequestHandler):
                 with contextlib.suppress(Exception):
                     await result_generator.aclose()
             self.do_finish()
+            self.application.finish_client_request(metadata, f"{agent_name}/streaming_chat", get_stats=True)
+
