@@ -13,7 +13,8 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-from asyncio import AbstractEventLoop
+from asyncio import to_thread
+
 from copy import deepcopy
 from logging import getLogger
 from logging import Logger
@@ -21,7 +22,6 @@ from logging import Logger
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 
-from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.config.resolver import Resolver
 
 from neuro_san.interfaces.coded_tool import CodedTool
@@ -234,24 +234,11 @@ Some hints:
         try:
             # Try the preferred async_invoke()
             retval = await coded_tool.async_invoke(self.arguments, self.sly_data)
+
         except NotImplementedError:
-            # That didn't work, so try running the synchronous method as an async task
-            # within the confines of the proper executor.
-
-            # Warn that there is a better alternative.
-            message = f"""
-Running CodedTool class {coded_tool.__class__.__name__}.invoke() synchronously in an asynchronous environment.
-This can lead to performance problems when running within a server. Consider porting to the async_invoke() method.
-"""
-            self.logger.info(message)
-            message = AgentMessage(content=message)
-            await self.journal.write_message(message)
-
-            # Try to run in the executor.
-            invocation_context = self.run_context.get_invocation_context()
-            executor: AsyncioExecutor = invocation_context.get_asyncio_executor()
-            loop: AbstractEventLoop = executor.get_event_loop()
-            retval = await loop.run_in_executor(None, coded_tool.invoke, arguments, sly_data)
+            # That didn't work, so try running the synchronous method
+            # in a separate thread so as not to distrupt the main event loop.
+            retval = await to_thread(coded_tool.invoke, arguments, sly_data)
 
         retval_dict: Dict[str, Any] = {
             "tool_end": True,

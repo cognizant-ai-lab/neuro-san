@@ -32,9 +32,9 @@ class Calculator(CodedTool):
         """
         Called when the coded tool is invoked asynchronously by the agent hierarchy.
         Strongly consider overriding this method instead of the "easier" synchronous
-        version above when the possibility of making any kind of call that could block
+        invoke() version above when the possibility of making any kind of call that could block
         (like sleep() or a socket read/write out to a web service) is within the
-        scope of your CodedTool.
+        scope of your CodedTool and can be done asynchronously.
 
         :param args: An argument dictionary whose keys are the parameters
                 to the coded tool and whose values are the values passed for them
