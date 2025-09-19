@@ -9,9 +9,10 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
-import contextlib
-import httpx
+
 from langchain_core.language_models.base import BaseLanguageModel
+
+from neuro_san.internals.run_context.langchain.llms.langchain_llm_client import LangChainLlmClient
 
 
 class LangChainLlmResources:
@@ -20,14 +21,14 @@ class LangChainLlmResources:
     together with run-time resources necessary for model usage by the service.
     """
 
-    def __init__(self, model: BaseLanguageModel, http_client: httpx.AsyncClient = None):
+    def __init__(self, model: BaseLanguageModel, llm_client: LangChainLlmClient = None):
         """
         Constructor.
         :param model: Language model used.
         :param http_client: optional httpx.AsyncClient used for model connections to LLM host.
         """
-        self.model = model
-        self.http_client = http_client
+        self.model: BaseLanguageModel = model
+        self.llm_client: LangChainLlmClient = llm_client
 
     def get_model(self) -> BaseLanguageModel:
         """
@@ -35,16 +36,15 @@ class LangChainLlmResources:
         """
         return self.model
 
-    def get_http_client(self) -> httpx.AsyncClient:
+    def get_llm_client(self) -> LangChainLlmClient:
         """
-        Get the http client used by the model
+        Get the client used by the model
         """
-        return self.http_client
+        return self.llm_client
 
-    async def release_resources(self):
+    async def delete_resources(self):
         """
         Release the run-time resources used by the model
         """
-        if self.http_client:
-            with contextlib.suppress(Exception):
-                await self.http_client.aclose()
+        if self.llm_client:
+            await self.llm_client.delete_resources()
