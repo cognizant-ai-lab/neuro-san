@@ -19,8 +19,8 @@ class CodedTool:
     Interface contract for a coded tool to squelch the anti-pattern of
     Static Cling.
 
-    Upon activation by the agent hierarchy, a CodedTool will have its
-    invoke() call called by the system.
+    Upon activation by the agent hierarchy, a CodedTool will have either its
+    async_invoke() (preferred) or synchronous invoke() method called by the system.
 
     Implementations are expected to clean up after themselves.
     """
@@ -28,15 +28,18 @@ class CodedTool:
     def invoke(self, args: Dict[str, Any], sly_data: Dict[str, Any]) -> Any:
         """
         This method is provided as a convenience for an "easy" start to using
-        coded-tools.  This synchronous interface called by async_invoke() below.
-        when the coded tool is invoked by the agent hierarchy.
+        coded-tools.
 
-        Know that any CodedTool is run within the confines of a Python asynchronous
-        EventLoop. Any synchronous blocking that happens - like making a call to a
-        web service over a socket, or something that inherently sleep()s - *will* also
-        block all other agent operations.  This is not so bad in a low-traffic or
-        test environment, but when scaling up, you really really want to embrace
-        and override the async_invoke() method below instead of this one.
+        Know that any CodedTool invoke() is run within the confines of its own thread
+        so as not to block any other agents or requests in the context of the main
+        Python asynchronous EventLoop. Any synchronous blocking that happens - like
+        making a call to a web service over a socket, or something that inherently
+        sleep()s - should not effect other agent or CodedTool operations.
+
+        There is a idea is to allow easy development of CodedTools and is is not so bad in a
+        low-traffic or test environment, but when scaling up, you really really want to embrace
+        and override the async_invoke() method below instead of this one if at all possible,
+        as it is inherently more efficient.
 
         :param args: An argument dictionary whose keys are the parameters
                 to the coded tool and whose values are the values passed for them
@@ -60,9 +63,9 @@ class CodedTool:
         """
         Called when the coded tool is invoked asynchronously by the agent hierarchy.
         Strongly consider overriding this method instead of the "easier" synchronous
-        version above when the possibility of making any kind of call that could block
+        invoke() version above when the possibility of making any kind of call that could block
         (like sleep() or a socket read/write out to a web service) is within the
-        scope of your CodedTool.
+        scope of your CodedTool and can be done asynchronously.
 
         :param args: An argument dictionary whose keys are the parameters
                 to the coded tool and whose values are the values passed for them
