@@ -226,14 +226,14 @@ class LangChainRunContext(RunContext):
         for index, fallback in enumerate(fallbacks):
 
             # Create a model we might use.
-            one_llm: LangChainLlmResources = llm_factory.create_llm(fallback)
-            one_agent: Agent = self.create_agent(prompt_template, one_llm.get_model())
+            one_llm_resources: LangChainLlmResources = llm_factory.create_llm(fallback)
+            one_agent: Agent = self.create_agent(prompt_template, one_llm_resources.get_model())
 
             if index == 0:
                 # The first agent is the one we want to be our main guy.
                 agent = one_agent
                 # For now. Could be problems with different providers w/ token counting.
-                self.llm_resources = one_llm
+                self.llm_resources = one_llm_resources
             else:
                 # Anything later than the first guy is considered a fallback. Add it to the list.
                 chain_fallbacks.append(one_agent)
