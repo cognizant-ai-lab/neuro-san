@@ -12,13 +12,11 @@
 from typing import Any
 from typing import Dict
 
-import httpx
-from openai import AsyncOpenAI
-
 from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.resolver import Resolver
 
+from neuro_san.internals.run_context.langchain.llms.langchain_llm_client import LangChainLlmClient
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
 
@@ -50,11 +48,17 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                                     the model description in this class.
     """
 
-    def create_base_chat_model(self, config: Dict[str, Any]) -> LangChainLlmResources:
+    def create_base_chat_model_with_client(self, config: Dict[str, Any],
+                                           llm_client: LangChainLlmClient = None) -> LangChainLlmResources:
         """
         Create a BaseLanguageModel from the fully-specified llm config.
         :param config: The fully specified llm config which is a product of
                     _create_full_llm_config() above.
+        :param llm_client: A LangChainLlmClient instance, which by default is None,
+                        implying that create_base_chat_model() needs to create its own client.
+                        Note, however that a None value can lead to connection leaks and requests
+                        that continue to run after the request connection is dropped in a server
+                        environment.
         :return: A LangChainLlmResources instance containing
                 a BaseLanguageModel (can be Chat or LLM) and all related resources
                 necessary for managing the model run-time lifecycle.
@@ -77,7 +81,6 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         # langchain_* packages to prevent installing the world.
         resolver = Resolver()
 
-        http_client: httpx.AsyncClient = None
         if chat_class == "openai":
 
             # OpenAI is the one chat class that we do not require any extra installs.
@@ -89,27 +92,30 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                                                           module_name="langchain_openai.chat_models.base",
                                                           install_if_missing="langchain-openai")
 
-            # Our run-time model resource here is httpx client which we need to control directly:
-            openai_proxy = self.get_value_or_env(config, "openai_organization", "OPENAI_PROXY")
-            request_timeout = config.get("request_timeout")
-            http_client = httpx.AsyncClient(proxy=openai_proxy, timeout=request_timeout)
-
-            # Now build an OpenAI client using this resource:
-            async_openai_client: AsyncOpenAI = AsyncOpenAI(
-                api_key=self.get_value_or_env(config, "openai_api_key",
-                                              "OPENAI_API_KEY"),
-                base_url=self.get_value_or_env(config, "openai_api_base", "OPENAI_API_BASE"),
-                organization=self.get_value_or_env(config, "openai_organization", "OPENAI_ORG_ID"),
-                timeout=request_timeout,
-                max_retries=config.get("max_retries"),
-                http_client=http_client
-            )
+            async_client: Any = None
+            if llm_client is not None:
+                async_openai_client = llm_client.get_client()
+                if async_openai_client is not None:
+                    async_client = async_openai_client.chat.completions
 
             # Now construct LLM chat model we will be using:
             llm = ChatOpenAI(
-                async_client=async_openai_client.chat.completions,
+                async_client=async_client,
                 model_name=model_name,
                 temperature=config.get("temperature"),
+
+                # This next group of params should always be None when we have async_client
+                openai_api_key=self.get_value_or_env(config, "openai_api_key",
+                                                     "OPENAI_API_KEY", async_client),
+                openai_api_base=self.get_value_or_env(config, "openai_api_base",
+                                                      "OPENAI_API_BASE", async_client),
+                openai_organization=self.get_value_or_env(config, "openai_organization",
+                                                          "OPENAI_ORG_ID", async_client),
+                openai_proxy=self.get_value_or_env(config, "openai_organization",
+                                                   "OPENAI_PROXY", async_client),
+                request_timeout=self.get_value_or_env(config, "request_timeout", None, async_client),
+                max_retries=self.get_value_or_env(config, "max_retries", None, async_client),
+
                 presence_penalty=config.get("presence_penalty"),
                 frequency_penalty=config.get("frequency_penalty"),
                 seed=config.get("seed"),
@@ -422,4 +428,4 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         else:
             raise ValueError(f"Class {chat_class} for model_name {model_name} is unrecognized.")
 
-        return LangChainLlmResources(llm, http_client=http_client)
+        return LangChainLlmResources(llm, llm_client=llm_client)

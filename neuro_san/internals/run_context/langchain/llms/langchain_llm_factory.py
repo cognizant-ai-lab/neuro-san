@@ -15,6 +15,7 @@ from typing import Dict
 
 import os
 
+from neuro_san.internals.run_context.langchain.llms.langchain_llm_client import LangChainLlmClient
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
 
 
@@ -56,20 +57,46 @@ class LangChainLlmFactory:
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
         """
+        return self.create_base_chat_model_with_client(config, llm_client=None)
+
+    def create_base_chat_model_with_client(self, config: Dict[str, Any],
+                                           llm_client: LangChainLlmClient = None) -> LangChainLlmResources:
+        """
+        Create a LangChainLlmResources instance from the fully-specified llm config.
+
+        :param config: The fully specified llm config which is a product of
+                    _create_full_llm_config() above.
+        :param llm_client: A LangChainLlmClient instance, which by default is None,
+                        implying that create_base_chat_model() needs to create its own client.
+                        Note, however that a None value can lead to connection leaks and requests
+                        that continue to run after the request connection is dropped in a server
+                        environment.
+        :return: A LangChainLlmResources instance containing
+                a BaseLanguageModel (can be Chat or LLM) and all related resources
+                necessary for managing the model run-time lifecycle.
+                Can raise a ValueError if the config's class or model_name value is
+                unknown to this method.
+        """
         raise NotImplementedError
 
-    def get_value_or_env(self, config: Dict[str, Any], key: str, env_key: str) -> Any:
+    def get_value_or_env(self, config: Dict[str, Any], key: str, env_key: str,
+                         llm_client: LangChainLlmClient = None) -> Any:
         """
         :param config: The config dictionary to search
         :param key: The key for the config to look for
         :param env_key: The os.environ key whose value should be gotten if either
                         the key does not exist or the value for the key is None
+        :param llm_client: A LangChainLlmClient instance.
+                        If present this method will return None.
         """
+        if llm_client is not None:
+            return None
+
         value = None
         if config is not None:
             value = config.get(key)
 
-        if value is None:
+        if value is None and env_key is not None:
             value = os.getenv(env_key)
 
         return value
