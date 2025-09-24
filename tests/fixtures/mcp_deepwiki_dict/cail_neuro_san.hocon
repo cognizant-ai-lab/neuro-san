@@ -1,0 +1,50 @@
+# Copyright (C) 2023-2025 Cognizant Digital Business, Evolutionary AI.
+# All Rights Reserved.
+# Issued under the Academic Public License.
+#
+# You can be released from the terms, and requirements of the Academic Public
+# License by purchasing a commercial license.
+# Purchase of a commercial license is mandatory for any use of the
+# neuro-san SDK Software in commercial settings.
+#
+# END COPYRIGHT
+
+# This file defines everything necessary for a data-driven test.
+# The schema specifications for this file are documented here:
+# https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/test_case_hocon_reference.md
+
+{
+    # Describes what agent to test against.
+    "agent": "mcp_deepwiki_dict",
+
+    # Interactions are a series of dictionaries with request elements paired with
+    # descriptions of response checks.
+    "interactions": [
+        {
+            # This is what we send as input to streaming_chat()
+            "text": """
+What is the description for cognizant-ai-lab/neuro-san?
+""",
+
+            # The response block treats how we are going to test what comes back
+            "response": {
+
+                # Text block says how we are going to examine the text of the response.
+                "text": {
+
+                    # Gist says we are going to ask an LLM about how the response
+                    # matches up to our description of acceptance criteria.
+                    # Each component of the list needs to pass muster in order to pass.
+                    "gist": [
+                        """
+The cognizant-ai-lab/neuro-san repository is a library for building data-driven multi-agent AI networks, where multiple LLM-enabled agents collaborate to solve complex tasks.
+Networks are defined using HOCON configuration files, and agents can be extended with tools for actions beyond LLM capabilities (e.g., API calls, web queries, data processing).
+The system separates public chat from private data, supports multiple LLM providers, and can run as a Python library, HTTP service, or gRPC service.
+Example networks and testing infrastructure are included to help users define and deploy custom agent systems.
+"""
+                    ]
+                }
+            }
+        }
+    ]
+}

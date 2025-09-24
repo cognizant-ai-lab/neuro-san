@@ -255,7 +255,8 @@
               "AI",
               "AGENT",
               "AGENT_FRAMEWORK",
-              "AGENT_TOOL_RESULT"
+              "AGENT_TOOL_RESULT",
+              "AGENT_PROGRESS"
             ],
             "type": "string",
             "description": "The type of chat message",

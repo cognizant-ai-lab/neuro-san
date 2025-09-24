@@ -13,9 +13,10 @@
 from typing import Any
 from typing import Dict
 
-from neuro_san.interfaces.coded_tool import CodedTool
 from neuro_san.coded_tools.math_guy.async_closeable import AsyncCloseable
 from neuro_san.coded_tools.math_guy.sync_closeable import SyncCloseable
+from neuro_san.interfaces.agent_progress_reporter import AgentProgressReporter
+from neuro_san.interfaces.coded_tool import CodedTool
 
 
 class Calculator(CodedTool):
@@ -32,9 +33,18 @@ class Calculator(CodedTool):
         """
         Called when the coded tool is invoked asynchronously by the agent hierarchy.
         Strongly consider overriding this method instead of the "easier" synchronous
-        invoke() version above when the possibility of making any kind of call that could block
-        (like sleep() or a socket read/write out to a web service) is within the
-        scope of your CodedTool and can be done asynchronously.
+        invoke() version on CodedTool when the possibility of making any kind of call
+        that could block (like sleep() or a socket read/write out to a web service) is
+        within the scope of your CodedTool and can be done asynchronously, especially within
+        the context of your CodedTool running within a server.
+
+        If you find your CodedTools can't help but synchronously block,
+        strongly consider looking into using the asyncio.to_thread() function
+        to not block the EventLoop for other requests.
+        See: https://docs.python.org/3/library/asyncio-task.html#asyncio.to_thread
+        Example:
+            async def async_invoke(self, args: Dict[str, Any], sly_data: Dict[str, Any]) -> Any:
+                return await asyncio.to_thread(self.invoke, args, sly_data)
 
         :param args: An argument dictionary whose keys are the parameters
                 to the coded tool and whose values are the values passed for them
@@ -62,6 +72,13 @@ class Calculator(CodedTool):
         if x is None or y is None:
             return "Need to set keys x and y in the sly_data as float operands"
 
+        progress_reporter: AgentProgressReporter = args.get("progress_reporter")
+        progress: Dict[str, Any] = {
+            # Nothing yet.
+            "progress": 0.0
+        }
+        await progress_reporter.async_report_progress(progress)
+
         x = float(x)
         y = float(y)
 
@@ -85,5 +102,13 @@ class Calculator(CodedTool):
         # to the function of this coded tool.
         sly_data["sync_closeable"] = SyncCloseable()
         sly_data["async_closeable"] = AsyncCloseable()
+
+        # Needs to be another instance of a dictionary from the one above
+        # otherwise both progress reports will be seen as the same.
+        progress: Dict[str, Any] = {
+            # All done
+            "progress": 1.0
+        }
+        await progress_reporter.async_report_progress(progress)
 
         return "Check sly_data['equals'] for the result"

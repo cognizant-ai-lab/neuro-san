@@ -23,6 +23,7 @@ from langchain_core.messages.system import SystemMessage
 
 from neuro_san.internals.messages.agent_framework_message import AgentFrameworkMessage
 from neuro_san.internals.messages.agent_message import AgentMessage
+from neuro_san.internals.messages.agent_progress_message import AgentProgressMessage
 from neuro_san.internals.messages.agent_tool_result_message import AgentToolResultMessage
 
 
@@ -39,6 +40,7 @@ class ChatMessageType(IntEnum):
     AGENT = 100
     AGENT_FRAMEWORK = 101
     AGENT_TOOL_RESULT = 103
+    AGENT_PROGRESS = 104
 
     # Adding something? Don't forget to update the maps below.
 
@@ -101,6 +103,7 @@ _MESSAGE_TYPE_TO_CHAT_MESSAGE_TYPE: Dict[Type[BaseMessage], ChatMessageType] = {
     AgentMessage: ChatMessageType.AGENT,
     AgentFrameworkMessage: ChatMessageType.AGENT_FRAMEWORK,
     AgentToolResultMessage: ChatMessageType.AGENT_TOOL_RESULT,
+    AgentProgressMessage: ChatMessageType.AGENT_PROGRESS,
 }
 
 _CHAT_MESSAGE_TYPE_TO_STRING: Dict[ChatMessageType, str] = {
@@ -114,4 +117,5 @@ _CHAT_MESSAGE_TYPE_TO_STRING: Dict[ChatMessageType, str] = {
     ChatMessageType.AGENT: "AGENT",
     ChatMessageType.AGENT_FRAMEWORK: "AGENT_FRAMEWORK",
     ChatMessageType.AGENT_TOOL_RESULT: "AGENT_TOOL_RESULT",
+    ChatMessageType.AGENT_PROGRESS: "AGENT_PROGRESS",
 }

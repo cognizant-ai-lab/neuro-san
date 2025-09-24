@@ -79,8 +79,10 @@ class NameCorrectionConfigFilter(ConfigFilter):
 
             new_agent_tools: List[str] = []
             for agent_tool in agent_tools:
-                if agent_tool in corrections:
-                    new_agent_tools.append(corrections.get(agent_tool))
+                # Replace string tool names with corrected versions if available,
+                # leave complex tool objects (e.g. MCP dictionaries) as-is
+                if isinstance(agent_tool, str):
+                    new_agent_tools.append(corrections.get(agent_tool, agent_tool))
                 else:
                     new_agent_tools.append(agent_tool)
 

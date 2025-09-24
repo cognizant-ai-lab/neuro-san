@@ -9,8 +9,10 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
+from typing import Any
 from typing import Dict
 from typing import List
+from typing import Union
 
 from urllib.parse import ParseResult
 from urllib.parse import urlparse
@@ -92,6 +94,31 @@ class ExternalAgentParsing:
         agent_location: Dict[str, str] = ExternalAgentParsing.parse_external_agent(agent_url)
         is_external: bool = agent_location is not None
         return is_external
+
+    @staticmethod
+    def is_mcp_tool(tool_ref: Union[str, Dict[str, Any]]) -> bool:
+        """
+        Check if the tool reference is for an MCP server.
+        :param tool_ref: String URL or dict config for MCP tool
+        :return: True if this is an MCP tool reference
+        """
+        # Support both str and dict format;
+        # str format: "https://mcp.deepwiki.com/mcp" or "http://localhost:8000/mcp/"
+        # dict format:
+        # {
+        #       "url": "https://mcp.deepwiki.com/mcp",
+        #       "tools": ["read_wiki_structure", "ask_question"],
+        # }
+
+        # If it is a dict, it is assume it is MCP for now.
+        # This may change in the future when Neuro-SAN supports other protocals like A2A.
+        if isinstance(tool_ref, dict):
+            return True
+
+        if isinstance(tool_ref, str):
+            return (tool_ref.startswith("https://mcp") or tool_ref.endswith(("/mcp", "/mcp/")))
+
+        return False
 
     @staticmethod
     def get_safe_agent_name(agent_url: str) -> str:
