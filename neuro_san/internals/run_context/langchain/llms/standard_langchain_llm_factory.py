@@ -48,6 +48,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                                     the model description in this class.
     """
 
+    # pylint: disable=too-many-branches
     def create_base_chat_model_with_client(self, config: Dict[str, Any],
                                            llm_client: LangChainLlmClient = None) -> LangChainLlmResources:
         """
