@@ -38,6 +38,8 @@ site/
 
 # Temporary integrtion test files
 tmp_*
+.coverage
+.coverage*
 
 # Transient openapi file
 neuro_san/api/grpc/openapi.yaml

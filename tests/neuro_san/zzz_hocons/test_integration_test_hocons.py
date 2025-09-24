@@ -35,6 +35,7 @@ class TestIntegrationTestHocons(TestCase):
         # Ideally more basic functionality will come first.
         # Barring that, try to stick to alphabetical order.
         "esp_decision_assistant/fallbacks_and_commondef_values.hocon",
+        "mcp_deepwiki_dict/cail_neuro_san.hocon",
 
         # List more hocon files as they become available here.
     ]))

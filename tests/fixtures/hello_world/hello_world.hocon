@@ -17,7 +17,7 @@
     # Describes what agent to test against.
     "agent": "hello_world",
 
-    # Needs to success N times out of M
+    # Needs to succeed N times out of M
     "success_ratio": "3/3", 
 
     # Interactions are a series of dictionaries with request elements paired with
