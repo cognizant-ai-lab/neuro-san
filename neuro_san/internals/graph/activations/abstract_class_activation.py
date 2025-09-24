@@ -13,7 +13,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-from asyncio import to_thread
+from asyncio import AbstractEventLoop
 
 from copy import deepcopy
 from logging import getLogger
@@ -22,6 +22,7 @@ from logging import Logger
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 
+from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.config.resolver import Resolver
 
 from neuro_san.interfaces.coded_tool import CodedTool
@@ -29,6 +30,7 @@ from neuro_san.internals.graph.activations.abstract_callable_activation import A
 from neuro_san.internals.graph.activations.branch_activation import BranchActivation
 from neuro_san.internals.graph.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.journals.journal import Journal
+from neuro_san.internals.journals.progress_journal import ProgressJournal
 from neuro_san.internals.messages.agent_message import AgentMessage
 from neuro_san.internals.messages.origination import Origination
 from neuro_san.internals.run_context.factory.run_context_factory import RunContextFactory
@@ -82,6 +84,8 @@ class AbstractClassActivation(AbstractCallableActivation):
 
         # Set some standard args so CodedTool can know about origin, but only if they are
         # not already set by other infrastructure.
+        if self.arguments.get("progress_reporter") is None:
+            self.arguments["progress_reporter"] = ProgressJournal(self.journal)
         if self.arguments.get("origin") is None:
             self.arguments["origin"] = deepcopy(self.run_context.get_origin())
         if self.arguments.get("origin_str") is None:
@@ -224,9 +228,14 @@ Some hints:
         """
         retval: Any = None
 
+        tool_args: Dict[str, Any] = arguments.copy()
+        # Need to remove class references from the args that will not transfer over the wire
+        if "progress_reporter" in tool_args:
+            del tool_args["progress_reporter"]
+
         arguments_dict: Dict[str, Any] = {
             "tool_start": True,
-            "tool_args": arguments
+            "tool_args": tool_args
         }
         message = AgentMessage(content="Received arguments:", structure=arguments_dict)
         await self.journal.write_message(message)
@@ -236,9 +245,23 @@ Some hints:
             retval = await coded_tool.async_invoke(self.arguments, self.sly_data)
 
         except NotImplementedError:
-            # That didn't work, so try running the synchronous method
-            # in a separate thread so as not to distrupt the main event loop.
-            retval = await to_thread(coded_tool.invoke, arguments, sly_data)
+            # That didn't work, so try running the synchronous method as an async task
+            # within the confines of the proper executor.
+
+            # Warn that there is a better alternative.
+            message = f"""
+Running CodedTool class {coded_tool.__class__.__name__}.invoke() synchronously in an asynchronous environment.
+This can lead to performance problems when running within a server. Consider porting to the async_invoke() method.
+"""
+            self.logger.info(message)
+            message = AgentMessage(content=message)
+            await self.journal.write_message(message)
+
+            # Try to run in the executor.
+            invocation_context = self.run_context.get_invocation_context()
+            executor: AsyncioExecutor = invocation_context.get_asyncio_executor()
+            loop: AbstractEventLoop = executor.get_event_loop()
+            retval = await loop.run_in_executor(None, coded_tool.invoke, arguments, sly_data)
 
         retval_dict: Dict[str, Any] = {
             "tool_end": True,

@@ -151,6 +151,10 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
             combined_args["origin"] = self.origin
             combined_args["origin_str"] = full_name
 
+            # Remove any progress_reporter from the args as that will not transfer over the wire
+            if "progress_reporter" in combined_args:
+                del combined_args["progress_reporter"]
+
             # Create a journal entry for this invocation and log the combined inputs
             self.langchain_tool_journal = OriginatingJournal(self.base_journal, self.origin)
             combined_args_dict: Dict[str, Any] = {

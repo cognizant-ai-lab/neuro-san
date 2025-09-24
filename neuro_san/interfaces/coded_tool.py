@@ -30,14 +30,15 @@ class CodedTool:
         This method is provided as a convenience for an "easy" start to using
         coded-tools.
 
-        Know that any CodedTool invoke() is run within the confines of its own thread
-        so as not to block any other agents or requests in the context of the main
-        Python asynchronous EventLoop. Any synchronous blocking that happens - like
-        making a call to a web service over a socket, or something that inherently
-        sleep()s - should not effect other agent or CodedTool operations.
+        Know that any CodedTool is run within the confines of a Python asynchronous
+        EventLoop. Any synchronous blocking that happens - like making a call to a
+        web service over a socket, or something that inherently sleep()s - *will* also
+        block all other agent operations.  This is not so bad in a low-traffic or
+        test environment, but when scaling up, you really really want to embrace
+        and override the async_invoke() method below instead of this one.
 
-        There is a idea is to allow easy development of CodedTools and is is not so bad in a
-        low-traffic or test environment, but when scaling up, you really really want to embrace
+        The idea is to allow easy development of CodedTools and use of invoke() is not so bad in a
+        low-traffic or test environment. However, when scaling up, you really really want to embrace
         and override the async_invoke() method below instead of this one if at all possible,
         as it is inherently more efficient.
 
@@ -65,7 +66,16 @@ class CodedTool:
         Strongly consider overriding this method instead of the "easier" synchronous
         invoke() version above when the possibility of making any kind of call that could block
         (like sleep() or a socket read/write out to a web service) is within the
-        scope of your CodedTool and can be done asynchronously.
+        scope of your CodedTool and can be done asynchronously, especially within
+        the context of your CodedTool running within a server.
+
+        If you find your CodedTools can't help but synchronously block,
+        strongly consider looking into using the asyncio.to_thread() function
+        to not block the EventLoop for other requests.
+        See: https://docs.python.org/3/library/asyncio-task.html#asyncio.to_thread
+        Example:
+            async def async_invoke(self, args: Dict[str, Any], sly_data: Dict[str, Any]) -> Any:
+                return await asyncio.to_thread(self.invoke, args, sly_data)
 
         :param args: An argument dictionary whose keys are the parameters
                 to the coded tool and whose values are the values passed for them

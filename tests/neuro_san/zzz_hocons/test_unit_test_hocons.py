@@ -37,6 +37,7 @@ class TestUnitTestHocons(TestCase):
         "math_guy/basic_sly_data.hocon",
         "math_guy/forwarded_sly_data.hocon",
         "music_nerd/beatles_with_history.hocon",
+        "mcp_deepwiki_dict/cail_neuro_san.hocon",
 
         # List more hocon files as they become available here.
     ]))
