@@ -48,6 +48,17 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                                     the model description in this class.
     """
 
+    def create_base_chat_model(self, config: Dict[str, Any]) -> BaseLanguageModel:
+        """
+        Create a BaseLanguageModel from the fully-specified llm config.
+        :param config: The fully specified llm config which is a product of
+                    _create_full_llm_config() above.
+        :return: A BaseLanguageModel (can be Chat or LLM)
+                Can raise a ValueError if the config's class or model_name value is
+                unknown to this method.
+        """
+        raise NotImplementedError
+
     # pylint: disable=too-many-branches
     def create_base_chat_model_with_client(self, config: Dict[str, Any],
                                            llm_client: LangChainLlmClient = None) -> LangChainLlmResources:

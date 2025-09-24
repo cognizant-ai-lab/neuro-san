@@ -325,6 +325,17 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         return llm_client
 
+    def create_base_chat_model(self, config: Dict[str, Any]) -> BaseLanguageModel:
+        """
+        Create a BaseLanguageModel from the fully-specified llm config.
+        :param config: The fully specified llm config which is a product of
+                    _create_full_llm_config() above.
+        :return: A BaseLanguageModel (can be Chat or LLM)
+                Can raise a ValueError if the config's class or model_name value is
+                unknown to this method.
+        """
+        raise NotImplementedError
+
     def create_base_chat_model_with_client(self, config: Dict[str, Any],
                                            llm_client: LangChainLlmClient = None) -> LangChainLlmResources:
         """
@@ -362,11 +373,16 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             except NotImplementedError:
                 # Try ignoring the llm_client this factory
                 # This allows for backwards compatibility with older LangChainLlmFactories
-                llm_resources = llm_factory.create_base_chat_model(config)
-                if llm_resources is not None and isinstance(llm_resources, LangChainLlmResources):
-                    # We found what we were looking for
-                    found_exception = None
-                    break
+                llm: BaseLanguageModel = llm_factory.create_base_chat_model(config)
+                if llm is not None:
+                    if isinstance(llm, LangChainLlmResources):
+                        # We found what we were looking for
+                        found_exception = None
+                        break
+                    if isinstance(llm, BaseLanguageModel):
+                        llm_resources = LangChainLlmResources(llm, None)
+                        found_exception = None
+                        break
 
                 # Let the next model have a crack
                 found_exception = None
