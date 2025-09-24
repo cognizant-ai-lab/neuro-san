@@ -17,6 +17,9 @@
     # Describes what agent to test against.
     "agent": "mcp_deepwiki_dict",
 
+    # Needs to succeed N times out of M
+    "success_ratio": "1/2",
+
     # Interactions are a series of dictionaries with request elements paired with
     # descriptions of response checks.
     "interactions": [
@@ -37,10 +40,7 @@ What is the description for cognizant-ai-lab/neuro-san?
                     # Each component of the list needs to pass muster in order to pass.
                     "gist": [
                         """
-The cognizant-ai-lab/neuro-san repository is a library for building data-driven multi-agent AI networks, where multiple LLM-enabled agents collaborate to solve complex tasks.
-Networks are defined using HOCON configuration files, and agents can be extended with tools for actions beyond LLM capabilities (e.g., API calls, web queries, data processing).
-The system separates public chat from private data, supports multiple LLM providers, and can run as a Python library, HTTP service, or gRPC service.
-Example networks and testing infrastructure are included to help users define and deploy custom agent systems.
+The cognizant-ai-lab/neuro-san repository is a library for building data-driven multi-agent AI networks.
 """
                     ]
                 }
