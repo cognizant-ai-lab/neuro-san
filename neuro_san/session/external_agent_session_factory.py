@@ -87,7 +87,8 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
             agent_network_provider: AgentNetworkProvider = \
                 self.network_storage.get_agent_network_provider(agent_name)
             agent_network: AgentNetwork = agent_network_provider.get_agent_network()
-            session = AsyncDirectAgentSession(agent_network, invocation_context, metadata=metadata)
+            safe_invocation_context: InvocationContext = invocation_context.safe_shallow_copy()
+            session = AsyncDirectAgentSession(agent_network, safe_invocation_context, metadata=metadata)
 
         if session is None:
             # When creating a session for external agents, specifically use None for the

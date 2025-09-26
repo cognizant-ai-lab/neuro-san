@@ -71,7 +71,11 @@ Return verbatim whatever it returns.
                 "from_downstream": {
                     # Specifying this allows sly_data keys to be ingested from downstream agents
                     # as sly_data for this agent network
-                    "sly_data": ["equals"]
+                    "sly_data": ["equals"],
+
+                    # Allow all messages sent from specific downstream agents to be reported
+                    # as if they came back from this agent network
+                    "messages": ["/math_guy"]
                 },
                 "to_upstream": {
                     # Specifying this allows sly_data keys from this network to be passed back
