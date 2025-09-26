@@ -183,10 +183,12 @@
 
     "gpt-4-turbo-preview": {
         # FYI: LLMs that do not support tools cannot be used as front-men or branch nodes
+        # Per OpenAI, marked for shutdown on 03/26/2026.
         "use_model_name": "gpt-4-0125-preview",
     },
     "gpt-4-0125-preview": {
         # FYI: LLMs that do not support tools cannot be used as front-men or branch nodes
+        # Per OpenAI, marked for shutdown on 03/26/2026.
         "class": "openai",
         "model_info_url": "https://platform.openai.com/docs/models/gpt-4-turbo",
         "modalities": {
@@ -218,6 +220,7 @@
     },
     "gpt-4-0314": {
         # FYI: LLMs that do not support tools cannot be used as front-men or branch nodes
+        # Per OpenAI, marked for shutdown on 03/26/2026.
         "class": "openai",
         "model_info_url": "https://platform.openai.com/docs/models/gpt-4",
         "modalities": {
@@ -253,6 +256,7 @@
     },
     "gpt-3.5-turbo-1106": {
         # FYI: LLMs that do not support tools cannot be used as front-men or branch nodes
+        # Per OpenAI, marked for shutdown on 09/28/2026.
         "class": "openai",
         "model_info_url": "https://platform.openai.com/docs/models/gpt-3.5-turbo",
         "modalities": {
@@ -266,6 +270,7 @@
     },
     "gpt-3.5-turbo-instruct": {
         # FYI: LLMs that do not support tools cannot be used as front-men or branch nodes
+        # Per OpenAI, marked for shutdown on 09/28/2026.
         "class": "openai",
         "model_info_url": "https://platform.openai.com/docs/models/gpt-3.5-turbo",
         "modalities": {
