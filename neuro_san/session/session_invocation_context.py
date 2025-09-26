@@ -9,10 +9,13 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
+from __future__ import annotations
+
 from typing import Any
 from typing import Callable
 from typing import Dict
 
+from copy import copy
 import functools
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
@@ -161,3 +164,17 @@ class SessionInvocationContext(InvocationContext):
         # to DirectAgentSession do not properly carry forward any memory of the conversation
         # in subsequent interactions with the same network.
         self.origination.reset()
+
+    def safe_shallow_copy(self) -> SessionInvocationContext:
+        """
+        Makes a safe shallow copy of the invocation context.
+        Generally used with direct sessions.
+        """
+
+        invocation_context: SessionInvocationContext = copy(self)
+
+        # We need a different queue in order for direct sessions to call external agents
+        # with direct sessions.
+        invocation_context.queue: AsyncCollatingQueue = AsyncCollatingQueue()
+
+        return invocation_context

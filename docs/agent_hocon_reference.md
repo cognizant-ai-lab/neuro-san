@@ -60,6 +60,7 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
             - [sly_data](#sly_data)
         - [from_downstream](#from_downstream)
             - [sly_data](#sly_data-1)
+            - [messages](#messages)
         - [to_upstream](#to_upstream)
             - [sly_data](#sly_data-2)
     - [display_as](#display_as)
@@ -249,8 +250,8 @@ Set the `class` key to one of the values listed below, then specify the model us
 | OpenAI        | openai        |
 
 You may only provide parameters that are explicitly defined for that provider's class under the
-`classes.<class>.args` section of  
-[`default_llm_info.hocon`](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon).  
+`classes.<class>.args` section of
+[`default_llm_info.hocon`](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon).
 Unsupported parameters will be ignored
 
 **2. For custom providers (not in `default_llm_info.hocon`)**
@@ -263,7 +264,7 @@ Set the `class` key to the full Python path of the desired LangChain-compatible 
 
 Then, provide any constructor arguments supported by that class in `llm_config`.
 
-For a full list of available chat model classes and their parameters, refer to:  
+For a full list of available chat model classes and their parameters, refer to:
 [LangChain Chat Integrations Documentation](https://python.langchain.com/docs/integrations/chat/)
 
 > _Note: Neuro-SAN requires models that support **tool-calling** capabilities._
@@ -651,6 +652,32 @@ is allowed to be accepted and merged into this agent's sly_data.
 A string value in the dictionary represents a translation to a new key.
 
 The same dictionary/list specification described in [to_downstream](#sly_data) also applies here.
+
+##### messages
+
+By default, external agent messages coming from downstream are not forwarded
+to the client via the calling agent network. Usually, all an agent really cares about is:
+"What was the answer text/json?" and "What sly_data needs to be integrated?"
+But there are some cases where it's advantageuos to forward messages from downstream
+external networks to the client, and that is what this key is for.
+
+There are several forms this key can take which have varying levels of control:
+
+- boolean - true/false value that controls whether or not to forward messages from
+            any and all downstream external agents.  The default is false.
+- string - a string value that represents a single external agent reference
+           (as it appears in the tool list) whose messages should be forwarded.
+           This is akin to turning on the boolean value to true for a single agent.
+- list of strings - a list of external agent references (as they appear in the tool list)
+           whose messages should be forwarded.  This is akin to turning on the boolean value
+           to true for multiple agents.
+- dictionary - a dictionary whose keys are external agent references (as they
+           appear in the tool list) and whose values are boolean values that control
+           whether or not to forward messages from that agent.
+
+Example networks that pass through their external agent messages:
+
+- [math_guy_passthrough.hocon](../neuro_san/registries/math_guy_passthrough.hocon)
 
 #### to_upstream
 

@@ -66,7 +66,7 @@ Use your tool to respond to the inquiry.
                     # illustrative purposes and debugging, it's useful to have on.
                     # Most agents would not want to have this reporting on
                     # in a production environment.
-                    "reporting": [ "/website_search" ]
+                    "messages": [ "/website_search" ]
                 }
             }
         }
