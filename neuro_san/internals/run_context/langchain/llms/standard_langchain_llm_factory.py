@@ -16,6 +16,7 @@ from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.resolver import Resolver
 
+from neuro_san.internals.run_context.langchain.llms.httpx_langchain_llm_client import HttpxLangChainLlmClient
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_client import LangChainLlmClient
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
@@ -267,6 +268,10 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
             ChatAnthropic = resolver.resolve_class_in_module("ChatAnthropic",
                                                              module_name="langchain_anthropic.chat_models",
                                                              install_if_missing="langchain-anthropic")
+
+            # ChatAnthropic currently only supports _async_client() as a cached_property,
+            # not as a constructor arg.
+
             llm = ChatAnthropic(
                 model_name=model_name,
                 max_tokens=config.get("max_tokens"),  # This is always for output
@@ -280,9 +285,14 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                                                         "ANTHROPIC_API_URL"),
                 anthropic_api_key=self.get_value_or_env(config, "anthropic_api_key",
                                                         "ANTHROPIC_API_KEY"),
+                default_headers=config.get("default_headers"),
+                betas=config.get("betas"),
                 streaming=True,  # streaming is always on. Without it token counting will not work.
                 # Set stream_usage to True in order to get token counting chunks.
                 stream_usage=True,
+                thinking=config.get("thinking"),
+                mcp_servers=config.get("mcp_servers"),
+                context_management=config.get("context_management"),
 
                 # If omitted, this defaults to the global verbose value,
                 # accessible via langchain_core.globals.get_verbose():
@@ -299,6 +309,12 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 # global verbose value) so that the warning is never triggered.
                 verbose=False,
             )
+
+            # Create the llm_client after the fact, with reach-in
+            async_anthropic = llm._async_client
+            http_client = async_anthropic.http_client
+            llm_client = HttpxLangChainLlmClient(http_client, async_anthropic)
+
         elif chat_class == "ollama":
 
             # Use lazy loading to prevent installing the world

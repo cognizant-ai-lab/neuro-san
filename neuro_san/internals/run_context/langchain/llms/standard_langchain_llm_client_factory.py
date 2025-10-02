@@ -132,6 +132,9 @@ class StandardLangChainLlmClientFactory(LangChainLlmClientFactory):
         elif chat_class == "anthropic":
 
             # Not yet
+            # Anthropic models only support _async_client() as a cached_property,
+            # not as a passed-in arg.  In LlmFactory, we grab hold of the async client
+            # after we create the ChatAntropic BaseLanguageModel. That's all we can do.
             llm_client = None
 
         elif chat_class == "ollama":
