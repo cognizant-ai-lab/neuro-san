@@ -92,8 +92,18 @@ class LangChainLlmFactory:
         :param key: The key for the config to look for
         :param env_key: The os.environ key whose value should be gotten if either
                         the key does not exist or the value for the key is None
-        :param llm_client: A LangChainLlmClient instance.
-                        If present this method will return None.
+        :param llm_client:  An optional LangChainLlmClient instance.
+                            If present this method will return None.
+
+                            Most BaseLanguageModels will take some kind of pre-made
+                            client as part of their constructor args, but they will
+                            also take enough args to constructor a client for themselves
+                            under the hood when explicitly not given that client.
+
+                            Note that this does *not* actually provide any values from
+                            the given client, rather this arg allows those constructor
+                            variables associated with creating that under-the-covers
+                            client to remain None when there is a client already made.
         """
         if llm_client is not None:
             return None
