@@ -139,7 +139,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             # Success. Tack it on to the list
             self.llm_factories.append(llm_factory)
 
-        # DEF - Might also want factory extension eventually
+        # DEF - Might also want client factory extension eventually
 
     def resolve_one_llm_factory(self, llm_factory_class_name: str, llm_info_file: str) -> LangChainLlmFactory:
         """
