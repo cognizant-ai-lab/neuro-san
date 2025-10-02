@@ -15,6 +15,7 @@ from typing import Dict
 from typing import Generator
 
 import json
+import contextlib
 import uuid
 
 from janus import Queue
@@ -256,16 +257,29 @@ class AsyncAgentService:
         chat_filter_dict = request_dict.get("chat_filter", chat_filter_dict)
         chat_filter_type: str = chat_filter_dict.get("chat_filter_type", "MINIMAL")
 
-        async for response_dict in response_dict_generator:
-            # Prepare chat message for output:
-            response_dict = ChatMessageConverter().to_dict(response_dict)
-            # Do not return the request when the filter is MINIMAL
-            if chat_filter_type != "MINIMAL":
-                response_dict["request"] = request_dict
-            yield response_dict
-
-        request_reporting: Dict[str, Any] = invocation_context.get_request_reporting()
-        invocation_context.close()
+        try:
+            async for response_dict in response_dict_generator:
+                # Prepare chat message for output:
+                response_dict = ChatMessageConverter().to_dict(response_dict)
+                # Do not return the request when the filter is MINIMAL
+                if chat_filter_type != "MINIMAL":
+                    response_dict["request"] = request_dict
+                yield response_dict
+        finally:
+            # Put async generator cleanup logic in "finally" part of try-except block;
+            # this way we guarantee that underlying response_dict_generator will be closed
+            # whether we finish consuming its data stream normally
+            # OR we are interrupted downstream
+            # and have special "GeneratorExit" exception delivered to us.
+            request_reporting: Dict[str, Any] = invocation_context.get_request_reporting()
+            # Properly close our async generator:
+            if response_dict_generator is not None:
+                with contextlib.suppress(Exception):
+                    await response_dict_generator.aclose()
+            # Ensure that our SessionInvocationContext is always closed,
+            # even if generator is interrupted.
+            invocation_context.close()
+            invocation_context = None
 
         # Maybe report token accounting to a UsageLogger
         token_dict: Dict[str, Any] = request_reporting.get("token_accounting")

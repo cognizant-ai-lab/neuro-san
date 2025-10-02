@@ -16,7 +16,10 @@ from typing import Any
 from typing import Dict
 from typing import Generator
 
+import asyncio
+import contextlib
 import json
+import tornado
 
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
@@ -63,15 +66,54 @@ class StreamingChatHandler(BaseRequestHandler):
             return
 
         self.application.start_client_request(metadata, f"{agent_name}/streaming_chat")
+        result_generator = None
         try:
             # Parse JSON body
             data = json.loads(self.request.body)
             result_generator = service.streaming_chat(data, metadata)
-            await self.stream_out(result_generator)
+
+            # Set up headers for chunked response
+            self.set_header("Content-Type", "application/json-lines")
+            self.set_header("Transfer-Encoding", "chunked")
+            # Flush headers immediately
+            flush_ok: bool = await self.do_flush()
+            if not flush_ok:
+                # If we failed to flush our output,
+                # most probably it's because connection is closed by a client.
+                # Raise accordingly - we will handle this exception:
+                raise tornado.iostream.StreamClosedError()
+
+            async for result_dict in result_generator:
+                result_str: str = json.dumps(result_dict) + "\n"
+                self.write(result_str)
+                flush_ok = await self.do_flush()
+                if not flush_ok:
+                    # Raise exception to be handled as a general
+                    # "stream abruptly closed" case:
+                    raise tornado.iostream.StreamClosedError()
+
+        except (asyncio.CancelledError, tornado.iostream.StreamClosedError):
+            # ensure generator is closed promptly
+            # and re-raise as recommended
+            if result_generator is not None:
+                # Suppress possible exceptions: they are of no interest here.
+                with contextlib.suppress(Exception):
+                    await result_generator.aclose()
+                    result_generator = None
+            self.logger.info(metadata, "Request handler cancelled/stream closed.")
+            raise
 
         except Exception as exc:  # pylint: disable=broad-exception-caught
-            self.process_exception(exc)
+            # Suppress possible exceptions: they are of no interest here.
+            with contextlib.suppress(Exception):
+                self.process_exception(exc)
+
         finally:
             # We are done with response stream:
+            if result_generator is not None:
+                with contextlib.suppress(Exception):
+                    # It is possible we will call .aclose() twice
+                    # on our result_generator - it is allowed and has no effect.
+                    await result_generator.aclose()
             self.do_finish()
             self.application.finish_client_request(metadata, f"{agent_name}/streaming_chat", get_stats=True)
