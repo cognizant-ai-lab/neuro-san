@@ -446,4 +446,6 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         else:
             raise ValueError(f"Class {chat_class} for model_name {model_name} is unrecognized.")
 
+        # Return the LlmResources with the llm_client that was passed in.
+        # That might be None, and that's OK.
         return LangChainLlmResources(llm, llm_client=llm_client)
