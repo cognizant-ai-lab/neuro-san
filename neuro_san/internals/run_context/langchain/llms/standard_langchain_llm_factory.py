@@ -51,6 +51,12 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
     def create_base_chat_model(self, config: Dict[str, Any]) -> BaseLanguageModel:
         """
         Create a BaseLanguageModel from the fully-specified llm config.
+
+        This method is provided for backwards compatibility.
+        Prefer create_llm_resources_with_client() instead,
+        as this allows server infrastructure to better account for outstanding
+        connections to LLM providers when connections drop.
+
         :param config: The fully specified llm config which is a product of
                     _create_full_llm_config() above.
         :return: A BaseLanguageModel (can be Chat or LLM)
