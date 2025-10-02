@@ -33,7 +33,7 @@ Neuro SAN also offers:
 * fallback LLM specifications for when your fave goes down.
 * powerful debugging information for gaining insight into your mutli-agent systems.
 * server-readiness at scale
-* enabling of distributed agent webs that call each other to work together, wheverer they are hosted.
+* enabling distributed agent webs that call each other to work together, wherever they are hosted.
 * security-by-default - you set what private data is to be shared downstream/upstream
 * test infrastructure for your agent networks, including:
     * data-driven test cases
