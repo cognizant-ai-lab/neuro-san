@@ -110,10 +110,12 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                                                           module_name="langchain_openai.chat_models.base",
                                                           install_if_missing="langchain-openai")
 
+            # See if there is an async_client to be had from the llm_client passed in
             async_client: Any = None
             if llm_client is not None:
                 async_openai_client = llm_client.get_client()
                 if async_openai_client is not None:
+                    # Necessary reach-in.
                     async_client = async_openai_client.chat.completions
 
             # Now construct LLM chat model we will be using:
