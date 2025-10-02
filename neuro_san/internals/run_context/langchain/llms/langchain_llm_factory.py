@@ -59,8 +59,8 @@ class LangChainLlmFactory:
         """
         raise NotImplementedError
 
-    def create_base_chat_model_with_client(self, config: Dict[str, Any],
-                                           llm_client: LangChainLlmClient = None) -> LangChainLlmResources:
+    def create_llm_resources_with_client(self, config: Dict[str, Any],
+                                         llm_client: LangChainLlmClient = None) -> LangChainLlmResources:
         """
         Create a LangChainLlmResources instance from the fully-specified llm config.
 

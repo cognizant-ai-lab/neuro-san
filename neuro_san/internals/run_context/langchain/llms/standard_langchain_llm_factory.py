@@ -60,8 +60,8 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         raise NotImplementedError
 
     # pylint: disable=too-many-branches
-    def create_base_chat_model_with_client(self, config: Dict[str, Any],
-                                           llm_client: LangChainLlmClient = None) -> LangChainLlmResources:
+    def create_llm_resources_with_client(self, config: Dict[str, Any],
+                                         llm_client: LangChainLlmClient = None) -> LangChainLlmResources:
         """
         Create a BaseLanguageModel from the fully-specified llm config.
         :param config: The fully specified llm config which is a product of

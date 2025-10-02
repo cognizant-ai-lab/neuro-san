@@ -179,7 +179,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         """
         full_config: Dict[str, Any] = self.create_full_llm_config(config)
         llm_client: LangChainLlmClient = self.create_llm_client(full_config)
-        llm_resources: LangChainLlmResources = self.create_base_chat_model_with_client(full_config, llm_client)
+        llm_resources: LangChainLlmResources = self.create_llm_resources_with_client(full_config, llm_client)
         return llm_resources
 
     def create_full_llm_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -318,7 +318,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 found_exception = exception
 
         # DEF - Might eventually want to resolve a specific class like the end of
-        #       create_base_chat_model_with_client() does.
+        #       create_llm_resources_with_client() does.
 
         if found_exception is not None:
             raise found_exception
@@ -336,8 +336,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         """
         raise NotImplementedError
 
-    def create_base_chat_model_with_client(self, config: Dict[str, Any],
-                                           llm_client: LangChainLlmClient = None) -> LangChainLlmResources:
+    def create_llm_resources_with_client(self, config: Dict[str, Any],
+                                         llm_client: LangChainLlmClient = None) -> LangChainLlmResources:
         """
         Create a BaseLanguageModel from the fully-specified llm config either from standard LLM factory,
         user-defined LLM factory, or user-specified langchain model class.
@@ -361,7 +361,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         found_exception: Exception = None
         for llm_factory in self.llm_factories:
             try:
-                llm_resources = llm_factory.create_base_chat_model_with_client(config, llm_client)
+                llm_resources = llm_factory.create_llm_resources_with_client(config, llm_client)
                 if llm_resources is not None and isinstance(llm_resources, LangChainLlmResources):
                     # We found what we were looking for
                     found_exception = None
