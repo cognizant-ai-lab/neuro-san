@@ -39,7 +39,7 @@ class PollingRegistryObserver(RegistryObserver):
         """
         Start running observer
         """
-        self.observer.schedule(self.event_handler, path=self.registry_path, recursive=False)
+        self.observer.schedule(self.event_handler, path=self.registry_path, recursive=True)
         self.observer.start()
         self.logger.info("Registry polling watchdog started on: %s for manifest %s with polling every %d sec",
                          self.registry_path, self.manifest_path, self.poll_seconds)

@@ -95,10 +95,10 @@ class AbstractCallableActivation(CallableActivation):
             await self.run_context.delete_resources(parent_run_context)
             self.run_context = None
 
-    async def build(self) -> List[BaseMessage]:
+    async def build(self) -> BaseMessage:
         """
         Main entry point to the class.
 
-        :return: A List of BaseMessages produced during this process.
+        :return: A BaseMessage produced during this process.
         """
         raise NotImplementedError

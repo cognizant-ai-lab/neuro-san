@@ -22,6 +22,7 @@ from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
 from leaf_server_common.logging.logging_setup import setup_extra_logging_fields
 
+from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
@@ -46,7 +47,8 @@ class SessionInvocationContext(InvocationContext):
                  async_executors_pool: AsyncioExecutorPool,
                  llm_factory: ContextTypeLlmFactory,
                  toolbox_factory: ContextTypeToolboxFactory = None,
-                 metadata: Dict[str, str] = None):
+                 metadata: Dict[str, str] = None,
+                 reservationist: Reservationist = None):
         """
         Constructor
 
@@ -59,6 +61,7 @@ class SessionInvocationContext(InvocationContext):
         :param metadata: A grpc metadata of key/value pairs to be inserted into
                          the header. Default is None. Preferred format is a
                          dictionary of string keys to string values.
+        :param reservationist: The Reservationist instance to use.
         """
 
         self.async_session_factory: AsyncAgentSessionFactory = async_session_factory
@@ -72,6 +75,7 @@ class SessionInvocationContext(InvocationContext):
         self.request_reporting: Dict[str, Any] = {}
         self.llm_factory: ContextTypeLlmFactory = llm_factory
         self.toolbox_factory: ContextTypeToolboxFactory = toolbox_factory
+        self.reservationist: Reservationist = reservationist
 
     def start(self):
         """
@@ -154,6 +158,12 @@ class SessionInvocationContext(InvocationContext):
         :return: The ContextTypeToolboxFactory instance for the session
         """
         return self.toolbox_factory
+
+    def get_reservationist(self) -> Reservationist:
+        """
+        :return: The Reservationist instance for the session
+        """
+        return self.reservationist
 
     def reset(self):
         """

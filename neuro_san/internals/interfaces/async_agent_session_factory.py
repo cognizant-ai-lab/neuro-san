@@ -33,3 +33,9 @@ class AsyncAgentSessionFactory:
                  communications about external agents can be made.
         """
         raise NotImplementedError
+
+    def is_use_direct(self) -> bool:
+        """
+        :return: When True, will use a Direct session for external agents that would reside on the same server.
+        """
+        raise NotImplementedError

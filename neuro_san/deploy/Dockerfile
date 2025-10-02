@@ -244,4 +244,30 @@ ENV AGENT_HTTP_SERVER_INSTANCES=1
 # Logging period is specified in seconds.
 ENV AGENT_HTTP_RESOURCES_MONITOR_INTERVAL=0
 
+# If this value is specified and >0,
+# it will enable dynamic temporary network updates of the server agents
+# allowing CodedTools to reserve temporary networks via the Reservationist
+# interface, if the agent network hocon file specifically allows it for the tool.
+# Update will be done every AGENT_TEMPORARY_NETWORK_UPDATE_PERIOD_SECONDS seconds;
+# if value is not specified or <= 0, no such dynamic updates will be executed.
+ENV AGENT_TEMPORARY_NETWORK_UPDATE_PERIOD_SECONDS=0
+
+# Optional URL describing how the server is to be referenced by the outside world.
+# This is useful when a server is behind a load-balancer as part of a larger cluster.
+ENV AGENT_EXTERNAL_SERVER_URL=""
+
+# A reference to a Python class that can be used to store temporary agent references
+# External to the server, so other replicated pods can pick them up.
+# This class must have a no-args constructor and implement the
+# neuro_san.internals.interfaces.ReservationsStorage interface.
+# When not set, this defaults to a null implementation.
+# A simple default implementation is provided by the class
+# "neuro_san.service.watcher.temp_networks.s3_reservations_storage.S3ReservationsStorage"
+ENV AGENT_EXTERNAL_RESERVATIONS_STORAGE
+
+# When the AGENT_EXTERNAL_RESERVATIONS_STORAGE (immediately above) is set to the
+# S3ReservationsStorage class mentioned there, this env var must be set to the S3 Bucket
+# to use for cross-pod reservations storage.
+ENV AGENT_RESERVATIONS_S3_BUCKET
+
 ENTRYPOINT "${APP_ENTRYPOINT}"

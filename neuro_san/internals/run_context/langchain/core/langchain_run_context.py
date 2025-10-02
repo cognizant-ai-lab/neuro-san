@@ -709,21 +709,20 @@ class LangChainRunContext(RunContext):
         """
         if tool_outputs is not None and len(tool_outputs) > 0:
             for tool_output in tool_outputs:
-                tool_messages: List[BaseMessage] = self.parse_tool_output(tool_output)
-                if tool_messages is not None:
-                    for tool_message in tool_messages:
-                        # Chat history is updated in write_message()
-                        await self.journal.write_message(tool_message)
+                tool_message: BaseMessage = self.parse_tool_output(tool_output)
+                if tool_message is not None:
+                    # Chat history is updated in write_message()
+                    await self.journal.write_message(tool_message)
 
         # Create a run to return
         run = LangChainRun(self.run_id_base, self.chat_history)
 
         return run
 
-    def parse_tool_output(self, tool_output: Dict[str, Any]) -> List[BaseMessage]:
+    def parse_tool_output(self, tool_output: Dict[str, Any]) -> BaseMessage:
         """
         Parse a single tool_output dictionary for its results
-        :return: A list of messages representing the output from the tool.
+        :return: A message representing the output from the tool.
         """
 
         # Get a Message for each output and add to the chat history.
@@ -736,11 +735,45 @@ class LangChainRunContext(RunContext):
             # Sometimes output comes back as a tuple.
             # The output we want is the first element of the tuple.
             tool_chat_list_string = tool_chat_list_string[0]
-        if not isinstance(tool_chat_list_string, str):
+
+        tool_message: BaseMessage = None
+        if isinstance(tool_chat_list_string, str):
+            # Sometimes output comes back as a list.
+            # The output we want is the first element of the list.
+            tool_message = self.parse_tool_chat_list_string(tool_chat_list_string, tool_output.get("origin"))
+
+        elif isinstance(tool_chat_list_string, BaseMessage):
+            tool_message = AgentToolResultMessage(content=tool_chat_list_string.content,
+                                                  tool_result_origin=tool_output.get("origin"))
+
+        elif isinstance(tool_chat_list_string, list) and isinstance(tool_chat_list_string[-1], BaseMessage):
+            # Always take the last element of the list as the answer to the tool output
+            last_message: BaseMessage = tool_chat_list_string[-1]
+            tool_message = AgentToolResultMessage(content=last_message.content,
+                                                  tool_result_origin=tool_output.get("origin"))
+        else:
             self.logger.warning("Dunno what to do with %s tool output %s",
                                 str(tool_chat_list_string.__class__.__name__),
                                 str(tool_chat_list_string))
             return None
+
+        # Integrate any sly data
+        tool_sly_data: Dict[str, Any] = tool_output.get("sly_data")
+        if tool_sly_data and tool_sly_data != self.tool_caller.sly_data:
+            # We have sly data from the tool output that is not the same as our own
+            # and it has data in it.  Integrate that.
+            # It's possible we might need to run a SlyDataRedactor against from_download.sly_data on this.
+            self.tool_caller.sly_data.update(tool_sly_data)
+
+        return tool_message
+
+    def parse_tool_chat_list_string(self, tool_chat_list_string: str, origin: str) -> BaseMessage:
+        """
+        Parse a tool output string into a list of messages
+        :param tool_chat_list_string: The string to parse
+        :param origin: The origin of the tool
+        :return: A list of messages representing the output from the tool.
+        """
 
         # Remove bracketing quotes from within the string
         while (tool_chat_list_string[0] == '"' and tool_chat_list_string[-1] == '"') or \
@@ -773,18 +806,9 @@ class LangChainRunContext(RunContext):
         # that process them.  So, to make things continue to work, report the
         # content as an AI message - as if the bot came up with the answer itself.
         tool_message = AgentToolResultMessage(content=tool_result_dict.get("content"),
-                                              tool_result_origin=tool_output.get("origin"))
+                                              tool_result_origin=origin)
 
-        # Integrate any sly data
-        tool_sly_data: Dict[str, Any] = tool_output.get("sly_data")
-        if tool_sly_data and tool_sly_data != self.tool_caller.sly_data:
-            # We have sly data from the tool output that is not the same as our own
-            # and it has data in it.  Integrate that.
-            # It's possible we might need to run a SlyDataRedactor against from_download.sly_data on this.
-            self.tool_caller.sly_data.update(tool_sly_data)
-
-        return_messages: List[BaseMessage] = [tool_message]
-        return return_messages
+        return tool_message
 
     async def delete_resources(self, parent_run_context: RunContext = None):
         """

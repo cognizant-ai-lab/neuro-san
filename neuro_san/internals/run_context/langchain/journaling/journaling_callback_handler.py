@@ -151,6 +151,10 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
             combined_args["origin"] = self.origin
             combined_args["origin_str"] = full_name
 
+            # Remove any reservationist from the args as that will not transfer over the wire
+            if "reservationist" in combined_args:
+                del combined_args["reservationist"]
+
             # Remove any progress_reporter from the args as that will not transfer over the wire
             if "progress_reporter" in combined_args:
                 del combined_args["progress_reporter"]

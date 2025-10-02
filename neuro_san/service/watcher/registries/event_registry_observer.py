@@ -38,7 +38,7 @@ class EventRegistryObserver(RegistryObserver):
         """
         Start running observer
         """
-        self.observer.schedule(self.event_handler, path=self.registry_path, recursive=False)
+        self.observer.schedule(self.event_handler, path=self.registry_path, recursive=True)
         self.observer.start()
         self.logger.info("Registry watchdog started on: %s for manifest %s",
                          self.registry_path, self.manifest_path)

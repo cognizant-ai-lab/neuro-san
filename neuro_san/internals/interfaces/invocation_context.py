@@ -15,6 +15,7 @@ from typing import Dict
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 
+from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
@@ -97,5 +98,11 @@ class InvocationContext:
     def get_toolbox_factory(self) -> ContextTypeToolboxFactory:
         """
         :return: The ContextTypeToolboxFactory instance for the session
+        """
+        raise NotImplementedError
+
+    def get_reservationist(self) -> Reservationist:
+        """
+        :return: The Reservationist instance for the session
         """
         raise NotImplementedError

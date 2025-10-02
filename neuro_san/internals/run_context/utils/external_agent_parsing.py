@@ -60,7 +60,7 @@ class ExternalAgentParsing:
             split: List[str] = parse_result.netloc.split(":")
             host = split[0]
             if len(split) > 1:
-                port = split[0]
+                port = split[1]
 
         # Special case for detecting localhost
         if host is None or len(host) == 0:
@@ -110,7 +110,7 @@ class ExternalAgentParsing:
         #       "tools": ["read_wiki_structure", "ask_question"],
         # }
 
-        # If it is a dict, it is assume it is MCP for now.
+        # If it is a dict, it is assumed it is MCP for now.
         # This may change in the future when Neuro-SAN supports other protocals like A2A.
         if isinstance(tool_ref, dict):
             return True
@@ -134,7 +134,7 @@ class ExternalAgentParsing:
 
             # FWIW: langchain internal tool references must satisfy the regex: "^[a-zA-Z0-9_-]+$"
             # It's possible that more complex external references might have the agent_name
-            # needing futher mangling.  Cross that bridge when we have a real example.
-            safe_name = "__" + agent_location.get("agent_name")
+            # needing further mangling.  Cross that bridge when we have a real example.
+            safe_name = "__" + agent_location.get("agent_name").replace("/", "__")
 
         return safe_name

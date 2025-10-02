@@ -17,16 +17,21 @@ from typing import Generator
 import json
 import uuid
 
+from janus import Queue
+
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
 from leaf_common.utils.atomic_counter import AtomicCounter
 
+from neuro_san.interfaces.reservationist import Reservationist
+from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.run_context.factory.master_toolbox_factory import MasterToolboxFactory
 from neuro_san.internals.run_context.factory.master_llm_factory import MasterLlmFactory
+from neuro_san.service.generic.service_agent_reservationist import ServiceAgentReservationist
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.chat_message_converter import ChatMessageConverter
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
@@ -75,6 +80,9 @@ class AsyncAgentService:
         self.request_logger = request_logger
         self.security_cfg = security_cfg
         self.server_logging: AgentServerLogging = server_logging
+
+        # Stuff needed for ServiceAgentReservationist
+        self.queues: Queue[AsyncCollatingQueue] = server_context.get_queues()
 
         self.agent_network_provider: AgentNetworkProvider = agent_network_provider
         self.agent_name: str = agent_name
@@ -210,6 +218,12 @@ class AsyncAgentService:
                 "Received a %s request for %s",
                 f"{self.agent_name}.StreamingChat", log_marker)
 
+        # Create a reservationist for the occasion
+        reservationist: Reservationist = None
+        if self.queues is not None:
+            reservationist = ServiceAgentReservationist()
+            self.queues.sync_q.put(reservationist.get_queue())
+
         # Prepare
         factory = ExternalAgentSessionFactory(use_direct=False)
         invocation_context = SessionInvocationContext(
@@ -217,7 +231,8 @@ class AsyncAgentService:
             self.async_executor_pool,
             self.llm_factory,
             self.toolbox_factory,
-            metadata)
+            metadata,
+            reservationist)
         invocation_context.start()
 
         # Set up logging inside async thread

@@ -23,17 +23,18 @@ from time import time
 from neuro_san.service.watcher.interfaces.startable import Startable
 from neuro_san.service.watcher.interfaces.storage_updater import StorageUpdater
 from neuro_san.service.watcher.registries.registry_storage_updater import RegistryStorageUpdater
+from neuro_san.service.watcher.temp_networks.temp_network_storage_updater import TempNetworkStorageUpdater
 from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.service.utils.server_status import ServerStatus
 
 
-# pylint: disable=too-many-instance-attributes
 class StorageWatcher(Startable):
     """
     Class implementing periodic server updates
     by watching agent files and manifest file itself
     and other changes to AgentNetworkStorage instances.
     """
+
     def __init__(self,
                  watcher_config: Dict[str, Any],
                  server_context: ServerContext):
@@ -48,8 +49,9 @@ class StorageWatcher(Startable):
         self.server_context: ServerContext = server_context
 
         self.storage_updaters: List[StorageUpdater] = [
-            RegistryStorageUpdater(self.server_context.get_network_storage_dict(), watcher_config),
-            # We will eventually have more here
+            RegistryStorageUpdater(server_context.get_network_storage_dict(), watcher_config),
+            TempNetworkStorageUpdater(server_context.get_network_storage_dict(), watcher_config,
+                                      server_context.get_queues())
         ]
 
         self.update_period_in_seconds: int = self.compute_update_period_in_seconds(self.storage_updaters)

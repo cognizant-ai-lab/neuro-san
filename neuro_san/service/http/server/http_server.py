@@ -192,9 +192,9 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
 
         # Register templated request paths for agent API methods:
         # regexp format used here is that of Python Re standard library.
-        handlers.append((r"/api/v1/([^/]+)/function", FunctionHandler, request_initialize_data))
-        handlers.append((r"/api/v1/([^/]+)/connectivity", ConnectivityHandler, request_initialize_data))
-        handlers.append((r"/api/v1/([^/]+)/streaming_chat", StreamingChatHandler, request_initialize_data))
+        handlers.append((r"/api/v1/(.+)/function", FunctionHandler, request_initialize_data))
+        handlers.append((r"/api/v1/(.+)/connectivity", ConnectivityHandler, request_initialize_data))
+        handlers.append((r"/api/v1/(.+)/streaming_chat", StreamingChatHandler, request_initialize_data))
 
         return HttpServerApp(handlers, requests_limit, logger, self.forwarded_request_metadata)
 

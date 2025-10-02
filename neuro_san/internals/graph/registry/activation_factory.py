@@ -105,6 +105,9 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
         if not agent_tool_path.endswith(self.agent_network.get_network_name()):
             agent_tool_path = f"{agent_tool_path}.{self.agent_network.get_network_name()}"
 
+        # Now, agent network name itself can contain "os.sep" symbols
+        # in case of hierarchical agents structure. Replace those too.
+        agent_tool_path = agent_tool_path.replace(os.sep, ".")
         return agent_tool_path
 
     def get_agent_tool_path(self) -> str:
@@ -130,6 +133,7 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
         :param sly_data: A mapping whose keys might be referenceable by agents, but whose
                  values should not appear in agent chat text. Can be an empty dictionary.
         :param arguments: A dictionary of arguments for the newly constructed agent
+        :param factory: A factory that will be used to create the agent tool
         :return: The CallableActivation agent referred to by the name.
         """
         if factory is None:

@@ -118,11 +118,11 @@ class BranchActivation(CallingActivation, CallableActivation):
 
         return new_messages
 
-    async def build(self) -> List[BaseMessage]:
+    async def build(self) -> BaseMessage:
         """
         Main entry point to the class.
 
-        :return: A List of BaseMessages produced during this process.
+        :return: A BaseMessage produced during this process.
         """
 
         assignments: str = self.get_assignments()
@@ -145,7 +145,8 @@ class BranchActivation(CallingActivation, CallableActivation):
 
         messages = await self.integrate_callable_response(run, messages)
 
-        return messages
+        # Return the last message
+        return messages[-1]
 
     def get_origin(self) -> List[Dict[str, Any]]:
         """
@@ -177,10 +178,10 @@ class BranchActivation(CallingActivation, CallableActivation):
                                                                                        tool_name,
                                                                                        sly_data,
                                                                                        tool_args)
-        message_list: List[BaseMessage] = []
+        message: BaseMessage = None
         try:
             # DEF - need to integrate sly_data
-            message_list: List[BaseMessage] = await callable_activation.build()
+            message = await callable_activation.build()
 
         except ClientConnectionError as exception:
             # There is a case where we could give a little more help.
@@ -197,8 +198,20 @@ flag to your invocation.
             # Nope. Just a regular http connection failure given the tool_name. Can't help ya.
             raise exception
 
-        # We got a list of messages back as a string. Take the last.
-        message_dict: Dict[str, Any] = message_list[-1]
-        content: str = message_dict.get("content")
+        # We got a message back, take the content as the return string
+        return message.content
 
-        return content
+    async def use_reservation(self, reservation_id: str, args: Dict[str, Any], sly_data: Dict[str, Any]) -> str:
+        """
+        Experimental method to call a reserved temporary network more directly from a subclass.
+
+        NOTE: This method is not correctly reporting history or anything like that just yet.
+
+        :param reservation_id: The string id of the reservation to invoke
+        :param args: A dictionary of arguments to send to the reserved temporary network.
+        :param sly_data: private data dictionary to send to the reserved temporary network.
+        :return: A string representing the last received content text of the last message.
+        """
+        # DEF - for now just assume a local copy
+        result: str = await self.use_tool(f"/{reservation_id}", args, sly_data)
+        return result

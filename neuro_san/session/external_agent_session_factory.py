@@ -30,17 +30,20 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
     """
 
     def __init__(self, use_direct: bool = False,
-                 network_storage: AgentNetworkStorage = None):
+                 network_storage_dict: Dict[str, AgentNetworkStorage] = None):
         """
         Constructor
 
         :param use_direct: When True, will use a Direct session for
                     external agents that would reside on the same server.
-        :param network_storage: A AgentNetworkStorage instance which keeps all
+        :param network_storage_dict: A dictionary of AgentNetworkStorage instances which keeps all
                                 the AgentNetwork instances.  Only used with use_direct=True.
         """
-        self.network_storage: AgentNetworkStorage = network_storage
         self.use_direct: bool = use_direct
+        self.network_storage_dict: Dict[str, AgentNetworkStorage] = None
+        if self.use_direct:
+            # Only store the reference if we will need it
+            self.network_storage_dict = network_storage_dict
 
     def create_session(self, agent_url: str,
                        invocation_context: InvocationContext) -> AsyncAgentSession:
@@ -67,7 +70,6 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
         """
         if agent_location is None:
             return None
-
         # Create the session.
         host = agent_location.get("host")
         port = agent_location.get("port")
@@ -81,11 +83,17 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
 
         session: AsyncAgentSession = None
         if self.use_direct and (host is None or len(host) == 0 or host == "localhost"):
+
             # Optimization: We want to create a different kind of session to minimize socket usage
             # and potentially relieve the direct user of the burden of having to start a server
 
-            agent_network_provider: AgentNetworkProvider = \
-                self.network_storage.get_agent_network_provider(agent_name)
+            agent_network_provider: AgentNetworkProvider = None
+            for network_storage in self.network_storage_dict.values():
+                # Be sure we have something
+                agent_network_provider = network_storage.get_agent_network_provider(agent_name)
+                if agent_network_provider.get_agent_network() is not None:
+                    break
+
             agent_network: AgentNetwork = agent_network_provider.get_agent_network()
             safe_invocation_context: InvocationContext = invocation_context.safe_shallow_copy()
             session = AsyncDirectAgentSession(agent_network, safe_invocation_context, metadata=metadata)
@@ -107,3 +115,9 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
         quiet_please.setLevel(logging.WARNING)
 
         return session
+
+    def is_use_direct(self) -> bool:
+        """
+        :return: When True, will use a Direct session for external agents that would reside on the same server.
+        """
+        return self.use_direct

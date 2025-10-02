@@ -24,15 +24,19 @@ from langchain_core.messages.base import BaseMessage
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.config.resolver import Resolver
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.interfaces.coded_tool import CodedTool
+from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.graph.activations.abstract_callable_activation import AbstractCallableActivation
 from neuro_san.internals.graph.activations.branch_activation import BranchActivation
 from neuro_san.internals.graph.interfaces.agent_tool_factory import AgentToolFactory
+from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.journals.progress_journal import ProgressJournal
 from neuro_san.internals.messages.agent_message import AgentMessage
 from neuro_san.internals.messages.origination import Origination
+from neuro_san.internals.reservations.accumulating_agent_reservationist import AccumulatingAgentReservationist
 from neuro_san.internals.run_context.factory.run_context_factory import RunContextFactory
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 
@@ -77,6 +81,17 @@ class AbstractClassActivation(AbstractCallableActivation):
         self.full_name: str = Origination.get_full_name_from_origin(self.run_context.get_origin())
         self.logger: Logger = getLogger(self.full_name)
 
+        # One of these per CodedTool
+        self.reservationist: Reservationist = None
+
+        # See if we should be doing anything with Reservationists at all
+        spec_extractor = DictionaryExtractor(self.agent_tool_spec)
+        if spec_extractor.get("allow.reservations"):
+            invocation_context: InvocationContext = self.run_context.get_invocation_context()
+            real_reservationist: Reservationist = invocation_context.get_reservationist()
+            if real_reservationist is not None:
+                self.reservationist = AccumulatingAgentReservationist(real_reservationist, self.full_name)
+
         # Put together the arguments to pass to the CodedTool
         self.arguments: Dict[str, Any] = {}
         if arguments is not None:
@@ -90,6 +105,14 @@ class AbstractClassActivation(AbstractCallableActivation):
             self.arguments["origin"] = deepcopy(self.run_context.get_origin())
         if self.arguments.get("origin_str") is None:
             self.arguments["origin_str"] = self.full_name
+        if self.arguments.get("reservationist") is None and self.reservationist:
+            # This is the Reservationist we pass into the CodedTool.
+            # You might think this belongs in sly_data, but sly_data is actually a global
+            # available to all CodedTools and this Reservationist is particular to the
+            # CodedTool, so it goes in the arguments.
+            # We specifically give the CodedTools the accumulating version so they
+            # do not have any access to service internals.
+            self.arguments["reservationist"] = self.reservationist
 
     def get_full_class_ref(self) -> str:
         """
@@ -105,13 +128,13 @@ class AbstractClassActivation(AbstractCallableActivation):
         raise NotImplementedError
 
     # pylint: disable=too-many-locals
-    async def build(self) -> List[BaseMessage]:
+    async def build(self) -> BaseMessage:
         """
         Main entry point to the class.
 
-        :return: A List of BaseMessages produced during this process.
+        :return: A BaseMessage produced during this process.
         """
-        messages: List[BaseMessage] = []
+        message: BaseMessage = None
 
         full_class_ref: str = self.get_full_class_ref()
         self.logger.info("Calling class %s", full_class_ref)
@@ -212,9 +235,8 @@ Some hints:
         # Change the result into a message
         retval_str: str = f"{retval}"
         message = AIMessage(content=retval_str)
-        messages.append(message)
 
-        return messages
+        return message
 
     async def attempt_invoke(self, coded_tool: CodedTool, arguments: Dict[str, Any], sly_data: Dict[str, Any]) \
             -> Any:
@@ -229,6 +251,11 @@ Some hints:
         retval: Any = None
 
         tool_args: Dict[str, Any] = arguments.copy()
+
+        # Remove any reservationist from the args as that will not transfer over the wire
+        if "reservationist" in tool_args:
+            del tool_args["reservationist"]
+
         # Need to remove class references from the args that will not transfer over the wire
         if "progress_reporter" in tool_args:
             del tool_args["progress_reporter"]
@@ -237,6 +264,7 @@ Some hints:
             "tool_start": True,
             "tool_args": tool_args
         }
+
         message = AgentMessage(content="Received arguments:", structure=arguments_dict)
         await self.journal.write_message(message)
 
