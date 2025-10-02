@@ -31,8 +31,8 @@ class HttpxLangChainLlmClient(LangChainLlmClient):
         :param async_llm_client: optional async_llm_client used for model connections to LLM host.
                             When used, this is most often ChatModel-specific.
         """
-        self.http_client = http_client
-        self.async_llm_client = async_llm_client
+        self.http_client: AsyncClient = http_client
+        self.async_llm_client: Any = async_llm_client
 
     def get_client(self) -> Any:
         """
