@@ -63,7 +63,7 @@ class StandardLangChainLlmClientFactory(LangChainLlmClientFactory):
                                                            install_if_missing="langchain-openai")
 
             # Our run-time model resource here is httpx client which we need to control directly:
-            openai_proxy = self.get_value_or_env(config, "openai_organization", "OPENAI_PROXY")
+            openai_proxy = self.get_value_or_env(config, "openai_proxy", "OPENAI_PROXY")
             request_timeout = config.get("request_timeout")
             http_client = AsyncClient(proxy=openai_proxy, timeout=request_timeout)
 
@@ -80,8 +80,54 @@ class StandardLangChainLlmClientFactory(LangChainLlmClientFactory):
 
         elif chat_class == "azure-openai":
 
-            # Not yet
-            llm_client = None
+            # pylint: disable=invalid-name
+            AsyncAzureOpenAI = resolver.resolve_class_in_module("AsyncAzureOpenAI",
+                                                                module_name="openai",
+                                                                install_if_missing="langchain-openai")
+
+            # Our run-time model resource here is httpx client which we need to control directly:
+            openai_proxy = self.get_value_or_env(config, "openai_proxy", "OPENAI_PROXY")
+            request_timeout = config.get("request_timeout")
+            http_client = AsyncClient(proxy=openai_proxy, timeout=request_timeout)
+
+            # Prepare some more complex args
+            openai_api_key: str = self.get_value_or_env(config, "openai_api_key", "AZURE_OPENAI_API_KEY")
+            if openai_api_key is None:
+                openai_api_key = self.get_value_or_env(config, "openai_api_key", "OPENAI_API_KEY")
+
+            # From lanchain_openai.chat_models.azure.py
+            default_headers: Dict[str, str] = {}
+            default_headers = config.get("default_headers", default_headers)
+            default_headers.update({
+                "User-Agent": "langchain-partner-python-azure-openai",
+            })
+
+            async_azure_client = AsyncAzureOpenAI(
+                azure_endpoint=self.get_value_or_env(config, "azure_endpoint",
+                                                     "AZURE_OPENAI_ENDPOINT"),
+                deployment_name=self.get_value_or_env(config, "deployment_name",
+                                                      "AZURE_OPENAI_DEPLOYMENT_NAME"),
+                api_version=self.get_value_or_env(config, "openai_api_version",
+                                                  "OPENAI_API_VERSION"),
+                api_key=openai_api_key,
+
+                # AD here means "ActiveDirectory"
+                azure_ad_token=self.get_value_or_env(config, "azure_ad_token",
+                                                     "AZURE_OPENAI_AD_TOKEN"),
+                # azure_ad_token_provider is a complex object, and we can't set that through config
+
+                organization=self.get_value_or_env(config, "openai_organization", "OPENAI_ORG_ID"),
+                # project           - not set in langchain_openai
+                # webhook_secret    - not set in langchain_openai
+                base_url=self.get_value_or_env(config, "openai_api_base", "OPENAI_API_BASE"),
+                timeout=request_timeout,
+                max_retries=config.get("max_retries"),
+                default_headers=default_headers,
+                # default_query     - don't understand enough to set, but set in langchain_openai
+                http_client=http_client
+            )
+
+            llm_client = HttpxLangChainLlmClient(http_client, async_azure_client)
 
         elif chat_class == "anthropic":
 

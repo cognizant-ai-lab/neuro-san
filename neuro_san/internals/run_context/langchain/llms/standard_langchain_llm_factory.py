@@ -178,27 +178,42 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                     "include_usage": True
                 }
             }
-            openai_api_key: str = self.get_value_or_env(config, "openai_api_key", "AZURE_OPENAI_API_KEY")
-            if openai_api_key is None:
-                openai_api_key = self.get_value_or_env(config, "openai_api_key", "OPENAI_API_KEY")
 
             # AzureChatOpenAI just happens to come with langchain_openai
             # pylint: disable=invalid-name
             AzureChatOpenAI = resolver.resolve_class_in_module("AzureChatOpenAI",
                                                                module_name="langchain_openai.chat_models.azure",
                                                                install_if_missing="langchain-openai")
+
+            # See if there is an async_client to be had from the llm_client passed in
+            async_client: Any = None
+            if llm_client is not None:
+                async_openai_client = llm_client.get_client()
+                if async_openai_client is not None:
+                    # Necessary reach-in.
+                    async_client = async_openai_client.chat.completions
+
+            # Prepare some more complex args
+            openai_api_key: str = self.get_value_or_env(config, "openai_api_key", "AZURE_OPENAI_API_KEY", async_client)
+            if openai_api_key is None:
+                openai_api_key = self.get_value_or_env(config, "openai_api_key", "OPENAI_API_KEY", async_client)
+
             llm = AzureChatOpenAI(
+                async_client=async_client,
                 model_name=model_name,
                 temperature=config.get("temperature"),
+
+                # This next group of params should always be None when we have async_client
                 openai_api_key=openai_api_key,
                 openai_api_base=self.get_value_or_env(config, "openai_api_base",
-                                                      "OPENAI_API_BASE"),
+                                                      "OPENAI_API_BASE", async_client),
                 openai_organization=self.get_value_or_env(config, "openai_organization",
-                                                          "OPENAI_ORG_ID"),
-                openai_proxy=self.get_value_or_env(config, "openai_organization",
-                                                   "OPENAI_PROXY"),
-                request_timeout=config.get("request_timeout"),
-                max_retries=config.get("max_retries"),
+                                                          "OPENAI_ORG_ID", async_client),
+                openai_proxy=self.get_value_or_env(config, "openai_proxy",
+                                                   "OPENAI_PROXY", async_client),
+                request_timeout=self.get_value_or_env(config, "request_timeout", None, async_client),
+                max_retries=self.get_value_or_env(config, "max_retries", None, async_client),
+
                 presence_penalty=config.get("presence_penalty"),
                 frequency_penalty=config.get("frequency_penalty"),
                 seed=config.get("seed"),
@@ -227,20 +242,21 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 # global verbose value) so that the warning is never triggered.
                 verbose=False,
 
-                # Azure-specific
+                # Azure-specific group that should be None if we have an async_client
                 azure_endpoint=self.get_value_or_env(config, "azure_endpoint",
-                                                     "AZURE_OPENAI_ENDPOINT"),
+                                                     "AZURE_OPENAI_ENDPOINT", async_client),
                 deployment_name=self.get_value_or_env(config, "deployment_name",
-                                                      "AZURE_OPENAI_DEPLOYMENT_NAME"),
+                                                      "AZURE_OPENAI_DEPLOYMENT_NAME", async_client),
                 openai_api_version=self.get_value_or_env(config, "openai_api_version",
-                                                         "OPENAI_API_VERSION"),
-
+                                                         "OPENAI_API_VERSION", async_client),
                 # AD here means "ActiveDirectory"
                 azure_ad_token=self.get_value_or_env(config, "azure_ad_token",
-                                                     "AZURE_OPENAI_AD_TOKEN"),
-                model_version=config.get("model_version"),
+                                                     "AZURE_OPENAI_AD_TOKEN", async_client),
                 openai_api_type=self.get_value_or_env(config, "openai_api_type",
-                                                      "OPENAI_API_TYPE"),
+                                                      "OPENAI_API_TYPE", async_client),
+
+                model_version=config.get("model_version"),
+
                 # Needed for token counting
                 model_kwargs=model_kwargs,
             )
