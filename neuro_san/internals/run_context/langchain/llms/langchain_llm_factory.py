@@ -86,13 +86,13 @@ class LangChainLlmFactory:
         raise NotImplementedError
 
     def get_value_or_env(self, config: Dict[str, Any], key: str, env_key: str,
-                         llm_client: LangChainLlmClient = None) -> Any:
+                         llm_client: Any = None) -> Any:
         """
         :param config: The config dictionary to search
         :param key: The key for the config to look for
         :param env_key: The os.environ key whose value should be gotten if either
                         the key does not exist or the value for the key is None
-        :param llm_client:  An optional LangChainLlmClient instance.
+        :param llm_client:  An optional client instance.
                             If present this method will return None.
 
                             Most BaseLanguageModels will take some kind of pre-made
