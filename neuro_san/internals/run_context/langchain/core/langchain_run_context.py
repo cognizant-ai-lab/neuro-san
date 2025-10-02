@@ -819,7 +819,7 @@ class LangChainRunContext(RunContext):
 
         # Release model related resources:
         if self.llm_resources:
-            await self.llm_resources.release_resources()
+            await self.llm_resources.delete_resources()
 
         self.tools = []
         self.chat_history = []

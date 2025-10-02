@@ -15,6 +15,9 @@ from typing import Dict
 
 import os
 
+from langchain_core.language_models.base import BaseLanguageModel
+
+from neuro_san.internals.run_context.langchain.llms.langchain_llm_client import LangChainLlmClient
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
 
 
@@ -45,11 +48,35 @@ class LangChainLlmFactory:
                                     the model description in this class.
     """
 
-    def create_base_chat_model(self, config: Dict[str, Any]) -> LangChainLlmResources:
+    def create_base_chat_model(self, config: Dict[str, Any]) -> BaseLanguageModel:
         """
         Create a LangChainLlmResources instance from the fully-specified llm config.
+
+        This method is provided for backwards compatibility.
+        Prefer create_llm_resources_with_client() instead,
+        as this allows server infrastructure to better account for outstanding
+        connections to LLM providers when connections drop.
+
         :param config: The fully specified llm config which is a product of
                     _create_full_llm_config() above.
+        :return: A BaseLanguageModel (can be Chat or LLM)
+                Can raise a ValueError if the config's class or model_name value is
+                unknown to this method.
+        """
+        raise NotImplementedError
+
+    def create_llm_resources_with_client(self, config: Dict[str, Any],
+                                         llm_client: LangChainLlmClient = None) -> LangChainLlmResources:
+        """
+        Create a LangChainLlmResources instance from the fully-specified llm config.
+
+        :param config: The fully specified llm config which is a product of
+                    _create_full_llm_config() above.
+        :param llm_client: A LangChainLlmClient instance, which by default is None,
+                        implying that create_base_chat_model() needs to create its own client.
+                        Note, however that a None value can lead to connection leaks and requests
+                        that continue to run after the request connection is dropped in a server
+                        environment.
         :return: A LangChainLlmResources instance containing
                 a BaseLanguageModel (can be Chat or LLM) and all related resources
                 necessary for managing the model run-time lifecycle.
@@ -58,18 +85,34 @@ class LangChainLlmFactory:
         """
         raise NotImplementedError
 
-    def get_value_or_env(self, config: Dict[str, Any], key: str, env_key: str) -> Any:
+    def get_value_or_env(self, config: Dict[str, Any], key: str, env_key: str,
+                         llm_client: Any = None) -> Any:
         """
         :param config: The config dictionary to search
         :param key: The key for the config to look for
         :param env_key: The os.environ key whose value should be gotten if either
                         the key does not exist or the value for the key is None
+        :param llm_client:  An optional client instance.
+                            If present this method will return None.
+
+                            Most BaseLanguageModels will take some kind of pre-made
+                            client as part of their constructor args, but they will
+                            also take enough args to constructor a client for themselves
+                            under the hood when explicitly not given that client.
+
+                            Note that this does *not* actually provide any values from
+                            the given client, rather this arg allows those constructor
+                            variables associated with creating that under-the-covers
+                            client to remain None when there is a client already made.
         """
+        if llm_client is not None:
+            return None
+
         value = None
         if config is not None:
             value = config.get(key)
 
-        if value is None:
+        if value is None and env_key is not None:
             value = os.getenv(env_key)
 
         return value
