@@ -431,6 +431,10 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
             )
         elif chat_class == "bedrock":
 
+            # Note: ChatBedrock only ever uses a synchronous boto3 client to access
+            #       any llm and there are no aioboto3 hooks yet. Not the greatest choice
+            #       for a performant asynchronous server.
+
             # Use lazy loading to prevent installing the world
             # pylint: disable=invalid-name
             ChatBedrock = resolver.resolve_class_in_module("ChatBedrock",

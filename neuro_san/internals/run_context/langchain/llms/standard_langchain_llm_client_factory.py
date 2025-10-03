@@ -154,6 +154,10 @@ class StandardLangChainLlmClientFactory(LangChainLlmClientFactory):
 
         elif chat_class == "bedrock":
 
+            # Note: ChatBedrock only ever uses a synchronous boto3 client to access
+            #       any llm and there are no aioboto3 hooks yet. Not the greatest choice
+            #       for a performant asynchronous server.
+
             # Not yet
             llm_client = None
 
