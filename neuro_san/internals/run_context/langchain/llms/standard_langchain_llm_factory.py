@@ -19,10 +19,10 @@ from leaf_common.config.resolver import Resolver
 from neuro_san.internals.run_context.langchain.llms.anthropic_client_policy import AnthropicClientPolicy
 from neuro_san.internals.run_context.langchain.llms.azure_client_policy import AzureClientPolicy
 from neuro_san.internals.run_context.langchain.llms.bedrock_client_policy import BedrockClientPolicy
-from neuro_san.internals.run_context.langchain.llms.openai_client_policy import OpenAIClientPolicy
 from neuro_san.internals.run_context.langchain.llms.client_policy import ClientPolicy
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
+from neuro_san.internals.run_context.langchain.llms.openai_client_policy import OpenAIClientPolicy
 
 
 class StandardLangChainLlmFactory(LangChainLlmFactory):
@@ -478,6 +478,6 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         else:
             raise ValueError(f"Class {chat_class} for model_name {model_name} is unrecognized.")
 
-        # Return the LlmResources with the client_policy that was passed in.
+        # Return the LlmResources with the client_policy that was created.
         # That might be None, and that's OK.
         return LangChainLlmResources(llm, client_policy=client_policy)
