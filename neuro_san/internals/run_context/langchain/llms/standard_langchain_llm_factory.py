@@ -311,7 +311,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
             )
 
             # Create the llm_client after the fact, with reach-in
-            async_anthropic = llm._async_client
+            async_anthropic = llm._async_client     # pylint:disable=protected-access
             http_client = async_anthropic.http_client
             llm_client = HttpxLangChainLlmClient(http_client, async_anthropic)
 
