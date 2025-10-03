@@ -19,12 +19,12 @@ from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.resolver import Resolver
 
-from neuro_san.internals.run_context.langchain.llms.langchain_llm_client import LangChainLlmClient
+from neuro_san.internals.run_context.langchain.llms.client_policy import ClientPolicy
 
 
-class OpenAILangChainLlmClient(LangChainLlmClient):
+class OpenAIClientPolicy(ClientPolicy):
     """
-    LangChainLlmClient implementation for OpenAI.
+    ClientPolicy implementation for OpenAI.
 
     OpenAI's BaseLanguageModel implementations do allow us to pass in a web client
     as an argument, so this implementation takes advantage of the create_client()

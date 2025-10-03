@@ -71,8 +71,8 @@ class LangChainLlmFactory:
         :param config: The fully specified llm config which is a product of
                     _create_full_llm_config() above.
         :return: A LangChainLlmResources instance containing
-                a BaseLanguageModel (can be Chat or LLM) and an LangChainLlmClient
-                policy object that contains all related resources
+                a BaseLanguageModel (can be Chat or LLM) and a ClientPolicy
+                object that contains all related resources
                 necessary for managing the model run-time lifecycle.
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
@@ -80,13 +80,13 @@ class LangChainLlmFactory:
         raise NotImplementedError
 
     def get_value_or_env(self, config: Dict[str, Any], key: str, env_key: str,
-                         llm_client: Any = None) -> Any:
+                         none_obj: Any = None) -> Any:
         """
         :param config: The config dictionary to search
         :param key: The key for the config to look for
         :param env_key: The os.environ key whose value should be gotten if either
                         the key does not exist or the value for the key is None
-        :param llm_client:  An optional client instance.
+        :param none_obj:  An optional client instance.
                             If present this method will return None.
 
                             Some BaseLanguageModels will take some kind of pre-made
@@ -99,7 +99,7 @@ class LangChainLlmFactory:
                             variables associated with creating that under-the-covers
                             client to remain None when there is a client already made.
         """
-        if llm_client is not None:
+        if none_obj is not None:
             return None
 
         value = None

@@ -14,12 +14,12 @@ from typing import Dict
 
 from leaf_common.config.resolver import Resolver
 
-from neuro_san.internals.run_context.langchain.llms.openai_langchain_llm_client import OpenAILangChainLlmClient
+from neuro_san.internals.run_context.langchain.llms.openai_client_policy import OpenAIClientPolicy
 
 
-class AzureLangChainLlmClient(OpenAILangChainLlmClient):
+class AzureClientPolicy(OpenAIClientPolicy):
     """
-    LangChainLlmClient implementation for OpenAI via Azure.
+    ClientPolicy implementation for OpenAI via Azure.
 
     OpenAI's BaseLanguageModel implementations do allow us to pass in a web client
     as an argument, so this implementation takes advantage of the create_client()

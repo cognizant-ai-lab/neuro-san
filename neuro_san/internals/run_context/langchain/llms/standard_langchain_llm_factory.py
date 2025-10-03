@@ -16,11 +16,11 @@ from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.resolver import Resolver
 
-from neuro_san.internals.run_context.langchain.llms.anthropic_langchain_llm_client import AnthropicLangChainLlmClient
-from neuro_san.internals.run_context.langchain.llms.azure_langchain_llm_client import AzureLangChainLlmClient
-from neuro_san.internals.run_context.langchain.llms.bedrock_langchain_llm_client import BedrockLangChainLlmClient
-from neuro_san.internals.run_context.langchain.llms.openai_langchain_llm_client import OpenAILangChainLlmClient
-from neuro_san.internals.run_context.langchain.llms.langchain_llm_client import LangChainLlmClient
+from neuro_san.internals.run_context.langchain.llms.anthropic_client_policy import AnthropicClientPolicy
+from neuro_san.internals.run_context.langchain.llms.azure_client_policy import AzureClientPolicy
+from neuro_san.internals.run_context.langchain.llms.bedrock_client_policy import BedrockClientPolicy
+from neuro_san.internals.run_context.langchain.llms.openai_client_policy import OpenAIClientPolicy
+from neuro_san.internals.run_context.langchain.llms.client_policy import ClientPolicy
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
 
@@ -84,7 +84,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         # pylint: disable=too-many-locals
         # Construct the LLM
         llm: BaseLanguageModel = None
-        llm_client: LangChainLlmClient = None
+        client_policy: ClientPolicy = None
 
         chat_class: str = config.get("class")
         if chat_class is not None:
@@ -111,8 +111,8 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                                                           install_if_missing="langchain-openai")
 
             # Create the policy object that allows us to manage the model run-time lifecycle
-            llm_client = OpenAILangChainLlmClient()
-            async_client: Any = llm_client.create_client(config)
+            client_policy = OpenAIClientPolicy()
+            async_client: Any = client_policy.create_client(config)
 
             # Now construct LLM chat model we will be using:
             llm = ChatOpenAI(
@@ -182,8 +182,8 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                                                                install_if_missing="langchain-openai")
 
             # Create the policy object that allows us to manage the model run-time lifecycle
-            llm_client = AzureLangChainLlmClient()
-            async_client: Any = llm_client.create_client(config)
+            client_policy = AzureClientPolicy()
+            async_client: Any = client_policy.create_client(config)
 
             # Prepare some more complex args
             openai_api_key: str = self.get_value_or_env(config, "openai_api_key", "AZURE_OPENAI_API_KEY", async_client)
@@ -302,8 +302,8 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 verbose=False,
             )
 
-            # Create the llm_client after the fact, with reach-in
-            llm_client = AnthropicLangChainLlmClient(llm)
+            # Create the client_policy after the fact, with reach-in
+            client_policy = AnthropicClientPolicy(llm)
 
         elif chat_class == "ollama":
 
@@ -470,14 +470,14 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 verbose=False,
             )
 
-            # Create the llm_client after the fact, with reach-in
-            llm_client = BedrockLangChainLlmClient(llm)
+            # Create the client_policy after the fact, with reach-in
+            client_policy = BedrockClientPolicy(llm)
 
         elif chat_class is None:
             raise ValueError(f"Class name {chat_class} for model_name {model_name} is unspecified.")
         else:
             raise ValueError(f"Class {chat_class} for model_name {model_name} is unrecognized.")
 
-        # Return the LlmResources with the llm_client that was passed in.
+        # Return the LlmResources with the client_policy that was passed in.
         # That might be None, and that's OK.
-        return LangChainLlmResources(llm, llm_client=llm_client)
+        return LangChainLlmResources(llm, client_policy=client_policy)

@@ -311,7 +311,6 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 found_exception = None
 
             except NotImplementedError:
-                # Try ignoring the llm_client this factory
                 # This allows for backwards compatibility with older LangChainLlmFactories
                 llm: BaseLanguageModel = llm_factory.create_base_chat_model(config)
                 if llm is not None:

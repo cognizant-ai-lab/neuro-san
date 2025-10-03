@@ -17,7 +17,7 @@ import os
 from langchain.llms.base import BaseLanguageModel
 
 
-class LangChainLlmClient:
+class ClientPolicy:
     """
     Policy interface to manage the lifecycles of web clients that talk to LLM services.
 

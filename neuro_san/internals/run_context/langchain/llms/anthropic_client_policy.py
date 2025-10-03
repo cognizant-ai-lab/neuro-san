@@ -14,12 +14,12 @@ from typing import Any
 
 from contextlib import suppress
 
-from neuro_san.internals.run_context.langchain.llms.langchain_llm_client import LangChainLlmClient
+from neuro_san.internals.run_context.langchain.llms.client_policy import ClientPolicy
 
 
-class AnthropicLangChainLlmClient(LangChainLlmClient):
+class AnthropicClientPolicy(ClientPolicy):
     """
-    Implementation of the LangChainLlmClient for Anthtropic chat models.
+    Implementation of the ClientPolicy for Anthtropic chat models.
 
     Anthropic chat models do not allow for passing in an externally managed
     async web client.
