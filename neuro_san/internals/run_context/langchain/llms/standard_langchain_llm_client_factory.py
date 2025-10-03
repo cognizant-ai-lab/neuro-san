@@ -132,9 +132,9 @@ class StandardLangChainLlmClientFactory(LangChainLlmClientFactory):
         elif chat_class == "anthropic":
 
             # Not yet
-            # Anthropic models only support _async_client() as a cached_property,
-            # not as a passed-in arg.  In LlmFactory, we grab hold of the async client
-            # after we create the ChatAntropic BaseLanguageModel. That's all we can do.
+            # Anthropic models only support _async_client() as a cached_property, not as a passed-in arg.
+            # In LlmFactory, we grab hold of the client after we create the BaseLanguageModel.
+            # That's all we can do.
             llm_client = None
 
         elif chat_class == "ollama":
@@ -157,8 +157,9 @@ class StandardLangChainLlmClientFactory(LangChainLlmClientFactory):
             # Note: ChatBedrock only ever uses a synchronous boto3 client to access
             #       any llm and there are no aioboto3 hooks yet. Not the greatest choice
             #       for a performant asynchronous server.
+            # In LlmFactory, we grab hold of the client after we create the BaseLanguageModel.
+            # That's all we can do.
 
-            # Not yet
             llm_client = None
 
         elif chat_class is None:

@@ -16,6 +16,7 @@ from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.resolver import Resolver
 
+from neuro_san.internals.run_context.langchain.llms.bedrock_langchain_llm_client import BedrockLangChainLlmClient
 from neuro_san.internals.run_context.langchain.llms.httpx_langchain_llm_client import HttpxLangChainLlmClient
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_client import LangChainLlmClient
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
@@ -479,6 +480,10 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 # global verbose value) so that the warning is never triggered.
                 verbose=False,
             )
+
+            # Create the llm_client after the fact, with reach-in
+            llm_client = BedrockLangChainLlmClient(llm.client, llm.bedrock_client)
+
         elif chat_class is None:
             raise ValueError(f"Class name {chat_class} for model_name {model_name} is unspecified.")
         else:
