@@ -16,8 +16,10 @@ from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.resolver import Resolver
 
+from neuro_san.internals.run_context.langchain.llms.anthropic_langchain_llm_client import AnthropicLangChainLlmClient
+from neuro_san.internals.run_context.langchain.llms.azure_langchain_llm_client import AzureLangChainLlmClient
 from neuro_san.internals.run_context.langchain.llms.bedrock_langchain_llm_client import BedrockLangChainLlmClient
-from neuro_san.internals.run_context.langchain.llms.httpx_langchain_llm_client import HttpxLangChainLlmClient
+from neuro_san.internals.run_context.langchain.llms.openai_langchain_llm_client import OpenAILangChainLlmClient
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_client import LangChainLlmClient
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
@@ -55,7 +57,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         Create a BaseLanguageModel from the fully-specified llm config.
 
         This method is provided for backwards compatibility.
-        Prefer create_llm_resources_with_client() instead,
+        Prefer create_llm_resources() instead,
         as this allows server infrastructure to better account for outstanding
         connections to LLM providers when connections drop.
 
@@ -68,17 +70,11 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         raise NotImplementedError
 
     # pylint: disable=too-many-branches
-    def create_llm_resources_with_client(self, config: Dict[str, Any],
-                                         llm_client: LangChainLlmClient = None) -> LangChainLlmResources:
+    def create_llm_resources(self, config: Dict[str, Any]) -> LangChainLlmResources:
         """
         Create a BaseLanguageModel from the fully-specified llm config.
         :param config: The fully specified llm config which is a product of
                     _create_full_llm_config() above.
-        :param llm_client: A LangChainLlmClient instance, which by default is None,
-                        implying that create_base_chat_model() needs to create its own client.
-                        Note, however that a None value can lead to connection leaks and requests
-                        that continue to run after the request connection is dropped in a server
-                        environment.
         :return: A LangChainLlmResources instance containing
                 a BaseLanguageModel (can be Chat or LLM) and all related resources
                 necessary for managing the model run-time lifecycle.
@@ -88,6 +84,8 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         # pylint: disable=too-many-locals
         # Construct the LLM
         llm: BaseLanguageModel = None
+        llm_client: LangChainLlmClient = None
+
         chat_class: str = config.get("class")
         if chat_class is not None:
             chat_class = chat_class.lower()
@@ -112,13 +110,9 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                                                           module_name="langchain_openai.chat_models.base",
                                                           install_if_missing="langchain-openai")
 
-            # See if there is an async_client to be had from the llm_client passed in
-            async_client: Any = None
-            if llm_client is not None:
-                async_openai_client = llm_client.get_client()
-                if async_openai_client is not None:
-                    # Necessary reach-in.
-                    async_client = async_openai_client.chat.completions
+            # Create the policy object that allows us to manage the model run-time lifecycle
+            llm_client = OpenAILangChainLlmClient()
+            async_client: Any = llm_client.create_client(config)
 
             # Now construct LLM chat model we will be using:
             llm = ChatOpenAI(
@@ -187,13 +181,9 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                                                                module_name="langchain_openai.chat_models.azure",
                                                                install_if_missing="langchain-openai")
 
-            # See if there is an async_client to be had from the llm_client passed in
-            async_client: Any = None
-            if llm_client is not None:
-                async_openai_client = llm_client.get_client()
-                if async_openai_client is not None:
-                    # Necessary reach-in.
-                    async_client = async_openai_client.chat.completions
+            # Create the policy object that allows us to manage the model run-time lifecycle
+            llm_client = AzureLangChainLlmClient()
+            async_client: Any = llm_client.create_client(config)
 
             # Prepare some more complex args
             openai_api_key: str = self.get_value_or_env(config, "openai_api_key", "AZURE_OPENAI_API_KEY", async_client)
@@ -262,6 +252,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 # Needed for token counting
                 model_kwargs=model_kwargs,
             )
+
         elif chat_class == "anthropic":
 
             # Use lazy loading to prevent installing the world
@@ -312,9 +303,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
             )
 
             # Create the llm_client after the fact, with reach-in
-            async_anthropic = llm._async_client     # pylint:disable=protected-access
-            http_client = async_anthropic.http_client
-            llm_client = HttpxLangChainLlmClient(http_client, async_anthropic)
+            llm_client = AnthropicLangChainLlmClient(llm)
 
         elif chat_class == "ollama":
 
@@ -482,7 +471,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
             )
 
             # Create the llm_client after the fact, with reach-in
-            llm_client = BedrockLangChainLlmClient(llm.client, llm.bedrock_client)
+            llm_client = BedrockLangChainLlmClient(llm)
 
         elif chat_class is None:
             raise ValueError(f"Class name {chat_class} for model_name {model_name} is unspecified.")

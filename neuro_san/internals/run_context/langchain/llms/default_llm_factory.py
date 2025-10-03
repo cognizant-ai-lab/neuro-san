@@ -26,13 +26,9 @@ from leaf_common.config.resolver_util import ResolverUtil
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
-from neuro_san.internals.run_context.langchain.llms.langchain_llm_client import LangChainLlmClient
-from neuro_san.internals.run_context.langchain.llms.langchain_llm_client_factory import LangChainLlmClientFactory
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
 from neuro_san.internals.run_context.langchain.llms.llm_info_restorer import LlmInfoRestorer
-from neuro_san.internals.run_context.langchain.llms.standard_langchain_llm_client_factory \
-    import StandardLangChainLlmClientFactory
 from neuro_san.internals.run_context.langchain.llms.standard_langchain_llm_factory import StandardLangChainLlmFactory
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
 from neuro_san.internals.run_context.langchain.util.argument_validator import ArgumentValidator
@@ -85,9 +81,6 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         self.overlayer = DictionaryOverlay()
         self.llm_factories: List[LangChainLlmFactory] = [
             StandardLangChainLlmFactory()
-        ]
-        self.llm_client_factories: List[LangChainLlmClientFactory] = [
-            StandardLangChainLlmClientFactory()
         ]
 
         # Get user LLM info file path with the following priority:
@@ -178,8 +171,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 unknown to this method.
         """
         full_config: Dict[str, Any] = self.create_full_llm_config(config)
-        llm_client: LangChainLlmClient = self.create_llm_client(full_config)
-        llm_resources: LangChainLlmResources = self.create_llm_resources_with_client(full_config, llm_client)
+        llm_resources: LangChainLlmResources = self.create_llm_resources(full_config)
         return llm_resources
 
     def create_full_llm_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -279,52 +271,6 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         return args
 
-    def create_llm_client(self, config: Dict[str, Any]) -> LangChainLlmClient:
-        """
-        Create a LangChainLlmClient from the fully-specified llm config either from
-        StandardLlmClientFactory or a user-defined LlmClientFactory.
-        :param config: The fully specified llm config which is a product of
-                    _create_full_llm_config() above.
-        :return: A LangChainLlmClient instance to use when making llm requests.
-                This can be None if client connection management is not required.
-                Can raise a ValueError if the config's class or model_name value is
-                unknown to this method.
-        """
-        llm_client: LangChainLlmClient = None
-
-        # Loop through the loaded factories in order until we can find one
-        # that can create the llm.
-        found_exception: Exception = None
-        for llm_client_factory in self.llm_client_factories:
-            try:
-                llm_client = llm_client_factory.create_llm_client(config)
-                if llm_client is not None and isinstance(llm_client, LangChainLlmClient):
-                    # We found what we were looking for
-                    found_exception = None
-                    break
-
-            # Catch some common wrong or missing API key errors in a single place
-            # with some verbose error messaging.
-            except API_KEY_ERRORS as exception:
-                # Will re-raise but with the right exception text it will
-                # also provide some more helpful failure text.
-                message: str = ApiKeyErrorCheck.check_for_api_key_exception(exception)
-                if message is not None:
-                    raise ValueError(message) from exception
-                found_exception = exception
-
-            except ValueError as exception:
-                # Let the next model have a crack
-                found_exception = exception
-
-        # DEF - Might eventually want to resolve a specific class like the end of
-        #       create_llm_resources_with_client() does.
-
-        if found_exception is not None:
-            raise found_exception
-
-        return llm_client
-
     def create_base_chat_model(self, config: Dict[str, Any]) -> BaseLanguageModel:
         """
         Create a BaseLanguageModel from the fully-specified llm config.
@@ -336,18 +282,12 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         """
         raise NotImplementedError
 
-    def create_llm_resources_with_client(self, config: Dict[str, Any],
-                                         llm_client: LangChainLlmClient = None) -> LangChainLlmResources:
+    def create_llm_resources(self, config: Dict[str, Any]) -> LangChainLlmResources:
         """
         Create a BaseLanguageModel from the fully-specified llm config either from standard LLM factory,
         user-defined LLM factory, or user-specified langchain model class.
         :param config: The fully specified llm config which is a product of
                     _create_full_llm_config() above.
-        :param llm_client: A LangChainLlmClient instance, which by default is None,
-                    implying that create_base_chat_model() needs to create its own client.
-                    Note, however that a None value can lead to connection leaks and requests
-                    that continue to run after the request connection is dropped in a server
-                    environment.
         :return: A LangChainLlmResources instance containing
                 a BaseLanguageModel (can be Chat or LLM) and all related resources
                 necessary for managing the model run-time lifecycle.
@@ -361,7 +301,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         found_exception: Exception = None
         for llm_factory in self.llm_factories:
             try:
-                llm_resources = llm_factory.create_llm_resources_with_client(config, llm_client)
+                llm_resources = llm_factory.create_llm_resources(config)
                 if llm_resources is not None and isinstance(llm_resources, LangChainLlmResources):
                     # We found what we were looking for
                     found_exception = None
