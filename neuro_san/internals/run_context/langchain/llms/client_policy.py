@@ -78,7 +78,8 @@ class ClientPolicy:
         :param env_key: The os.environ key whose value should be gotten if either
                         the key does not exist or the value for the key is None
         :param none_obj:  An optional object instance to test.
-                          If present this method will return None.
+                          If present this method will return None, implying
+                          that some other external object/mechanism is supplying the values.
         """
         if none_obj is not None:
             return None
