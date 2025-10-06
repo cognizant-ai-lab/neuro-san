@@ -10,12 +10,12 @@
 #
 # END COPYRIGHT
 
-from neuro_san.internals.run_context.langchain.llms.client_policy import ClientPolicy
+from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 
 
-class BedrockClientPolicy(ClientPolicy):
+class BedrockLlmPolicy(LlmPolicy):
     """
-    ClientPolicy implementation for Bedrock.
+    LlmPolicy implementation for Bedrock.
 
     Bedrock does not allow for passing in async web clients.
     As a matter of fact, all of its clients are synchronous,

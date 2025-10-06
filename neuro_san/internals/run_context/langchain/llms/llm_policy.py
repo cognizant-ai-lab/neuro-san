@@ -17,7 +17,7 @@ from langchain.llms.base import BaseLanguageModel
 from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration
 
 
-class ClientPolicy(EnvironmentConfiguration):
+class LlmPolicy(EnvironmentConfiguration):
     """
     Policy interface to manage the lifecycles of web clients that talk to LLM services.
     This inherits from EnvironmentConfiguration in order to support easy access to the

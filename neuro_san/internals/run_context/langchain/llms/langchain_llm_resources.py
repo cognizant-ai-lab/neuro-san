@@ -12,7 +12,7 @@
 
 from langchain_core.language_models.base import BaseLanguageModel
 
-from neuro_san.internals.run_context.langchain.llms.client_policy import ClientPolicy
+from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 
 
 class LangChainLlmResources:
@@ -21,14 +21,14 @@ class LangChainLlmResources:
     together with run-time policy necessary for model usage by the service.
     """
 
-    def __init__(self, model: BaseLanguageModel, client_policy: ClientPolicy = None):
+    def __init__(self, model: BaseLanguageModel, llm_policy: LlmPolicy = None):
         """
         Constructor.
         :param model: Language model used.
-        :param client_policy: optional ClientPolicy object to manage connections to LLM host.
+        :param llm_policy: optional LlmPolicy object to manage connections to LLM host.
         """
         self.model: BaseLanguageModel = model
-        self.client_policy: ClientPolicy = client_policy
+        self.llm_policy: LlmPolicy = llm_policy
 
     def get_model(self) -> BaseLanguageModel:
         """
@@ -36,15 +36,15 @@ class LangChainLlmResources:
         """
         return self.model
 
-    def get_client_policy(self) -> ClientPolicy:
+    def get_llm_policy(self) -> LlmPolicy:
         """
-        :return: the ClientPolicy used by the model
+        :return: the LlmPolicy used by the model
         """
-        return self.client_policy
+        return self.llm_policy
 
     async def delete_resources(self):
         """
         Release the run-time resources used by the model
         """
-        if self.client_policy is not None:
-            await self.client_policy.delete_resources()
+        if self.llm_policy is not None:
+            await self.llm_policy.delete_resources()
