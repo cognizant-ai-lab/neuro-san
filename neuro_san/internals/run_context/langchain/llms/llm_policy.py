@@ -15,8 +15,6 @@ from typing import Any
 from typing import Dict
 from typing import Tuple
 
-from copy import copy
-
 from langchain.llms.base import BaseLanguageModel
 
 from leaf_common.config.resolver import Resolver
