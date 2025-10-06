@@ -44,6 +44,12 @@ class OpenAILlmPolicy(LlmPolicy):
         # Save that for create_client(), where it's meatier.
         self.async_openai_client: Any = None
 
+    def get_class_name(self) -> str:
+        """
+        :return: The name of the llm class for registration purposes.
+        """
+        return "openai"
+
     def create_client(self, config: Dict[str, Any]) -> Any:
         """
         Creates the web client to used by a BaseLanguageModel to be
@@ -97,6 +103,83 @@ class OpenAILlmPolicy(LlmPolicy):
         openai_proxy: str = self.get_value_or_env(config, "openai_proxy", "OPENAI_PROXY")
         request_timeout: int = config.get("request_timeout")
         self.http_client = AsyncClient(proxy=openai_proxy, timeout=request_timeout)
+
+    def create_llm(self, config: Dict[str, Any], model_name: str, client: Any) -> BaseLanguageModel:
+        """
+        Create a BaseLanguageModel instance from the fully-specified llm config
+        for the llm class that the implementation supports.  Chat models are usually
+        per-provider, where the specific model itself is an argument to its constructor.
+
+        :param config: The fully specified llm config
+        :param model_name: The name of the model
+        :param client: The web client to use (if any)
+        :return: A BaseLanguageModel (can be Chat or LLM)
+        """
+        # OpenAI is the one chat class that we do not require any extra installs.
+        # This is what we want to work out of the box.
+        # Nevertheless, have it go through the same lazy-loading resolver rigamarole as the others.
+
+        # pylint: disable=invalid-name
+        ChatOpenAI = self.resolver.resolve_class_in_module("ChatOpenAI",
+                                                           module_name="langchain_openai.chat_models.base",
+                                                           install_if_missing="langchain-openai")
+
+        # Now construct LLM chat model we will be using:
+        llm = ChatOpenAI(
+            async_client=client,
+            model_name=model_name,
+            temperature=config.get("temperature"),
+
+            # This next group of params should always be None when we have async_client
+            openai_api_key=self.get_value_or_env(config, "openai_api_key",
+                                                 "OPENAI_API_KEY", client),
+            openai_api_base=self.get_value_or_env(config, "openai_api_base",
+                                                  "OPENAI_API_BASE", client),
+            openai_organization=self.get_value_or_env(config, "openai_organization",
+                                                      "OPENAI_ORG_ID", client),
+            openai_proxy=self.get_value_or_env(config, "openai_organization",
+                                               "OPENAI_PROXY", client),
+            request_timeout=self.get_value_or_env(config, "request_timeout", None, client),
+            max_retries=self.get_value_or_env(config, "max_retries", None, client),
+
+            presence_penalty=config.get("presence_penalty"),
+            frequency_penalty=config.get("frequency_penalty"),
+            seed=config.get("seed"),
+            logprobs=config.get("logprobs"),
+            top_logprobs=config.get("top_logprobs"),
+            logit_bias=config.get("logit_bias"),
+            streaming=True,  # streaming is always on. Without it token counting will not work.
+            n=1,  # n is always 1.  neuro-san will only ever consider one chat completion.
+            top_p=config.get("top_p"),
+            max_tokens=config.get("max_tokens"),  # This is always for output
+            tiktoken_model_name=config.get("tiktoken_model_name"),
+            stop=config.get("stop"),
+
+            # The following three parameters are for reasoning models only.
+            reasoning=config.get("reasoning"),
+            reasoning_effort=config.get("reasoning_effort"),
+            verbosity=config.get("verbosity"),
+
+            # If omitted, this defaults to the global verbose value,
+            # accessible via langchain_core.globals.get_verbose():
+            # https://github.com/langchain-ai/langchain/blob/master/libs/core/langchain_core/globals.py#L53
+            #
+            # However, accessing the global verbose value during concurrent initialization
+            # can trigger the following warning:
+            #
+            # UserWarning: Importing verbose from langchain root module is no longer supported.
+            # Please use langchain.globals.set_verbose() / langchain.globals.get_verbose() instead.
+            # old_verbose = langchain.verbose
+            #
+            # To prevent this, we explicitly set verbose=False here (which matches the default
+            # global verbose value) so that the warning is never triggered.
+            verbose=False,
+
+            # Set stream_usage to True in order to get token counting chunks.
+            stream_usage=True
+        )
+
+        return llm
 
     async def delete_resources(self):
         """

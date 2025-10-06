@@ -19,6 +19,8 @@ from copy import copy
 
 from langchain.llms.base import BaseLanguageModel
 
+from leaf_common.config.resolver import Resolver
+
 from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration
 
 
@@ -49,38 +51,13 @@ class LlmPolicy(EnvironmentConfiguration):
         :param llm: BaseLanguageModel
         """
         self.llm: BaseLanguageModel = llm
+        self.resolver: Resolver = Resolver()
 
     def get_class_name(self) -> str:
         """
         :return: The name of the llm class for registration purposes.
         """
         raise NotImplementedError
-
-    def create_llm_resources_components(self, config: Dict[str, Any]) -> Tuple[BaseLanguageModel, LlmPolicy]:
-        """
-        Basic policy framework method.
-        Most LLMs will not need to override this.
-
-        :param config: The fully specified llm config
-        :return: The components that go into populating an LlmResources instance.
-                This is a tuple of (BaseLanguageModel, LlmPolicy).
-                It's entirely fine if the LlmPolicy is not the same instance as this one.
-        """
-        use_policy: LlmPolicy = self
-        client: Any = None
-        try:
-            client = self.create_client(config)
-        except NotImplementedError:
-            # Slurp up the exception if nothing was implemented.
-            # We will handle this in the None-client case below.
-            client = None
-
-        llm: BaseLanguageModel = self.create_llm(config, client)
-        if client is None:
-            use_policy = copy(self)
-            use_policy.llm = llm
-
-        return llm, use_policy
 
     # pylint: disable=useless-return
     def create_client(self, config: Dict[str, Any]) -> Any:
@@ -101,13 +78,15 @@ class LlmPolicy(EnvironmentConfiguration):
         _ = config
         return None
 
-    def create_llm(self, config: Dict[str, Any], client: Any) -> BaseLanguageModel:
+    def create_llm(self, config: Dict[str, Any], model_name: str, client: Any) -> BaseLanguageModel:
         """
-        Create a LangChainLlmResources instance from the fully-specified llm config
+        Create a BaseLanguageModel instance from the fully-specified llm config
         for the llm class that the implementation supports.  Chat models are usually
         per-provider, where the specific model itself is an argument to its constructor.
 
         :param config: The fully specified llm config
+        :param model_name: The name of the model
+        :param client: The web client to use (if any)
         :return: A BaseLanguageModel (can be Chat or LLM)
         """
         raise NotImplementedError
@@ -121,3 +100,32 @@ class LlmPolicy(EnvironmentConfiguration):
         any web client references in there.
         """
         raise NotImplementedError
+
+    def create_llm_resources_components(self, config: Dict[str, Any]) -> Tuple[BaseLanguageModel, LlmPolicy]:
+        """
+        Basic policy framework method.
+        Most LLMs will not need to override this.
+
+        :param config: The fully specified llm config
+        :return: The components that go into populating an LlmResources instance.
+                This is a tuple of (BaseLanguageModel, LlmPolicy).
+                It's entirely fine if the LlmPolicy is not the same instance as this one.
+        """
+        client: Any = None
+        try:
+            client = self.create_client(config)
+        except NotImplementedError:
+            # Slurp up the exception if nothing was implemented.
+            # We will handle this in the None-client case below.
+            client = None
+
+        # Check for key "model_name", "model", and "model_id" to use as model name
+        # If the config is from default_llm_info, this is always "model_name"
+        # but with user-specified config, it is possible to have the other keys will be specifed instead.
+        model_name: str = config.get("model_name") or config.get("model") or config.get("model_id")
+
+        llm: BaseLanguageModel = self.create_llm(config, model_name, client)
+        if client is None:
+            self.llm = llm
+
+        return llm, self
