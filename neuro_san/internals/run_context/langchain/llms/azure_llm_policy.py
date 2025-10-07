@@ -27,12 +27,6 @@ class AzureLlmPolicy(OpenAILlmPolicy):
     the llm reference, because of our create_client() implementation, we do not.
     """
 
-    def get_class_name(self) -> str:
-        """
-        :return: The name of the llm class for registration purposes.
-        """
-        return "azure-openai"
-
     def create_client(self, config: Dict[str, Any]) -> Any:
         """
         Creates the web client to used by a BaseLanguageModel to be

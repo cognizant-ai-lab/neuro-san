@@ -44,12 +44,6 @@ class OpenAILlmPolicy(LlmPolicy):
         # Save that for create_client(), where it's meatier.
         self.async_openai_client: Any = None
 
-    def get_class_name(self) -> str:
-        """
-        :return: The name of the llm class for registration purposes.
-        """
-        return "openai"
-
     def create_client(self, config: Dict[str, Any]) -> Any:
         """
         Creates the web client to used by a BaseLanguageModel to be

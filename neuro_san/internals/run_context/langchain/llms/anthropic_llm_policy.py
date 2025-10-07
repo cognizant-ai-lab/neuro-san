@@ -28,12 +28,6 @@ class AnthropicLlmPolicy(LlmPolicy):
     async web client.
     """
 
-    def get_class_name(self) -> str:
-        """
-        :return: The name of the llm class for registration purposes.
-        """
-        return "anthropic"
-
     def create_llm(self, config: Dict[str, Any], model_name: str, client: Any) -> BaseLanguageModel:
         """
         Create a BaseLanguageModel instance from the fully-specified llm config

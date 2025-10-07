@@ -51,12 +51,6 @@ class LlmPolicy(EnvironmentConfiguration):
         self.llm: BaseLanguageModel = llm
         self.resolver: Resolver = Resolver()
 
-    def get_class_name(self) -> str:
-        """
-        :return: The name of the llm class for registration purposes.
-        """
-        raise NotImplementedError
-
     # pylint: disable=useless-return
     def create_client(self, config: Dict[str, Any]) -> Any:
         """

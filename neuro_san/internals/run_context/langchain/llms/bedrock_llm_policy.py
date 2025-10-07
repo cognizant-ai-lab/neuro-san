@@ -27,12 +27,6 @@ class BedrockLlmPolicy(LlmPolicy):
     which is not the best for an async service.
     """
 
-    def get_class_name(self) -> str:
-        """
-        :return: The name of the llm class for registration purposes.
-        """
-        return "bedrock"
-
     def create_llm(self, config: Dict[str, Any], model_name: str, client: Any) -> BaseLanguageModel:
         """
         Create a BaseLanguageModel instance from the fully-specified llm config
