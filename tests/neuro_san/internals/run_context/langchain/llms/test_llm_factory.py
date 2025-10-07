@@ -16,12 +16,11 @@ from typing import Dict
 import json
 
 from langchain_core.language_models.base import BaseLanguageModel
-from langchain_openai.chat_models.base import ChatOpenAI
 
-from neuro_san.internals.run_context.langchain.llms.client_policy import ClientPolicy
+from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
-from neuro_san.internals.run_context.langchain.llms.openai_client_policy import OpenAIClientPolicy
+from neuro_san.internals.run_context.langchain.llms.openai_llm_policy import OpenAILlmPolicy
 
 
 class TestLlmFactory(LangChainLlmFactory):
@@ -75,14 +74,14 @@ class TestLlmFactory(LangChainLlmFactory):
         :param config: The fully specified llm config which is a product of
                     _create_full_llm_config() above.
         :return: A LangChainLlmResources instance containing
-                a BaseLanguageModel (can be Chat or LLM) and a ClientPolicy
+                a BaseLanguageModel (can be Chat or LLM) and a LlmPolicy
                 object necessary for managing the model run-time lifecycle.
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
         """
         # Construct the LLM
         llm: BaseLanguageModel = None
-        client_policy: ClientPolicy = None
+        llm_policy: LlmPolicy = None
 
         chat_class: str = config.get("class")
         if chat_class is not None:
@@ -92,72 +91,16 @@ class TestLlmFactory(LangChainLlmFactory):
 
         print(f"In TestLlmFactory for {json.dumps(config, sort_keys=True, indent=4)}")
         if chat_class == "test-openai":
+
             print("Creating test-openai")
-
-            # Create the policy object that allows us to manage the model run-time lifecycle
-            client_policy = OpenAIClientPolicy()
-            async_client: Any = client_policy.create_client(config)
-
-            # Now construct LLM chat model we will be using:
-            llm = ChatOpenAI(
-                async_client=async_client,
-                model_name=model_name,
-                temperature=config.get("temperature"),
-
-                # This next group of params should always be None when we have async_client
-                openai_api_key=self.get_value_or_env(config, "openai_api_key",
-                                                     "OPENAI_API_KEY", async_client),
-                openai_api_base=self.get_value_or_env(config, "openai_api_base",
-                                                      "OPENAI_API_BASE", async_client),
-                openai_organization=self.get_value_or_env(config, "openai_organization",
-                                                          "OPENAI_ORG_ID", async_client),
-                openai_proxy=self.get_value_or_env(config, "openai_organization",
-                                                   "OPENAI_PROXY", async_client),
-                request_timeout=self.get_value_or_env(config, "request_timeout", None, async_client),
-                max_retries=self.get_value_or_env(config, "max_retries", None, async_client),
-
-                presence_penalty=config.get("presence_penalty"),
-                frequency_penalty=config.get("frequency_penalty"),
-                seed=config.get("seed"),
-                logprobs=config.get("logprobs"),
-                top_logprobs=config.get("top_logprobs"),
-                logit_bias=config.get("logit_bias"),
-                streaming=True,  # streaming is always on. Without it token counting will not work.
-                n=1,  # n is always 1.  neuro-san will only ever consider one chat completion.
-                top_p=config.get("top_p"),
-                max_tokens=config.get("max_tokens"),  # This is always for output
-                tiktoken_model_name=config.get("tiktoken_model_name"),
-                stop=config.get("stop"),
-
-                # The following three parameters are for reasoning models only.
-                reasoning=config.get("reasoning"),
-                reasoning_effort=config.get("reasoning_effort"),
-                verbosity=config.get("verbosity"),
-
-                # If omitted, this defaults to the global verbose value,
-                # accessible via langchain_core.globals.get_verbose():
-                # https://github.com/langchain-ai/langchain/blob/master/libs/core/langchain_core/globals.py#L53
-                #
-                # However, accessing the global verbose value during concurrent initialization
-                # can trigger the following warning:
-                #
-                # UserWarning: Importing verbose from langchain root module is no longer supported.
-                # Please use langchain.globals.set_verbose() / langchain.globals.get_verbose() instead.
-                # old_verbose = langchain.verbose
-                #
-                # To prevent this, we explicitly set verbose=False here (which matches the default
-                # global verbose value) so that the warning is never triggered.
-                verbose=False,
-
-                # Set stream_usage to True in order to get token counting chunks.
-                stream_usage=True
-            )
+            llm_policy = OpenAILlmPolicy()
+            llm, llm_policy = self._create_llm_resources(config, llm_policy, chat_class)
 
         elif chat_class is None:
             raise ValueError(f"Class name {chat_class} for model_name {model_name} is unspecified.")
         else:
             raise ValueError(f"Class {chat_class} for model_name {model_name} is unrecognized.")
 
-        # Return the LlmResources with the client_policy that was created.
+        # Return the LlmResources with the llm_policy that was created.
         # That might be None, and that's OK.
-        return LangChainLlmResources(llm, client_policy=client_policy)
+        return LangChainLlmResources(llm, llm_policy=llm_policy)

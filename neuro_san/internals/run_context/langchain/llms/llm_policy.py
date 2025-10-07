@@ -105,6 +105,7 @@ class LlmPolicy(EnvironmentConfiguration):
         """
         client: Any = None
         try:
+            # pylint: disable=assignment-from-none
             client = self.create_client(config)
         except NotImplementedError:
             # Slurp up the exception if nothing was implemented.
