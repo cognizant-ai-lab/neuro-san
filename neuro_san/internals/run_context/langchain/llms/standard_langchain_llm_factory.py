@@ -46,19 +46,31 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                                     the model description in this class.
     """
 
-    def __init__(self):
+    def __init__(self, class_to_llm_policy_type: Dict[str, Type[LlmPolicy]] = None):
         """
         Constructor
+
+        :param class_to_llm_policy_type: A dictionary mapping llm class names
+                    used in an llm_info.hocon file to python types that represent
+                    the correspoinding LlmPolicy implementation.
+
+                    The default value is None, allowing for the stock lookup table
+                    for the base library to be used for the instance.
+
+                    Subclasses can pass in their own lookup table if desired,
+                    making the extension of the library easier.
         """
-        self.policy_name_to_class: Dict[str, LlmPolicy] = {
-            "anthropic": AnthropicLlmPolicy,
-            "azure-openai": AzureLlmPolicy,
-            "bedrock": BedrockLlmPolicy,
-            "gemini": GeminiLlmPolicy,
-            "nvidia": NvidiaLlmPolicy,
-            "openai": OpenAILlmPolicy,
-            "ollama": OllamaLlmPolicy,
-        }
+        self.class_to_llm_policy_type: Dict[str, LlmPolicy] = class_to_llm_policy_type
+        if self.class_to_llm_policy_type is None:
+            self.class_to_llm_policy_type = {
+                "anthropic": AnthropicLlmPolicy,
+                "azure-openai": AzureLlmPolicy,
+                "bedrock": BedrockLlmPolicy,
+                "gemini": GeminiLlmPolicy,
+                "nvidia": NvidiaLlmPolicy,
+                "openai": OpenAILlmPolicy,
+                "ollama": OllamaLlmPolicy,
+            }
 
     def create_base_chat_model(self, config: Dict[str, Any]) -> BaseLanguageModel:
         """
@@ -104,7 +116,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
 
         # Get from table of policy classes
         llm_policy: LlmPolicy = None
-        policy_class: Type[LlmPolicy] = self.policy_name_to_class.get(chat_class)
+        policy_class: Type[LlmPolicy] = self.class_to_llm_policy_type.get(chat_class)
         if policy_class is not None:
 
             # Use the LlmPolicy type we found in the lookup table to create an call a new instance.
