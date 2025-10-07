@@ -94,7 +94,7 @@ class TestLlmFactory(LangChainLlmFactory):
 
             print("Creating test-openai")
             llm_policy = OpenAILlmPolicy()
-            llm, llm_policy = self.create_llm_resources_components(config)
+            llm, llm_policy = llm_policy.create_llm_resources_components(config)
 
         elif chat_class is None:
             raise ValueError(f"Class name {chat_class} for model_name {model_name} is unspecified.")
