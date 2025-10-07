@@ -68,7 +68,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         self.async_openai_client = AsyncAzureOpenAI(
             azure_endpoint=self.get_value_or_env(config, "azure_endpoint",
                                                  "AZURE_OPENAI_ENDPOINT"),
-            deployment_name=self.get_value_or_env(config, "deployment_name",
+            azure_deployment=self.get_value_or_env(config, "deployment_name",
                                                   "AZURE_OPENAI_DEPLOYMENT_NAME"),
             api_version=self.get_value_or_env(config, "openai_api_version",
                                               "OPENAI_API_VERSION"),
