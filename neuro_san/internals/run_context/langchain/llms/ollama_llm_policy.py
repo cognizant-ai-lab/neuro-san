@@ -95,11 +95,11 @@ class OllamaLlmPolicy(LlmPolicy):
         # Note we don't want to do this in the constructor, as OllamaChat lazily
         # creates these as needed via a private member that needs to be done in its own time
         # via Ollama infrastructure.  By the time we get here, it's already been created.
-        ollama_async_client: Any = self.llm._async_client     # pylint:disable=protected-access
+        ollama_async_client: Any = self.llm._async_client       # pylint:disable=protected-access
 
         if ollama_async_client is not None:
             with suppress(Exception):
-                await ollama_async_client._client.aclose()
+                await ollama_async_client._client.aclose()      # pylint:disable=protected-access
 
         # Let's not do this again, shall we?
         self.llm = None
