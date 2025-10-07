@@ -17,8 +17,6 @@ from httpx import AsyncClient
 
 from langchain_core.language_models.base import BaseLanguageModel
 
-from leaf_common.config.resolver import Resolver
-
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 
 
@@ -63,14 +61,10 @@ class OpenAILlmPolicy(LlmPolicy):
         # This is what we want to work out of the box.
         # Nevertheless, have it go through the same lazy-loading resolver rigamarole as the others.
 
-        # Set up a resolver to use to resolve lazy imports of classes from
-        # langchain_* packages to prevent installing the world.
-        resolver = Resolver()
-
         # pylint: disable=invalid-name
-        AsyncOpenAI = resolver.resolve_class_in_module("AsyncOpenAI",
-                                                       module_name="openai",
-                                                       install_if_missing="langchain-openai")
+        AsyncOpenAI = self.resolver.resolve_class_in_module("AsyncOpenAI",
+                                                            module_name="openai",
+                                                            install_if_missing="langchain-openai")
 
         self.create_http_client(config)
 
