@@ -617,6 +617,7 @@
     # NVIDIA models
     # Also know that so far as of 10/7/2025, all nvidia models use synchronous clients,
     # which might not be the most performant choice for a server situation.
+    # Consider bugging the maintainers of langchain-nvidia-ai-endpoints for async functionality.
 
     "nvidia-llama-3.1-405b-instruct": {
         "use_model_name": "meta/llama-3.1-405b-instruct",
@@ -765,6 +766,8 @@
     # These models require access to AWS endpoints in either us-east-1, us-east-2, or us-west-2
     # Also know that so far as of 10/7/2025, all bedrock models use synchronous clients,
     # which might not be the most performant choice for a server situation.
+    # Consider bugging the maintainers of langchain-aws for async functionality.
+
     "bedrock-us-claude-opus-4": {
         "use_model_name": "us.anthropic.claude-opus-4-20250514-v1:0"
     },
