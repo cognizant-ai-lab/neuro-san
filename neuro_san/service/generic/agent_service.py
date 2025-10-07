@@ -14,6 +14,7 @@ from typing import Any
 from typing import Dict
 from typing import Iterator
 
+import contextlib
 import copy
 import json
 import uuid
@@ -261,16 +262,29 @@ class AgentService:
         chat_filter_dict = request_dict.get("chat_filter", chat_filter_dict)
         chat_filter_type: str = chat_filter_dict.get("chat_filter_type", "MINIMAL")
 
-        for response_dict in response_dict_iterator:
-            # Prepare chat message for output:
-            response_dict = ChatMessageConverter().to_dict(response_dict)
-            # Do not return the request when the filter is MINIMAL
-            if chat_filter_type != "MINIMAL":
-                response_dict["request"] = request_dict
-            yield response_dict
-
-        request_reporting: Dict[str, Any] = invocation_context.get_request_reporting()
-        invocation_context.close()
+        try:
+            for response_dict in response_dict_iterator:
+                # Prepare chat message for output:
+                response_dict = ChatMessageConverter().to_dict(response_dict)
+                # Do not return the request when the filter is MINIMAL
+                if chat_filter_type != "MINIMAL":
+                    response_dict["request"] = request_dict
+                yield response_dict
+        finally:
+            # Put iterator cleanup logic in "finally" part of try-except block;
+            # this way we guarantee that underlying response_dict_iterator will be closed
+            # whether we finish consuming its data stream normally
+            # OR we are interrupted downstream
+            # and have special "GeneratorExit" exception delivered to us.
+            request_reporting: Dict[str, Any] = invocation_context.get_request_reporting()
+            # Properly close our iterator:
+            if response_dict_iterator is not None:
+                with contextlib.suppress(Exception):
+                    response_dict_iterator.close()
+            # Ensure that our SessionInvocationContext is always closed,
+            # even if iterator is interrupted.
+            invocation_context.close()
+            invocation_context = None
 
         # Maybe report token accounting to a UsageLogger
         token_dict: Dict[str, Any] = request_reporting.get("token_accounting")
