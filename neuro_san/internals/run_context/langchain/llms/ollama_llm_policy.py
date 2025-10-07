@@ -13,6 +13,8 @@
 from typing import Any
 from typing import Dict
 
+from contextlib import suppress
+
 from langchain_core.language_models.base import BaseLanguageModel
 
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
@@ -21,6 +23,8 @@ from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 class OllamaLlmPolicy(LlmPolicy):
     """
     LlmPolicy implementation for Ollama.
+
+    Ollama models do not allow for passing in an externally managed web client.
     """
 
     def create_llm(self, config: Dict[str, Any], model_name: str, client: Any) -> BaseLanguageModel:
@@ -82,5 +86,20 @@ class OllamaLlmPolicy(LlmPolicy):
         """
         Release the run-time resources used by the model
         """
-        # Not sure of the right way to do this for Ollama just yet.
-        # For now, do nothing.
+        if self.llm is None:
+            return
+
+        # Do the necessary reach-ins to successfully shut down the web client
+
+        # This is really an ollama.AsyncClient, but we don't really want to do the Resolver here.
+        # Note we don't want to do this in the constructor, as OllamaChat lazily
+        # creates these as needed via a private member that needs to be done in its own time
+        # via Ollama infrastructure.  By the time we get here, it's already been created.
+        ollama_async_client: Any = self.llm._async_client     # pylint:disable=protected-access
+
+        if ollama_async_client is not None:
+            with suppress(Exception):
+                await ollama_async_client._client.aclose()
+
+        # Let's not do this again, shall we?
+        self.llm = None
