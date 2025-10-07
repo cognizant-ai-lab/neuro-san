@@ -765,6 +765,7 @@
         "use_model_name": "us.anthropic.claude-opus-4-20250514-v1:0"
     },
     "us.anthropic.claude-opus-4-20250514-v1:0": {
+        # Per AWS, this will sunset on 3/1/2026
         "class": "bedrock",
         "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
         "modalities": {
