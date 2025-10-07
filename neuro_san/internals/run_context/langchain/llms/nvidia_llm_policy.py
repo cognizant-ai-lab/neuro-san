@@ -21,6 +21,11 @@ from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 class NvidiaLlmPolicy(LlmPolicy):
     """
     LlmPolicy implementation for Nvidia.
+
+    Nvidia does not allow for passing in async web clients.
+    As a matter of fact, all of its clients are synchronous,
+    and use request.Sessions which only last as long as a single call to their client.
+    This is not the best arrangement for an async service.
     """
 
     def create_llm(self, config: Dict[str, Any], model_name: str, client: Any) -> BaseLanguageModel:
@@ -75,5 +80,8 @@ class NvidiaLlmPolicy(LlmPolicy):
         """
         Release the run-time resources used by the model
         """
-        # Not sure of the right way to do this for NVIDIA just yet.
-        # For now, do nothing.
+        if self.llm is None:
+            return
+
+        # Let's not do this again, shall we?
+        self.llm = None
