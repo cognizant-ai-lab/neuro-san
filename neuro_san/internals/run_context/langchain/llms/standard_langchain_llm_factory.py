@@ -11,6 +11,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import Type
 
 from langchain_core.language_models.base import BaseLanguageModel
 
@@ -52,6 +53,17 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                                     the model description in this class.
     """
 
+    def __init__(self):
+        """
+        Constructor
+        """
+        self.policy_name_to_class: Dict[str, LlmPolicy] = {
+            "openai": OpenAILlmPolicy,
+            "azure-openai": AzureLlmPolicy,
+            "bedrock": BedrockLlmPolicy,
+            "anthropic": AnthropicLlmPolicy
+        }
+
     def create_base_chat_model(self, config: Dict[str, Any]) -> BaseLanguageModel:
         """
         Create a BaseLanguageModel from the fully-specified llm config.
@@ -84,7 +96,6 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         # pylint: disable=too-many-locals
         # Construct the LLM
         llm: BaseLanguageModel = None
-        llm_policy: LlmPolicy = None
 
         chat_class: str = config.get("class")
         if chat_class is not None:
@@ -99,17 +110,11 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         # langchain_* packages to prevent installing the world.
         resolver = Resolver()
 
-        if chat_class == "openai":
-            llm_policy = OpenAILlmPolicy()
-            llm, llm_policy = llm_policy.create_llm_resources_components(config)
-
-        elif chat_class == "azure-openai":
-            llm_policy = AzureLlmPolicy()
-            llm, llm_policy = llm_policy.create_llm_resources_components(config)
-
-        elif chat_class == "anthropic":
-
-            llm_policy = AnthropicLlmPolicy()
+        # Get from table of policy classes
+        llm_policy: LlmPolicy = None
+        policy_class: Type[LlmPolicy] = self.policy_name_to_class.get(chat_class)
+        if policy_class is not None:
+            llm_policy = policy_class()
             llm, llm_policy = llm_policy.create_llm_resources_components(config)
 
         elif chat_class == "ollama":
@@ -226,11 +231,6 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 # global verbose value) so that the warning is never triggered.
                 verbose=False,
             )
-        elif chat_class == "bedrock":
-
-            llm_policy = BedrockLlmPolicy()
-            llm, llm_policy = llm_policy.create_llm_resources_components(config)
-
         elif chat_class is None:
             raise ValueError(f"Class name {chat_class} for model_name {model_name} is unspecified.")
         else:
