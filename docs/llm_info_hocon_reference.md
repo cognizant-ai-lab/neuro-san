@@ -223,7 +223,7 @@ Any classes listed must:
 - Either:
   - Derive from `neuro_san.internals.run_context.langchain.llms.standard_langchain_llm_factory.StandardLangChainLlmFactory`
     to supply a mapping of class name to neuro_san.internals.run_context.langchain.llms.llm_policy.LlmPolicy
-    class implementations (preferred).   OR
+    class implementations (preferred - see `tests.neuro_san.intnrnals.run_context.langchain.llms.test_llm_factory`).   OR
   - Derive from `neuro_san.internals.run_context.langchain.llms.langchain_llm_factory.LangChainLlmFactory`
     to override the `create_llm_resources()` method that creates LangChainLlmResources object.  OR
   - Derive from `neuro_san.internals.run_context.langchain.llms.langchain_llm_factory.LangChainLlmFactory`
