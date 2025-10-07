@@ -13,6 +13,8 @@
 from typing import Any
 from typing import Dict
 
+from contextlib import suppress
+
 from langchain_core.language_models.base import BaseLanguageModel
 
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
@@ -65,6 +67,10 @@ class GeminiLlmPolicy(LlmPolicy):
             # To prevent this, we explicitly set verbose=False here (which matches the default
             # global verbose value) so that the warning is never triggered.
             verbose=False,
+
+            # We always want an async client, but grpc_asyncio is the only option,
+            # as there is no async rest client at the moment.
+            transport="grpc_asyncio",
         )
         return llm
 
@@ -72,5 +78,17 @@ class GeminiLlmPolicy(LlmPolicy):
         """
         Release the run-time resources used by the model
         """
-        # Not sure of the right way to do this for Gemini just yet.
-        # For now, do nothing.
+        if self.llm is None:
+            return
+
+        # Do the necessary reach-ins to successfully shut down the web client
+        # This is really a v1betaGenerativeServiceAsyncClient, aka
+        # google.ai.generativelanguage_v1beta.GenerativeServiceAsyncClient.
+        # but we don't really want to do the Resolver thing here just for type hints.
+        async_client_running: Any = self.llm.async_client_running
+        if async_client_running is not None:
+            with suppress(Exception):
+                await async_client_running.transport.close()
+
+        # Let's not do this again, shall we?
+        self.llm = None
