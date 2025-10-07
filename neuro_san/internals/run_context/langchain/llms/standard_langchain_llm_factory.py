@@ -16,9 +16,13 @@ from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.resolver import Resolver
 
-from neuro_san.internals.run_context.langchain.llms.langchain_llm_client import LangChainLlmClient
+from neuro_san.internals.run_context.langchain.llms.anthropic_client_policy import AnthropicClientPolicy
+from neuro_san.internals.run_context.langchain.llms.azure_client_policy import AzureClientPolicy
+from neuro_san.internals.run_context.langchain.llms.bedrock_client_policy import BedrockClientPolicy
+from neuro_san.internals.run_context.langchain.llms.client_policy import ClientPolicy
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
+from neuro_san.internals.run_context.langchain.llms.openai_client_policy import OpenAIClientPolicy
 
 
 class StandardLangChainLlmFactory(LangChainLlmFactory):
@@ -53,7 +57,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         Create a BaseLanguageModel from the fully-specified llm config.
 
         This method is provided for backwards compatibility.
-        Prefer create_llm_resources_with_client() instead,
+        Prefer create_llm_resources() instead,
         as this allows server infrastructure to better account for outstanding
         connections to LLM providers when connections drop.
 
@@ -66,17 +70,11 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         raise NotImplementedError
 
     # pylint: disable=too-many-branches
-    def create_llm_resources_with_client(self, config: Dict[str, Any],
-                                         llm_client: LangChainLlmClient = None) -> LangChainLlmResources:
+    def create_llm_resources(self, config: Dict[str, Any]) -> LangChainLlmResources:
         """
         Create a BaseLanguageModel from the fully-specified llm config.
         :param config: The fully specified llm config which is a product of
                     _create_full_llm_config() above.
-        :param llm_client: A LangChainLlmClient instance, which by default is None,
-                        implying that create_base_chat_model() needs to create its own client.
-                        Note, however that a None value can lead to connection leaks and requests
-                        that continue to run after the request connection is dropped in a server
-                        environment.
         :return: A LangChainLlmResources instance containing
                 a BaseLanguageModel (can be Chat or LLM) and all related resources
                 necessary for managing the model run-time lifecycle.
@@ -86,6 +84,8 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         # pylint: disable=too-many-locals
         # Construct the LLM
         llm: BaseLanguageModel = None
+        client_policy: ClientPolicy = None
+
         chat_class: str = config.get("class")
         if chat_class is not None:
             chat_class = chat_class.lower()
@@ -110,13 +110,9 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                                                           module_name="langchain_openai.chat_models.base",
                                                           install_if_missing="langchain-openai")
 
-            # See if there is an async_client to be had from the llm_client passed in
-            async_client: Any = None
-            if llm_client is not None:
-                async_openai_client = llm_client.get_client()
-                if async_openai_client is not None:
-                    # Necessary reach-in.
-                    async_client = async_openai_client.chat.completions
+            # Create the policy object that allows us to manage the model run-time lifecycle
+            client_policy = OpenAIClientPolicy()
+            async_client: Any = client_policy.create_client(config)
 
             # Now construct LLM chat model we will be using:
             llm = ChatOpenAI(
@@ -178,27 +174,38 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                     "include_usage": True
                 }
             }
-            openai_api_key: str = self.get_value_or_env(config, "openai_api_key", "AZURE_OPENAI_API_KEY")
-            if openai_api_key is None:
-                openai_api_key = self.get_value_or_env(config, "openai_api_key", "OPENAI_API_KEY")
 
             # AzureChatOpenAI just happens to come with langchain_openai
             # pylint: disable=invalid-name
             AzureChatOpenAI = resolver.resolve_class_in_module("AzureChatOpenAI",
                                                                module_name="langchain_openai.chat_models.azure",
                                                                install_if_missing="langchain-openai")
+
+            # Create the policy object that allows us to manage the model run-time lifecycle
+            client_policy = AzureClientPolicy()
+            async_client: Any = client_policy.create_client(config)
+
+            # Prepare some more complex args
+            openai_api_key: str = self.get_value_or_env(config, "openai_api_key", "AZURE_OPENAI_API_KEY", async_client)
+            if openai_api_key is None:
+                openai_api_key = self.get_value_or_env(config, "openai_api_key", "OPENAI_API_KEY", async_client)
+
             llm = AzureChatOpenAI(
+                async_client=async_client,
                 model_name=model_name,
                 temperature=config.get("temperature"),
+
+                # This next group of params should always be None when we have async_client
                 openai_api_key=openai_api_key,
                 openai_api_base=self.get_value_or_env(config, "openai_api_base",
-                                                      "OPENAI_API_BASE"),
+                                                      "OPENAI_API_BASE", async_client),
                 openai_organization=self.get_value_or_env(config, "openai_organization",
-                                                          "OPENAI_ORG_ID"),
-                openai_proxy=self.get_value_or_env(config, "openai_organization",
-                                                   "OPENAI_PROXY"),
-                request_timeout=config.get("request_timeout"),
-                max_retries=config.get("max_retries"),
+                                                          "OPENAI_ORG_ID", async_client),
+                openai_proxy=self.get_value_or_env(config, "openai_proxy",
+                                                   "OPENAI_PROXY", async_client),
+                request_timeout=self.get_value_or_env(config, "request_timeout", None, async_client),
+                max_retries=self.get_value_or_env(config, "max_retries", None, async_client),
+
                 presence_penalty=config.get("presence_penalty"),
                 frequency_penalty=config.get("frequency_penalty"),
                 seed=config.get("seed"),
@@ -227,23 +234,25 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 # global verbose value) so that the warning is never triggered.
                 verbose=False,
 
-                # Azure-specific
+                # Azure-specific group that should be None if we have an async_client
                 azure_endpoint=self.get_value_or_env(config, "azure_endpoint",
-                                                     "AZURE_OPENAI_ENDPOINT"),
+                                                     "AZURE_OPENAI_ENDPOINT", async_client),
                 deployment_name=self.get_value_or_env(config, "deployment_name",
-                                                      "AZURE_OPENAI_DEPLOYMENT_NAME"),
+                                                      "AZURE_OPENAI_DEPLOYMENT_NAME", async_client),
                 openai_api_version=self.get_value_or_env(config, "openai_api_version",
-                                                         "OPENAI_API_VERSION"),
-
+                                                         "OPENAI_API_VERSION", async_client),
                 # AD here means "ActiveDirectory"
                 azure_ad_token=self.get_value_or_env(config, "azure_ad_token",
-                                                     "AZURE_OPENAI_AD_TOKEN"),
-                model_version=config.get("model_version"),
+                                                     "AZURE_OPENAI_AD_TOKEN", async_client),
                 openai_api_type=self.get_value_or_env(config, "openai_api_type",
-                                                      "OPENAI_API_TYPE"),
+                                                      "OPENAI_API_TYPE", async_client),
+
+                model_version=config.get("model_version"),
+
                 # Needed for token counting
                 model_kwargs=model_kwargs,
             )
+
         elif chat_class == "anthropic":
 
             # Use lazy loading to prevent installing the world
@@ -251,6 +260,10 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
             ChatAnthropic = resolver.resolve_class_in_module("ChatAnthropic",
                                                              module_name="langchain_anthropic.chat_models",
                                                              install_if_missing="langchain-anthropic")
+
+            # ChatAnthropic currently only supports _async_client() as a cached_property,
+            # not as a constructor arg.
+
             llm = ChatAnthropic(
                 model_name=model_name,
                 max_tokens=config.get("max_tokens"),  # This is always for output
@@ -264,9 +277,14 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                                                         "ANTHROPIC_API_URL"),
                 anthropic_api_key=self.get_value_or_env(config, "anthropic_api_key",
                                                         "ANTHROPIC_API_KEY"),
+                default_headers=config.get("default_headers"),
+                betas=config.get("betas"),
                 streaming=True,  # streaming is always on. Without it token counting will not work.
                 # Set stream_usage to True in order to get token counting chunks.
                 stream_usage=True,
+                thinking=config.get("thinking"),
+                mcp_servers=config.get("mcp_servers"),
+                context_management=config.get("context_management"),
 
                 # If omitted, this defaults to the global verbose value,
                 # accessible via langchain_core.globals.get_verbose():
@@ -283,6 +301,10 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 # global verbose value) so that the warning is never triggered.
                 verbose=False,
             )
+
+            # Create the client_policy after the fact, with reach-in
+            client_policy = AnthropicClientPolicy(llm)
+
         elif chat_class == "ollama":
 
             # Use lazy loading to prevent installing the world
@@ -399,6 +421,10 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
             )
         elif chat_class == "bedrock":
 
+            # Note: ChatBedrock only ever uses a synchronous boto3 client to access
+            #       any llm and there are no aioboto3 hooks yet. Not the greatest choice
+            #       for a performant asynchronous server.
+
             # Use lazy loading to prevent installing the world
             # pylint: disable=invalid-name
             ChatBedrock = resolver.resolve_class_in_module("ChatBedrock",
@@ -443,11 +469,15 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 # global verbose value) so that the warning is never triggered.
                 verbose=False,
             )
+
+            # Create the client_policy after the fact, with reach-in
+            client_policy = BedrockClientPolicy(llm)
+
         elif chat_class is None:
             raise ValueError(f"Class name {chat_class} for model_name {model_name} is unspecified.")
         else:
             raise ValueError(f"Class {chat_class} for model_name {model_name} is unrecognized.")
 
-        # Return the LlmResources with the llm_client that was passed in.
+        # Return the LlmResources with the client_policy that was created.
         # That might be None, and that's OK.
-        return LangChainLlmResources(llm, llm_client=llm_client)
+        return LangChainLlmResources(llm, client_policy=client_policy)

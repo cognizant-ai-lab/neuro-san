@@ -18,9 +18,10 @@ import json
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_openai.chat_models.base import ChatOpenAI
 
-from neuro_san.internals.run_context.langchain.llms.langchain_llm_client import LangChainLlmClient
+from neuro_san.internals.run_context.langchain.llms.client_policy import ClientPolicy
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
+from neuro_san.internals.run_context.langchain.llms.openai_client_policy import OpenAIClientPolicy
 
 
 class TestLlmFactory(LangChainLlmFactory):
@@ -55,7 +56,7 @@ class TestLlmFactory(LangChainLlmFactory):
         Create a LangChainLlmResources instance from the fully-specified llm config.
 
         This method is provided for backwards compatibility.
-        Prefer create_llm_resources_with_client() instead,
+        Prefer create_llm_resources() instead,
         as this allows server infrastructure to better account for outstanding
         connections to LLM providers when connections drop.
 
@@ -67,26 +68,22 @@ class TestLlmFactory(LangChainLlmFactory):
         """
         raise NotImplementedError
 
-    def create_llm_resources_with_client(self, config: Dict[str, Any],
-                                         llm_client: LangChainLlmClient = None) -> LangChainLlmResources:
+    def create_llm_resources(self, config: Dict[str, Any]) -> LangChainLlmResources:
         """
         Create a LangChainLlmResources instance from the fully-specified llm config.
 
         :param config: The fully specified llm config which is a product of
                     _create_full_llm_config() above.
-        :param llm_client: A LangChainLlmClient instance, which by default is None,
-                        implying that create_base_chat_model() needs to create its own client.
-                        Note, however that a None value can lead to connection leaks and requests
-                        that continue to run after the request connection is dropped in a server
-                        environment.
         :return: A LangChainLlmResources instance containing
-                a BaseLanguageModel (can be Chat or LLM) and all related resources
-                necessary for managing the model run-time lifecycle.
+                a BaseLanguageModel (can be Chat or LLM) and a ClientPolicy
+                object necessary for managing the model run-time lifecycle.
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
         """
         # Construct the LLM
         llm: BaseLanguageModel = None
+        client_policy: ClientPolicy = None
+
         chat_class: str = config.get("class")
         if chat_class is not None:
             chat_class = chat_class.lower()
@@ -97,13 +94,9 @@ class TestLlmFactory(LangChainLlmFactory):
         if chat_class == "test-openai":
             print("Creating test-openai")
 
-            # See if there is an async_client to be had from the llm_client passed in
-            async_client: Any = None
-            if llm_client is not None:
-                async_openai_client = llm_client.get_client()
-                if async_openai_client is not None:
-                    # Necessary reach-in
-                    async_client = async_openai_client.chat.completions
+            # Create the policy object that allows us to manage the model run-time lifecycle
+            client_policy = OpenAIClientPolicy()
+            async_client: Any = client_policy.create_client(config)
 
             # Now construct LLM chat model we will be using:
             llm = ChatOpenAI(
@@ -165,6 +158,6 @@ class TestLlmFactory(LangChainLlmFactory):
         else:
             raise ValueError(f"Class {chat_class} for model_name {model_name} is unrecognized.")
 
-        # Return the LlmResources with the llm_client that was passed in.
+        # Return the LlmResources with the client_policy that was created.
         # That might be None, and that's OK.
-        return LangChainLlmResources(llm, llm_client=llm_client)
+        return LangChainLlmResources(llm, client_policy=client_policy)

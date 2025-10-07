@@ -9,44 +9,38 @@
 # neuro-san SDK Software in commercial settings.
 #
 # END COPYRIGHT
-
 from typing import Any
 from typing import Dict
 
 import os
 
-from neuro_san.internals.run_context.langchain.llms.langchain_llm_client import LangChainLlmClient
 
-
-class LangChainLlmClientFactory:
+class EnvironmentConfiguration:
     """
-    Interface for Factory classes creating LLM client connections for LangChain.
+    Easy policy add on for the get_value_or_env() method for various classes that
+    are effected by configuration via dictionary/hocon and/or environment variables.
     """
 
-    def create_llm_client(self, config: Dict[str, Any]) -> LangChainLlmClient:
-        """
-        Create a LangChainLlmClient instance from the fully-specified llm config.
-        :param config: The fully specified llm config
-        :return: A LangChainLlmClient instance containing run-time resources necessary
-                for model usage by the service.
-
-                Can raise a ValueError if the config's class or model_name value is
-                unknown to this method.
-        """
-        raise NotImplementedError
-
-    def get_value_or_env(self, config: Dict[str, Any], key: str, env_key: str) -> Any:
+    @staticmethod
+    def get_value_or_env(config: Dict[str, Any], key: str, env_key: str,
+                         none_obj: Any = None) -> Any:
         """
         :param config: The config dictionary to search
         :param key: The key for the config to look for
         :param env_key: The os.environ key whose value should be gotten if either
                         the key does not exist or the value for the key is None
+        :param none_obj:  An optional object instance to test.
+                          If present this method will return None, implying
+                          that some other external object/mechanism is supplying the values.
         """
+        if none_obj is not None:
+            return None
+
         value = None
         if config is not None:
             value = config.get(key)
 
-        if value is None:
+        if value is None and env_key is not None:
             value = os.getenv(env_key)
 
         return value
