@@ -49,6 +49,9 @@ class LlmPolicy(EnvironmentConfiguration):
         :param llm: BaseLanguageModel
         """
         self.llm: BaseLanguageModel = llm
+
+        # Set up a resolver to use to resolve lazy imports of classes from
+        # langchain_* packages to prevent installing the world.
         self.resolver: Resolver = Resolver()
 
     # pylint: disable=useless-return

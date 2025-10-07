@@ -15,14 +15,15 @@ from typing import Type
 
 from langchain_core.language_models.base import BaseLanguageModel
 
-from leaf_common.config.resolver import Resolver
-
 from neuro_san.internals.run_context.langchain.llms.anthropic_llm_policy import AnthropicLlmPolicy
 from neuro_san.internals.run_context.langchain.llms.azure_llm_policy import AzureLlmPolicy
 from neuro_san.internals.run_context.langchain.llms.bedrock_llm_policy import BedrockLlmPolicy
+from neuro_san.internals.run_context.langchain.llms.gemini_llm_policy import GeminiLlmPolicy
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
+from neuro_san.internals.run_context.langchain.llms.nvidia_llm_policy import NvidiaLlmPolicy
+from neuro_san.internals.run_context.langchain.llms.ollama_llm_policy import OllamaLlmPolicy
 from neuro_san.internals.run_context.langchain.llms.openai_llm_policy import OpenAILlmPolicy
 
 
@@ -40,14 +41,6 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                                     higher temperatures yield more random results.
                                     Default if not specified is 0.7
 
-        "prompt_token_fraction"     The fraction of total tokens (not necessarily words
-                                    or letters) to use for a prompt. Each model_name
-                                    has a documented number of max_tokens it can handle
-                                    which is a total count of message + response tokens
-                                    which goes into the calculation involved in
-                                    get_max_prompt_tokens().
-                                    By default, the value is 0.5.
-
         "max_tokens"                The maximum number of tokens to use in
                                     get_max_prompt_tokens(). By default, this comes from
                                     the model description in this class.
@@ -58,10 +51,13 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         Constructor
         """
         self.policy_name_to_class: Dict[str, LlmPolicy] = {
-            "openai": OpenAILlmPolicy,
+            "anthropic": AnthropicLlmPolicy,
             "azure-openai": AzureLlmPolicy,
             "bedrock": BedrockLlmPolicy,
-            "anthropic": AnthropicLlmPolicy
+            "gemini": GeminiLlmPolicy,
+            "nvidia": NvidiaLlmPolicy,
+            "openai": OpenAILlmPolicy,
+            "ollama": OllamaLlmPolicy,
         }
 
     def create_base_chat_model(self, config: Dict[str, Any]) -> BaseLanguageModel:
@@ -106,131 +102,15 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         # but with user-specified config, it is possible to have the other keys will be specifed instead.
         model_name: str = config.get("model_name") or config.get("model") or config.get("model_id")
 
-        # Set up a resolver to use to resolve lazy imports of classes from
-        # langchain_* packages to prevent installing the world.
-        resolver = Resolver()
-
         # Get from table of policy classes
         llm_policy: LlmPolicy = None
         policy_class: Type[LlmPolicy] = self.policy_name_to_class.get(chat_class)
         if policy_class is not None:
+
+            # Use the LlmPolicy type we found in the lookup table to create an call a new instance.
             llm_policy = policy_class()
             llm, llm_policy = llm_policy.create_llm_resources_components(config)
 
-        elif chat_class == "ollama":
-
-            # Use lazy loading to prevent installing the world
-            # pylint: disable=invalid-name
-            ChatOllama = resolver.resolve_class_in_module("ChatOllama",
-                                                          module_name="langchain_ollama",
-                                                          install_if_missing="langchain-ollama")
-            # Higher temperature is more random
-            llm = ChatOllama(
-                model=model_name,
-                mirostat=config.get("mirostat"),
-                mirostat_eta=config.get("mirostat_eta"),
-                mirostat_tau=config.get("mirostat_tau"),
-                num_ctx=config.get("num_ctx"),
-                num_gpu=config.get("num_gpu"),
-                num_thread=config.get("num_thread"),
-                num_predict=config.get("num_predict", config.get("max_tokens")),
-                reasoning=config.get("reasoning"),
-                repeat_last_n=config.get("repeat_last_n"),
-                repeat_penalty=config.get("repeat_penalty"),
-                temperature=config.get("temperature"),
-                seed=config.get("seed"),
-                stop=config.get("stop"),
-                tfs_z=config.get("tfs_z"),
-                top_k=config.get("top_k"),
-                top_p=config.get("top_p"),
-                keep_alive=config.get("keep_alive"),
-                base_url=config.get("base_url"),
-
-                # If omitted, this defaults to the global verbose value,
-                # accessible via langchain_core.globals.get_verbose():
-                # https://github.com/langchain-ai/langchain/blob/master/libs/core/langchain_core/globals.py#L53
-                #
-                # However, accessing the global verbose value during concurrent initialization
-                # can trigger the following warning:
-                #
-                # UserWarning: Importing verbose from langchain root module is no longer supported.
-                # Please use langchain.globals.set_verbose() / langchain.globals.get_verbose() instead.
-                # old_verbose = langchain.verbose
-                #
-                # To prevent this, we explicitly set verbose=False here (which matches the default
-                # global verbose value) so that the warning is never triggered.
-                verbose=False,
-            )
-        elif chat_class == "nvidia":
-
-            # Use lazy loading to prevent installing the world
-            # pylint: disable=invalid-name
-            ChatNVIDIA = resolver.resolve_class_in_module("ChatNVIDIA",
-                                                          module_name="langchain_nvidia_ai_endpoints",
-                                                          install_if_missing="langchain-nvidia-ai-endpoints")
-            # Higher temperature is more random
-            llm = ChatNVIDIA(
-                base_url=config.get("base_url"),
-                model=model_name,
-                temperature=config.get("temperature"),
-                max_tokens=config.get("max_tokens"),
-                top_p=config.get("top_p"),
-                seed=config.get("seed"),
-                stop=config.get("stop"),
-
-                # If omitted, this defaults to the global verbose value,
-                # accessible via langchain_core.globals.get_verbose():
-                # https://github.com/langchain-ai/langchain/blob/master/libs/core/langchain_core/globals.py#L53
-                #
-                # However, accessing the global verbose value during concurrent initialization
-                # can trigger the following warning:
-                #
-                # UserWarning: Importing verbose from langchain root module is no longer supported.
-                # Please use langchain.globals.set_verbose() / langchain.globals.get_verbose() instead.
-                # old_verbose = langchain.verbose
-                #
-                # To prevent this, we explicitly set verbose=False here (which matches the default
-                # global verbose value) so that the warning is never triggered.
-                verbose=False,
-                nvidia_api_key=self.get_value_or_env(config, "nvidia_api_key",
-                                                     "NVIDIA_API_KEY"),
-                nvidia_base_url=self.get_value_or_env(config, "nvidia_base_url",
-                                                      "NVIDIA_BASE_URL"),
-            )
-        elif chat_class == "gemini":
-
-            # Use lazy loading to prevent installing the world
-            # pylint: disable=invalid-name
-            ChatGoogleGenerativeAI = resolver.resolve_class_in_module("ChatGoogleGenerativeAI",
-                                                                      module_name="langchain_google_genai.chat_models",
-                                                                      install_if_missing="langchain-google-genai")
-            llm = ChatGoogleGenerativeAI(
-                model=model_name,
-                google_api_key=self.get_value_or_env(config, "google_api_key",
-                                                     "GOOGLE_API_KEY"),
-                max_retries=config.get("max_retries"),
-                max_tokens=config.get("max_tokens"),  # This is always for output
-                n=config.get("n"),
-                temperature=config.get("temperature"),
-                timeout=config.get("timeout"),
-                top_k=config.get("top_k"),
-                top_p=config.get("top_p"),
-
-                # If omitted, this defaults to the global verbose value,
-                # accessible via langchain_core.globals.get_verbose():
-                # https://github.com/langchain-ai/langchain/blob/master/libs/core/langchain_core/globals.py#L53
-                #
-                # However, accessing the global verbose value during concurrent initialization
-                # can trigger the following warning:
-                #
-                # UserWarning: Importing verbose from langchain root module is no longer supported.
-                # Please use langchain.globals.set_verbose() / langchain.globals.get_verbose() instead.
-                # old_verbose = langchain.verbose
-                #
-                # To prevent this, we explicitly set verbose=False here (which matches the default
-                # global verbose value) so that the warning is never triggered.
-                verbose=False,
-            )
         elif chat_class is None:
             raise ValueError(f"Class name {chat_class} for model_name {model_name} is unspecified.")
         else:

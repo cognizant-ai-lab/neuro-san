@@ -35,14 +35,6 @@ class LangChainLlmFactory(EnvironmentConfiguration):
                                     higher temperatures yield more random results.
                                     Default if not specified is 0.7
 
-        "prompt_token_fraction"     The fraction of total tokens (not necessarily words
-                                    or letters) to use for a prompt. Each model_name
-                                    has a documented number of max_tokens it can handle
-                                    which is a total count of message + response tokens
-                                    which goes into the calculation involved in
-                                    get_max_prompt_tokens().
-                                    By default the value is 0.5.
-
         "max_tokens"                The maximum number of tokens to use in
                                     get_max_prompt_tokens(). By default this comes from
                                     the model description in this class.
