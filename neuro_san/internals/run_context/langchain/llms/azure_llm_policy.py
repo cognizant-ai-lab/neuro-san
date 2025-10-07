@@ -25,6 +25,8 @@ class AzureLlmPolicy(OpenAILlmPolicy):
     as an argument, so this implementation takes advantage of the create_client()
     method to do that. Worth noting that where many other implementations might care about
     the llm reference, because of our create_client() implementation, we do not.
+
+    This class is a child of OpenAILlmPolicy, and inherits its implementation of delete_resources().
     """
 
     def create_client(self, config: Dict[str, Any]) -> Any:
