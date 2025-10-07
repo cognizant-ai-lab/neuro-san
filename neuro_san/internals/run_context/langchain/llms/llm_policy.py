@@ -40,6 +40,24 @@ class LlmPolicy(EnvironmentConfiguration):
        to the llm instance to clean up any references related to the web client.
 
     Both of these are handled by the base implementation of create_llm_resources_components().
+
+    LlmPolicy classes allow for a few methods for control over creating and cleaning up
+    BaseLanguageModel instances over the course of their lifetime within the neuro-san system.
+
+        * create_llm() actually creates your BaseLanguageModel instance
+             from a fully-specified llm config that is compiled by the system.
+             "Fully-specified" here means that the config is a product of llm_config
+             settings for any given agent in an agent network hocon file overlayed
+             on top of the default settings you specify in your own llm_info.hocon file.
+        * delete_resources() deletes any resources related to network clients that were
+             created by create_llm(). Unfortunately, most often this involes reaching
+             into the internals of your particular BaseLanguageModel implementation
+             in order to shut down any network connections.  This isn't strictly required,
+             but it's highly recommended in a server environment.
+        * create_client() creates a network client that can be used to make requests
+             to your LLM.  This is only required if your BaseLanguageModel implementation
+             can take some kind of externally instantiated web client as an argument to
+             its constructor and you care about delete_resources() cleanup.
     """
 
     def __init__(self, llm: BaseLanguageModel = None):
