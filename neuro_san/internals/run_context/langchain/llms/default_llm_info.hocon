@@ -615,6 +615,8 @@
     },
 
     # NVIDIA models
+    # Also know that so far as of 10/7/2025, all nvidia models use synchronous clients,
+    # which might not be the most performant choice for a server situation.
 
     "nvidia-llama-3.1-405b-instruct": {
         "use_model_name": "meta/llama-3.1-405b-instruct",
@@ -757,10 +759,12 @@
         "max_output_tokens": 8192,
         "knowledge_cutoff": "09/2024",
     },
-    
+
     # Bedrock
 
     # These models require access to AWS endpoints in either us-east-1, us-east-2, or us-west-2
+    # Also know that so far as of 10/7/2025, all bedrock models use synchronous clients,
+    # which might not be the most performant choice for a server situation.
     "bedrock-us-claude-opus-4": {
         "use_model_name": "us.anthropic.claude-opus-4-20250514-v1:0"
     },
@@ -942,7 +946,7 @@
                 "n": 1,         # Number of chat completions to generate for each prompt.
                 "temperature": 0.7,         # [0.0, 2.0],
                 "timeout": null,
-                "top_k": null, 
+                "top_k": null,
                 "top_p": null,
             }
         },
