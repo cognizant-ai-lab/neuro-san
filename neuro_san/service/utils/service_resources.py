@@ -210,7 +210,7 @@ class ServiceResources:
             conns = []
             for c in psutil.net_connections(kind="tcp"):
                 if getattr(c, "pid", None) == p.pid:
-                    conns.append(c)
+                    conns.append©
             return conns
 
     # --- unchanged external API, but hardened for Windows/psutil variations ---
@@ -281,11 +281,11 @@ class ServiceResources:
 
             # Accepted inbound socket uses the server port as local port
             if lport == server_port and status != psutil.CONN_LISTEN:
-                inbound_accepted_list.append(c)
+                inbound_accepted_list.append©
                 continue
 
             # Everything else is an outbound (client) socket from this process
-            outbound_list.append(c)
+            outbound_list.append©
 
         return {
             "inbound_listen": inbound_listen,
