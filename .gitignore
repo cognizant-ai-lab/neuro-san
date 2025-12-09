@@ -25,6 +25,9 @@ __pycache__/
 # Vim editor restore files
 *.swp
 
+# VS Code setting
+settings.json
+
 # Documentation created by mkdocs which may harbor security vulnerabilities
 site/
 
