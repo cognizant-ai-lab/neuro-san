@@ -18,7 +18,9 @@
         #
         # Note:
         # - For Ollama, the model must be downloaded locally before use.
-        # - Additional parameters (e.g., `temperature`, `max_tokens`) can be configured below.
+        # - Additional LLM parameters (e.g., `temperature`, `max_tokens`) can be configured below.
+        # - Agent-level control (e.g., `max_iterations`) can also be set here.
+        #
         #   For more details, see:
         #   - `neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon`
         #   - `docs/agent_hocon_reference.md`
