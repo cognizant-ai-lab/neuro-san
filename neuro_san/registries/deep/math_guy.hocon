@@ -19,6 +19,12 @@
 # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md
 
 {
+    # Load the shared LLM configuration from a single source of truth.
+    # This allows users to change the model in one file rather than
+    # modifying the configuration for each agent network.
+    # Note that the file path here is relative to the root level of the repo.
+    include "neuro_san/registries/llm_config.hocon"
+
     # Optional metadata describing this agent network
     "metadata": {
         "description": "Simple agent network using a CodedTool and sly_data"
@@ -28,9 +34,6 @@
             "bogosity": 0.9,
             "safety": 0.8,    
         }
-    },
-    "llm_config": {
-        "model_name": "gpt-4o",
     },
     "tools": [
         # This first agent definition is regarded as the "Front Man", which

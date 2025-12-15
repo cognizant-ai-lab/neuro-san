@@ -174,6 +174,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 unknown to this method.
         """
         full_config: Dict[str, Any] = self.create_full_llm_config(config)
+        print(f"\n\n{full_config=}\n\n")
         llm_resources: LangChainLlmResources = self.create_llm_resources(full_config)
         return llm_resources
 
@@ -204,17 +205,18 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             # giving priority to values in config.
             return self.overlayer.overlay(config_from_class_in_llm_info, config)
 
-        default_config: Dict[str, Any] = self.llm_infos.get("default_config")
-        use_config = self.overlayer.overlay(default_config, config)
+        # default_config: Dict[str, Any] = self.llm_infos.get("default_config")
+        # use_config = self.overlayer.overlay(default_config, config)
 
-        model_name = use_config.get("model_name")
+        # model_name = use_config.get("model_name")
+        model_name: str = config.get("model_name")
 
-        llm_entry = self.llm_infos.get(model_name)
+        llm_entry: dict[str, Any] = self.llm_infos.get(model_name)
         if llm_entry is None:
             raise ValueError(f"No llm entry for model_name {model_name}")
 
         # Get some bits from the llm_entry
-        use_model_name = llm_entry.get("use_model_name", model_name)
+        use_model_name: str = llm_entry.get("use_model_name", model_name)
         if len(llm_entry.keys()) <= 2 and use_model_name is not None:
             # We effectively have an alias. Switch out the llm entry.
             llm_entry = self.llm_infos.get(use_model_name)
@@ -230,11 +232,11 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         chat_args: Dict[str, Any] = self.get_chat_class_args(chat_class_name, use_model_name)
 
         # Get a new sense of the default config now that we have the default args for the chat class.
-        default_config = self.overlayer.overlay(chat_args, default_config)
+        # default_config = self.overlayer.overlay(chat_args, default_config)
 
         # Now that we have the true defaults, overlay the config that came in to get the
         # config we are going to use.
-        full_config: Dict[str, Any] = self.overlayer.overlay(default_config, config)
+        full_config: Dict[str, Any] = self.overlayer.overlay(chat_args, config)  # self.overlayer.overlay(default_config, config)
         full_config["class"] = chat_class_name
         full_config["model_name"] = llm_entry.get("use_model_name", use_model_name)
 
