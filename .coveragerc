@@ -1,0 +1,23 @@
+[run]
+# Include specific source so we can tell when entire directories are not measured
+# XXX It'd sure be nice to have a way to make this repo-agnostic.
+source = 
+    neuro_san
+
+# Omit specific files or directories from the coverage measurement
+omit =
+    # Exclude the entire 'tests' directory
+    tests/*
+    # Exclude everything in /usr which usually also means Python standard library
+    /usr/*
+
+# Do not measure coverage for the Python standard library
+cover_pylib = false
+
+[report]
+# Omit specific files or directories from the coverage measurement
+omit =
+    # Exclude the entire 'tests' directory
+    tests/*
+    # Exclude everything in /usr which usually also means Python standard library
+    /usr/*

@@ -39,10 +39,9 @@ site/
 # macOS folder metadata
 .DS_Store
 
-# Temporary integrtion test files
+# Temporary integration test files
 tmp_*
 .coverage
-.coverage*
 
 # Transient openapi file
 neuro_san/api/grpc/openapi.yaml
