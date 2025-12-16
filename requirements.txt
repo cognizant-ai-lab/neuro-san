@@ -7,7 +7,7 @@
 
 # In-house dependencies
 leaf-common>=1.2.32
-leaf-server-common>=0.1.22
+leaf-server-common>=0.1.23
 
 # These are needed for generating code from .proto files
 grpcio>=1.62.0
