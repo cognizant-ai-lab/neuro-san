@@ -47,7 +47,7 @@ class TestUnitTestHocons(TestCase):
         "requests_get/get_example.hocon",
 
         # List more hocon files as they become available here.
-    ]))
+    ]), skip_on_empty=True)
     @pytest.mark.timeout(60)  # 30 seconds for each test
     def test_hocon(self, test_name: str, test_hocon: str):
         """
@@ -70,7 +70,7 @@ class TestUnitTestHocons(TestCase):
         "music_nerd_pro/combination_responses_with_history_http.hocon",
 
         # List more hocon files as they become available here.
-    ]))
+    ]), skip_on_empty=True)
     @pytest.mark.needs_server
     @pytest.mark.timeout(30)  # 30 seconds for each test
     def test_hocon_with_server(self, test_name: str, test_hocon: str):

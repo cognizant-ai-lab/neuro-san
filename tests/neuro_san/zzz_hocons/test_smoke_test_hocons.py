@@ -42,7 +42,7 @@ class TestSmokeTestHocons(TestCase):
         "music_nerd_pro/combination_responses_with_history_direct.hocon",
 
         # List more hocon files as they become available here.
-    ]))
+    ]), skip_on_empty=True)
     @pytest.mark.timeout(30)  # 30 seconds for this test
     @pytest.mark.smoke
     @pytest.mark.needs_server
@@ -70,7 +70,7 @@ class TestSmokeTestHocons(TestCase):
         "music_nerd_pro_llm_bedrock_claude/combination_responses_with_history_direct.hocon",
 
         # List more hocon files as they become available here.
-    ]))
+    ]), skip_on_empty=True)
     @pytest.mark.timeout(60)  # in seconds for this test
     @pytest.mark.smoke
     @pytest.mark.non_default_llm_provider
@@ -99,7 +99,7 @@ class TestSmokeTestHocons(TestCase):
         "music_nerd_pro_llm_ollama/combination_responses_with_history_http.hocon",
 
         # List more hocon files as they become available here.
-    ]))
+    ]), skip_on_empty=True)
     @pytest.mark.timeout(12 * 60)  # in mins for this test
     @pytest.mark.smoke
     @pytest.mark.needs_server

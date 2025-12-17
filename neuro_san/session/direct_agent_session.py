@@ -20,8 +20,8 @@ from typing import Dict
 from typing import Generator
 from typing import List
 
-import asyncio
-import contextlib
+from asyncio import Future
+from contextlib import suppress
 from copy import copy
 
 from leaf_common.asyncio.async_to_sync_generator import AsyncToSyncGenerator
@@ -175,9 +175,9 @@ class DirectAgentSession(AgentSession):
         # This might take a few minutes, which can be longer than some
         # sockets stay open.
         asyncio_executor: AsyncioExecutor = self.invocation_context.get_asyncio_executor()
-        future: asyncio.Future = asyncio_executor.submit(self.request_id, chat_session.streaming_chat,
-                                                         user_input, self.invocation_context, sly_data,
-                                                         chat_context)
+        future: Future = asyncio_executor.submit(self.request_id, chat_session.streaming_chat,
+                                                 user_input, self.invocation_context, sly_data,
+                                                 chat_context)
         # Ignore the future. Live in the now.
         _ = future
 
@@ -212,11 +212,12 @@ class DirectAgentSession(AgentSession):
                     response_dict["response"] = message
                     yield response_dict
         finally:
-            with contextlib.suppress(Exception):
-                # We are in a sync run-time environment,
-                # so we need to run the async delete_resources() method
-                # with the asyncio.run() helper.
-                asyncio.run(chat_session.delete_resources())
+            # Release resources without exceptions
+            with suppress(Exception):
+                # Cannot run as if in sync environment, so run async
+                # Use the asyncio_executor so as to not induce other async warnings
+                future: Future = asyncio_executor.submit(self.request_id, chat_session.delete_resources)
+                _ = future
 
     def reset(self):
         """

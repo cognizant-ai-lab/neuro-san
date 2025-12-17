@@ -88,6 +88,9 @@ class SessionInvocationContext(InvocationContext):
         self.asyncio_executor: AsyncioExecutor = self.async_executors_pool.get_executor()
         self.request_reporting: Dict[str, Any] = {}
         self.origination: Origination = Origination()
+
+        # Anything that has to do with the queue will need a new instance in
+        # safe_shallow_copy() below to keep AsyncDirectAgentSessions happy.
         self.queue: AsyncCollatingQueue = AsyncCollatingQueue()
         self.journal: Journal = MessageJournal(self.queue)
 
@@ -209,8 +212,11 @@ class SessionInvocationContext(InvocationContext):
 
         invocation_context: SessionInvocationContext = copy(self)
 
-        # We need a different queue in order for direct sessions to call external agents
-        # with direct sessions.
+        # We need a different queue in order to call external agents with direct sessions.
         invocation_context.queue: AsyncCollatingQueue = AsyncCollatingQueue()
+
+        # Now that the queue has changed, we need a new Journal as well
+        # to be sure that the messages are sent to the correct queue.
+        invocation_context.journal: Journal = MessageJournal(invocation_context.queue)
 
         return invocation_context

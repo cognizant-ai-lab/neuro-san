@@ -43,7 +43,7 @@ class TestIntegrationTestHocons(TestCase):
         "mcp_deepwiki_dict/cail_neuro_san.hocon",
 
         # List more hocon files as they become available here.
-    ]))
+    ]), skip_on_empty=True)
     @pytest.mark.timeout(90)  # 90 seconds for this test
     @pytest.mark.integration
     def test_hocon(self, test_name: str, test_hocon: str):
