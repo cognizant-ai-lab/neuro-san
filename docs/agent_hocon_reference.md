@@ -214,9 +214,10 @@ see the [llm_info_hocon_reference](./llm_info_hocon_reference.md).
 
 #### temperature
 
-Pretty much any of the LLMs will take a floating-point temperature parameter as an argument.
-Roughly speaking, temperature is a number between 0.0 and 1.0 that indicates a relative amount of randomness
-in answers provided by the LLM.  By default this value is 0.7.
+Most LLMs accept a floating-point temperature parameter, except reasoning-focused models like gpt-5.
+In simple terms, temperature is a non-negative value that controls the randomness or creativity of the model’s outputs:
+higher values produce more diverse responses, while lower values make answers more deterministic.
+If not specified, the default temperature varies depending on the provider.
 
 #### Other LLM-specific Parameters
 
