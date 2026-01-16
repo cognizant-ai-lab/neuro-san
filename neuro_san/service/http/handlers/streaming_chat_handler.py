@@ -71,9 +71,6 @@ class StreamingChatHandler(BaseRequestHandler):
             async with asyncio.timeout(request_timeout):
                 result_generator = service.streaming_chat(data, metadata)
                 async for result_dict in result_generator:
-
-                    print(f">>>>>>>>>>>>>>>>>>>>> result_dict: {json.dumps(result_dict, indent=4)}")
-
                     result_str: str = json.dumps(result_dict) + "\n"
                     self.write(result_str)
                     flush_ok = await self.do_flush()
