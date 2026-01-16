@@ -200,9 +200,6 @@ class McpToolsProcessor:
             result_text = result_text + structure_str
         if result_sly_data is not None:
             call_result["result"]["sly_data"] = result_sly_data
-
-            print(f">>>>>>>>> BUILD >>>>>>>>>>>> MCP result_sly_data: {json.dumps(result_sly_data, indent=4)}")
-
         call_result["result"]["content"][0]["text"] = McpRequestUtil.safe_message(result_text)
         return call_result
 
