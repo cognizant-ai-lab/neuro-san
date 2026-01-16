@@ -124,10 +124,6 @@ class McpToolsProcessor:
             async with asyncio.timeout(tool_timeout_seconds):
                 result_generator = service.streaming_chat(input_request, metadata)
                 async for result_dict in result_generator:
-
-                    print(f">>>>>>>>>>>>>>>>>>>>> MCP result_dict: {json.dumps(result_dict, indent=4)}")
-
-
                     partial_response, structure_data, sly_data = await self._extract_tool_response_part(result_dict)
                     if partial_response is not None:
                         response_text = response_text + partial_response
