@@ -41,6 +41,10 @@ class McpChatResponseDictionaryConverter(DictionaryConverter):
         if not isinstance(obj, dict):
             return empty
         chat_response: Dict[str, Any] = obj
+
+        import json
+        print(f"~~~~~~~~~~~~~~~~~~~~~~~~~~~ NS => MCP Chat Response: {json.dumps(chat_response, indent=4)}")
+
         result: Dict[str, Any] = chat_response.get("result", None)
         if result is None:
             return empty
@@ -50,14 +54,22 @@ class McpChatResponseDictionaryConverter(DictionaryConverter):
         content_seq: Sequence[Dict[str, Any]] = result.get("content", [])
         if len(content_seq) == 0:
             return empty
-        response: Dict[str, Any] = content_seq[0]
-        return {
+        content_dict: Dict[str, Any] = content_seq[0]
+        response_dict: Dict[str, Any] = {
             "response": {
                 "type": ChatMessageType.AGENT_FRAMEWORK.name,
-                "text": response.get("text", "")
+                "text": content_dict.get("text", "")
             },
             "mcp_response": chat_response
         }
+        sly_data_dict: Dict[str, Any] = result.get("sly_data", None)
+        if sly_data_dict:
+            response_dict["response"]["sly_data"] = sly_data_dict
+            # This is a workaround to ensure message will make it through
+            # client-side message filters
+            response_dict["response"]["chat_context"] = {}
+            print(f"~~~~~~~~~~~~~~~~~~~~~~~~~~~ Added sly_data to response: {json.dumps(response_dict, indent=4)}")
+        return response_dict
 
     def from_dict(self, obj_dict: Dict[str, object]) -> object:
         """
