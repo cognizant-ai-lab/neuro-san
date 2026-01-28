@@ -24,8 +24,8 @@ from typing import Optional
 from mcp.client.auth import OAuthClientProvider
 from mcp.shared.auth import OAuthClientMetadata
 
-from neuro_san.internals.run_context.langchain.mcp.extended_client_credentials import \
-    ExtendedClientCredentialsOauthProvider
+from neuro_san.internals.run_context.langchain.mcp.client_credentials_oauth_provider import \
+    ClientCredentialsOauthProvider
 from neuro_san.internals.run_context.langchain.mcp.extended_oauth_provider import ExtendedOauthClientProvider
 from neuro_san.internals.run_context.langchain.mcp.file_token_storage import FileTokenStorage
 from neuro_san.internals.run_context.langchain.mcp.oauth_callback_handler import OauthCallbackHandler
@@ -107,11 +107,11 @@ class OauthProviderFactory:
     def _create_client_credentials_provider(
             self,
             credentials: Dict[str, Any]
-    ) -> ExtendedClientCredentialsOauthProvider:
+    ) -> ClientCredentialsOauthProvider:
         """Create client credentials OAuth provider."""
         self.logger.info("✓ Using client_credentials flow")
 
-        return ExtendedClientCredentialsOauthProvider(
+        return ClientCredentialsOauthProvider(
             server_url=self.server_url,
             storage=self.storage,
             client_id=credentials.get("client_id"),

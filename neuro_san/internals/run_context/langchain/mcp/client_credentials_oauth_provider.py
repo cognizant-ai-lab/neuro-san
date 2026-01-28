@@ -26,7 +26,7 @@ from mcp.shared.auth import OAuthClientInformationFull
 from neuro_san.internals.run_context.langchain.mcp.extended_oauth_provider import ExtendedOauthClientProvider
 
 
-class ExtendedClientCredentialsOauthProvider(ExtendedOauthClientProvider):
+class ClientCredentialsOauthProvider(ExtendedOauthClientProvider):
     """OAuth provider for client_credentials grant with client_id + client_secret.
 
     This provider sets client_info directly, bypassing dynamic client registration.
