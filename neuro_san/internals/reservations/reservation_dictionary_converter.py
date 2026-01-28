@@ -20,6 +20,7 @@ from typing import Dict
 from leaf_common.serialization.interface.dictionary_converter import DictionaryConverter
 
 from neuro_san.interfaces.reservation import Reservation
+from neuro_san.internals.reservations.agent_reservation import AgentReservation
 
 
 class ReservationDictionaryConverter(DictionaryConverter):
@@ -55,8 +56,10 @@ class ReservationDictionaryConverter(DictionaryConverter):
                 If obj_dict is not the correct type, it is also reasonable
                 to return None.
         """
-        reservation = Reservation(obj_dict.get("lifetime_in_seconds"))
+        reservation = AgentReservation(obj_dict.get("lifetime_in_seconds"))
         reservation.id = obj_dict.get("id")
+        if reservation.id is None:
+            reservation.id = obj_dict.get("reservation_id")
         reservation.expiration_time_in_seconds = obj_dict.get("expiration_time_in_seconds")
 
         return reservation

@@ -75,7 +75,7 @@ class AgentReservation(Reservation):
             # We still have something, so prepend on the external_url
             if len(external_url) > 0:
                 # Assume always http for now.
-                url = f"{external_url}/api/vl/{url}"
+                url = f"{external_url}/api/v1/{url}"
 
         return url
 
