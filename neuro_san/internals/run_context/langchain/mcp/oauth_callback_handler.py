@@ -95,7 +95,7 @@ class OauthCallbackHandler:
         self.site = TCPSite(self.runner, "localhost", self.port)
         await self.site.start()
 
-        self.logger.info("✓ Local callback server started on %s, self.redirect_uri")
+        self.logger.info("✓ Local callback server started on %s", self.redirect_uri)
 
     async def stop_server(self):
         """Stop the callback server."""

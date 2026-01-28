@@ -30,8 +30,8 @@ class ExtendedClientCredentialsOauthProvider(ExtendedOauthClientProvider):
     """OAuth provider for client_credentials grant with client_id + client_secret.
 
     This provider sets client_info directly, bypassing dynamic client registration.
-    Use this when you already have client credentials (client_id and client_secret) and grant type is client credentials.
-    This is taken directly from the MCP SDK:
+    Use this when you already have client credentials (client_id and client_secret) and grant type is
+    client credentials. This is taken directly from the MCP SDK:
     https://github.com/modelcontextprotocol/python-sdk/blob/main/src/mcp/client/auth/extensions/client_credentials.py
     but extends ExtendedOauthClientProvider instead of OAuthClientProvider to handle non-json token responses
     and add token_endpoint as an optional parameter.
