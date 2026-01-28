@@ -42,6 +42,7 @@ from neuro_san.service.http.handlers.function_handler import FunctionHandler
 from neuro_san.service.http.handlers.streaming_chat_handler import StreamingChatHandler
 from neuro_san.service.http.handlers.concierge_handler import ConciergeHandler
 from neuro_san.service.http.handlers.openapi_publish_handler import OpenApiPublishHandler
+from neuro_san.service.http.handlers.news_file_handler import NewsFileHandler
 from neuro_san.service.http.interfaces.agent_authorizer import AgentAuthorizer
 from neuro_san.service.http.logging.http_logger import HttpLogger
 from neuro_san.service.http.server.resources_usage_logger import ResourcesUsageLogger
@@ -200,6 +201,12 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
         if enable_http_handlers:
             handlers.append(("/api/v1/list", ConciergeHandler, request_initialize_data))
             handlers.append(("/api/v1/docs", OpenApiPublishHandler, request_initialize_data))
+
+            # News file endpoint for demo purposes (repsim integration)
+            news_file_data: Dict[str, Any] = {
+                "forwarded_request_metadata": self.forwarded_request_metadata
+            }
+            handlers.append(("/api/v1/news_file", NewsFileHandler, news_file_data))
 
             # Register templated request paths for agent API methods:
             # regexp format used here is that of Python Re standard library.
