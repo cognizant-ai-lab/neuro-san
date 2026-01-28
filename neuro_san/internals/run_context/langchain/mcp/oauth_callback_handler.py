@@ -16,6 +16,7 @@
 # END COPYRIGHT
 
 from asyncio import Future
+import html
 from logging import Logger
 from logging import getLogger
 from typing import List
@@ -63,15 +64,15 @@ class OauthCallbackHandler:
         self.error = params.get("error")
 
         if self.error:
-            html = f"""
+            html_content = f"""
             <html><body style="font-family: sans-serif; text-align: center; padding: 50px;">
                 <h1>Authentication Failed</h1>
-                <p>Error: {self.error}</p>
+                <p>Error: {html.escape(self.error)}</p>
                 <p>You can close this window.</p>
             </body></html>
             """
         else:
-            html = """
+            html_content = """
             <html><body style="font-family: sans-serif; text-align: center; padding: 50px;">
                 <h1>Authentication Successful!</h1>
                 <p>You can close this window and return to your application.</p>
@@ -82,7 +83,7 @@ class OauthCallbackHandler:
         if self._callback_future and not self._callback_future.done():
             self._callback_future.set_result(True)
 
-        return Response(text=html, content_type="text/html")
+        return Response(text=html_content, content_type="text/html")
 
     async def start_server(self):
         """Start the callback server."""
