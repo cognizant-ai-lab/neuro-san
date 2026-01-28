@@ -275,7 +275,14 @@ ENV AGENT_RESERVATIONS_S3_BUCKET=""
 
 # A hocon file with MCP servers information to be used by LangChainMcpAdapter
 # for connecting to external MCP servers with authentication and tool filtering.
-ENV MCP_SERVERS_INFO_FILE=""
+ENV AGENT_MCP_SERVERS_INFO_FILE=""
+
+# A directory path where MCP OAuth authentication information for MCP servers
+# (tokens and client info) will be stored.
+ENV AGENT_MCP_AUTH_DIR=""
+
+# Port number for MCP OAuth callback endpoint. Only necessary for authorization code grant type.
+ENV AGENT_MCP_CALLBACK_PORT=3000
 
 # When set, this parameter enables MCP service protocol for running neuro-san server.
 # Service endpoint is http://host:port/mcp

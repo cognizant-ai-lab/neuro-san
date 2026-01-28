@@ -42,7 +42,8 @@ class McpServersInfoRestorer(Restorer):
         """
         file_path: str = file_reference
         if not file_path:
-            file_path = os.environ.get("MCP_SERVERS_INFO_FILE")
+            # "MCP_SERVERS_INFO_FILE" will be deprecated in neuro-san==0.7.
+            file_path = os.environ.get("AGENT_MCP_SERVERS_INFO_FILE") or os.environ.get("MCP_SERVERS_INFO_FILE")
             if not file_path:
                 # No servers info file specified.
                 return None

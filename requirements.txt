@@ -78,3 +78,6 @@ json-repair>=0.47.3,<1.0
 
 # MCP tools
 langchain-mcp-adapters>=0.1.7,<1.0
+# 1.23 is needed for MCP OAuth with grant type "client_credentials" and <2.0 to avoid breaking changes.
+# https://github.com/modelcontextprotocol/python-sdk/releases/tag/v1.25.0
+mcp>=1.23.0,<2.0
