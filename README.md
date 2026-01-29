@@ -32,7 +32,7 @@ Neuro SAN also offers:
 * agent-specific LLM specifications - use the right LLM for the cost/latency/context-window/data-privacy each agent needs.
 * fallback LLM specifications for when your fave goes down.
 * powerful debugging information for gaining insight into your mutli-agent systems.
-* server-readiness at scale
+* cloud-agnostic server-readiness at scale - run where you want
 * enabling distributed agent webs that call each other to work together, wherever they are hosted.
 * security-by-default - you set what private data is to be shared downstream/upstream
 * Out-of-the-box support for Observability/tracing data feeds for apps like LangSmith, Arize Phoenix and HoneyHive.
