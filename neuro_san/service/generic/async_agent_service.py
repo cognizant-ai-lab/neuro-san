@@ -47,6 +47,8 @@ from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.session.async_direct_agent_session import AsyncDirectAgentSession
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
 from neuro_san.session.session_invocation_context import SessionInvocationContext
+from neuro_san.internals.run_context.tracing.honeyhive_tracing import enrich_session
+from neuro_san.internals.run_context.tracing.honeyhive_tracing import is_honeyhive_enabled
 
 # A list of methods to not log requests for
 # Some of these can be way too chatty
@@ -245,6 +247,14 @@ class AsyncAgentService:
                 metadata,
                 "Received a %s request for %s",
                 f"{self.agent_name}.StreamingChat", log_marker)
+
+        # Enrich HoneyHive session with service-level metadata
+        if is_honeyhive_enabled():
+            enrich_session(metadata={
+                "stage": "async_agent_service",
+                "agent_name": self.agent_name,
+                "user_text_length": len(user_text),
+            })
 
         # Create a reservationist for the occasion
         reservationist: Reservationist = None

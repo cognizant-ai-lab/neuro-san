@@ -53,6 +53,8 @@ from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.message_processing.message_processor import MessageProcessor
 from neuro_san.message_processing.answer_message_processor import AnswerMessageProcessor
 from neuro_san.message_processing.structure_message_processor import StructureMessageProcessor
+from neuro_san.internals.run_context.tracing.honeyhive_tracing import enrich_span
+from neuro_san.internals.run_context.tracing.honeyhive_tracing import is_honeyhive_enabled
 
 # Lazily import specific errors from llm providers
 PATIENCE_ERRORS: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
@@ -236,6 +238,10 @@ class DataDrivenChatSession(RunTarget):
         :param inputs: An AgentFrameworkMessage populated with the user's input.
         :return: The user input. (Outputs are handled by the tracing context infrastructure.)
         """
+        # Enrich HoneyHive span with run_it stage info
+        if is_honeyhive_enabled():
+            enrich_span(metadata={"stage": "run_it", "stage_description": "Main chat execution"})
+
         # Get all our real input values from the original_input_message.
         # If we got it from the inputs arg, we'd get the for-show message
         # which has fields rearranged and even redacted.

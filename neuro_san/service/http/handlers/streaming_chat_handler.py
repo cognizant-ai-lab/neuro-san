@@ -19,6 +19,7 @@ See class comment for details
 """
 from typing import Any
 from typing import Dict
+from typing import Optional
 
 from http import HTTPStatus
 
@@ -29,6 +30,9 @@ import tornado
 
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
+from neuro_san.internals.run_context.tracing.honeyhive_tracing import TracingContext
+from neuro_san.internals.run_context.tracing.honeyhive_tracing import enrich_session
+from neuro_san.internals.run_context.tracing.honeyhive_tracing import is_honeyhive_enabled
 
 
 class StreamingChatHandler(BaseRequestHandler):
@@ -47,12 +51,31 @@ class StreamingChatHandler(BaseRequestHandler):
             return
 
         self.application.start_client_request(metadata, f"{agent_name}/streaming_chat")
+
+        # Initialize HoneyHive tracing for this request
+        tracing_context: Optional[TracingContext] = None
+        if is_honeyhive_enabled():
+            request_id = metadata.get("request_id", f"request-{self.request_id}")
+            session_metadata = {
+                "agent_name": agent_name,
+                "endpoint": "streaming_chat",
+                "request_id": request_id,
+                "http_method": self.request.method,
+                "uri": self.request.uri,
+            }
+            tracing_context = TracingContext(
+                session_name=f"{agent_name}/streaming_chat",
+                metadata=session_metadata
+            )
+            tracing_context.start_session()
+
         # Set up request timeout if it is specified:
         request_timeout: float = service.get_request_timeout_seconds()
         if request_timeout <= 0.0:
             # For asyncio.timeout(), None means no timeout:
             request_timeout = None
         result_generator = None
+        request_error: Optional[str] = None
         try:
             # Parse JSON body
             data = json.loads(self.request.body)
@@ -81,16 +104,19 @@ class StreamingChatHandler(BaseRequestHandler):
 
         except (asyncio.CancelledError, tornado.iostream.StreamClosedError):
             self.logger.info(metadata, "Request handler cancelled/stream closed.")
+            request_error = "Request cancelled or stream closed"
             # Re-raise as recommended
             raise
 
         except asyncio.TimeoutError:
             self.logger.info(metadata, "Chat request timeout for %s in %f seconds.", agent_name, request_timeout)
+            request_error = f"Request timeout after {request_timeout} seconds"
             # Recommended HTTP response code: Service Unavailable
             self.set_status(HTTPStatus.SERVICE_UNAVAILABLE)
             self.write({"error": "Request timeout"})
 
         except Exception as exc:  # pylint: disable=broad-exception-caught
+            request_error = str(exc)
             # Suppress possible exceptions: they are of no interest here.
             with contextlib.suppress(Exception):
                 self.process_exception(exc)
@@ -105,3 +131,9 @@ class StreamingChatHandler(BaseRequestHandler):
                     await result_generator.aclose()
             self.do_finish()
             self.application.finish_client_request(metadata, f"{agent_name}/streaming_chat", get_stats=True)
+
+            # Stop HoneyHive tracing
+            if tracing_context is not None:
+                if request_error:
+                    enrich_session(metadata={"error": request_error})
+                tracing_context.stop_session()

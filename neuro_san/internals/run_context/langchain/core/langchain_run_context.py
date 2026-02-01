@@ -58,6 +58,8 @@ from neuro_san.internals.run_context.langchain.core.base_tool_factory import Bas
 from neuro_san.internals.run_context.langchain.core.langchain_run import LangChainRun
 from neuro_san.internals.run_context.langchain.core.run_context_runnable import RunContextRunnable
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
+from neuro_san.internals.run_context.tracing.honeyhive_tracing import enrich_span
+from neuro_san.internals.run_context.tracing.honeyhive_tracing import is_honeyhive_enabled
 
 
 MINUTES: float = 60.0
@@ -325,6 +327,17 @@ class LangChainRunContext(RunContext):
         :return: An potentially updated run
         """
         _ = run, journal
+
+        # Enrich HoneyHive span with LLM execution stage info
+        if is_honeyhive_enabled():
+            full_name: str = Origination.get_full_name_from_origin(self.origin)
+            model_name = self.llm_config.get("model_name", "unknown")
+            enrich_span(metadata={
+                "stage": "wait_on_run",
+                "stage_description": "LLM execution",
+                "agent_name": full_name,
+                "model_name": model_name,
+            })
 
         # Chat history is updated in write_message() below, so to save on
         # some tokens, make a shallow copy of it here as we send it to the LLM

@@ -8,6 +8,10 @@ langchain-google-genai>=4.1.2,<5.0
 langchain-nvidia-ai-endpoints>=1.0.0,<2.0
 langchain-ollama>=1.0.0,<2.0
 
+# Optional: HoneyHive tracing integration
+# Install this to enable HoneyHive tracing support
+honeyhive>=0.1.0
+
 # Tests
 pytest==8.3.3
 pytest-asyncio==1.1.0
