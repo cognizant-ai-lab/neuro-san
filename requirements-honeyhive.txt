@@ -1,0 +1,9 @@
+# Optional: HoneyHive tracing integration
+# Install this to enable HoneyHive tracing support
+#
+# Note: This is kept separate from requirements-build.txt because honeyhive
+# has dependency conflicts with leaf-server-common (opentelemetry versions).
+# Install only if you need HoneyHive tracing and can resolve the conflicts.
+#
+# Usage: pip install -r requirements-honeyhive.txt
+honeyhive>=0.1.0
