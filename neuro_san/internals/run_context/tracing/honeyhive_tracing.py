@@ -135,7 +135,7 @@ def init_session(
 
         return tracer
 
-    except Exception as exc:
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         _logger.warning("Failed to initialize HoneyHive session: %s", str(exc))
         return None
 
@@ -151,7 +151,7 @@ def flush_session() -> None:
 
     try:
         HoneyHiveTracer.flush()
-    except Exception as exc:
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         _logger.warning("Failed to flush HoneyHive session: %s", str(exc))
 
 
@@ -186,7 +186,7 @@ def enrich_session(
         if kwargs:
             hh_enrich_session(**kwargs)
 
-    except Exception as exc:
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         _logger.warning("Failed to enrich HoneyHive session: %s", str(exc))
 
 
@@ -227,7 +227,7 @@ def enrich_span(
         if kwargs:
             hh_enrich_span(**kwargs)
 
-    except Exception as exc:
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         _logger.warning("Failed to enrich HoneyHive span: %s", str(exc))
 
 
