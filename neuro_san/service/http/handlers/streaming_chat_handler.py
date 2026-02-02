@@ -29,13 +29,10 @@ import json
 import tornado
 
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
-from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
-from neuro_san.internals.run_context.tracing.honeyhive_tracing import TracingContext
-from neuro_san.internals.run_context.tracing.honeyhive_tracing import enrich_session
-from neuro_san.internals.run_context.tracing.honeyhive_tracing import is_honeyhive_enabled
+from neuro_san.service.http.handlers.tracing_request_handler import TracingRequestHandler
 
 
-class StreamingChatHandler(BaseRequestHandler):
+class StreamingChatHandler(TracingRequestHandler):
     """
     Handler class for neuro-san streaming chat API call.
     """
@@ -54,21 +51,7 @@ class StreamingChatHandler(BaseRequestHandler):
         self.application.start_client_request(metadata, f"{agent_name}/streaming_chat")
 
         # Initialize HoneyHive tracing for this request
-        tracing_context: Optional[TracingContext] = None
-        if is_honeyhive_enabled():
-            request_id = metadata.get("request_id", f"request-{self.request_id}")
-            session_metadata = {
-                "agent_name": agent_name,
-                "endpoint": "streaming_chat",
-                "request_id": request_id,
-                "http_method": self.request.method,
-                "uri": self.request.uri,
-            }
-            tracing_context = TracingContext(
-                session_name=f"{agent_name}/streaming_chat",
-                metadata=session_metadata
-            )
-            tracing_context.start_session()
+        self.start_tracing(agent_name, "streaming_chat")
 
         # Set up request timeout if it is specified:
         request_timeout: float = service.get_request_timeout_seconds()
@@ -134,7 +117,4 @@ class StreamingChatHandler(BaseRequestHandler):
             self.application.finish_client_request(metadata, f"{agent_name}/streaming_chat", get_stats=True)
 
             # Stop HoneyHive tracing
-            if tracing_context is not None:
-                if request_error:
-                    enrich_session(metadata={"error": request_error})
-                tracing_context.stop_session()
+            self.stop_tracing(request_error)
