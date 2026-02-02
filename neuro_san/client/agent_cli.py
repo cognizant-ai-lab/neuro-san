@@ -28,9 +28,6 @@ import json
 from pathlib import Path
 from timedinput import timedinput
 
-from grpc import RpcError
-from grpc import StatusCode
-
 from leaf_common.config.file_of_class import FileOfClass
 
 from neuro_san.client.agent_session_factory import AgentSessionFactory
@@ -146,17 +143,9 @@ Some suggestions:
 """
 
         empty: Dict[str, Any] = {}
-        try:
-            response: Dict[str, Any] = self.session.function(empty)
-            if response is None:
-                raise ValueError(message)
-        except RpcError as exception:
-            # pylint: disable=no-member
-            if exception.code() is StatusCode.UNIMPLEMENTED:
-                raise ValueError(message) from exception
-
-            # If not an RpcException, then I dunno what it is.
-            raise
+        response: Dict[str, Any] = self.session.function(empty)
+        if response is None:
+            raise ValueError(message)
 
         function: Dict[str, Any] = response.get("function", empty)
         initial_prompt: str = function.get("description")

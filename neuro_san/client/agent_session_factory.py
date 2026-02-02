@@ -45,7 +45,7 @@ class AgentSessionFactory:
         :param port: The port on the host to connect to (if applicable)
         :param use_direct: When True, will use a Direct session for
                     external agents that would reside on the same server.
-        :param metadata: A grpc metadata of key/value pairs to be inserted into
+        :param metadata: A metadata dictionary of key/value pairs to be inserted into
                          the header. Default is None. Preferred format is a
                          dictionary of string keys to string values.
         :param connect_timeout_in_seconds: A timeout in seconds after which attempts

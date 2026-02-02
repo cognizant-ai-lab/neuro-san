@@ -34,8 +34,6 @@ function run() {
 
     check_directory
 
-    # RUN_JSON_INPUT_DIR will go away when an actual GRPC service exists
-    # for receiving the input. For now it's a mounted directory.
     CONTAINER_VERSION="0.0.1"
     echo "Using CONTAINER_VERSION ${CONTAINER_VERSION}"
     echo "Using args '$*'"

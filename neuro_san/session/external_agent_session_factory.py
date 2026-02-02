@@ -16,8 +16,6 @@
 # END COPYRIGHT
 from typing import Dict
 
-import logging
-
 from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
@@ -115,10 +113,6 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
             #       precedes any streaming_chat() call.
             session = AsyncHttpServiceAgentSession(host, port, agent_name=agent_name,
                                                    metadata=metadata, streaming_timeout_in_seconds=None)
-
-        # Quiet any logging from leaf-common grpc stuff.
-        quiet_please = logging.getLogger("leaf_common.session.grpc_client_retry")
-        quiet_please.setLevel(logging.WARNING)
 
         return session
 

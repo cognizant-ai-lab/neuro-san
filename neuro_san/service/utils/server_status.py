@@ -29,7 +29,6 @@ class ServerStatus:
         Constructor.
         """
         self.server_name: str = server_name
-        self.grpc_service: ServiceStatus = ServiceStatus("gRPC")
         self.http_service: ServiceStatus = ServiceStatus("http")
         self.updater: ServiceStatus = ServiceStatus("updater")
         self.mcp_service: ServiceStatus = ServiceStatus("mcp")
@@ -46,7 +45,6 @@ class ServerStatus:
         Return "ready" status for the server
         """
         return \
-            (not self.grpc_service.is_requested() or self.grpc_service.is_ready()) and \
             (not self.http_service.is_requested() or self.http_service.is_ready()) and \
             (not self.mcp_service.is_requested() or self.mcp_service.is_ready()) and \
             (not self.updater.is_requested() or self.updater.is_ready())

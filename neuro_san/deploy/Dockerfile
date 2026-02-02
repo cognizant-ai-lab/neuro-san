@@ -151,7 +151,7 @@ ENV AGENT_SERVICE_LOG_JSON=${PACKAGE_DEPLOY}/logging.json
 # and https://docs.python.org/3/library/logging.html#logging-levels for details.
 ENV AGENT_SERVICE_LOG_LEVEL="DEBUG"
 
-# The name of the service for grpc health reporting purposes
+# The name of the service for health reporting purposes
 ENV AGENT_SERVER_NAME="neuro-san.Agent"
 
 # Name of the service as seen in logs

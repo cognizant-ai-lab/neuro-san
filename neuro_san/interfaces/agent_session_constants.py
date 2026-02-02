@@ -21,9 +21,6 @@ class AgentSessionConstants:
     Interface for shared constants between AgentSession and AsyncAgentSession
     """
 
-    # Default gRPC port for the Agent Service
-    DEFAULT_GRPC_PORT: int = 30011
-
     # Default port for the Agent HTTP Service
     # This port number will also be mentioned in its Dockerfile
     DEFAULT_HTTP_PORT: int = 8080

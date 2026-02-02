@@ -41,7 +41,7 @@ class ConciergeSessionFactory:
         :param session_type: The type of session to create
         :param hostname: The name of the host to connect to (if applicable)
         :param port: The port on the host to connect to (if applicable)
-        :param metadata: A grpc metadata of key/value pairs to be inserted into
+        :param metadata: A metadata dictionary of key/value pairs to be inserted into
                          the header. Default is None. Preferred format is a
                          dictionary of string keys to string values.
         :param connect_timeout_in_seconds: A timeout in seconds after which attempts

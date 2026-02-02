@@ -1,6 +1,6 @@
 #!/bin/bash
   
-# Script to be run to start server before any of test case client that require services like HTTP or GRPC
+# Script to be run to start server before any of test case client that require HTTP services
 
 apt-get update && apt-get install -y netcat-openbsd procps curl net-tools
 

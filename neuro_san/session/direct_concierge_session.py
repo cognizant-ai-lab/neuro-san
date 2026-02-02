@@ -30,7 +30,7 @@ from neuro_san.internals.network_providers.agent_network_storage import AgentNet
 class DirectConciergeSession(ConciergeSession):
     """
     Service-agnostic guts for a ConciergeSession.
-    This could be used by a gRPC and/or Http service.
+    This could be used by an HTTP service.
     """
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -46,9 +46,9 @@ class DirectConciergeSession(ConciergeSession):
         :param metadata: A dictionary of request metadata to be forwarded
                         to subsequent yet-to-be-made requests.
         :param security_cfg: A dictionary of parameters used to
-                        secure the TLS and the authentication of the gRPC
+                        secure the TLS and the authentication of the HTTP
                         connection.  Supplying this implies use of a secure
-                        GRPC Channel.  If None, uses insecure channel.
+                        HTTP connection.  If None, uses insecure connection.
         """
         self.network_storage: AgentNetworkStorage = network_storage
         # These aren't used yet
