@@ -37,27 +37,75 @@ import os
 from logging import Logger
 from logging import getLogger
 
+from leaf_common.config.resolver import Resolver
+
 # Type variable for generic function signatures
 F = TypeVar('F', bound=Callable[..., Any])
 
 # Module-level state
-_honeyhive_available: bool = False
 _logger: Logger = getLogger(__name__)
+_resolver: Resolver = Resolver()
 
-# Try to import HoneyHive
-try:
-    from honeyhive import HoneyHiveTracer
-    from honeyhive import trace as hh_trace
-    from honeyhive import atrace as hh_atrace
-    from honeyhive import enrich_span as hh_enrich_span
-    from honeyhive import enrich_session as hh_enrich_session
-    _honeyhive_available = True
-except ImportError:
-    HoneyHiveTracer = None
-    hh_trace = None
-    hh_atrace = None
-    hh_enrich_span = None
-    hh_enrich_session = None
+# Lazily resolved HoneyHive classes/functions
+_hh_tracer_class: Any = None
+_hh_trace: Any = None
+_hh_atrace: Any = None
+_hh_enrich_span: Any = None
+_hh_enrich_session: Any = None
+_honeyhive_resolved: bool = False
+
+
+def _resolve_honeyhive() -> bool:
+    """
+    Lazily resolve HoneyHive classes and functions.
+
+    Uses the Resolver pattern to prevent installing the world.
+
+    :return: True if HoneyHive SDK is available
+    """
+    # pylint: disable=global-statement
+    global _hh_tracer_class, _hh_trace, _hh_atrace, _hh_enrich_span, _hh_enrich_session
+    global _honeyhive_resolved
+
+    if _honeyhive_resolved:
+        return _hh_tracer_class is not None
+
+    _honeyhive_resolved = True
+
+    try:
+        _hh_tracer_class = _resolver.resolve_class_in_module(
+            "HoneyHiveTracer",
+            module_name="honeyhive",
+            install_if_missing=None  # Don't auto-install
+        )
+        _hh_trace = _resolver.resolve_class_in_module(
+            "trace",
+            module_name="honeyhive",
+            install_if_missing=None
+        )
+        _hh_atrace = _resolver.resolve_class_in_module(
+            "atrace",
+            module_name="honeyhive",
+            install_if_missing=None
+        )
+        _hh_enrich_span = _resolver.resolve_class_in_module(
+            "enrich_span",
+            module_name="honeyhive",
+            install_if_missing=None
+        )
+        _hh_enrich_session = _resolver.resolve_class_in_module(
+            "enrich_session",
+            module_name="honeyhive",
+            install_if_missing=None
+        )
+        return True
+    except (ValueError, AttributeError, ModuleNotFoundError):
+        _hh_tracer_class = None
+        _hh_trace = None
+        _hh_atrace = None
+        _hh_enrich_span = None
+        _hh_enrich_session = None
+        return False
 
 
 def is_honeyhive_available() -> bool:
@@ -66,7 +114,7 @@ def is_honeyhive_available() -> bool:
 
     :return: True if HoneyHive SDK is available
     """
-    return _honeyhive_available
+    return _resolve_honeyhive()
 
 
 def is_honeyhive_enabled() -> bool:
@@ -81,7 +129,7 @@ def is_honeyhive_enabled() -> bool:
 
     :return: True if HoneyHive tracing is enabled
     """
-    if not _honeyhive_available:
+    if not _resolve_honeyhive():
         return False
 
     if os.environ.get("HH_ENABLED", "true").lower() == "false":
@@ -128,7 +176,7 @@ def init_session(
         if session_id:
             init_kwargs["session_id"] = session_id
 
-        tracer = HoneyHiveTracer.init(**init_kwargs)
+        tracer = _hh_tracer_class.init(**init_kwargs)
 
         if metadata and tracer:
             enrich_session(metadata=metadata)
@@ -150,7 +198,7 @@ def flush_session() -> None:
         return
 
     try:
-        HoneyHiveTracer.flush()
+        _hh_tracer_class.flush()
     except Exception as exc:  # pylint: disable=broad-exception-caught
         _logger.warning("Failed to flush HoneyHive session: %s", str(exc))
 
@@ -184,7 +232,7 @@ def enrich_session(
             kwargs["session_id"] = session_id
 
         if kwargs:
-            hh_enrich_session(**kwargs)
+            _hh_enrich_session(**kwargs)
 
     except Exception as exc:  # pylint: disable=broad-exception-caught
         _logger.warning("Failed to enrich HoneyHive session: %s", str(exc))
@@ -225,7 +273,7 @@ def enrich_span(
             kwargs["error"] = error
 
         if kwargs:
-            hh_enrich_span(**kwargs)
+            _hh_enrich_span(**kwargs)
 
     except Exception as exc:  # pylint: disable=broad-exception-caught
         _logger.warning("Failed to enrich HoneyHive span: %s", str(exc))
@@ -254,7 +302,7 @@ def trace(
         if metadata:
             decorator_kwargs["metadata"] = metadata
 
-        return hh_trace(**decorator_kwargs)(func)
+        return _hh_trace(**decorator_kwargs)(func)
 
     return decorator
 
@@ -282,7 +330,7 @@ def atrace(
         if metadata:
             decorator_kwargs["metadata"] = metadata
 
-        return hh_atrace(**decorator_kwargs)(func)
+        return _hh_atrace(**decorator_kwargs)(func)
 
     return decorator
 
@@ -322,7 +370,7 @@ def traced_function(
             if span_metadata:
                 decorator_kwargs["metadata"] = span_metadata
 
-            return hh_atrace(**decorator_kwargs)(async_wrapper)
+            return _hh_atrace(**decorator_kwargs)(async_wrapper)
 
         @functools.wraps(func)
         def sync_wrapper(*args, **kwargs):
@@ -332,7 +380,7 @@ def traced_function(
         if span_metadata:
             decorator_kwargs["metadata"] = span_metadata
 
-        return hh_trace(**decorator_kwargs)(sync_wrapper)
+        return _hh_trace(**decorator_kwargs)(sync_wrapper)
 
     return decorator
 
