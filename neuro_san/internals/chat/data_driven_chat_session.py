@@ -108,13 +108,21 @@ class DataDrivenChatSession(RunTarget):
         # Reset what we might have created before.
         await self.delete_resources()
 
-        # Update sly data, if any.
+        # Update sly data (if any) with what was passed in.
         # Note that since this instance is the owner of the sly_data,
         # any update here should get transmitted to all the other graph components
         # because it is expected they share the reference and only interact with it
         # in a read-only fashion.
         if sly_data is not None:
             self.sly_data.update(sly_data)
+
+        # Update sly data with metadata from the request headers so this information
+        # can be made available in CodedTools, privately, without any leakage to LLMs.
+        # Only add this if it doesn't already exist w/rt what the user gave us.
+        if self.sly_data.get("request_metadata") is None:
+            # Make a deep copy so the server's idea of the original metadata doesn't get modified
+            # should any CodedTool somehow get the idea to modify it.
+            self.sly_data["request_metadata"] = copy.deepcopy(invocation_context.get_metadata())
 
         run_context: RunContext = RunContextFactory.create_run_context(None, None,
                                                                        invocation_context=invocation_context,
