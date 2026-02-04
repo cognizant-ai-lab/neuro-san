@@ -21,13 +21,13 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
-from mcp.client.auth import OAuthClientProvider
+from httpx import Auth
+from mcp.client.auth import TokenStorage
 from mcp.shared.auth import OAuthClientMetadata
 
 from neuro_san.internals.run_context.langchain.mcp.client_credentials_oauth_provider import \
     ClientCredentialsOauthProvider
 from neuro_san.internals.run_context.langchain.mcp.extended_oauth_provider import ExtendedOauthClientProvider
-from neuro_san.internals.run_context.langchain.mcp.file_token_storage import FileTokenStorage
 from neuro_san.internals.run_context.langchain.mcp.oauth_callback_handler import OauthCallbackHandler
 from neuro_san.internals.run_context.langchain.mcp.authorization_code_oauth_provider import \
     AuthorizationCodeOauthProvider
@@ -45,7 +45,7 @@ class OauthProviderFactory:
     def __init__(
         self,
         server_url: str,
-        storage: FileTokenStorage,
+        storage: TokenStorage,
         auth_endpoint: Optional[str] = None,
         token_endpoint: Optional[str] = None,
         client_metadata: Optional[OAuthClientMetadata] = None,
@@ -65,7 +65,7 @@ class OauthProviderFactory:
         self.timeout = timeout
         self.callback_handler: Optional[OauthCallbackHandler] = None
 
-    async def get_auth(self) -> OAuthClientProvider:
+    async def get_auth(self) -> Auth:
         """
         Get appropriate OAuth provider based on stored credentials.
 
@@ -203,7 +203,7 @@ class OauthProviderFactory:
 
         # If no client info is stored, delete storage folder
         # This indicates the server required no authentication
-        credentials: Dict[str, Any] = await self.storage.get_client_credentials()
-        if credentials is None:
-            await self.storage.delete_storage()
-            self.logger.debug("Storage deleted (no authentication required)")
+        # credentials: Dict[str, Any] = await self.storage.get_client_credentials()
+        # if credentials is None:
+        #     await self.storage.delete_storage()
+        #     self.logger.debug("Storage deleted (no authentication required)")

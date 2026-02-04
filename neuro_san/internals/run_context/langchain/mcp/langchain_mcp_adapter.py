@@ -32,7 +32,7 @@ from mcp.client.auth.exceptions import OAuthFlowError
 from mcp.client.auth.exceptions import OAuthTokenError
 
 
-from neuro_san.internals.run_context.langchain.mcp.file_token_storage import FileTokenStorage
+from neuro_san.internals.run_context.langchain.mcp.sly_data_token_storage import SlyDataTokenStorage
 from neuro_san.internals.run_context.langchain.mcp.mcp_servers_info_restorer import McpServersInfoRestorer
 from neuro_san.internals.run_context.langchain.mcp.oauth_provider_factory import OauthProviderFactory
 
@@ -115,7 +115,8 @@ class LangChainMcpAdapter:
 
         return None
 
-    def _create_oauth_provider(self, server_url: str) -> OauthProviderFactory:
+    def _create_oauth_provider(
+            self, server_url: str, client_info: Dict[str, Any], token: Dict[str, Any]) -> OauthProviderFactory:
         """
         Create and configure OAuth provider for the server.
 
@@ -126,7 +127,7 @@ class LangChainMcpAdapter:
         server_info = self._get_server_info(server_url)
 
         # Prepare token storage
-        storage = FileTokenStorage(server_url)
+        storage = SlyDataTokenStorage(client_info, token)
 
         # Get OAuth endpoints from server config (optional - will be discovered if not provided)
         auth_endpoint = server_info.get("authorization_endpoint")
@@ -195,7 +196,9 @@ class LangChainMcpAdapter:
         self,
         server_url: str,
         allowed_tools: Optional[List[str]] = None,
-        headers: Optional[Dict[str, Any]] = None
+        headers: Optional[Dict[str, Any]] = None,
+        client_info: Optional[Dict[str, Any]] = None,
+        token: Optional[Dict[str, Any]] = None
     ) -> List[BaseTool]:
         """
         Fetches tools from the given MCP server and returns them as LangChain-compatible tools.
@@ -225,7 +228,7 @@ class LangChainMcpAdapter:
             mcp_tool_dict["headers"] = prepared_headers
 
         # Create and configure OAuth provider
-        provider = self._create_oauth_provider(server_url)
+        provider = self._create_oauth_provider(server_url, client_info, token)
 
         try:
             # Get OAuth authentication
