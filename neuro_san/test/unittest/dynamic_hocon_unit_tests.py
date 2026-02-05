@@ -81,7 +81,7 @@ class DynamicHoconUnitTests:
 
         # Set up the driver
         asserts = UnitTestAssertForwarder(test_case)
-        driver = DataDrivenAgentTestDriver(asserts)
+        driver = DataDrivenAgentTestDriver(asserts, test_name=test_name)
 
         # Run the test
         driver.one_test(test_hocon_file)

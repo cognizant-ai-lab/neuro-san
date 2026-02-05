@@ -43,7 +43,11 @@ over the serving and visibility of the agents with the following keys:
 ##### serve
 
 The value for the "serve" key is a boolean.
-This says whether or not the agent should be served up at all.
+This says whether or not the agent should be served up in any capacity.
+
+Note that when this value is false (whether explicitly or implicitly),
+the server will log a warning message on startup to inform you that the agent will not be served.
+The idea is to have a run-time source of truth tostave off questions about "Why can't I see my agent X?".
 
 ##### public
 

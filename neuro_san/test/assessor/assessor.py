@@ -19,6 +19,7 @@ from typing import Dict
 from typing import List
 
 import argparse
+import os
 
 from neuro_san import REGISTRIES_DIR
 from neuro_san.client.simple_one_shot import SimpleOneShot
@@ -48,7 +49,9 @@ class Assessor:
 
         # Run the tests per the test case, collecting failure information in the AssertForwarder
         asserts = AssessorAssertForwarder()
-        driver = DataDrivenAgentTestDriver(asserts)
+        test_name: str = None
+        test_name, _ = os.path.splitext(os.path.basename(self.args.test_hocon))
+        driver = DataDrivenAgentTestDriver(asserts, test_name=test_name)
 
         print(f"Testing {self.args.test_hocon}:")
         driver.one_test(self.args.test_hocon)
