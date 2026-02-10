@@ -107,8 +107,10 @@ Option 2: Build and run the docker container for the hosting agent service:
 These build.sh / Dockerfile / run.sh scripts are intended to be portable so they can be used with
 your own projects' registries and coded_tools work.
 
-ℹ️ Ensure the required environment variables (OPENAI_API_KEY, AGENT_TOOL_PATH, and PYTHONPATH) are passed into the
-container — either by exporting them before running run.sh, or by configuring them inside the script
+ℹ️ Ensure the required environment variables
+(OPENAI_API_KEY, AGENT_TOOL_PATH, AGENT_MANIFEST_FILE, and PYTHONPATH)
+are passed into the container — either by exporting them before running run.sh,
+or by configuring them inside the script
 
 #### Client
 

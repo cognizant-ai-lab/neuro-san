@@ -513,6 +513,19 @@
         "max_output_tokens": 64000,
         "knowledge_cutoff": "08/2025",
     },
+    "claude-opus-4-6": {
+        "class": "anthropic",
+        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
+        "capabilities": [ "tools" ],
+        "context_window_size": 200000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "08/2025",
+    }
 
 
     # Ollama models

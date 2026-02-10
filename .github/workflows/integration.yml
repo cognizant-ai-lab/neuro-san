@@ -34,6 +34,9 @@ jobs:
         run: pytest -s --verbose -m "integration" --timer-top-n 100
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PYTHONPATH: ${{ env.PYTHONPATH }}:.
+          AGENT_TOOL_PATH: "./neuro_san/coded_tools"
+          AGENT_MANIFEST_FILE: "./neuro_san/registries/manifest.hocon"
 
       - name: Notify Slack on success
         if: success()

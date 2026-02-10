@@ -1,5 +1,5 @@
 
-# Copyright © 2023-2025 Cognizant Technology Solutions Corp, www.cognizant.com.
+# Copyright © 2023-2026 Cognizant Technology Solutions Corp, www.cognizant.com.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,6 +22,15 @@
     # Describes what agent to test against.
     "agent": "deep/math_guy_passthrough",
 
+    # Timeout for the entire test.
+    # It's also possible to have a timeout_in_seconds on a per-interaction basis.
+    "timeout_in_seconds": 90,
+    
+    # success_ratio is useful for passing to the assessor to find out why
+    # a test is intermitently failing. Sometimes it's the agent prompt, but
+    # sometimes it's the test itself.
+    "success_ratio": "1/1",
+    
     # Use direct sessions for external agents
     "use_direct": true,
 

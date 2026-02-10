@@ -50,6 +50,12 @@ and are not run with every checkin, but only once a night.
 
     pytest -v -m "integration" -n auto
 
+Required environment variables:
+
+    export PYTHONPATH=$(pwd)
+    export AGENT_TOOL_PATH="./neuro_san/coded_tools"
+    export AGENT_MANIFEST_FILE="./neuro_san/registries/manifest.hocon"
+
 ### smoke tests
 
 Some unit tests are marked as "@pytest.mark.smoke"
@@ -65,6 +71,12 @@ You will need to have a server running in order for smoke tests to succeed:
 ... then:
 
     pytest -v -m "smoke" -n auto
+
+Required environment variables:
+
+    export PYTHONPATH=$(pwd)
+    export AGENT_TOOL_PATH="./neuro_san/coded_tools"
+    export AGENT_MANIFEST_FILE="./neuro_san/registries/manifest.hocon"
 
 ### Debugging
 

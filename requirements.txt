@@ -6,7 +6,8 @@
 # requirements-build.txt
 
 # In-house dependencies
-leaf-common>=1.2.32
+# note: ticket issue #705 and switch back to latest leaf-common once we have a new release with the latest fixes and features #706
+leaf-common>=1.2.34
 leaf-server-common>=0.1.23
 
 # These are needed for generating code from .proto files and for the

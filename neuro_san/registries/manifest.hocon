@@ -32,6 +32,7 @@
     "math_guy.hocon": true,
     "math_guy_passthrough.hocon": true,
     "music_nerd.hocon": true,
+    "music_nerd_pro_sly.hocon":true,
     "music_nerd_pro.hocon": {
         # A long-hand version of what the simple boolean true value expands to.
         "serve": true, # Whether or not this agent network should be served up

@@ -43,7 +43,6 @@ class TestSmokeTestHocons(TestCase):
 
         # List more hocon files as they become available here.
     ]), skip_on_empty=True)
-    @pytest.mark.timeout(30)  # 30 seconds for this test
     @pytest.mark.smoke
     @pytest.mark.needs_server
     def test_hocon_with_server(self, test_name: str, test_hocon: str):
@@ -71,7 +70,6 @@ class TestSmokeTestHocons(TestCase):
 
         # List more hocon files as they become available here.
     ]), skip_on_empty=True)
-    @pytest.mark.timeout(60)  # in seconds for this test
     @pytest.mark.smoke
     @pytest.mark.non_default_llm_provider
     @pytest.mark.anthropic
@@ -100,7 +98,6 @@ class TestSmokeTestHocons(TestCase):
 
         # List more hocon files as they become available here.
     ]), skip_on_empty=True)
-    @pytest.mark.timeout(12 * 60)  # in mins for this test
     @pytest.mark.smoke
     @pytest.mark.needs_server
     @pytest.mark.non_default_llm_provider

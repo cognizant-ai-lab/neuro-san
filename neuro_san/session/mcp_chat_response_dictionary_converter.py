@@ -50,14 +50,24 @@ class McpChatResponseDictionaryConverter(DictionaryConverter):
         content_seq: Sequence[Dict[str, Any]] = result.get("content", [])
         if len(content_seq) == 0:
             return empty
+        # "structuredContent" is MCP standard key for content with additional structure.
+        structured_data: Dict[str, Any] = result.get("structuredContent", None)
         response: Dict[str, Any] = content_seq[0]
-        return {
+        final_response: Dict[str, Any] = {
             "response": {
                 "type": ChatMessageType.AGENT_FRAMEWORK.name,
                 "text": response.get("text", "")
             },
             "mcp_response": chat_response
         }
+        if structured_data is not None:
+            message_structured_data: Dict[str, Any] = structured_data.get("structure", None)
+            if message_structured_data is not None:
+                final_response["response"]["structure"] = message_structured_data
+            chat_context_data: Dict[str, Any] = structured_data.get("chat_context", None)
+            if chat_context_data is not None:
+                final_response["response"]["chat_context"] = chat_context_data
+        return final_response
 
     def from_dict(self, obj_dict: Dict[str, object]) -> object:
         """
