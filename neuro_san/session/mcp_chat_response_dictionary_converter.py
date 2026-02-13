@@ -67,9 +67,6 @@ class McpChatResponseDictionaryConverter(DictionaryConverter):
             chat_context_data: Dict[str, Any] = structured_data.get("chat_context", None)
             if chat_context_data is not None:
                 final_response["response"]["chat_context"] = chat_context_data
-            sly_data: Dict[str, Any] = structured_data.get("sly_data", None)
-            if sly_data is not None:
-                final_response["response"]["sly_data"] = sly_data
         return final_response
 
     def from_dict(self, obj_dict: Dict[str, object]) -> object:
