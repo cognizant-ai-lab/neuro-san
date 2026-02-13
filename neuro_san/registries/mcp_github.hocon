@@ -26,7 +26,7 @@
         "tags": ["example", "mcp", "github", "authentication", "sly_data"],
     },
     "llm_config": {
-        "model_name": "gpt-4o",
+        "model_name": "gpt-5.2"
     },
     "tools": [
         # These tool definitions do not have to be in any particular order

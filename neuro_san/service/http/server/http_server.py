@@ -31,26 +31,27 @@ import tornado
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
-from neuro_san.service.interfaces.startable import Startable
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
-from neuro_san.service.http.handlers.health_check_handler import HealthCheckHandler
+from neuro_san.service.http.config.http_server_config import HttpServerConfig
+from neuro_san.service.http.handlers.concierge_handler import ConciergeHandler
 from neuro_san.service.http.handlers.connectivity_handler import ConnectivityHandler
 from neuro_san.service.http.handlers.function_handler import FunctionHandler
-from neuro_san.service.http.handlers.streaming_chat_handler import StreamingChatHandler
-from neuro_san.service.http.handlers.concierge_handler import ConciergeHandler
+from neuro_san.service.http.handlers.health_check_handler import HealthCheckHandler
 from neuro_san.service.http.handlers.openapi_publish_handler import OpenApiPublishHandler
-from neuro_san.service.http.interfaces.agent_authorizer import AgentAuthorizer
+from neuro_san.service.http.handlers.streaming_chat_handler import StreamingChatHandler
 from neuro_san.service.http.logging.http_logger import HttpLogger
-from neuro_san.service.http.server.resources_usage_logger import ResourcesUsageLogger
+from neuro_san.service.http.server.agent_authorization_policy import AgentAuthorizationPolicy
 from neuro_san.service.http.server.http_server_app import HttpServerApp
+from neuro_san.service.http.server.resources_usage_logger import ResourcesUsageLogger
+from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
 from neuro_san.service.interfaces.agent_server import AgentServer
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
-from neuro_san.service.utils.server_status import ServerStatus
-from neuro_san.service.utils.server_context import ServerContext
-from neuro_san.service.http.config.http_server_config import HttpServerConfig
+from neuro_san.service.interfaces.startable import Startable
 from neuro_san.service.mcp.handlers.mcp_root_handler import McpRootHandler
+from neuro_san.service.utils.server_context import ServerContext
+from neuro_san.service.utils.server_status import ServerStatus
 
 
 DEFAULT_SERVER_NAME: str = 'neuro-san.Agent'
@@ -63,7 +64,7 @@ DEFAULT_MAX_CONCURRENT_REQUESTS: int = 10
 DEFAULT_REQUEST_LIMIT: int = 1000 * 1000
 
 
-class HttpServer(AgentAuthorizer, AgentStateListener):
+class HttpServer(AgentStateListener):
     """
     Class provides simple http endpoint for neuro-san API.
     """
@@ -108,6 +109,7 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
         self.forwarded_request_metadata: List[str] = forwarded_request_metadata.split(" ")
         self.logger = HttpLogger(self.forwarded_request_metadata)
         self.allowed_agents: Dict[str, AsyncAgentServiceProvider] = {}
+        self.authorization_policy: AgentAuthorizer = AgentAuthorizationPolicy(self.allowed_agents)
         self.lock = threading.Lock()
 
         # Add listener to handle adding per-agent http service
@@ -218,9 +220,6 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
 
         return HttpServerApp(handlers, requests_limit, logger, self.forwarded_request_metadata)
 
-    def allow(self, agent_name) -> AsyncAgentServiceProvider:
-        return self.allowed_agents.get(agent_name)
-
     def agent_added(self, agent_name: str, source: AgentStorageSource):
         """
         Add agent to the map of known agents
@@ -277,7 +276,7 @@ class HttpServer(AgentAuthorizer, AgentStateListener):
             raise ValueError(f"Failed to load '{self.openapi_service_spec_path}'") from exc
 
         return {
-            "agent_policy": self,
+            "agent_policy": self.authorization_policy,
             "forwarded_request_metadata": self.forwarded_request_metadata,
             "openapi_service_spec": open_api_dict,
             "server_context": self.server_context

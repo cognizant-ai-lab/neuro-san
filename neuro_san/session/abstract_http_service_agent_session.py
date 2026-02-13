@@ -128,5 +128,8 @@ class AbstractHttpServiceAgentSession(AgentSessionConstants):
            provide any of the necessary certificates for this to work and any certs used will
            need to be well known.  If you're unfamiliar with this process, it's a big deal.
            Try regular http instead.
+        10. Is the server your are attempting to reach running with an AGENT_AUTHORIZER?
+            If so, have the administrator for the server check its authorization
+            policy/database to be sure the your user has the correct permissions for the network.
         """
         return message

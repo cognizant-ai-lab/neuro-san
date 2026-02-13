@@ -14,22 +14,17 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-See class comment for details
-"""
-from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
+
+from enum import Enum
 
 
-class AgentAuthorizer:
+# class syntax
+class Permission(Enum):
     """
-    Abstract interface implementing some policy
-    of allowing to route incoming requests to an agent.
+    Different kinds of permissions on our objects
+    that we will request authorization for.
     """
-
-    def allow(self, agent_name) -> AsyncAgentServiceProvider:
-        """
-        :param agent_name: name of an agent
-        :return: instance of AsyncAgentService if routing requests is allowed for this agent;
-                 None otherwise
-        """
-        raise NotImplementedError
+    CREATE = "create"
+    READ = "read"
+    UPDATE = "update"
+    DELETE = "delete"

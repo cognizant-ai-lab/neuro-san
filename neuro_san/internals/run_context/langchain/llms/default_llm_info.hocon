@@ -1086,7 +1086,7 @@
     # incomplete llm_configs are overlayed.
     "default_config":{
 
-        "model_name": "gpt-4o",             # The string name of the default model to use.
+        "model_name": "gpt-5.2",           # The string name of the default model to use.
 
         "temperature": 0.7,                 # The default LLM temperature (randomness) to use.
                                             # Values are floats between 0.0 (least random) to

@@ -33,7 +33,7 @@ from tornado.web import RequestHandler
 from leaf_common.utils.async_atomic_counter import AsyncAtomicCounter
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
-from neuro_san.service.http.interfaces.agent_authorizer import AgentAuthorizer
+from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
 from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.service.http.logging.http_logger import HttpLogger
 
@@ -47,8 +47,6 @@ class BaseRequestHandler(RequestHandler):
     request_id_counter: AsyncAtomicCounter = AsyncAtomicCounter()
 
     # pylint: disable=attribute-defined-outside-init
-    # pylint: disable=too-many-arguments
-    # pylint: disable=too-many-positional-arguments
     def initialize(self, **kwargs):
         """
         This method is called by Tornado framework to allow
@@ -60,13 +58,9 @@ class BaseRequestHandler(RequestHandler):
             "server_context" - ServerContext instance for this server.
         """
         # Set up local members from kwargs dictionary passed in:
-        # type: AgentAuthorizer
         self.agent_policy: AgentAuthorizer = kwargs.pop("agent_policy", None)
-        # type: List[str]
         self.forwarded_request_metadata: List[str] = kwargs.pop("forwarded_request_metadata", [])
-        # type: str
         self.openapi_service_spec: Dict[str, Any] = kwargs.pop("openapi_service_spec", None)
-        # type: ServerContext
         self.server_context: ServerContext = kwargs.pop("server_context", None)
 
         self.logger = HttpLogger(self.forwarded_request_metadata)
@@ -137,12 +131,23 @@ class BaseRequestHandler(RequestHandler):
         :return: instance of AsyncAgentService if it is defined for this agent
                  None otherwise
         """
-        service_provider: AsyncAgentServiceProvider = self.agent_policy.allow(agent_name)
+        is_authorized: bool = False
+        service_provider: AsyncAgentServiceProvider = None
+        is_authorized, service_provider = await self.agent_policy.allow_agent(agent_name, metadata)
+
         if service_provider is None:
+            # Resource not found
             self.set_status(404)
             self.logger.error(metadata, "error: Invalid request path %s", self.request.path)
             self.do_finish()
             return None
+
+        if not is_authorized:
+            # Forbidden
+            self.set_status(403)
+            self.do_finish()
+            return None
+
         return service_provider.get_service()
 
     def process_exception(self, exc: Exception):

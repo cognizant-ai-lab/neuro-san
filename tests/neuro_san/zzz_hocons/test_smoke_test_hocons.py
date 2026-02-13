@@ -44,8 +44,34 @@ class TestSmokeTestHocons(TestCase):
         # List more hocon files as they become available here.
     ]), skip_on_empty=True)
     @pytest.mark.smoke
-    @pytest.mark.needs_server
+    @pytest.mark.smoke_default_llm_provider
     def test_hocon_with_server(self, test_name: str, test_hocon: str):
+        """
+        Test method for a single parameterized test case specified by a hocon file.
+        Arguments to this method are given by the iteration that happens as a result
+        of the magic of the @parameterized.expand annotation above.
+
+        :param test_name: The name of a single test.
+        :param test_hocon: The hocon file of a single data-driven test case.
+        """
+        # Call the guts of the dynamic test driver.
+        # This will expand the test_hocon file name from the expanded list to
+        # include the file basis implied by the __file__ and path_to_basis above.
+        self.DYNAMIC.one_test_hocon(self, test_name, test_hocon)
+
+    @parameterized.expand(DynamicHoconUnitTests.from_hocon_list([
+        # These can be in any order.
+        # Ideally more basic functionality will come first.
+        # Barring that, try to stick to alphabetical order.
+        "music_nerd_pro/combination_responses_with_history_mcp.hocon",
+        # Issue #734:
+        # "music_nerd_pro_sly/combination_responses_with_history_mcp.hocon",
+
+        # List more hocon files as they become available here.
+    ]), skip_on_empty=True)
+    @pytest.mark.smoke
+    @pytest.mark.smoke_needs_server
+    def test_hocon_with_server_default_llm(self, test_name: str, test_hocon: str):
         """
         Test method for a single parameterized test case specified by a hocon file.
         Arguments to this method are given by the iteration that happens as a result
@@ -71,11 +97,7 @@ class TestSmokeTestHocons(TestCase):
         # List more hocon files as they become available here.
     ]), skip_on_empty=True)
     @pytest.mark.smoke
-    @pytest.mark.non_default_llm_provider
-    @pytest.mark.anthropic
-    @pytest.mark.gemini
-    @pytest.mark.azure
-    @pytest.mark.bedrock_claude
+    @pytest.mark.smoke_non_default_llm_provider
     def test_hocon_with_non_default_llm(self, test_name: str, test_hocon: str):
         """
         Test method for a single parameterized test case specified by a hocon file.
@@ -99,9 +121,8 @@ class TestSmokeTestHocons(TestCase):
         # List more hocon files as they become available here.
     ]), skip_on_empty=True)
     @pytest.mark.smoke
-    @pytest.mark.needs_server
-    @pytest.mark.non_default_llm_provider
-    @pytest.mark.ollama
+    @pytest.mark.smoke_non_default_llm_provider_needs_server
+    @pytest.mark.smoke_ollama
     def test_hocon_with_server_non_default_llm(self, test_name: str, test_hocon: str):
         """
         Test method for a single parameterized test case specified by a hocon file.

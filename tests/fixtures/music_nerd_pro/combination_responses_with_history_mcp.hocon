@@ -16,48 +16,59 @@
 # END COPYRIGHT
 
 # This file defines everything necessary for a data-driven test.
-# The schema specifications for this file are documented here:
-# https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/test_case_hocon_reference.md
-
 {
     # Describes what agent to test against.
-    "agent": "math_guy_passthrough",
+    "agent": "music_nerd_pro",
 
-    # Timeout for the entire test.
+   # Timeout for the entire test.
     # It's also possible to have a timeout_in_seconds on a per-interaction basis.
     "timeout_in_seconds": 60,
-  
+    
     # success_ratio is useful for passing to the assessor to find out why
     # a test is intermitently failing. Sometimes it's the agent prompt, but
     # sometimes it's the test itself.
     "success_ratio": "1/1",
-
-    # Use direct sessions for external agents
-    "use_direct": true,
+   
+    # Connect to the agent via a server
+    "connections": ["mcp"],
 
     # Interactions are a series of dictionaries with request elements paired with
     # descriptions of response checks.
     "interactions": [
         {
             # This is what we send as input to streaming_chat()
-            "text": "multiply",
-
-            "sly_data": {
-                "x": 847,
-                "y": 23
-            },
+            "text": "Who did Yellow Submarine?",
 
             # The response block treats how we are going to test what comes back
             "response": {
-
-                # Text block says how we are going to examine the text of the response.
-                "sly_data": {
-
-                    # Each key here corresponds to a key in the sly_data itself
-                    # that is returned.
-                    "equals": {
-                        # Value says we are going to look for exact values for a single value.
-                        "value": 19481.0
+                # Structure block says how we are going to examine the structure
+                # (dictionary) returned as part of the response.               
+                "structure": {
+                    # "answer" is a key that is supposed to be in the dictionary.
+                    "answer": {
+                        # Keywords says we are going to look for exact matches for each
+                        # element in a list of strings.  All elements need to show up
+                        # in order to pass.
+                        "keywords": "Beatles"
+                    },
+                    "running_cost": {
+                        "value": 3.0
+                    }
+                }
+            }
+        },
+        {
+            # This next interaction block tests the ability for an agent
+            # to continue its conversation with the context from the previous
+            # interaction.
+            "text": "Where were they from?",
+            "response": {
+                "structure": {
+                    "answer": {
+                        "keywords": "Liverpool"
+                    },
+                    "running_cost": {
+                        "value": 6.0
                     }
                 }
             }

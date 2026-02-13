@@ -30,9 +30,9 @@ import tornado
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
-from neuro_san.service.http.interfaces.agent_authorizer import AgentAuthorizer
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
+from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
 from neuro_san.service.mcp.util.mcp_errors_util import McpErrorsUtil
 from neuro_san.service.mcp.util.mcp_request_util import McpRequestUtil
 from neuro_san.service.mcp.validation.tool_request_validator import ToolRequestValidator
@@ -63,9 +63,17 @@ class McpToolsProcessor:
         :param metadata: http-level request metadata;
         :return: json dictionary with tools list in MCP format
         """
+        # See which agents the user has access to per authorization policy
+        authorized_agents: List[str] = await self.agent_policy.list_agents(metadata)
+
         public_storage: AgentNetworkStorage = self.network_storage_dict.get("public")
         tools_description: List[Dict[str, Any]] = []
         for agent_name in public_storage.get_agent_names():
+
+            # Skip agents that are not authorized
+            if agent_name not in authorized_agents:
+                continue
+
             provider: AgentNetworkProvider = public_storage.get_agent_network_provider(agent_name)
             if provider is not None:
                 agent_network: AgentNetwork = provider.get_agent_network()
@@ -80,6 +88,7 @@ class McpToolsProcessor:
             }
         }
 
+    # pylint: disable=too-many-return-statements
     async def call_tool(self, request_id, metadata: Dict[str, Any],
                         tool_name: str,
                         prompt: Dict[str, Any],
@@ -102,10 +111,17 @@ class McpToolsProcessor:
         # pylint: disable=too-many-arguments
         # pylint: disable=too-many-positional-arguments
 
-        service_provider: AsyncAgentServiceProvider = self.agent_policy.allow(tool_name)
+        is_authorized: bool = False
+        service_provider: AsyncAgentServiceProvider = None
+        is_authorized, service_provider = await self.agent_policy.allow_agent(tool_name, metadata)
+
         if service_provider is None:
             # No such tool is found:
             return McpErrorsUtil.get_tool_error(request_id, f"Tool not found: {tool_name}")
+
+        if not is_authorized:
+            return McpErrorsUtil.get_tool_error(request_id, f"Tool not authorized: {tool_name}")
+
         service: AsyncAgentService = service_provider.get_service()
         if not service.is_mcp_tool():
             # Service is not allowed to be called as MCP tool:
@@ -196,9 +212,14 @@ class McpToolsProcessor:
         return call_result
 
     async def _get_tool_description(self, agent_name: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        service_provider: AsyncAgentServiceProvider = self.agent_policy.allow(agent_name)
-        if service_provider is None:
+
+        is_authorized: bool = False
+        service_provider: AsyncAgentServiceProvider = None
+        is_authorized, service_provider = await self.agent_policy.allow_agent(agent_name, metadata)
+
+        if service_provider is None or not is_authorized:
             return None
+
         service: AsyncAgentService = service_provider.get_service()
         function_dict: Dict[str, Any] = await service.function({}, metadata)
         tool_description: str = function_dict.get("function", {}).get("description", "")

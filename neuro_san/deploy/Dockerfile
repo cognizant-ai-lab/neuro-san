@@ -293,4 +293,55 @@ ENV AGENT_MCP_ENABLE="true"
 # while disabling neuro-san own http API.
 ENV AGENT_MCP_ONLY="false"
 
+#
+# Authorization
+#
+
+# What class neuro-san server should use for authorization
+# When not set (the default) the server uses an implementation for the Authorizer
+# that effectively lets all requests for all users through.
+# We offer the following implementations:
+#   neuro_san.internals.authorization.null.always_yes_authorizer.AlwaysYesAuthorizer (default)
+#   neuro_san.internals.authorization.null.always_no_authorizer.AlwaysNoAuthorizer
+#   neuro_san.internals.authorization.openfga.open_fga_authorizer.OpenFgaAuthorizer
+# Feel free to make your own as long as it derives from this interface:
+#   neuro_san.internals.authorization.interfaces.authorizer.Authorizer
+ENV AGENT_AUTHORIZER=""
+
+# The request metadata field to use as the actor id for authorization
+ENV AGENT_AUTHORIZER_ACTOR_ID_METADATA_KEY=user_id
+
+# See authorization logging.
+# In production you would not want to set this at all.
+# For debugging you might want to set this to "true".
+ENV AGENT_DEBUG_AUTH=""
+
+# The Actor type sent to the Authorizer
+# This typically corresponds to a specific type set up in the authorization policy
+ENV AGENT_AUTHORIZER_ACTOR_KEY=User
+
+# The Resource type sent to the Authorizer
+# This typically corresponds to a specific type set up in the authorization policy
+ENV AGENT_AUTHORIZER_RESOURCE_KEY=AgentNetwork
+
+# The Relation type sent to the Authorizer used to judge whether the Actor has permission to access the Resource.
+# This typically corresponds to a specific relation set up in the authorization policy
+# Typically "read" from CRUD-based permissions.
+ENV AGENT_AUTHORIZER_ALLOW_RELATION=read
+
+# Below: Env vars specific to OpenFgaAuthorizer
+
+# Where the OpenFGA HTTP server is running for the OpenFgaAuthorizer
+# Typical development example might be "http://localhost:8082"
+ENV FGA_API_URL=
+
+# The file containing the authorization policy for the OpenFgaAuthorizer
+# This is a path to a json file that has been compiled from a .fga policy file using the fga CLI tool.
+ENV FGA_POLICY_FILE=
+
+# The name of the authorization store to use
+# Typically "default"
+ENV FGA_STORE_NAME=
+
+
 ENTRYPOINT "${APP_ENTRYPOINT}"

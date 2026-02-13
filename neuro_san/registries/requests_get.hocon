@@ -25,7 +25,7 @@
         "tags": ["example", "web_browsing", "requests_get"],
     },
     "llm_config": {
-        "model_name": "gpt-4o",
+        "model_name": "gpt-5.2"
     },
     "tools": [
         # This first agent definition is regarded as the "Front Man", which

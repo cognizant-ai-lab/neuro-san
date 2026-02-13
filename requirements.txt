@@ -25,6 +25,7 @@ botocore>=1.34.51
 idna>=3.6
 urllib3>=1.26.18
 aiohttp>=3.13.0,<4.0
+aiofiles>=25.1.0
 
 # These are transient dependencies needed by leaf-common
 ruamel.yaml>=0.18.6

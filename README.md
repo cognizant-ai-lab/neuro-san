@@ -40,7 +40,8 @@ Neuro SAN also offers:
     * data-driven test cases
     * the ability for LLMs to test your agent networks
     * an Assessor app which classifies the modes of failure for your agents, given a data-driven test case
-* MCP protocol API
+* MCP protocol API - Every Neuro SAN server can be an MCP Server.
+* per-user authorization for Agent Networks - optional implementations include: OpenFGA
 
 ## Running client and server
 

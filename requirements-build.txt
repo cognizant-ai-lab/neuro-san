@@ -1,12 +1,15 @@
 # We separate out requirements that are specific to the build, but not
 # necessary for operation to minimize the size of containers
 
-# For LLM Access
+# Optional LLM Access
 langchain-anthropic>=1.0.0,<2.0
 langchain-aws>=1.0.0,<2.0
 langchain-google-genai>=4.1.2,<5.0
 langchain-nvidia-ai-endpoints>=1.0.0,<2.0
 langchain-ollama>=1.0.0,<2.0
+
+# Optional Authorization
+openfga-sdk
 
 # Tests
 pytest==8.3.3
