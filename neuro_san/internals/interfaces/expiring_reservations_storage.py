@@ -22,16 +22,12 @@ from typing import Dict
 from neuro_san.interfaces.reservation import Reservation
 
 
-class ReservationsStorage:
+class ExpiringReservationsStorage:
     """
-    An interface for implementations of Reservations storage
+    An interface for implementations of basic Reservations storage,
+    supporting addition Reservations in bulk and retrieval of individual Reservations,
+    as well as expiration of Reservations based on their lifetime.
     """
-
-    def set_sync_target(self, sync_target: ReservationsStorage):
-        """
-        :param sync_target: The ReservationsStorage where in-memory versions end up
-        """
-        raise NotImplementedError
 
     def add_reservations(self, reservations_dict: Dict[Reservation, Any],
                          source: str = None):
@@ -48,13 +44,9 @@ class ReservationsStorage:
         Extract a single reservation.
 
         :param obj_key: unique key for the reservation
-        :return: Tuple of (reservation, agent_spec) if successful and not expired,
+        :return: Tuple of (reservation, agent data) if successful
+                 and reservation is not expired,
                  (None, None) otherwise
-        """
-
-    def sync_reservations(self):
-        """
-        Sync Reservations with some underlying data source
         """
         raise NotImplementedError
 

@@ -23,15 +23,17 @@ import time
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
+from neuro_san.internals.network_providers.fixed_agent_network_provider import FixedAgentNetworkProvider
 
 
 class ExpiringCachingAgentNetworkStorage(AgentNetworkStorage, ReservationsStorage):
     """
     An AgentNetworkStorage instance where AgentNetworks are allowed to expire.
     This implementation also allows for an optional "source" storage to be set,
-    which is used as a source of truth
+    which will be used as a "base" source of truth.
     """
 
     def __init__(self):
@@ -142,3 +144,45 @@ class ExpiringCachingAgentNetworkStorage(AgentNetworkStorage, ReservationsStorag
             for agent_name in expired:
                 listener.agent_removed(agent_name, self)
                 self.logger.info("REMOVED network for agent %s", agent_name)
+
+    def get_agent_network_provider(self, agent_name: str) -> AgentNetworkProvider:
+        """
+        Get AgentNetworkProvider for a specific agent
+        :param agent_name: name of an agent
+        """
+        # Agents and their Reservations are always present or absent together.
+        reservation: Reservation = None
+        agent_network: AgentNetwork = None
+        if agent_name in self.reservations_table:
+            # We have a reservation for this agent, but we need to check is it still valid:
+            reservation = self.reservations_table[agent_name]
+            if reservation.is_expired():
+                # Reservation is expired, so AgentNetwork is gone for good:
+                with self.lock:
+                    self.reservations_table.pop(agent_name, None)
+                    self.agents_table.pop(agent_name, None)
+
+                # Notify listeners about this state change:
+                # do it outside of internal lock
+                for listener in self.listeners:
+                    listener.agent_removed(agent_name, self)
+                    self.logger.info("REMOVED expired network for agent %s", agent_name)
+
+                # Now if we have a source storage,
+                # we rely on it to expire this reservation according to its own schedule.
+
+                # Our agent network no longer exists.
+                return None
+            # Reservation is still valid, so we can return the AgentNetworkProvider for this agent.
+            agent_network = self.agents_table[agent_name]
+            return FixedAgentNetworkProvider(agent_network)
+        # We don't have a reservation for this agent,
+        # so check the source storage if we have one:
+        if self.source_storage is not None:
+            reservation, agent_network = self.source_storage.get_one_reservation(agent_name)
+            if reservation is not None and not reservation.is_expired():
+                # We have a valid reservation for this agent in the source storage,
+                # so return the AgentNetworkProvider for this agent.
+                return FixedAgentNetworkProvider(agent_network)
+        return None
+
