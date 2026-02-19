@@ -23,6 +23,7 @@ from os import environ
 from asyncio import AbstractEventLoop
 from asyncio import Event
 from asyncio import run_coroutine_threadsafe
+from concurrent.futures import ThreadPoolExecutor
 from logging import getLogger
 from logging import Logger
 
@@ -43,6 +44,8 @@ class TempNetworkStorageUpdater(AbstractStorageUpdater):
     """
     StorageUpdater implementation for temporary network updates.
     """
+    # Size of thread pool for processing reservations queues.
+    THREAD_POOL_SIZE: int = 32
 
     def __init__(self, network_storage_dict: Dict[str, AgentNetworkStorage],
                  watcher_config: Dict[str, Any],
@@ -74,12 +77,8 @@ class TempNetworkStorageUpdater(AbstractStorageUpdater):
             if external_storage is not None:
                 self.reservations_storage.add(external_storage)
 
-            # The ultimate target for sync is the temp storage
-            for storage in self.reservations_storage:
-                storage.set_sync_target(temp_storage)
-
         self.incoming: Queue[AsyncCollatingQueue] = queues
-        self.queue_pool: Set[AsyncCollatingQueue] = set()
+        self.queue_processing_pool: ThreadPoolExecutor = ThreadPoolExecutor(self.THREAD_POOL_SIZE)
         self.reservationist = AbstractAgentReservationist(self.reservations_storage)
 
     def start(self):
@@ -93,6 +92,8 @@ class TempNetworkStorageUpdater(AbstractStorageUpdater):
         for storage in self.reservations_storage:
             if isinstance(storage, Startable):
                 storage.start()
+        # Start the task for checking for new queues to process
+        self.queue_processing_pool.submit(self.add_new_queues_to_processing)
 
     def update_storage(self):
         """
@@ -124,14 +125,19 @@ class TempNetworkStorageUpdater(AbstractStorageUpdater):
         if finished > 0:
             self.logger.info("Temp storage from %d queues finished", finished)
 
-    def add_new_queues_to_pool(self):
+    def add_new_queues_to_processing(self):
         """
         Checks our master queue of queues for any new additions
-        and adds them to the queue pool we need to pay attention to.
+        and adds them to the queue processing pool
+        for independent processing of each queue.
         """
-        while self.incoming.sync_q.qsize() > 0:
+        self.logger.info("Waiting for new queues to be added for processing")
+        print("Waiting for new queues to be added for processing")
+        while True:
             async_collating_queue: AsyncCollatingQueue = self.incoming.sync_q.get()
-            self.queue_pool.add(async_collating_queue)
+            # We have a new queue to process.
+            # Submit this queue processing  task to our thread pool.
+            self.queue_processing_pool.submit(self.process_one_queue, async_collating_queue)
 
     def process_one_queue(self, async_collating_queue: AsyncCollatingQueue):
         """
@@ -142,14 +148,12 @@ class TempNetworkStorageUpdater(AbstractStorageUpdater):
         janus_queue: Queue = async_collating_queue.get_queue()
 
         # See what has come over this particular queue
-        while janus_queue.sync_q.qsize() > 0:
-
+        while True:
             # Get an item off the queue
             queued_item: Dict[str, Any] = janus_queue.sync_q.get()
             if async_collating_queue.is_final_item(queued_item):
                 # We have exhausted this queue.
-                # No one needs to worry about it any more.
-                self.queue_pool.remove(async_collating_queue)
+                # No one needs to worry about it anymore.
                 async_collating_queue.close()
                 return
 
@@ -187,3 +191,6 @@ class TempNetworkStorageUpdater(AbstractStorageUpdater):
         for storage in self.reservations_storage:
             if isinstance(storage, Startable):
                 storage.stop()
+        # Finalize the queue processing pool
+        self.queue_processing_pool.shutdown(wait=False, cancel_futures=True)
+

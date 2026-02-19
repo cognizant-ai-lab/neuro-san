@@ -24,40 +24,29 @@ import time
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
-from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
+from neuro_san.internals.interfaces.expiring_reservations_storage import ExpiringReservationsStorage
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
+from neuro_san.internals.network_providers.abstract_expiring_reservations_storage import AbstractExpiringReservationsStorage
 from neuro_san.internals.network_providers.fixed_agent_network_provider import FixedAgentNetworkProvider
 
 
-class ExpiringCachingAgentNetworkStorage(AgentNetworkStorage, ReservationsStorage):
+class ExpiringCachingAgentNetworkStorage(AbstractExpiringReservationsStorage, AgentNetworkStorage):
     """
     An AgentNetworkStorage instance where AgentNetworks are allowed to expire.
     This implementation also allows for an optional "source" storage to be set,
     which will be used as a "base" source of truth.
     """
 
-    def __init__(self):
+    def __init__(self,
+                 base_storage: ExpiringReservationsStorage = None,
+                 check_expirations_interval_seconds: float = 60.0):
         """
         Constructor
         """
-        super().__init__()
+        super().__init__(check_expirations_interval_seconds = check_expirations_interval_seconds)
         self.reservations_table: Dict[str, Reservation] = {}
         self.last_modified: float = 0.0
-        self.source_storage: ReservationsStorage = None
-
-    def set_sync_target(self, sync_target: ReservationsStorage):
-        """
-        :param sync_target: The ReservationsStorage where in-memory versions end up
-        """
-        # We don't need one of these
-
-    def set_source(self, source: ReservationsStorage):
-        """
-        :param source: The ReservationsStorage which we use as a source of truth,
-                       if it is set, this network storage effectively works as a cache
-                       for the "source" storage.
-        """
-        self.source_storage = source
+        self.base_storage: ExpiringReservationsStorage = base_storage
 
     def add_reservations(self, reservations_dict: Dict[Reservation, Dict[str, Any]],
                          source: str = None):
@@ -71,10 +60,10 @@ class ExpiringCachingAgentNetworkStorage(AgentNetworkStorage, ReservationsStorag
             # Nothing to do
             return
 
-        if self.source_storage is not None:
+        if self.base_storage is not None:
             # If we have a source storage, then we need to add these reservations there first:
             # TODO: ship out to another thread not to block this one?
-            self.source_storage.add_reservations(reservations_dict, source=source)
+            self.base_storage.add_reservations(reservations_dict, source=source)
 
         # Figure out what's new vs what's not.
         # Need to do this while holding the lock
@@ -106,12 +95,6 @@ class ExpiringCachingAgentNetworkStorage(AgentNetworkStorage, ReservationsStorag
             for agent_name in replaced:
                 listener.agent_modified(agent_name, self)
                 self.logger.info("REPLACED network for agent %s from %s", agent_name, source)
-
-    def sync_reservations(self):
-        """
-        Sync Reservations with some underlying data source
-        """
-        # Nothing to do here.  We are our own source of truth.
 
     def expire_reservations(self):
         """
@@ -178,11 +161,16 @@ class ExpiringCachingAgentNetworkStorage(AgentNetworkStorage, ReservationsStorag
             return FixedAgentNetworkProvider(agent_network)
         # We don't have a reservation for this agent,
         # so check the source storage if we have one:
-        if self.source_storage is not None:
-            reservation, agent_network = self.source_storage.get_one_reservation(agent_name)
+        if self.base_storage is not None:
+            reservation, agent_network = self.base_storage.get_one_reservation(agent_name)
             if reservation is not None and not reservation.is_expired():
                 # We have a valid reservation for this agent in the source storage,
                 # so return the AgentNetworkProvider for this agent.
+                # Also cache this reservation and agent network locally:
+                with self.lock:
+                    self.reservations_table[agent_name] = reservation
+                    self.agents_table[agent_name] = agent_network
+                    self.last_modified = time.time()
                 return FixedAgentNetworkProvider(agent_network)
         return None
 
