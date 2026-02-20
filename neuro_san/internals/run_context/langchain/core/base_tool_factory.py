@@ -153,10 +153,8 @@ class BaseToolFactory:
         """
         # By default, assume no allowed tools. This may get updated below or in the LangChainMcpAdadter.
         allowed_tools: List[str] = None
-        # Get HTTP headers from sly_data if available
-        http_headers: Dict[str, Any] = self.tool_caller.sly_data.get("http_headers", {})
-        client_infos: Dict[str, Any] = self.tool_caller.sly_data.get("client_infos", {})
-        tokens: Dict[str, Any] = self.tool_caller.sly_data.get("tokens", {})
+        # Get sly_data for http headers, client info, and tokens that may be needed for MCP auth and tool retrieval
+        sly_data: Dict[str, Any] = self.tool_caller.sly_data
 
         if isinstance(mcp_info, str):
             server_url: str = mcp_info
@@ -164,15 +162,11 @@ class BaseToolFactory:
             server_url = mcp_info.get("url")
             allowed_tools = mcp_info.get("tools")
 
-        # Get specific headers, client infos, or tokens for the MCP server if available
-        headers: Dict[str, Any] = http_headers.get(server_url)
-        client_info: Dict[str, Any] = client_infos.get(server_url)
-        token: Dict[str, Any] = tokens.get(server_url)
-
         try:
             mcp_adapter = LangChainMcpAdapter()
+            # Pass sly_data from tool caller since MCP auth provider may need to write tokens into it
             mcp_tools: List[BaseTool] = await mcp_adapter.get_mcp_tools(
-                server_url, allowed_tools, headers, client_info, token)
+                server_url, allowed_tools, sly_data)
 
         # MCP errors are nested exceptions.
         except ExceptionGroup as nested_exception:

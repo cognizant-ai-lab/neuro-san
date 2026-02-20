@@ -15,6 +15,8 @@
 #
 # END COPYRIGHT
 
+from typing import Any
+from typing import Dict
 from urllib.parse import parse_qs
 
 import httpx
@@ -36,13 +38,13 @@ class ExtendedOauthClientProvider(OAuthClientProvider):
     async def _handle_token_response(self, response: httpx.Response) -> None:
         """Handle token exchange response with multiple format support."""
         if response.status_code not in {200, 201}:
-            body = await response.aread()
-            body_text = body.decode("utf-8")
+            body: bytes = await response.aread()
+            body_text: str = body.decode("utf-8")
             raise OAuthTokenError(f"Token exchange failed ({response.status_code}): {body_text}")
 
         # Try JSON first (standard OAuth format)
         try:
-            token_response = await handle_token_response_scopes(response)
+            token_response: OAuthToken = await handle_token_response_scopes(response)
         except OAuthTokenError:
             # Fall back to form-encoded format
             try:
@@ -58,10 +60,10 @@ class ExtendedOauthClientProvider(OAuthClientProvider):
 
     async def _parse_form_token_response(self, response: httpx.Response) -> OAuthToken:
         """Parse application/x-www-form-urlencoded token response."""
-        content = await response.aread()
-        body_text = content.decode("utf-8")
+        content: bytes = await response.aread()
+        body_text: str = content.decode("utf-8")
         # Parse form data
-        params = parse_qs(body_text)
+        params: Dict[str, Any] = parse_qs(body_text)
 
         # Extract token data (values are lists, take first element)
         token_data = {

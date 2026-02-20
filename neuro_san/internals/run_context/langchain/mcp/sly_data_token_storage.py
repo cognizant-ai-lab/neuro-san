@@ -15,7 +15,6 @@
 #
 # END COPYRIGHT
 
-from json import JSONDecodeError
 from logging import Logger
 from logging import getLogger
 from typing import Any
@@ -33,20 +32,20 @@ class SlyDataTokenStorage(TokenStorage):
     Sly data-based token storage that also stores client credentials info.
     """
 
-    def __init__(self, client_info: Dict[str, Any], token: Dict[str, Any]):
+    def __init__(self, client_info: Dict[str, Any], tokens: Dict[str, Any]):
         """ Constructor """
         self.logger: Logger = getLogger(self.__class__.__name__)
 
         self.client_info: Dict[str, Any] = client_info
-        self.token: Dict[str, Any] = token
+        self.tokens: Dict[str, Any] = tokens
 
     async def get_tokens(self) -> Optional[OAuthToken]:
         """Load OAuth tokens from sly data."""
-        if not self.token:
+        if not self.tokens:
             return None
 
         try:
-            return OAuthToken(**self.token)
+            return OAuthToken(**self.tokens)
 
         except (ValidationError, TypeError, ValueError) as errors:
             self.logger.warning("Failed to load token from sly data: %s", errors)
@@ -56,8 +55,8 @@ class SlyDataTokenStorage(TokenStorage):
         """Save OAuth tokens to a dictionary in sly data."""
         try:
             # Clear and update token in-place
-            self.token.clear()
-            self.token.update(tokens.model_dump(mode="json"))
+            self.tokens.clear()
+            self.tokens.update(tokens.model_dump(mode="json"))
             self.logger.info("Tokens saved (expires in %d s)", tokens.expires_in)
         except (AttributeError, TypeError) as errors:
             self.logger.error("Failed to save tokens in sly data: %s", errors)
@@ -80,23 +79,6 @@ class SlyDataTokenStorage(TokenStorage):
             return OAuthClientInformationFull(**self.client_info)
         except ValidationError as validation_error:
             self.logger.warning("Failed to instantiate OAuthClientInformationFull: %s", validation_error)
-            return None
-
-    async def get_client_credentials(self) -> Dict[str, Any]:
-        """
-        Load client credentails from sly data. Similar to get_client_info() but return dictionary instead of
-        OAuthClientInformationFull so it can be used for grant type that does not required `redirect_uris`
-        """
-        if not self.client_info:
-            return None
-
-        try:
-            return self.client_info
-        except JSONDecodeError as json_error:
-            self.logger.warning("Failed to parse client info file: %s", json_error)
-            return None
-        except OSError as os_error:
-            self.logger.warning("Failed to read client info file: %s", os_error)
             return None
 
     async def set_client_info(self, client_info: OAuthClientInformationFull) -> None:

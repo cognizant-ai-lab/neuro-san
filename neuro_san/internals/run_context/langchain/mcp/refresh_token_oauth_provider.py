@@ -15,29 +15,33 @@
 #
 # END COPYRIGHT
 
-from typing import Any
-from typing import Dict
 from typing import Literal
 from typing import override
 import httpx
 
 from mcp.shared.auth import OAuthClientMetadata
 from mcp.client.auth import TokenStorage
+from mcp.client.auth.exceptions import OAuthTokenError
 from mcp.shared.auth import OAuthClientInformationFull
+
 
 from neuro_san.internals.run_context.langchain.mcp.extended_oauth_provider import ExtendedOauthClientProvider
 
 
-class ClientCredentialsOauthProvider(ExtendedOauthClientProvider):
-    """OAuth provider for client_credentials grant with client_id + client_secret.
+class RefreshTokenOauthProvider(ExtendedOauthClientProvider):
+    """OAuth provider for refresh token grant.
 
-    This provider sets client_info directly, bypassing dynamic client registration.
-    Use this when you already have client credentials (client_id and client_secret) and there is no refresh token.
+    This provider sets client_info and token directly, bypassing dynamic client registration and user authorization.
+    Use this when you already have client credentials (client_id and client_secret) and token with refresh token field.
+    In general, refresh token flow works in tandem with authorization code flow, but currently neuro-san only support
+    machine-to-machine flows, so refresh token flow is implemented to work when there is refresh token in sly data or
+    env var, AGENT_MCP_TOKENS.
 
-    This is taken directly from the MCP SDK:
+    This is adapted from the MCP SDK:
     https://github.com/modelcontextprotocol/python-sdk/blob/main/src/mcp/client/auth/extensions/client_credentials.py
-    but extends ExtendedOauthClientProvider instead of OAuthClientProvider to handle non-json token responses
-    and add token_endpoint as an optional parameter.
+    but overrides the user authorization step to exchange new token with refresh token and client credentials
+    when token is expired, add token_endpoint as an optional parameter, and extends ExtendedOauthClientProvider
+    instead of OAuthClientProvider to handle non-json token responses.
     """
 
     # pylint: disable=too-many-arguments
@@ -47,7 +51,7 @@ class ClientCredentialsOauthProvider(ExtendedOauthClientProvider):
         server_url: str,
         storage: TokenStorage,
         client_id: str,
-        client_secret: str,
+        client_secret: str = None,  # may not require client_secret to refresh token
         token_endpoint: str = None,
         token_endpoint_auth_method: Literal["client_secret_basic", "client_secret_post"] = "client_secret_basic",
         scopes: str | None = None,
@@ -57,7 +61,7 @@ class ClientCredentialsOauthProvider(ExtendedOauthClientProvider):
         # Build minimal client_metadata for the base class
         client_metadata = OAuthClientMetadata(
             redirect_uris=None,
-            grant_types=["client_credentials"],
+            grant_types=["refresh_token"],
             token_endpoint_auth_method=token_endpoint_auth_method,
             scope=scopes,
         )
@@ -70,7 +74,7 @@ class ClientCredentialsOauthProvider(ExtendedOauthClientProvider):
             redirect_uris=None,
             client_id=client_id,
             client_secret=client_secret,
-            grant_types=["client_credentials"],
+            grant_types=["refresh_token"],
             token_endpoint_auth_method=token_endpoint_auth_method,
             scope=scopes,
         )
@@ -88,35 +92,50 @@ class ClientCredentialsOauthProvider(ExtendedOauthClientProvider):
     @override
     async def _perform_authorization(self) -> httpx.Request:
         """
-        Perform client_credentials authorization.
+        Refresh tokens.
 
         Note that this method originally performs user authorization and exchange code for token.
-        Thus, we override it to perform client credentials flow instead of user authorization and token exchange.
+        Thus, we override it to perform refresh token flow instead of user authorization and token exchange.
         """
-        return await self._exchange_token_client_credentials()
+        return await self._refresh_token()
 
-    async def _exchange_token_client_credentials(self) -> httpx.Request:
+    @override
+    async def _refresh_token(self) -> httpx.Request:
         """
-        Build token exchange request for client_credentials grant.
+        Build token refresh request.
 
-        A helper method to build the token request for client credentials flow, which is used in _perform_authorization.
+        Overrides to add support for user provided token endpoint
         """
-        token_data: Dict[str, Any] = {
-            "grant_type": "client_credentials",
-            "client_id": self.context.client_info.client_id,
-        }
+        if not self.context.current_tokens or not self.context.current_tokens.refresh_token:
+            raise OAuthTokenError("No refresh token available")  # pragma: no cover
 
-        headers: Dict[str, str] = {"Content-Type": "application/x-www-form-urlencoded"}
-
-        # Use standard auth methods (client_secret_basic, client_secret_post, none)
-        token_data, headers = self.context.prepare_token_auth(token_data, headers)
-
-        if self.context.should_include_resource_param(self.context.protocol_version):
-            token_data["resource"] = self.context.get_resource_url()
-
-        if self.context.client_metadata.scope:
-            token_data["scope"] = self.context.client_metadata.scope
+        if not self.context.client_info or not self.context.client_info.client_id:
+            raise OAuthTokenError("No client info available")  # pragma: no cover
 
         # Determine token endpoint URL: use endpoint from discovery if available, otherwise use provided token_endpoint
         token_url: str = self._get_token_endpoint() or self.token_endpoint
-        return httpx.Request("POST", token_url, data=token_data, headers=headers)
+
+        refresh_data: dict[str, str] = {
+            "grant_type": "refresh_token",
+            "refresh_token": self.context.current_tokens.refresh_token,
+            "client_id": self.context.client_info.client_id,
+        }
+
+        # Only include resource param if conditions are met
+        if self.context.should_include_resource_param(self.context.protocol_version):
+            refresh_data["resource"] = self.context.get_resource_url()  # RFC 8707
+
+        # Prepare authentication based on preferred method
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        refresh_data, headers = self.context.prepare_token_auth(refresh_data, headers)
+
+        return httpx.Request("POST", token_url, data=refresh_data, headers=headers)
+
+    # @override
+    # async def _handle_token_response(self, response):
+    #     """
+    #     Handle token response by updating tokens in storage and context.
+
+    #     Overridden to handle refresh token response instead of authorization code exchange response.
+    #     """
+    #     return await self._handle_refresh_response(response)

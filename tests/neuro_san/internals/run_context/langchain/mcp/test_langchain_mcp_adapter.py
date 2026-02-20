@@ -1,4 +1,3 @@
-
 # Copyright © 2023-2026 Cognizant Technology Solutions Corp, www.cognizant.com.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -46,8 +45,12 @@ class TestLangChainMcpAdapter:
         """Reset class-level state before and after each test"""
         # pylint: disable=protected-access
         LangChainMcpAdapter._mcp_servers_info = None
+        LangChainMcpAdapter._mcp_clients_info = None
+        LangChainMcpAdapter._mcp_tokens = None
         yield
         LangChainMcpAdapter._mcp_servers_info = None
+        LangChainMcpAdapter._mcp_clients_info = None
+        LangChainMcpAdapter._mcp_tokens = None
 
     def test_init(self, adapter):
         """Test adapter initialization"""
@@ -55,14 +58,29 @@ class TestLangChainMcpAdapter:
         assert adapter.logger is not None
 
     @pytest.mark.asyncio
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.OauthProviderFactory')
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpTokensRestorer')
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpClientsInfoRestorer')
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpServersInfoRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
-    async def test_get_mcp_tools_basic(self, mock_client_class, adapter, mock_mcp_tool):
+    async def test_get_mcp_tools_basic(self, mock_client_class, mock_servers_restorer_class, 
+                                      mock_clients_restorer_class, mock_tokens_restorer_class,
+                                      mock_oauth_factory_class, adapter, mock_mcp_tool):
         """Test basic retrieval of MCP tools"""
+        # Setup restorer mocks
+        mock_servers_restorer_class.return_value.restore.return_value = {}
+        mock_clients_restorer_class.return_value.restore.return_value = {}
+        mock_tokens_restorer_class.return_value.restore.return_value = {}
+        
+        # Setup oauth mock to return None (no auth needed)
+        mock_oauth_factory = mock_oauth_factory_class.return_value
+        mock_oauth_factory.get_auth = AsyncMock(return_value=None)
+        
         mock_client = mock_client_class.return_value
         mock_client.get_tools = AsyncMock(return_value=[mock_mcp_tool])
 
         server_url = "https://mcp.example.com/mcp"
-        tools = await adapter.get_mcp_tools(server_url)
+        tools = await adapter.get_mcp_tools(server_url, allowed_tools=None, sly_data={})
 
         assert len(tools) == 1
         assert tools[0].name == "test_tool"
@@ -71,11 +89,26 @@ class TestLangChainMcpAdapter:
         mock_client.get_tools.assert_called_once()
 
     @pytest.mark.asyncio
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.OauthProviderFactory')
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpTokensRestorer')
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpClientsInfoRestorer')
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpServersInfoRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
     async def test_get_mcp_tools_with_allowed_tools_param(
-        self, mock_client_class, adapter
+        self, mock_client_class, mock_servers_restorer_class, 
+        mock_clients_restorer_class, mock_tokens_restorer_class,
+        mock_oauth_factory_class, adapter
     ):
         """Test filtering tools with allowed_tools parameter"""
+        # Setup restorer mocks
+        mock_servers_restorer_class.return_value.restore.return_value = {}
+        mock_clients_restorer_class.return_value.restore.return_value = {}
+        mock_tokens_restorer_class.return_value.restore.return_value = {}
+        
+        # Setup oauth mock to return None (no auth needed)
+        mock_oauth_factory = mock_oauth_factory_class.return_value
+        mock_oauth_factory.get_auth = AsyncMock(return_value=None)
+        
         tool1 = MagicMock(spec=StructuredTool)
         tool1.name = "allowed_tool"
         tool1.tags = []
@@ -89,26 +122,36 @@ class TestLangChainMcpAdapter:
 
         server_url = "https://mcp.example.com/mcp"
         allowed_tools = ["allowed_tool"]
-        tools = await adapter.get_mcp_tools(server_url, allowed_tools=allowed_tools)
+        tools = await adapter.get_mcp_tools(server_url, allowed_tools=allowed_tools, sly_data={})
 
         assert len(tools) == 1
         assert tools[0].name == "allowed_tool"
         assert adapter.client_allowed_tools == allowed_tools
 
     @pytest.mark.asyncio
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.OauthProviderFactory')
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpTokensRestorer')
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpClientsInfoRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpServersInfoRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
     async def test_get_mcp_tools_with_config_allowed_tools(
-        self, mock_client_class, mock_restorer_class, adapter
+        self, mock_client_class, mock_servers_restorer_class, 
+        mock_clients_restorer_class, mock_tokens_restorer_class,
+        mock_oauth_factory_class, adapter
     ):
         """Test filtering tools with allowed_tools from config"""
         server_url = "https://mcp.example.com/mcp"
-        mock_restorer = mock_restorer_class.return_value
-        mock_restorer.restore.return_value = {
+        mock_servers_restorer_class.return_value.restore.return_value = {
             server_url: {
                 "tools": ["config_tool"]
             }
         }
+        mock_clients_restorer_class.return_value.restore.return_value = {}
+        mock_tokens_restorer_class.return_value.restore.return_value = {}
+        
+        # Setup oauth mock to return None (no auth needed)
+        mock_oauth_factory = mock_oauth_factory_class.return_value
+        mock_oauth_factory.get_auth = AsyncMock(return_value=None)
 
         tool1 = MagicMock(spec=StructuredTool)
         tool1.name = "config_tool"
@@ -121,61 +164,89 @@ class TestLangChainMcpAdapter:
         mock_client = mock_client_class.return_value
         mock_client.get_tools = AsyncMock(return_value=[tool1, tool2])
 
-        tools = await adapter.get_mcp_tools(server_url)
+        tools = await adapter.get_mcp_tools(server_url, allowed_tools=None, sly_data={})
 
         assert len(tools) == 1
         assert tools[0].name == "config_tool"
 
     @pytest.mark.asyncio
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.OauthProviderFactory')
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpTokensRestorer')
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpClientsInfoRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpServersInfoRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
     async def test_get_mcp_tools_with_headers_param(
-        self, mock_client_class, mock_restorer_class, adapter
+        self, mock_client_class, mock_servers_restorer_class, 
+        mock_clients_restorer_class, mock_tokens_restorer_class,
+        mock_oauth_factory_class, adapter
     ):
         """Test MCP client initialization with headers parameter"""
         server_url = "https://mcp.example.com/mcp"
-        headers = {"Authorization": "Bearer custom_token"}
+        sly_data = {
+            "http_headers": {
+                server_url: {"Authorization": "Bearer custom_token"}
+            }
+        }
 
-        mock_restorer = mock_restorer_class.return_value
-        mock_restorer.restore.return_value = {}
+        mock_servers_restorer_class.return_value.restore.return_value = {}
+        mock_clients_restorer_class.return_value.restore.return_value = {}
+        mock_tokens_restorer_class.return_value.restore.return_value = {}
+        
+        # Setup oauth mock to return None (no auth needed)
+        mock_oauth_factory = mock_oauth_factory_class.return_value
+        mock_oauth_factory.get_auth = AsyncMock(return_value=None)
 
         mock_client = mock_client_class.return_value
         mock_client.get_tools = AsyncMock(return_value=[])
 
-        await adapter.get_mcp_tools(server_url, headers=headers)
+        await adapter.get_mcp_tools(server_url, allowed_tools=None, sly_data=sly_data)
 
         call_args = mock_client_class.call_args[0][0]
         assert "headers" in call_args["server"]
         assert call_args["server"]["headers"]["Authorization"] == "Bearer custom_token"
 
     @pytest.mark.asyncio
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.OauthProviderFactory')
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpTokensRestorer')
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpClientsInfoRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpServersInfoRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
     async def test_get_mcp_tools_with_config_headers(
-        self, mock_client_class, mock_restorer_class, adapter
+        self, mock_client_class, mock_servers_restorer_class, 
+        mock_clients_restorer_class, mock_tokens_restorer_class,
+        mock_oauth_factory_class, adapter
     ):
         """Test MCP client initialization with headers from config"""
         server_url = "https://mcp.example.com/mcp"
-        mock_restorer = mock_restorer_class.return_value
-        mock_restorer.restore.return_value = {
+        mock_servers_restorer_class.return_value.restore.return_value = {
             server_url: {
                 "http_headers": {"Authorization": "Bearer config_token"}
             }
         }
+        mock_clients_restorer_class.return_value.restore.return_value = {}
+        mock_tokens_restorer_class.return_value.restore.return_value = {}
+        
+        # Setup oauth mock to return None (no auth needed)
+        mock_oauth_factory = mock_oauth_factory_class.return_value
+        mock_oauth_factory.get_auth = AsyncMock(return_value=None)
 
         mock_client = mock_client_class.return_value
         mock_client.get_tools = AsyncMock(return_value=[])
 
-        await adapter.get_mcp_tools(server_url)
+        await adapter.get_mcp_tools(server_url, allowed_tools=None, sly_data={})
 
         call_args = mock_client_class.call_args[0][0]
         assert "headers" in call_args["server"]
         assert call_args["server"]["headers"]["Authorization"] == "Bearer config_token"
 
     @pytest.mark.asyncio
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.OauthProviderFactory')
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpTokensRestorer')
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpClientsInfoRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
     async def test_get_mcp_tools_invalid_headers_type(
-        self, mock_client_class, adapter, caplog
+        self, mock_client_class, mock_clients_restorer_class, 
+        mock_tokens_restorer_class, mock_oauth_factory_class, adapter, caplog
     ):
         """Test handling of invalid headers type in config"""
         # pylint: disable=protected-access
@@ -185,21 +256,42 @@ class TestLangChainMcpAdapter:
                 "http_headers": "invalid_string_not_dict"
             }
         }
+        
+        mock_clients_restorer_class.return_value.restore.return_value = {}
+        mock_tokens_restorer_class.return_value.restore.return_value = {}
+        
+        # Setup oauth mock to return None (no auth needed)
+        mock_oauth_factory = mock_oauth_factory_class.return_value
+        mock_oauth_factory.get_auth = AsyncMock(return_value=None)
 
         mock_client = mock_client_class.return_value
         mock_client.get_tools = AsyncMock(return_value=[])
 
-        await adapter.get_mcp_tools(server_url)
+        await adapter.get_mcp_tools(server_url, allowed_tools=None, sly_data={})
 
         # Check that error was logged
         assert "must be a dictionary" in caplog.text
 
     @pytest.mark.asyncio
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.OauthProviderFactory')
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpTokensRestorer')
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpClientsInfoRestorer')
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpServersInfoRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
     async def test_get_mcp_tools_adds_langchain_tool_tags(
-        self, mock_client_class, adapter
+        self, mock_client_class, mock_servers_restorer_class, 
+        mock_clients_restorer_class, mock_tokens_restorer_class,
+        mock_oauth_factory_class, adapter
     ):
         """Test that langchain_tool tags are added to all tools"""
+        mock_servers_restorer_class.return_value.restore.return_value = {}
+        mock_clients_restorer_class.return_value.restore.return_value = {}
+        mock_tokens_restorer_class.return_value.restore.return_value = {}
+        
+        # Setup oauth mock to return None (no auth needed)
+        mock_oauth_factory = mock_oauth_factory_class.return_value
+        mock_oauth_factory.get_auth = AsyncMock(return_value=None)
+        
         tools = [
             MagicMock(spec=StructuredTool, name=f"tool{i}", tags=[])
             for i in range(3)
@@ -208,7 +300,7 @@ class TestLangChainMcpAdapter:
         mock_client = mock_client_class.return_value
         mock_client.get_tools = AsyncMock(return_value=tools)
 
-        result = await adapter.get_mcp_tools("https://mcp.example.com/mcp")
+        result = await adapter.get_mcp_tools("https://mcp.example.com/mcp", allowed_tools=None, sly_data={})
 
         for tool in result:
             assert "langchain_tool" in tool.tags

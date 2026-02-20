@@ -277,12 +277,17 @@ ENV AGENT_RESERVATIONS_S3_BUCKET=""
 # for connecting to external MCP servers with authentication and tool filtering.
 ENV AGENT_MCP_SERVERS_INFO_FILE=""
 
-# A directory path where MCP OAuth authentication information for MCP servers
-# (tokens and client info) will be stored.
-ENV AGENT_MCP_AUTH_DIR=""
+# A string containing clients info for MCP servers. For example,
+# '{"https://example.com/mcp": {"client_id": <client id>, "client_secret": <client secret>}}'
+ENV AGENT_MCP_CLIENTS_INFO=""
 
-# Port number for MCP OAuth callback endpoint. Only necessary for authorization code grant type.
-ENV AGENT_MCP_CALLBACK_PORT=3000
+# A string containing tokens info for MCP servers. For example,
+# '{"https://example.com/mcp": {"access_token": "eyJhbGciOi...", "expires_in": 3600, "refresh_token": "def50200a1..."}}'
+# Note that MCP SDK only support bearer token so it is not necessary to have "token_type" field.
+ENV AGENT_MCP_TOKENS=""
+
+# Timeout to wait for MCP server authentication response, in seconds. Default is 300 seconds (5 minutes).
+ENV AGENT_MCP_TIMEOUT_SECONDS=300
 
 # When set, this parameter enables MCP service protocol for running neuro-san server.
 # Service endpoint is http://host:port/mcp
