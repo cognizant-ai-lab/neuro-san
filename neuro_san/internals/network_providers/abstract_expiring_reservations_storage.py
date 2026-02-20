@@ -31,14 +31,15 @@ from neuro_san.service.interfaces.startable import Startable
 
 class AbstractExpiringReservationsStorage(ExpiringReservationsStorage, Startable):
     """
-    An AgentNetworkStorage instance where AgentNetworks are allowed to expire.
-    This implementation also allows for an optional "source" storage to be set,
-    which will be used as a "base" source of truth.
+    An abstract implementation of ExpiringReservationsStorage interface
+    providing a background thread that periodically checks for expired reservations and removes them.
+    Specific logic for adding, retrieving, and expiring reservations is left to concrete implementations.
     """
 
     def __init__(self, check_expirations_interval_seconds: float = 60.0):
         """
         Constructor
+        :param check_expirations_interval_seconds: The number of seconds between checks for expired reservations.
         """
         super().__init__()
         self._thread: threading.Thread = None
@@ -62,18 +63,20 @@ class AbstractExpiringReservationsStorage(ExpiringReservationsStorage, Startable
 
     def _run_loop(self):
         while not self._stop_event.is_set():
+            # Using "monotonic" time allows us to avoid potential issues with system clock changes
             start = time.monotonic()
             try:
                 self.expire_reservations()
             except Exception as exception:  # pylint: disable=broad-except
                 self._logger.info("Expiration cleanup failed: %s", exception)
             elapsed = time.monotonic() - start
-            print(f"Expiration cleanup took {elapsed} seconds.")
+            self._logger.debug("Expiration cleanup took %f seconds.", elapsed)
 
             # Compute remaining sleep time
             sleep_time = self._check_interval_seconds - elapsed
             if sleep_time > 0:
-                # Sleep but wake early if stop is requested
+                # Sleep but wake early if stop is requested,
+                # this makes worker thread more responsive to shutdown requests.
                 self._stop_event.wait(timeout=sleep_time)
             # We're behind schedule; skip sleeping (prevents drift accumulation)
 
