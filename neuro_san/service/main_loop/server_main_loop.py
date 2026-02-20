@@ -259,7 +259,7 @@ class ServerMainLoop:
             components_to_start.append(watcher)
         # Another component to start is the temporary networks updater
         temp_networks_updater: TempNetworkStorageUpdater =\
-            TempNetworkStorageUpdater(server_context.get_network_storage_dict(), server_context.get_queues())
+            TempNetworkStorageUpdater(self.server_context.get_network_storage_dict(), self.server_context.get_queues())
         components_to_start.append(temp_networks_updater)
 
         # Create HTTP server;

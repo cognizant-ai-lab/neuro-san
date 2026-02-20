@@ -15,8 +15,6 @@
 #
 # END COPYRIGHT
 
-from typing import Dict
-
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 
@@ -36,4 +34,4 @@ class FixedAgentNetworkProvider(AgentNetworkProvider):
         """
         :return: Current AgentNetwork instance for specific agent name.
         """
-        return self.agents_network
+        return self.agent_network

@@ -18,15 +18,15 @@
 from typing import Any
 from typing import Dict
 from typing import List
-
-import time
+from typing import Tuple
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.expiring_reservations_storage import ExpiringReservationsStorage
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
-from neuro_san.internals.network_providers.abstract_expiring_reservations_storage import AbstractExpiringReservationsStorage
+from neuro_san.internals.network_providers.abstract_expiring_reservations_storage \
+    import AbstractExpiringReservationsStorage
 from neuro_san.internals.network_providers.fixed_agent_network_provider import FixedAgentNetworkProvider
 
 
@@ -42,17 +42,19 @@ class ExpiringCachingAgentNetworkStorage(AbstractExpiringReservationsStorage, Ag
         Constructor
         :param check_expirations_interval_seconds: The number of seconds between checks for expired reservations.
         """
-        super().__init__(check_expirations_interval_seconds = check_expirations_interval_seconds)
+        super().__init__(check_expirations_interval_seconds=check_expirations_interval_seconds)
         self.reservations_table: Dict[str, Reservation] = {}
         self.base_storage: ExpiringReservationsStorage = None
 
     def set_base_storage(self, base_storage: ExpiringReservationsStorage):
         """
         Set the base storage to be used as a "source of truth" for reservations and agent networks.
-        This is optional, but if set, then this storage will be used as a source of truth for reservations and agent networks,
+        This is optional, but if set, then this storage will be used as a source of truth
+        for reservations and agent networks,
         and any changes to reservations and agent networks in this storage will be reflected in this storage as well.
 
-        :param base_storage: An ExpiringReservationsStorage instance to be used as a source of truth for reservations and agent networks.
+        :param base_storage: An ExpiringReservationsStorage instance to be used
+                             as a source of truth for reservations and agent networks.
         """
         self.base_storage = base_storage
 
@@ -70,7 +72,6 @@ class ExpiringCachingAgentNetworkStorage(AbstractExpiringReservationsStorage, Ag
 
         if self.base_storage is not None:
             # If we have a source storage, then we need to add these reservations there first:
-            # TODO: ship out to another thread not to block this one?
             self.base_storage.add_reservations(reservations_dict, source=source)
 
         # Figure out what's new vs what's not.
@@ -102,13 +103,24 @@ class ExpiringCachingAgentNetworkStorage(AbstractExpiringReservationsStorage, Ag
                 listener.agent_modified(agent_name, self)
                 self.logger.info("REPLACED network for agent %s from %s", agent_name, source)
 
+    def get_one_reservation(self, obj_key: str) -> Tuple[Reservation, Any]:
+        """
+        Extract a single reservation.
+
+        :param obj_key: unique key for the reservation
+        :return: Tuple of (reservation, agent data) if successful
+                 and reservation is not expired,
+                 (None, None) otherwise
+        """
+        # For this class, this method is never used.
+        return None, None
+
     def expire_reservations(self):
         """
         Remove Reservations that are expired
         """
 
         # First determine what has expired
-        now: float = time.time()
         expired: List[str] = []
 
         for agent_name, reservation in self.reservations_table.items():
@@ -176,4 +188,3 @@ class ExpiringCachingAgentNetworkStorage(AbstractExpiringReservationsStorage, Ag
                     self.agents_table[agent_name] = agent_network
                 return FixedAgentNetworkProvider(agent_network)
         return None
-

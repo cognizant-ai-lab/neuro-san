@@ -16,7 +16,6 @@
 # END COPYRIGHT
 from typing import Any
 from typing import Dict
-from typing import Set
 
 from os import environ
 
@@ -84,8 +83,7 @@ class TempNetworkStorageUpdater(Startable):
         """
         Perform start up.
         """
-        self.logger.info("Starting TempNetworkStorageUpdater with %d seconds period",
-                         self.update_period_in_seconds)
+        self.logger.info("Starting TempNetworkStorageUpdater")
 
         # Start any Startables
         if isinstance(self.temp_storage, Startable):
@@ -161,4 +159,3 @@ class TempNetworkStorageUpdater(Startable):
             self.temp_storage.stop()
         # Finalize the queue processing pool
         self.queue_processing_pool.shutdown(wait=False, cancel_futures=True)
-

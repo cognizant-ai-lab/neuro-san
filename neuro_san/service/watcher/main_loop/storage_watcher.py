@@ -55,7 +55,7 @@ class StorageWatcher(Startable):
 
         self.storage_updaters: List[StorageUpdater] = [
             RegistryStorageUpdater(server_context.get_network_storage_dict(), watcher_config),
-            TempNetworkStorageUpdater(server_context.get_network_storage_dict(), watcher_config,
+            TempNetworkStorageUpdater(server_context.get_network_storage_dict(),
                                       server_context.get_queues())
         ]
 

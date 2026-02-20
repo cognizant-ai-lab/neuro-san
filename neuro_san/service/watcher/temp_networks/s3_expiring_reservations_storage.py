@@ -34,6 +34,7 @@ from botocore.exceptions import ClientError
 from botocore.exceptions import NoCredentialsError
 
 from neuro_san.interfaces.reservation import Reservation
+from neuro_san.internals.interfaces.expiring_reservations_storage import ExpiringReservationsStorage
 from neuro_san.internals.network_providers.abstract_expiring_reservations_storage \
     import AbstractExpiringReservationsStorage
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
@@ -141,6 +142,15 @@ class S3ExpiringReservationsStorage(AbstractExpiringReservationsStorage):
             )
 
             self.logger.debug("Successfully stored reservation %s in S3", reservation_id)
+
+    def set_base_storage(self, base_storage: ExpiringReservationsStorage):
+        """
+        Set a "base" storage to use as a source of truth for reservations.
+        This is optional, but if set, will be used as the source of truth for reservations
+        and the implementing class will act as a cache in front of it.
+        :param base_storage: An ExpiringReservationsStorage instance to use as a source of truth
+        """
+        raise NotImplementedError
 
     def get_one_reservation(self, obj_key: str) -> Tuple[Reservation, Any]:
         """
