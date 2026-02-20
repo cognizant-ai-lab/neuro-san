@@ -31,6 +31,9 @@ from neuro_san.internals.run_context.langchain.mcp.extended_oauth_provider impor
 class RefreshTokenOauthProvider(ExtendedOauthClientProvider):
     """OAuth provider for refresh token grant.
 
+    A new provider we created specifically for machine-to-machine refresh token flows
+    since the SDK's refresh token logic is designed for the Authorization Code grant type.
+
     This provider sets client_info and token directly, bypassing dynamic client registration and user authorization.
     Use this when you already have client credentials (client_id and client_secret) and token with refresh token field.
     In general, refresh token flow works in tandem with authorization code flow, but currently neuro-san only support

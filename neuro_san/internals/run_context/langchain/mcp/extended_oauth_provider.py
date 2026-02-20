@@ -36,6 +36,11 @@ class ExtendedOauthClientProvider(OAuthClientProvider):
     OAuthClientProvider itself extends httpx.Auth and is designed to handle custom authentication schemes.
     It overrides the async_auth_flow method, while the remaining helper methods are private.
 
+    Key Methods:
+    - async_auth_flow() - Entry point triggered on every HTTP request
+    - _initialize() - Loads client info and tokens from storage (overridden by subclasses)
+    - _perform_authorization() - Handles the authorization step (overridden by subclasses)
+
     The authentication flow proceeds as follows:
     1. When an HTTP request is sent to an MCP server, the async_auth_flow method is triggered.
     2. The provider attempts to load client information and tokens from storage. This logic is implemented in

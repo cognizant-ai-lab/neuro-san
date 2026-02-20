@@ -47,10 +47,17 @@ class ClientCredentialsOauthProvider(ExtendedOauthClientProvider):
     the protected resource metadata.
     7. Retry the authentication flow with the new scopes or tokens.
 
-    This is taken directly from the MCP SDK:
+    This is taken from the MCP SDK:
     https://github.com/modelcontextprotocol/python-sdk/blob/main/src/mcp/client/auth/extensions/client_credentials.py
-    but extends ExtendedOauthClientProvider instead of OAuthClientProvider to handle non-json token responses
-    and add token_endpoint as an optional parameter.
+
+    However, the SDK's ClientCredentialsOauthProvider has two limitations:
+    - No user-provided endpoint support - Only uses endpoints from metadata discovery,
+    doesn't allow manual configuration
+    - Bug in client_secret_post method - The token exchange fails when using this authentication method
+
+    Thus, we modify the code from the MCP SDK to add support for user-provided token endpoint and
+    fix the client_secret_post method, and extend ExtendedOauthClientProvider instead of
+    OAuthClientProvider to handle non-json token responses.
     """
 
     # pylint: disable=too-many-arguments
