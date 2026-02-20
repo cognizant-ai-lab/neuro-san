@@ -37,6 +37,19 @@ class RefreshTokenOauthProvider(ExtendedOauthClientProvider):
     machine-to-machine flows, so refresh token flow is implemented to work when there is refresh token in sly data or
     env var, AGENT_MCP_TOKENS.
 
+    The authentication flow proceeds as follows:
+    1. When an HTTP request is sent to an MCP server, the async_auth_flow method is triggered.
+    2. The provider attempts to load client information and tokens from storage. This logic is implemented in
+    the _initialize() method, which is overridden to set client_info directly to prevent invalid parameters.
+    3. If the server responds with 401 Unauthorized, the provider attempts metadata discovery, including:
+        - Protected Resource Metadata
+        - OAuth Authorization Server Metadata
+    4. Attempt to get tokens from the token endpoint in _perform_authorization() method.
+    Use the endpoint from discovery if available, otherwise use the token_endpoint parameter.
+    5. If the server responds with 403 Forbidden, the provider attempts to update the scopes from
+    the protected resource metadata.
+    7. Retry the authentication flow with the new scopes or tokens.
+
     This is adapted from the MCP SDK:
     https://github.com/modelcontextprotocol/python-sdk/blob/main/src/mcp/client/auth/extensions/client_credentials.py
     but overrides the user authorization step to exchange new token with refresh token and client credentials

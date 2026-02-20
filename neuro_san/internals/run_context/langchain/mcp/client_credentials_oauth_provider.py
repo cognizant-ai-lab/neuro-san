@@ -34,6 +34,19 @@ class ClientCredentialsOauthProvider(ExtendedOauthClientProvider):
     This provider sets client_info directly, bypassing dynamic client registration.
     Use this when you already have client credentials (client_id and client_secret) and there is no refresh token.
 
+    The authentication flow proceeds as follows:
+    1. When an HTTP request is sent to an MCP server, the async_auth_flow method is triggered.
+    2. The provider attempts to load client information and tokens from storage. This logic is implemented in
+    the _initialize() method, which is overridden to set client_info directly to prevent invalid parameters.
+    3. If the server responds with 401 Unauthorized, the provider attempts metadata discovery, including:
+        - Protected Resource Metadata
+        - OAuth Authorization Server Metadata
+    4. Attempt to get tokens from the token endpoint in _perform_authorization() method.
+    Use the endpoint from discovery if available, otherwise use the token_endpoint parameter.
+    5. If the server responds with 403 Forbidden, the provider attempts to update the scopes from
+    the protected resource metadata.
+    7. Retry the authentication flow with the new scopes or tokens.
+
     This is taken directly from the MCP SDK:
     https://github.com/modelcontextprotocol/python-sdk/blob/main/src/mcp/client/auth/extensions/client_credentials.py
     but extends ExtendedOauthClientProvider instead of OAuthClientProvider to handle non-json token responses

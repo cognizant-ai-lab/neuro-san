@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import override
 from urllib.parse import parse_qs
 
 import httpx
@@ -29,14 +30,40 @@ from pydantic import ValidationError
 
 class ExtendedOauthClientProvider(OAuthClientProvider):
     """
-    Extended OAuthClientProvider that handles both JSON and form-encoded token responses.
-    Tries JSON first (standard), then falls back to form-encoded format.
+    This class serves as the base implementation for OAuth client providers in the LangChain MCP adapter.
+    It extends the standard OAuthClientProvider from the MCP SDK to support non-standard token responses.
 
-    See https://github.com/modelcontextprotocol/python-sdk/blob/main/src/mcp/client/auth/oauth2.py#L397.
+    OAuthClientProvider itself extends httpx.Auth and is designed to handle custom authentication schemes.
+    It overrides the async_auth_flow method, while the remaining helper methods are private.
+
+    The authentication flow proceeds as follows:
+    1. When an HTTP request is sent to an MCP server, the async_auth_flow method is triggered.
+    2. The provider attempts to load client information and tokens from storage. This logic is implemented in
+    the _initialize() method, which is overridden in both ClientCredentialsOauthProvider and RefreshTokenOauthProvider.
+    3. If the server responds with 401 Unauthorized, the provider attempts metadata discovery, including:
+        - Protected Resource Metadata
+        - OAuth Authorization Server Metadata
+    4. The client is then either dynamically registered with the authorization server or identified using
+    a URL-based client ID (CIMD).
+    5. The authorization step is performed via the _perform_authorization() method. In the RefreshTokenOauthProvider,
+    this method is overridden to exchange a refresh token (along with client credentials) for a new access token,
+    instead of initiating an interactive user authorization flow.
+    6. If the server responds with 403 Forbidden, the provider attempts to update the scopes from
+    the protected resource metadata.
+    7. Retry the authentication flow with the new scopes or tokens.
+
+    The primary reason for extending this class rather than using it directly is to customize
+    the token response handling logic. Specifically, we add support for both JSON and form-encoded token responses.
+
+    See https://github.com/modelcontextprotocol/python-sdk/blob/main/src/mcp/client/auth/oauth2.py.
     """
 
+    @override
     async def _handle_token_response(self, response: httpx.Response) -> None:
-        """Handle token exchange response with multiple format support."""
+        """
+        Handle token exchange response with multiple format support.
+        Tries JSON first (standard), then falls back to form-encoded format.
+        """
         if response.status_code not in {200, 201}:
             body: bytes = await response.aread()
             body_text: str = body.decode("utf-8")
@@ -47,6 +74,7 @@ class ExtendedOauthClientProvider(OAuthClientProvider):
             token_response: OAuthToken = await handle_token_response_scopes(response)
         except OAuthTokenError:
             # Fall back to form-encoded format
+            # This is the part we added to support non-standard token responses.
             try:
                 token_response = await self._parse_form_token_response(response)
             except (ValueError, KeyError, ValidationError) as errors:
@@ -59,7 +87,11 @@ class ExtendedOauthClientProvider(OAuthClientProvider):
         await self.context.storage.set_tokens(token_response)
 
     async def _parse_form_token_response(self, response: httpx.Response) -> OAuthToken:
-        """Parse application/x-www-form-urlencoded token response."""
+        """
+        Parse application/x-www-form-urlencoded token response.
+        
+        This is our own implementation since the MCP SDK only supports JSON responses.
+        """
         content: bytes = await response.aread()
         body_text: str = content.decode("utf-8")
         # Parse form data
