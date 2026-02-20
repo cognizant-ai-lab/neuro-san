@@ -58,6 +58,13 @@ class RefreshTokenOauthProvider(ExtendedOauthClientProvider):
     but overrides the user authorization step to exchange new token with refresh token and client credentials
     when token is expired, add token_endpoint as an optional parameter, and extends ExtendedOauthClientProvider
     instead of OAuthClientProvider to handle non-json token responses.
+
+    WARNING: This class overrides private methods from the SDK's OAuth implementation.
+
+    FRAGILITY NOTICE:
+    - We override _initialize(), _perform_authorization(), and _refresh_token()
+    - These are PRIVATE methods that may change without notice
+    - Any SDK update could break this implementation
     """
 
     # pylint: disable=too-many-arguments
@@ -146,12 +153,3 @@ class RefreshTokenOauthProvider(ExtendedOauthClientProvider):
         refresh_data, headers = self.context.prepare_token_auth(refresh_data, headers)
 
         return httpx.Request("POST", token_url, data=refresh_data, headers=headers)
-
-    # @override
-    # async def _handle_token_response(self, response):
-    #     """
-    #     Handle token response by updating tokens in storage and context.
-
-    #     Overridden to handle refresh token response instead of authorization code exchange response.
-    #     """
-    #     return await self._handle_refresh_response(response)

@@ -58,6 +58,13 @@ class ClientCredentialsOauthProvider(ExtendedOauthClientProvider):
     Thus, we modify the code from the MCP SDK to add support for user-provided token endpoint and
     fix the client_secret_post method, and extend ExtendedOauthClientProvider instead of
     OAuthClientProvider to handle non-json token responses.
+
+    WARNING: This class overrides private methods from the SDK's OAuth implementation.
+
+    FRAGILITY NOTICE:
+    - We override _initialize() and _perform_authorization()
+    - These are PRIVATE methods that may change without notice
+    - Any SDK update could break this implementation
     """
 
     # pylint: disable=too-many-arguments

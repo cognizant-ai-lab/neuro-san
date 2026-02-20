@@ -39,7 +39,9 @@ class ExtendedOauthClientProvider(OAuthClientProvider):
     Key Methods:
     - async_auth_flow() - Entry point triggered on every HTTP request
     - _initialize() - Loads client info and tokens from storage (overridden by subclasses)
+    - _handle_token_response() - Handles token exchange response (overridden here to support multiple formats)
     - _perform_authorization() - Handles the authorization step (overridden by subclasses)
+    - _refresh_token() - Handles token refresh logic (overridden by RefreshTokenOauthProvider)
 
     The authentication flow proceeds as follows:
     1. When an HTTP request is sent to an MCP server, the async_auth_flow method is triggered.
@@ -61,6 +63,13 @@ class ExtendedOauthClientProvider(OAuthClientProvider):
     the token response handling logic. Specifically, we add support for both JSON and form-encoded token responses.
 
     See https://github.com/modelcontextprotocol/python-sdk/blob/main/src/mcp/client/auth/oauth2.py.
+
+    WARNING: This class overrides private methods from the SDK's OAuth implementation.
+
+    FRAGILITY NOTICE:
+    - We override _handle_token_response()
+    - These are PRIVATE methods that may change without notice
+    - Any SDK update could break this implementation
     """
 
     @override
