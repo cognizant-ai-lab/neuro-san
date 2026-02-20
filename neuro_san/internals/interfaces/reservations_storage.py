@@ -43,15 +43,6 @@ class ReservationsStorage:
         """
         raise NotImplementedError
 
-    def get_one_reservation(self, obj_key: str) -> Tuple[Reservation, Any]:
-        """
-        Extract a single reservation.
-
-        :param obj_key: unique key for the reservation
-        :return: Tuple of (reservation, agent_spec) if successful and not expired,
-                 (None, None) otherwise
-        """
-
     def sync_reservations(self):
         """
         Sync Reservations with some underlying data source
