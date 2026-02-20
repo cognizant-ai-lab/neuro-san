@@ -393,8 +393,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         )
 
         # Create a copy of the config, removing "class" and "verbose".
-        # Note: "verbose" is valid for both Neuro-SAN and LangChain chat models, but when specified by the user,
-        # it should only apply to Neuro-SAN (e.g. AgentExecutor) — not passed into the LLM constructor.
+        # Note: "verbose" is valid for both Neuro SAN and LangChain chat models, but when specified by the user,
+        # it should only apply to Neuro SAN (e.g. AgentExecutor) — not passed into the LLM constructor.
         user_config: Dict[str, Any] = {}
         for llm_config_key, llm_config_value in config.items():
             if llm_config_key not in KEYS_TO_REMOVE_FOR_USER_CLASS:

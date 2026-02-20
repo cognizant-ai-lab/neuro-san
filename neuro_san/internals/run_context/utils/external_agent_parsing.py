@@ -124,7 +124,7 @@ class ExternalAgentParsing:
         # }
 
         # If it is a dict, it is assumed it is MCP for now.
-        # This may change in the future when Neuro-SAN supports other protocals like A2A.
+        # This may change in the future when Neuro SAN supports other protocals like A2A.
         if isinstance(tool_ref, dict):
             return True
 

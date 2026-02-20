@@ -43,6 +43,29 @@ Neuro SAN also offers:
 * MCP protocol API - Every Neuro SAN server can be an MCP Server.
 * per-user authorization for Agent Networks - optional implementations include: OpenFGA
 
+## Quick Start
+
+**🚀 For the easiest way to get started, use our automated quick start scripts!**
+
+See the [quick-start/README.md](quick-start/README.md) for simple one-command scripts that handle all setup automatically:
+- **macOS/Linux:** `./quick-start/start-server.sh`
+- **Windows:** `quick-start\start-server.bat`
+
+### Prerequisites
+
+Before running the quick start scripts, ensure you have:
+- You have Python 3.12 or better installed on your machine
+- You have virtual environment support for Python installed (typically included with Python 3.12+)
+
+These scripts automatically:
+- Create and activate virtual environment
+- Install all dependencies
+- Set up environment variables
+- Enable CORS for web applications
+- Launch the server
+
+For manual setup, continue with the instructions below.
+
 ## Running client and server
 
 ### Prep

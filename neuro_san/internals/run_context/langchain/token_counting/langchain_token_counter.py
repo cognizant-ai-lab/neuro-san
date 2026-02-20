@@ -191,7 +191,7 @@ class LangChainTokenCounter:
         network_token_dict["caveats"] = [
             "External agent token usage is not included.",
             "Token counts are approximate and estimated using tiktoken.",
-            "time_taken_in_seconds includes overhead from Langchain and Neuro-SAN"
+            "time_taken_in_seconds includes overhead from Langchain and Neuro SAN"
         ]
         request_reporting["token_accounting"] = \
             {**network_token_dict, "models": models_token_dict}
@@ -234,7 +234,7 @@ class LangChainTokenCounter:
             "caveats": [
                 "Token usage is tracked at the agent level.",
                 "Token counts are approximate and estimated using tiktoken.",
-                "time_taken_in_seconds includes overhead from Langchain and Neuro-SAN"
+                "time_taken_in_seconds includes overhead from Langchain and Neuro SAN"
             ]
         }
 
