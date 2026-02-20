@@ -89,7 +89,7 @@ class ExtendedOauthClientProvider(OAuthClientProvider):
     async def _parse_form_token_response(self, response: httpx.Response) -> OAuthToken:
         """
         Parse application/x-www-form-urlencoded token response.
-        
+
         This is our own implementation since the MCP SDK only supports JSON responses.
         """
         content: bytes = await response.aread()
