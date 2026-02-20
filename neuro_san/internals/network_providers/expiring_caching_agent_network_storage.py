@@ -37,16 +37,24 @@ class ExpiringCachingAgentNetworkStorage(AbstractExpiringReservationsStorage, Ag
     which will be used as a "base" source of truth.
     """
 
-    def __init__(self,
-                 base_storage: ExpiringReservationsStorage = None,
-                 check_expirations_interval_seconds: float = 60.0):
+    def __init__(self, check_expirations_interval_seconds: float = 60.0):
         """
         Constructor
+        :param check_expirations_interval_seconds: The number of seconds between checks for expired reservations.
         """
         super().__init__(check_expirations_interval_seconds = check_expirations_interval_seconds)
         self.reservations_table: Dict[str, Reservation] = {}
-        self.last_modified: float = 0.0
-        self.base_storage: ExpiringReservationsStorage = base_storage
+        self.base_storage: ExpiringReservationsStorage = None
+
+    def set_base_storage(self, base_storage: ExpiringReservationsStorage):
+        """
+        Set the base storage to be used as a "source of truth" for reservations and agent networks.
+        This is optional, but if set, then this storage will be used as a source of truth for reservations and agent networks,
+        and any changes to reservations and agent networks in this storage will be reflected in this storage as well.
+
+        :param base_storage: An ExpiringReservationsStorage instance to be used as a source of truth for reservations and agent networks.
+        """
+        self.base_storage = base_storage
 
     def add_reservations(self, reservations_dict: Dict[Reservation, Dict[str, Any]],
                          source: str = None):
@@ -84,8 +92,6 @@ class ExpiringCachingAgentNetworkStorage(AbstractExpiringReservationsStorage, Ag
                 else:
                     replaced.append(agent_name)
 
-            self.last_modified = time.time()
-
         # Notify listeners about this state change:
         # do it outside of internal lock
         for listener in self.listeners:
@@ -118,8 +124,6 @@ class ExpiringCachingAgentNetworkStorage(AbstractExpiringReservationsStorage, Ag
             for agent_name in expired:
                 self.reservations_table.pop(agent_name, None)
                 self.agents_table.pop(agent_name, None)
-
-            self.last_modified = time.time()
 
         # Notify listeners about this state change:
         # do it outside of internal lock
@@ -170,7 +174,6 @@ class ExpiringCachingAgentNetworkStorage(AbstractExpiringReservationsStorage, Ag
                 with self.lock:
                     self.reservations_table[agent_name] = reservation
                     self.agents_table[agent_name] = agent_network
-                    self.last_modified = time.time()
                 return FixedAgentNetworkProvider(agent_network)
         return None
 

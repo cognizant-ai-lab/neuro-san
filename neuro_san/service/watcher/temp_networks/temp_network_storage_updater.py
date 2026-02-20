@@ -32,15 +32,14 @@ from janus import Queue
 from leaf_common.config.resolver_util import ResolverUtil
 
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
-from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
+from neuro_san.internals.interfaces.expiring_reservations_storage import ExpiringReservationsStorage
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
 from neuro_san.internals.reservations.abstract_agent_reservationist import AbstractAgentReservationist
-from neuro_san.service.watcher.interfaces.abstract_storage_updater import AbstractStorageUpdater
 from neuro_san.service.interfaces.startable import Startable
 
 
-class TempNetworkStorageUpdater(AbstractStorageUpdater):
+class TempNetworkStorageUpdater(Startable):
     """
     StorageUpdater implementation for temporary network updates.
     """
@@ -48,7 +47,6 @@ class TempNetworkStorageUpdater(AbstractStorageUpdater):
     THREAD_POOL_SIZE: int = 32
 
     def __init__(self, network_storage_dict: Dict[str, AgentNetworkStorage],
-                 watcher_config: Dict[str, Any],
                  queues: Queue[AsyncCollatingQueue]):
         """
         Constructor
@@ -56,30 +54,31 @@ class TempNetworkStorageUpdater(AbstractStorageUpdater):
         :param network_storage_dict: A dictionary of string (descripting scope) to
                     AgentNetworkStorage instance which keeps all the AgentNetwork instances
                     of a particular grouping.
-        :param watcher_config: A config dictionary for StorageUpdaters
         :param queues: A Queue of AsyncCollatingQueues for temp network deployment
         """
-        super().__init__(watcher_config.get("temporary_network_update_period_seconds"))
         self.logger: Logger = getLogger(self.__class__.__name__)
 
-        self.reservations_storage: Set[ReservationsStorage] = set()
-        temp_storage: ReservationsStorage = network_storage_dict.get("temp")
-        if temp_storage is not None:
+        self.reservationist: AbstractAgentReservationist = None
+        self.temp_storage: ExpiringReservationsStorage = network_storage_dict.get("temp")
+        if self.temp_storage is not None:
             # If we don't have temp storage, we don't got nothin'
-            self.reservations_storage.add(temp_storage)
+            # Check that the temp storage instance is indeed an ExpiringReservationsStorage,
+            # since we need to be able to expire reservations in it.
+            if not isinstance(self.temp_storage, ExpiringReservationsStorage):
+                raise ValueError("Temp reservations storage must be an instance of ExpiringReservationsStorage")
 
-            # Potentially create an external storage class
+            # Potentially create a "base" reservations storage class
             storage_class_name: str = environ.get("AGENT_EXTERNAL_RESERVATIONS_STORAGE", "")
-            external_storage: ReservationsStorage = ResolverUtil.create_instance(
+            external_storage: ExpiringReservationsStorage = ResolverUtil.create_instance(
                     storage_class_name,
                     "AGENT_EXTERNAL_RESERVATIONS_STORAGE env var",
-                    ReservationsStorage)
+                    ExpiringReservationsStorage)
             if external_storage is not None:
-                self.reservations_storage.add(external_storage)
+                self.temp_storage.set_base_storage(external_storage)
+            self.reservationist = AbstractAgentReservationist({self.temp_storage})
 
         self.incoming: Queue[AsyncCollatingQueue] = queues
         self.queue_processing_pool: ThreadPoolExecutor = ThreadPoolExecutor(self.THREAD_POOL_SIZE)
-        self.reservationist = AbstractAgentReservationist(self.reservations_storage)
 
     def start(self):
         """
@@ -89,41 +88,10 @@ class TempNetworkStorageUpdater(AbstractStorageUpdater):
                          self.update_period_in_seconds)
 
         # Start any Startables
-        for storage in self.reservations_storage:
-            if isinstance(storage, Startable):
-                storage.start()
+        if isinstance(self.temp_storage, Startable):
+            self.temp_storage.start()
         # Start the task for checking for new queues to process
         self.queue_processing_pool.submit(self.add_new_queues_to_processing)
-
-    def update_storage(self):
-        """
-        Perform an update
-        """
-        # First sync any existing networks from potential external sources
-        for storage in self.reservations_storage:
-            storage.sync_reservations()
-
-        # First expire any existing networks
-        for storage in self.reservations_storage:
-            storage.expire_reservations()
-
-        # Get any new queues
-        self.add_new_queues_to_pool()
-
-        before = len(self.queue_pool)
-        if before == 0:
-            return
-
-        # Process all our queues.
-        # We take a copy because during processing we might remove a queue from the pool.
-        self.logger.info("Updating temp storage from %d queues", before)
-        for queue in self.queue_pool.copy():
-            self.process_one_queue(queue)
-
-        after = len(self.queue_pool)
-        finished = before - after
-        if finished > 0:
-            self.logger.info("Temp storage from %d queues finished", finished)
 
     def add_new_queues_to_processing(self):
         """
@@ -132,12 +100,13 @@ class TempNetworkStorageUpdater(AbstractStorageUpdater):
         for independent processing of each queue.
         """
         self.logger.info("Waiting for new queues to be added for processing")
-        print("Waiting for new queues to be added for processing")
         while True:
             async_collating_queue: AsyncCollatingQueue = self.incoming.sync_q.get()
             # We have a new queue to process.
-            # Submit this queue processing  task to our thread pool.
-            self.queue_processing_pool.submit(self.process_one_queue, async_collating_queue)
+            # Submit this queue processing  task to our thread pool,
+            # IF we have a storage to put the results in.
+            if self.reservationist is not None:
+                self.queue_processing_pool.submit(self.process_one_queue, async_collating_queue)
 
     def process_one_queue(self, async_collating_queue: AsyncCollatingQueue):
         """
@@ -188,9 +157,8 @@ class TempNetworkStorageUpdater(AbstractStorageUpdater):
         self.logger.info("Stopping TempNetworkStorageUpdater")
 
         # Stop any Startables
-        for storage in self.reservations_storage:
-            if isinstance(storage, Startable):
-                storage.stop()
+        if self.temp_storage is not None:
+            self.temp_storage.stop()
         # Finalize the queue processing pool
         self.queue_processing_pool.shutdown(wait=False, cancel_futures=True)
 

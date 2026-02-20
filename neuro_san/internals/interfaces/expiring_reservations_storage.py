@@ -55,3 +55,12 @@ class ExpiringReservationsStorage:
         Remove Reservations that are expired
         """
         raise NotImplementedError
+
+    def set_base_storage(self, base_storage: ExpiringReservationsStorage):
+        """
+        Set a "base" storage to use as a source of truth for reservations.
+        This is optional, but if set, will be used as the source of truth for reservations
+        and the implementing class will act as a cache in front of it.
+        :param base_storage: An ExpiringReservationsStorage instance to use as a source of truth
+        """
+        raise NotImplementedError

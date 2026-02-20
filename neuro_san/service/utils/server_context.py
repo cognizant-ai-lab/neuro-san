@@ -24,7 +24,8 @@ from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
 from neuro_san.interfaces.agent_session_constants import AgentSessionConstants
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
-from neuro_san.internals.network_providers.expiring_agent_network_storage import ExpiringAgentNetworkStorage
+from neuro_san.internals.network_providers.expiring_caching_agent_network_storage \
+    import ExpiringCachingAgentNetworkStorage
 from neuro_san.service.utils.server_status import ServerStatus
 from neuro_san.service.utils.mcp_server_context import McpServerContext
 
@@ -48,7 +49,7 @@ class ServerContext:
         self.network_storage_dict: Dict[str, AgentNetworkStorage] = {
             "protected": AgentNetworkStorage(),
             "public": AgentNetworkStorage(),
-            "temp": ExpiringAgentNetworkStorage()
+            "temp": ExpiringCachingAgentNetworkStorage()
         }
 
     def get_executor_pool(self) -> AsyncioExecutorPool:

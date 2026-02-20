@@ -43,6 +43,7 @@ from neuro_san.service.http.config.http_server_config import HttpServerConfig
 from neuro_san.service.interfaces.agent_server import AgentServer
 from neuro_san.service.http.server.http_server import HttpServer
 from neuro_san.service.watcher.main_loop.storage_watcher import StorageWatcher
+from neuro_san.service.watcher.temp_networks.temp_network_storage_updater import TempNetworkStorageUpdater
 from neuro_san.service.utils.server_status import ServerStatus
 from neuro_san.service.utils.server_context import ServerContext
 
@@ -256,6 +257,10 @@ class ServerMainLoop:
                           'AGENT_SERVICE_LOG_LEVEL')
             watcher = StorageWatcher(self.watcher_config, self.server_context)
             components_to_start.append(watcher)
+        # Another component to start is the temporary networks updater
+        temp_networks_updater: TempNetworkStorageUpdater =\
+            TempNetworkStorageUpdater(server_context.get_network_storage_dict(), server_context.get_queues())
+        components_to_start.append(temp_networks_updater)
 
         # Create HTTP server;
         self.http_server = HttpServer(
