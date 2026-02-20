@@ -57,25 +57,27 @@ class TestLangChainMcpAdapter:
         assert adapter.client_allowed_tools == []
         assert adapter.logger is not None
 
+    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-positional-arguments
     @pytest.mark.asyncio
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.OauthProviderFactory')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpTokensRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpClientsInfoRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpServersInfoRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
-    async def test_get_mcp_tools_basic(self, mock_client_class, mock_servers_restorer_class, 
-                                      mock_clients_restorer_class, mock_tokens_restorer_class,
-                                      mock_oauth_factory_class, adapter, mock_mcp_tool):
+    async def test_get_mcp_tools_basic(self, mock_client_class, mock_servers_restorer_class,
+                                       mock_clients_restorer_class, mock_tokens_restorer_class,
+                                       mock_oauth_factory_class, adapter, mock_mcp_tool):
         """Test basic retrieval of MCP tools"""
         # Setup restorer mocks
         mock_servers_restorer_class.return_value.restore.return_value = {}
         mock_clients_restorer_class.return_value.restore.return_value = {}
         mock_tokens_restorer_class.return_value.restore.return_value = {}
-        
+
         # Setup oauth mock to return None (no auth needed)
         mock_oauth_factory = mock_oauth_factory_class.return_value
         mock_oauth_factory.get_auth = AsyncMock(return_value=None)
-        
+
         mock_client = mock_client_class.return_value
         mock_client.get_tools = AsyncMock(return_value=[mock_mcp_tool])
 
@@ -95,7 +97,7 @@ class TestLangChainMcpAdapter:
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpServersInfoRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
     async def test_get_mcp_tools_with_allowed_tools_param(
-        self, mock_client_class, mock_servers_restorer_class, 
+        self, mock_client_class, mock_servers_restorer_class,
         mock_clients_restorer_class, mock_tokens_restorer_class,
         mock_oauth_factory_class, adapter
     ):
@@ -104,11 +106,11 @@ class TestLangChainMcpAdapter:
         mock_servers_restorer_class.return_value.restore.return_value = {}
         mock_clients_restorer_class.return_value.restore.return_value = {}
         mock_tokens_restorer_class.return_value.restore.return_value = {}
-        
+
         # Setup oauth mock to return None (no auth needed)
         mock_oauth_factory = mock_oauth_factory_class.return_value
         mock_oauth_factory.get_auth = AsyncMock(return_value=None)
-        
+
         tool1 = MagicMock(spec=StructuredTool)
         tool1.name = "allowed_tool"
         tool1.tags = []
@@ -135,7 +137,7 @@ class TestLangChainMcpAdapter:
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpServersInfoRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
     async def test_get_mcp_tools_with_config_allowed_tools(
-        self, mock_client_class, mock_servers_restorer_class, 
+        self, mock_client_class, mock_servers_restorer_class,
         mock_clients_restorer_class, mock_tokens_restorer_class,
         mock_oauth_factory_class, adapter
     ):
@@ -148,7 +150,7 @@ class TestLangChainMcpAdapter:
         }
         mock_clients_restorer_class.return_value.restore.return_value = {}
         mock_tokens_restorer_class.return_value.restore.return_value = {}
-        
+
         # Setup oauth mock to return None (no auth needed)
         mock_oauth_factory = mock_oauth_factory_class.return_value
         mock_oauth_factory.get_auth = AsyncMock(return_value=None)
@@ -176,7 +178,7 @@ class TestLangChainMcpAdapter:
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpServersInfoRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
     async def test_get_mcp_tools_with_headers_param(
-        self, mock_client_class, mock_servers_restorer_class, 
+        self, mock_client_class, mock_servers_restorer_class,
         mock_clients_restorer_class, mock_tokens_restorer_class,
         mock_oauth_factory_class, adapter
     ):
@@ -191,7 +193,7 @@ class TestLangChainMcpAdapter:
         mock_servers_restorer_class.return_value.restore.return_value = {}
         mock_clients_restorer_class.return_value.restore.return_value = {}
         mock_tokens_restorer_class.return_value.restore.return_value = {}
-        
+
         # Setup oauth mock to return None (no auth needed)
         mock_oauth_factory = mock_oauth_factory_class.return_value
         mock_oauth_factory.get_auth = AsyncMock(return_value=None)
@@ -212,7 +214,7 @@ class TestLangChainMcpAdapter:
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpServersInfoRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
     async def test_get_mcp_tools_with_config_headers(
-        self, mock_client_class, mock_servers_restorer_class, 
+        self, mock_client_class, mock_servers_restorer_class,
         mock_clients_restorer_class, mock_tokens_restorer_class,
         mock_oauth_factory_class, adapter
     ):
@@ -225,7 +227,7 @@ class TestLangChainMcpAdapter:
         }
         mock_clients_restorer_class.return_value.restore.return_value = {}
         mock_tokens_restorer_class.return_value.restore.return_value = {}
-        
+
         # Setup oauth mock to return None (no auth needed)
         mock_oauth_factory = mock_oauth_factory_class.return_value
         mock_oauth_factory.get_auth = AsyncMock(return_value=None)
@@ -245,7 +247,7 @@ class TestLangChainMcpAdapter:
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpClientsInfoRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
     async def test_get_mcp_tools_invalid_headers_type(
-        self, mock_client_class, mock_clients_restorer_class, 
+        self, mock_client_class, mock_clients_restorer_class,
         mock_tokens_restorer_class, mock_oauth_factory_class, adapter, caplog
     ):
         """Test handling of invalid headers type in config"""
@@ -256,10 +258,10 @@ class TestLangChainMcpAdapter:
                 "http_headers": "invalid_string_not_dict"
             }
         }
-        
+
         mock_clients_restorer_class.return_value.restore.return_value = {}
         mock_tokens_restorer_class.return_value.restore.return_value = {}
-        
+
         # Setup oauth mock to return None (no auth needed)
         mock_oauth_factory = mock_oauth_factory_class.return_value
         mock_oauth_factory.get_auth = AsyncMock(return_value=None)
@@ -279,7 +281,7 @@ class TestLangChainMcpAdapter:
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpServersInfoRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
     async def test_get_mcp_tools_adds_langchain_tool_tags(
-        self, mock_client_class, mock_servers_restorer_class, 
+        self, mock_client_class, mock_servers_restorer_class,
         mock_clients_restorer_class, mock_tokens_restorer_class,
         mock_oauth_factory_class, adapter
     ):
@@ -287,11 +289,11 @@ class TestLangChainMcpAdapter:
         mock_servers_restorer_class.return_value.restore.return_value = {}
         mock_clients_restorer_class.return_value.restore.return_value = {}
         mock_tokens_restorer_class.return_value.restore.return_value = {}
-        
+
         # Setup oauth mock to return None (no auth needed)
         mock_oauth_factory = mock_oauth_factory_class.return_value
         mock_oauth_factory.get_auth = AsyncMock(return_value=None)
-        
+
         tools = [
             MagicMock(spec=StructuredTool, name=f"tool{i}", tags=[])
             for i in range(3)
