@@ -28,6 +28,7 @@ else
 fi
 
 echo "Activating virtual environment..."
+# shellcheck disable=SC1091
 source "$VENV_DIR/bin/activate"
 echo "✅ Virtual environment activated"
 echo ""

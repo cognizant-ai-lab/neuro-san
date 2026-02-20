@@ -34,6 +34,7 @@ echo ""
 VENV_DIR=".venv"
 
 echo "Activating virtual environment..."
+# shellcheck disable=SC1091
 source "$VENV_DIR/bin/activate"
 echo "✅ Virtual environment activated"
 echo ""
@@ -61,7 +62,7 @@ echo ""
 
 # Check if port is already in use
 PORT=${AGENT_HTTP_PORT:-8080}
-if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null 2>&1 ; then
+if lsof -Pi :"$PORT" -sTCP:LISTEN -t >/dev/null 2>&1 ; then
     echo "❌ ERROR: Port $PORT is already in use!"
     echo ""
     echo "To see what's using the port:"
