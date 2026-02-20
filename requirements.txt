@@ -6,7 +6,6 @@
 # requirements-build.txt
 
 # In-house dependencies
-# note: ticket issue #705 and switch back to latest leaf-common once we have a new release with the latest fixes and features #706
 leaf-common>=1.2.34
 leaf-server-common>=0.1.23
 
@@ -29,7 +28,6 @@ aiofiles>=25.1.0
 
 # These are transient dependencies needed by leaf-common
 ruamel.yaml>=0.18.6
-hvac>=1.1.0
 
 # For LLM access
 # Keep all these guys limited for now, as it can be the wild wild west out there
