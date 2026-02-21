@@ -54,9 +54,7 @@ class StorageWatcher(Startable):
         self.server_context: ServerContext = server_context
 
         self.storage_updaters: List[StorageUpdater] = [
-            RegistryStorageUpdater(server_context.get_network_storage_dict(), watcher_config),
-            TempNetworkStorageUpdater(server_context.get_network_storage_dict(),
-                                      server_context.get_queues())
+            RegistryStorageUpdater(server_context.get_network_storage_dict(), watcher_config)
         ]
 
         self.update_period_in_seconds: int = self.compute_update_period_in_seconds(self.storage_updaters)
