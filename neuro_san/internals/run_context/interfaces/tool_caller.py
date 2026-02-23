@@ -54,3 +54,10 @@ class ToolCaller(AgentSpecProvider):
         :return: the name of the data-driven agent as it comes from the spec
         """
         raise NotImplementedError
+
+    def get_sly_data(self) -> Dict[str, Any]:
+        """
+        :return: A mapping whose keys might be referenceable by agents, but whose
+                 values should not appear in agent chat text. Can be an empty dictionary.
+        """
+        raise NotImplementedError

@@ -79,6 +79,13 @@ class AbstractCallableActivation(CallableActivation):
         # For now, our inspector is an AgentToolFactory
         return self.factory
 
+    def get_sly_data(self) -> Dict[str, Any]:
+        """
+        :return: A mapping whose keys might be referenceable by agents, but whose
+                 values should not appear in agent chat text. Can be an empty dictionary.
+        """
+        return self.sly_data
+
     def get_origin(self) -> List[Dict[str, Any]]:
         """
         :return: A List of origin dictionaries indicating the origin of the run.
