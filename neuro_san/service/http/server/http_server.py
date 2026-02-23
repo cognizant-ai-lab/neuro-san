@@ -236,7 +236,7 @@ class HttpServer(AgentStateListener):
         # Convert back to a single string as required by constructor
         request_metadata_str: str = " ".join(self.forwarded_request_metadata)
         agent_server_logging: AgentServerLogging = \
-            AgentServerLogging(self.server_name_for_logs, request_metadata_str)
+            AgentServerLogging(self.server_name_for_logs, request_metadata_str, self.logging_config)
         agent_service_provider: AsyncAgentServiceProvider = \
             AsyncAgentServiceProvider(
                 self.logger,
