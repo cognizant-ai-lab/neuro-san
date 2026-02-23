@@ -39,8 +39,10 @@ class LoggingConfigRestorer(Restorer):
                 Default is None, implying the file reference comes from an environment variable.
         """
         super().__init__()
-        self.default_file_reference: str = environ.get("AGENT_SERVICE_LOG_JSON",
-                                                       DEPLOY_DIR.get_file_in_basis("logging.json"))
+        self.default_file_reference: str = default_file_reference
+        if self.default_file_reference is None:
+            self.default_file_reference = environ.get("AGENT_SERVICE_LOG_JSON",
+                                                      DEPLOY_DIR.get_file_in_basis("logging.json"))
 
     def restore(self, file_reference: str = None) -> Dict[str, Any]:
         """

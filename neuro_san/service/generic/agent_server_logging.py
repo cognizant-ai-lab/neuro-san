@@ -15,6 +15,7 @@
 #
 # END COPYRIGHT
 
+from typing import Any
 from typing import Dict
 from typing import List
 
@@ -23,8 +24,6 @@ import os
 
 from leaf_server_common.logging.logging_setup import setup_logging
 from leaf_server_common.server.grpc_metadata_forwarder import GrpcMetadataForwarder
-
-from neuro_san import DEPLOY_DIR
 
 
 class AgentServerLogging:

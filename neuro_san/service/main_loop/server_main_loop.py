@@ -34,7 +34,7 @@ from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_IDLE_C
 from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_INSTANCES
 from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS
 from neuro_san.service.http.config.http_server_config import HttpServerConfig
-from neuro_san.service.http.logging_config_restorer import LoggingConfigRestorer
+from neuro_san.service.http.logging.logging_config_restorer import LoggingConfigRestorer
 from neuro_san.service.http.server.http_server import DEFAULT_SERVER_NAME
 from neuro_san.service.http.server.http_server import DEFAULT_SERVER_NAME_FOR_LOGS
 from neuro_san.service.http.server.http_server import DEFAULT_MAX_CONCURRENT_REQUESTS
