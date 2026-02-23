@@ -78,6 +78,7 @@ class HttpServer(AgentStateListener):
                  server_config: HttpServerConfig,
                  openapi_service_spec_path: str,
                  requests_limit: int,
+                 logging_config: Dict[str, Any],
                  forwarded_request_metadata: str = AgentServer.DEFAULT_FORWARDED_REQUEST_METADATA):
         """
         Constructor:
@@ -87,6 +88,7 @@ class HttpServer(AgentStateListener):
         :param requests_limit: The number of requests to service before shutting down.
                         This is useful to be sure production environments can handle
                         a service occasionally going down.
+        :param logging_config: logging configuration
         :param forwarded_request_metadata: A space-delimited list of http metadata request keys
                to forward to logs/other requests
         """
@@ -94,6 +96,7 @@ class HttpServer(AgentStateListener):
         self.server_config = server_config
         self.http_port = self.server_config.http_port
         self.server_context: ServerContext = server_context
+        self.logging_config: Dict[str, Any] = logging_config
 
         # Randomize requests limit for this server instance.
         # Lower and upper bounds for number of requests before shutting down
@@ -107,7 +110,7 @@ class HttpServer(AgentStateListener):
 
         self.openapi_service_spec_path: str = openapi_service_spec_path
         self.forwarded_request_metadata: List[str] = forwarded_request_metadata.split(" ")
-        self.logger = HttpLogger(self.forwarded_request_metadata)
+        self.logger = HttpLogger(self.forwarded_request_metadata, self.logging_config)
         self.allowed_agents: Dict[str, AsyncAgentServiceProvider] = {}
         self.authorization_policy: AgentAuthorizer = AgentAuthorizationPolicy(self.allowed_agents)
         self.lock = threading.Lock()
@@ -189,12 +192,14 @@ class HttpServer(AgentStateListener):
         live_request_initialize_data: Dict[str, Any] = {
             "forwarded_request_metadata": self.forwarded_request_metadata,
             "server_status": self.server_context.get_server_status(),
-            "op": "live"
+            "op": "live",
+            "logging_config": self.logging_config
         }
         ready_request_initialize_data: Dict[str, Any] = {
             "forwarded_request_metadata": self.forwarded_request_metadata,
             "server_status": self.server_context.get_server_status(),
-            "op": "ready"
+            "op": "ready",
+            "logging_config": self.logging_config
         }
         handlers = []
         # Health check handlers are enabled always
@@ -279,5 +284,6 @@ class HttpServer(AgentStateListener):
             "agent_policy": self.authorization_policy,
             "forwarded_request_metadata": self.forwarded_request_metadata,
             "openapi_service_spec": open_api_dict,
-            "server_context": self.server_context
+            "server_context": self.server_context,
+            "logging_config": self.logging_config
         }

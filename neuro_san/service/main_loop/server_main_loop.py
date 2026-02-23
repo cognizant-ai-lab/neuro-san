@@ -262,6 +262,7 @@ class ServerMainLoop:
             self.http_server_config,
             self.service_openapi_spec_file,
             self.request_limit,
+            self.logging_config,
             forwarded_request_metadata=metadata_str)
 
         # Enable MCP service if requested:
