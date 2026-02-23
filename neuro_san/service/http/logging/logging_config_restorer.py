@@ -23,6 +23,7 @@ from os import environ
 from leaf_common.persistence.interface.restorer import Restorer
 from leaf_common.persistence.easy.easy_hocon_persistence import EasyHoconPersistence
 from leaf_common.persistence.easy.easy_json_persistence import EasyJsonPersistence
+from leaf_common.persistence.easy.easy_yaml_persistence import EasyYamlPersistence
 
 from neuro_san import DEPLOY_DIR
 
@@ -42,7 +43,7 @@ class LoggingConfigRestorer(Restorer):
         self.default_file_reference: str = default_file_reference
         if self.default_file_reference is None:
             self.default_file_reference = environ.get("AGENT_SERVICE_LOG_JSON",
-                                                      DEPLOY_DIR.get_file_in_basis("logging.json"))
+                                                      DEPLOY_DIR.get_file_in_basis("logging.hocon"))
 
     def restore(self, file_reference: str = None) -> Dict[str, Any]:
         """
@@ -62,6 +63,8 @@ class LoggingConfigRestorer(Restorer):
                 logging_config = EasyHoconPersistence().restore(file_reference=use_file_reference)
             if use_file_reference.endswith(".json"):
                 logging_config = EasyJsonPersistence().restore(file_reference=use_file_reference)
+            if use_file_reference.endswith(".yaml") or use_file_reference.endswith(".yml"):
+                logging_config = EasyYamlPersistence().restore(file_reference=use_file_reference)
         else:
             raise ValueError(f"Unsupported logging config file type: {use_file_reference}")
 
