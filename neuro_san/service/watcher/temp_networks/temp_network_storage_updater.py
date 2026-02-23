@@ -115,6 +115,7 @@ class TempNetworkStorageUpdater(AbstractStorageUpdater):
 
         # Process all our queues.
         # We take a copy because during processing we might remove a queue from the pool.
+        self.logger.debug("Updating temp storage from %d queues", before)
         for queue in self.queue_pool.copy():
             self.process_one_queue(queue)
 
