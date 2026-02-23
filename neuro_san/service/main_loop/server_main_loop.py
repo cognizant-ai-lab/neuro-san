@@ -24,24 +24,24 @@ from argparse import ArgumentParser
 
 from leaf_server_common.logging.logging_setup import setup_logging
 
-from neuro_san import DEPLOY_DIR
 from neuro_san import TOP_LEVEL_DIR
 from neuro_san.interfaces.agent_session import AgentSession
-from neuro_san.service.interfaces.startable import Startable
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
-from neuro_san.service.http.server.http_server import DEFAULT_SERVER_NAME
-from neuro_san.service.http.server.http_server import DEFAULT_SERVER_NAME_FOR_LOGS
-from neuro_san.service.http.server.http_server import DEFAULT_MAX_CONCURRENT_REQUESTS
-from neuro_san.service.http.server.http_server import DEFAULT_REQUEST_LIMIT
 from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_CONNECTIONS_BACKLOG
 from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_IDLE_CONNECTIONS_TIMEOUT_SECONDS
 from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_INSTANCES
 from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS
 from neuro_san.service.http.config.http_server_config import HttpServerConfig
-from neuro_san.service.interfaces.agent_server import AgentServer
+from neuro_san.service.http.logging.logging_config_restorer import LoggingConfigRestorer
+from neuro_san.service.http.server.http_server import DEFAULT_SERVER_NAME
+from neuro_san.service.http.server.http_server import DEFAULT_SERVER_NAME_FOR_LOGS
+from neuro_san.service.http.server.http_server import DEFAULT_MAX_CONCURRENT_REQUESTS
+from neuro_san.service.http.server.http_server import DEFAULT_REQUEST_LIMIT
 from neuro_san.service.http.server.http_server import HttpServer
+from neuro_san.service.interfaces.agent_server import AgentServer
+from neuro_san.service.interfaces.startable import Startable
 from neuro_san.service.watcher.main_loop.storage_watcher import StorageWatcher
 from neuro_san.service.utils.server_status import ServerStatus
 from neuro_san.service.utils.server_context import ServerContext
@@ -72,6 +72,7 @@ class ServerMainLoop:
         self.server_context = ServerContext()
         self.http_server_config = HttpServerConfig()
         self.watcher_config: Dict[str, Any] = {}
+        self.logging_config: Dict[str, Any] = {}
 
     def prepare_args(self) -> ArgumentParser:
         """
@@ -226,10 +227,8 @@ class ServerMainLoop:
         """
         self.parse_args()
 
-        # Make for easy running from the neuro-san repo
-        if os.environ.get("AGENT_SERVICE_LOG_JSON") is None:
-            # Use the log file that is local to the repo
-            os.environ["AGENT_SERVICE_LOG_JSON"] = DEPLOY_DIR.get_file_in_basis("logging.json")
+        logging_config_restorer = LoggingConfigRestorer()
+        self.logging_config = logging_config_restorer.restore()
 
         # Construct forwarded metadata list as a union of
         # self.forwarded_request_metadata and self.usage_logger_metadata
@@ -251,9 +250,9 @@ class ServerMainLoop:
         if server_status.updater.is_requested():
             current_dir: str = os.path.dirname(os.path.abspath(__file__))
             setup_logging(server_status.updater.get_service_name(),
-                          current_dir,
-                          'AGENT_SERVICE_LOG_JSON',
-                          'AGENT_SERVICE_LOG_LEVEL')
+                          default_log_dir=current_dir,
+                          log_level_env="AGENT_SERVICE_LOG_LEVEL",
+                          logging_config=self.logging_config)
             watcher = StorageWatcher(self.watcher_config, self.server_context)
             components_to_start.append(watcher)
 
@@ -263,6 +262,7 @@ class ServerMainLoop:
             self.http_server_config,
             self.service_openapi_spec_file,
             self.request_limit,
+            self.logging_config,
             forwarded_request_metadata=metadata_str)
 
         # Enable MCP service if requested:
