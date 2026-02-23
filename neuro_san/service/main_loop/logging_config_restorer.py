@@ -54,11 +54,13 @@ class LoggingConfigRestorer(Restorer):
         if file_reference is None:
             use_file_reference = self.default_file_reference
 
-        if use_file_reference is None:
-            return {}
-        elif use_file_reference.endswith(".hocon"):
-            return EasyHoconPersistence().restore(file_reference=use_file_reference)
-        elif use_file_reference.endswith(".json"):
-            return EasyJsonPersistence().restore(file_reference=use_file_reference)
+        logging_config: Dict[str, Any] = {}
+        if use_file_reference is not None:
+            if use_file_reference.endswith(".hocon"):
+                logging_config = EasyHoconPersistence().restore(file_reference=use_file_reference)
+            if use_file_reference.endswith(".json"):
+                logging_config = EasyJsonPersistence().restore(file_reference=use_file_reference)
         else:
             raise ValueError(f"Unsupported logging config file type: {use_file_reference}")
+
+        return logging_config
