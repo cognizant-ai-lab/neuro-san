@@ -58,6 +58,14 @@ class ExpiringCachingAgentNetworkStorage(AbstractExpiringReservationsStorage, Ag
         """
         self.base_storage = base_storage
 
+    def start(self):
+        """
+        Start this storage, which includes starting the expiration checking loop.
+        """
+        super().start()
+        if self.base_storage is not None:
+            self.base_storage.start()
+
     def add_reservations(self, reservations_dict: Dict[Reservation, Dict[str, Any]],
                          source: str = None):
         """
