@@ -176,9 +176,9 @@ ENV AGENT_TOOL_PATH=${APP_SOURCE}/coded_tools
 # Where to find the configuration file for Python logging.
 # See https://docs.python.org/3/library/logging.config.html#dictionary-schema-details
 # as to how this file can be configured for your own needs.  Examples there are provided in YAML,
-# but these can be easily translated to JSON (which we prefer).
+# but these can be easily translated to JSON or HOCON (which we prefer).
 # Another good resource: https://docs.python.org/3/howto/logging-cookbook.html
-ENV AGENT_SERVICE_LOG_JSON=${PACKAGE_DEPLOY}/logging.json
+ENV AGENT_SERVICE_LOG_JSON=${PACKAGE_DEPLOY}/logging.hocon
 
 # Threshold for logging.
 # See https://docs.python.org/3/library/logging.html#logging.Handler.setLevel

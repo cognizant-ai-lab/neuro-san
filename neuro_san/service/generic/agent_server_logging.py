@@ -15,6 +15,7 @@
 #
 # END COPYRIGHT
 
+from typing import Any
 from typing import Dict
 from typing import List
 
@@ -24,8 +25,6 @@ import os
 from leaf_server_common.logging.logging_setup import setup_logging
 from leaf_server_common.server.grpc_metadata_forwarder import GrpcMetadataForwarder
 
-from neuro_san import DEPLOY_DIR
-
 
 class AgentServerLogging:
     """
@@ -33,7 +32,8 @@ class AgentServerLogging:
     """
 
     def __init__(self, server_name_for_logs: str,
-                 forwarded_request_metadata_str: str):
+                 forwarded_request_metadata_str: str,
+                 logging_config: Dict[str, Any] = None):
         """
         Constructor
 
@@ -42,9 +42,11 @@ class AgentServerLogging:
                             whose key/value pairs are to be forwarded on to the logging system.
                             Note that individual keys must be snake_case. No capitals.
                             (I guess per HTTP rules).
+        :param logging_config: A dictionary of configuration parameters for the logging system
         """
         self.server_name_for_logs: str = server_name_for_logs
         self.forwarded_request_metadata: List[str] = forwarded_request_metadata_str.split(" ")
+        self.logging_config: Dict[str, Any] = logging_config
 
     def get_forwarder(self) -> GrpcMetadataForwarder:
         """
@@ -61,11 +63,6 @@ class AgentServerLogging:
         :param request_id: An optional request_id string.  Default is "None".
         """
 
-        # Make for easy running from the neuro-san repo
-        if os.environ.get("AGENT_SERVICE_LOG_JSON") is None:
-            # Use the log file that is local to the repo
-            os.environ["AGENT_SERVICE_LOG_JSON"] = DEPLOY_DIR.get_file_in_basis("logging.json")
-
         # Need to initialize the forwarded metadata default values before our first
         # call to a logger (which is below!).
         extra_logging_defaults: Dict[str, str] = {
@@ -81,10 +78,11 @@ class AgentServerLogging:
                     extra_logging_defaults[key] = "None"
 
         current_dir: str = os.path.dirname(os.path.abspath(__file__))
-        setup_logging(self.server_name_for_logs, current_dir,
-                      'AGENT_SERVICE_LOG_JSON',
-                      'AGENT_SERVICE_LOG_LEVEL',
-                      extra_logging_defaults)
+        setup_logging(self.server_name_for_logs,
+                      default_log_dir=current_dir,
+                      log_level_env="AGENT_SERVICE_LOG_LEVEL",
+                      extra_logging_fields_defaults=extra_logging_defaults,
+                      logging_config=self.logging_config)
 
         # This module within openai library can be quite chatty w/rt http requests
         logging.getLogger("httpx").setLevel(logging.WARNING)
