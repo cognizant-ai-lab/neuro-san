@@ -79,6 +79,7 @@
     # Reservations example
     "copy_cat.hocon": true,
 
+    # Agents having to do with MCP
     # These 2 agents are examples of calling MCP tools using string and dictionary format, respectively.
     "mcp_deepwiki_dict.hocon": true,
     "mcp_deepwiki_str.hocon": true,
@@ -87,6 +88,9 @@
     # This is an example of an agent network that uses neuro-san as an MCP server where each agent is a tool.
     # Make sure to start the neuro-san server at localhost:8080 before running this network.
     "mcp_neurosan.hocon": true,
+
+    # Middleware agent examples
+    "pii_middleware.hocon": true,
 
     # Agents having to do with test infrastructure
     "gist.hocon": true,
