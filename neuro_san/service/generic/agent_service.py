@@ -233,7 +233,7 @@ class AgentService:
         request_log = None
         user_text: str = request_dict.get("user_message", {}).get("text", "")
 
-        log_marker: str = self.server_logging(user_text, "AGENT_REQUEST_LOGGING_INPUT_SLICE")
+        log_marker: str = self.server_logging.redact_per_env_var(user_text, "AGENT_REQUEST_LOGGING_INPUT_SLICE")
         service_logging_dict: Dict[str, str] = {
             "request_id": f"server-{uuid.uuid4()}"
         }

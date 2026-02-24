@@ -234,7 +234,7 @@ class AsyncAgentService:
         user_text: str = request_dict.get("user_message", {}).get("text", "")
         do_log: bool = "StreamingChat" not in DO_NOT_LOG_REQUESTS
 
-        log_marker: str = self.server_logging(user_text, "AGENT_REQUEST_LOGGING_INPUT_SLICE")
+        log_marker: str = self.server_logging.redact_per_env_var(user_text, "AGENT_REQUEST_LOGGING_INPUT_SLICE")
         metadata: Dict[str, str] = {
             "request_id": f"server-{uuid.uuid4()}"
         }
