@@ -26,7 +26,7 @@ import threading
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.interfaces.expiring_reservations_storage import ExpiringReservationsStorage
-from neuro_san.service.interfaces.startable import Startable
+from neuro_san.internals.interfaces.startable import Startable
 
 
 class AbstractExpiringReservationsStorage(ExpiringReservationsStorage, Startable):

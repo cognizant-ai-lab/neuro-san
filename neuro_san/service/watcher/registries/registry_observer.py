@@ -17,7 +17,7 @@
 
 from typing import Tuple
 
-from neuro_san.service.interfaces.startable import Startable
+from neuro_san.internals.interfaces.startable import Startable
 
 
 class RegistryObserver(Startable):

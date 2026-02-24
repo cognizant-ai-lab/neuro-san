@@ -48,7 +48,7 @@ from neuro_san.service.http.server.resources_usage_logger import ResourcesUsageL
 from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
 from neuro_san.service.interfaces.agent_server import AgentServer
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
-from neuro_san.service.interfaces.startable import Startable
+from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.service.mcp.handlers.mcp_root_handler import McpRootHandler
 from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.service.utils.server_status import ServerStatus

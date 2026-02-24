@@ -264,7 +264,6 @@ class S3ExpiringReservationsStorage(AbstractExpiringReservationsStorage):
         Remove expired reservations from S3 storage.
         """
         self.logger.debug("Starting expiration process for S3 reservations")
-        print("Starting expiration process for S3 reservations")
 
         # List all reservation objects in S3 bucket with our prefix
         response: Dict[str, Any] = self.s3_client.list_objects_v2(
@@ -292,7 +291,5 @@ class S3ExpiringReservationsStorage(AbstractExpiringReservationsStorage):
 
         if expired_count > 0:
             self.logger.info("Expiration complete: removed %d expired reservations from S3", expired_count)
-            print(f"Expiration complete: removed {expired_count} expired reservations from S3")
         else:
             self.logger.debug("Expiration complete: removed no expired reservations from S3")
-            print("Expiration complete: removed no expired reservations from S3")

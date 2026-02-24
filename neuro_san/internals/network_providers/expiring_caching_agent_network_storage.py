@@ -121,7 +121,7 @@ class ExpiringCachingAgentNetworkStorage(AbstractExpiringReservationsStorage, Ag
                  (None, None) otherwise
         """
         # For this class, this method is never used.
-        return None, None
+        raise NotImplementedError
 
     def expire_reservations(self):
         """
@@ -131,7 +131,11 @@ class ExpiringCachingAgentNetworkStorage(AbstractExpiringReservationsStorage, Ag
         # First determine what has expired
         expired: List[str] = []
 
-        for agent_name, reservation in self.reservations_table.items():
+        reservations_snapshot: Dict[str, Reservation] = None
+        with self.lock:
+            reservations_snapshot = self.reservations_table.copy()
+
+        for agent_name, reservation in reservations_snapshot.items():
             if reservation.is_expired():
                 expired.append(agent_name)
 
@@ -158,11 +162,9 @@ class ExpiringCachingAgentNetworkStorage(AbstractExpiringReservationsStorage, Ag
         :param agent_name: name of an agent
         """
         # Agents and their Reservations are always present or absent together.
-        reservation: Reservation = None
-        agent_network: AgentNetwork = None
-        if agent_name in self.reservations_table:
+        reservation: Reservation = self.reservations_table.get(agent_name, None)
+        if reservation is not None:
             # We have a reservation for this agent, but we need to check is it still valid:
-            reservation = self.reservations_table[agent_name]
             if reservation.is_expired():
                 # Reservation is expired, so AgentNetwork is gone for good:
                 with self.lock:
@@ -181,8 +183,10 @@ class ExpiringCachingAgentNetworkStorage(AbstractExpiringReservationsStorage, Ag
                 # Our agent network no longer exists.
                 return None
             # Reservation is still valid, so we can return the AgentNetworkProvider for this agent.
-            agent_network = self.agents_table[agent_name]
-            return FixedAgentNetworkProvider(agent_network)
+            agent_network: AgentNetwork = self.agents_table.get(agent_name, None)
+            if agent_network is not None:
+                return FixedAgentNetworkProvider(agent_network)
+            return None
         # We don't have a reservation for this agent,
         # so check the source storage if we have one:
         if self.base_storage is not None:
