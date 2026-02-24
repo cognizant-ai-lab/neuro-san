@@ -122,6 +122,7 @@ class AgentServerLogging:
             except ValueError:
                 # Not an int
                 logging.getLogger(self.__class__.__name__).info(
-                    f"Value for {env_var_name}: {slice_str} needs to be integer or empty string.")
+                    "Value for %s: '%s' needs to be integer or empty string.",
+                    env_var_name, slice_str)
 
         return value
