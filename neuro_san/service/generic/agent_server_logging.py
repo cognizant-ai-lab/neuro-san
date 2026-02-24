@@ -106,7 +106,7 @@ class AgentServerLogging:
                 marker_slice: int = int(slice_str)
 
                 if marker_slice == 0:
-                    value = ""
+                    value = "<redacted>"
                 elif marker_slice < 0:
                     one_slice: str = input_str[marker_slice:]
                     prefix: str = ""
