@@ -64,6 +64,7 @@ class TestSmokeTestHocons(TestCase):
         # Ideally more basic functionality will come first.
         # Barring that, try to stick to alphabetical order.
         "music_nerd_pro/combination_responses_with_history_mcp.hocon",
+        "copy_cat/create_and_use_temp_network_http.hocon",
         # Issue #734:
         # "music_nerd_pro_sly/combination_responses_with_history_mcp.hocon",
 
