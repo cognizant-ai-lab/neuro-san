@@ -86,3 +86,42 @@ class AgentServerLogging:
 
         # This module within openai library can be quite chatty w/rt http requests
         logging.getLogger("httpx").setLevel(logging.WARNING)
+
+    def redact_per_env_var(self, input_str: str, env_var_name: str) -> str:
+        """
+        Redact a string using the value of an environment variable.
+
+        :param input_str: The string to redact
+        :param env_var_name: The name of the environment variable
+        :return: The redacted string
+        """
+        value: str = "'{input_str}'"
+
+        # Determine the value of the environment variable
+        slice_str: str = os.environ.get(env_var_name)
+        if slice_str is not None and len(slice_str) > 0:
+
+            # Deterimine the extent and direction of the slice
+            try:
+                marker_slice: int = int(slice_str)
+
+                if marker_slice == 0:
+                    value = ""
+                elif marker_slice < 0:
+                    one_slice: str = input_str[marker_slice:]
+                    prefix: str = ""
+                    if -marker_slice < len(input_str):
+                        prefix = "..."
+                    value = f"'{prefix}{one_slice}'"
+                else:
+                    one_slice: str = input_str[:marker_slice]
+                    suffix: str = ""
+                    if marker_slice < len(input_str):
+                        suffix = "..."
+                    value = f"'{one_slice}{suffix}'"
+            except ValueError:
+                # Not an int
+                logging.getLogger(self.__class__.__name__).info(
+                    f"Value for {env_var_name}: {slice_str} needs to be integer or empty string.")
+
+        return value

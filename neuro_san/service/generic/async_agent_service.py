@@ -19,8 +19,8 @@ from typing import Any
 from typing import Dict
 from typing import Generator
 
-import json
 import contextlib
+import json
 import uuid
 
 from janus import Queue
@@ -234,7 +234,7 @@ class AsyncAgentService:
         user_text: str = request_dict.get("user_message", {}).get("text", "")
         do_log: bool = "StreamingChat" not in DO_NOT_LOG_REQUESTS
 
-        log_marker = f"'{user_text}'"
+        log_marker: str = self.server_logging(user_text, "AGENT_REQUEST_LOGGING_INPUT_SLICE")
         metadata: Dict[str, str] = {
             "request_id": f"server-{uuid.uuid4()}"
         }
