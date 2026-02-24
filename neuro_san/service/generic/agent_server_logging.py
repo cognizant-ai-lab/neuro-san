@@ -95,7 +95,7 @@ class AgentServerLogging:
         :param env_var_name: The name of the environment variable
         :return: The redacted string
         """
-        value: str = "'{input_str}'"
+        value: str = f"'{input_str}'"
 
         # Determine the value of the environment variable
         slice_str: str = os.environ.get(env_var_name)
