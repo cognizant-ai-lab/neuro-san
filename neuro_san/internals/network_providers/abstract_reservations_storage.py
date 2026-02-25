@@ -25,11 +25,11 @@ import time
 import threading
 
 from neuro_san.interfaces.reservation import Reservation
-from neuro_san.internals.interfaces.expiring_reservations_storage import ExpiringReservationsStorage
+from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
 from neuro_san.internals.interfaces.startable import Startable
 
 
-class AbstractReservationsStorage(ExpiringReservationsStorage, Startable):
+class AbstractReservationsStorage(ReservationsStorage, Startable):
     """
     An abstract implementation of ExpiringReservationsStorage interface
     providing a background thread that periodically checks for expired reservations and removes them.
