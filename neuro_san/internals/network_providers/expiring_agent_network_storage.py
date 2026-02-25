@@ -44,7 +44,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         """
         super().__init__(check_expirations_interval_seconds=check_expirations_interval_seconds)
         self.reservations_table: Dict[str, Reservation] = {}
-        self.base_storage: ExpiringReservationsStorage = None
+        self.base_storage: ReservationsStorage = None
 
     def set_base_storage(self, base_storage: ReservationsStorage):
         """
