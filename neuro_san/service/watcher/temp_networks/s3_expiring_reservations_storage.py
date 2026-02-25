@@ -33,6 +33,7 @@ from logging import Logger
 
 from boto3 import client as boto3_client
 from botocore.client import BaseClient
+from botocore.exceptions import BotoCoreError
 from botocore.exceptions import ClientError
 from botocore.exceptions import NoCredentialsError
 
@@ -357,7 +358,7 @@ class S3ExpiringReservationsStorage(AbstractExpiringReservationsStorage):
         current_time: float = time.time()
 
         for reservation_key in self.iter_reservation_keys():
-             # Attempt to expire this reservation and increment counter if successful
+            # Attempt to expire this reservation and increment counter if successful
             if self.expire_one_reservation(reservation_key, current_time):
                 expired_count += 1
 
