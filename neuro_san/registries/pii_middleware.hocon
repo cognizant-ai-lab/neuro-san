@@ -56,7 +56,7 @@ Tell her I got her number and I need to make her mine.
 Send me a phone number and I will leave a message on its voicemail for you.
 (Tee-hee, giggle-giggle).
 """,
-                "paramaters": {
+                "parameters": {
                     "phone_number": {
                         "type": "string",
                         "description": "The phone number to send the message to."
