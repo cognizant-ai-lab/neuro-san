@@ -55,7 +55,7 @@ Items in ***bold*** are essentials. Try to understand these first.
         - [MCP Servers](#mcp-servers)
             - [Authentication](#authentication)
     - [***class*** - Python class name to invoke for Coded Tools](#class-1)
-    - [***llm_config*** - agent-specific LLM configuration](#llm_config-1)
+    - [llm_config - agent-specific LLM configuration](#llm_config-1)
     - [command](#command)
     - [toolbox](#toolbox)
     - [args](#args)
@@ -77,6 +77,12 @@ Items in ***bold*** are essentials. Try to understand these first.
     - [error_formatter](#error_formatter-1)
     - [error_fragments](#error_fragments-1)
     - [structure_formats](#structure_formats)
+    - [middleware](#middleware)
+        - [class](#class-2)
+        - [args](#args-1)
+            - [origin](#origin)
+            - [origin_str](#origin_str)
+            - [sly_data](#sly_data-3)
 
 <!--TOC-->
 
@@ -558,7 +564,7 @@ server. Users may specify different authorization credentials for different MCP 
     ```json
     {
         "http_headers": {
-            "<MCP_URL_1>": {      
+            "<MCP_URL_1>": {
                 "Authorization": "Bearer <token_value>"
             },
             "<MCP_URL_2>": {
@@ -576,7 +582,7 @@ server. Users may specify different authorization credentials for different MCP 
         "mcp_server_url_1": {
             "http_headers": {
                 "Authorization": "Bearer <token>",
-            }, 
+            },
             "tools": ["tool_1", "tool_2"]
         },
     }
@@ -868,3 +874,60 @@ definition.
 Example networks that parse their structure_formats:
 
 - [music_nerd_pro.hocon](../neuro_san/registries/music_nerd_pro.hocon)
+
+### middleware
+
+An optional list of dictionaries which describes AgentMiddleware instances to be applied to the agent.
+Note that the order of appearance in the list can matter.
+
+For an overview of middleware, see the [Overview](https://docs.langchain.com/oss/python/langchain/middleware/overview).
+
+Example networks that parse their structure_formats:
+
+- [pii_middleware.hocon](../neuro_san/registries/pii_middleware.hocon)
+
+Each middleware dictionary in the list can contain the following keys:
+
+<!--- pyml disable-next-line no-duplicate-heading -->
+#### class
+
+_required_
+The fully-qualified class name of the langchain AgentMiddleware class to be instantiated.
+
+AgentMiddleware allows for calling code to be executed in the following situations:
+- before the agent execution starts (abefore_agent())
+- after the agent execution starts (aafter_agent())
+- before the LLM is called (abefore_model())
+- after the LLM is called (aafter_model())
+
+We list the asynchronous methods here as those are preferred in the asynchronous environment of
+a Neuro SAN server.
+
+Note that we only support class-based middleware and not annotations-based middleware.
+See [AgentMiddleware](https://docs.langchain.com/oss/python/langchain/middleware/custom#class-based-middleware)
+for details.
+
+<!--- pyml disable-next-line no-duplicate-heading -->
+#### args
+
+A dictionary of keyword arguments to be passed to the specified AgentMiddleware class constructor.
+
+Keys of the dictionary are the argument names and values are the argument values.
+These will depend on the constructor signature of the class you are trying to instantiate.
+
+There are some special args that will be populated with information provided by the agent framework
+if they are specified in both the middleware dictionary and the class constructor signature:
+
+##### origin
+
+A list of dictionaries that describe the origin of the middleware instantiation in terms of
+where it is in the hierarchy of the agent network.
+
+##### origin_str
+
+A simpler string representation of the [origin](#origin)
+
+<!--- pyml disable-next-line no-duplicate-heading -->
+##### sly_data
+
+The agent's sly_data dictionary which is common to all middleware and coded tools for the request.

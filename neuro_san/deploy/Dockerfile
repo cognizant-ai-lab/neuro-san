@@ -185,6 +185,14 @@ ENV AGENT_SERVICE_LOG_JSON=${PACKAGE_DEPLOY}/logging.hocon
 # and https://docs.python.org/3/library/logging.html#logging-levels for details.
 ENV AGENT_SERVICE_LOG_LEVEL="DEBUG"
 
+# Optional input slice specification for user input in request logging
+# By default this is empty, which means all user input is logged.
+# This can be an integer where:
+#   > 0 means first N characters of user input is logged
+#   0 means no user input is logged
+#   < 0 means last N characters of user input is logged
+ENV AGENT_REQUEST_LOGGING_INPUT_SLICE=""
+
 # The name of the service for health reporting purposes
 ENV AGENT_SERVER_NAME="neuro-san.Agent"
 

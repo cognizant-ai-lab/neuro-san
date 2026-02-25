@@ -45,6 +45,7 @@ class TestUnitTestHocons(TestCase):
         "math_guy/deep_forwarded_sly_data.hocon",
         "music_nerd/beatles_with_history.hocon",
         "requests_get/get_example.hocon",
+        "pii_middleware/jenny_phone.hocon",
 
         # List more hocon files as they become available here.
     ]), skip_on_empty=True)
