@@ -154,7 +154,7 @@ class BaseToolFactory:
         # By default, assume no allowed tools. This may get updated below or in the LangChainMcpAdadter.
         allowed_tools: List[str] = None
         # Get sly_data for http headers, client info, and tokens that may be needed for MCP auth and tool retrieval
-        sly_data: Dict[str, Any] = self.tool_caller.sly_data
+        sly_data: Dict[str, Any] = self.tool_caller.get_sly_data()
 
         if isinstance(mcp_info, str):
             server_url: str = mcp_info

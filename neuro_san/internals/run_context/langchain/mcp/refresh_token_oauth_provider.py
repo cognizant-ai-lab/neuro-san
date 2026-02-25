@@ -24,7 +24,6 @@ from mcp.client.auth import TokenStorage
 from mcp.client.auth.exceptions import OAuthTokenError
 from mcp.shared.auth import OAuthClientInformationFull
 
-
 from neuro_san.internals.run_context.langchain.mcp.extended_oauth_provider import ExtendedOauthClientProvider
 
 

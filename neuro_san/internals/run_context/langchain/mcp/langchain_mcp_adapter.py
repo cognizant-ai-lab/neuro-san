@@ -39,7 +39,7 @@ from neuro_san.internals.run_context.langchain.mcp.oauth_provider_factory import
 from neuro_san.internals.run_context.langchain.mcp.sly_data_token_storage import SlyDataTokenStorage
 from neuro_san.internals.run_context.langchain.mcp.mcp_tokens_restorer import McpTokensRestorer
 
-MCP_AUTH_TIMEOUT = float(os.getenv("MCP_AUTH_TIMEOUT", "300.0"))  # Default to 5 minutes if not set
+MCP_AUTH_TIMEOUT = float(os.getenv("AGENT_MCP_TIMEOUT_SECONDS", "300.0"))  # Default to 5 minutes if not set
 
 
 class LangChainMcpAdapter:
