@@ -29,7 +29,7 @@ from neuro_san.internals.interfaces.expiring_reservations_storage import Expirin
 from neuro_san.internals.interfaces.startable import Startable
 
 
-class AbstractExpiringReservationsStorage(ExpiringReservationsStorage, Startable):
+class AbstractReservationsStorage(ExpiringReservationsStorage, Startable):
     """
     An abstract implementation of ExpiringReservationsStorage interface
     providing a background thread that periodically checks for expired reservations and removes them.

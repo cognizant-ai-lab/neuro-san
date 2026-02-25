@@ -40,12 +40,12 @@ from botocore.exceptions import NoCredentialsError
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.expiring_reservations_storage import ExpiringReservationsStorage
-from neuro_san.internals.network_providers.abstract_expiring_reservations_storage \
-    import AbstractExpiringReservationsStorage
+from neuro_san.internals.network_providers.abstract_reservations_storage \
+    import AbstractReservationsStorage
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
 
 
-class S3ExpiringReservationsStorage(AbstractExpiringReservationsStorage):
+class S3ExpiringReservationsStorage(AbstractReservationsStorage):
     """
     AWS S3-based implementation of ExpiringReservationsStorage.
 
