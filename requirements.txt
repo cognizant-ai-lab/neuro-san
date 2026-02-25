@@ -7,7 +7,7 @@
 
 # In-house dependencies
 leaf-common>=1.2.34
-leaf-server-common>=0.1.23
+leaf-server-common>=0.1.24
 
 # These are needed for generating code from .proto files and for the
 # generated *_pb2_grpc.py files which import grpcio

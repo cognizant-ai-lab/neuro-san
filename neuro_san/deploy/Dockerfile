@@ -176,14 +176,22 @@ ENV AGENT_TOOL_PATH=${APP_SOURCE}/coded_tools
 # Where to find the configuration file for Python logging.
 # See https://docs.python.org/3/library/logging.config.html#dictionary-schema-details
 # as to how this file can be configured for your own needs.  Examples there are provided in YAML,
-# but these can be easily translated to JSON (which we prefer).
+# but these can be easily translated to JSON or HOCON (which we prefer).
 # Another good resource: https://docs.python.org/3/howto/logging-cookbook.html
-ENV AGENT_SERVICE_LOG_JSON=${PACKAGE_DEPLOY}/logging.json
+ENV AGENT_SERVICE_LOG_JSON=${PACKAGE_DEPLOY}/logging.hocon
 
 # Threshold for logging.
 # See https://docs.python.org/3/library/logging.html#logging.Handler.setLevel
 # and https://docs.python.org/3/library/logging.html#logging-levels for details.
 ENV AGENT_SERVICE_LOG_LEVEL="DEBUG"
+
+# Optional input slice specification for user input in request logging
+# By default this is empty, which means all user input is logged.
+# This can be an integer where:
+#   > 0 means first N characters of user input is logged
+#   0 means no user input is logged
+#   < 0 means last N characters of user input is logged
+ENV AGENT_REQUEST_LOGGING_INPUT_SLICE=""
 
 # The name of the service for health reporting purposes
 ENV AGENT_SERVER_NAME="neuro-san.Agent"

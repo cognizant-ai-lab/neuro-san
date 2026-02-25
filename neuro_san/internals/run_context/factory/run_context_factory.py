@@ -81,11 +81,11 @@ class RunContextFactory:
         if context_type.startswith("langchain"):
             run_context = LangChainRunContext(default_llm_config, parent_run_context,
                                               tool_caller, use_invocation_context,
-                                              chat_context)
+                                              chat_context, use_config.get("middleware_config"))
         else:
             # Default case
             run_context = LangChainRunContext(default_llm_config, parent_run_context,
                                               tool_caller, use_invocation_context,
-                                              chat_context)
+                                              chat_context, use_config.get("middleware_config"))
 
         return run_context

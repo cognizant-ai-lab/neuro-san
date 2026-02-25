@@ -41,7 +41,8 @@ class HealthCheckHandler(RequestHandler):
     def initialize(self,
                    forwarded_request_metadata: List[str],
                    server_status: ServerStatus,
-                   op: str):
+                   op: str,
+                   logging_config: Dict[str, Any]):
         """
         This method is called by Tornado framework to allow
         injecting service-specific data into local handler context.
@@ -51,8 +52,9 @@ class HealthCheckHandler(RequestHandler):
         :param op: requested healthcheck operation:
                    "ready" for /readyz query
                    "live" for /livez query
+        :param logging_config: logging configuration dictionary
         """
-        self.logger = HttpLogger(forwarded_request_metadata)
+        self.logger = HttpLogger(forwarded_request_metadata, logging_config)
         if op == "ready":
             self.status = server_status.is_server_ready()
         else:

@@ -68,6 +68,7 @@ class CallingActivation(AbstractCallableActivation, ToolCaller):
         agent_network_config: Dict[str, Any] = self.factory.get_config()
         spec_llm_config: Dict[str, Any] = self.agent_tool_spec.get("llm_config")
         run_context_config: Dict[str, Any] = self.prepare_run_context_config(agent_network_config,
+                                                                             self.agent_tool_spec,
                                                                              spec_llm_config)
         self.run_context: RunContext = RunContextFactory.create_run_context(parent_run_context, self,
                                                                             config=run_context_config)
@@ -75,11 +76,13 @@ class CallingActivation(AbstractCallableActivation, ToolCaller):
 
     @staticmethod
     def prepare_run_context_config(agent_network_config: Dict[str, Any],
+                                   agent_tool_spec: Dict[str, Any],
                                    spec_llm_config: Dict[str, Any]) -> Dict[str, Any]:
         """
         Get the llm config as a combination of defaults from different places in the config
 
         :param agent_network_config: The entirety of the agent network's config
+        :param agent_tool_spec: The agent tool spec
         :param spec_llm_config: The llm config for the agent spec
         :return: A merged llm config to use for a RunContext
         """
@@ -88,12 +91,14 @@ class CallingActivation(AbstractCallableActivation, ToolCaller):
             spec_llm_config = empty
 
         overlayer = DictionaryOverlay()
-        llm_config = agent_network_config.get("llm_config", empty)
+        llm_config: Dict[str, Any] = agent_network_config.get("llm_config", empty)
         llm_config = overlayer.overlay(llm_config, spec_llm_config)
 
+        middleware_config: List[Dict[str, Any]] = agent_tool_spec.get("middleware")
         run_context_config: Dict[str, Any] = {
             "context_type": agent_network_config.get("context_type"),
-            "llm_config": llm_config
+            "llm_config": llm_config,
+            "middleware_config": middleware_config
         }
         return run_context_config
 

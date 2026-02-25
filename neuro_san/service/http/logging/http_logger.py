@@ -38,9 +38,13 @@ class HttpLogger(EventLoopLogger):
 
     HTTP_LOGGER_NAME: str = "HttpServer"
 
-    def __init__(self, forwarded_metadata: Sequence[str]):
+    def __init__(self, forwarded_metadata: Sequence[str],
+                 logging_config: Dict[str, Any]):
         """
         Constructor
+
+        :param forwarded_metadata: list of metadata keys to be forwarded
+        :param logging_config: logging configuration dictionary
         """
         # Initialize minimal metadata dictionary to contain some value
         # for each metadata key we expect to be used.
@@ -49,7 +53,7 @@ class HttpLogger(EventLoopLogger):
             self.base_metadata[key] = "None"
         self.base_metadata["source"] = HttpLogger.HTTP_LOGGER_NAME
         LogContextFilter.set_log_context()
-        self.setup_logging()
+        self.setup_logging(logging_config)
         # For our Http server, we have separate logging setup,
         # because things like "user_id" and "request_id"
         # can only be extracted and used on per-request basis.
@@ -92,17 +96,20 @@ class HttpLogger(EventLoopLogger):
         self.prepare_filter(metadata)
         self.logger.error(msg, *args)
 
-    def setup_logging(self):
+    def setup_logging(self, logging_config: Dict[str, Any]):
         """
         Setup logging from configuration file.
+
+        :param logging_config: logging configuration dictionary
         """
         # Need to initialize the forwarded metadata default values before our first
         # call to a logger.
         current_dir: str = pathlib.Path(__file__).parent.parent.resolve()
-        setup_logging(HttpLogger.HTTP_LOGGER_NAME, current_dir,
-                      'AGENT_SERVICE_LOG_JSON',
-                      'AGENT_SERVICE_LOG_LEVEL',
-                      self.base_metadata)
+        setup_logging(HttpLogger.HTTP_LOGGER_NAME,
+                      default_log_dir=current_dir,
+                      log_level_env="AGENT_SERVICE_LOG_LEVEL",
+                      extra_logging_fields_defaults=self.base_metadata,
+                      logging_config=logging_config)
 
         # This module within openai library can be quite chatty w/rt http requests
         logging.getLogger("httpx").setLevel(logging.WARNING)

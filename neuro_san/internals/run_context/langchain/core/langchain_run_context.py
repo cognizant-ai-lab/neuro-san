@@ -18,7 +18,6 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Tuple
-from typing import Type
 from typing import Union
 
 import json
@@ -31,6 +30,7 @@ from logging import getLogger
 from pydantic_core import ValidationError
 
 from langchain.agents.factory import create_agent
+from langchain.agents.middleware.types import AgentMiddleware
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.human import HumanMessage
@@ -39,8 +39,6 @@ from langchain_core.prompts.chat import ChatPromptTemplate
 from langchain_core.runnables.base import Runnable
 from langchain_core.runnables.passthrough import RunnablePassthrough
 from langchain_core.tools.base import BaseTool
-
-from leaf_common.config.resolver_util import ResolverUtil
 
 from neuro_san.internals.errors.error_detector import ErrorDetector
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
@@ -58,16 +56,7 @@ from neuro_san.internals.run_context.langchain.core.base_tool_factory import Bas
 from neuro_san.internals.run_context.langchain.core.langchain_run import LangChainRun
 from neuro_san.internals.run_context.langchain.core.run_context_runnable import RunContextRunnable
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
-
-
-MINUTES: float = 60.0
-
-# Lazily import specific errors from llm providers
-API_ERROR_TYPES: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
-                                            "openai.APIError",
-                                            "anthropic.APIError",
-                                            "langchain_google_genai.chat_models.ChatGoogleGenerativeAIError",
-                                         ])
+from neuro_san.internals.run_context.langchain.middleware.middleware_factory import MiddlewareFactory
 
 
 # pylint: disable=too-many-instance-attributes,too-many-public-methods
@@ -84,7 +73,8 @@ class LangChainRunContext(RunContext):
                  parent_run_context: RunContext,
                  tool_caller: ToolCaller,
                  invocation_context: InvocationContext,
-                 chat_context: Dict[str, Any]):
+                 chat_context: Dict[str, Any],
+                 middleware_config: List[Dict[str, Any]] = None):
         """
         Constructor
 
@@ -96,8 +86,10 @@ class LangChainRunContext(RunContext):
                     of the agent.
         :param chat_context: A ChatContext dictionary that contains all the state necessary
                 to carry on a previous conversation, possibly from a different server.
+        :param middleware_config: An ordered list of middleware configurations
         """
         self.chat_history: List[BaseMessage] = []
+        self.middleware_config: List[Dict[str, Any]] = middleware_config
         self.journal: Journal = None
         self.interceptor: InterceptingJournal = None
         self.llm_resources: LangChainLlmResources = None
@@ -247,10 +239,20 @@ class LangChainRunContext(RunContext):
         # Initialize our return value
         agent: Runnable = None
 
+        # Create any middleware instances that were specified, in the order they were specified.
+        # This will be None for most simple situations.
+        middleware_factory = MiddlewareFactory(self.origin, self.invocation_context.get_journal())
+        sly_data: Dict[str, Any] = self.tool_caller.get_sly_data()
+
+        middleware: List[AgentMiddleware] = None
+        checkpointer: Any = None
+        middleware, checkpointer = middleware_factory.create_agent_middleware(self.middleware_config, sly_data)
+
         # Determine how complex the meat of our agent chain will be
         meat: Runnable = llm
-        if len(self.tools) > 0:
-            meat = create_agent(model=llm, tools=self.tools)
+        if len(self.tools) > 0 or len(middleware) > 0:
+
+            meat = create_agent(model=llm, tools=self.tools, middleware=middleware, checkpointer=checkpointer)
 
         # This uses LangChain Expression Language (LCEL), which enables a functional, pipeline-style composition
         # using "|". Here, we pass `agent_scratchpad` in the input message, but since we don't explicitly assign it
@@ -261,7 +263,7 @@ class LangChainRunContext(RunContext):
         # where RunnablePassthrough `agent scratchpad` convert (AgentAction, tool output) tuples into ToolMessages.
         #
         # By skipping this step, our agent functions as a pure LLM-driven system with a defined role,
-        # without tool invocation logic influencing its decision-making.
+        # without tool invocation or middleware logic influencing its decision-making.
 
         agent = prompt_template | meat
 

@@ -56,14 +56,16 @@ class BaseRequestHandler(RequestHandler):
             "forwarded_request_metadata" - list of request metadata keys to forward;
             "openapi_service_spec" - OpenAPI service spec dictionary;
             "server_context" - ServerContext instance for this server.
+            "logging_config" - logging configuration dictionary
         """
         # Set up local members from kwargs dictionary passed in:
         self.agent_policy: AgentAuthorizer = kwargs.pop("agent_policy", None)
         self.forwarded_request_metadata: List[str] = kwargs.pop("forwarded_request_metadata", [])
         self.openapi_service_spec: Dict[str, Any] = kwargs.pop("openapi_service_spec", None)
         self.server_context: ServerContext = kwargs.pop("server_context", None)
+        logging_config: Dict[str, Any] = kwargs.pop("logging_config", None)
 
-        self.logger = HttpLogger(self.forwarded_request_metadata)
+        self.logger = HttpLogger(self.forwarded_request_metadata, logging_config)
         self.show_absent: bool = os.environ.get("SHOW_ABSENT_METADATA") is not None
         self.request_id: int = 0
 
