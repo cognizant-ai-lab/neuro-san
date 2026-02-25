@@ -31,7 +31,8 @@ from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNe
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
-from neuro_san.internals.network_providers.expiring_agent_network_storage import ExpiringAgentNetworkStorage
+from neuro_san.internals.network_providers.expiring_caching_agent_network_storage \
+    import ExpiringCachingAgentNetworkStorage
 from neuro_san.internals.reservations.direct_agent_reservationist import DirectAgentReservationist
 from neuro_san.session.direct_agent_session import DirectAgentSession
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
@@ -58,7 +59,7 @@ class DirectAgentSessionFactory:
         manifest_networks: Dict[str, Dict[str, AgentNetwork]] = manifest_restorer.restore()
 
         self.network_storage_dict: Dict[str, AgentNetworkStorage] = {
-            "temp": ExpiringAgentNetworkStorage()
+            "temp": ExpiringCachingAgentNetworkStorage()
         }
 
         for storage_type in ["public", "protected"]:

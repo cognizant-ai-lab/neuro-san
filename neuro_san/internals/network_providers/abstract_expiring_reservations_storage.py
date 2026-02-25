@@ -76,7 +76,7 @@ class AbstractExpiringReservationsStorage(ExpiringReservationsStorage, Startable
             sleep_time = self._check_interval_seconds - elapsed
             if sleep_time > 0:
                 # Sleep but wake early if stop is requested,
-                # this makes worker thread more responsive to shutdown requests.
+                # this makes worker thread more responsive to the shutdown requests.
                 self._stop_event.wait(timeout=sleep_time)
             # We're behind schedule; skip sleeping (prevents drift accumulation)
 

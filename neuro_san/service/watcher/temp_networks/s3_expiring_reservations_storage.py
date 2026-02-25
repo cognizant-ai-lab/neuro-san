@@ -17,10 +17,13 @@
 
 from typing import Any
 from typing import Dict
+from typing import Iterable
 from typing import Tuple
 
 import os
+import random
 import time
+from functools import partial
 
 from json import dumps
 from json import loads
@@ -34,6 +37,7 @@ from botocore.exceptions import ClientError
 from botocore.exceptions import NoCredentialsError
 
 from neuro_san.interfaces.reservation import Reservation
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.expiring_reservations_storage import ExpiringReservationsStorage
 from neuro_san.internals.network_providers.abstract_expiring_reservations_storage \
     import AbstractExpiringReservationsStorage
@@ -74,6 +78,7 @@ class S3ExpiringReservationsStorage(AbstractExpiringReservationsStorage):
         # Track last sync timestamp for incremental syncing (0.0 means sync all)
         self.last_sync_timestamp: float = 0.0
         self.converter = ReservationDictionaryConverter()
+        self.max_keys_per_page: int = 1000  # Max allowed by S3 API for ListObjectsV2
         self.logger: Logger = getLogger(self.__class__.__name__)
 
     def start(self):
@@ -104,6 +109,69 @@ class S3ExpiringReservationsStorage(AbstractExpiringReservationsStorage):
         # We are good with S3 connection and bucket access at this point,
         # let's start underlying logic:
         super().start()
+
+    def _is_retryable_client_error(self, err: ClientError) -> bool:
+        """
+        Determine if a ClientError is worth retrying based on its error code and HTTP status.
+        :param err: The ClientError exception to evaluate
+        :return: True if the error is likely transient and worth retrying, False otherwise
+        """
+        client_error = err.response.get("Error")
+        if not client_error:
+            client_error = {}
+        code = client_error.get("Code", "")
+        error_response = err.response.get("ResponseMetadata")
+        if not error_response:
+            error_response = {}
+        status = error_response.get("HTTPStatusCode", 0)
+
+        # Common codes for transient situations
+        retryable_codes = {
+            "SlowDown",
+            "Throttling",
+            "ThrottlingException",
+            "RequestTimeout",
+            "RequestTimeoutException",
+            "InternalError",
+            "ServiceUnavailable",
+            "503",
+        }
+        if code in retryable_codes:
+            return True
+        # Retry on some 5xx
+        if isinstance(status, int) and 500 <= status < 600:
+            return True
+        return False
+
+    def _do_with_retries(self, fn, *, max_attempts: int = 8, base_sleep: float = 0.25):
+        """
+        Generic retry wrapper for boto3 calls.
+        boto3/botocore already retries, but this adds a bit of extra resilience and backoff for batch operations.
+
+        """
+        attempt: int = 1
+        while True:
+            try:
+                return fn()
+            except ClientError as err:
+                if attempt >= max_attempts or not self._is_retryable_client_error(err):
+                    raise
+                # Compute exponential backoff with jitter
+                sleep = base_sleep * (2 ** (attempt - 1))
+                sleep = sleep * (0.5 + random.random())  # sleep time jitter
+                self.logger.warning("Retryable ClientError (%s). attempt=%d", err, attempt)
+                time.sleep(sleep)
+                attempt += 1
+            except BotoCoreError as err:
+                # Often transient network/serialization issues
+                if attempt >= max_attempts:
+                    raise
+                # Compute exponential backoff with jitter
+                sleep = base_sleep * (2 ** (attempt - 1))
+                sleep = sleep * (0.5 + random.random())
+                self.logger.warning("Retryable BotoCoreError (%s). attempt=%d", err, attempt)
+                time.sleep(sleep)
+                attempt += 1
 
     def add_reservations(self, reservations_dict: Dict[Reservation, Any],
                          source: str = None):
@@ -152,6 +220,20 @@ class S3ExpiringReservationsStorage(AbstractExpiringReservationsStorage):
         """
         raise NotImplementedError
 
+    def _retrieve_object_with_retries(self, obj_key: str) -> Dict[str, Any]:
+        """
+        Helper method to retrieve an S3 object with retries.
+        :param obj_key: S3 object key to retrieve
+        :return: The parsed JSON content of the S3 object as a dictionary
+        :raises: ClientError if the object cannot be retrieved after retries
+                 JSONDecodeError if the content cannot be parsed as JSON
+        """
+        get_function = partial(self.s3_client.get_object, Bucket=self.bucket_name, Key=obj_key)
+        obj_response: Dict[str, Any] = self._do_with_retries(get_function)
+        # Parse JSON content from S3 object body
+        json_content: str = obj_response["Body"].read().decode("utf-8")
+        return loads(json_content)
+
     def get_one_reservation(self, obj_key: str) -> Tuple[Reservation, Any]:
         """
         Sync a single reservation from S3.
@@ -161,22 +243,18 @@ class S3ExpiringReservationsStorage(AbstractExpiringReservationsStorage):
                  (None, None) otherwise
         """
         reservation: Reservation = None
-        agent_spec: Dict[str, Any] = None
+        agent_network: AgentNetwork = None
         try:
             # Retrieve the reservation object from S3
-            obj_response: Dict[str, Any] = self.s3_client.get_object(
-                Bucket=self.bucket_name,
-                Key=obj_key
-            )
-
-            # Parse JSON content from S3 object body
-            json_content: str = obj_response["Body"].read().decode("utf-8")
-            agent_spec: Dict[str, Any] = loads(json_content)
+            agent_spec: Dict[str, Any] = self._retrieve_object_with_retries(obj_key)
             metadata: Dict[str, Any] = agent_spec.get("metadata")
 
             # Reconstruct the Reservation object from stored dictionary
             reservation_dict: Dict[str, Any] = metadata.get("reservation")
             reservation = self.converter.from_dict(reservation_dict)
+            # Reconstruct the AgentNetwork object using the agent spec dictionary
+            # and reservation ID - which is our agent name in this design
+            agent_network: AgentNetwork = AgentNetwork(agent_spec, reservation.get_reservation_id())
 
             self.logger.debug("Successfully synced active reservation %s",
                               reservation.get_reservation_id())
@@ -196,7 +274,7 @@ class S3ExpiringReservationsStorage(AbstractExpiringReservationsStorage):
             self.logger.error("JSON error processing reservation object %s during sync: %s",
                               obj_key, str(exception))
 
-        return reservation, agent_spec
+        return reservation, agent_network
 
     def expire_one_reservation(self, obj_key: str, current_time: float) -> bool:
         """
@@ -209,14 +287,7 @@ class S3ExpiringReservationsStorage(AbstractExpiringReservationsStorage):
         expired: bool = False
         try:
             # Retrieve the reservation object from S3
-            obj_response: Dict[str, Any] = self.s3_client.get_object(
-                Bucket=self.bucket_name,
-                Key=obj_key
-            )
-
-            # Parse JSON content to extract reservation metadata
-            json_content: str = obj_response["Body"].read().decode("utf-8")
-            agent_spec: Dict[str, Any] = loads(json_content)
+            agent_spec: Dict[str, Any] = self._retrieve_object_with_retries(obj_key)
             metadata: Dict[str, Any] = agent_spec.get("metadata")
             reservation_data: Dict[str, Any] = metadata.get("reservation")
 
@@ -225,10 +296,8 @@ class S3ExpiringReservationsStorage(AbstractExpiringReservationsStorage):
             if current_time > expiration_time:
                 # Reservation has expired - remove it from S3 storage
                 try:
-                    self.s3_client.delete_object(
-                        Bucket=self.bucket_name,
-                        Key=obj_key
-                    )
+                    delete_function = partial(self.s3_client.delete_object, Bucket=self.bucket_name, Key=obj_key)
+                    self._do_with_retries(delete_function)
                     reservation_id: str = reservation_data.get("id")
                     self.logger.debug("Deleted expired reservation %s from S3", reservation_id)
                     expired = True
@@ -253,40 +322,43 @@ class S3ExpiringReservationsStorage(AbstractExpiringReservationsStorage):
                 self.logger.error("S3 error processing reservation object %s: %s", obj_key, str(exception))
 
         except JSONDecodeError as exception:
-            # Log JSON errors but don't raise - allows expire to continue
+            # Log JSON errors but don't raise - allows expiration process to continue
             self.logger.error("JSON error processing reservation object %s during expire: %s",
                               obj_key, str(exception))
 
         return expired
+
+    def iter_reservation_keys(self) -> Iterable[str]:
+        """
+        Lists ALL objects (under current S3 bucket prefix) using a paginator.
+        Yields object keys.
+        """
+        paginator = self.s3_client.get_paginator("list_objects_v2")
+        paginate_function = partial(paginator.paginate,
+                                    Bucket=self.bucket_name,
+                                    Prefix=self.prefix,
+                                    PaginationConfig={"PageSize": self.max_keys_per_page})
+        for page in self._do_with_retries(paginate_function):
+            # _do_with_retries here wraps the generator creation
+            contents = page.get("Contents", [])
+            for obj in contents:
+                yield obj["Key"]
 
     def expire_reservations(self):
         """
         Remove expired reservations from S3 storage.
         """
         self.logger.debug("Starting expiration process for S3 reservations")
-
-        # List all reservation objects in S3 bucket with our prefix
-        response: Dict[str, Any] = self.s3_client.list_objects_v2(
-            Bucket=self.bucket_name,
-            Prefix=self.prefix
-        )
-
-        # Handle case where no reservations exist in S3
-        if "Contents" not in response:
-            self.logger.debug("No reservations found in S3 bucket for expiration")
-            print("No reservations found in S3 bucket for expiration")
-            return
+        print("Starting expiration process for S3 reservations")
 
         # Track how many reservations we expire for reporting
         expired_count: int = 0
         # Get current timestamp once for consistent expiration checking
         current_time: float = time.time()
 
-        # Process each S3 object individually using our helper method
-        obj: Dict[str, Any]
-        for obj in response["Contents"]:
-            # Attempt to expire this reservation and increment counter if successful
-            if self.expire_one_reservation(obj["Key"], current_time):
+        for reservation_key in self.iter_reservation_keys():
+             # Attempt to expire this reservation and increment counter if successful
+            if self.expire_one_reservation(reservation_key, current_time):
                 expired_count += 1
 
         if expired_count > 0:
