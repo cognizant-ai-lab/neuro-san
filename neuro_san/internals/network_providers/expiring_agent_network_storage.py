@@ -23,7 +23,7 @@ from typing import Tuple
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
-from neuro_san.internals.interfaces.expiring_reservations_storage import ExpiringReservationsStorage
+from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.network_providers.abstract_reservations_storage \
     import AbstractReservationsStorage
@@ -46,7 +46,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         self.reservations_table: Dict[str, Reservation] = {}
         self.base_storage: ExpiringReservationsStorage = None
 
-    def set_base_storage(self, base_storage: ExpiringReservationsStorage):
+    def set_base_storage(self, base_storage: ReservationsStorage):
         """
         Set the base storage to be used as a "source of truth" for reservations and agent networks.
         This is optional, but if set, then this storage will be used as a source of truth

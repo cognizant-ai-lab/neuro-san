@@ -39,15 +39,15 @@ from botocore.exceptions import NoCredentialsError
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
-from neuro_san.internals.interfaces.expiring_reservations_storage import ExpiringReservationsStorage
+from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
 from neuro_san.internals.network_providers.abstract_reservations_storage \
     import AbstractReservationsStorage
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
 
 
-class S3ExpiringReservationsStorage(AbstractReservationsStorage):
+class S3ReservationsStorage(AbstractReservationsStorage):
     """
-    AWS S3-based implementation of ExpiringReservationsStorage.
+    AWS S3-based implementation of ReservationsStorage.
 
     Stores reservations as JSON objects in an S3 bucket, with each reservation
     stored in its associated agent spec as metadata.
@@ -212,12 +212,12 @@ class S3ExpiringReservationsStorage(AbstractReservationsStorage):
 
             self.logger.debug("Successfully stored reservation %s in S3", reservation_id)
 
-    def set_base_storage(self, base_storage: ExpiringReservationsStorage):
+    def set_base_storage(self, base_storage: ReservationsStorage):
         """
         Set a "base" storage to use as a source of truth for reservations.
         This is optional, but if set, will be used as the source of truth for reservations
         and the implementing class will act as a cache in front of it.
-        :param base_storage: An ExpiringReservationsStorage instance to use as a source of truth
+        :param base_storage: An ReservationsStorage instance to use as a source of truth
         """
         raise NotImplementedError
 
@@ -350,7 +350,6 @@ class S3ExpiringReservationsStorage(AbstractReservationsStorage):
         Remove expired reservations from S3 storage.
         """
         self.logger.debug("Starting expiration process for S3 reservations")
-        print("Starting expiration process for S3 reservations")
 
         # Track how many reservations we expire for reporting
         expired_count: int = 0

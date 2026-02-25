@@ -101,7 +101,7 @@ class AbstractReservationsStorage(ReservationsStorage, Startable):
         """
         raise NotImplementedError
 
-    def set_base_storage(self, base_storage: ExpiringReservationsStorage):
+    def set_base_storage(self, base_storage: ReservationsStorage):
         """
         Set a "base" storage to use as a source of truth for reservations.
         This is optional, but if set, will be used as the source of truth for reservations

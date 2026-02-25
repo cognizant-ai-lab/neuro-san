@@ -31,7 +31,7 @@ from janus import Queue
 from leaf_common.config.resolver_util import ResolverUtil
 
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
-from neuro_san.internals.interfaces.expiring_reservations_storage import ExpiringReservationsStorage
+from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
 from neuro_san.internals.reservations.abstract_agent_reservationist import AbstractAgentReservationist
@@ -58,20 +58,20 @@ class TempNetworkStorageUpdater(Startable):
         self.logger: Logger = getLogger(self.__class__.__name__)
 
         self.reservationist: AbstractAgentReservationist = None
-        self.temp_storage: ExpiringReservationsStorage = network_storage_dict.get("temp")
+        self.temp_storage: ReservationsStorage = network_storage_dict.get("temp")
         if self.temp_storage is not None:
             # If we don't have temp storage, we don't got nothin'
             # Check that the temp storage instance is indeed an ExpiringReservationsStorage,
             # since we need to be able to expire reservations in it.
-            if not isinstance(self.temp_storage, ExpiringReservationsStorage):
-                raise ValueError("Temp reservations storage must be an instance of ExpiringReservationsStorage")
+            if not isinstance(self.temp_storage, ReservationsStorage):
+                raise ValueError("Temp reservations storage must be an instance of ReservationsStorage")
 
             # Potentially create a "base" reservations storage class
             storage_class_name: str = environ.get("AGENT_EXTERNAL_RESERVATIONS_STORAGE", "")
-            external_storage: ExpiringReservationsStorage = ResolverUtil.create_instance(
+            external_storage: ReservationsStorage = ResolverUtil.create_instance(
                     storage_class_name,
                     "AGENT_EXTERNAL_RESERVATIONS_STORAGE env var",
-                    ExpiringReservationsStorage)
+                    ReservationsStorage)
             if external_storage is not None:
                 self.temp_storage.set_base_storage(external_storage)
             self.reservationist = AbstractAgentReservationist({self.temp_storage})
