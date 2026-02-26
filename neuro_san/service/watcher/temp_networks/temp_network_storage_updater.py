@@ -114,6 +114,11 @@ class TempNetworkStorageUpdater(Startable):
             # we avoid potential locking out of different queues received from "main" self.incoming
             if self.reservationist is not None:
                 self.queue_processing_pool.submit(self.process_one_queue, async_collating_queue)
+            else:
+                # We don't have a reservation functionality set up,
+                # so we can't do anything with this queue, but we should still close it to avoid leaks.
+                self.logger.warning("No reservationist available, closing incoming queue without processing")
+                async_collating_queue.close()
 
     def process_one_queue(self, async_collating_queue: AsyncCollatingQueue):
         """
