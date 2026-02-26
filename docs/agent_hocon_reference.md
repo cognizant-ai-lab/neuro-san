@@ -203,10 +203,10 @@ to use LLMs from various providers.
 | Ollma         | &lt;None required&gt;                          |
 | OpenAI        | OPENAI_API_KEY                                 |
 
-**Anthropic Model Names:** The model names `claude-haiku`, `claude-sonnet`, and `claude-opus` 
-are aliases that automatically reference the latest versions of their respective Anthropic model lines. 
-This aliasing is recommended because Anthropic frequently deprecates older model versions. For information 
-on current models and deprecation schedules, see the 
+**Anthropic Model Names:** The model names `claude-haiku`, `claude-sonnet`, and `claude-opus`
+are aliases that automatically reference the latest versions of their respective Anthropic model lines.
+This aliasing is recommended because Anthropic frequently deprecates older model versions. For information
+on current models and deprecation schedules, see the
 [Anthropic model deprecations documentation](https://platform.claude.com/docs/en/about-claude/model-deprecations).
 
 **Security Best Practice:** _We strongly recommend to **not** set secrets as values within any source file._
