@@ -344,72 +344,19 @@
 
     # Anthropic models
 
-    "claude-3-haiku": {
-        "use_model_name": "claude-3-haiku-20240307",
+    # These 3 models, claude-haiku, claude-sonnet, and claude-opus, are references to the latest versions of their respective model lines.
+    # When a new version is released, we will update the "use_model_name" field to point to the new version, and the old version will still be accessible via its own entry.
+    # Status of model lines and versions can be found here:
+    # https://platform.claude.com/docs/en/about-claude/model-deprecations
+    # Note that most of the retired Anthropic models can still be accessed via Amazon Bedrock.
+    "claude-haiku": {
+        "use_model_name": "claude-haiku-4-5-20251001"
     },
-    "claude-3-haiku-20240307": {
-        "class": "anthropic",
-        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
-        "modalities": {
-            "input": [ "text", "image" ],
-            "output": [ "text" ],
-        },
-        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
-        "capabilities": [ "tools" ],
-        "context_window_size": 200000,
-        "max_output_tokens": 4096,
-        "knowledge_cutoff": "08/2023",
+    "claude-sonnet": {
+        "use_model_name": "claude-sonnet-4-6"
     },
-
-    "claude-3-opus": {
-        "use_model_name": "claude-3-opus-20240229",
-    },
-    "claude-3-opus-20240229": {
-        "class": "anthropic",
-        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
-        "modalities": {
-            "input": [ "text", "image" ],
-            "output": [ "text" ],
-        },
-        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
-        "capabilities": [ "tools" ],
-        "context_window_size": 200000,
-        "max_output_tokens": 4096,
-        "knowledge_cutoff": "08/2023",
-    },
-
-    "claude-3-5-haiku": {
-        "use_model_name": "claude-3-5-haiku-20241022",
-    },
-    "claude-3-5-haiku-20241022": {
-        "class": "anthropic",
-        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
-        "modalities": {
-            "input": [ "text", "image" ],
-            "output": [ "text" ],
-        },
-        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
-        "capabilities": [ "tools" ],
-        "context_window_size": 200000,
-        "max_output_tokens": 8192,
-        "knowledge_cutoff": "07/2024",
-    },
-
-    "claude-3-7-sonnet": {
-        "use_model_name": "claude-3-7-sonnet-20250219",
-    },
-    "claude-3-7-sonnet-20250219": {
-        "class": "anthropic",
-        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
-        "modalities": {
-            "input": [ "text", "image" ],
-            "output": [ "text" ],
-        },
-        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
-        "capabilities": [ "tools" ],
-        "context_window_size": 200000,
-        "max_output_tokens": 64000,
-        "knowledge_cutoff": "11/2024",
+    "claude-opus": {
+        "use_model_name": "claude-opus-4-6"
     },
 
     "claude-sonnet-4-0": {
@@ -422,11 +369,14 @@
             "input": [ "text", "image" ],
             "output": [ "text" ],
         },
-        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
+        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
         "capabilities": [ "tools" ],
         "context_window_size": 200000,
         "max_output_tokens": 64000,
         "knowledge_cutoff": "03/2025",
+        # https://platform.claude.com/docs/en/about-claude/pricing
+        "price_per_1k_input_tokens": 0.003,
+        "price_per_1k_output_tokens": 0.015,
     },
 
     "claude-opus-4-0": {
@@ -439,11 +389,14 @@
             "input": [ "text", "image" ],
             "output": [ "text" ],
         },
-        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
+        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
         "capabilities": [ "tools" ],
         "context_window_size": 200000,
         "max_output_tokens": 32000,
         "knowledge_cutoff": "03/2025",
+        # https://platform.claude.com/docs/en/about-claude/pricing
+        "price_per_1k_input_tokens": 0.015,
+        "price_per_1k_output_tokens": 0.075,
     },
 
     "claude-opus-4-1": {
@@ -456,11 +409,14 @@
             "input": [ "text", "image" ],
             "output": [ "text" ],
         },
-        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
+        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
         "capabilities": [ "tools" ],
         "context_window_size": 200000,
         "max_output_tokens": 32000,
         "knowledge_cutoff": "03/2025",
+        # https://platform.claude.com/docs/en/about-claude/pricing
+        "price_per_1k_input_tokens": 0.015,
+        "price_per_1k_output_tokens": 0.075,
     },
 
     "claude-haiku-4-5": {
@@ -473,11 +429,14 @@
             "input": [ "text", "image" ],
             "output": [ "text" ],
         },
-        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
+        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
         "capabilities": [ "tools" ],
         "context_window_size": 200000,
         "max_output_tokens": 64000,
         "knowledge_cutoff": "07/2025",
+        # https://platform.claude.com/docs/en/about-claude/pricing
+        "price_per_1k_input_tokens": 0.001,
+        "price_per_1k_output_tokens": 0.005,
     },
 
     "claude-sonnet-4-5": {
@@ -490,11 +449,31 @@
             "input": [ "text", "image" ],
             "output": [ "text" ],
         },
-        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
+        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
         "capabilities": [ "tools" ],
         "context_window_size": 200000,
         "max_output_tokens": 64000,
         "knowledge_cutoff": "07/2025",
+        # https://platform.claude.com/docs/en/about-claude/pricing
+        "price_per_1k_input_tokens": 0.003,
+        "price_per_1k_output_tokens": 0.015,
+    },
+
+    "claude-sonnet-4-6": {
+        "class": "anthropic",
+        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
+        "capabilities": [ "tools" ],
+        "context_window_size": 200000,
+        "max_output_tokens": 64000,
+        "knowledge_cutoff": "01/2026",
+        # https://platform.claude.com/docs/en/about-claude/pricing
+        "price_per_1k_input_tokens": 0.003,
+        "price_per_1k_output_tokens": 0.015,
     },
 
     "claude-opus-4-5": {
@@ -507,11 +486,14 @@
             "input": [ "text", "image" ],
             "output": [ "text" ],
         },
-        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
+        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
         "capabilities": [ "tools" ],
         "context_window_size": 200000,
         "max_output_tokens": 64000,
         "knowledge_cutoff": "08/2025",
+        # https://platform.claude.com/docs/en/about-claude/pricing
+        "price_per_1k_input_tokens": 0.005,
+        "price_per_1k_output_tokens": 0.025,
     },
     "claude-opus-4-6": {
         "class": "anthropic",
@@ -520,11 +502,14 @@
             "input": [ "text", "image" ],
             "output": [ "text" ],
         },
-        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
+        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
         "capabilities": [ "tools" ],
         "context_window_size": 200000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "08/2025",
+        # https://platform.claude.com/docs/en/about-claude/pricing
+        "price_per_1k_input_tokens": 0.005,
+        "price_per_1k_output_tokens": 0.025,
     }
 
 
@@ -728,6 +713,44 @@
     },
 
     # Google Gemini
+    "gemini-3.1-pro": {
+        "use_model_name": "gemini-3.1-pro-preview"
+    },
+    "gemini-3.1-pro-preview": {
+        "class": "gemini",
+        "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview",
+        "modalities": {
+            "input": [ "text", "images", "video", "audio", "pdf"],
+            "output": [ "text"],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1048576,
+        "max_output_tokens": 65536,
+        "knowledge_cutoff": "01/2025",
+        # https://cloud.google.com/vertex-ai/generative-ai/pricing
+        "price_per_1k_input_tokens": 0.002,
+        "price_per_1k_output_tokens": 0.012,
+    },
+    # This model is optimized for agentic workflows that use custom tools and bash
+    "gemini-3.1-pro-customtools": {
+        "use_model_name": "gemini-3.1-pro-preview-customtools"
+    },
+    "gemini-3.1-pro-preview-customtools": {
+        "class": "gemini",
+        "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview",
+        "modalities": {
+            "input": [ "text", "images", "video", "audio", "pdf"],
+            "output": [ "text"],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1048576,
+        "max_output_tokens": 65536,
+        "knowledge_cutoff": "01/2025",
+        # https://cloud.google.com/vertex-ai/generative-ai/pricing
+        "price_per_1k_input_tokens": 0.002,
+        "price_per_1k_output_tokens": 0.012,
+    },
+
     "gemini-3-pro": {
         "use_model_name": "gemini-3-pro-preview"
     },
