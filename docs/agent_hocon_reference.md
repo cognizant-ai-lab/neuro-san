@@ -190,7 +190,7 @@ you will need to use a model that has been specifically trained for "tool use" f
 branches off work to any other agent/tool.  You can browse the `capabilities` section of the
 `default_llm_info.hocon` to be sure the llm you choose can use tools.
 
-Note that you will need your own access key set as an environment variable in order
+You will need your own access key set as an environment variable in order
 to use LLMs from various providers.
 
 | LLM Provider  | API Key environment variable                   |
@@ -208,6 +208,7 @@ are aliases that automatically reference the latest versions of their respective
 This aliasing is recommended because Anthropic frequently deprecates older model versions. For information
 on current models and deprecation schedules, see the
 [Anthropic model deprecations documentation](https://platform.claude.com/docs/en/about-claude/model-deprecations).
+Note that most retired Anthropic models can still be accessed via Amazon Bedrock.
 
 **Security Best Practice:** _We strongly recommend to **not** set secrets as values within any source file._
 These files tend to creep into source control repos, and it is **very** bad practice
