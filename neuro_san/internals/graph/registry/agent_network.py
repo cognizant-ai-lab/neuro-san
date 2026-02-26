@@ -163,6 +163,13 @@ However, the front man must not be:
 
         return front_man
 
+    def get_metadata(self) -> Dict[str, Any]:
+        """
+        :return: The metadata dictionary from the agent network config,
+                 or None if no metadata is defined.
+        """
+        return self.config.get("metadata", None)
+
     def get_network_name(self) -> str:
         """
         :return: The network name of this AgentNetwork
