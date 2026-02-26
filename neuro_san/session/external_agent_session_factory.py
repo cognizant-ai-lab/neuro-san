@@ -15,6 +15,7 @@
 #
 # END COPYRIGHT
 from typing import Dict
+from typing import List
 
 from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -63,6 +64,22 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
         session: AsyncAgentSession = self.create_session_from_location_dict(agent_location, invocation_context)
         return session
 
+    def get_networks_order(self, network_storage_dict: Dict[str, AgentNetworkStorage]) -> List[str]:
+        """
+        :param network_storage_dict: The dictionary of AgentNetworkStorage instances to check for networks.
+        :return: A List of AgentNetworkStorage names in the order they should be checked.
+        Note: we need our "temp" storage to be checked last,
+        because in the general case this might involve querying external storage, which is potentially slow.
+        """
+        temp_name: str = "temp"
+        networks_order: List[str] = []
+        for storage_name in network_storage_dict.keys():
+            if storage_name != temp_name:
+                networks_order.append(storage_name)
+        if temp_name in network_storage_dict:
+            networks_order.append(temp_name)
+        return networks_order
+
     def create_session_from_location_dict(self, agent_location: Dict[str, str],
                                           invocation_context: InvocationContext) -> AsyncAgentSession:
         """
@@ -92,7 +109,8 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
             # and potentially relieve the direct user of the burden of having to start a server
 
             agent_network_provider: AgentNetworkProvider = None
-            for network_storage in self.network_storage_dict.values():
+            for network_storage_name in self.get_networks_order(self.network_storage_dict):
+                network_storage = self.network_storage_dict.get(network_storage_name)
                 # Be sure we have something
                 agent_network_provider = network_storage.get_agent_network_provider(agent_name)
                 if agent_network_provider.get_agent_network() is not None:
