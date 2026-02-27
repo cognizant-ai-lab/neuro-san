@@ -165,13 +165,18 @@ class BaseRequestHandler(RequestHandler):
             # and become available for future requests until it expires.
             # Note that "network_provider" result is not used directly here,
             # but the call is necessary to trigger the "side effect" of lookup and registration of temp network.
-            network_provider = temp_storage.get_agent_network_provider(agent_name)
+            # We delegate call execution to a thread to avoid blocking server event loop
+            # with potentially slow external storage access.
+            network_provider = asyncio.to_thread(temp_storage.get_agent_network_provider, agent_name)
             if network_provider is not None:
                 # Now that our service is aware of this temp network,
                 # we can query our policy again,
                 # and we already know that this agent has been authorized:
                 _, service_provider = await self.agent_policy.allow_agent(agent_name, metadata)
-                return service_provider.get_service()
+                # If service provider is still None,
+                # that means something went very wrong - bail out:
+                if service_provider is not None:
+                    return service_provider.get_service()
 
         # Nothing worked - so we report resource not found
         self.set_status(404)
