@@ -243,20 +243,21 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         json_content: str = obj_response["Body"].read().decode("utf-8")
         return loads(json_content)
 
-    def get_one_reservation(self, reservation_id: str) -> Tuple[Reservation, Any]:
+    def get_one_reservation(self, obj_key: str) -> Tuple[Reservation, Any]:
         """
         Sync a single reservation from S3.
 
-        :param reservation_id: reservation ID to retrieve (used to construct S3 object key)
+        :param obj_key: reservation ID to retrieve (used to construct S3 object key)
         :return: Tuple of (reservation, agent_spec) if successful and not expired,
                  (None, None) otherwise
         """
         reservation: Reservation = None
         agent_network: AgentNetwork = None
-        obj_key: str = self.get_obj_key_for_reservation(reservation_id)
+        # Construct the S3 object key for this reservation ID
+        s3_obj_key: str = self.get_obj_key_for_reservation(obj_key)
         try:
             # Retrieve the reservation object from S3
-            agent_spec: Dict[str, Any] = self._retrieve_object_with_retries(obj_key)
+            agent_spec: Dict[str, Any] = self._retrieve_object_with_retries(s3_obj_key)
             metadata: Dict[str, Any] = agent_spec.get("metadata")
 
             # Reconstruct the Reservation object from stored dictionary
@@ -273,16 +274,16 @@ class S3ReservationsStorage(AbstractReservationsStorage):
             # Handle case where another process already removed the object before we could read it
             if exception.response["Error"]["Code"] == "NoSuchKey":
                 self.logger.debug("Reservation %s was already removed by another process during sync",
-                                  obj_key)
+                                  s3_obj_key)
             else:
                 # Log other S3 errors but don't raise - allows sync to continue
                 self.logger.error("S3 error processing reservation object %s during sync: %s",
-                                  obj_key, str(exception))
+                                  s3_obj_key, str(exception))
 
         except JSONDecodeError as exception:
             # Log JSON errors but don't raise - allows sync to continue
             self.logger.error("JSON error processing reservation object %s during sync: %s",
-                              obj_key, str(exception))
+                              s3_obj_key, str(exception))
 
         return reservation, agent_network
 

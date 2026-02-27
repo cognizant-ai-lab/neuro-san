@@ -32,6 +32,7 @@ from tornado.web import RequestHandler
 
 from leaf_common.utils.async_atomic_counter import AsyncAtomicCounter
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
+from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.network_providers.expiring_agent_network_storage import ExpiringAgentNetworkStorage
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
