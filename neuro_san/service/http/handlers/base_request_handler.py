@@ -31,6 +31,8 @@ import tornado
 from tornado.web import RequestHandler
 
 from leaf_common.utils.async_atomic_counter import AsyncAtomicCounter
+from neuro_san.internals.reservations.agent_reservation import AgentReservation
+from neuro_san.internals.network_providers.expiring_agent_network_storage import ExpiringAgentNetworkStorage
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
@@ -137,20 +139,42 @@ class BaseRequestHandler(RequestHandler):
         service_provider: AsyncAgentServiceProvider = None
         is_authorized, service_provider = await self.agent_policy.allow_agent(agent_name, metadata)
 
-        if service_provider is None:
-            # Resource not found
-            self.set_status(404)
-            self.logger.error(metadata, "error: Invalid request path %s", self.request.path)
-            self.do_finish()
-            return None
-
         if not is_authorized:
             # Forbidden
             self.set_status(403)
             self.do_finish()
             return None
 
-        return service_provider.get_service()
+        if service_provider is not None:
+            return service_provider.get_service()
+
+        # Now, this could be a temporary network created outside of our service:
+        # Does it look like a temporary network name?
+        if AgentReservation.is_reservation_name(agent_name):
+            print("111111111111")
+            # Get temporary network storage:
+            network_storage_dict: Dict[str, AgentNetworkStorage] = self.server_context.get_network_storage_dict()
+            temp_storage: AgentNetworkStorage = network_storage_dict.get("temp", None)
+            if temp_storage is None or not isinstance(temp_storage, ExpiringAgentNetworkStorage):
+                print("2222222")
+                self.set_status(500)
+                self.logger.error(metadata, "error: Temporary network storage is not properly configured.")
+                self.do_finish()
+                return None
+            # This call will trigger temp network lookup in external storage
+            # and if found, it will be registered in our service
+            # and become available for future requests until it expires.
+            service_provider = temp_storage.get_agent_network_provider(agent_name)
+            print(f"33333333333 service_provider: {service_provider}")
+            if service_provider is not None:
+                _, service_provider = await self.agent_policy.allow_agent(agent_name, metadata)
+                return service_provider.get_service()
+
+        # Resource not found
+        self.set_status(404)
+        self.logger.error(metadata, "error: Invalid request path %s", self.request.path)
+        self.do_finish()
+        return None
 
     def process_exception(self, exc: Exception):
         """

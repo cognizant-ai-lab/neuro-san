@@ -174,6 +174,14 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                 time.sleep(sleep)
                 attempt += 1
 
+    def get_obj_key_for_reservation(self, reservation_id: str) -> str:
+        """
+        Helper method to construct the S3 object key for a given reservation ID.
+        :param reservation_id: The ID of the reservation
+        :return: The corresponding S3 object key
+        """
+        return f"{self.prefix}{reservation_id}.json"
+
     def add_reservations(self, reservations_dict: Dict[Reservation, Any],
                          source: str = None):
         """
@@ -199,7 +207,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
 
             # Generate S3 key using prefix and reservation ID for easy lookup
             reservation_id: str = reservation.get_reservation_id()
-            key: str = f"{self.prefix}{reservation_id}.json"
+            key: str = self.get_obj_key_for_reservation(reservation_id)
 
             # Store as JSON object in S3 with proper content type
             json_body: str = dumps(agent_spec, indent=4)  # Pretty-printed JSON
@@ -235,19 +243,22 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         json_content: str = obj_response["Body"].read().decode("utf-8")
         return loads(json_content)
 
-    def get_one_reservation(self, obj_key: str) -> Tuple[Reservation, Any]:
+    def get_one_reservation(self, reservation_id: str) -> Tuple[Reservation, Any]:
         """
         Sync a single reservation from S3.
 
-        :param obj_key: S3 object key for the reservation
+        :param reservation_id: reservation ID to retrieve (used to construct S3 object key)
         :return: Tuple of (reservation, agent_spec) if successful and not expired,
                  (None, None) otherwise
         """
         reservation: Reservation = None
         agent_network: AgentNetwork = None
+        obj_key: str = self.get_obj_key_for_reservation(reservation_id)
         try:
             # Retrieve the reservation object from S3
+            print(f"Attempting to retrieve reservation object from S3 with key: {obj_key}")
             agent_spec: Dict[str, Any] = self._retrieve_object_with_retries(obj_key)
+            print(f"Successfully retrieved reservation {agent_spec} with key: {obj_key}")
             metadata: Dict[str, Any] = agent_spec.get("metadata")
 
             # Reconstruct the Reservation object from stored dictionary

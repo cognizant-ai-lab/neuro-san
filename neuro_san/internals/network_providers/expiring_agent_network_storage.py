@@ -189,8 +189,12 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             return None
         # We don't have a reservation for this agent,
         # so check the source storage if we have one:
+        if self.base_storage is None:
+            print(f">>>>>>>>>>>>>>>>>Agent {agent_name} not found in local storage, and no base storage to check.")
         if self.base_storage is not None:
+            print(f">>>>>>>>>>>>>>>>>Agent {agent_name} not found in local storage, checking base storage...")
             reservation, agent_network = self.base_storage.get_one_reservation(agent_name)
+            print(f">>>>>>>>>>>>>>>>>Got reservation {reservation} and agent_network {agent_network} from base storage for agent {agent_name}")
             if reservation is not None and not reservation.is_expired():
                 # We have a valid reservation for this agent in the source storage,
                 # so return the AgentNetworkProvider for this agent.
@@ -198,5 +202,11 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
                 with self.lock:
                     self.reservations_table[agent_name] = reservation
                     self.agents_table[agent_name] = agent_network
+                # Notify listeners about this state change:
+                # do it outside of internal lock
+                for listener in self.listeners:
+                    listener.agent_added(agent_name, self)
+                    self.logger.info("ADDED network for agent %s from %s", agent_name, "base storage")
+
                 return FixedAgentNetworkProvider(agent_network)
         return None
