@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import List
 from typing import Tuple
 
 from asyncio import Event
@@ -31,9 +32,10 @@ class ReservationUtil:
     Agent (network) Reservations easier.
     """
 
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     @staticmethod
     async def wait_for_one(args: Dict[str, Any], agent_spec: Dict[str, Any], lifetime_in_seconds: float,
-                           prefix: str = "") \
+                           prefix: str = "", external_networks: List[str] = None, mcp_servers: List[str] = None) \
             -> Tuple[Reservation, str]:
         """
         Waits for a single agent to be deployed as a temporary agent network.
@@ -42,6 +44,8 @@ class ReservationUtil:
         :param agent_spec: The dictionary containing the agent network specification
         :param lifetime_in_seconds: How long the temporary agent network should live, in seconds
         :param prefix: An optional prefix to attach to the generated reservation id.
+        :param external_networks: An optional list of valid external networks that are to be validated against
+        :param mcp_servers: An optional list of valid MCP servers that are to be validated against
         :return: A tuple containing the Reservation representing the agent network that was deployed
                 and a string representing an error message pertaining to the Reservation.  One
                 of the elements of the Tuple will be None.
@@ -69,7 +73,7 @@ Reservationist is None.  Try this for your server:
         # then set confirmation=False, and don't bother about waiting for the Event.
         deployed_event: Event = None
         try:
-            async with reservationist:
+            async with reservationist(external_networks=external_networks, mcp_servers=mcp_servers):
                 deployed_event = await reservationist.deploy(deployments, confirmation=True)
 
         except ValueError as exception:

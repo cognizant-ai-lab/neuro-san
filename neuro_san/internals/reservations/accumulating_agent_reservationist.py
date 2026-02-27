@@ -71,6 +71,8 @@ class AccumulatingAgentReservationist(Reservationist):
         self.deployments: Dict[Union[Event, str], Dict[Reservation, Dict[str, Any]]] = {}
         self._supporting_reservationist: Reservationist = supporting_reservationist
         self._supporting_reservation: Reservation = None
+        self._external_networks: List[str] = None
+        self._mcp_servers: List[str] = None
 
     async def reserve(self, lifetime_in_seconds: float = Reservationist.DEFAULT_LIFETIME,
                       prefix: str = "") -> Reservation:
@@ -87,6 +89,16 @@ class AccumulatingAgentReservationist(Reservationist):
         reservation = AgentReservation(actual_lifetime, prefix)
 
         return reservation
+
+    def __call__(self, external_networks: List[str] = None, mcp_servers: List[str] = None) -> Reservationist:
+        """
+        :param external_networks: A list of external network names
+        :param mcp_servers: A list of MCP servers, as read in from a mcp_info.hocon file
+        :return: The instance
+        """
+        self._external_networks = external_networks
+        self._mcp_servers = mcp_servers
+        return self
 
     async def __aenter__(self):
         """
@@ -114,7 +126,8 @@ class AccumulatingAgentReservationist(Reservationist):
             return None
 
         # Do some validation here
-        validator = ManifestNetworkValidator()      # No args to this yet.
+        validator = ManifestNetworkValidator(external_network_names=self._external_networks,
+                                             mcp_servers=self._mcp_servers)
         errors: Dict[str, List[str]] = {}
         for reservation, agent_network_spec in deployment_dict.items():
 
@@ -163,6 +176,8 @@ class AccumulatingAgentReservationist(Reservationist):
 
         # Reset state
         self._supporting_reservation = None
+        self._external_networks = None
+        self._mcp_servers = None
         self.deployments = {}
 
     @staticmethod
