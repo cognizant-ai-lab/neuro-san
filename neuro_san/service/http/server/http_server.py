@@ -232,6 +232,15 @@ class HttpServer(AgentStateListener):
         :param source: The AgentStorageSource source of the message
         """
         agent_network_provider: AgentNetworkProvider = source.get_agent_network_provider(agent_name)
+        # There are some timing scenarios where at this point agent network provider might not be available,
+        # even though we got a notification that agent is added.
+        # One example: temporary agent network expiration.
+        # In this case, log the message and finish processing.
+        if agent_network_provider is None:
+            self.logger.warning({},
+                                "Agent %s is not available though it's being added to the service.",
+                                agent_name)
+            return
 
         # Convert back to a single string as required by constructor
         request_metadata_str: str = " ".join(self.forwarded_request_metadata)
