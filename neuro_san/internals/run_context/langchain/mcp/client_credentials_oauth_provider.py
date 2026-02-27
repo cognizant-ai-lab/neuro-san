@@ -21,14 +21,13 @@ from typing import Literal
 from typing import override
 import httpx
 
-from mcp.shared.auth import OAuthClientMetadata
+from mcp.client.auth import OAuthClientProvider
 from mcp.client.auth import TokenStorage
 from mcp.shared.auth import OAuthClientInformationFull
+from mcp.shared.auth import OAuthClientMetadata
 
-from neuro_san.internals.run_context.langchain.mcp.extended_oauth_provider import ExtendedOauthClientProvider
 
-
-class ClientCredentialsOauthProvider(ExtendedOauthClientProvider):
+class ClientCredentialsOauthProvider(OAuthClientProvider):
     """OAuth provider for client_credentials grant with client_id + client_secret.
 
     This provider sets client_info directly, bypassing dynamic client registration.
@@ -65,6 +64,14 @@ class ClientCredentialsOauthProvider(ExtendedOauthClientProvider):
     - We override _initialize() and _perform_authorization()
     - These are PRIVATE methods that may change without notice
     - Any SDK update could break this implementation
+
+    FUTURE WORK:
+    - The following GitHub issue/PR tracks making this properly extensible in the SDK
+        - https://github.com/modelcontextprotocol/python-sdk/issues/2121
+        - https://github.com/modelcontextprotocol/python-sdk/issues/2128
+        - https://github.com/modelcontextprotocol/python-sdk/pull/2140
+    - If/when that lands, we should migrate to use official extension points
+    - If not accepted, we should build our own OAuth client
     """
 
     # pylint: disable=too-many-arguments
@@ -76,7 +83,7 @@ class ClientCredentialsOauthProvider(ExtendedOauthClientProvider):
         client_id: str,
         client_secret: str,
         token_endpoint: str = None,
-        token_endpoint_auth_method: Literal["client_secret_basic", "client_secret_post"] = "client_secret_basic",
+        token_endpoint_auth_method: Literal["client_secret_basic", "client_secret_post", None] = "client_secret_basic",
         scopes: str | None = None,
         timeout: float = 300.0
     ) -> None:
@@ -144,6 +151,6 @@ class ClientCredentialsOauthProvider(ExtendedOauthClientProvider):
         if self.context.client_metadata.scope:
             token_data["scope"] = self.context.client_metadata.scope
 
-        # Determine token endpoint URL: use endpoint from discovery if available, otherwise use provided token_endpoint
-        token_url: str = self._get_token_endpoint() or self.token_endpoint
+        # Determine token endpoint URL: use provided token_endpoint if available, otherwise use endpoint from discovery
+        token_url: str = self.token_endpoint or self._get_token_endpoint()
         return httpx.Request("POST", token_url, data=token_data, headers=headers)

@@ -19,15 +19,14 @@ from typing import Literal
 from typing import override
 import httpx
 
-from mcp.shared.auth import OAuthClientMetadata
+from mcp.client.auth import OAuthClientProvider
 from mcp.client.auth import TokenStorage
 from mcp.client.auth.exceptions import OAuthTokenError
 from mcp.shared.auth import OAuthClientInformationFull
+from mcp.shared.auth import OAuthClientMetadata
 
-from neuro_san.internals.run_context.langchain.mcp.extended_oauth_provider import ExtendedOauthClientProvider
 
-
-class RefreshTokenOauthProvider(ExtendedOauthClientProvider):
+class RefreshTokenOauthProvider(OAuthClientProvider):
     """OAuth provider for refresh token grant.
 
     A new provider we created specifically for machine-to-machine refresh token flows
@@ -36,8 +35,7 @@ class RefreshTokenOauthProvider(ExtendedOauthClientProvider):
     This provider sets client_info and token directly, bypassing dynamic client registration and user authorization.
     Use this when you already have client credentials (client_id and client_secret) and token with refresh token field.
     In general, refresh token flow works in tandem with authorization code flow, but currently neuro-san only support
-    machine-to-machine flows, so refresh token flow is implemented to work when there is refresh token in sly data or
-    env var, AGENT_MCP_TOKENS.
+    machine-to-machine flows, so refresh token flow is implemented to work when there is refresh token in sly data.
 
     The authentication flow proceeds as follows:
     1. When an HTTP request is sent to an MCP server, the async_auth_flow method is triggered.
@@ -64,6 +62,16 @@ class RefreshTokenOauthProvider(ExtendedOauthClientProvider):
     - We override _initialize(), _perform_authorization(), and _refresh_token()
     - These are PRIVATE methods that may change without notice
     - Any SDK update could break this implementation
+
+    FUTURE WORK:
+    - The following GitHub issue/PR tracks making this properly extensible in the SDK
+        - https://github.com/modelcontextprotocol/python-sdk/issues/1250
+        - https://github.com/modelcontextprotocol/python-sdk/issues/1318
+        - https://github.com/modelcontextprotocol/python-sdk/pull/1743
+        - https://github.com/modelcontextprotocol/python-sdk/pull/1784
+        - https://github.com/modelcontextprotocol/python-sdk/issues/2121
+    - If/when that lands, we should migrate to use official extension points
+    - If not accepted, we should build our own OAuth client
     """
 
     # pylint: disable=too-many-arguments
@@ -75,7 +83,7 @@ class RefreshTokenOauthProvider(ExtendedOauthClientProvider):
         client_id: str,
         client_secret: str = None,  # may not require client_secret to refresh token
         token_endpoint: str = None,
-        token_endpoint_auth_method: Literal["client_secret_basic", "client_secret_post"] = "client_secret_basic",
+        token_endpoint_auth_method: Literal["client_secret_basic", "client_secret_post", None] = "client_secret_basic",
         scopes: str | None = None,
         timeout: float = 300.0
     ) -> None:
@@ -134,8 +142,8 @@ class RefreshTokenOauthProvider(ExtendedOauthClientProvider):
         if not self.context.client_info or not self.context.client_info.client_id:
             raise OAuthTokenError("No client info available")  # pragma: no cover
 
-        # Determine token endpoint URL: use endpoint from discovery if available, otherwise use provided token_endpoint
-        token_url: str = self._get_token_endpoint() or self.token_endpoint
+        # Determine token endpoint URL: use provided token_endpoint if available, otherwise use endpoint from discovery
+        token_url: str = self.token_endpoint or self._get_token_endpoint()
 
         refresh_data: dict[str, str] = {
             "grant_type": "refresh_token",

@@ -20,6 +20,7 @@ from logging import getLogger
 from typing import Any
 from typing import Dict
 from typing import Optional
+from typing import override
 
 from mcp.client.auth import TokenStorage
 from mcp.shared.auth import OAuthClientInformationFull
@@ -39,6 +40,7 @@ class SlyDataTokenStorage(TokenStorage):
         self.client_info: Dict[str, Any] = client_info
         self.tokens: Dict[str, Any] = tokens
 
+    @override
     async def get_tokens(self) -> Optional[OAuthToken]:
         """Load OAuth tokens from sly data."""
         if not self.tokens:
@@ -51,6 +53,11 @@ class SlyDataTokenStorage(TokenStorage):
             self.logger.warning("Failed to load token from sly data: %s", errors)
             return None
 
+    async def get_tokens_dict(self) -> Dict[str, Any]:
+        """Get raw token dictionary."""
+        return self.tokens
+
+    @override
     async def set_tokens(self, tokens: OAuthToken) -> None:
         """Save OAuth tokens to a dictionary in sly data."""
         try:
@@ -61,6 +68,7 @@ class SlyDataTokenStorage(TokenStorage):
         except (AttributeError, TypeError) as errors:
             self.logger.error("Failed to save tokens in sly data: %s", errors)
 
+    @override
     async def get_client_info(self) -> Optional[OAuthClientInformationFull]:
         """
         Load client information from sly data.
@@ -81,6 +89,11 @@ class SlyDataTokenStorage(TokenStorage):
             self.logger.warning("Failed to instantiate OAuthClientInformationFull: %s", validation_error)
             return None
 
+    async def get_client_info_dict(self) -> Dict[str, Any]:
+        """Get raw client info dictionary."""
+        return self.client_info
+
+    @override
     async def set_client_info(self, client_info: OAuthClientInformationFull) -> None:
         """Save client information to sly data."""
         try:

@@ -15,6 +15,8 @@
 #
 # END COPYRIGHT
 
+from logging import Logger
+from logging import getLogger
 import os
 from typing import Any, Dict
 
@@ -26,12 +28,23 @@ from leaf_common.persistence.easy.easy_hocon_persistence import EasyHoconPersist
 from leaf_common.persistence.interface.restorer import Restorer
 
 
-class McpServersInfoRestorer(Restorer):
+class McpInfoRestorer(Restorer):
     """
-    Implementation of the Restorer interface that reads the MCP servers info file.
-    NOTE: This class is highly experimental and implementation of MCP servers
-    is very likely to change in future releases.
+    Implementation of the Restorer interface that reads the MCP info file.
+    The file path can be provided via the AGENT_MCP_INFO_FILE env var.
+    The file can contain the following info for each MCP server:
+    - MCP server url
+    - server endpoints (e.g. authorization_endpoint, token endpoint, and timeout settings)
+    - http headers
+    - client info (e.g. client id, client secret, token_endpoint_auth_method, and scopes)
+    - tool filtering info (e.g. allowed tools list)
     """
+
+    def __init__(self):
+        """
+        Constructor
+        """
+        self.logger: Logger = getLogger(self.__class__.__name__)
 
     def restore(self, file_reference: str = None) -> Dict[str, Any]:
         """
@@ -42,9 +55,20 @@ class McpServersInfoRestorer(Restorer):
         """
         file_path: str = file_reference
         if not file_path:
-            # "MCP_SERVERS_INFO_FILE" will be deprecated in neuro-san==0.7.
-            file_path = os.environ.get("AGENT_MCP_SERVERS_INFO_FILE") or os.environ.get("MCP_SERVERS_INFO_FILE")
-            if not file_path:
+            # First check for AGENT_MCP_INFO_FILE env var, then fallback to MCP_SERVERS_INFO_FILE env var for
+            # backward compatibility (will be removed in neuro-san==0.7)
+            if os.getenv("AGENT_MCP_INFO_FILE"):
+                file_path = os.environ.get("AGENT_MCP_INFO_FILE")
+                self.logger.info("Restoring MCP info from file specified in AGENT_MCP_INFO_FILE env var: %s", file_path)
+            elif os.getenv("MCP_SERVERS_INFO_FILE"):
+                file_path = os.environ.get("MCP_SERVERS_INFO_FILE")
+                self.logger.info(
+                    "Restoring MCP info from file specified in MCP_SERVERS_INFO_FILE env var: %s", file_path)
+                self.logger.warning(
+                    "MCP_SERVERS_INFO_FILE env var is deprecated and will be removed in neuro-san==0.7. "
+                    "Please switch to AGENT_MCP_INFO_FILE env var."
+                )
+            else:
                 # No servers info file specified.
                 return None
 
@@ -55,7 +79,7 @@ class McpServersInfoRestorer(Restorer):
                 servers_info = hocon.restore(file_reference=file_path)
             except (ParseException, ParseSyntaxException) as exception:
                 message: str = f"""
-        There was an error parsing MCP servers info file "{file_path}".
+        There was an error parsing MCP info file "{file_path}".
         See the accompanying ParseException (above) for clues as to what might be
         syntactically incorrect in that file.
         """
@@ -69,20 +93,20 @@ class McpServersInfoRestorer(Restorer):
                 servers_info = None
             except json.decoder.JSONDecodeError as exception:
                 message: str = f"""
-        There was an error parsing MCP servers info file "{file_path}".
+        There was an error parsing MCP info file "{file_path}".
         See the accompanying JSONDecodeError exception (above) for clues as to what might be
         syntactically incorrect in that file.
         """
                 raise ParseException(message) from exception
         if servers_info is None:
-            message = f"Could not find MCP servers info file at path: {file_path}.\n" + """
+            message = f"Could not find MCP info file at path: {file_path}.\n" + """
             Some common problems include:
             * The file itself simply does not exist.
             * Path is not an absolute path and you are invoking the server from a place
               where the path is not reachable.
             * The path has a typo in it.
 
-            Double-check the value of the MCP_SERVERS_INFO_FILE env var and
+            Double-check the value of the AGENT_MCP_INFO_FILE and MCP_SERVERS_INFO_FILE env var and
             your current working directory (pwd).
             """
             raise FileNotFoundError(message)

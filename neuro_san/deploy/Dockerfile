@@ -315,18 +315,9 @@ ENV AGENT_EXTERNAL_RESERVATIONS_STORAGE=""
 # to use for cross-pod reservations storage.
 ENV AGENT_RESERVATIONS_S3_BUCKET=""
 
-# A hocon file with MCP servers information to be used by LangChainMcpAdapter
+# A hocon file with MCP clients and servers information to be used by LangChainMcpAdapter
 # for connecting to external MCP servers with authentication and tool filtering.
-ENV AGENT_MCP_SERVERS_INFO_FILE=""
-
-# A string containing clients info for MCP servers. For example,
-# '{"https://example.com/mcp": {"client_id": <client id>, "client_secret": <client secret>}}'
-ENV AGENT_MCP_CLIENTS_INFO=""
-
-# A string containing tokens info for MCP servers. For example,
-# '{"https://example.com/mcp": {"access_token": "eyJhbGciOi...", "expires_in": 3600, "refresh_token": "def50200a1..."}}'
-# Note that MCP SDK only support bearer token so it is not necessary to have "token_type" field.
-ENV AGENT_MCP_TOKENS=""
+ENV AGENT_MCP_INFO_FILE=""
 
 # Timeout to wait for MCP server authentication response, in seconds. Default is 300 seconds (5 minutes).
 ENV AGENT_MCP_TIMEOUT_SECONDS=300

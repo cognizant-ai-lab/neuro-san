@@ -61,8 +61,8 @@ class OauthProviderFactory:
         - Refresh token flow (if refresh token is available)
         - Client credentials flow (no refresh token, but client credentials are available)
         """
-        credentials: Dict[str, Any] = self.storage.client_info
-        tokens: Dict[str, Any] = self.storage.tokens
+        credentials: Dict[str, Any] = await self.storage.get_client_info_dict()
+        tokens: Dict[str, Any] = await self.storage.get_tokens_dict()
         refresh_token: str = tokens.get("refresh_token")
 
         if credentials:
@@ -84,7 +84,7 @@ class OauthProviderFactory:
             client_id=credentials.get("client_id"),
             client_secret=credentials.get("client_secret"),
             token_endpoint=self.token_endpoint,
-            token_endpoint_auth_method=credentials.get("token_endpoint_auth_method") or "client_secret_basic",
+            token_endpoint_auth_method=credentials.get("token_endpoint_auth_method", "client_secret_basic"),
             scopes=credentials.get("scope"),
             timeout=self.timeout
         )
@@ -99,7 +99,7 @@ class OauthProviderFactory:
             client_id=credentials.get("client_id"),
             client_secret=credentials.get("client_secret"),
             token_endpoint=self.token_endpoint,
-            token_endpoint_auth_method=credentials.get("token_endpoint_auth_method") or "client_secret_basic",
+            token_endpoint_auth_method=credentials.get("token_endpoint_auth_method", "client_secret_basic"),
             scopes=credentials.get("scope"),
             timeout=self.timeout
         )

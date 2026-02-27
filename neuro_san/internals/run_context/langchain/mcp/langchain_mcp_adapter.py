@@ -33,11 +33,9 @@ from mcp.client.auth.exceptions import OAuthFlowError
 from mcp.client.auth.exceptions import OAuthTokenError
 
 
-from neuro_san.internals.run_context.langchain.mcp.mcp_clients_info_restorer import McpClientsInfoRestorer
-from neuro_san.internals.run_context.langchain.mcp.mcp_servers_info_restorer import McpServersInfoRestorer
+from neuro_san.internals.run_context.langchain.mcp.mcp_info_restorer import McpInfoRestorer
 from neuro_san.internals.run_context.langchain.mcp.oauth_provider_factory import OauthProviderFactory
 from neuro_san.internals.run_context.langchain.mcp.sly_data_token_storage import SlyDataTokenStorage
-from neuro_san.internals.run_context.langchain.mcp.mcp_tokens_restorer import McpTokensRestorer
 
 MCP_AUTH_TIMEOUT = float(os.getenv("AGENT_MCP_TIMEOUT_SECONDS", "300.0"))  # Default to 5 minutes if not set
 
@@ -50,13 +48,11 @@ class LangChainMcpAdapter:
     Features:
     - Automatic OAuth authentication with multiple flow support
     - Tool filtering based on allowed lists
-    - MCP server configuration management
+    - MCP client and server configuration management
     """
 
     _mcp_info_lock: threading.Lock = threading.Lock()
-    _mcp_servers_info: Dict[str, Any] = None
-    _mcp_clients_info: Dict[str, Any] = None
-    _mcp_tokens: Dict[str, Any] = None
+    _mcp_info: Dict[str, Any] = None
 
     def __init__(self):
         """
@@ -66,79 +62,29 @@ class LangChainMcpAdapter:
         self.logger: Logger = getLogger(self.__class__.__name__)
 
     @staticmethod
-    async def _load_mcp_servers_info():
+    async def _load_mcp_info():
         """
-        Loads MCP servers information from a configuration file if not already loaded.
+        Loads MCP clients and servers information from a configuration file if not already loaded.
         """
         with LangChainMcpAdapter._mcp_info_lock:
-            if LangChainMcpAdapter._mcp_servers_info is None:
-                LangChainMcpAdapter._mcp_servers_info = McpServersInfoRestorer().restore()
-                if LangChainMcpAdapter._mcp_servers_info is None:
+            if LangChainMcpAdapter._mcp_info is None:
+                LangChainMcpAdapter._mcp_info = McpInfoRestorer().restore()
+                if LangChainMcpAdapter._mcp_info is None:
                     # Something went wrong reading the file.
                     # Prevent further attempts to load info.
-                    LangChainMcpAdapter._mcp_servers_info = {}
+                    LangChainMcpAdapter._mcp_info = {}
 
-    @staticmethod
-    async def _load_mcp_clients_info():
+    async def _get_mcp_info(self, server_url: str) -> Dict[str, Any]:
         """
-        Loads MCP clients information from the env var AGENT_MCP_CLIENTS_INFO if not already loaded.
-        """
-        with LangChainMcpAdapter._mcp_info_lock:
-            if LangChainMcpAdapter._mcp_clients_info is None:
-                LangChainMcpAdapter._mcp_clients_info = McpClientsInfoRestorer().restore()
-                if LangChainMcpAdapter._mcp_clients_info is None:
-                    # Something went wrong reading the env var.
-                    # Prevent further attempts to load info.
-                    LangChainMcpAdapter._mcp_clients_info = {}
-
-    @staticmethod
-    async def _load_mcp_tokens():
-        """
-        Loads MCP tokens information from the env var AGENT_MCP_TOKENS if not already loaded.
-        """
-        with LangChainMcpAdapter._mcp_info_lock:
-            if LangChainMcpAdapter._mcp_tokens is None:
-                LangChainMcpAdapter._mcp_tokens = McpTokensRestorer().restore()
-                if LangChainMcpAdapter._mcp_tokens is None:
-                    # Something went wrong reading the env var.
-                    # Prevent further attempts to load info.
-                    LangChainMcpAdapter._mcp_tokens = {}
-
-    async def _get_server_info(self, server_url: str) -> Dict[str, Any]:
-        """
-        Get server configuration from cached info.
+        Get client and server configuration from cached info.
 
         :param server_url: The MCP server URL to look up configuration for.
 
         :return: Server configuration dictionary (empty dict if not found).
         """
-        if self._mcp_servers_info is None:
-            await self._load_mcp_servers_info()
-        return self._mcp_servers_info.get(server_url, {})
-
-    async def _get_client_info(self, server_url: str) -> Dict[str, Any]:
-        """
-        Get client configuration from cached info.
-
-        :param server_url: The MCP server URL to look up client info for.
-
-        :return: Client info for the MCP server (empty dict if not found).
-        """
-        if self._mcp_clients_info is None:
-            await self._load_mcp_clients_info()
-        return self._mcp_clients_info.get(server_url, {})
-
-    async def _get_token(self, server_url: str) -> Dict[str, Any]:
-        """
-        Get token info from cached info.
-
-        :param server_url: The MCP server URL to look up token for.
-
-        :return: Token for the MCP server (empty dict if not found).
-        """
-        if self._mcp_tokens is None:
-            await self._load_mcp_tokens()
-        return self._mcp_tokens.get(server_url, {})
+        if self._mcp_info is None:
+            await self._load_mcp_info()
+        return self._mcp_info.get(server_url, {})
 
     async def _prepare_headers(
         self,
@@ -156,8 +102,8 @@ class LangChainMcpAdapter:
         :return: Headers dictionary or None if no headers are available or invalid.
         """
         # Use provided headers, fallback to server config
-        server_info = await self._get_server_info(server_url)
-        final_headers = headers or server_info.get("http_headers")
+        mcp_info: Dict[str, Any] = await self._get_mcp_info(server_url)
+        final_headers: Dict[str, Any] = headers or mcp_info.get("http_headers")
 
         if final_headers:
             if not isinstance(final_headers, dict):
@@ -184,7 +130,8 @@ class LangChainMcpAdapter:
         :return: Client info dictionary or an empty dict if no client info are available or invalid.
         """
         # Use sly data client info, fallback to environment variable
-        final_client_info = client_info or await self._get_client_info(server_url)
+        mcp_info: Dict[str, Any] = await self._get_mcp_info(server_url)
+        final_client_info: Dict[str, Any] = client_info or mcp_info.get("client_info")
 
         if final_client_info:
             if not isinstance(final_client_info, dict):
@@ -206,9 +153,7 @@ class LangChainMcpAdapter:
     ) -> Dict[str, Any]:
         """
         Prepare token for MCP authentication. sly_data is needed as a reference to store the generated token.
-
-        Priority: token from sly data > token from environment variable
-        If env var is used and parent is provided, promotes the value to sly_data.
+        Only allow tokens that are explicitly configured in sly_data.
 
         :param server_url: The MCP server URL to get configuration for.
         :param sly_data: The sly data dictionary to use for token lookup and storage.
@@ -220,24 +165,17 @@ class LangChainMcpAdapter:
 
         # Get token from sly_data or env var
         sly_data_token: Dict[str, Any] = sly_data_tokens.get(server_url)
-        final_token = sly_data_token or await self._get_token(server_url)
 
-        if final_token:
-            if not isinstance(final_token, dict):
+        if sly_data_token:
+            if not isinstance(sly_data_token, dict):
                 self.logger.error(
                     "Token for server %s must be a dictionary, got %s",
                     server_url,
-                    type(final_token).__name__
+                    type(sly_data_token).__name__
                 )
                 sly_data_tokens[server_url] = {}
 
-            # If we used env var fallback and have parent reference, promote to sly_data
-            if not sly_data_token:
-                # Create a new dict in sly_data and copy the env var token into it
-                sly_data_tokens[server_url] = copy.copy(final_token)
-                self.logger.info("Putting token from env var to sly_data for server: %s", server_url)
-
-        # Ensure server has an entry (either existing, from env var, or empty dict)
+        # Ensure server has an entry (either existing or empty dict)
         return sly_data_tokens.setdefault(server_url, {})
 
     async def _create_oauth_provider(
@@ -249,16 +187,17 @@ class LangChainMcpAdapter:
 
         :return: Configured OAuth provider factory instance.
         """
-        server_info = await self._get_server_info(server_url)
+        mcp_info: Dict[str, Any] = await self._get_mcp_info(server_url)
+        server_info: Dict[str, Any] = mcp_info.get("server_info", {})
 
         # Prepare token storage
         storage = SlyDataTokenStorage(client_info, token)
 
         # Get OAuth endpoints from server config (optional - will be discovered if not provided)
-        token_endpoint = server_info.get("token_endpoint")
+        token_endpoint: str = server_info.get("token_endpoint")
 
         # Get timeout for OAuth flows from server config or use default
-        timeout: float = server_info.get("auth_timeout", MCP_AUTH_TIMEOUT)
+        timeout: float = mcp_info.get("auth_timeout", MCP_AUTH_TIMEOUT)
 
         return OauthProviderFactory(
             server_url=server_url,
@@ -286,7 +225,7 @@ class LangChainMcpAdapter:
             return allowed_tools
 
         # Fallback to server config
-        server_info = await self._get_server_info(server_url)
+        server_info = await self._get_mcp_info(server_url)
         return server_info.get("tools", [])
 
     async def _filter_and_tag_tools(
@@ -326,11 +265,13 @@ class LangChainMcpAdapter:
         # Get client info from env var if not available in sly data
         sly_data_client_info: Dict[str, Any] = sly_data.get("mcp_client_info", {}).get(server_url)
         client_info: Dict[str, Any] = await self._prepare_client_info(server_url, sly_data_client_info)
-        # Get token from env var if not available in sly data and
-        # ensure it's stored in sly_data for the provider to use and update
-        token: Dict[str, Any] = await self._prepare_token(server_url, sly_data)
+        token: Dict[str, Any] = {}
+        if client_info:
+            # If there is client info, ensure that there is "mcp_tokens" in the sly data
+            # for the provider to use and update, otherwise just pass an empty dict.
+            token = await self._prepare_token(server_url, sly_data)
         # Create and configure OAuth provider
-        provider = await self._create_oauth_provider(server_url, client_info, token)
+        provider: OauthProviderFactory = await self._create_oauth_provider(server_url, client_info, token)
 
         return await provider.get_auth()
 
