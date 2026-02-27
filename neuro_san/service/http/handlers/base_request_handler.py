@@ -167,7 +167,7 @@ class BaseRequestHandler(RequestHandler):
             # but the call is necessary to trigger the "side effect" of lookup and registration of temp network.
             # We delegate call execution to a thread to avoid blocking server event loop
             # with potentially slow external storage access.
-            network_provider = asyncio.to_thread(temp_storage.get_agent_network_provider, agent_name)
+            network_provider = await asyncio.to_thread(temp_storage.get_agent_network_provider, agent_name)
             if network_provider is not None:
                 # Now that our service is aware of this temp network,
                 # we can query our policy again,
