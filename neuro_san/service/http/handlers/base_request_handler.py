@@ -151,12 +151,10 @@ class BaseRequestHandler(RequestHandler):
         # Now, this could be a temporary network created outside of our service:
         # Does it look like a temporary network name?
         if AgentReservation.is_reservation_name(agent_name):
-            print("111111111111")
             # Get temporary network storage:
             network_storage_dict: Dict[str, AgentNetworkStorage] = self.server_context.get_network_storage_dict()
             temp_storage: AgentNetworkStorage = network_storage_dict.get("temp", None)
             if temp_storage is None or not isinstance(temp_storage, ExpiringAgentNetworkStorage):
-                print("2222222")
                 self.set_status(500)
                 self.logger.error(metadata, "error: Temporary network storage is not properly configured.")
                 self.do_finish()
@@ -164,13 +162,17 @@ class BaseRequestHandler(RequestHandler):
             # This call will trigger temp network lookup in external storage
             # and if found, it will be registered in our service
             # and become available for future requests until it expires.
-            service_provider = temp_storage.get_agent_network_provider(agent_name)
-            print(f"33333333333 service_provider: {service_provider}")
-            if service_provider is not None:
+            # Note that "network_provider" result is not used directly here,
+            # but the call is necessary to trigger the "side effect" of lookup and registration of temp network.
+            network_provider = temp_storage.get_agent_network_provider(agent_name)
+            if network_provider is not None:
+                # Now that our service is aware of this temp network,
+                # we can query our policy again,
+                # and we already know that this agent has been authorized:
                 _, service_provider = await self.agent_policy.allow_agent(agent_name, metadata)
                 return service_provider.get_service()
 
-        # Resource not found
+        # Nothing worked - so we report resource not found
         self.set_status(404)
         self.logger.error(metadata, "error: Invalid request path %s", self.request.path)
         self.do_finish()

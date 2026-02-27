@@ -256,9 +256,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         obj_key: str = self.get_obj_key_for_reservation(reservation_id)
         try:
             # Retrieve the reservation object from S3
-            print(f"Attempting to retrieve reservation object from S3 with key: {obj_key}")
             agent_spec: Dict[str, Any] = self._retrieve_object_with_retries(obj_key)
-            print(f"Successfully retrieved reservation {agent_spec} with key: {obj_key}")
             metadata: Dict[str, Any] = agent_spec.get("metadata")
 
             # Reconstruct the Reservation object from stored dictionary
