@@ -52,7 +52,7 @@ class McpInfoRestorer(Restorer):
         :param file_reference: The file reference to use when restoring.
                 Default is None, implying the file reference is up to the
                 implementation.
-        :return: a dictionary with MCP servers information
+        :return: a dictionary with MCP clients and servers information
         """
         file_path: str = file_reference
         if not file_path:
