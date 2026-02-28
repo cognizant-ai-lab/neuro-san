@@ -241,9 +241,13 @@ class LangChainMcpAdapter:
 
         :return: Filtered list of tools with tags added.
         """
-        # Filter if allowed_tools is not empty
+       # Filter if allowed_tools is not empty
         if allowed_tools:
-            tools = [tool for tool in tools if tool.name in allowed_tools]
+            filtered_tools: List[BaseTool] = []
+            for tool in tools:
+                if tool.name in allowed_tools:
+                    filtered_tools.append(tool)
+            tools = filtered_tools
 
         # Add tags to all tools
         for tool in tools:
