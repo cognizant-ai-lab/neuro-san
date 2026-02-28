@@ -26,6 +26,7 @@ import requests
 from leaf_common.time.timeout import Timeout
 
 from neuro_san.interfaces.agent_session import AgentSession
+from neuro_san.interfaces.concierge_session import ConciergeSession
 from neuro_san.session.abstract_http_service_agent_session import AbstractHttpServiceAgentSession
 from neuro_san.session.mcp_chat_response_dictionary_converter import McpChatResponseDictionaryConverter
 
@@ -35,7 +36,7 @@ from neuro_san.session.mcp_chat_response_dictionary_converter import McpChatResp
 MCP_VERSION: str = "2025-06-18"
 
 
-class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
+class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession, ConciergeSession):
     """
     Implementation of AgentSession that talks to an MCP protocol service.
     This is largely only used by command-line tests.
@@ -219,6 +220,35 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                         result_dict = json.loads(line)
                         result_dict = McpChatResponseDictionaryConverter().to_dict(result_dict)
                         yield result_dict
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            raise ValueError(self.help_message(path)) from exc
+
+    def list(self, request_dict: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        :param request_dict: A request dictionary. Not used for this implementation.
+        :return: A dictionary version of the MCP protocol "tools/list" response.
+                "tools" - the sequence of dictionaries describing available MCP tools
+        """
+        # Get the list of tools available from the service
+        mcp_payload: Dict[str, Any] = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/list",
+            "params": {
+            }
+        }
+        headers: Dict[str, str] = self.get_headers()
+        headers["Content-Type"] = "application/json"
+        headers[self.MCP_PROTOCOL_VERSION] = self.protocol_version
+
+        path: str = self.get_request_path("list")
+        try:
+            with requests.post(path, json=mcp_payload, headers=headers,
+                               timeout=self.streaming_timeout_in_seconds) as response:
+                response.raise_for_status()
+                result_dict = response.json()
+                #result_dict = McpChatResponseDictionaryConverter().to_dict(result_dict)
+                return result_dict
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(self.help_message(path)) from exc
 
