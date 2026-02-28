@@ -90,8 +90,11 @@ class AccumulatingAgentReservationist(Reservationist):
 
         return reservation
 
-    def __call__(self, external_networks: List[str] = None, mcp_servers: List[str] = None) -> Reservationist:
+    def validate_with(self, external_networks: List[str] = None, mcp_servers: List[str] = None) -> Reservationist:
         """
+        Allow passing of validation paramaters when using a with-statement.
+        These get reset in aexit().
+
         :param external_networks: A list of external network names
         :param mcp_servers: A list of MCP servers, as read in from a mcp_info.hocon file
         :return: The instance

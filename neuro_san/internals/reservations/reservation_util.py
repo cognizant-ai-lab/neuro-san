@@ -73,7 +73,7 @@ Reservationist is None.  Try this for your server:
         # then set confirmation=False, and don't bother about waiting for the Event.
         deployed_event: Event = None
         try:
-            async with reservationist(external_networks=external_networks, mcp_servers=mcp_servers):
+            async with reservationist.validate_with(external_networks=external_networks, mcp_servers=mcp_servers):
                 deployed_event = await reservationist.deploy(deployments, confirmation=True)
 
         except ValueError as exception:
