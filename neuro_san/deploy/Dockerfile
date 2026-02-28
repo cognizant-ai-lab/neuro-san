@@ -319,6 +319,10 @@ ENV AGENT_RESERVATIONS_S3_BUCKET=""
 # for connecting to external MCP servers with authentication and tool filtering.
 ENV AGENT_MCP_INFO_FILE=""
 
+# Fallback for AGENT_MCP_INFO_FILE. Deprecated in favor of AGENT_MCP_INFO_FILE, but still supported for now for backward compatibility.
+# Will be removed in neuro-san==0.7
+ENV MCP_SERVERS_INFO_FILE=""
+
 # Timeout to wait for MCP server authentication response, in seconds. Default is 300 seconds (5 minutes).
 ENV AGENT_MCP_TIMEOUT_SECONDS=300
 

@@ -131,7 +131,7 @@ class LangChainMcpAdapter:
         """
         # Use sly data client info, fallback to environment variable
         mcp_info: Dict[str, Any] = await self._get_mcp_info(server_url)
-        final_client_info: Dict[str, Any] = client_info or mcp_info.get("client_info")
+        final_client_info: Dict[str, Any] = client_info or mcp_info.get("mcp_client_info")
 
         if final_client_info:
             if not isinstance(final_client_info, dict):
@@ -188,7 +188,7 @@ class LangChainMcpAdapter:
         :return: Configured OAuth provider factory instance.
         """
         mcp_info: Dict[str, Any] = await self._get_mcp_info(server_url)
-        server_info: Dict[str, Any] = mcp_info.get("server_info", {})
+        server_info: Dict[str, Any] = mcp_info.get("mcp_server_info", {})
 
         # Prepare token storage
         storage = SlyDataTokenStorage(client_info, token)

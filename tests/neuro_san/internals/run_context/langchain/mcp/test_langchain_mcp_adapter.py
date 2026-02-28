@@ -320,7 +320,7 @@ class TestLangChainMcpAdapter:
         server_url = "https://mcp.example.com/mcp"
         mock_info_restorer_class.return_value.restore.return_value = {
             server_url: {
-                "client_info": {
+                "mcp_client_info": {
                     "client_id": "config_client_id",
                     "client_secret": "config_secret"
                 }
@@ -363,7 +363,7 @@ class TestLangChainMcpAdapter:
 
         mock_info_restorer_class.return_value.restore.return_value = {
             server_url: {
-                "client_info": {
+                "mcp_client_info": {
                     "client_id": "config_client_id",
                     "client_secret": "config_secret"
                 }
@@ -468,7 +468,7 @@ class TestLangChainMcpAdapter:
         server_url = "https://mcp.example.com/mcp"
         mock_info_restorer_class.return_value.restore.return_value = {
             server_url: {
-                "client_info": "invalid_string_not_dict"
+                "mcp_client_info": "invalid_string_not_dict"
             }
         }
 
@@ -532,8 +532,8 @@ class TestLangChainMcpAdapter:
         server_url = "https://mcp.example.com/mcp"
         mock_info_restorer_class.return_value.restore.return_value = {
             server_url: {
-                "client_info": {"client_id": "test_id"},
-                "server_info": {
+                "mcp_client_info": {"client_id": "test_id"},
+                "mcp_server_info": {
                     "token_endpoint": "https://auth.example.com/token"
                 }
             }
@@ -564,7 +564,7 @@ class TestLangChainMcpAdapter:
         server_url = "https://mcp.example.com/mcp"
         mock_info_restorer_class.return_value.restore.return_value = {
             server_url: {
-                "client_info": {"client_id": "test_id"},
+                "mcp_client_info": {"client_id": "test_id"},
                 "auth_timeout": 600.0
             }
         }
