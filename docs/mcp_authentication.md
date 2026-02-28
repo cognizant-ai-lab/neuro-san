@@ -40,6 +40,7 @@ You can specify different credentials for different MCP URLs.
 - `mcp_tokens` - Token information (only available via sly_data)
 
 **Example:**
+
 ```hocon
 {
     "http_headers": {
@@ -82,6 +83,7 @@ If these configuration files need to be committed, use **HOCON substitution** (e
 instead of hardcoding secret values.
 
 **Example Configuration:**
+
 ```hocon
 {
     "mcp_server_url_1": {
@@ -120,11 +122,13 @@ When authentication data exists in multiple locations, the following precedence 
 ## Field Reference
 
 ### `http_headers`
+
 | Field | Description | Required |
 |-------|-------------|----------|
 | `Authorization` | Authentication header, typically `Bearer <token>` | Depends on server |
 
 ### `mcp_client_info`
+
 | Field | Description | Required | Default |
 |-------|-------------|----------|---------|
 | `client_id` | OAuth client identifier | Yes | - |
@@ -135,6 +139,7 @@ When authentication data exists in multiple locations, the following precedence 
 *Required unless `token_endpoint_auth_method` is None
 
 ### `mcp_tokens`
+
 | Field | Description | Required |
 |-------|-------------|----------|
 | `access_token` | Current access token | Yes |
@@ -144,6 +149,7 @@ When authentication data exists in multiple locations, the following precedence 
 | `refresh_token` | Token for refreshing access | No |
 
 ### `mcp_server_info`
+
 | Field | Description | Required | Default |
 |-------|-------------|----------|---------|
 | `token_endpoint` | Custom token endpoint URL | No | Discovery endpoint or `base_url/token` |
