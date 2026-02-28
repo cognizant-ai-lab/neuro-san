@@ -55,8 +55,7 @@ class ClientCredentialsOauthProvider(OAuthClientProvider):
     - Bug in client_secret_post method - The token exchange fails when using this authentication method
 
     Thus, we modify the code from the MCP SDK to add support for user-provided token endpoint and
-    fix the client_secret_post method, and extend ExtendedOauthClientProvider instead of
-    OAuthClientProvider to handle non-json token responses.
+    fix the client_secret_post method.
 
     WARNING: This class overrides private methods from the SDK's OAuth implementation.
 

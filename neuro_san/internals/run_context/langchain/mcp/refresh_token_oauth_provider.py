@@ -53,8 +53,7 @@ class RefreshTokenOauthProvider(OAuthClientProvider):
     This is adapted from the MCP SDK:
     https://github.com/modelcontextprotocol/python-sdk/blob/main/src/mcp/client/auth/extensions/client_credentials.py
     but overrides the user authorization step to exchange new token with refresh token and client credentials
-    when token is expired, add token_endpoint as an optional parameter, and extends ExtendedOauthClientProvider
-    instead of OAuthClientProvider to handle non-json token responses.
+    when token is expired, add token_endpoint as an optional parameter.
 
     WARNING: This class overrides private methods from the SDK's OAuth implementation.
 
