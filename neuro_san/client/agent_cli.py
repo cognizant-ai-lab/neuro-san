@@ -36,6 +36,7 @@ from neuro_san.client.concierge_session_factory import ConciergeSessionFactory
 from neuro_san.client.streaming_input_processor import StreamingInputProcessor
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.interfaces.concierge_session import ConciergeSession
+from neuro_san.session.mcp_service_agent_session import McpServiceAgentSession
 
 
 class AgentCli:
@@ -68,12 +69,22 @@ class AgentCli:
         """
         self.parse_args(args)
 
-        # See if we are doing a list operation
-        if self.args.list or self.args.tags or self.args.tag:
+        use_mcp: bool = self.args.connection == "mcp"
+        do_list: bool = self.args.list or self.args.tags or self.args.tag
+
+        # See if we are doing a list operation for non-MCP connection types:
+        if not use_mcp and do_list:
             self.list()
             return
 
         self.open_session()
+
+        # Now check if we are doing a list operation for MCP connection type,
+        # for this we need to have the session open since the MCP tools are listed via a session call:
+        if use_mcp and do_list:
+            self.mcp_list()
+            return
+
         if self.args.connectivity:
             self.connectivity()
         else:
@@ -485,6 +496,37 @@ Have external tools that can be found in the local agent manifest use a service 
         else:
             print(f"Available agents:\n{json.dumps(response_dict, indent=4, sort_keys=True)}")
 
+    def mcp_list(self):
+        """
+        List available MCP tools (agents) via a MCP tools/list request
+        """
+        # We assume MCP session is already set up thanks to "mcp" connection type,
+        # so we just need to send the list request.
+
+        if not isinstance(self.session, McpServiceAgentSession):
+            print("McpServiceAgentSession is not set up.")
+            print("Please use the --mcp connection type to connect to an MCP server.")
+            return
+
+        mcp_session: McpServiceAgentSession = self.session
+        response_dict: Dict[str, Any] = mcp_session.list({})
+        empty_list: List[Dict[str, Any]] = []
+        if self.args.tags:
+            tags = set()
+            for agent_info in response_dict.get("agents", empty_list):
+                agent_tags: List[str] = agent_info.get("tags", empty_list)
+                tags.update(agent_tags)
+            print(f"Available tags:\n{json.dumps(list(tags), indent=4, sort_keys=True)}")
+
+        elif self.args.tag:
+            print(f"Available agents for tag {self.args.tag}:\n")
+            for agent_info in response_dict.get("agents", empty_list):
+                agent_tags: List[str] = agent_info.get("tags", empty_list)
+                if self.args.tag in agent_tags:
+                    print(json.dumps(agent_info, indent=4, sort_keys=True))
+
+        else:
+            print(f"Available tools:\n{json.dumps(response_dict, indent=4, sort_keys=True)}")
 
 if __name__ == '__main__':
     AgentCli().main()
