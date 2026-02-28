@@ -34,9 +34,10 @@ class McpInfoRestorer(Restorer):
     The file path can be provided via the AGENT_MCP_INFO_FILE env var.
     The file can contain the following info for each MCP server:
     - MCP server url
-    - server endpoints (e.g. authorization_endpoint, token endpoint, and timeout settings)
-    - http headers
     - client info (e.g. client id, client secret, token_endpoint_auth_method, and scopes)
+    - server endpoints (e.g. authorization_endpoint, token endpoint)
+    - http headers
+    - authentication timeout settings
     - tool filtering info (e.g. allowed tools list)
     """
 
