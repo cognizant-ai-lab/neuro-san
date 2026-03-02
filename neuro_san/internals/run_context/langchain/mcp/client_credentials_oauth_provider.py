@@ -18,6 +18,7 @@
 from typing import Any
 from typing import Dict
 from typing import Literal
+from typing import Optional
 from typing import override
 import httpx
 
@@ -80,7 +81,7 @@ class ClientCredentialsOauthProvider(OAuthClientProvider):
         server_url: str,
         storage: TokenStorage,
         client_id: str,
-        client_secret: str,
+        client_secret: Optional[str],
         token_endpoint: str = None,
         token_endpoint_auth_method: Literal["client_secret_basic", "client_secret_post", None] = "client_secret_basic",
         scopes: str | None = None,

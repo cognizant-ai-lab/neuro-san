@@ -18,7 +18,9 @@
 from logging import Logger
 from logging import getLogger
 import os
-from typing import Any, Dict
+from typing import Any
+from typing import Dict
+from typing import Optional
 
 import json
 from pyparsing.exceptions import ParseException
@@ -47,7 +49,7 @@ class McpInfoRestorer(Restorer):
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
 
-    def restore(self, file_reference: str = None) -> Dict[str, Any]:
+    def restore(self, file_reference: str = None) -> Optional[Dict[str, Any]]:
         """
         :param file_reference: The file reference to use when restoring.
                 Default is None, implying the file reference is up to the

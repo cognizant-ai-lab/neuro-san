@@ -257,7 +257,7 @@ class LangChainMcpAdapter:
 
         return tools
 
-    async def _prepare_auth(self, server_url: str, sly_data: Optional[Dict[str, Any]]) -> Optional[Auth]:
+    async def _prepare_auth(self, server_url: str, sly_data: Dict[str, Any]) -> Optional[Auth]:
         """
         Prepare auth provider for MCP server if authentication is needed.
 
@@ -283,7 +283,7 @@ class LangChainMcpAdapter:
         self,
         server_url: str,
         allowed_tools: Optional[List[str]],
-        sly_data: Optional[Dict[str, Any]]
+        sly_data: Dict[str, Any]
     ) -> List[BaseTool]:
         """
         Fetches tools from the given MCP server and returns them as LangChain-compatible tools.
@@ -333,6 +333,7 @@ class LangChainMcpAdapter:
 
         except (OAuthFlowError, OAuthTokenError) as auth_error:
             self.logger.error("Authentication failed for MCP server %s: %s", server_url, auth_error, exc_info=True)
+            mcp_tools = []
 
         # Determine which tools are allowed
         client_allowed_tools = await self._determine_allowed_tools(server_url, allowed_tools)

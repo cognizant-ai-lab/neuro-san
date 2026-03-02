@@ -53,7 +53,7 @@ class OauthProviderFactory:
         self.token_endpoint = token_endpoint
         self.timeout = timeout
 
-    async def get_auth(self) -> Auth:
+    async def get_auth(self) -> Optional[Auth]:
         """
         Get appropriate OAuth provider based on stored credentials and tokens.
 

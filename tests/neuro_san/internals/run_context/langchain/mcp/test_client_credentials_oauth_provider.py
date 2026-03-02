@@ -272,7 +272,7 @@ class TestClientCredentialsOauthProvider:
 
         request = await provider._exchange_token_client_credentials()
 
-        # Should use discovered endpoint, not the provided one
+        # Should use the provided one, not the discovered one
         assert str(request.url) == "https://fallback.auth.com/token"
 
     @pytest.mark.asyncio

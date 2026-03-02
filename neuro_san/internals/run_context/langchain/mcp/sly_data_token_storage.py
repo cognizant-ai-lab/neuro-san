@@ -64,7 +64,7 @@ class SlyDataTokenStorage(TokenStorage):
             # Clear and update token in-place
             self.tokens.clear()
             self.tokens.update(tokens.model_dump(mode="json"))
-            self.logger.info("Tokens saved (expires in %d s)", tokens.expires_in)
+            self.logger.info("Tokens saved (expires in %s s)", tokens.expires_in)
         except (AttributeError, TypeError) as errors:
             self.logger.error("Failed to save tokens in sly data: %s", errors)
 
