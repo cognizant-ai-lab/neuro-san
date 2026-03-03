@@ -37,7 +37,7 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
     An abstract implementation of a config dictionary Restorer that allows sync or async
     restoration from a file.  The file may be from an explicit string or an environment variable.
     Files themselves may be of the following formats:
-        * HOCON
+        * HOCON - Warning: include files can only be synchronously loaded during deserialization.
         * JSON
     Allows for optional processing of the dictionary read in from the file via filter_config().
     """
