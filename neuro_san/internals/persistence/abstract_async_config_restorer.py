@@ -42,15 +42,17 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
     Allows for optional processing of the dictionary read in from the file via filter_config().
     """
 
-    def __init__(self, file_purpose: str, env_var: str = None):
+    def __init__(self, file_purpose: str, env_var: str = None, must_exist: bool = True):
         """
         Constructor
 
         :param file_purpose: A string description of the file to be restored.
         :param env_var: An optional environment variable name to get any file_reference from.
+        :param must_exist: True if the file must exist, False otherwise
         """
         self.file_purpose: str = file_purpose
         self.env_var: str = env_var
+        self.must_exist: bool = must_exist
 
     def get_file_path(self, file_reference: str = None) -> str:
         """
@@ -80,8 +82,14 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
 
         # Do a synchronous read of the file contents
         file_contents: str = None
-        with open(file_path, "r", encoding="utf-8") as file_obj:
-            file_contents = file_obj.read()
+
+        try:
+            with open(file_path, "r", encoding="utf-8") as file_obj:
+                file_contents = file_obj.read()
+        except FileNotFoundError:
+            if self.must_exist:
+                raise
+            return config
 
         config = self.deserialize_file_contents(file_path, file_contents)
         return config
@@ -102,8 +110,13 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
 
         # Do an asynchronous read of the file contents
         file_contents: str = None
-        async with async_open(file_path, "r", encoding="utf-8") as file_obj:
-            file_contents = await file_obj.read()
+        try:
+            async with async_open(file_path, "r", encoding="utf-8") as file_obj:
+                file_contents = await file_obj.read()
+        except FileNotFoundError:
+            if self.must_exist:
+                raise
+            return config
 
         config = self.deserialize_file_contents(file_path, file_contents)
         return config
