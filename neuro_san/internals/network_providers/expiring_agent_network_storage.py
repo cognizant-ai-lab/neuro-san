@@ -20,6 +20,8 @@ from typing import Dict
 from typing import List
 from typing import Tuple
 
+import logging
+
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
@@ -45,6 +47,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         super().__init__(check_expirations_interval_seconds=check_expirations_interval_seconds)
         self.reservations_table: Dict[str, Reservation] = {}
         self.base_storage: ReservationsStorage = None
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     def set_base_storage(self, base_storage: ReservationsStorage):
         """
@@ -63,8 +66,25 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         Start this storage, which includes starting the expiration checking loop.
         """
         super().start()
-        if self.base_storage is not None:
-            self.base_storage.start()
+        try:
+            if self.base_storage is not None:
+                self.base_storage.start()
+        except Exception as exc:  #pylint: disable=broad-except
+            self.logger.error("Failed to start base storage: %s", exc)
+            super().stop()
+            raise
+
+    def stop(self):
+        """
+        Stop this storage, which includes stopping the expiration checking loop.
+        """
+        super().stop()
+        try:
+            if self.base_storage is not None and isinstance(self.base_storage, Startable):
+                self.base_storage.stop()
+        except Exception as exc:  #pylint: disable=broad-except
+            self.logger.error("Failed to stop base storage: %s", exc)
+            raise
 
     def add_reservations(self, reservations_dict: Dict[Reservation, Dict[str, Any]],
                          source: str = None):

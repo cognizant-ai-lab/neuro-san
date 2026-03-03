@@ -57,7 +57,7 @@ class Reservation:
         """
         :return: Whether the reservation is expired or not.
         """
-        return time.time() >= self.expiration_time_in_seconds
+        return time.time() > self.expiration_time_in_seconds
 
     def get_url(self) -> str:
         """

@@ -47,6 +47,11 @@ class AbstractReservationsStorage(ReservationsStorage, Startable):
         self._stop_event = threading.Event()
         self._logger = logging.getLogger(self.__class__.__name__)
 
+    def start(self):
+        self._thread = threading.Thread(target=self._run_loop, daemon=True)
+        self._thread.start()
+        self._logger.debug("Expiration cleanup thread started.")
+
     def stop(self, timeout: Optional[float] = None):
         """
         Signal the worker to stop and wait for it with timeout.
@@ -55,11 +60,6 @@ class AbstractReservationsStorage(ReservationsStorage, Startable):
         if self._thread:
             self._thread.join(timeout)
             self._logger.debug("Expiration cleanup thread stopped.")
-
-    def start(self):
-        self._thread = threading.Thread(target=self._run_loop, daemon=True)
-        self._thread.start()
-        self._logger.debug("Expiration cleanup thread started.")
 
     def _run_loop(self):
         while not self._stop_event.is_set():

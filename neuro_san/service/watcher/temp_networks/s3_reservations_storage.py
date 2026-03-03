@@ -219,7 +219,6 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         and the implementing class will act as a cache in front of it.
         :param base_storage: An ReservationsStorage instance to use as a source of truth
         """
-        raise NotImplementedError
 
     def _retrieve_object_with_retries(self, obj_key: str) -> Dict[str, Any]:
         """
