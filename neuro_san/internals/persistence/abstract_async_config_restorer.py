@@ -19,6 +19,8 @@ from typing import Dict
 
 from io import StringIO
 from json.decoder import JSONDecodeError
+from logging import getLogger
+from logging import Logger
 from os import environ
 
 from aiofiles import open as async_open
@@ -50,6 +52,7 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
         :param env_var: An optional environment variable name to get any file_reference from.
         :param must_exist: True if the file must exist, False otherwise
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self.file_purpose: str = file_purpose
         self.env_var: str = env_var
         self.must_exist: bool = must_exist
