@@ -235,8 +235,8 @@ class McpToolsProcessor:
             "inputSchema": self.tool_request_validator.get_request_schema()
         }
         # Include agent network metadata in MCP _meta field if available:
-        network_metadata: Dict[str, Any] = agent_network.get_metadata()
-        if network_metadata is not None:
+        network_metadata: Any = agent_network.get_metadata()
+        if isinstance(network_metadata, dict):
             tool_dict["_meta"] = network_metadata
         return tool_dict
 
