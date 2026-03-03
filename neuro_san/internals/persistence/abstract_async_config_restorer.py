@@ -132,5 +132,6 @@ syntactically incorrect in that file.
         :return: A config dictionary, potentially modified as per the
                 policy encapsulated by the implementation
         """
+        _ = file_path
         # By default, do no filtering
         return basis_config

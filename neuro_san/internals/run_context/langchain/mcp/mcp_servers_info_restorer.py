@@ -29,7 +29,7 @@ class McpServersInfoRestorer(AbstractAsyncConfigRestorer):
     """
 
     def __init__(self):
-        super().__init__(file_purpose="MCP servers info", env_var_name="MCP_SERVERS_INFO_FILE")
+        super().__init__(file_purpose="MCP servers info", env_var="MCP_SERVERS_INFO_FILE")
 
     def filter_config(self, basis_config: Dict[str, Any], file_path: str = None) -> Dict[str, Any]:
         """
