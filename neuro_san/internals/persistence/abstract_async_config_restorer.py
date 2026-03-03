@@ -17,7 +17,7 @@
 from typing import Any
 from typing import Dict
 
-from io import StringIO
+from io import BytesIO
 from json.decoder import JSONDecodeError
 from logging import getLogger
 from logging import Logger
@@ -135,7 +135,7 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
         :return: a dictionary
         """
         # Create a file-like object from the string
-        string_file = StringIO(file_contents)
+        string_file = BytesIO(file_contents.encode("utf-8"))
 
         # Determine the serialization format
         serialization: SerializationFormat = None
