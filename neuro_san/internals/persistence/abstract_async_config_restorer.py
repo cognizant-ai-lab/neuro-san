@@ -69,13 +69,14 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
             file_path = environ.get(self.env_var)
         return file_path
 
-    def restore(self, file_reference: str = None) -> Dict[str, Any]:
+    def restore(self, file_reference: str = None) -> Any:
         """
         Synchronous restore from the given file reference.
         :param file_reference: The file reference to use when restoring.
                 Default is None, implying the file reference is up to the
                 implementation.
-        :return: a dictionary
+        :return: a dictionary. Note the return type is Any so subclasses can
+                override by returning an object. Without this, you get a dictionary.
         """
         config: Dict[str, Any] = None
 
@@ -98,13 +99,14 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
 
         return self.filter_config(config)
 
-    async def async_restore(self, file_reference: str = None) -> Dict[str, Any]:
+    async def async_restore(self, file_reference: str = None) -> Any:
         """
         Asynchronous restore from the given file reference.
         :param file_reference: The file reference to use when restoring.
                 Default is None, implying the file reference is up to the
                 implementation.
-        :return: a dictionary
+        :return: a dictionary. Note the return type is Any so subclasses can
+                override by returning an object. Without this, you get a dictionary.
         """
         config: Dict[str, Any] = None
 

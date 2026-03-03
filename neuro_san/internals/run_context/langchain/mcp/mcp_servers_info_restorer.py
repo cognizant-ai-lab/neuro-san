@@ -24,6 +24,8 @@ from neuro_san.internals.persistence.abstract_async_config_restorer import Abstr
 class McpServersInfoRestorer(AbstractAsyncConfigRestorer):
     """
     Implementation of the AbstractAsyncConfigRestorer that reads the MCP servers info file.
+    The restore() and async_restore() methods both return a dictionary.
+
     NOTE: This class is highly experimental and implementation of MCP servers
     is very likely to change in future releases.
     """

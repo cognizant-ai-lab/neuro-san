@@ -22,6 +22,7 @@ class RawManifestRestorer(AbstractAsyncConfigRestorer):
     """
     Implementation of the AbstractAsyncConfigRestorer interface that reads the contents
     of a single manifest file for agent networks/registries.
+    The restore() and async_restore() methods both return a dictionary.
     """
 
     def __init__(self):
