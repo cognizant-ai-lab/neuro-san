@@ -17,16 +17,19 @@
 from typing import Any
 from typing import Dict
 
-from json import load
+from io import StringIO
 from json.decoder import JSONDecodeError
 from os import environ
 
+from aiofiles import open as async_open
 from pyparsing.exceptions import ParseException
 from pyparsing.exceptions import ParseSyntaxException
 
 from leaf_common.config.config_filter import ConfigFilter
-from leaf_common.persistence.easy.easy_hocon_persistence import EasyHoconPersistence
 from leaf_common.persistence.interface.restorer import Restorer
+from leaf_common.serialization.format.hocon_serialization_format import HoconSerializationFormat
+from leaf_common.serialization.format.json_serialization_format import JsonSerializationFormat
+from leaf_common.serialization.interface.serialization_format import SerializationFormat
 
 
 class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
@@ -75,33 +78,13 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
         if not file_path:
             return config
 
-        if file_path.endswith(".hocon"):
-            hocon = EasyHoconPersistence()
-            try:
-                config = hocon.restore(file_reference=file_path)
-            except (ParseException, ParseSyntaxException) as exception:
-                message: str = f"""
-There was an error parsing {self.file_purpose} file "{file_path}".
-See the accompanying ParseException (above) for clues as to what might be
-syntactically incorrect in that file.
-"""
-                raise ParseException(message) from exception
-        else:
-            try:
-                with open(file_path, "r", encoding="utf-8") as json_file:
-                    config = load(json_file)
-            except FileNotFoundError:
-                # Use the common verbiage below
-                config = None
-            except JSONDecodeError as exception:
-                message: str = f"""
-There was an error parsing {self.file_purpose} file "{file_path}".
-See the accompanying JSONDecodeError exception (above) for clues as to what might be
-syntactically incorrect in that file.
-"""
-                raise ParseException(message) from exception
+        # Do a synchronous read of the file contents
+        file_contents: str = None
+        with open(file_path, "r", encoding="utf-8") as file_obj:
+            file_contents = file_obj.read()
 
-        return self.filter_config(config)
+        config = self.deserialize_file_contents(file_path, file_contents)
+        return config
 
     async def async_restore(self, file_reference: str = None) -> Dict[str, Any]:
         """
@@ -116,6 +99,41 @@ syntactically incorrect in that file.
         file_path = self.get_file_path(file_reference)
         if not file_path:
             return config
+
+        # Do an asynchronous read of the file contents
+        file_contents: str = None
+        async with async_open(file_path, "r", encoding="utf-8") as file_obj:
+            file_contents = await file_obj.read()
+
+        config = self.deserialize_file_contents(file_path, file_contents)
+        return config
+
+    def deserialize_file_contents(self, file_path: str, file_contents: str) -> Dict[str, Any]:
+        """
+        :param file_path: The path to the file being restored
+        :param file_contents: The contents of the file
+        :return: a dictionary
+        """
+        # Create a file-like object from the string
+        string_file = StringIO(file_contents)
+
+        # Determine the serialization format
+        serialization: SerializationFormat = None
+        if file_path.endswith(".hocon"):
+            serialization = HoconSerializationFormat()
+        else:
+            serialization = JsonSerializationFormat()
+
+        # Read the contents
+        try:
+            config = serialization.to_object(string_file)
+        except (ParseException, ParseSyntaxException, JSONDecodeError) as exception:
+            message: str = f"""
+There was an error parsing {self.file_purpose} file "{file_path}".
+See the accompanying exception (above) for clues as to what might be
+syntactically incorrect in that file.
+"""
+            raise ParseException(message) from exception
 
         return self.filter_config(config)
 
