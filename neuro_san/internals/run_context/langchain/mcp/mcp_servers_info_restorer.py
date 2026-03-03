@@ -38,19 +38,8 @@ class McpServersInfoRestorer(AbstractAsyncConfigRestorer):
         :return: a dictionary with MCP servers information
         """
 
-        if basis_config is None:
-            message = f"""
-Could not find {self.file_purpose} file at path: {file_path}.
-Some common problems include:
-    * The file itself simply does not exist.
-    * Path is not an absolute path and you are invoking the server from a place
-      where the path is not reachable.
-    * The path has a typo in it.
-
-Double-check the value of the {self.env_var} env var and
-your current working directory (pwd).
-"""
-            raise FileNotFoundError(message)
+        # Basic file checking help in here
+        basis_config = super().filter_config(basis_config, file_path)
 
         # Now, MCP endpoints urls could put in quotes, so strip them out.
         result_dict: Dict[str, Any] = {}

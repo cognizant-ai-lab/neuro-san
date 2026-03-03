@@ -90,12 +90,13 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
             with open(file_path, "r", encoding="utf-8") as file_obj:
                 file_contents = file_obj.read()
         except FileNotFoundError:
-            if self.must_exist:
-                raise
-            return config
+            # Swallow this in favor of common exception verbiage in filter_config()
+            pass
 
-        config = self.deserialize_file_contents(file_path, file_contents)
-        return config
+        if file_contents:
+            config = self.deserialize_file_contents(file_path, file_contents)
+
+        return self.filter_config(config)
 
     async def async_restore(self, file_reference: str = None) -> Dict[str, Any]:
         """
@@ -117,12 +118,13 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
             async with async_open(file_path, "r", encoding="utf-8") as file_obj:
                 file_contents = await file_obj.read()
         except FileNotFoundError:
-            if self.must_exist:
-                raise
-            return config
+            # Swallow this in favor of common exception verbiage in filter_config()
+            pass
 
-        config = self.deserialize_file_contents(file_path, file_contents)
-        return config
+        if file_contents:
+            config = self.deserialize_file_contents(file_path, file_contents)
+
+        return self.filter_config(config)
 
     def deserialize_file_contents(self, file_path: str, file_contents: str) -> Dict[str, Any]:
         """
@@ -151,7 +153,7 @@ syntactically incorrect in that file.
 """
             raise ParseException(message) from exception
 
-        return self.filter_config(config)
+        return config
 
     def filter_config(self, basis_config: Dict[str, Any], file_path: str = None) -> Dict[str, Any]:
         """
@@ -166,6 +168,21 @@ syntactically incorrect in that file.
         :return: A config dictionary, potentially modified as per the
                 policy encapsulated by the implementation
         """
-        _ = file_path
+        if basis_config is None and self.must_exist:
+            env_var_msg: str = ""
+            if self.env_var:
+                env_var_msg = f" the value of the {self.env_var} env var and"
+            message = f"""
+Could not find {self.file_purpose} file at path: {file_path}.
+Some common problems include:
+    * The file itself simply does not exist.
+    * Path is not an absolute path and you are invoking the server from a place
+      where the path is not reachable.
+    * The path has a typo in it.
+
+Double-check{env_var_msg} your current working directory (pwd).
+"""
+            raise FileNotFoundError(message)
+
         # By default, do no filtering
         return basis_config
