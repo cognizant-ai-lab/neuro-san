@@ -15,80 +15,48 @@
 #
 # END COPYRIGHT
 
-import os
-from typing import Any, Dict
+from typing import Any
+from typing import Dict
 
-import json
-from pyparsing.exceptions import ParseException
-from pyparsing.exceptions import ParseSyntaxException
-
-from leaf_common.persistence.easy.easy_hocon_persistence import EasyHoconPersistence
-from leaf_common.persistence.interface.restorer import Restorer
+from neuro_san.internals.persistence.abstract_async_config_restorer import AbstractAsyncConfigRestorer
 
 
-class McpServersInfoRestorer(Restorer):
+class McpServersInfoRestorer(AbstractAsyncConfigRestorer):
     """
-    Implementation of the Restorer interface that reads the MCP servers info file.
+    Implementation of the AbstractAsyncConfigRestorer that reads the MCP servers info file.
     NOTE: This class is highly experimental and implementation of MCP servers
     is very likely to change in future releases.
     """
 
-    def restore(self, file_reference: str = None) -> Dict[str, Any]:
+    def __init__(self):
+        super().__init__(file_purpose="MCP servers info", env_var_name="MCP_SERVERS_INFO_FILE")
+
+    def filter_config(self, basis_config: Dict[str, Any], file_path: str = None) -> Dict[str, Any]:
         """
-        :param file_reference: The file reference to use when restoring.
-                Default is None, implying the file reference is up to the
-                implementation.
+        :param basis_config: A dictionary with MCP servers information
+        :param file_path: The path to the MCP servers info file
         :return: a dictionary with MCP servers information
         """
-        file_path: str = file_reference
-        if not file_path:
-            file_path = os.environ.get("MCP_SERVERS_INFO_FILE")
-            if not file_path:
-                # No servers info file specified.
-                return None
 
-        servers_info: Dict[str, Any] = None
-        if file_path.endswith(".hocon"):
-            hocon = EasyHoconPersistence()
-            try:
-                servers_info = hocon.restore(file_reference=file_path)
-            except (ParseException, ParseSyntaxException) as exception:
-                message: str = f"""
-        There was an error parsing MCP servers info file "{file_path}".
-        See the accompanying ParseException (above) for clues as to what might be
-        syntactically incorrect in that file.
-        """
-                raise ParseException(message) from exception
-        else:
-            try:
-                with open(file_path, "r", encoding="utf-8") as json_file:
-                    servers_info = json.load(json_file)
-            except FileNotFoundError:
-                # Use the common verbiage below
-                servers_info = None
-            except json.decoder.JSONDecodeError as exception:
-                message: str = f"""
-        There was an error parsing MCP servers info file "{file_path}".
-        See the accompanying JSONDecodeError exception (above) for clues as to what might be
-        syntactically incorrect in that file.
-        """
-                raise ParseException(message) from exception
-        if servers_info is None:
-            message = f"Could not find MCP servers info file at path: {file_path}.\n" + """
-            Some common problems include:
-            * The file itself simply does not exist.
-            * Path is not an absolute path and you are invoking the server from a place
-              where the path is not reachable.
-            * The path has a typo in it.
+        if basis_config is None:
+            message = f"""
+Could not find {self.file_purpose} file at path: {file_path}.
+Some common problems include:
+    * The file itself simply does not exist.
+    * Path is not an absolute path and you are invoking the server from a place
+      where the path is not reachable.
+    * The path has a typo in it.
 
-            Double-check the value of the MCP_SERVERS_INFO_FILE env var and
-            your current working directory (pwd).
-            """
+Double-check the value of the {self.env_var} env var and
+your current working directory (pwd).
+"""
             raise FileNotFoundError(message)
+
         # Now, MCP endpoints urls could put in quotes, so strip them out.
         result_dict: Dict[str, Any] = {}
-        for key, value in servers_info.items():
+        for key, value in basis_config.items():
             use_key: str = key.replace(r'"', "")
             use_key = use_key.strip()
             result_dict[use_key] = value
+
         return result_dict

@@ -1,0 +1,136 @@
+
+# Copyright © 2023-2026 Cognizant Technology Solutions Corp, www.cognizant.com.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# END COPYRIGHT
+from typing import Any
+from typing import Dict
+
+from json import load
+from json.decoder import JSONDecodeError
+from os import environ
+
+from pyparsing.exceptions import ParseException
+from pyparsing.exceptions import ParseSyntaxException
+
+from leaf_common.config.config_filter import ConfigFilter
+from leaf_common.persistence.easy.easy_hocon_persistence import EasyHoconPersistence
+from leaf_common.persistence.interface.restorer import Restorer
+
+
+class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
+    """
+    An abstract implementation of a config dictionary Restorer that allows sync or async
+    restoration from a file.  The file may be from an explicit string or an environment variable.
+    Files themselves may be of the following formats:
+        * HOCON
+        * JSON
+    Allows for optional processing of the dictionary read in from the file via filter_config().
+    """
+
+    def __init__(self, file_purpose: str, env_var: str = None):
+        """
+        Constructor
+
+        :param file_purpose: A string description of the file to be restored.
+        :param env_var: An optional environment variable name to get any file_reference from.
+        """
+        self.file_purpose: str = file_purpose
+        self.env_var: str = env_var
+
+    def get_file_path(self, file_reference: str = None) -> str:
+        """
+        :param file_reference: The file reference to use when restoring.
+                Default is None, implying the file reference should be looked
+                up by the environment variable for the instance.
+        :return: the file path to use. Could still be None
+        """
+        file_path: str = file_reference
+        if not file_path and self.env_var:
+            file_path = environ.get(self.env_var)
+        return file_path
+
+    def restore(self, file_reference: str = None) -> Dict[str, Any]:
+        """
+        Synchronous restore from the given file reference.
+        :param file_reference: The file reference to use when restoring.
+                Default is None, implying the file reference is up to the
+                implementation.
+        :return: a dictionary
+        """
+        config: Dict[str, Any] = None
+
+        file_path = self.get_file_path(file_reference)
+        if not file_path:
+            return config
+
+        if file_path.endswith(".hocon"):
+            hocon = EasyHoconPersistence()
+            try:
+                config = hocon.restore(file_reference=file_path)
+            except (ParseException, ParseSyntaxException) as exception:
+                message: str = f"""
+There was an error parsing {self.file_purpose} file "{file_path}".
+See the accompanying ParseException (above) for clues as to what might be
+syntactically incorrect in that file.
+"""
+                raise ParseException(message) from exception
+        else:
+            try:
+                with open(file_path, "r", encoding="utf-8") as json_file:
+                    config = load(json_file)
+            except FileNotFoundError:
+                # Use the common verbiage below
+                config = None
+            except JSONDecodeError as exception:
+                message: str = f"""
+There was an error parsing {self.file_purpose} file "{file_path}".
+See the accompanying JSONDecodeError exception (above) for clues as to what might be
+syntactically incorrect in that file.
+"""
+                raise ParseException(message) from exception
+
+        return self.filter_config(config)
+
+    async def async_restore(self, file_reference: str = None) -> Dict[str, Any]:
+        """
+        Asynchronous restore from the given file reference.
+        :param file_reference: The file reference to use when restoring.
+                Default is None, implying the file reference is up to the
+                implementation.
+        :return: a dictionary
+        """
+        config: Dict[str, Any] = None
+
+        file_path = self.get_file_path(file_reference)
+        if not file_path:
+            return config
+
+        return self.filter_config(config)
+
+    def filter_config(self, basis_config: Dict[str, Any], file_path: str = None) -> Dict[str, Any]:
+        """
+        Filters the given basis config.
+
+        Ideally this would be a Pure Function in that it would not
+        modify the caller's arguments so that the caller has a chance
+        to decide whether to take any changes returned.
+
+        :param basis_config: The config dictionary to act as the basis for filtering
+        :param file_path: The path to the file being restored
+        :return: A config dictionary, potentially modified as per the
+                policy encapsulated by the implementation
+        """
+        # By default, do no filtering
+        return basis_config
