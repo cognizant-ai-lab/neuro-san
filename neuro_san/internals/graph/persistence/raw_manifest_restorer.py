@@ -15,7 +15,7 @@
 #
 # END COPYRIGHT
 
-from neuo_san.internals.persistence.abstract_async_config_restorer import AbstractAsyncConfigRestorer
+from neuro_san.internals.persistence.abstract_async_config_restorer import AbstractAsyncConfigRestorer
 
 
 class RawManifestRestorer(AbstractAsyncConfigRestorer):
