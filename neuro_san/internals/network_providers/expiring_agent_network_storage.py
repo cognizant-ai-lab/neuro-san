@@ -18,6 +18,7 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Tuple
 
 import logging
@@ -30,6 +31,7 @@ from neuro_san.internals.network_providers.agent_network_storage import AgentNet
 from neuro_san.internals.network_providers.abstract_reservations_storage \
     import AbstractReservationsStorage
 from neuro_san.internals.network_providers.fixed_agent_network_provider import FixedAgentNetworkProvider
+from neuro_san.internals.interfaces.startable import Startable
 
 
 class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStorage):
@@ -69,12 +71,12 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         try:
             if self.base_storage is not None:
                 self.base_storage.start()
-        except Exception as exc:  #pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except
             self.logger.error("Failed to start base storage: %s", exc)
             super().stop()
             raise
 
-    def stop(self):
+    def stop(self, timeout: Optional[float] = None):
         """
         Stop this storage, which includes stopping the expiration checking loop.
         """
@@ -82,7 +84,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         try:
             if self.base_storage is not None and isinstance(self.base_storage, Startable):
                 self.base_storage.stop()
-        except Exception as exc:  #pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except
             self.logger.error("Failed to stop base storage: %s", exc)
             raise
 
