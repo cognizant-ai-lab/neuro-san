@@ -140,6 +140,8 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
         # Determine the serialization format
         serialization: SerializationFormat = None
         if file_path.endswith(".hocon"):
+            # Woth noting that includes within hocon files can only be done synchronously
+            # The core pyhocon library does not support async includes.
             serialization = HoconSerializationFormat()
         elif file_path.endswith(".json"):
             serialization = JsonSerializationFormat()
