@@ -45,6 +45,7 @@ The configuration file allows you to:
 
 ### Never Hardcode Secrets
 
+<!--- pyml disable-next-line no-emphasis-as-heading -->
 **⚠️ CRITICAL SECURITY WARNING ⚠️**
 
 We **strongly recommend NOT storing secrets directly in any source file**. This includes:
@@ -256,6 +257,7 @@ The OAuth 2.0 client identifier issued to your application during the registrati
 server. This uniquely identifies your application.
 
 **Example:**
+
 ```hocon
 "client_id": "${MCP_CLIENT_ID}"
 ```
@@ -281,6 +283,7 @@ This is a confidential credential that must be protected.
 - Using other authentication methods that don't require a client secret
 
 **Example:**
+
 ```hocon
 "client_secret": "${MCP_CLIENT_SECRET}"
 ```
@@ -320,7 +323,7 @@ and sent in the `Authorization` header.
 
 **Token request format:**
 
-```
+```http
 POST /token HTTP/1.1
 Host: auth.example.com
 Authorization: Basic Base64(client_id:client_secret)
@@ -344,7 +347,7 @@ Client credentials are sent as POST parameters in the request body.
 
 **Token request format:**
 
-```
+```http
 POST /token HTTP/1.1
 Host: auth.example.com
 Content-Type: application/x-www-form-urlencoded
@@ -365,7 +368,7 @@ No client authentication is performed. Used for public clients that don't have a
 
 **Token request format:**
 
-```
+```http
 POST /token HTTP/1.1
 Host: auth.example.com
 Content-Type: application/x-www-form-urlencoded

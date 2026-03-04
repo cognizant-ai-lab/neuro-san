@@ -237,10 +237,12 @@ instead of hardcoding secret values.
 }
 ```
 
+<!--- pyml disable-next-line no-duplicate-heading -->
 #### `http_headers`
 
 Same as in Method 1. See the `http_headers` section under Method 1 for detailed field descriptions.
 
+<!--- pyml disable-next-line no-duplicate-heading -->
 #### `mcp_client_info`
 
 Same as in Method 1. See the `mcp_client_info` section under Method 1 for detailed field descriptions.
