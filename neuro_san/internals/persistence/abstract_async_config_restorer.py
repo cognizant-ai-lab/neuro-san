@@ -44,17 +44,20 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
     Allows for optional processing of the dictionary read in from the file via filter_config().
     """
 
-    def __init__(self, file_purpose: str, env_var: str = None, must_exist: bool = True):
+    def __init__(self, file_purpose: str, env_var: str = None, must_exist: bool = True, deprecated_env_var: str = None):
         """
         Constructor
 
         :param file_purpose: A string description of the file to be restored.
         :param env_var: An optional environment variable name to get any file_reference from.
+        :param deprecated_env_var: An optional environment variable name to get any file_reference from
+                                   that is deprecated.
         :param must_exist: True if the file must exist, False otherwise
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.file_purpose: str = file_purpose
         self.env_var: str = env_var
+        self.deprecated_env_var: str = deprecated_env_var
         self.must_exist: bool = must_exist
 
     def get_file_path(self, file_reference: str = None) -> str:
@@ -65,8 +68,17 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
         :return: the file path to use. Could still be None
         """
         file_path: str = file_reference
-        if not file_path and self.env_var:
+        if (file_path is None or len(file_path) == 0) and self.env_var:
+
+            # Get the value from the env var
             file_path = environ.get(self.env_var)
+            if (file_path is None or len(file_path) == 0) and self.deprecated_env_var:
+
+                # Get the value from the deprecated env var if there is one.
+                file_path = environ.get(self.deprecated_env_var)
+                self.logger.warning("Using deprecated env var %s for %s. Please use %s instead.",
+                                    self.deprecated_env_var, self.file_purpose, self.env_var)
+
         return file_path
 
     def restore(self, file_reference: str = None) -> Any:
