@@ -20,6 +20,7 @@ See class comment for details
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Tuple
 
 import asyncio
@@ -236,12 +237,12 @@ class McpToolsProcessor:
             "inputSchema": self.tool_request_validator.get_request_schema()
         }
         # Include agent network metadata in MCP _meta field if available:
-        network_metadata: Dict[str, Any] = await self.get_agent_network_metadata(agent_network)
+        network_metadata: Dict[str, Any] = self.get_agent_network_metadata(agent_network)
         if network_metadata is not None:
             tool_dict["_meta"] = network_metadata
         return tool_dict
 
-    async def get_agent_network_metadata(self, agent_network: AgentNetwork) -> Dict[str, Any]:
+    def get_agent_network_metadata(self, agent_network: AgentNetwork) -> Optional[Dict[str, Any]]:
         """
         Get agent network metadata dictionary for MCP tool description.
         :param agent_network: agent network object;
