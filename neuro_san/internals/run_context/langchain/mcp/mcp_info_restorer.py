@@ -28,8 +28,13 @@ class McpInfoRestorer(AbstractAsyncConfigRestorer):
     """
 
     def __init__(self):
-        super().__init__(file_purpose="MCP servers info", env_var="AGENT_MCP_INFO_FILE",
-                         deprecated_env_var="MCP_SERVERS_INFO_FILE")
+        super().__init__(
+            file_purpose="MCP servers info",
+            env_var="AGENT_MCP_INFO_FILE",
+            deprecated_env_var="MCP_SERVERS_INFO_FILE",
+            # Only necessary if authentication is required.
+            must_exist=False,
+        )
 
     def filter_config(self, basis_config: Dict[str, Any], file_path: str = None) -> Dict[str, Any]:
         """
