@@ -81,7 +81,8 @@ class McpToolsProcessor:
                 if agent_network.is_mcp_tool():
                     tool_dict: Dict[str, Any] = \
                         await self._get_tool_description(agent_name, agent_network, metadata)
-                    tools_description.append(tool_dict)
+                    if tool_dict is not None:
+                        tools_description.append(tool_dict)
         return {
             "jsonrpc": "2.0",
             "id": RequestUtil.safe_request_id(request_id),
