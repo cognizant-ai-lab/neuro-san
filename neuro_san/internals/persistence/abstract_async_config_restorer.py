@@ -94,10 +94,10 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
             # Swallow this in favor of common exception verbiage in filter_config()
             pass
 
-        if file_contents:
+        if file_contents is not None:
             config = self.deserialize_file_contents(file_path, file_contents)
 
-        return self.filter_config(config)
+        return self.filter_config(config, file_path)
 
     async def async_restore(self, file_reference: str = None) -> Any:
         """
@@ -123,10 +123,10 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
             # Swallow this in favor of common exception verbiage in filter_config()
             pass
 
-        if file_contents:
+        if file_contents is not None:
             config = self.deserialize_file_contents(file_path, file_contents)
 
-        return self.filter_config(config)
+        return self.filter_config(config, file_path)
 
     def deserialize_file_contents(self, file_path: str, file_contents: str) -> Dict[str, Any]:
         """
