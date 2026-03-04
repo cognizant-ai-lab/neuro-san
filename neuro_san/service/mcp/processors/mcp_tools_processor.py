@@ -235,10 +235,29 @@ class McpToolsProcessor:
             "inputSchema": self.tool_request_validator.get_request_schema()
         }
         # Include agent network metadata in MCP _meta field if available:
-        network_metadata: Any = agent_network.get_metadata()
-        if isinstance(network_metadata, dict):
+        network_metadata: Dict[str, Any] = await self.get_agent_network_metadata(agent_network)
+        if network_metadata is not None:
             tool_dict["_meta"] = network_metadata
         return tool_dict
+
+    async def get_agent_network_metadata(self, agent_network: AgentNetwork) -> Dict[str, Any]:
+        """
+        Get agent network metadata dictionary for MCP tool description.
+        :param agent_network: agent network object;
+        :return: metadata dictionary or None
+        """
+        # List of keys we are interested in for MCP tool metadata - we can add more if necessary:
+        metadata_keys: List[str] = ["description", "sample_queries", "tags"]
+
+        network_metadata: Any = agent_network.get_metadata()
+        result_dict: Dict[str, Any] = {}
+        if isinstance(network_metadata, dict):
+            for key in metadata_keys:
+                if key in network_metadata:
+                    result_dict[key] = network_metadata[key]
+        if len(result_dict) > 0:
+            return result_dict
+        return None
 
     async def _extract_tool_response_part(
             self, response_dict: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:

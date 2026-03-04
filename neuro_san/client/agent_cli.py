@@ -510,23 +510,35 @@ Have external tools that can be found in the local agent manifest use a service 
 
         mcp_session: McpServiceAgentSession = self.session
         response_dict: Dict[str, Any] = mcp_session.list({})
+        tools_list: List[Dict[str, Any]] = response_dict.get("result", {}).get("tools", [])
+        tools_description: List[Dict[str, Any]] = []
+        for tool in tools_list:
+            metadata: Dict[str, str] = tool.get("_meta", {})
+            tool_description: Dict[str, Any] = {
+                "agent_name": tool.get("name", "<Unnamed Tool>"),
+                "description": metadata.get("description", ""),
+                "tags": metadata.get("tags", [])
+            }
+            tools_description.append(tool_description)
+
         empty_list: List[Dict[str, Any]] = []
         if self.args.tags:
             tags = set()
-            for agent_info in response_dict.get("agents", empty_list):
-                agent_tags: List[str] = agent_info.get("tags", empty_list)
-                tags.update(agent_tags)
+            for tool_info in tools_description:
+                tool_tags: List[str] = tool_info.get("tags", empty_list)
+                tags.update(tool_tags)
             print(f"Available tags:\n{json.dumps(list(tags), indent=4, sort_keys=True)}")
 
         elif self.args.tag:
-            print(f"Available agents for tag {self.args.tag}:\n")
-            for agent_info in response_dict.get("agents", empty_list):
-                agent_tags: List[str] = agent_info.get("tags", empty_list)
-                if self.args.tag in agent_tags:
-                    print(json.dumps(agent_info, indent=4, sort_keys=True))
+            print(f"Available tools for tag {self.args.tag}:\n")
+            for tool_info in tools_description:
+                tool_tags: List[str] = tool_info.get("tags", empty_list)
+                if self.args.tag in tool_tags:
+                    print(json.dumps(tool_info, indent=4, sort_keys=True))
 
         else:
-            print(f"Available tools:\n{json.dumps(response_dict, indent=4, sort_keys=True)}")
+            print(f'Available tools:\n{json.dumps({"tools": tools_description}, indent=4, sort_keys=True)}')
+
 
 if __name__ == '__main__':
     AgentCli().main()

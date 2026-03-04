@@ -247,7 +247,6 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession, Conc
                                timeout=self.streaming_timeout_in_seconds) as response:
                 response.raise_for_status()
                 result_dict = response.json()
-                #result_dict = McpChatResponseDictionaryConverter().to_dict(result_dict)
                 return result_dict
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(self.help_message(path)) from exc
