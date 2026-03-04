@@ -109,7 +109,9 @@ class AgentNetworkRestorer(AbstractAsyncConfigRestorer):
         :param file_reference: The file reference used for restoring
         :return: AgentNetwork instance for an agent.
         """
-        # Now create the AgentNetwork
+        if config is None:
+            return None
+
         # Inside here is incorrectly flagged as destination of Path Traversal 7
         #   Reason: The lines above ensure that the path of registry_dir is within
         #           this source base. CheckMarx does not recognize
