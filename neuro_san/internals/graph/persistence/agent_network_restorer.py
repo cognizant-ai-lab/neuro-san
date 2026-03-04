@@ -67,7 +67,7 @@ class AgentNetworkRestorer(AbstractAsyncConfigRestorer):
         :param file_reference: The file reference to use when restoring.
                 Default is None, implying the file reference is up to the
                 implementation.
-        :return: an object from some persisted store
+        :return: an string of the file path to use
         """
         if file_reference is None or len(file_reference) == 0:
             raise ValueError(f"file_reference {file_reference} cannot be None or empty string")
@@ -79,14 +79,13 @@ class AgentNetworkRestorer(AbstractAsyncConfigRestorer):
 
         return use_file
 
-    def restore(self, file_reference: str = None) -> Any:
+    def restore(self, file_reference: str = None) -> AgentNetwork:
         """
         Synchronous restore from the given file reference.
         :param file_reference: The file reference to use when restoring.
                 Default is None, implying the file reference is up to the
                 implementation.
-        :return: a dictionary. Note the return type is Any so subclasses can
-                override by returning an object. Without this, you get a dictionary.
+        :return: an AgentNetwork.
         """
         config: Dict[str, Any] = super().restore(file_reference)
         return self.create_network(config, file_reference)
@@ -97,8 +96,7 @@ class AgentNetworkRestorer(AbstractAsyncConfigRestorer):
         :param file_reference: The file reference to use when restoring.
                 Default is None, implying the file reference is up to the
                 implementation.
-        :return: a dictionary. Note the return type is Any so subclasses can
-                override by returning an object. Without this, you get a dictionary.
+        :return: an AgentNetwork.
         """
         config: Dict[str, Any] = await super().async_restore(file_reference)
         return self.create_network(config, file_reference)
@@ -125,9 +123,8 @@ class AgentNetworkRestorer(AbstractAsyncConfigRestorer):
 
     def filter_config(self, basis_config: Dict[str, Any], file_path: str = None) -> Dict[str, Any]:
         """
-        :param config: agent configuration dictionary,
-            built or parsed from external sources;
-        :return: AgentNetwork instance for an agent.
+        :param basis_config: agent configuration dictionary, built or parsed from external sources
+        :return: An agent network dictionary that has gone through the standard filter chain.
         """
         # Perform a filter chain on the config that was read in
         filter_chain = ConfigFilterChain()
