@@ -237,9 +237,8 @@ class HttpServer(AgentStateListener):
         # One example: temporary agent network expiration.
         # In this case, log the message and finish processing.
         if agent_network_provider is None:
-            self.logger.warning({},
-                                "Agent %s is not available though it's being added to the service.",
-                                agent_name)
+            self.logger.info({}, "Agent %s has already expired - adding to service cancelled.",
+                             agent_name)
             return
 
         # Convert back to a single string as required by constructor
