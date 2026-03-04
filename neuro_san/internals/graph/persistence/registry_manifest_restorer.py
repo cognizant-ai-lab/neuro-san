@@ -233,11 +233,11 @@ class RegistryManifestRestorer(Restorer):
         :param agent_network: The agent network to process.
         :param usable_network: Is this agent network usable?
         :param agent_filepath: The filepath to the agent definition file.
-        :manifest_file: The manifest file.
-        :manifest_key: The manifest key.
-        :manifest_dict: The manifest dictionary.
-        :validator: The validator.
-        :agent_networks: The accumulated agent networks
+        :param manifest_file: The manifest file.
+        :param manifest_key: The manifest key.
+        :param manifest_dict: The manifest dictionary.
+        :param validator: The validator.
+        :param agent_networks: The accumulated agent networks
         """
         if agent_network is not None:
 
