@@ -141,8 +141,10 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
         serialization: SerializationFormat = None
         if file_path.endswith(".hocon"):
             serialization = HoconSerializationFormat()
-        else:
+        elif file_path.endswith(".json"):
             serialization = JsonSerializationFormat()
+        else:
+            raise ValueError(f"File reference {file_path} must be a .json or .hocon file")
 
         # Read the contents
         try:
