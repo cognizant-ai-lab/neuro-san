@@ -109,7 +109,7 @@ class McpInfoRestorer(Restorer):
               where the path is not reachable.
             * The path has a typo in it.
 
-            Double-check the value of the AGENT_MCP_INFO_FILE and MCP_SERVERS_INFO_FILE env var and
+            Double-check the value of the AGENT_MCP_INFO_FILE env var and
             your current working directory (pwd).
             """
             raise FileNotFoundError(message)
