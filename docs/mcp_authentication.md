@@ -62,6 +62,7 @@ for different MCP URLs.
 - `mcp_tokens` - Token information (only available via sly_data)
 
 **Example:**
+
 ```hocon
 {
     "http_headers": {
@@ -99,6 +100,7 @@ but other authentication schemes may be used depending on the server's requireme
 Consult your MCP server's documentation for the specific authentication scheme required.
 
 **Example:**
+
 ```hocon
 "Authorization": "Bearer <token_value>"
 ```
@@ -113,6 +115,7 @@ The OAuth 2.0 client identifier issued to the client during the registration pro
 This is a required field that uniquely identifies your application to the authorization server.
 
 **Example:**
+
 ```hocon
 "client_id": "my-application-client-id"
 ```
@@ -124,6 +127,7 @@ This confidential credential is used to authenticate the client with the authori
 This field is required unless `token_endpoint_auth_method` is set to `null`.
 
 **Example:**
+
 ```hocon
 "client_secret": "super-secret-client-secret-value"
 ```
@@ -143,6 +147,7 @@ For more details on OAuth 2.0 client authentication methods,
 see [RFC 6749 Section 2.3](https://datatracker.ietf.org/doc/html/rfc6749#section-2.3).
 
 **Example:**
+
 ```hocon
 "token_endpoint_auth_method": "client_secret_post"
 ```
@@ -155,6 +160,7 @@ The available scopes depend on the MCP server's authorization server configurati
 If omitted, the server will use its default scopes.
 
 **Example:**
+
 ```hocon
 "scope": "read:data write:data admin:settings"
 ```
@@ -176,6 +182,7 @@ The OAuth 2.0 access token string used to authenticate requests to the MCP serve
 (JSON Web Token) or an opaque token string issued by the authorization server.
 
 **Example:**
+
 ```hocon
 "access_token": "<token_value>"
 ```
@@ -187,6 +194,7 @@ fails. If provided, the system will automatically use this token to refresh auth
 Not all authorization servers issue refresh tokens, particularly for short-lived sessions or public clients.
 
 **Example:**
+
 ```hocon
 "refresh_token": "<refresh-token-string-value>"
 ```
@@ -207,6 +215,7 @@ If these configuration files need to be committed, use **HOCON substitution** (e
 instead of hardcoding secret values.
 
 **Example Configuration:**
+
 ```hocon
 {
     "mcp_server_url_1": {
@@ -247,6 +256,7 @@ If not provided, the system will attempt to discover the endpoint automatically 
 discovery mechanism, or fall back to `{base_url}/token`.
 
 **Example:**
+
 ```hocon
 "token_endpoint": "https://auth.example.com/oauth/token"
 ```
@@ -258,6 +268,7 @@ This includes token exchange requests and any other authentication-related netwo
 The default value is 300.0 seconds (5 minutes).
 
 **Example:**
+
 ```hocon
 "auth_timeout": 180.0  # 3 minutes
 ```
@@ -271,6 +282,7 @@ When specified, only the listed tools from this MCP server will be made availabl
 If omitted, all tools from the server are available.
 
 **Example:**
+
 ```hocon
 "tools": ["search_database", "update_record", "delete_record"]
 ```

@@ -5,6 +5,7 @@ The MCP Info Configuration file is a HOCON-formatted file that contains authenti
 to point to its location.
 
 The configuration file allows you to:
+
 - Define authentication credentials for multiple MCP servers
 - Configure OAuth 2.0 client credentials and token endpoints
 - Set custom headers for authentication
@@ -163,6 +164,7 @@ This is typically used for token-based authentication.
 The most commonly used authentication header. Supports various authentication schemes:
 
 **Bearer Token Authentication (most common):**
+
 ```hocon
 "http_headers": {
     "Authorization": "Bearer ${ACCESS_TOKEN}"
@@ -174,6 +176,7 @@ Bearer tokens are typically used with OAuth 2.0 and are defined in
 The token should be sent exactly as received from the authorization server.
 
 **Basic Authentication:**
+
 ```hocon
 "http_headers": {
     "Authorization": "Basic ${BASE64_CREDENTIALS}"
@@ -184,6 +187,7 @@ Where `BASE64_CREDENTIALS` is the base64 encoding of `username:password`.
 See [RFC 7617](https://datatracker.ietf.org/doc/html/rfc7617).
 
 **API Key Authentication:**
+
 ```hocon
 "http_headers": {
     "Authorization": "ApiKey ${API_KEY}"
@@ -315,6 +319,7 @@ and sent in the `Authorization` header.
 - Credentials are not exposed in request body or logs
 
 **Token request format:**
+
 ```
 POST /token HTTP/1.1
 Host: auth.example.com
@@ -338,6 +343,7 @@ Client credentials are sent as POST parameters in the request body.
 - Less secure than `client_secret_basic` as credentials appear in request body
 
 **Token request format:**
+
 ```
 POST /token HTTP/1.1
 Host: auth.example.com
@@ -358,6 +364,7 @@ No client authentication is performed. Used for public clients that don't have a
 - Authorization servers that don't require client authentication
 
 **Token request format:**
+
 ```
 POST /token HTTP/1.1
 Host: auth.example.com
@@ -376,6 +383,7 @@ Scopes define the specific permissions your application is requesting.
 The available scopes are defined by the authorization server and vary by service.
 
 **Example:**
+
 ```hocon
 "scope": "read:data write:data admin:users"
 ```
@@ -389,16 +397,19 @@ The available scopes are defined by the authorization server and vary by service
 **Common scope patterns:**
 
 **Resource-based scopes:**
+
 ```hocon
 "scope": "read:projects write:projects delete:projects"
 ```
 
 **Action-based scopes:**
+
 ```hocon
 "scope": "projects.read projects.write projects.delete"
 ```
 
 **Role-based scopes:**
+
 ```hocon
 "scope": "user admin superadmin"
 ```
@@ -434,6 +445,7 @@ This is where token requests are sent during authentication.
 - The token endpoint follows the standard pattern (`{base_url}/token`)
 
 **Example:**
+
 ```hocon
 "mcp_server_info": {
     "token_endpoint": "https://auth.example.com/oauth/token"
@@ -524,6 +536,7 @@ The maximum time to wait for authentication operations to complete. This include
 - Authorization server response time
 
 **Example:**
+
 ```hocon
 "auth_timeout": 180.0  # 3 minutes
 ```
@@ -582,6 +595,7 @@ When specified, only the listed tools will be made available to the agent. This 
 - Testing specific tools in isolation
 
 **Example:**
+
 ```hocon
 "tools": ["search_database", "update_record", "delete_record", "create_report"]
 ```
@@ -609,12 +623,14 @@ The configuration file's tool filtering is **only used if no tool filtering exis
 **Use cases:**
 
 **Security-focused filtering:**
+
 ```hocon
 # Only allow read operations
 "tools": ["read_data", "search_data", "list_data"]
 ```
 
 **Environment-specific filtering:**
+
 ```hocon
 # Development: all tools available
 "tools": []
@@ -624,6 +640,7 @@ The configuration file's tool filtering is **only used if no tool filtering exis
 ```
 
 **Role-based filtering:**
+
 ```hocon
 # Admin role
 "tools": ["create", "read", "update", "delete", "admin_panel"]
