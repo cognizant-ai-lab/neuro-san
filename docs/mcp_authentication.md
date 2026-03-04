@@ -100,7 +100,7 @@ Consult your MCP server's documentation for the specific authentication scheme r
 
 **Example:**
 ```hocon
-"Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+"Authorization": "Bearer <token_value>"
 ```
 
 #### `mcp_client_info`
@@ -177,7 +177,7 @@ The OAuth 2.0 access token string used to authenticate requests to the MCP serve
 
 **Example:**
 ```hocon
-"access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+"access_token": "<token_value>"
 ```
 
 ##### `refresh_token`
@@ -188,7 +188,7 @@ Not all authorization servers issue refresh tokens, particularly for short-lived
 
 **Example:**
 ```hocon
-"refresh_token": "refresh-token-string-value"
+"refresh_token": "<refresh-token-string-value>"
 ```
 
 ### Method 2: Using Configuration File
