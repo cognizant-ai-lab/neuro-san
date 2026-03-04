@@ -88,7 +88,7 @@ class AgentNetworkRestorer(AbstractAsyncConfigRestorer):
         :return: a dictionary. Note the return type is Any so subclasses can
                 override by returning an object. Without this, you get a dictionary.
         """
-        config: Dict[str, Any] = self.restore(file_reference)
+        config: Dict[str, Any] = super().restore(file_reference)
         return self.create_network(config, file_reference)
 
     async def async_restore(self, file_reference: str = None) -> AgentNetwork:
@@ -100,7 +100,7 @@ class AgentNetworkRestorer(AbstractAsyncConfigRestorer):
         :return: a dictionary. Note the return type is Any so subclasses can
                 override by returning an object. Without this, you get a dictionary.
         """
-        config: Dict[str, Any] = await self.async_restore(file_reference)
+        config: Dict[str, Any] = await super().async_restore(file_reference)
         return self.create_network(config, file_reference)
 
     def create_network(self, config: Dict[str, Any], file_reference: str) -> AgentNetwork:
