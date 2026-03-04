@@ -21,22 +21,20 @@ from typing import Dict
 from neuro_san.internals.persistence.abstract_async_config_restorer import AbstractAsyncConfigRestorer
 
 
-class McpServersInfoRestorer(AbstractAsyncConfigRestorer):
+class McpInfoRestorer(AbstractAsyncConfigRestorer):
     """
-    Implementation of the AbstractAsyncConfigRestorer that reads the MCP servers info file.
+    Implementation of the AbstractAsyncConfigRestorer that reads the MCP info file.
     The restore() and async_restore() methods both return a dictionary.
-
-    NOTE: This class is highly experimental and implementation of MCP servers
-    is very likely to change in future releases.
     """
 
     def __init__(self):
-        super().__init__(file_purpose="MCP servers info", env_var="MCP_SERVERS_INFO_FILE")
+        super().__init__(file_purpose="MCP servers info", env_var="AGENT_MCP_INFO_FILE",
+                         deprecated_env_var="MCP_SERVERS_INFO_FILE")
 
     def filter_config(self, basis_config: Dict[str, Any], file_path: str = None) -> Dict[str, Any]:
         """
-        :param basis_config: A dictionary with MCP servers information
-        :param file_path: The path to the MCP servers info file
+        :param basis_config: A dictionary with MCP headers, clients, and servers information
+        :param file_path: The path to the MCP info file
         :return: a dictionary with MCP servers information
         """
 
