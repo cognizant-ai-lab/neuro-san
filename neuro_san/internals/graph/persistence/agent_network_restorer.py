@@ -36,7 +36,7 @@ from neuro_san.internals.persistence.abstract_async_config_restorer import Abstr
 
 class AgentNetworkRestorer(AbstractAsyncConfigRestorer):
     """
-    Implementation of the AbstractConfigRestorer interface to read in an AgentNetwork
+    Implementation of the AbstractAsyncConfigRestorer interface to read in an AgentNetwork
     instance given a JSON file name.
     """
 
