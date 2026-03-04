@@ -509,7 +509,7 @@ Have external tools that can be found in the local agent manifest use a service 
         tools_list: List[Dict[str, Any]] = response_dict.get("result", {}).get("tools", [])
         tools_description: List[Dict[str, Any]] = []
         for tool in tools_list:
-            metadata: Dict[str, str] = tool.get("_meta", {})
+            metadata: Dict[str, Any] = tool.get("_meta", {})
             tool_description: Dict[str, Any] = {
                 "agent_name": tool.get("name", "<Unnamed Tool>"),
                 "description": metadata.get("description", ""),
@@ -517,7 +517,7 @@ Have external tools that can be found in the local agent manifest use a service 
             }
             tools_description.append(tool_description)
 
-        empty_list: List[Dict[str, Any]] = []
+        empty_list: List[str] = []
         if self.args.tags:
             tags = set()
             for tool_info in tools_description:
