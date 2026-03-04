@@ -187,9 +187,15 @@ syntactically incorrect in that file.
                 policy encapsulated by the implementation
         """
         if basis_config is None and self.must_exist:
+
             env_var_msg: str = ""
             if self.env_var:
-                env_var_msg = f" the value of the {self.env_var} env var and"
+                if not self.deprecated_env_var:
+                    env_var_msg = f" the value of the {self.env_var} env var and"
+                else:
+                    env_var_msg = f" the value of the {self.env_var} and/or the deprecated " + \
+                                  f"{self.deprecated_env_var} env vars and"
+
             message = f"""
 Could not find {self.file_purpose} file at path: {file_path}.
 Some common problems include:
