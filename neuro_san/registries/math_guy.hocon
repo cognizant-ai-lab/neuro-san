@@ -26,7 +26,7 @@
         "rai_scores": {
             # These are not real scores, they are just an example
             "bogosity": 0.9,
-            "safety": 0.8,    
+            "safety": 0.8,
         }
     },
     "llm_config": {
@@ -107,7 +107,7 @@ Return verbatim whatever real_calculator returns.
                 "rai_scores": {
                     # These are not real scores, they are just an example
                     "bogosity": 0.9,
-                    "safety": 0.8,    
+                    "safety": 0.8,
                 }
             }
         },
@@ -129,7 +129,9 @@ Return verbatim whatever real_calculator returns.
                     "required": ["operator"]
                 }
             },
-            # Test for fully-qualified class name
+            # Most of the time you could just use "calculator.Calculator" for brevity and the system
+            # will find it given the AGENT_TOOL_PATH and the agent name combo.
+            # But this one is a test for fully-qualified class name.
             "class": "neuro_san.coded_tools.math_guy.calculator.Calculator"
         }
     ]
