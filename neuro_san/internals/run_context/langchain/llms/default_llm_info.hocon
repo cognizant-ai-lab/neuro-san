@@ -56,7 +56,7 @@
     },
 
     "gpt-5.4-pro": {
-        "use_model_name": "gpt-5.4-pro-2026-03-05"
+        "use_model_name": "gpt-5.4-pro-2026-03-05",
     },
     "gpt-5.4-pro-2026-03-05": {
         "class": "openai",
@@ -73,7 +73,7 @@
         "price_per_1k_output_tokens": 0.18,
     },
     "gpt-5.4": {
-        "use_model_name": "gpt-5.4-2026-03-05"
+        "use_model_name": "gpt-5.4-2026-03-05",
     },
     "gpt-5.4-2026-03-05": {
         "class": "openai",
