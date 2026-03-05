@@ -24,6 +24,7 @@ from logging import Logger
 from os import environ
 
 from aiofiles import open as async_open
+from pyhocon import ConfigException
 from pyparsing.exceptions import ParseException
 from pyparsing.exceptions import ParseSyntaxException
 
@@ -154,7 +155,7 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
         # Determine the serialization format
         serialization: SerializationFormat = None
         if file_path.endswith(".hocon"):
-            # Woth noting that includes within hocon files can only be done synchronously
+            # Worth noting that includes within hocon files can only be done synchronously
             # The core pyhocon library does not support async includes.
             serialization = HoconSerializationFormat()
         elif file_path.endswith(".json"):
@@ -165,7 +166,7 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
         # Read the contents
         try:
             config = serialization.to_object(string_file)
-        except (ParseException, ParseSyntaxException, JSONDecodeError) as exception:
+        except (ParseException, ParseSyntaxException, JSONDecodeError, ConfigException) as exception:
             message: str = f"""
 There was an error parsing {self.file_purpose} file "{file_path}".
 See the accompanying exception (above) for clues as to what might be
