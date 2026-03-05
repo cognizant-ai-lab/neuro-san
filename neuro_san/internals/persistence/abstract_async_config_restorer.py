@@ -76,7 +76,7 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
 
                 # Get the value from the deprecated env var if there is one.
                 file_path = environ.get(self.deprecated_env_var)
-                if file_path:
+                if file_path is not None:
                     # Provide warning if the deprecated env var is set.
                     self.logger.warning("Using deprecated env var %s for %s. Please use %s instead.",
                                         self.deprecated_env_var, self.file_purpose, self.env_var)
