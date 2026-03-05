@@ -194,6 +194,8 @@ class AbstractClassActivation(AbstractCallableActivation):
         python_class: Type[Any] = None
         last_exception: Union[ValueError, AttributeError] = None
 
+        warnings: list[str] = []
+
         # Try resolving from most specific to most general (root level)
         for i in range(len(agent_network_name_parts) + 1):
             if i == 0:
@@ -214,13 +216,22 @@ class AbstractClassActivation(AbstractCallableActivation):
                 break  # Successfully resolved, exit the loop
             except (ValueError, AttributeError) as exception:
                 last_exception = exception
-                self.logger.warning("Failed to resolve class `%s` in module `%s` using path `%s`: %s",
-                                    class_name, module_name, packages[0], str(exception))
+                # Accumulate warnings but only issue them if we didn't actually find a class.
+                # Issuing these warnings too early can be a false positive w/rt warnings that is normal behavior.
+                warning_str: str = f"Failed to resolve class `{class_name}` in module `{module_name}` using path " \
+                                   f"`{packages[0]}`: {str(exception)}"
+                warnings.append(warning_str)
                 # Continue to the next level up
                 continue
 
         # If we exhausted all levels without success, raise an error
         if python_class is None:
+
+            # Issue warnings only now that we know we have no class.
+            if len(warnings) > 0:
+                for warning_str in warnings:
+                    self.logger.warning(warning_str)
+
             agent_name: str = self.factory.get_name_from_spec(self.agent_tool_spec)
             agent_tool_path: str = ".".join(this_agent_tool_path_parts[:-len(agent_network_name_parts)])
             message = f"""
