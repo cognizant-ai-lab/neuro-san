@@ -129,7 +129,8 @@ Return verbatim whatever real_calculator returns.
                     "required": ["operator"]
                 }
             },
-            "class": "calculator.Calculator"
+            # Test for fully-qualified class name
+            "class": "neuro_san.coded_tools.math_guy.calculator.Calculator"
         }
     ]
 }
