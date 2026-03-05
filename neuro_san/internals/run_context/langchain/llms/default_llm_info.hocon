@@ -68,6 +68,7 @@
         "context_window_size": 400000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "08/31/2025",
+        # https://developers.openai.com/api/docs/pricing/
         "price_per_1k_input_tokens": 0.00175,
         "price_per_1k_output_tokens": 0.014,
     },
