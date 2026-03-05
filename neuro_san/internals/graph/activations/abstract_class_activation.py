@@ -32,6 +32,7 @@ from langchain_core.messages.base import BaseMessage
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.config.resolver import Resolver
+from leaf_common.config.resolver_util import ResolverUtil
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.interfaces.coded_tool import CodedTool
@@ -196,33 +197,41 @@ class AbstractClassActivation(AbstractCallableActivation):
 
         warnings: list[str] = []
 
-        # Try resolving from most specific to most general (root level)
-        for i in range(len(agent_network_name_parts) + 1):
-            if i == 0:
-                # First attempt: try the most specific path
-                packages: List[str] = [this_agent_tool_path]
-            else:
-                # Subsequent attempts: remove one level at a time from the end
-                path_parts: List[str] = this_agent_tool_path_parts[:-i]
-                current_path: str = ".".join(path_parts)
-                packages = [current_path]
-
-            resolver = Resolver(packages)
-
-            try:
-                self.logger.info("Attempting to resolve class `%s` in module `%s` using path `%s`",
-                                 class_name, module_name, packages[0])
-                python_class = resolver.resolve_class_in_module(class_name, module_name)
-                break  # Successfully resolved, exit the loop
-            except (ValueError, AttributeError) as exception:
-                last_exception = exception
-                # Accumulate warnings but only issue them if we didn't actually find a class.
-                # Issuing these warnings too early can be a false positive w/rt warnings that is normal behavior.
+        if python_class is None:
+            # Phase 1 - Try the simplest thing first - a direct import from a fully-qualified path
+            fully_qualified_name: str = f"{module_name}.{class_name}"
+            python_class = ResolverUtil.create_type(fully_qualified_name, raise_if_not_found=False)
+            if python_class is None:
                 warning_str: str = f"Failed to resolve class `{class_name}` in module `{module_name}` using path " \
-                                   f"`{packages[0]}`: {str(exception)}"
+                                   f"`{fully_qualified_name}`"
                 warnings.append(warning_str)
-                # Continue to the next level up
-                continue
+
+        if python_class is None:
+            # Phase 2 - Try resolving from most specific to most general (root level)
+            for i in range(len(agent_network_name_parts) + 1):
+                if i == 0:
+                    # First attempt: try the most specific path
+                    packages: List[str] = [this_agent_tool_path]
+                else:
+                    # Subsequent attempts: remove one level at a time from the end
+                    path_parts: List[str] = this_agent_tool_path_parts[:-i]
+                    current_path: str = ".".join(path_parts)
+                    packages = [current_path]
+
+                resolver = Resolver(packages)
+
+                try:
+                    self.logger.info("Attempting to resolve class `%s` in module `%s` using path `%s`",
+                                     class_name, module_name, packages[0])
+                    python_class = resolver.resolve_class_in_module(class_name, module_name)
+                    break  # Successfully resolved, exit the loop
+                except (ValueError, AttributeError) as exception:
+                    last_exception = exception
+                    # Accumulate warnings but only issue them if we didn't actually find a class.
+                    # Issuing these warnings too early can be a false positive w/rt warnings that is normal behavior.
+                    warning_str: str = f"Failed to resolve class `{class_name}` in module `{module_name}` using path " \
+                                       f"`{packages[0]}`: {str(exception)}"
+                    warnings.append(warning_str)
 
         # If we exhausted all levels without success, raise an error
         if python_class is None:
