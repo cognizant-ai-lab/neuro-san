@@ -86,6 +86,7 @@ def write_hocon_file(tmp_path: Path, content: str, filename: str = "config.hocon
     return str(path)
 
 
+# pylint: disable=too-many-public-methods
 class TestAbstractAsyncConfigRestorer:
     """
     Tests for AbstractAsyncConfigRestorer covering __init__, get_file_path,
