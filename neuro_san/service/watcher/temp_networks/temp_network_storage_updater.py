@@ -95,7 +95,7 @@ class TempNetworkStorageUpdater(Startable):
         if isinstance(self.temp_storage, Startable):
             self.temp_storage.start()
         # Start the task for checking for new queues to process,
-        # his task is expected to run for the lifetime of this TempNetworkStorageUpdater instance.
+        # this task is expected to run for the lifetime of this TempNetworkStorageUpdater instance.
         self.queue_processing_pool.submit(self.add_new_queues_to_processing)
 
     def add_new_queues_to_processing(self):
