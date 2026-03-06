@@ -621,9 +621,13 @@ Optional string specifying a Python class which implements the
 interface.
 
 <!-- pyml disable no-inline-html -->
+Implementations can be specified as a fully-qualified class name, as long as that is in your PYTHONPATH.
+
+OR, to contribute to hocon brevity, there is a shortcut ...
+
 Implementations must be found in the directory where the class can be resolved by looking
 under the `AGENT_TOOL_PATH` environment variable setting as part of the `PYTHONPATH`.
-By default neuro-san deployments assume that `PYTHONPATH` is set to contain the
+By default, neuro-san deployments assume that `PYTHONPATH` is set to contain the
 top-level of your project's repo and that `AGENT_TOOL_PATH` is set to `<top-level>/coded_tools`.
 In that directory each agent has its own folder and the value of the class is resolved
 from there:  `<top-level>/coded_tools/<agent-name>`.  If there is no appropriate class found there,
