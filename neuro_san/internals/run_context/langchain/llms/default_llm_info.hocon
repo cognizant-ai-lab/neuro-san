@@ -54,6 +54,41 @@
         "max_output_tokens": 100000,
         "knowledge_cutoff": "09/30/2023",
     },
+
+    "gpt-5.4-pro": {
+        "use_model_name": "gpt-5.4-pro-2026-03-05",
+    },
+    "gpt-5.4-pro-2026-03-05": {
+        "class": "openai",
+        "model_info_url": "https://developers.openai.com/api/docs/models/gpt-5.4-pro",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1050000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "08/31/2025",
+        "price_per_1k_input_tokens": 0.03,
+        "price_per_1k_output_tokens": 0.18,
+    },
+    "gpt-5.4": {
+        "use_model_name": "gpt-5.4-2026-03-05",
+    },
+    "gpt-5.4-2026-03-05": {
+        "class": "openai",
+        "model_info_url": "https://developers.openai.com/api/docs/models/gpt-5.4",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1050000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "08/31/2025",
+        "price_per_1k_input_tokens": 0.0025,
+        "price_per_1k_output_tokens": 0.015,
+    },
     "gpt-5.2": {
         "use_model_name": "gpt-5.2-2025-12-11",
     },
@@ -68,6 +103,9 @@
         "context_window_size": 400000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "08/31/2025",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.00175,
+        "price_per_1k_output_tokens": 0.014,
     },
     "gpt-5.1": {
         "use_model_name": "gpt-5.1-2025-11-13",
