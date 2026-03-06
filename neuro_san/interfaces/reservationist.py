@@ -14,8 +14,12 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+
+from __future__ import annotations
+
 from typing import Any
 from typing import Dict
+from typing import List
 
 from asyncio import Event
 
@@ -111,3 +115,16 @@ class Reservationist:
         Indicates we are done using the Reservationist instance.
         By default this does nothing.
         """
+
+    def validate_with(self, external_networks: List[str] = None, mcp_servers: List[str] = None) -> Reservationist:
+        """
+        Allow passing of validation parameters when using a with-statement.
+        These get reset in __aexit()__.
+
+        :param external_networks: A list of external network names
+        :param mcp_servers: A list of MCP servers, as read in from a mcp_info.hocon file
+        :return: The instance
+        """
+        _ = external_networks
+        _ = mcp_servers
+        return self

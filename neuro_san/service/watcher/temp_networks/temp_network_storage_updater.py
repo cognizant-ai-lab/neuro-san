@@ -33,6 +33,7 @@ from leaf_common.config.resolver_util import ResolverUtil
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
+from neuro_san.internals.network_providers.expiring_agent_network_storage import ExpiringAgentNetworkStorage
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
 from neuro_san.internals.reservations.abstract_agent_reservationist import AbstractAgentReservationist
 from neuro_san.internals.interfaces.startable import Startable
@@ -58,13 +59,14 @@ class TempNetworkStorageUpdater(Startable):
         self.logger: Logger = getLogger(self.__class__.__name__)
 
         self.reservationist: AbstractAgentReservationist = None
+        self.queue_processing_pool: ThreadPoolExecutor = None
         self.temp_storage: ReservationsStorage = network_storage_dict.get("temp")
         if self.temp_storage is not None:
             # If we don't have temp storage, we don't got nothin'
             # Check that the temp storage instance is indeed an ExpiringReservationsStorage,
             # since we need to be able to expire reservations in it.
-            if not isinstance(self.temp_storage, ReservationsStorage):
-                raise ValueError("Temp reservations storage must be an instance of ReservationsStorage")
+            if not isinstance(self.temp_storage, ExpiringAgentNetworkStorage):
+                raise ValueError("Temp reservations storage must be an instance of ExpiringAgentNetworkStorage")
 
             # Potentially create a "base" reservations storage class
             storage_class_name: str = environ.get("AGENT_EXTERNAL_RESERVATIONS_STORAGE", "")
@@ -76,26 +78,36 @@ class TempNetworkStorageUpdater(Startable):
                 self.temp_storage.set_base_storage(external_storage)
             self.reservationist = AbstractAgentReservationist({self.temp_storage})
 
-        self.incoming: Queue[AsyncCollatingQueue] = queues
-        # We use a thread pool to process the collection of tasks
-        # this TempNetworkStorageUpdater instance is responsible for:
-        # 1. Checking for new queues to process coming in self.incoming "main" queue
-        # 2. Processing the individual queues that come in,
-        #    which involves processing the items that come in on those queues
-        #    and deploying reservations to the temp storage, which is done by self.reservationist.
-        self.queue_processing_pool: ThreadPoolExecutor = ThreadPoolExecutor(self.THREAD_POOL_SIZE)
+            # We use a thread pool to process the collection of tasks
+            # this TempNetworkStorageUpdater instance is responsible for:
+            # 1. Checking for new queues to process coming in self.incoming "main" queue
+            # 2. Processing the individual queues that come in,
+            #    which involves processing the items that come in on those queues
+            #    and deploying reservations to the temp storage, which is done by self.reservationist.
+            self.queue_processing_pool = ThreadPoolExecutor(self.THREAD_POOL_SIZE)
+
+            self.incoming: Queue[AsyncCollatingQueue] = queues
+
+        else:
+            # We don't have a temp storage, so we won't be doing any processing,
+            # close the incoming queues and don't start any processing threads.
+            self.logger.info("No temp storage configured, closing incoming queues without processing")
+            queues.close()
 
     def start(self):
         """
         Perform start up.
         """
-        self.logger.info("Starting TempNetworkStorageUpdater")
+        if self.temp_storage is None:
+            self.logger.info("TempNetworkStorageUpdater is not started: no temp storage configured.")
+            return
 
+        self.logger.info("Starting TempNetworkStorageUpdater")
         # Start any Startables
         if isinstance(self.temp_storage, Startable):
             self.temp_storage.start()
         # Start the task for checking for new queues to process,
-        # his task is expected to run for the lifetime of this TempNetworkStorageUpdater instance.
+        # this task is expected to run for the lifetime of this TempNetworkStorageUpdater instance.
         self.queue_processing_pool.submit(self.add_new_queues_to_processing)
 
     def add_new_queues_to_processing(self):
@@ -167,9 +179,12 @@ class TempNetworkStorageUpdater(Startable):
         Perform stopping.
         """
         self.logger.info("Stopping TempNetworkStorageUpdater")
+        if self.temp_storage is None:
+            # We never started, so we don't need to stop anything.
+            return
 
         # Stop any Startables
-        if self.temp_storage is not None:
-            self.temp_storage.stop()
+        self.temp_storage.stop()
+
         # Finalize the queue processing pool
         self.queue_processing_pool.shutdown(wait=False, cancel_futures=True)

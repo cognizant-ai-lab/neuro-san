@@ -20,14 +20,7 @@ from typing import Dict
 
 from pathlib import Path
 
-import json
-
-from pyparsing.exceptions import ParseException
-from pyparsing.exceptions import ParseSyntaxException
-
 from leaf_common.config.config_filter_chain import ConfigFilterChain
-from leaf_common.persistence.easy.easy_hocon_persistence import EasyHoconPersistence
-from leaf_common.persistence.interface.restorer import Restorer
 
 from neuro_san.internals.interfaces.agent_name_mapper import AgentNameMapper
 from neuro_san.internals.graph.persistence.agent_filetree_mapper import AgentFileTreeMapper
@@ -36,14 +29,14 @@ from neuro_san.internals.graph.filters.defaults_config_filter import DefaultsCon
 from neuro_san.internals.graph.filters.dictionary_common_defs_config_filter \
     import DictionaryCommonDefsConfigFilter
 from neuro_san.internals.graph.filters.name_correction_config_filter import NameCorrectionConfigFilter
-from neuro_san.internals.graph.filters.string_common_defs_config_filter \
-    import StringCommonDefsConfigFilter
+from neuro_san.internals.graph.filters.string_common_defs_config_filter import StringCommonDefsConfigFilter
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.persistence.abstract_async_config_restorer import AbstractAsyncConfigRestorer
 
 
-class AgentNetworkRestorer(Restorer):
+class AgentNetworkRestorer(AbstractAsyncConfigRestorer):
     """
-    Implementation of the Restorer interface to read in an AgentNetwork
+    Implementation of the AbstractAsyncConfigRestorer interface to read in an AgentNetwork
     instance given a JSON file name.
     """
 
@@ -59,6 +52,8 @@ class AgentNetworkRestorer(Restorer):
                 if registry_dir is None, AgentStandaloneMapper instance will be used;
                 otherwise, we use AgentFileTreeMapper.
         """
+        super().__init__(file_purpose="agent network", must_exist=True)
+
         self.registry_dir: str = registry_dir
         self.agent_mapper = agent_mapper
         if not self.agent_mapper:
@@ -67,15 +62,13 @@ class AgentNetworkRestorer(Restorer):
             else:
                 self.agent_mapper = AgentStandaloneMapper()
 
-    def restore(self, file_reference: str = None):
+    def get_file_path(self, file_reference: str = None) -> str:
         """
         :param file_reference: The file reference to use when restoring.
                 Default is None, implying the file reference is up to the
                 implementation.
-        :return: an object from some persisted store
+        :return: an string of the file path to use
         """
-        config: Dict[str, Any] = None
-
         if file_reference is None or len(file_reference) == 0:
             raise ValueError(f"file_reference {file_reference} cannot be None or empty string")
 
@@ -84,38 +77,54 @@ class AgentNetworkRestorer(Restorer):
             # This should be OS-agnostic operation, producing a valid local file path
             use_file = str(Path(self.registry_dir) / file_reference)
 
-        try:
-            if use_file.endswith(".json"):
-                config = json.load(use_file)
-            elif use_file.endswith(".hocon"):
-                hocon = EasyHoconPersistence(full_ref=use_file, must_exist=True)
-                config = hocon.restore()
-            else:
-                raise ValueError(f"file_reference {use_file} must be a .json or .hocon file")
-        except (ParseException, ParseSyntaxException, json.decoder.JSONDecodeError) as exception:
-            message = f"""
-There was an error parsing the agent network file "{use_file}".
-See the accompanying ParseException (above) for clues as to what might be
-syntactically incorrect in that file.
-"""
-            raise ParseException(message) from exception
+        return use_file
 
-        # Now create the AgentNetwork
+    def restore(self, file_reference: str = None) -> AgentNetwork:
+        """
+        Synchronous restore from the given file reference.
+        :param file_reference: The file reference to use when restoring.
+                Default is None, implying the file reference is up to the
+                implementation.
+        :return: an AgentNetwork.
+        """
+        config: Dict[str, Any] = super().restore(file_reference)
+        return self.create_network(config, file_reference)
+
+    async def async_restore(self, file_reference: str = None) -> AgentNetwork:
+        """
+        Asynchronous restore from the given file reference.
+        :param file_reference: The file reference to use when restoring.
+                Default is None, implying the file reference is up to the
+                implementation.
+        :return: an AgentNetwork.
+        """
+        config: Dict[str, Any] = await super().async_restore(file_reference)
+        return self.create_network(config, file_reference)
+
+    def create_network(self, config: Dict[str, Any], file_reference: str) -> AgentNetwork:
+        """
+        :param config: agent configuration dictionary, built or parsed from external sources
+        :param file_reference: The file reference used for restoring
+        :return: AgentNetwork instance for an agent.
+        """
+        if config is None:
+            return None
+
         # Inside here is incorrectly flagged as destination of Path Traversal 7
         #   Reason: The lines above ensure that the path of registry_dir is within
         #           this source base. CheckMarx does not recognize
         #           the calls to Pathlib/__file__ as a valid means to resolve
         #           these kinds of issues.
-        name = self.agent_mapper.filepath_to_agent_network_name(file_reference)
-        agent_network: AgentNetwork = self.restore_from_config(name, config)
+        name: str = self.agent_mapper.filepath_to_agent_network_name(file_reference)
+
+        # Now create the AgentNetwork
+        agent_network = AgentNetwork(config, name)
         return agent_network
 
-    def restore_from_config(self, agent_name: str, config: Dict[str, Any]) -> AgentNetwork:
+    def filter_config(self, basis_config: Dict[str, Any], file_path: str = None) -> Dict[str, Any]:
         """
-        :param agent_name: name of an agent;
-        :param config: agent configuration dictionary,
-            built or parsed from external sources;
-        :return: AgentNetwork instance for an agent.
+        :param basis_config: agent configuration dictionary, built or parsed from external sources
+        :return: An agent network dictionary that has gone through the standard filter chain.
         """
         # Perform a filter chain on the config that was read in
         filter_chain = ConfigFilterChain()
@@ -123,9 +132,6 @@ syntactically incorrect in that file.
         filter_chain.register(StringCommonDefsConfigFilter())
         filter_chain.register(DefaultsConfigFilter())
         filter_chain.register(NameCorrectionConfigFilter())
-        config = filter_chain.filter_config(config)
 
-        # Now create the AgentNetwork
-        agent_network = AgentNetwork(config, agent_name)
-
-        return agent_network
+        config: Dict[str, Any] = filter_chain.filter_config(basis_config)
+        return config

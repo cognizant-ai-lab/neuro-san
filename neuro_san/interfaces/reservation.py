@@ -15,8 +15,6 @@
 #
 # END COPYRIGHT
 
-import time
-
 
 class Reservation:
     """
@@ -52,12 +50,6 @@ class Reservation:
         :return: The expiration time in seconds since the epoch, ala time.time().
         """
         return self.expiration_time_in_seconds
-
-    def is_expired(self) -> bool:
-        """
-        :return: Whether the reservation is expired or not.
-        """
-        return time.time() >= self.expiration_time_in_seconds
 
     def get_url(self) -> str:
         """

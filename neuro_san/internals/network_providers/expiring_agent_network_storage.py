@@ -18,7 +18,11 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Tuple
+
+import logging
+import time
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -28,6 +32,7 @@ from neuro_san.internals.network_providers.agent_network_storage import AgentNet
 from neuro_san.internals.network_providers.abstract_reservations_storage \
     import AbstractReservationsStorage
 from neuro_san.internals.network_providers.fixed_agent_network_provider import FixedAgentNetworkProvider
+from neuro_san.internals.interfaces.startable import Startable
 
 
 class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStorage):
@@ -42,9 +47,11 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         Constructor
         :param check_expirations_interval_seconds: The number of seconds between checks for expired reservations.
         """
-        super().__init__(check_expirations_interval_seconds=check_expirations_interval_seconds)
+        super().__init__(storage_name="temp_storage",
+                         check_expirations_interval_seconds=check_expirations_interval_seconds)
         self.reservations_table: Dict[str, Reservation] = {}
         self.base_storage: ReservationsStorage = None
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     def set_base_storage(self, base_storage: ReservationsStorage):
         """
@@ -63,8 +70,32 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         Start this storage, which includes starting the expiration checking loop.
         """
         super().start()
-        if self.base_storage is not None:
-            self.base_storage.start()
+        try:
+            if self.base_storage is not None:
+                self.base_storage.start()
+        except Exception as exc:  # pylint: disable=broad-except
+            self.logger.error("%s: Failed to start base storage: %s", self._name, exc)
+            super().stop()
+            raise
+
+    def stop(self, timeout: Optional[float] = None):
+        """
+        Stop this storage, which includes stopping the expiration checking loop.
+        """
+        super().stop()
+        try:
+            if self.base_storage is not None and isinstance(self.base_storage, Startable):
+                self.base_storage.stop()
+        except Exception as exc:  # pylint: disable=broad-except
+            self.logger.error("%s: Failed to stop base storage: %s", self._name, exc)
+            raise
+
+    @staticmethod
+    def is_expired(reservation: Reservation) -> bool:
+        """
+        :return: Whether this reservation is expired or not.
+        """
+        return time.time() > reservation.get_expiration_time_in_seconds()
 
     def add_reservations(self, reservations_dict: Dict[Reservation, Dict[str, Any]],
                          source: str = None):
@@ -106,10 +137,10 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         for listener in self.listeners:
             for agent_name in added:
                 listener.agent_added(agent_name, self)
-                self.logger.info("ADDED network for agent %s from %s", agent_name, source)
+                self.logger.info("%s: ADDED network for agent %s from %s", self._name, agent_name, source)
             for agent_name in replaced:
                 listener.agent_modified(agent_name, self)
-                self.logger.info("REPLACED network for agent %s from %s", agent_name, source)
+                self.logger.info("%s: REPLACED network for agent %s from %s", self._name, agent_name, source)
 
     def get_one_reservation(self, obj_key: str) -> Tuple[Reservation, Any]:
         """
@@ -136,7 +167,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             reservations_snapshot = self.reservations_table.copy()
 
         for agent_name, reservation in reservations_snapshot.items():
-            if reservation.is_expired():
+            if self.is_expired(reservation):
                 expired.append(agent_name)
 
         # Nothing to do?
@@ -154,7 +185,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         for listener in self.listeners:
             for agent_name in expired:
                 listener.agent_removed(agent_name, self)
-                self.logger.info("REMOVED network for agent %s", agent_name)
+                self.logger.info("%s: REMOVED network for agent %s", self._name, agent_name)
 
     def get_agent_network_provider(self, agent_name: str) -> AgentNetworkProvider:
         """
@@ -165,7 +196,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         reservation: Reservation = self.reservations_table.get(agent_name, None)
         if reservation is not None:
             # We have a reservation for this agent, but we need to check is it still valid:
-            if reservation.is_expired():
+            if self.is_expired(reservation):
                 # Reservation is expired, so AgentNetwork is gone for good:
                 with self.lock:
                     self.reservations_table.pop(agent_name, None)
@@ -175,7 +206,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
                 # do it outside of internal lock
                 for listener in self.listeners:
                     listener.agent_removed(agent_name, self)
-                    self.logger.info("REMOVED expired network for agent %s", agent_name)
+                    self.logger.info("%s: REMOVED expired network for agent %s", self._name, agent_name)
 
                 # Now if we have a source storage,
                 # we rely on it to expire this reservation according to its own schedule.
@@ -191,7 +222,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         # so check the source storage if we have one:
         if self.base_storage is not None:
             reservation, agent_network = self.base_storage.get_one_reservation(agent_name)
-            if reservation is not None and not reservation.is_expired():
+            if reservation is not None and not self.is_expired(reservation):
                 # We have a valid reservation for this agent in the source storage,
                 # so return the AgentNetworkProvider for this agent.
                 # Also cache this reservation and agent network locally:
