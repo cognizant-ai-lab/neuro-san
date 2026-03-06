@@ -36,9 +36,10 @@ class AbstractReservationsStorage(ReservationsStorage, Startable):
     Specific logic for adding, retrieving, and expiring reservations is left to concrete implementations.
     """
 
-    def __init__(self, check_expirations_interval_seconds: float = 60.0):
+    def __init__(self, storage_name: str = "", check_expirations_interval_seconds: float = 60.0):
         """
         Constructor
+        :param storage_name: A string name for this storage, used for logging purposes.
         :param check_expirations_interval_seconds: The number of seconds between checks for expired reservations.
         """
         super().__init__()
@@ -46,11 +47,12 @@ class AbstractReservationsStorage(ReservationsStorage, Startable):
         self._check_interval_seconds: float = check_expirations_interval_seconds
         self._stop_event = threading.Event()
         self._logger = logging.getLogger(self.__class__.__name__)
+        self._name: str = storage_name
 
     def start(self):
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
         self._thread.start()
-        self._logger.debug("Expiration cleanup thread started.")
+        self._logger.debug("%s: Expiration cleanup thread started.", self._name)
 
     def stop(self, timeout: Optional[float] = None):
         """
@@ -59,7 +61,7 @@ class AbstractReservationsStorage(ReservationsStorage, Startable):
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout)
-            self._logger.debug("Expiration cleanup thread stopped.")
+            self._logger.debug("%s: Expiration cleanup thread stopped.", self._name)
 
     def _run_loop(self):
         while not self._stop_event.is_set():
@@ -68,9 +70,9 @@ class AbstractReservationsStorage(ReservationsStorage, Startable):
             try:
                 self.expire_reservations()
             except Exception as exception:  # pylint: disable=broad-except
-                self._logger.info("Expiration cleanup failed: %s", exception)
+                self._logger.info("%s: Expiration cleanup failed: %s", self._name, exception)
             elapsed = time.monotonic() - start
-            self._logger.debug("Expiration cleanup took %f seconds.", elapsed)
+            self._logger.debug("%s: Expiration cleanup took %f seconds.", self._name, elapsed)
 
             # Compute remaining sleep time
             sleep_time = self._check_interval_seconds - elapsed
@@ -98,15 +100,6 @@ class AbstractReservationsStorage(ReservationsStorage, Startable):
         :return: Tuple of (reservation, agent data) if successful
                  and reservation is not expired,
                  (None, None) otherwise
-        """
-        raise NotImplementedError
-
-    def set_base_storage(self, base_storage: ReservationsStorage):
-        """
-        Set a "base" storage to use as a source of truth for reservations.
-        This is optional, but if set, will be used as the source of truth for reservations
-        and the implementing class will act as a cache in front of it.
-        :param base_storage: An ExpiringReservationsStorage instance to use as a source of truth
         """
         raise NotImplementedError
 

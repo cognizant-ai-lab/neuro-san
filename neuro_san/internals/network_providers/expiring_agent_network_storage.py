@@ -47,7 +47,8 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         Constructor
         :param check_expirations_interval_seconds: The number of seconds between checks for expired reservations.
         """
-        super().__init__(check_expirations_interval_seconds=check_expirations_interval_seconds)
+        super().__init__(storage_name="temp_storage",
+                         check_expirations_interval_seconds=check_expirations_interval_seconds)
         self.reservations_table: Dict[str, Reservation] = {}
         self.base_storage: ReservationsStorage = None
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -73,7 +74,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             if self.base_storage is not None:
                 self.base_storage.start()
         except Exception as exc:  # pylint: disable=broad-except
-            self.logger.error("Failed to start base storage: %s", exc)
+            self.logger.error("%s: Failed to start base storage: %s", self._name, exc)
             super().stop()
             raise
 
@@ -86,7 +87,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             if self.base_storage is not None and isinstance(self.base_storage, Startable):
                 self.base_storage.stop()
         except Exception as exc:  # pylint: disable=broad-except
-            self.logger.error("Failed to stop base storage: %s", exc)
+            self.logger.error("%s: Failed to stop base storage: %s", self._name, exc)
             raise
 
     @staticmethod
@@ -136,10 +137,10 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         for listener in self.listeners:
             for agent_name in added:
                 listener.agent_added(agent_name, self)
-                self.logger.info("ADDED network for agent %s from %s", agent_name, source)
+                self.logger.info("%s: ADDED network for agent %s from %s", self._name, agent_name, source)
             for agent_name in replaced:
                 listener.agent_modified(agent_name, self)
-                self.logger.info("REPLACED network for agent %s from %s", agent_name, source)
+                self.logger.info("%s: REPLACED network for agent %s from %s", self._name, agent_name, source)
 
     def get_one_reservation(self, obj_key: str) -> Tuple[Reservation, Any]:
         """
@@ -184,7 +185,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         for listener in self.listeners:
             for agent_name in expired:
                 listener.agent_removed(agent_name, self)
-                self.logger.info("REMOVED network for agent %s", agent_name)
+                self.logger.info("%s: REMOVED network for agent %s", self._name, agent_name)
 
     def get_agent_network_provider(self, agent_name: str) -> AgentNetworkProvider:
         """
@@ -205,7 +206,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
                 # do it outside of internal lock
                 for listener in self.listeners:
                     listener.agent_removed(agent_name, self)
-                    self.logger.info("REMOVED expired network for agent %s", agent_name)
+                    self.logger.info("%s: REMOVED expired network for agent %s", self._name, agent_name)
 
                 # Now if we have a source storage,
                 # we rely on it to expire this reservation according to its own schedule.
