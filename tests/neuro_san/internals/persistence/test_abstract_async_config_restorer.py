@@ -32,8 +32,7 @@ T = TypeVar("T")
 # ---------------------------------------------------------------------------
 # Concrete subclass used by all tests.
 # AbstractAsyncConfigRestorer inherits from abstract base
-# classes, and a future addition of @abstractmethod would break direct
-# instantiation. ConcreteRestorer makes the test intent explicit at no cost.
+# classes. ConcreteRestorer makes the test intent explicit at no cost.
 # ---------------------------------------------------------------------------
 
 
