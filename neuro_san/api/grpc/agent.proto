@@ -93,11 +93,19 @@ message Function {
     // a bit too complex to specify directly in protobuf.
     google.protobuf.Struct parameters = 2 [json_name="parameters"];
 
+    // This is a description of what data is expected to come *in* via the sly_data channel.
     // Optional map of parameters passed in via the sly_data dictionary private data channel
     // that the agent needs in order to work.  Just like the parameters above,
     // this is really a pydantic/OpenAI function description, which is
     // a bit too complex to specify directly in protobuf.
     google.protobuf.Struct sly_data_schema = 3 [json_name="sly_data_schema"];
+
+    // This is a description of what data is expected to come *out* via the sly_data channel.
+    // Optional map of parameters returned via the sly_data dictionary private data channel
+    // that the agent will return after its work.  Just like the parameters above,
+    // this is really a pydantic/OpenAI function description, which is
+    // a bit too complex to specify directly in protobuf.
+    google.protobuf.Struct sly_data_output_schema = 4 [json_name="sly_data_output_schema"];
 }
 
 // Response structure for Function gRPC method
