@@ -21,6 +21,8 @@ from typing import Union
 from asyncio import Event
 from asyncio import get_running_loop
 
+from janus import Queue
+
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
@@ -33,20 +35,18 @@ class ServiceAgentReservationist(Reservationist):
     for a specific amount of time.
     """
 
-    def __init__(self, max_lifetime_in_seconds: float = Reservationist.DEFAULT_LIFETIME):
+    def __init__(self, main_queue: Queue[AsyncCollatingQueue],
+                 max_lifetime_in_seconds: float = Reservationist.DEFAULT_LIFETIME):
         """
         Constructor
 
+        :param main_queue: The main Queue of AsyncCollatingQueues to which this instance
+                   will add its own AsyncCollatingQueue for deployment when it will be created.
         :param max_lifetime_in_seconds: The maximum lifetime allowed for any Reservation.
         """
         self.max_lifetime_in_seconds: float = max_lifetime_in_seconds
-        self.queue: AsyncCollatingQueue = AsyncCollatingQueue()
-
-    def get_queue(self) -> AsyncCollatingQueue:
-        """
-        :return: The AsyncCollatingQueue belonging to this Reservationist
-        """
-        return self.queue
+        self.main_queue: Queue[AsyncCollatingQueue] = main_queue
+        self.queue: AsyncCollatingQueue = None
 
     async def reserve(self, lifetime_in_seconds: float = Reservationist.DEFAULT_LIFETIME,
                       prefix: str = "") -> Reservation:
@@ -109,6 +109,11 @@ class ServiceAgentReservationist(Reservationist):
                 if isinstance(key, Event):
                     queued_item["event"] = key
                     queued_item["event_loop"] = get_running_loop()
+
+                if self.queue is None:
+                    # We haven't created our queue yet, so we need to do that and put it on the main queue.
+                    self.queue = AsyncCollatingQueue()
+                    self.main_queue.sync_q.put(self.queue)
 
                 await self.queue.put(queued_item, synchronous=False)
 

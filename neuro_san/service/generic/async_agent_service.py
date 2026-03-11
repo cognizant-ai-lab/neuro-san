@@ -249,8 +249,7 @@ class AsyncAgentService:
         # Create a reservationist for the occasion
         reservationist: Reservationist = None
         if self.queues is not None:
-            reservationist = ServiceAgentReservationist()
-            self.queues.sync_q.put(reservationist.get_queue())
+            reservationist = ServiceAgentReservationist(self.queues)
 
         # Prepare
         factory = ExternalAgentSessionFactory(use_direct=False)
