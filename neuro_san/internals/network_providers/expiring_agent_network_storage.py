@@ -229,5 +229,11 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
                 with self.lock:
                     self.reservations_table[agent_name] = reservation
                     self.agents_table[agent_name] = agent_network
+                # Notify listeners about this state change:
+                # do it outside of internal lock
+                for listener in self.listeners:
+                    listener.agent_added(agent_name, self)
+                    self.logger.info("ADDED network for agent %s from %s", agent_name, "base storage")
+
                 return FixedAgentNetworkProvider(agent_network)
         return None

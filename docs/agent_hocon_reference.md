@@ -49,6 +49,7 @@ Items in ***bold*** are essentials. Try to understand these first.
             - [properties](#properties)
             - [required](#required)
         - [sly_data_schema](#sly_data_schema)
+        - [sly_data_output_schema](#sly_data_output_schema)
     - [***instructions*** - main system prompt for the agent](#instructions)
     - [***tools*** - list of other agents/tools that this agent may access](#tools-agents)
         - [External Agents](#external-agents)
@@ -477,6 +478,15 @@ The front-man is the only agent node that ever needs to specify this aspect of t
 definition, as sly_data itself is already visible to all other internal agents of the network.
 
 Example networks that advertise their sly_data_schema:
+
+- [math_guy.hocon](../neuro_san/registries/math_guy.hocon)
+
+#### sly_data_output_schema
+
+Similar optional dictionary to [sly_data_schema](#sly_data_schema) above, but this specifies the schema
+for the sly_data being output by the agent network.
+
+Example networks that advertise their sly_data_output_schema:
 
 - [math_guy.hocon](../neuro_san/registries/math_guy.hocon)
 

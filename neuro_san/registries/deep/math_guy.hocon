@@ -85,6 +85,19 @@ on the secret numbers.
                         }
                     },
                     "required": ["x", "y"]
+                },
+                # You can also optionally specify the schema needed for any sly_data output.
+                # This is to allow generic clients to know what to expect for private-data outputs
+                # that do not belong in the chat stream.
+                "sly_data_output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "equals": {
+                            "type": "float",
+                            "description": "The numeric answer of the calculation"
+                        }
+                    },
+                    "required": ["equals"]
                 }
             },
 

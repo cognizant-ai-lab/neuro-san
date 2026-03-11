@@ -16,6 +16,7 @@
 # END COPYRIGHT
 
 from uuid import uuid4
+from uuid import UUID
 
 from os import environ
 
@@ -49,6 +50,25 @@ class AgentReservation(Reservation):
         :return: The id associated with the reservation instance
         """
         return f"{self.prefix}{self.id}"
+
+    @staticmethod
+    def is_reservation_name(agent_name: str) -> bool:
+        """
+        :param agent_name: The name of an agent
+        :return: True if the name is in the format of a reservation id, False otherwise.
+        """
+        # We expect the format to be <prefix>-<uuid>, where the prefix can be empty.
+        if not isinstance(agent_name, str):
+            return False
+        # Get uuid part without possible prefix:
+        uuid_part: str = agent_name[-36:]
+        try:
+            u = UUID(uuid_part)
+            if u.version == 4:
+                return True
+            return False
+        except ValueError:
+            return False
 
     def get_prefix(self) -> str:
         """
