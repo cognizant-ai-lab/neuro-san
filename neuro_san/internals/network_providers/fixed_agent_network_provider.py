@@ -15,24 +15,23 @@
 #
 # END COPYRIGHT
 
-from typing import Tuple
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 
-from neuro_san.internals.interfaces.startable import Startable
 
-
-class RegistryObserver(Startable):
+class FixedAgentNetworkProvider(AgentNetworkProvider):
     """
-    Interface for specific kinds of filesystem observing
+    Class providing fixed immutable AgentNetwork for a given agent in the service scope.
     """
+    def __init__(self, agent_network: AgentNetwork):
+        """
+        Constructor.
+        :param agent_network: AgentNetwork instance to be returned by this provider.
+        """
+        self.agent_network: AgentNetwork = agent_network
 
-    def start(self):
+    def get_agent_network(self) -> AgentNetwork:
         """
-        Start running observer
+        :return: Current AgentNetwork instance for specific agent name.
         """
-        raise NotImplementedError
-
-    def reset_event_counters(self) -> Tuple[int, int, int]:
-        """
-        Reset event counters and return current counters.
-        """
-        raise NotImplementedError
+        return self.agent_network
