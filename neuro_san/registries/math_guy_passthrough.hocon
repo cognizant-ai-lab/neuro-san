@@ -53,7 +53,37 @@
 I am a test agent network that can do math with values in sly_data.
 Just give me the name of an arithmetic operator and I will do the work
 on the secret numbers.
-"""
+""",
+                # You can also optionally specify the schema needed for any sly_data input.
+                # This is to allow generic clients to prompt for private-data inputs
+                # that do not belong in the chat stream.
+                "sly_data_schema": {
+                    "type": "object",
+                    "properties": {
+                        "x": {
+                            "type": "float",
+                            "description": "The first operand for the arithmetic operation"
+                        },
+                        "y": {
+                            "type": "float",
+                            "description": "The second operand for the arithmetic operation"
+                        }
+                    },
+                    "required": ["x", "y"]
+                },
+                # You can also optionally specify the schema needed for any sly_data output.
+                # This is to allow generic clients to know what to expect for private-data outputs
+                # that do not belong in the chat stream.
+                "sly_data_output_schema": {
+                    "type": "object",
+                    "properties": { 
+                        "equals": { 
+                            "type": "float",
+                            "description": "The numeric answer of the calculation"
+                        }
+                    },
+                    "required": ["equals"]
+                }
             },
 
             "instructions": """
