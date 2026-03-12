@@ -878,6 +878,8 @@ AgentMiddleware allows for calling code to be executed in the following situatio
 - after the agent execution starts (aafter_agent())
 - before the LLM is called (abefore_model())
 - after the LLM is called (aafter_model())
+- intercept and control async model execution (awrap_model_call())
+- intercept and control async tool execution (awrap_tool_call())
 
 We list the asynchronous methods here as those are preferred in the asynchronous environment of
 a Neuro SAN server.
