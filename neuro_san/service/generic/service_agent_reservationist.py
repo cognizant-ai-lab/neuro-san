@@ -113,7 +113,7 @@ class ServiceAgentReservationist(Reservationist):
                 if self.queue is None:
                     # We haven't created our queue yet, so we need to do that and put it on the main queue.
                     self.queue = AsyncCollatingQueue()
-                    self.main_queue.sync_q.put(self.queue)
+                    self.main_queue.sync_q.put_nowait(self.queue)
 
                 await self.queue.put(queued_item, synchronous=False)
 
@@ -125,4 +125,5 @@ class ServiceAgentReservationist(Reservationist):
         """
         # Use synchronous side of the queue because this will not
         # be part of the same event loop the put() in deploy() above is done.
-        await self.queue.put_final_item(synchronous=True)
+        if self.queue is not None:
+            await self.queue.put_final_item(synchronous=True)
