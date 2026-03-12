@@ -48,7 +48,7 @@ from neuro_san.service.http.server.resources_usage_logger import ResourcesUsageL
 from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
 from neuro_san.service.interfaces.agent_server import AgentServer
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
-from neuro_san.service.interfaces.startable import Startable
+from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.service.mcp.handlers.mcp_root_handler import McpRootHandler
 from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.service.utils.server_status import ServerStatus
@@ -232,6 +232,14 @@ class HttpServer(AgentStateListener):
         :param source: The AgentStorageSource source of the message
         """
         agent_network_provider: AgentNetworkProvider = source.get_agent_network_provider(agent_name)
+        # There are some timing scenarios where at this point agent network provider might not be available,
+        # even though we got a notification that agent is added.
+        # One example: temporary agent network expiration.
+        # In this case, log the message and finish processing.
+        if agent_network_provider is None:
+            self.logger.info({}, "Agent %s has already expired - adding to service cancelled.",
+                             agent_name)
+            return
 
         # Convert back to a single string as required by constructor
         request_metadata_str: str = " ".join(self.forwarded_request_metadata)

@@ -26,6 +26,7 @@ from leaf_server_common.logging.logging_setup import setup_logging
 
 from neuro_san import TOP_LEVEL_DIR
 from neuro_san.interfaces.agent_session import AgentSession
+from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
@@ -41,8 +42,8 @@ from neuro_san.service.http.server.http_server import DEFAULT_MAX_CONCURRENT_REQ
 from neuro_san.service.http.server.http_server import DEFAULT_REQUEST_LIMIT
 from neuro_san.service.http.server.http_server import HttpServer
 from neuro_san.service.interfaces.agent_server import AgentServer
-from neuro_san.service.interfaces.startable import Startable
 from neuro_san.service.watcher.main_loop.storage_watcher import StorageWatcher
+from neuro_san.service.watcher.temp_networks.temp_network_storage_updater import TempNetworkStorageUpdater
 from neuro_san.service.utils.server_status import ServerStatus
 from neuro_san.service.utils.server_context import ServerContext
 
@@ -255,6 +256,10 @@ class ServerMainLoop:
                           logging_config=self.logging_config)
             watcher = StorageWatcher(self.watcher_config, self.server_context)
             components_to_start.append(watcher)
+        # Another component to start is the temporary networks updater
+        temp_networks_updater: TempNetworkStorageUpdater =\
+            TempNetworkStorageUpdater(self.server_context.get_network_storage_dict(), self.server_context.get_queues())
+        components_to_start.append(temp_networks_updater)
 
         # Create HTTP server;
         self.http_server = HttpServer(

@@ -24,7 +24,7 @@ import json
 import tornado
 
 from neuro_san.service.http.logging.http_logger import HttpLogger
-from neuro_san.service.interfaces.startable import Startable
+from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.service.utils.service_resources import ServiceResources
 
 
