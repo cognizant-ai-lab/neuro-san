@@ -51,6 +51,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
     Stores reservations as JSON objects in an S3 bucket, with each reservation
     stored in its associated agent spec as metadata.
     """
+    # pylint: disable=too-many-instance-attributes
 
     def __init__(self, bucket_name: str = "", prefix: str = "reservations/",
                  check_expirations_interval_seconds: float = 0.0):
@@ -65,7 +66,6 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         # Our default for check_expirations_interval_seconds is 0
         # because S3 expiration check is generally a significant execution load,
         # and we may want to run it externally on demand rather than on a fixed schedule inside the service.
-
         super().__init__(storage_name="s3_storage",
                          check_expirations_interval_seconds=check_expirations_interval_seconds)
         self.logger: Logger = getLogger(self.__class__.__name__)
