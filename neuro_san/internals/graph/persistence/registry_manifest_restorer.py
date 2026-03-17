@@ -94,9 +94,15 @@ class RegistryManifestRestorer(Restorer):
         all_agent_networks: Dict[str, Dict[str, AgentNetwork]] = {}
         overlayer = DictionaryOverlay()
 
+        # Pre-collect external network names from all manifest files so that
+        # overlays can validate references to networks defined in other files.
+        all_external_network_names: List[str] = \
+            self._collect_all_external_network_names(file_references)
+
         # Loop through all the manifest files in the list to make a composite
         for manifest_file in file_references:
-            agents_from_one_manifest: Dict[str, Dict[str, AgentNetwork]] = self.restore_one_manifest(manifest_file)
+            agents_from_one_manifest: Dict[str, Dict[str, AgentNetwork]] = \
+                self.restore_one_manifest(manifest_file, all_external_network_names)
             # Do a deep update() with the overlayer.
             all_agent_networks = overlayer.overlay(all_agent_networks, agents_from_one_manifest)
 
@@ -119,10 +125,15 @@ class RegistryManifestRestorer(Restorer):
         all_agent_networks: Dict[str, Dict[str, AgentNetwork]] = {}
         overlayer = DictionaryOverlay()
 
+        # Pre-collect external network names from all manifest files so that
+        # overlays can validate references to networks defined in other files.
+        all_external_network_names: List[str] = \
+            await self._async_collect_all_external_network_names(file_references)
+
         # Loop through all the manifest files in the list to make a composite
         for manifest_file in file_references:
             agents_from_one_manifest: Dict[str, Dict[str, AgentNetwork]] = \
-                await self.async_restore_one_manifest(manifest_file)
+                await self.async_restore_one_manifest(manifest_file, all_external_network_names)
             # Do a deep update() with the overlayer.
             all_agent_networks = overlayer.overlay(all_agent_networks, agents_from_one_manifest)
 
@@ -137,9 +148,15 @@ class RegistryManifestRestorer(Restorer):
         return all_agent_networks
 
     # pylint: disable=too-many-locals
-    def restore_one_manifest(self, manifest_file: str) -> Dict[str, Dict[str, AgentNetwork]]:
+    def restore_one_manifest(self, manifest_file: str,
+                             all_external_network_names: List[str] = None) \
+            -> Dict[str, Dict[str, AgentNetwork]]:
         """
         :param manifest_file: The file reference to use when restoring.
+        :param all_external_network_names: Optional pre-collected external
+            network names from all manifest files. When provided, these are
+            merged with the current file's names so that overlays can
+            validate references to networks defined in other manifest files.
         :return: a nested map of storage type -> (mapping of name -> agent networks)
         """
 
@@ -159,6 +176,11 @@ class RegistryManifestRestorer(Restorer):
         manifest_dir: str = file_of_class.get_basis()
 
         external_network_names: List[str] = self.find_external_network_names(one_manifest)
+        if all_external_network_names is not None:
+            # Use a set to merge and deduplicate names from all manifests
+            merged: set = set(external_network_names)
+            merged.update(all_external_network_names)
+            external_network_names = sorted(merged)
 
         # DEF - need mcp servers as well at some point
         validator = ManifestNetworkValidator(external_network_names)
@@ -181,9 +203,15 @@ class RegistryManifestRestorer(Restorer):
         return agent_networks
 
     # pylint: disable=too-many-locals
-    async def async_restore_one_manifest(self, manifest_file: str) -> Dict[str, Dict[str, AgentNetwork]]:
+    async def async_restore_one_manifest(self, manifest_file: str,
+                                         all_external_network_names: List[str] = None) \
+            -> Dict[str, Dict[str, AgentNetwork]]:
         """
         :param manifest_file: The file reference to use when restoring.
+        :param all_external_network_names: Optional pre-collected external
+            network names from all manifest files. When provided, these are
+            merged with the current file's names so that overlays can
+            validate references to networks defined in other manifest files.
         :return: a nested map of storage type -> (mapping of name -> agent networks)
         """
 
@@ -203,6 +231,11 @@ class RegistryManifestRestorer(Restorer):
         manifest_dir: str = file_of_class.get_basis()
 
         external_network_names: List[str] = self.find_external_network_names(one_manifest)
+        if all_external_network_names is not None:
+            # Use a set to merge and deduplicate names from all manifests
+            merged: set = set(external_network_names)
+            merged.update(all_external_network_names)
+            external_network_names = sorted(merged)
 
         # DEF - need mcp servers as well at some point
         validator = ManifestNetworkValidator(external_network_names)
@@ -378,3 +411,41 @@ class RegistryManifestRestorer(Restorer):
             external_network_names.append(f"/{network_name}")
 
         return external_network_names
+
+    def _collect_all_external_network_names(self, file_references: Sequence[str]) -> List[str]:
+        """
+        Pre-scan all manifest files to collect the union of external network
+        names.  This allows overlays to validate tool references that point
+        to networks defined in a different manifest file.
+
+        :param file_references: The sequence of manifest file references.
+        :return: A deduplicated list of external network name strings.
+        """
+        all_names: set = set()
+        raw_restorer = RawManifestRestorer()
+        for manifest_file in file_references:
+            raw_manifest: Dict[str, Any] = raw_restorer.restore(file_reference=manifest_file)
+            manifest_filter = ManifestFilterChain(manifest_file)
+            filtered: Dict[str, Dict[str, Any]] = manifest_filter.filter_config(raw_manifest)
+            names: List[str] = self.find_external_network_names(filtered)
+            all_names.update(names)
+        return sorted(all_names)
+
+    async def _async_collect_all_external_network_names(
+            self, file_references: Sequence[str]) -> List[str]:
+        """
+        Async version of _collect_all_external_network_names.
+
+        :param file_references: The sequence of manifest file references.
+        :return: A deduplicated list of external network name strings.
+        """
+        all_names: set = set()
+        raw_restorer = RawManifestRestorer()
+        for manifest_file in file_references:
+            raw_manifest: Dict[str, Any] = await raw_restorer.async_restore(
+                file_reference=manifest_file)
+            manifest_filter = ManifestFilterChain(manifest_file)
+            filtered: Dict[str, Dict[str, Any]] = manifest_filter.filter_config(raw_manifest)
+            names: List[str] = self.find_external_network_names(filtered)
+            all_names.update(names)
+        return sorted(all_names)
