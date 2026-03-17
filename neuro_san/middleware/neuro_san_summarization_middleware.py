@@ -24,8 +24,6 @@ from typing import Tuple
 from typing import Union
 from typing_extensions import override
 
-from langchain.agents.middleware.summarization import _DEFAULT_MESSAGES_TO_KEEP
-from langchain.agents.middleware.summarization import _DEFAULT_TRIM_TOKEN_LIMIT
 from langchain.agents.middleware.summarization import DEFAULT_SUMMARY_PROMPT
 from langchain.agents.middleware.summarization import SummarizationMiddleware
 from langchain.agents.middleware.types import AgentState
@@ -38,6 +36,15 @@ from langgraph.runtime import Runtime
 
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.messages.agent_message import AgentMessage
+
+# NOTE:
+# The following defaults mirror LangChain's internal summarization defaults
+# as of a specific version (pin in requirements). They are defined locally
+# to avoid importing private module-level constants (e.g.,
+# `_DEFAULT_MESSAGES_TO_KEEP`, `_DEFAULT_TRIM_TOKEN_LIMIT`), which are not
+# part of the public API and may change across LangChain versions.
+_DEFAULT_MESSAGES_TO_KEEP: int = 4
+_DEFAULT_TRIM_TOKEN_LIMIT: int = 3000
 
 
 class NeuroSanSummarizationMiddleware(SummarizationMiddleware):
