@@ -20,9 +20,9 @@ from collections.abc import Iterable
 from typing import Any
 from typing import Dict
 from typing import List
-from typing import override
 from typing import Tuple
 from typing import Union
+from typing_extensions import override
 
 from langchain.agents.middleware.summarization import _DEFAULT_MESSAGES_TO_KEEP
 from langchain.agents.middleware.summarization import _DEFAULT_TRIM_TOKEN_LIMIT
