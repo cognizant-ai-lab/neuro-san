@@ -27,19 +27,17 @@ from typing_extensions import override
 from langchain.agents.middleware.summarization import DEFAULT_SUMMARY_PROMPT
 from langchain.agents.middleware.summarization import SummarizationMiddleware
 from langchain.agents.middleware.types import AgentState
-from langchain.agents.middleware.types import ContextT
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.utils import count_tokens_approximately
 from langchain_core.messages.utils import MessageLikeRepresentation
-from langgraph.runtime import Runtime
 
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.messages.agent_message import AgentMessage
 
 # NOTE:
 # The following defaults mirror LangChain's internal summarization defaults
-# as of a specific version (pin in requirements). They are defined locally
+# as of langchain==1.2.19. They are defined locally
 # to avoid importing private module-level constants (e.g.,
 # `_DEFAULT_MESSAGES_TO_KEEP`, `_DEFAULT_TRIM_TOKEN_LIMIT`), which are not
 # part of the public API and may change across LangChain versions.
@@ -115,7 +113,7 @@ class NeuroSanSummarizationMiddleware(SummarizationMiddleware):
 
     @override
     async def abefore_model(
-        self, state: AgentState[Any], runtime: Runtime[ContextT]
+        self, state: AgentState[Any], runtime: Any
     ) -> Dict[str, Any] | None:
         """
         Hook executed before model invocation.
