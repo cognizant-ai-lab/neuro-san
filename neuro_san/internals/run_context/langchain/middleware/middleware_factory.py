@@ -25,6 +25,7 @@ from logging import getLogger
 from logging import Logger
 
 from langchain.agents.middleware.types import AgentMiddleware
+from langchain_core.messages import BaseMessage
 
 from leaf_common.config.resolver_util import ResolverUtil
 
@@ -41,14 +42,16 @@ class MiddlewareFactory:
     Creates instances of AgentMiddleware based on a list of middleware configs.
     """
 
-    def __init__(self, origin: List[Dict[str, Any]], base_journal: Journal):
+    def __init__(self, origin: List[Dict[str, Any]], chat_history: List[BaseMessage], base_journal: Journal):
         """
         :param origin: A list of dictionaries containing origin information as to which agent
                     is creating the middleware.
+        :param chat_history: The chat history of the RunContext that the middleware is being created for.
         :param base_journal: The base Journal for the RunContext that the middleware is being created for.
         """
         self.origin: List[Dict[str, Any]] = origin
         self.origin_str: str = Origination.get_full_name_from_origin(self.origin)
+        self.chat_history: List[BaseMessage] = chat_history
         self.base_journal: Journal = base_journal
         self.instantiation_indexes: Dict[str, int] = {}
         self.logger: Logger = getLogger(self.__class__.__name__)
@@ -173,6 +176,10 @@ Check these things:
             args["origin"] = use_origin
         if "origin_str" in args:
             args["origin_str"] = Origination.get_full_name_from_origin(use_origin)
+        if "chat_history" in args:
+            args["chat_history"] = self.chat_history
+        if "base_journal" in args:
+            args["base_journal"] = self.base_journal
         if "sly_data" in args:
             args["sly_data"] = sly_data
 
