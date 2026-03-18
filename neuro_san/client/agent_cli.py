@@ -348,8 +348,8 @@ Have external tools that can be found in the local agent manifest use a service 
         group.add_argument("--thinking_file", type=str, default="/tmp/agent_thinking.txt",
                            help="File that captures agent thinking. "
                                 "This is a separate text stream from the user/assistant chat")
-        group.add_argument("--no_thinking_file", type=bool, default=False,
-                           help="If true, blocks creation of thinking file and any output to it. ")
+        group.add_argument("--no_thinking_file", default=False, action="store_true",
+                           help="If set, blocks creation of thinking file and any output to it.")
         group.add_argument("--thinking_dir", default=True, action="store_true",
                            help="Use the basis of the thinking_file as a directory to capture "
                                 "internal agent chatter in separate files. "
@@ -388,6 +388,7 @@ Have external tools that can be found in the local agent manifest use a service 
             # Don't create a thinking file or directory at all. This will disable any output to a thinking file.
             self.args.thinking_file = None
             self.thinking_dir = None
+            self.args.thinking_dir = False
             return
 
         # Clear out the previous thinking file/dir contents
