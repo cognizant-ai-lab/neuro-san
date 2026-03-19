@@ -151,11 +151,12 @@ Some suggestions:
         initial_prompt: str = function.get("description")
         print(f"\n{initial_prompt}\n")
 
-        print("To see the thinking involved with the agent:\n")
-        if not self.args.thinking_dir:
-            print(f"    tail -f {self.args.thinking_file}\n")
-        else:
-            print(f"    See any one of the files in {self.thinking_dir} for agent network chat details.\n")
+        if not self.args.no_thinking_file:
+            print("To see the thinking involved with the agent:\n")
+            if not self.args.thinking_dir:
+                print(f"    tail -f {self.args.thinking_file}\n")
+            else:
+                print(f"    See any one of the files in {self.thinking_dir} for agent network chat details.\n")
 
         self.loop_until_done(user_input, sly_data, chat_filter)
 
