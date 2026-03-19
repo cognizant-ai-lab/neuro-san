@@ -149,8 +149,10 @@ class RunContextRunnable(NeuroSanRunnable):
         backtrace: str = None
         while chain_result is None and retries > 0:
             try:
+                print(f">>>>>>>>>>>>>>>> Invoking agent chain with inputs: {inputs}")
                 chain_result: Dict[str, Any] = await self.agent_chain.ainvoke(input=inputs, config=runnable_config)
             except API_ERROR_TYPES as api_error:
+                print(f">>>>>>>>>>>>>>>> API error: {api_error}")
                 backtrace = traceback.format_exc()
                 message: str = None
                 if not ApiKeyErrorCheck.check_for_internal_error(backtrace):
@@ -163,11 +165,13 @@ class RunContextRunnable(NeuroSanRunnable):
                 retries = retries - 1
                 exception = api_error
             except KeyError as key_error:
+                print(f">>>>>>>>>>>>>>>> Key error: {key_error}")
                 self.logger.warning("retrying from KeyError")
                 retries = retries - 1
                 exception = key_error
                 backtrace = traceback.format_exc()
             except ValueError as value_error:
+                print(f">>>>>>>>>>>>>>>> Value error: {value_error}")
                 response = str(value_error)
                 find_string = "An output parsing error occurred. " + \
                               "In order to pass this error back to the agent and have it try again, " + \
