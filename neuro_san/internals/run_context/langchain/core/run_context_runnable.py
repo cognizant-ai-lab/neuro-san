@@ -189,7 +189,7 @@ class RunContextRunnable(NeuroSanRunnable):
                     backtrace = traceback.format_exc()
             # pylint: disable=broad-exception-caught
             except Exception as exception_error:
-                # This catches any errors from running middlewars and also error form exceeding the recursion_limit.
+                # This catches any errors from running middlewares and also error form exceeding the recursion_limit.
                 self.logger.warning("retrying from Exception")
                 retries = retries - 1
                 exception = exception_error
