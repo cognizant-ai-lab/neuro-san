@@ -1,9 +1,16 @@
+---
+# Test workflow — consumes the shared Python quality gate
+# from build-common (legacy toolchain: flake8 + pylint).
+#
+# NOTE: This branch temporarily points at the build-common
+# PR branch for integration testing.  Before merging,
+# update the ref to the merged SHA on main.
 name: Test
 
 permissions:
-    contents: read
+  contents: read
 
-on:
+"on":
   push:
     branches:
       - "**"
@@ -11,71 +18,37 @@ on:
     types: [opened, reopened]
     branches:
       - main
+
 jobs:
   test:
-    runs-on: ubuntu-latest
     if: >
-      (github.event_name == 'push' && github.ref != 'refs/heads/main') ||
-      (github.event_name == 'pull_request' && github.base_ref == 'main')
-    container:
-      image: python:3.12-slim
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          apt-get update && apt-get install -y shellcheck
-          pip install -r requirements.txt -r requirements-build.txt
-
-      - name: Show installed packages
-        run: pip freeze
-
-      - name: Run pylint
-        run: build_scripts/run_pylint.sh
-
-      - name: Run pymarkdownlint
-        run: build_scripts/run_markdownlint.sh
-
-      - name: Run shellcheck
-        run: build_scripts/run_shellcheck.sh
-
-      - name: Run flake8
-        run: flake8
-
-      - name: Run pytest with start of server (excluding integration tests & Smoke tests)
-        shell: bash
-        run: |
-          build_scripts/server_start.sh
-          pytest --verbose -m "not integration and not smoke" --timer-top-n 10 -n auto --cov-config=.coveragerc --cov
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          AGENT_TOOL_PATH: "./neuro_san/coded_tools"
-          PYTHONPATH: ${{ env.PYTHONPATH }}:"."
-
-      - name: Check README renders correctly on PyPI
-        run: |
-          python -m readme_renderer README.md
-
-      - name: Notify Slack on success
-        if: success()
-        uses: slackapi/slack-github-action@v1.24.0
-        with:
-          payload: |
-            {
-              "text": "✅ *Tests Passed* for `${{ github.repository }}` on `${{ github.ref_name }}`"
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-
-      - name: Notify Slack on failure
-        if: failure()
-        uses: slackapi/slack-github-action@v1.24.0
-        with:
-          payload: |
-            {
-              "text": "❌ *Tests Failed* for `${{ github.repository }}` on `${{ github.ref_name }}`"
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      (github.event_name == 'push' &&
+       github.ref != 'refs/heads/main') ||
+      (github.event_name == 'pull_request' &&
+       github.base_ref == 'main')
+    # yamllint disable-line rule:line-length
+    uses: cognizant-ai-lab/build-common/.github/workflows/_python-quality-gate.yml@devin/1771545839-python-quality-gate-abstraction
+    with:
+      lint-toolchain: "legacy"
+      python-version: "3.12"
+      sources: "."
+      pylint-command: "build_scripts/run_pylint.sh"
+      shellcheck-command: "build_scripts/run_shellcheck.sh"
+      run-markdownlint: true
+      markdownlint-command: "build_scripts/run_markdownlint.sh"
+      check-readme-pypi: true
+      # The server_start.sh script must run before pytest,
+      # and custom env vars are needed, so we use the
+      # test-command-override escape hatch.
+      test-command-override: >-
+        AGENT_TOOL_PATH="./neuro_san/coded_tools"
+        PYTHONPATH="."
+        bash -c "build_scripts/server_start.sh &&
+        pytest --verbose
+        -m 'not integration and not smoke'
+        --timer-top-n 10 -n auto
+        --cov-config=.coveragerc --cov"
+      pytest-extra-args: ""
+    secrets:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
