@@ -20,6 +20,7 @@ from collections.abc import Iterable
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Tuple
 from typing import Union
 from typing_extensions import override
@@ -76,15 +77,15 @@ class NeuroSanSummarizationMiddleware(SummarizationMiddleware):
     def __init__(
             self,
             *,
-            model: str | BaseChatModel,
+            model: Union[str, BaseChatModel],
             origin: List[Dict[str, Any]],
             chat_history: List[BaseMessage],
             base_journal: Journal,
-            trigger: Tuple[str, Union[int, float]] | List[Tuple[str, Union[int, float]]] = None,
+            trigger: Union[Tuple[str, Union[int, float]], List[Tuple[str, Union[int, float]]]] = None,
             keep: Tuple[str, Union[int, float]] = ("messages", _DEFAULT_MESSAGES_TO_KEEP),
             token_counter: Callable[[Iterable[MessageLikeRepresentation]], int] = count_tokens_approximately,
             summary_prompt: str = DEFAULT_SUMMARY_PROMPT,
-            trim_tokens_to_summarize: int | None = _DEFAULT_TRIM_TOKEN_LIMIT,
+            trim_tokens_to_summarize: Optional[int] = _DEFAULT_TRIM_TOKEN_LIMIT,
             **deprecated_kwargs: Any,
     ) -> None:
         """
@@ -114,7 +115,7 @@ class NeuroSanSummarizationMiddleware(SummarizationMiddleware):
     @override
     async def abefore_model(
         self, state: AgentState[Any], runtime: Any
-    ) -> Dict[str, Any] | None:
+    ) -> Optional[Dict[str, Any]]:
         """
         Hook executed before model invocation.
 
