@@ -285,7 +285,7 @@ class AsyncAgentService:
 
         # See if we want to put the request dict in the response
         extractor = DictionaryExtractor(request_dict)
-        chat_filter: str = extractor.get("chat_filter.chat_filter_type", "MINIMAL")
+        chat_filter_type: str = extractor.get("chat_filter.chat_filter_type", "MINIMAL")
 
         try:
             async for response_dict in response_dict_generator:

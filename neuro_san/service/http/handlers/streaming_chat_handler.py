@@ -38,14 +38,15 @@ class StreamingChatHandler(BaseRequestHandler):
     Handler class for neuro-san streaming chat API call.
     """
 
+    # pylint: disable=too-many-statements
     async def post(self, agent_name: str):
         """
         Implementation of POST request handler for streaming chat API call.
         """
 
+        metadata: Dict[str, Any] = self.get_metadata()
         self.application.start_client_request(metadata, f"{agent_name}/streaming_chat")
 
-        metadata: Dict[str, Any] = self.get_metadata()
         service: AsyncAgentService = await self.get_service(agent_name, metadata)
         if service is None:
             return
