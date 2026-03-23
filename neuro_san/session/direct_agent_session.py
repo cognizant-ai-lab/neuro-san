@@ -155,8 +155,7 @@ class DirectAgentSession(AgentSession):
         chat_session = DataDrivenChatSession(agent_network=self.agent_network)
 
         # Prepare the response dictionary
-        template_response_dict = {
-        }
+        template_response_dict: Dict[str, Any] = {}
 
         if chat_session is None or user_input is None:
             # Can't go on to chat, so report back early with a single value.
@@ -182,7 +181,7 @@ class DirectAgentSession(AgentSession):
         _ = future
 
         # Late-stage conversions for any and all messages
-        message_processor: MessageProcessor = chat_session.create_outgoing_message_processor()
+        message_processor: MessageProcessor = chat_session.create_outgoing_message_processor(request_dict)
 
         # The synchronously_iterate() method below will synchronously block waiting for
         # chat.ChatMessage dictionaries to come back asynchronously from the submit()

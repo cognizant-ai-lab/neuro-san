@@ -353,12 +353,14 @@ class DataDrivenChatSession(RunTarget):
 
         return chat_context
 
-    def create_outgoing_message_processor(self) -> MessageProcessor:
+    def create_outgoing_message_processor(self, request_dict: Dict[str, Any]) -> MessageProcessor:
         """
+        :param request_dict: The request dictionary
         :return: A MessageProcessor that filters messages outgoing to the client.
                 How this works is based on settings on the front man.
                 Can be None.
         """
+        _ = request_dict    # For now
         message_processor: MessageProcessor = None
 
         front_man_name: str = self.registry.find_front_man()
