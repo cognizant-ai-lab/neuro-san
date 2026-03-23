@@ -193,7 +193,7 @@ class RunContextRunnable(NeuroSanRunnable):
                 self.logger.warning("Retrying due to exception in %s. Error: %s",
                                     self.__class__.__name__,
                                     exception_error,
-                )
+                                    )
                 retries = retries - 1
                 exception = exception_error
                 backtrace = traceback.format_exc()
