@@ -67,7 +67,7 @@ class DataDrivenChatSession(RunTarget):
     in using data-driven agent tool graphs.
     """
 
-    def __init__(self, agent_network: AgentNetwork):
+    def __init__(self, agent_network: AgentNetwork, invocation: str = "chatbot"):
         """
         Constructor
 
@@ -78,6 +78,7 @@ class DataDrivenChatSession(RunTarget):
         agent_network_copy: AgentNetwork = copy.deepcopy(agent_network)
         self.registry: AgentToolRegistry = AgentToolRegistry(agent_network_copy)
 
+        self.invocation: str = invocation
         self.front_man: FrontMan = None
         self.sly_data: Dict[str, Any] = {}
 
@@ -353,14 +354,13 @@ class DataDrivenChatSession(RunTarget):
 
         return chat_context
 
-    def create_outgoing_message_processor(self, request_dict: Dict[str, Any]) -> MessageProcessor:
+    def create_outgoing_message_processor(self) -> MessageProcessor:
         """
         :param request_dict: The request dictionary
         :return: A MessageProcessor that filters messages outgoing to the client.
                 How this works is based on settings on the front man.
                 Can be None.
         """
-        _ = request_dict    # For now
         message_processor: MessageProcessor = None
 
         front_man_name: str = self.registry.find_front_man()
