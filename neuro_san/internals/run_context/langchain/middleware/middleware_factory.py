@@ -28,7 +28,7 @@ from langchain_core.messages import BaseMessage
 
 from leaf_common.config.resolver_util import ResolverUtil
 
-from neuro_san.internals.interfaces.invocation_context import InvocationContect
+from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.originating_journal import OriginatingJournal
 from neuro_san.internals.journals.progress_journal import ProgressJournal
 from neuro_san.internals.messages.origination import Origination
@@ -42,7 +42,7 @@ class MiddlewareFactory:
     Creates instances of AgentMiddleware based on a list of middleware configs.
     """
 
-    def __init__(self, invocation_context: InvocationContect,
+    def __init__(self, invocation_context: InvocationContext,
                  origin: List[Dict[str, Any]],
                  chat_history: List[BaseMessage]):
         """
@@ -51,7 +51,7 @@ class MiddlewareFactory:
                     is creating the middleware.
         :param chat_history: The chat history of the RunContext that the middleware is being created for.
         """
-        self.invocation_context: InvocationContect = invocation_context
+        self.invocation_context: InvocationContext = invocation_context
         self.origin: List[Dict[str, Any]] = origin
         self.chat_history: List[BaseMessage] = chat_history
         self.logger: Logger = getLogger(self.__class__.__name__)
@@ -132,7 +132,8 @@ class MiddlewareFactory:
         """
         created_class: Type[create_type] = None
 
-        error_context: str = f"{what_we_are_creating} at index {index} of {self.origin_str}"
+        origin_str: str = Origination.get_full_name_from_origin(self.origin)
+        error_context: str = f"{what_we_are_creating} at index {index} of {origin_str}"
         if not isinstance(config, Dict):
             self.logger.warning("%s is missing a configuration dictionary. Skipping it.", error_context)
             return created_class
