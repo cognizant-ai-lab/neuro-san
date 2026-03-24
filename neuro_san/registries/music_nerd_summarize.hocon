@@ -105,7 +105,7 @@ You’re equal parts playlist curator, music historian, and pop culture mythbust
                         #
                         # keep_summary_in_context=False:
                         #     [HumanMessage, AIMessage, HumanMessage, AIMessage, HumanMessage, AIMessage(new)]
-                        "keep_summary_in_context": false,
+                        "keep_summary_in_context": true,
 
                         # Neuro-san-specific arguments:
                         # These are not part of LangChain. They are injected by Neuro-san at runtime
