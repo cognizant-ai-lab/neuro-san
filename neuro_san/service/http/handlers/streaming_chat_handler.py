@@ -57,7 +57,7 @@ class StreamingChatHandler(BaseRequestHandler):
             # For asyncio.timeout(), None means no timeout:
             request_timeout = None
 
-        result_generator: AsyncGenerator[Dict[str, Any], None, None] = None
+        result_generator: AsyncGenerator[Dict[str, Any], None] = None
 
         # Parse the JSON request body separately from everything else.
         request_dict: Dict[str, Any] = None
@@ -140,7 +140,7 @@ class StreamingChatHandler(BaseRequestHandler):
         """
         return not is_event or (is_event and not flushed_first_result)
 
-    async def _finish_request(self, result_generator: AsyncGenerator[Dict[str, Any], None, None],
+    async def _finish_request(self, result_generator: AsyncGenerator[Dict[str, Any], None],
                               metadata: Dict[str, Any], agent_name: str):
         # We are done with response stream,
         # ensure generator is closed properly in any case:
