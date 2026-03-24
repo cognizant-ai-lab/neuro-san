@@ -81,8 +81,10 @@ Items in ***bold*** are essentials. Try to understand these first.
     - [middleware](#middleware)
         - [class](#class-2)
         - [args](#args-1)
+            - [chat_history](#chat_history)
             - [origin](#origin)
             - [origin_str](#origin_str)
+            - [progress_reporter](#progress_reporter)
             - [sly_data](#sly_data-3)
 
 <!--TOC-->
@@ -941,6 +943,12 @@ These will depend on the constructor signature of the class you are trying to in
 There are some special args that will be populated with information provided by the agent framework
 if they are specified in both the middleware dictionary and the class constructor signature:
 
+##### chat_history
+
+A list of langchain BaseMessages that are the full history of the conversation so far for the Middleware's agent.
+We allow this because some middleware may need to inspect and/or modify the history that neuro-san keeps
+as per-agent state (Think: summarization middleware).
+
 ##### origin
 
 A list of dictionaries that describe the origin of the middleware instantiation in terms of
@@ -949,6 +957,10 @@ where it is in the hierarchy of the agent network.
 ##### origin_str
 
 A simpler string representation of the [origin](#origin)
+
+##### progress_reporter
+
+A ProgressReporter instance that can be used to report progress dictionaries via the chat stream.
 
 <!--- pyml disable-next-line no-duplicate-heading -->
 ##### sly_data
