@@ -29,7 +29,7 @@ class InvocationUtil:
     """
 
     @staticmethod
-    def get_effective_invocation(inspector: AgentNetworkInspector, request_dict: Dict[str, Any]) -> str: 
+    def get_effective_invocation(inspector: AgentNetworkInspector, request_dict: Dict[str, Any]) -> str:
         """
         Check if the agent network should process the request as an event.
 
