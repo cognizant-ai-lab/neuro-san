@@ -258,7 +258,8 @@ class DataDrivenChatSession(RunTarget):
         # If we are invoked as an event, tell the caller that it's OK to disconnect early.
         # By definition, they are not expecting a custom response.
         if self.invocation_context.get_effective_invocation() == "event":
-            event_acknowledge = AgentFrameworkMessage(content="event acknowledged")
+            empty: Dict[str, Any] = {}
+            event_acknowledge = AgentFrameworkMessage(content="event acknowledged", chat_context=empty)
             await self.send_last_message(event_acknowledge)
 
         # Actually run the chat and save information about it
