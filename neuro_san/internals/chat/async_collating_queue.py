@@ -72,7 +72,7 @@ class AsyncCollatingQueue(AsyncIterator, AsyncHopper):
 
         return message
 
-    async def put(self, item: Any, synchronous: bool = False):
+    async def put(self, item: Any, synchronous: bool = False, check_last_item_sent: bool = True):
         """
         Fulfills AsyncHopper interface
 
@@ -83,8 +83,10 @@ class AsyncCollatingQueue(AsyncIterator, AsyncHopper):
                 When True, we use the synchronous side of the queue for put().
                 This ends up being necessary when each end of the queue is serviced
                 in a different asyncio event loop.
+        :param check_last_item_sent: When True (the default), this method will
+                not put anything if the last item was already sent.
         """
-        if self.last_item_sent:
+        if check_last_item_sent and self.last_item_sent:
             # If the last message was sent, don't put anything else
             # This controls unbounded queue growth when there is no longer a consumer.
             return
@@ -106,8 +108,8 @@ class AsyncCollatingQueue(AsyncIterator, AsyncHopper):
                 This ends up being necessary when each end of the queue is serviced
                 in a different asyncio event loop.
         """
-        await self.put(self.END_MESSAGE, synchronous)
         self.last_item_sent = True
+        await self.put(self.END_MESSAGE, synchronous, check_last_item_sent=False)
 
     def is_final_item(self, item: Any) -> bool:
         """
