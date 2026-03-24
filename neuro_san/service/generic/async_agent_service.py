@@ -336,4 +336,5 @@ class AsyncAgentService:
         :return: True if the request should be processed as an event. False otherwise
         """
         agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
-        return InvocationUtil.should_process_as_event(agent_network, request_dict)
+        process_as_event: bool = InvocationUtil.get_effective_invocation(agent_network, request_dict) == "event"
+        return process_as_event

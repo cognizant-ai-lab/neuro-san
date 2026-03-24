@@ -29,7 +29,7 @@ class InvocationUtil:
     """
 
     @staticmethod
-    def should_process_as_event(inspector: AgentNetworkInspector, request_dict: Dict[str, Any]) -> bool:
+    def get_effective_invocation(inspector: AgentNetworkInspector, request_dict: Dict[str, Any]) -> str: 
         """
         Check if the agent network should process the request as an event.
 
@@ -40,7 +40,7 @@ class InvocationUtil:
         :return: True if the request should be processed as an event, False otherwise.
         """
         if inspector is None:
-            return False
+            return None
 
         invocation: str = None
         front_man: str = inspector.find_front_man()
@@ -57,6 +57,6 @@ class InvocationUtil:
 
         # More possibilities will come for more invocations and chat filters.
         if invocation in ("event") and chat_filter in ("MINIMAL"):
-            return True
+            return "event"
 
-        return False
+        return "chatbot"
