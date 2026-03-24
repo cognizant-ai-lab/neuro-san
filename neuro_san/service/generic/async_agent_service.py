@@ -17,7 +17,7 @@
 
 from typing import Any
 from typing import Dict
-from typing import Generator
+from typing import AsyncGenerator
 
 import contextlib
 import json
@@ -223,7 +223,7 @@ class AsyncAgentService:
     # pylint: disable=too-many-locals
     async def streaming_chat(self, request_dict: Dict[str, Any],
                              request_metadata: Dict[str, Any]) \
-            -> Generator[Dict[str, Any], None, None]:
+            -> AsyncGenerator[Dict[str, Any], None, None]:
         """
         Initiates or continues the agent chat with the session_id
         context in the request.
@@ -285,7 +285,7 @@ class AsyncAgentService:
                 metadata=metadata,
                 security_cfg=self.security_cfg)
         # Get our args in order to pass to transport-agnostic session level
-        response_dict_generator: Generator[Dict[str, Any], None, None] = session.streaming_chat(request_dict)
+        response_dict_generator: AsyncGenerator[Dict[str, Any], None, None] = session.streaming_chat(request_dict)
 
         # See if we want to put the request dict in the response
         extractor = DictionaryExtractor(request_dict)
