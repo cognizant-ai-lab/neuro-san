@@ -66,7 +66,7 @@ class StreamingChatHandler(BaseRequestHandler):
             # Suppress possible exceptions: they are of no interest here.
             with contextlib.suppress(Exception):
                 self.process_exception(exc)
-            self._finish_request(None, metadata, agent_name)
+            await self._finish_request(None, metadata, agent_name)
             return
 
         is_event: bool = service.should_process_as_event(request_dict)

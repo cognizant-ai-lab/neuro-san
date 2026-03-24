@@ -37,7 +37,9 @@ class InvocationUtil:
                         AgentNetworkInspector include AgentNetwork, AgentToolRegistry.
         :param request_dict: A ChatRequest dictionary.
 
-        :return: True if the request should be processed as an event, False otherwise.
+        :return: A string representing the invocation type.
+                 Can be "event" or "chatbot" when the inspector is not None.
+                 Can be None if the inspector is None.
         """
         if inspector is None:
             return None
@@ -56,7 +58,7 @@ class InvocationUtil:
             chat_filter = request_extractor.get("chat_filter.chat_filter_type", chat_filter)
 
         # More possibilities will come for more invocations and chat filters.
-        if invocation in ("event") and chat_filter in ("MINIMAL"):
+        if invocation in ("event",) and chat_filter in ("MINIMAL",):
             return "event"
 
         # Note that even if the spec wants event but the request is a MAXIMAL filter,
