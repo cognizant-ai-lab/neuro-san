@@ -44,7 +44,13 @@ class InvocationUtil:
             return "chatbot"
 
         invocation: str = None
-        front_man: str = inspector.find_front_man()
+        front_man: str = None
+        try:
+            front_man = inspector.find_front_man()
+        except ValueError:
+            # No front man found.
+            pass
+
         if front_man is not None:
             front_man_spec: Dict[str, Any] = inspector.get_agent_tool_spec(front_man)
             spec_extractor = DictionaryExtractor(front_man_spec)
