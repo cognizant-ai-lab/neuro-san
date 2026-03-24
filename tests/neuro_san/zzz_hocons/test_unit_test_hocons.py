@@ -44,6 +44,7 @@ class TestUnitTestHocons(TestCase):
         "math_guy/forwarded_sly_data.hocon",
         "math_guy/deep_forwarded_sly_data.hocon",
         "music_nerd/beatles_with_history.hocon",
+        "music_nerd_summarize/beatles_with_history_summarize.hocon",
         "requests_get/get_example.hocon",
         "pii_middleware/jenny_phone.hocon",
 

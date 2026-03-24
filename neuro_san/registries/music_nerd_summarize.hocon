@@ -1,0 +1,133 @@
+
+# Copyright © 2023-2026 Cognizant Technology Solutions Corp, www.cognizant.com.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# END COPYRIGHT
+
+# The schema specifications for this file are documented here:
+# https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md
+
+{
+    # Optional metadata describing this agent network
+    "metadata": {
+        "description": "Simple agent network using a single LLM-based agent with summarizing middleware",
+        "tags": ["example", "middleware", "summarization"],
+        "sample_queries": [
+            "Which band wrote Yellow Submarine?",
+            "Where are they from?",
+        ]
+    },
+    "llm_config": {
+        "model_name": "gpt-5.2"
+    },
+    "tools": [
+        # This first agent definition is regarded as the "Front Man", which
+        # does all the talking to the outside world/client.
+        #
+        # Some disqualifications from being a front man:
+        #   1) Cannot use a CodedTool "class" definition
+        #   2) Cannot use a Tool "toolbox" definition
+        #
+        # Besides the first agent being the front man, these tool definitions
+        # do not have to be in any particular order. How they are linked and
+        # call each other is defined within their own specs.
+        # This could be a graph, potentially even with cycles.
+        {
+            "name": "MusicNerd",
+
+            # Note that there are no parameters defined for this guy's "function" key.
+            # This is the primary way to identify this tool as a front-man,
+            # distinguishing it from the rest of the tools.
+
+            "function": {
+
+                # The description acts as an initial prompt. 
+                "description": """
+I can help with music-related inquiries.
+"""
+            },
+
+            "instructions": """
+You’re Music Nerd, the go-to brain for all things rock, pop, and everything in between from the 60s onward. You live for liner notes, B-sides, lost demos, and legendary live sets. You know who played bass on that one track in ‘72 and why the band broke up in ‘83. People come to you with questions like:
+	•	“What’s the story behind this song?”
+	•	“Which album should I start with?”
+	•	“Who influenced this band’s sound?”
+	•	“Is there a deeper meaning in these lyrics?”
+	•	“What’s a hidden gem I probably missed?”
+You’re equal parts playlist curator, music historian, and pop culture mythbuster—with a sixth sense for sonic nostalgia and a deep respect for the analog gods.
+""",
+            "tools": [],
+            "middleware": [
+                {
+                    "class": "neuro_san.middleware.neuro_san_summarization_middleware.NeuroSanSummarizationMiddleware",
+                    "args": {
+
+                        # Arguments passed to LangChain's built-in SummarizationMiddleware:
+                        # https://reference.langchain.com/python/langchain/agents/middleware/summarization/SummarizationMiddleware
+
+                        # Language model used to generate summaries.
+                        # This value is passed to `init_chat_model` internally.
+                        # https://reference.langchain.com/python/langchain/chat_models/base/init_chat_model
+                        "model": "gpt-4.1",
+
+                        # Threshold(s) that trigger summarization.
+                        # Format: [<type>, <value>], where type is typically "messages" or "tokens".
+                        # Example below triggers summarization when there are 4 or more messages.
+                        "trigger": [["messages", 3]],
+
+                        # Defines how much recent context to retain after summarization.
+                        # Format: [<type>, <value>] (same structure as `trigger`).
+                        # Example below keeps the most recent 1 message after summarization.
+                        "keep": ["messages", 1],
+
+                        # Whether or not to keep the summary in chat context.
+                        # Default is true.
+                        #
+                        # Example — effect of ``keep_summary_in_context`` on chat history
+                        # (assuming ``keep=("messages", 2)`` and summarization is triggered):
+                        #
+                        # incoming messages:
+                        #     [HumanMessage, AIMessage, HumanMessage, AIMessage, HumanMessage]
+                        #
+                        # keep_summary_in_context=True:
+                        #     [HumanMessage(summary), AIMessage(kept), HumanMessage(kept), AIMessage(new)]
+                        #
+                        # keep_summary_in_context=False:
+                        #     [HumanMessage, AIMessage, HumanMessage, AIMessage, HumanMessage, AIMessage(new)]
+                        "keep_summary_in_context": true,
+
+                        # Neuro-san-specific arguments:
+                        # These are not part of LangChain. They are injected by Neuro-san at runtime
+                        # and can be referenced by the custom middleware if present.
+                        #
+                        # Any key listed below can be included here with any value to request
+                        # that Neuro-san provides it when constructing the middleware.
+                        #
+                        # Supported keys:
+                        #   - "chat_history"
+                        #   - "journal"
+                        #   - "origin"
+                        #   - "origin_str"
+                        #   - "progress_reporter"
+                        #   - "sly_data"
+                        #
+                        # Reference:
+                        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#args-1
+                        "chat_history": true,
+                    }
+                }
+            ]
+        }
+    ]
+}
