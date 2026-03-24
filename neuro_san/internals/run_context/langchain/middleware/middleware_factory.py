@@ -20,16 +20,17 @@ from typing import List
 from typing import Tuple
 from typing import Type
 
-from copy import copy as shallow_copy
 from logging import getLogger
 from logging import Logger
 
 from langchain.agents.middleware.types import AgentMiddleware
+from langchain_core.messages import BaseMessage
 
 from leaf_common.config.resolver_util import ResolverUtil
 
-from neuro_san.internals.journals.journal import Journal
-# from neuro_san.internals.journals.progress_journal import ProgressJournal
+from neuro_san.internals.interfaces.invocation_context import InvocationContext
+from neuro_san.internals.journals.originating_journal import OriginatingJournal
+from neuro_san.internals.journals.progress_journal import ProgressJournal
 from neuro_san.internals.messages.origination import Origination
 
 # We don't want to drag in langgraph as a dependency, but we will allow Checkpointers from there.
@@ -41,16 +42,18 @@ class MiddlewareFactory:
     Creates instances of AgentMiddleware based on a list of middleware configs.
     """
 
-    def __init__(self, origin: List[Dict[str, Any]], base_journal: Journal):
+    def __init__(self, invocation_context: InvocationContext,
+                 origin: List[Dict[str, Any]],
+                 chat_history: List[BaseMessage]):
         """
+        :param invocation_context: The invocation context for the request.
         :param origin: A list of dictionaries containing origin information as to which agent
                     is creating the middleware.
-        :param base_journal: The base Journal for the RunContext that the middleware is being created for.
+        :param chat_history: The chat history of the RunContext that the middleware is being created for.
         """
+        self.invocation_context: InvocationContext = invocation_context
         self.origin: List[Dict[str, Any]] = origin
-        self.origin_str: str = Origination.get_full_name_from_origin(self.origin)
-        self.base_journal: Journal = base_journal
-        self.instantiation_indexes: Dict[str, int] = {}
+        self.chat_history: List[BaseMessage] = chat_history
         self.logger: Logger = getLogger(self.__class__.__name__)
 
     def create_agent_middleware(self, config: List[Dict[str, Any]], sly_data: Dict[str, Any]) \
@@ -129,7 +132,8 @@ class MiddlewareFactory:
         """
         created_class: Type[create_type] = None
 
-        error_context: str = f"{what_we_are_creating} at index {index} of {self.origin_str}"
+        origin_str: str = Origination.get_full_name_from_origin(self.origin)
+        error_context: str = f"{what_we_are_creating} at index {index} of {origin_str}"
         if not isinstance(config, Dict):
             self.logger.warning("%s is missing a configuration dictionary. Skipping it.", error_context)
             return created_class
@@ -152,17 +156,10 @@ Check these things:
             self.logger.error(message)
             raise ValueError(message) from exception
 
-        # Get the instantiation index for this instance and increment for future use
-        instantation_index = self.instantiation_indexes.get(class_name, 0)
-        self.instantiation_indexes[class_name] = instantation_index + 1
-
-        # Set up an origin for any journaling
-        use_origin: List[Dict[str, Any]] = shallow_copy(self.origin)
-        add_to_origin: Dict[str, Any] = {
-            "tool": class_name,
-            "instantiation_index": instantation_index
-        }
-        use_origin.append(add_to_origin)
+        # Prepare a new origin for the middleware
+        tool_name_for_class: str = class_name.split(".")[-1]
+        origination: Origination = self.invocation_context.get_origination()
+        middleware_origin: List[Dict[str, Any]] = origination.add_spec_name_to_origin(self.origin, tool_name_for_class)
 
         # Prepare the args for the class
         empty: Dict[str, Any] = {}
@@ -170,20 +167,19 @@ Check these things:
 
         # Special args keys that have data coming in from the agent framework.
         if "origin" in args:
-            args["origin"] = use_origin
+            args["origin"] = middleware_origin
         if "origin_str" in args:
-            args["origin_str"] = Origination.get_full_name_from_origin(use_origin)
+            args["origin_str"] = Origination.get_full_name_from_origin(middleware_origin)
         if "sly_data" in args:
             args["sly_data"] = sly_data
-
-        # Not yet
-        # if "progress_reporter" in args:
-            # DEF - this is not quite correct, but here to keep dev moving.
-            # This should probably be initialized as per journal creation in
-            #       LangChainRunContext.update_invocation_context() and
-            #       AbstractClassActivation.__init__() for ProgressJournal
-            # ... so as to get correct origin information through from use_origin.
-            # args["progress_reporter"] = ProgressJournal(self.base_journal)
+        if "chat_history" in args:
+            args["chat_history"] = self.chat_history
+        if "journal" in args or "progress_reporter" in args:
+            journal = OriginatingJournal(self.invocation_context.get_journal(), middleware_origin)
+            if "journal" in args:
+                args["journal"] = journal
+            if "progress_reporter" in args:
+                args["progress_reporter"] = ProgressJournal(journal)
 
         # Actually create the class instance
         try:
