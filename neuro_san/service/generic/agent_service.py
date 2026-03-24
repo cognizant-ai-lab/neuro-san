@@ -256,6 +256,10 @@ class AgentService:
             reservationist = ServiceAgentReservationist()
             self.queues.sync_q.put(reservationist.get_queue())
 
+        # Determine the effective invocation
+        agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
+        effective_invocation: str = InvocationUtil.get_effective_invocation(agent_network, request_dict)
+
         # Prepare
         factory = ExternalAgentSessionFactory(use_direct=False)
         invocation_context = SessionInvocationContext(
@@ -266,7 +270,8 @@ class AgentService:
             self.toolbox_factory,
             metadata,
             reservationist,
-            self.port)
+            self.port,
+            effective_invocation=effective_invocation)
         invocation_context.start()
 
         # Set up logging inside async thread
@@ -275,7 +280,6 @@ class AgentService:
         _ = executor.submit(None, self.server_logging.setup_logging, metadata, metadata.get("request_id"))
 
         # Delegate to Direct*Session
-        agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
         session = DirectAgentSession(agent_network=agent_network,
                                      invocation_context=invocation_context,
                                      metadata=metadata,
