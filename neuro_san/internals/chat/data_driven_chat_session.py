@@ -259,7 +259,7 @@ class DataDrivenChatSession(RunTarget):
         # By definition, they are not expecting a custom response.
         if self.invocation_context.get_effective_invocation() == "event":
             empty: Dict[str, Any] = {}
-            event_acknowledge = AgentFrameworkMessage(content="event acknowledged", chat_context=empty)
+            event_acknowledge = AgentFrameworkMessage(content="Event acknowledged", chat_context=empty)
             await self.send_last_message(event_acknowledge)
 
         # Actually run the chat and save information about it
