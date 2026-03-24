@@ -87,6 +87,7 @@ class DataDrivenChatSession(RunTarget):
         self.invocation_context: InvocationContext = None
         self.interceptor: InterceptingJournal = None
         self.original_input_message: AgentFrameworkMessage = None
+        self.last_message_sent: bool = False
 
     async def set_up(self, invocation_context: InvocationContext,
                      sly_data: Dict[str, Any] = None,
@@ -255,7 +256,13 @@ class DataDrivenChatSession(RunTarget):
         if self.front_man is None:
             await self.set_up(self.invocation_context, sly_data, chat_context)
 
-        # Save information about chat
+        # If we are invoked as an event, tell the caller that it's OK to disconnect early.
+        # By definition, they are not expecting a custom response.
+        if self.invocation == "event":
+            event_acknowledge = AgentFrameworkMessage(content="event acknowledged")
+            await self.send_last_message(event_acknowledge)
+
+        # Actually run the chat and save information about it
         chat_messages: Iterator[Dict[str, Any]] = await self.chat(user_input, self.invocation_context, sly_data)
         message_list: List[Dict[str, Any]] = list(chat_messages)
 
@@ -291,18 +298,7 @@ class DataDrivenChatSession(RunTarget):
         # at the end of the tracing context.
         message = AgentFrameworkMessage(content=answer, chat_context=return_chat_context,
                                         sly_data=return_sly_data, structure=structure)
-        await self.interceptor.write_message(message, origin=None)
-
-        # Put an end-marker on the queue to tell the consumer we truly are done
-        # and it doesn't need to wait for any more messages.
-        # The consumer await-s for queue.get()
-        queue: AsyncCollatingQueue = self.invocation_context.get_queue()
-
-        # The synchronous=True is necessary when an async HTTP request is at the get()-ing end of the queue,
-        # as the journal messages come from inside a separate event loop from that request. The lock
-        # taken here ends up being harmless in the synchronous request case (like for gRPC) because
-        # we would only be blocking our own event loop.
-        await queue.put_final_item(synchronous=True)
+        await self.send_last_message(message)
 
         # Now that we are done, tell the Reservationist that we used for this request
         # that there will be no more Reservations to corral.
@@ -416,3 +412,24 @@ class DataDrivenChatSession(RunTarget):
             logger: Logger = getLogger(self.__class__.__name__)
             logger.error("Unable to close() %s", description)
             logger.error(traceback.format_exc())
+
+    async def send_last_message(self, message: AgentFrameworkMessage):
+        """
+        Send the last message to the client and signal that the queue is closed.
+        """
+        if self.last_message_sent:
+            return
+        self.last_message_sent = True
+
+        await self.interceptor.write_message(message, origin=None)
+
+        # Put an end-marker on the queue to tell the consumer we truly are done
+        # and it doesn't need to wait for any more messages.
+        # The consumer await-s for queue.get()
+        queue: AsyncCollatingQueue = self.invocation_context.get_queue()
+
+        # The synchronous=True is necessary when an async HTTP request is at the get()-ing end of the queue,
+        # as the journal messages come from inside a separate event loop from that request. The lock
+        # taken here ends up being harmless in the synchronous request case (like for gRPC) because
+        # we would only be blocking our own event loop.
+        await queue.put_final_item(synchronous=True)
