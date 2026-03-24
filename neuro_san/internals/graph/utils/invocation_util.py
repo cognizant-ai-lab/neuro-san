@@ -38,18 +38,17 @@ class InvocationUtil:
         :param request_dict: A ChatRequest dictionary.
 
         :return: A string representing the invocation type.
-                 Can be "event" or "chatbot" when the inspector is not None.
-                 Can be None if the inspector is None.
+                 Can be "event" or "chatbot" for now.
         """
         if inspector is None:
-            return None
+            return "chatbot"
 
         invocation: str = None
         front_man: str = inspector.find_front_man()
         if front_man is not None:
             front_man_spec: Dict[str, Any] = inspector.get_agent_tool_spec(front_man)
             spec_extractor = DictionaryExtractor(front_man_spec)
-            # Default invocation id none specified is chatbot
+            # Default invocation if none specified is chatbot
             invocation = spec_extractor.get("function.invocation", "chatbot")
 
         chat_filter: str = "MINIMAL"

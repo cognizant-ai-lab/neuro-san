@@ -105,7 +105,7 @@ class StreamingChatHandler(BaseRequestHandler):
                         # Otherwise swallow and continue
 
         except asyncio.CancelledError:
-            self.logger.info(metadata, "Request handler cancelled closed.")
+            self.logger.info(metadata, "Request handler cancelled.")
             # Re-raise as recommended
             raise
 
