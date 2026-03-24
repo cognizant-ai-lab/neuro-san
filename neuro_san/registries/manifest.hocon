@@ -46,6 +46,9 @@
     "music_nerd_pro_multi_agents.hocon": true,
     "music_nerd_pro_llm_bedrock_claude.hocon": true,
 
+    # This is an example of summarization middleware.
+    "music_nerd_summarize.hocon": true,
+
     # These two allow us to test agent hocons in a directory hierarchy.
     "deep/math_guy_passthrough.hocon": {
         # A long-hand version of what the simple boolean true value expands to.
