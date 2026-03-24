@@ -356,7 +356,6 @@ class DataDrivenChatSession(RunTarget):
 
     def create_outgoing_message_processor(self) -> MessageProcessor:
         """
-        :param request_dict: The request dictionary
         :return: A MessageProcessor that filters messages outgoing to the client.
                 How this works is based on settings on the front man.
                 Can be None.
