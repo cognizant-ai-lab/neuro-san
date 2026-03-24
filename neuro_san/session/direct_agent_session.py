@@ -35,7 +35,6 @@ from neuro_san.internals.chat.data_driven_chat_session import DataDrivenChatSess
 from neuro_san.internals.filters.message_filter import MessageFilter
 from neuro_san.internals.filters.message_filter_factory import MessageFilterFactory
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
-from neuro_san.internals.graph.utils.invocation_util import InvocationUtil
 from neuro_san.internals.messages.chat_message_type import ChatMessageType
 from neuro_san.message_processing.message_processor import MessageProcessor
 from neuro_san.session.session_invocation_context import SessionInvocationContext
@@ -153,8 +152,7 @@ class DirectAgentSession(AgentSession):
         user_input = extractor.get("user_message.text")
 
         # Create the gateway to the internals.
-        invocation: str = InvocationUtil.get_effective_invocation(self.agent_network, request_dict)
-        chat_session = DataDrivenChatSession(agent_network=self.agent_network, invocation=invocation)
+        chat_session = DataDrivenChatSession(agent_network=self.agent_network)
 
         # Prepare the response dictionary
         template_response_dict: Dict[str, Any] = {}

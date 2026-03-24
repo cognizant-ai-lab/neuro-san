@@ -67,7 +67,7 @@ class DataDrivenChatSession(RunTarget):
     in using data-driven agent tool graphs.
     """
 
-    def __init__(self, agent_network: AgentNetwork, invocation: str = "chatbot"):
+    def __init__(self, agent_network: AgentNetwork):
         """
         Constructor
 
@@ -78,7 +78,6 @@ class DataDrivenChatSession(RunTarget):
         agent_network_copy: AgentNetwork = copy.deepcopy(agent_network)
         self.registry: AgentToolRegistry = AgentToolRegistry(agent_network_copy)
 
-        self.invocation: str = invocation
         self.front_man: FrontMan = None
         self.sly_data: Dict[str, Any] = {}
 
@@ -258,7 +257,7 @@ class DataDrivenChatSession(RunTarget):
 
         # If we are invoked as an event, tell the caller that it's OK to disconnect early.
         # By definition, they are not expecting a custom response.
-        if self.invocation == "event":
+        if self.invocation_context.get_effective_invocation() == "event":
             event_acknowledge = AgentFrameworkMessage(content="event acknowledged")
             await self.send_last_message(event_acknowledge)
 

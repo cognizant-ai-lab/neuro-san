@@ -112,6 +112,12 @@ class SessionInvocationContext(InvocationContext):
         # make sure it is finished before we start to use this AsyncioExecutor instance.
         self.asyncio_executor.initialize(logging_setup)
 
+    def get_effective_invocation(self) -> str:
+        """
+        :return: The effective invocation of the session
+        """
+        return self.effective_invocation
+
     def get_async_session_factory(self) -> AsyncAgentSessionFactory:
         """
         :return: The AsyncAgentSessionFactory associated with the invocation
