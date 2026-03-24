@@ -19,7 +19,7 @@ See class comment for details
 """
 from typing import Any
 from typing import Dict
-from typing import Generator
+from typing import AsyncGenerator
 
 from http import HTTPStatus
 
@@ -57,6 +57,8 @@ class StreamingChatHandler(BaseRequestHandler):
             # For asyncio.timeout(), None means no timeout:
             request_timeout = None
 
+        result_generator: AsyncGenerator[Dict[str, Any], None, None] = None
+
         # Parse the JSON request body separately from everything else.
         request_dict: Dict[str, Any] = None
         try:
@@ -66,12 +68,11 @@ class StreamingChatHandler(BaseRequestHandler):
             # Suppress possible exceptions: they are of no interest here.
             with contextlib.suppress(Exception):
                 self.process_exception(exc)
-            await self._finish_request(None, metadata, agent_name)
+            await self._finish_request(result_generator, metadata, agent_name)
             return
 
         is_event: bool = service.should_process_as_event(request_dict)
         flushed_first_result: bool = False
-        result_generator: Generator[Dict[str, Any], None, None] = None
         try:
             # Set up headers for chunked response
             self.set_header("Content-Type", "application/json-lines")
@@ -139,7 +140,7 @@ class StreamingChatHandler(BaseRequestHandler):
         """
         return not is_event or (is_event and not flushed_first_result)
 
-    async def _finish_request(self, result_generator: Generator[Dict[str, Any], None, None],
+    async def _finish_request(self, result_generator: AsyncGenerator[Dict[str, Any], None, None],
                               metadata: Dict[str, Any], agent_name: str):
         # We are done with response stream,
         # ensure generator is closed properly in any case:
