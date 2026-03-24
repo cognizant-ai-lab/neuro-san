@@ -59,4 +59,7 @@ class InvocationUtil:
         if invocation in ("event") and chat_filter in ("MINIMAL"):
             return "event"
 
+        # Note that even if the spec wants event but the request is a MAXIMAL filter,
+        # we are taking that to mean that the client wants to hang around for the queued messages
+        # to debug what is going on with the event.
         return "chatbot"
