@@ -28,6 +28,7 @@ from janus import Queue
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.utils.atomic_counter import AtomicCounter
 
 from leaf_server_common.server.request_logger import RequestLogger
@@ -35,6 +36,7 @@ from leaf_server_common.server.request_logger import RequestLogger
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.graph.utils.invocation_util import InvocationUtil
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
@@ -282,9 +284,8 @@ class AgentService:
         response_dict_iterator: Iterator[Dict[str, Any]] = session.streaming_chat(request_dict)
 
         # See if we want to put the request dict in the response
-        chat_filter_dict: Dict[str, Any] = {}
-        chat_filter_dict = request_dict.get("chat_filter", chat_filter_dict)
-        chat_filter_type: str = chat_filter_dict.get("chat_filter_type", "MINIMAL")
+        extractor = DictionaryExtractor(request_dict)
+        chat_filter_type: str = extractor.get("chat_filter.chat_filter_type", "MINIMAL")
 
         try:
             for response_dict in response_dict_iterator:
@@ -326,3 +327,10 @@ class AgentService:
             self.request_logger.finish_request(f"{self.agent_name}.StreamingChat", log_marker, request_log)
 
         self.request_counter.decrement()
+
+    def should_process_as_event(self, request_dict: Dict[str, Any]) -> bool:
+        """
+        :return: True if the request should be processed as an event. False otherwise
+        """
+        agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
+        return InvocationUtil.should_process_as_event(agent_network, request_dict)
