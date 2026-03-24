@@ -134,7 +134,7 @@ class StreamingChatHandler(BaseRequestHandler):
         """
         For the most part a client close is a problem and we want to stop processing early.
         Even if this is an event agent, and we have not yet flushed first result, this is still a problem.
-        However, if this is an agent evoked as an event, this is not a problem
+        However, if this is an agent invoked as an event, this is not a problem
         as long as we have flushed the first result.
         """
         return not is_event or (is_event and not flushed_first_result)
