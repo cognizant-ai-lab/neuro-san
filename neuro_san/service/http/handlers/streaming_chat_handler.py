@@ -45,11 +45,11 @@ class StreamingChatHandler(BaseRequestHandler):
         """
 
         metadata: Dict[str, Any] = self.get_metadata()
-        self.application.start_client_request(metadata, f"{agent_name}/streaming_chat")
-
         service: AsyncAgentService = await self.get_service(agent_name, metadata)
         if service is None:
             return
+
+        self.application.start_client_request(metadata, f"{agent_name}/streaming_chat")
 
         # Set up request timeout if it is specified:
         request_timeout: float = service.get_request_timeout_seconds()
@@ -71,7 +71,7 @@ class StreamingChatHandler(BaseRequestHandler):
 
         is_event: bool = service.should_process_as_event(request_dict)
         flushed_first_result: bool = False
-        result_generator = None
+        result_generator: Generator[Dict[str, Any], None, None] = None
         try:
             # Set up headers for chunked response
             self.set_header("Content-Type", "application/json-lines")
@@ -87,8 +87,7 @@ class StreamingChatHandler(BaseRequestHandler):
 
             # Now process the result stream
             async with asyncio.timeout(request_timeout):
-                result_generator: Generator[Dict[str, Any], None, None] = \
-                    service.streaming_chat(request_dict, metadata)
+                result_generator = service.streaming_chat(request_dict, metadata)
                 async for result_dict in result_generator:
                     result_str: str = json.dumps(result_dict) + "\n"
                     self.write(result_str)
