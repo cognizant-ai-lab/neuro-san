@@ -241,7 +241,7 @@ class LangChainRunContext(RunContext):
 
         # Create any middleware instances that were specified, in the order they were specified.
         # This will be None for most simple situations.
-        middleware_factory = MiddlewareFactory(self.origin, self.chat_history, self.invocation_context.get_journal())
+        middleware_factory = MiddlewareFactory(self.invocation_context, self.origin, self.chat_history)
         sly_data: Dict[str, Any] = self.tool_caller.get_sly_data()
 
         middleware: List[AgentMiddleware] = None
