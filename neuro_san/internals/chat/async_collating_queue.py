@@ -45,7 +45,7 @@ class AsyncCollatingQueue(AsyncIterator, AsyncHopper):
         self.queue: Queue = queue
         if self.queue is None:
             self.queue = Queue()
-        self.last_message_sent: bool = False
+        self.last_item_sent: bool = False
 
     def get_queue(self) -> Queue:
         """
@@ -84,7 +84,7 @@ class AsyncCollatingQueue(AsyncIterator, AsyncHopper):
                 This ends up being necessary when each end of the queue is serviced
                 in a different asyncio event loop.
         """
-        if self.last_message_sent:
+        if self.last_item_sent:
             # If the last message was sent, don't put anything else
             # This controls unbounded queue growth when there is no longer a consumer.
             return
@@ -107,7 +107,7 @@ class AsyncCollatingQueue(AsyncIterator, AsyncHopper):
                 in a different asyncio event loop.
         """
         await self.put(self.END_MESSAGE, synchronous)
-        self.last_message_sent = True
+        self.last_item_sent = True
 
     def is_final_item(self, item: Any) -> bool:
         """
@@ -122,3 +122,9 @@ class AsyncCollatingQueue(AsyncIterator, AsyncHopper):
         Close this queue
         """
         self.queue.close()
+
+    def reset(self):
+        """
+        Allows more messages to be sent on this queue
+        """
+        self.last_item_sent = False

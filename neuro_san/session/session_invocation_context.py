@@ -212,6 +212,7 @@ class SessionInvocationContext(InvocationContext):
         # to DirectAgentSession do not properly carry forward any memory of the conversation
         # in subsequent interactions with the same network.
         self.origination.reset()
+        self.queue.reset()
 
     def safe_shallow_copy(self) -> SessionInvocationContext:
         """
