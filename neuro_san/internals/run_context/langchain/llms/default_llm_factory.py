@@ -22,6 +22,9 @@ from typing import Set
 from typing import Type
 from typing import Tuple
 
+from logging import Logger
+from logging import getLogger
+
 import os
 
 from langchain_core.language_models.base import BaseLanguageModel
@@ -82,6 +85,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         :param config: The config dictionary which may or may not contain
                        keys for the context_type and agent_llm_info_file
         """
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self.llm_infos: Dict[str, Any] = {}
         self.overlayer = DictionaryOverlay()
         self.llm_factories: List[LangChainLlmFactory] = [
@@ -336,6 +340,9 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 # also provide some more helpful failure text.
                 message: str = ApiKeyErrorCheck.check_for_api_key_exception(exception)
                 if message is not None:
+                    # Log the error with technical details for debugging purposes,
+                    # but we are returning a more user-friendly message to the client.
+                    self.logger.error("API KEY error detected: %s", str(exception))
                     raise ValueError(message) from exception
                 found_exception = exception
 

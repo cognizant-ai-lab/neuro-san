@@ -165,6 +165,9 @@ class RunContextRunnable(NeuroSanRunnable):
                     chain_result = {
                         "output": message
                     }
+                    # Log the error with technical details for debugging purposes,
+                    # but we are returning a more user-friendly message to the client.
+                    self.logger.error("API KEY error detected: %s", str(api_error))
                     break
                 # Continue with regular retry logic:
                 self.logger.warning("retrying from %s", api_error.__class__.__name__)
