@@ -108,6 +108,8 @@ class AsyncCollatingQueue(AsyncIterator, AsyncHopper):
                 This ends up being necessary when each end of the queue is serviced
                 in a different asyncio event loop.
         """
+        if self.last_item_sent:
+            return
         self.last_item_sent = True
         await self.put(self.END_MESSAGE, synchronous, check_last_item_sent=False)
 
