@@ -337,7 +337,6 @@ class DataDrivenChatSession(RunTarget):
         # Close any objects on sly data that can be closed.
         await self.close_sly_data()
 
-
     async def delete_resources(self):
         """
         Frees up any service-side resources.
