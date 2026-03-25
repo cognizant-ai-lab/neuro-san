@@ -149,29 +149,33 @@ class RunContextRunnable(NeuroSanRunnable):
         backtrace: str = None
         while chain_result is None and retries > 0:
             try:
-                print(f">>>>>>>>>>>>>>>> Invoking agent chain with inputs: {inputs}")
                 chain_result: Dict[str, Any] = await self.agent_chain.ainvoke(input=inputs, config=runnable_config)
             except API_ERROR_TYPES as api_error:
-                print(f">>>>>>>>>>>>>>>> API error: {api_error}")
                 backtrace = traceback.format_exc()
                 message: str = None
                 if not ApiKeyErrorCheck.check_for_internal_error(backtrace):
                     # Does not look like internal LLM stack error:
                     message = ApiKeyErrorCheck.check_for_api_key_exception(api_error)
                 if message is not None:
-                    raise ValueError(message) from api_error
+                    # Construct a uniform message to return to the client
+                    # indicating that they likely have an API key problem,
+                    # rather than retrying and hitting the same error again.
+                    exception = None
+                    backtrace = None
+                    chain_result = {
+                        "output": message
+                    }
+                    break
                 # Continue with regular retry logic:
                 self.logger.warning("retrying from %s", api_error.__class__.__name__)
                 retries = retries - 1
                 exception = api_error
             except KeyError as key_error:
-                print(f">>>>>>>>>>>>>>>> Key error: {key_error}")
                 self.logger.warning("retrying from KeyError")
                 retries = retries - 1
                 exception = key_error
                 backtrace = traceback.format_exc()
             except ValueError as value_error:
-                print(f">>>>>>>>>>>>>>>> Value error: {value_error}")
                 response = str(value_error)
                 find_string = "An output parsing error occurred. " + \
                               "In order to pass this error back to the agent and have it try again, " + \
