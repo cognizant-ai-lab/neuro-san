@@ -191,7 +191,7 @@ class LangChainRunContext(RunContext):
     def create_agent_with_fallbacks(self, instructions: str) -> Runnable:
         """
         Creates an agent with potential fallback llms to use.
-        :param prompt_template: The ChatPromptTemplate to use for the agent
+        :param instructions: The instructions to use for the agent
         :return: An Agent (Runnable)
         """
         # Initialize our return value
@@ -233,7 +233,7 @@ class LangChainRunContext(RunContext):
     def create_agent(self, instructions: str, llm: BaseLanguageModel) -> Runnable:
         """
         Creates an agent.
-        :param prompt_template: The ChatPromptTemplate to use for the agent
+        :param instructions: The instructions to use for the agent
         :param llm: The BaseLanguageModel to use for the agent
         :return: An Agent (Runnable)
         """
