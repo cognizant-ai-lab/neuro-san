@@ -31,7 +31,6 @@ from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
-from langchain_core.messages.human import HumanMessage
 from langchain_core.runnables.base import Runnable
 from langchain_core.runnables.utils import Input
 from langchain_core.runnables.utils import Output

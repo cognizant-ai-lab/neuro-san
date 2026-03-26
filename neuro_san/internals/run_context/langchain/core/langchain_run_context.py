@@ -17,7 +17,6 @@
 from typing import Any
 from typing import Dict
 from typing import List
-from typing import Tuple
 from typing import Union
 
 import json
@@ -35,7 +34,6 @@ from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.human import HumanMessage
 from langchain_core.messages.system import SystemMessage
-from langchain_core.prompts.chat import ChatPromptTemplate
 from langchain_core.runnables.base import Runnable
 from langchain_core.runnables.passthrough import RunnablePassthrough
 from langchain_core.tools.base import BaseTool
