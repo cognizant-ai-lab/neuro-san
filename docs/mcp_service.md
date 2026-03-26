@@ -270,7 +270,7 @@ Server response body:
         "tools": [
           {
             "name": "hello_world",
-            "description": "\nI can help you to make a terse anouncement.\nTell me what your target audience is, and what sentiment you would like to relate.\n",
+            "description": "\nI can help you to make a terse announcement.\nTell me what your target audience is, and what sentiment you would like to relate.\n",
             "inputSchema": {
               "type": "object",
               "properties": {

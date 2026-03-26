@@ -253,14 +253,21 @@ class DataDrivenChatSession(RunTarget):
         chat_context: Dict[str, Any] = self.original_input_message.chat_context
 
         if self.front_man is None:
-            await self.set_up(self.invocation_context, sly_data, chat_context)
+            try:
+                await self.set_up(self.invocation_context, sly_data, chat_context)
+            except ValueError as exc:
+                # This can happen if we have problems with LLM clients API keys:
+                # Construct a message to send back to the client with the error information.
+                message = AgentFrameworkMessage(content=str(exc))
+                await self.finalize_run(message)
+                return message
 
         # If we are invoked as an event, tell the caller that it's OK to disconnect early.
         # By definition, they are not expecting a custom response.
         if self.invocation_context.get_effective_invocation() == "event":
             empty: Dict[str, Any] = {}
             event_acknowledge = AgentFrameworkMessage(content="Event acknowledged", chat_context=empty)
-            await self.send_last_message(event_acknowledge)
+            await self.finalize_run(event_acknowledge)
 
         # Actually run the chat and save information about it
         chat_messages: Iterator[Dict[str, Any]] = await self.chat(user_input, self.invocation_context, sly_data)
@@ -298,7 +305,40 @@ class DataDrivenChatSession(RunTarget):
         # at the end of the tracing context.
         message = AgentFrameworkMessage(content=answer, chat_context=return_chat_context,
                                         sly_data=return_sly_data, structure=structure)
-        await self.send_last_message(message)
+        await self.finalize_run(message)
+
+        # Bogus output, but need something for interface
+        outputs: AgentFrameworkMessage = inputs
+        return outputs
+
+    async def finalize_run(self, message: BaseMessage):
+        """
+        This is a method that publishes the resulting message of the run
+        and performs necessary finalization steps for run resources.
+
+        :param message: The final message delivered from the run.
+        :return: Nothing.
+        """
+        if self.last_message_sent:
+            return
+        self.last_message_sent = True
+
+        # Use the interceptor to write the final message.
+        # This guy wraps the journal from the invocation context and listens to the
+        # messages coming across, which allows us to report to the tracing infrastructure
+        # at the end of the tracing context.
+        await self.interceptor.write_message(message, origin=None)
+
+        # Put an end-marker on the queue to tell the consumer we truly are done
+        # and it doesn't need to wait for any more messages.
+        # The consumer await-s for queue.get()
+        queue: AsyncCollatingQueue = self.invocation_context.get_queue()
+
+        # The synchronous=True is necessary when an async HTTP request is at the get()-ing end of the queue,
+        # as the journal messages come from inside a separate event loop from that request. The lock
+        # taken here ends up being harmless in the synchronous request case (like for gRPC) because
+        # we would only be blocking our own event loop.
+        await queue.put_final_item(synchronous=True)
 
         # Now that we are done, tell the Reservationist that we used for this request
         # that there will be no more Reservations to corral.
@@ -308,10 +348,6 @@ class DataDrivenChatSession(RunTarget):
 
         # Close any objects on sly data that can be closed.
         await self.close_sly_data()
-
-        # Bogus output, but need something for interface
-        outputs: AgentFrameworkMessage = inputs
-        return outputs
 
     async def delete_resources(self):
         """
@@ -412,24 +448,3 @@ class DataDrivenChatSession(RunTarget):
             logger: Logger = getLogger(self.__class__.__name__)
             logger.error("Unable to close() %s", description)
             logger.error(traceback.format_exc())
-
-    async def send_last_message(self, message: AgentFrameworkMessage):
-        """
-        Send the last message to the client and signal that the queue is closed.
-        """
-        if self.last_message_sent:
-            return
-        self.last_message_sent = True
-
-        await self.interceptor.write_message(message, origin=None)
-
-        # Put an end-marker on the queue to tell the consumer we truly are done
-        # and it doesn't need to wait for any more messages.
-        # The consumer await-s for queue.get()
-        queue: AsyncCollatingQueue = self.invocation_context.get_queue()
-
-        # The synchronous=True is necessary when an async HTTP request is at the get()-ing end of the queue,
-        # as the journal messages come from inside a separate event loop from that request. The lock
-        # taken here ends up being harmless in the synchronous request case (like for gRPC) because
-        # we would only be blocking our own event loop.
-        await queue.put_final_item(synchronous=True)
