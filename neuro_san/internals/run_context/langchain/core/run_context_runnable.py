@@ -158,7 +158,18 @@ class RunContextRunnable(NeuroSanRunnable):
                     # Does not look like internal LLM stack error:
                     message = ApiKeyErrorCheck.check_for_api_key_exception(api_error)
                 if message is not None:
-                    raise ValueError(message) from api_error
+                    # Construct a uniform message to return to the client
+                    # indicating that they likely have an API key problem,
+                    # rather than retrying and hitting the same error again.
+                    exception = None
+                    backtrace = None
+                    chain_result = {
+                        "output": message
+                    }
+                    # Log the error with technical details for debugging purposes,
+                    # but we are returning a more user-friendly message to the client.
+                    self.logger.error("API KEY error detected: %s", str(api_error))
+                    break
                 # Continue with regular retry logic:
                 self.logger.warning("retrying from %s", api_error.__class__.__name__)
                 retries = retries - 1
