@@ -14,7 +14,7 @@ Synchronous connection:
 * HttpServiceAgentSession
 
 It also uses the DirectAgentSession to call the neuro-san infrastructure as a library.
-There are async version of all of the above as well.
+There are async versions of all of the above as well.
 
 ## Other clients
 
@@ -42,7 +42,7 @@ returns:
     ```json
     {
         "function": {
-            "description": "\nI can help you to make a terse anouncement.\nTell me what your target audience is, and what
+            "description": "\nI can help you to make a terse announcement.\nTell me what your target audience is, and what
             sentiment you would like to relate.\n"
         }
     }
@@ -115,8 +115,8 @@ This can be used to add context to the conversation that is not visible to the c
 The field you want to fill is called "sly_data". It is a dictionary of key-value pairs that can
 be different for each agent.
 
-As above, you can specify the agent name in the route. We will use a differnet sample agent
-called "math_guy" who is a simple calculartor agent that takes operands in the sly_data and
+As above, you can specify the agent name in the route. We will use a different sample agent
+called "math_guy" who is a simple calculator agent that takes operands in the sly_data and
 the name of the operator in the regular chat stream. The result also comes back in the sly_data:
 
     curl --request POST --url localhost:8080/api/v1/math_guy/streaming_chat --data '{
