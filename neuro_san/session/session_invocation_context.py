@@ -55,7 +55,8 @@ class SessionInvocationContext(InvocationContext):
                  toolbox_factory: ContextTypeToolboxFactory = None,
                  metadata: Dict[str, str] = None,
                  reservationist: Reservationist = None,
-                 port: int = None):
+                 port: int = None,
+                 effective_invocation: str = "chatbot"):
         """
         Constructor
 
@@ -71,6 +72,7 @@ class SessionInvocationContext(InvocationContext):
                          dictionary of string keys to string values.
         :param reservationist: The Reservationist instance to use.
         :param port: The port on which the server was started
+        :param effective_invocation: A string representing the effective invocation of the session.
         """
 
         # From args
@@ -82,6 +84,7 @@ class SessionInvocationContext(InvocationContext):
         self.metadata: Dict[str, str] = metadata
         self.reservationist: Reservationist = reservationist
         self.port: int = port
+        self.effective_invocation: str = effective_invocation
 
         # Internal
         # Get an async executor to run all tasks for this session instance:
@@ -108,6 +111,12 @@ class SessionInvocationContext(InvocationContext):
         # Run logging setup as event-loop initialization step -
         # make sure it is finished before we start to use this AsyncioExecutor instance.
         self.asyncio_executor.initialize(logging_setup)
+
+    def get_effective_invocation(self) -> str:
+        """
+        :return: The effective invocation of the session
+        """
+        return self.effective_invocation
 
     def get_async_session_factory(self) -> AsyncAgentSessionFactory:
         """
@@ -203,6 +212,7 @@ class SessionInvocationContext(InvocationContext):
         # to DirectAgentSession do not properly carry forward any memory of the conversation
         # in subsequent interactions with the same network.
         self.origination.reset()
+        self.queue.reset()
 
     def safe_shallow_copy(self) -> SessionInvocationContext:
         """

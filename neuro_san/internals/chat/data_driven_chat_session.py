@@ -86,6 +86,7 @@ class DataDrivenChatSession(RunTarget):
         self.invocation_context: InvocationContext = None
         self.interceptor: InterceptingJournal = None
         self.original_input_message: AgentFrameworkMessage = None
+        self.last_message_sent: bool = False
 
     async def set_up(self, invocation_context: InvocationContext,
                      sly_data: Dict[str, Any] = None,
@@ -261,7 +262,14 @@ class DataDrivenChatSession(RunTarget):
                 await self.finalize_run(message)
                 return message
 
-        # Save information about chat
+        # If we are invoked as an event, tell the caller that it's OK to disconnect early.
+        # By definition, they are not expecting a custom response.
+        if self.invocation_context.get_effective_invocation() == "event":
+            empty: Dict[str, Any] = {}
+            event_acknowledge = AgentFrameworkMessage(content="Event acknowledged", chat_context=empty)
+            await self.finalize_run(event_acknowledge)
+
+        # Actually run the chat and save information about it
         chat_messages: Iterator[Dict[str, Any]] = await self.chat(user_input, self.invocation_context, sly_data)
         message_list: List[Dict[str, Any]] = list(chat_messages)
 
@@ -311,6 +319,10 @@ class DataDrivenChatSession(RunTarget):
         :param message: The final message delivered from the run.
         :return: Nothing.
         """
+        if self.last_message_sent:
+            return
+        self.last_message_sent = True
+
         # Use the interceptor to write the final message.
         # This guy wraps the journal from the invocation context and listens to the
         # messages coming across, which allows us to report to the tracing infrastructure
