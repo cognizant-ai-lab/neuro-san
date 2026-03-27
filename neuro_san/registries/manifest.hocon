@@ -81,6 +81,7 @@
 
     # Reservations example
     "copy_cat.hocon": true,
+    "copy_cat_middleware.hocon": true,
 
     # Agents having to do with MCP
     # These 2 agents are examples of calling MCP tools using string and dictionary format, respectively.

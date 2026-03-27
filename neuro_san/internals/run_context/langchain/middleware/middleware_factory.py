@@ -28,10 +28,12 @@ from langchain_core.messages import BaseMessage
 
 from leaf_common.config.resolver_util import ResolverUtil
 
+from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.originating_journal import OriginatingJournal
 from neuro_san.internals.journals.progress_journal import ProgressJournal
 from neuro_san.internals.messages.origination import Origination
+from neuro_san.internals.reservations.accumulating_agent_reservationist import AccumulatingAgentReservationist
 
 # We don't want to drag in langgraph as a dependency, but we will allow Checkpointers from there.
 Checkpointer: Type = Any
@@ -160,6 +162,11 @@ Check these things:
         tool_name_for_class: str = class_name.split(".")[-1]
         origination: Origination = self.invocation_context.get_origination()
         middleware_origin: List[Dict[str, Any]] = origination.add_spec_name_to_origin(self.origin, tool_name_for_class)
+        middleware_origin_str: str = Origination.get_full_name_from_origin(middleware_origin)
+        real_reservationist: Reservationist = self.invocation_context.get_reservationist()
+        reservationist: Reservationist = None
+        if real_reservationist is not None:
+            reservationist = AccumulatingAgentReservationist(real_reservationist, middleware_origin_str)
 
         # Prepare the args for the class
         empty: Dict[str, Any] = {}
@@ -169,7 +176,9 @@ Check these things:
         if "origin" in args:
             args["origin"] = middleware_origin
         if "origin_str" in args:
-            args["origin_str"] = Origination.get_full_name_from_origin(middleware_origin)
+            args["origin_str"] = middleware_origin_str
+        if "reservationist" in args:
+            args["reservationist"] = reservationist
         if "sly_data" in args:
             args["sly_data"] = sly_data
         if "chat_history" in args:
