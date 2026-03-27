@@ -14,7 +14,8 @@
 #
 # END COPYRIGHT
 
-import json
+from json import JSONDecodeError
+from json import loads
 from logging import getLogger
 from logging import Logger
 from typing import Any
@@ -26,7 +27,6 @@ from langchain.agents.middleware import AgentState
 from langchain_core.messages import AIMessage
 
 from neuro_san import REGISTRIES_DIR
-from neuro_san.interfaces.reservation import Reservation
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -73,7 +73,7 @@ class NetworkCopyMiddleware(AgentMiddleware):
         self,
         state: AgentState,
         runtime: Any
-    ) -> dict[str, Any] | None:
+    ) -> Dict[str, Any] | None:
         """
         Copy the agent network provided by the model's response.
 
@@ -82,48 +82,36 @@ class NetworkCopyMiddleware(AgentMiddleware):
         :return: Dict with error message and jump directive, or None if valid
         """
         response: str = state.get("messages")[-1].content
-        args: Dict[str, str] = json.loads(response)
 
-        copy_agent: str = args.get("agent_name")
-        if copy_agent is None or len(copy_agent) == 0:
-            return "Need a non-empty value for copy_agent"
+        agent_name: str = self._parse_agent_name(response)
+        if agent_name is None:
+            return self._agent_response("Please provide the name of the network to copy.")
 
-        # Make sure we have a hocon file reference
-        if not copy_agent.endswith(".hocon"):
-            copy_agent = f"{copy_agent}.hocon"
+        network: AgentNetwork = self._restore_network(agent_name)
+        if not network:
+            self.logger.error("Cannot find agent %s", agent_name)
+            return self._agent_response(
+                f"Cannot find agent {agent_name}. "
+                "Please provide a valid name of the network to copy."
+            )
 
-        # Remove the .hocon suffix for this string
-        use_agent_name: str = copy_agent[:-6]
-
-        # Restore the given agent network to find its spec dictionary
-        copy_file: str = REGISTRIES_DIR.get_file_in_basis(copy_agent)
-        restorer = AgentNetworkRestorer()
-        network: AgentNetwork = restorer.restore(file_reference=copy_file)
-        my_agent_spec: Dict[str, Any] = network.get_config()
-
-        # Creating Reservations can be done outside the with-statement
         lifetime_in_seconds: float = 5 * 60.0
-
-        self.logger.info("Creating temporary network from %s", use_agent_name)
-        reservation: Reservation = None
-        error: str = None
+        self.logger.info("Creating temporary network from %s", agent_name)
         reservation, error = await ReservationUtil.wait_for_one(
             {"reservationist": self.reservationist},
-            my_agent_spec,
+            network.get_config(),
             lifetime_in_seconds,
-            prefix=f"copy_cat-{use_agent_name}"
+            prefix=f"copy_cat-{agent_name}"
         )
 
         if error is not None:
             self.logger.error("Error: %s", error)
-            return error
+            return self._agent_response(f"Got the following error: {error}.")
 
-        # Get info from the reservation
         reservation_id: str = reservation.get_reservation_id()
-        lifetime_in_seconds: float = reservation.get_lifetime_in_seconds()
-        self.logger.info("Successfully create tempory network %s", reservation_id)
+        lifetime_in_seconds = reservation.get_lifetime_in_seconds()
+        self.logger.info("Successfully created temporary network %s", reservation_id)
 
-        # Put the output in sly_data for less LLM "telephone" interference
         self.sly_data["agent_reservations"] = [
             {
                 "reservation_id": reservation_id,
@@ -132,12 +120,43 @@ class NetworkCopyMiddleware(AgentMiddleware):
             }
         ]
 
-        # Return message to provide the agent name and lifetime
-        return {
-            "messages": [
-                AIMessage(
-                    f"The temporary agent name is {reservation_id}. "
-                    f"Hurry, it's only available for {lifetime_in_seconds} seconds."
-                )
-            ]
-        }
+        return self._agent_response(
+            f"The temporary agent name is {reservation_id}. "
+            f"Hurry, it's only available for {lifetime_in_seconds} seconds."
+        )
+
+    def _agent_response(self, message: str) -> Dict[str, Any]:
+        """Return an agent response dict with the given message."""
+        return {"messages": [AIMessage(message)]}
+
+    def _parse_agent_name(self, response: str) -> str | None:
+        """
+        Parse the model response JSON and extract the agent name.
+
+        :param response: Raw model response string
+        :return: The agent name, or None if parsing/validation fails
+        """
+        try:
+            args: Dict[str, str] = loads(response)
+        except JSONDecodeError as json_error:
+            self.logger.error("Cannot parse '%s' into JSON format. Got %s", response, json_error)
+            return None
+
+        agent_name: str = args.get("agent_name")
+        if not agent_name:
+            self.logger.error("Need a non-empty value for agent name to copy")
+            return None
+
+        return agent_name
+
+    def _restore_network(self, agent_name: str) -> AgentNetwork | None:
+        """
+        Restore an agent network from the registry by name.
+
+        :param agent_name: Agent name (with or without .hocon suffix)
+        :return: The restored AgentNetwork, or None if not found
+        """
+        hocon_name: str = agent_name if agent_name.endswith(".hocon") else f"{agent_name}.hocon"
+        copy_file: str = REGISTRIES_DIR.get_file_in_basis(hocon_name)
+        restorer = AgentNetworkRestorer()
+        return restorer.restore(file_reference=copy_file)
