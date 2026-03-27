@@ -120,7 +120,8 @@ class MiddlewareFactory:
 
         return middleware, checkpointer
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-positional-arguments
     def create_class(self, what_we_are_creating: str, create_type: Type[Any],
                      config: Dict[str, Any], sly_data: Dict[str, Any], index: int) -> Any:
         """
@@ -130,24 +131,49 @@ class MiddlewareFactory:
         :param create_type: The type of class to create.
         :param config: A dictionary containing specific class configurations.
         :param sly_data: The private sly_data dictionary for the agent invocation.
+        :param index: The index of the class in the config.
         :return: An instance of the class or None if class creation fails.
         """
-        created_class: Type[create_type] = None
+        error_context: str = self._build_error_context(what_we_are_creating, index)
 
+        class_name: str = self._get_class_name(config, error_context)
+        if class_name is None:
+            return None
+
+        created_class = self._resolve_class(class_name, error_context, create_type)
+
+        middleware_origin, middleware_origin_str, reservationist = self._prepare_middleware_context(class_name)
+
+        args: Dict[str, Any] = self._prepare_args(
+            config, sly_data, middleware_origin, middleware_origin_str, reservationist)
+
+        return self._instantiate_class(created_class, args, what_we_are_creating, class_name)
+
+    def _build_error_context(self, what_we_are_creating: str, index: int) -> str:
+        """Build a descriptive error context string."""
         origin_str: str = Origination.get_full_name_from_origin(self.origin)
-        error_context: str = f"{what_we_are_creating} at index {index} of {origin_str}"
+        return f"{what_we_are_creating} at index {index} of {origin_str}"
+
+    def _get_class_name(self, config: Dict[str, Any], error_context: str) -> str:
+        """
+        Validate config and extract the class name.
+        :return: The class name, or None if config is invalid.
+        """
         if not isinstance(config, Dict):
             self.logger.warning("%s is missing a configuration dictionary. Skipping it.", error_context)
-            return created_class
+            return None
 
         class_name: str = config.get("class")
         if class_name is None:
             self.logger.warning("%s is missing the 'class' field. Skipping it.", error_context)
-            return created_class
+            return None
 
-        # Resolve the class
+        return class_name
+
+    def _resolve_class(self, class_name: str, error_context: str, create_type: Type[Any]) -> Type[Any]:
+        """Resolve and return the class from the class name."""
         try:
-            created_class = ResolverUtil.create_class(class_name, error_context, create_type)
+            return ResolverUtil.create_class(class_name, error_context, create_type)
         except ValueError as exception:
             message = f"""
 Problems loading class {class_name}: {str(exception)}
@@ -158,31 +184,45 @@ Check these things:
             self.logger.error(message)
             raise ValueError(message) from exception
 
-        # Prepare a new origin for the middleware
+    def _prepare_middleware_context(self, class_name: str) \
+            -> Tuple[List[Dict[str, Any]], str, Reservationist]:
+        """
+        Prepare the origin and reservationist for the middleware.
+        :return: A tuple of (middleware_origin, middleware_origin_str, reservationist).
+        """
         tool_name_for_class: str = class_name.split(".")[-1]
         origination: Origination = self.invocation_context.get_origination()
         middleware_origin: List[Dict[str, Any]] = origination.add_spec_name_to_origin(self.origin, tool_name_for_class)
         middleware_origin_str: str = Origination.get_full_name_from_origin(middleware_origin)
+
         real_reservationist: Reservationist = self.invocation_context.get_reservationist()
         reservationist: Reservationist = None
         if real_reservationist is not None:
             reservationist = AccumulatingAgentReservationist(real_reservationist, middleware_origin_str)
 
-        # Prepare the args for the class
-        empty: Dict[str, Any] = {}
-        args: Dict[str, Any] = config.get("args", empty)
+        return middleware_origin, middleware_origin_str, reservationist
 
-        # Special args keys that have data coming in from the agent framework.
-        if "origin" in args:
-            args["origin"] = middleware_origin
-        if "origin_str" in args:
-            args["origin_str"] = middleware_origin_str
-        if "reservationist" in args:
-            args["reservationist"] = reservationist
-        if "sly_data" in args:
-            args["sly_data"] = sly_data
-        if "chat_history" in args:
-            args["chat_history"] = self.chat_history
+    def _prepare_args(self, config: Dict[str, Any], sly_data: Dict[str, Any],
+                      middleware_origin: List[Dict[str, Any]],
+                      middleware_origin_str: str, reservationist: Reservationist) -> Dict[str, Any]:
+        """
+        Prepare the args dict, injecting framework-provided values for special keys.
+        """
+        args: Dict[str, Any] = config.get("args", {})
+
+        # Map of special arg keys to their framework-provided values.
+        special_args: Dict[str, Any] = {
+            "origin": middleware_origin,
+            "origin_str": middleware_origin_str,
+            "reservationist": reservationist,
+            "sly_data": sly_data,
+            "chat_history": self.chat_history,
+        }
+        for key, value in special_args.items():
+            if key in args:
+                args[key] = value
+
+        # Journal-based args require lazy creation of the journal.
         if "journal" in args or "progress_reporter" in args:
             journal = OriginatingJournal(self.invocation_context.get_journal(), middleware_origin)
             if "journal" in args:
@@ -190,9 +230,13 @@ Check these things:
             if "progress_reporter" in args:
                 args["progress_reporter"] = ProgressJournal(journal)
 
-        # Actually create the class instance
+        return args
+
+    def _instantiate_class(self, created_class: Type[Any], args: Dict[str, Any],
+                           what_we_are_creating: str, class_name: str) -> AgentMiddleware:
+        """Instantiate the resolved class with the prepared args."""
         try:
-            class_instance = created_class(**args)
+            return created_class(**args)
         except TypeError as exception:
             message = f"""
 Problems creating {what_we_are_creating} instance of {class_name}: {str(exception)}
@@ -203,5 +247,3 @@ Check these things:
 """
             self.logger.error(message)
             raise ValueError(message) from exception
-
-        return class_instance
