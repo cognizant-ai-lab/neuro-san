@@ -49,6 +49,8 @@ class LangChainToolCall(ToolCall):
         self.args = args
         self.id: str = f"tool_call_{run_id}_{uuid.uuid4()}"
         self.invocation: str = invocation
+        if invocation is None:
+            self.invocation = "chatbot"
 
     def get_id(self) -> str:
         """
