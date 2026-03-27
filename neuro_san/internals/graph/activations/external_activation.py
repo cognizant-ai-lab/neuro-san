@@ -62,7 +62,8 @@ class ExternalActivation(AbstractCallableActivation):
                  agent_url: str,
                  arguments: Dict[str, Any],
                  sly_data: Dict[str, Any],
-                 allow_from_downstream: Dict[str, Any]):
+                 allow_from_downstream: Dict[str, Any],
+                 invocation: str):
         """
         Constructor
 
@@ -80,6 +81,7 @@ class ExternalActivation(AbstractCallableActivation):
                  invoke() method.
         :param allow_from_downstream: A dictionary describing how to handle information
                 coming in from the downstream external agent
+        :param invocation: The sytle of the invocation
         """
         # There is no spec on our end for the agent_tool_spec
         # Also worth noting that normally, sly_data is shared between all tools
@@ -96,6 +98,7 @@ class ExternalActivation(AbstractCallableActivation):
         self.session: AsyncAgentSession = None
         self.chat_context: Dict[str, Any] = None
         self.processor = BasicMessageProcessor()
+        self.invocation: str = invocation
 
         # Allow for precedence of keys from "allow.from_downstream" in the agent spec.
         extractor = DictionaryExtractor(self.allow_from_downstream)
