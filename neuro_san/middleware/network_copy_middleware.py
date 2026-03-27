@@ -147,6 +147,9 @@ class NetworkCopyMiddleware(AgentMiddleware):
             self.logger.error("Need a non-empty value for agent name to copy")
             return None
 
+        if agent_name.endswith(".hocon"):
+            agent_name = agent_name[:-6]
+
         return agent_name
 
     def _restore_network(self, agent_name: str) -> AgentNetwork | None:
@@ -156,7 +159,7 @@ class NetworkCopyMiddleware(AgentMiddleware):
         :param agent_name: Agent name (with or without .hocon suffix)
         :return: The restored AgentNetwork, or None if not found
         """
-        hocon_name: str = agent_name if agent_name.endswith(".hocon") else f"{agent_name}.hocon"
+        hocon_name: str = f"{agent_name}.hocon"
         copy_file: str = REGISTRIES_DIR.get_file_in_basis(hocon_name)
         restorer = AgentNetworkRestorer()
         return restorer.restore(file_reference=copy_file)
