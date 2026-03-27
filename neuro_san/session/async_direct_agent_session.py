@@ -17,7 +17,7 @@
 
 from typing import Any
 from typing import Dict
-from typing import Generator
+from typing import AsyncGenerator
 from typing import List
 
 from asyncio import Future
@@ -141,7 +141,7 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         return response_dict
 
     # pylint: disable=too-many-locals,too-many-statements,too-many-branches
-    async def streaming_chat(self, request_dict: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:
+    async def streaming_chat(self, request_dict: Dict[str, Any]) -> AsyncGenerator[Dict[str, Any], None]:
         """
         :param request_dict: A dictionary version of the ChatRequest
                     protobufs structure. Has the following keys:
@@ -165,8 +165,7 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         chat_session = DataDrivenChatSession(agent_network=self.agent_network)
 
         # Prepare the response dictionary
-        template_response_dict = {
-        }
+        template_response_dict: Dict[str, Any] = {}
 
         if chat_session is None or user_input is None:
             # Can't go on to chat, so report back early with a single value.

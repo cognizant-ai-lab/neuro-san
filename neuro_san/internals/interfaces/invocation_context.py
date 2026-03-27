@@ -43,6 +43,12 @@ class InvocationContext:
         """
         raise NotImplementedError
 
+    def get_effective_invocation(self) -> str:
+        """
+        :return: The effective invocation of the session
+        """
+        raise NotImplementedError
+
     def get_async_session_factory(self) -> AsyncAgentSessionFactory:
         """
         :return: The AsyncAgentSessionFactory associated with the invocation
