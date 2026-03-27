@@ -27,7 +27,7 @@
     "timeout_in_seconds": 30,
     
     # success_ratio is useful for passing to the assessor to find out why
-    # a test is intermitently failing. Sometimes it's the agent prompt, but
+    # a test is intermittently failing. Sometimes it's the agent prompt, but
     # sometimes it's the test itself.
     "success_ratio": "1/1",
     
@@ -36,11 +36,11 @@
  
     "interactions": [
         {
-            # Interaction 1: Create a temp network by copying hello_world
+            # Create a temp network by copying hello_world
             "text": "Copy the hello_world agent",
             "response": {
                 "text": {
-                    "gist": ["The response should contain the tempory agent name starting with 'copy_cat-hello_world', and the amount of time the network is available for."]
+                    "gist": ["The response should contain the temporary agent name starting with 'copy_cat-hello_world', and the amount of time the network is available for."]
                 },
                 "sly_data": {
                     "agent_reservations": {

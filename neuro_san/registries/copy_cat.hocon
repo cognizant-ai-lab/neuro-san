@@ -72,7 +72,7 @@ with this agent. By convention, the last one in the list is a top-level handle w
                                 "type": "object",
                                 "properties": {
                                     "reservation_id": {
-                                        "type": "string"
+                                        "type": "string",
                                         "description": """
 The unique identifier of the reserved temporary agent network.
 This can be used to invoke the newly created network later on the same server/cluster.
@@ -91,11 +91,12 @@ The number of seconds since the epoch (Jan 1, 1970) when the reservation will ex
 After this time the network can no longer be counted upon to exist.
 """
                                     } 
-                                }
+                                },
+                                "required": ["reservation_id", "lifetime_in_seconds", "expiration_time_in_seconds"]
                             }
                         }
                     },
-                    "required": ["reservation_id", "lifetime_in_seconds", "expiration_time_in_seconds"]
+                    "required": ["agent_reservations"]
                 }
             },
 
