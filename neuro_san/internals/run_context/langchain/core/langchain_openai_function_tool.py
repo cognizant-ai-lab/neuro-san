@@ -215,7 +215,7 @@ It's function_json is described thusly:
             converter = PydanticArgumentDictionaryConverter()
             kwargs = converter.to_dict(kwargs)
 
-            initial_run = LangChainRun("tool_base", [""], self.name, kwargs)
+            initial_run = LangChainRun("tool_base", [""], self.name, kwargs, invocation=self.invocation)
             run = await self.tool_caller.make_tool_function_calls(initial_run)
 
         # pylint: disable=broad-exception-caught
