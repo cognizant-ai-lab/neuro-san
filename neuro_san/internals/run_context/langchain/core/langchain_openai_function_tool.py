@@ -79,6 +79,8 @@ class LangChainOpenAIFunctionTool(BaseTool):
 
     tool_caller: Optional[ToolCaller] = None
 
+    invocation: Optional[str] = None
+
     @staticmethod
     def verify_function_json(function_json: Dict[str, Any]):
         """
