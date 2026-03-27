@@ -17,6 +17,7 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Tuple
 from typing import Type
 
@@ -154,7 +155,7 @@ class MiddlewareFactory:
         origin_str: str = Origination.get_full_name_from_origin(self.origin)
         return f"{what_we_are_creating} at index {index} of {origin_str}"
 
-    def _get_class_name(self, config: Dict[str, Any], error_context: str) -> str:
+    def _get_class_name(self, config: Dict[str, Any], error_context: str) -> Optional[str]:
         """
         Validate config and extract the class name.
         :return: The class name, or None if config is invalid.

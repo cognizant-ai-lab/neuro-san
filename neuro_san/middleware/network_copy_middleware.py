@@ -143,8 +143,8 @@ class NetworkCopyMiddleware(AgentMiddleware):
             return None
 
         agent_name: str = args.get("agent_name")
-        if not agent_name:
-            self.logger.error("Need a non-empty value for agent name to copy")
+        if not agent_name or not isinstance(agent_name, str):
+            self.logger.error("Need a non-empty string for agent name")
             return None
 
         if agent_name.endswith(".hocon"):
