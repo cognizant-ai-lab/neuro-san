@@ -208,7 +208,7 @@ Check these things:
         """
         Prepare the args dict, injecting framework-provided values for special keys.
         """
-        args: Dict[str, Any] = config.get("args", {})
+        args: Dict[str, Any] = dict(config.get("args", {}))
 
         # Map of special arg keys to their framework-provided values.
         special_args: Dict[str, Any] = {
