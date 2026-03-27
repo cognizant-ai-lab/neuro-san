@@ -159,7 +159,7 @@ class MiddlewareFactory:
         Validate config and extract the class name.
         :return: The class name, or None if config is invalid.
         """
-        if not isinstance(config, Dict):
+        if not isinstance(config, dict):
             self.logger.warning("%s is missing a configuration dictionary. Skipping it.", error_context)
             return None
 
