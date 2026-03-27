@@ -31,7 +31,6 @@ from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
-from langchain_core.messages.human import HumanMessage
 from langchain_core.runnables.base import Runnable
 from langchain_core.runnables.utils import Input
 from langchain_core.runnables.utils import Output
@@ -97,10 +96,6 @@ class RunContextRunnable(NeuroSanRunnable):
         # as input.
         agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
 
-        verbose: Union[bool, str] = agent_spec.get("verbose", False)
-        if isinstance(verbose, str):
-            verbose = bool(verbose.lower() in ("true", "extra", "logging"))
-
         max_execution_seconds: float = agent_spec.get("max_execution_seconds", 2.0 * MINUTES)
 
         # Per advice from https://python.langchain.com/docs/how_to/migrate_agent/#max_iterations
@@ -118,17 +113,13 @@ class RunContextRunnable(NeuroSanRunnable):
         # Consult the agent spec for level of verbosity as it pertains to callbacks.
         agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
         verbose: Union[bool, str] = agent_spec.get("verbose", False)
-        if isinstance(verbose, str) and verbose.lower() in ("extra", "logging"):
+        if isinstance(verbose, str) and verbose.lower() in ("true", "extra", "logging"):
             # This particular class adds a *lot* of very detailed messages
             # to the logs.  Add this because some people are interested in it.
             callbacks.append(LoggingCallbackHandler(self.logger))
 
         runnable_config: Dict[str, Any] = self.prepare_runnable_config(callbacks=callbacks,
                                                                        recursion_limit=recursion_limit)
-
-        # Chat history is updated in write_message
-        recent_human_message: BaseMessage = HumanMessage(content=inputs.get("input"))
-        await self.journal.write_message(recent_human_message)
 
         # Attempt to count tokens/costs while invoking the agent.
         token_counter = LangChainTokenCounter(self.primary_llm, self.invocation_context, self.journal, self.origin)
