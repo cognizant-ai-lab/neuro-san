@@ -91,10 +91,10 @@ The number of seconds since the epoch (Jan 1, 1970) when the reservation will ex
 After this time the network can no longer be counted upon to exist.
 """
                                     } 
-                                },
+                                }
                             }
                         }
-                    },
+                    }
                 }
             },
 
