@@ -107,6 +107,9 @@ Always answer with a JSON message that has one key, "agent_name" which is the na
             "middleware": [
                 {
                     "class": "neuro_san.middleware.network_copy_middleware.NetworkCopyMiddleware",
+                    "allow": {
+                        "reservations": true
+                    },
                     "args": {
                         # "reservationist" is required to create temporary networks
                         "reservationist": true,

@@ -28,6 +28,7 @@ from langchain.agents.middleware.types import AgentMiddleware
 from langchain_core.messages import BaseMessage
 
 from leaf_common.config.resolver_util import ResolverUtil
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
@@ -141,9 +142,9 @@ class MiddlewareFactory:
         if class_name is None:
             return None
 
-        created_class = self._resolve_class(class_name, error_context, create_type)
+        created_class: Type[Any] = self._resolve_class(class_name, error_context, create_type)
 
-        middleware_origin, middleware_origin_str, reservationist = self._prepare_middleware_context(class_name)
+        middleware_origin, middleware_origin_str, reservationist = self._prepare_middleware_context(class_name, config)
 
         args: Dict[str, Any] = self._prepare_args(
             config, sly_data, middleware_origin, middleware_origin_str, reservationist)
@@ -185,10 +186,12 @@ Check these things:
             self.logger.error(message)
             raise ValueError(message) from exception
 
-    def _prepare_middleware_context(self, class_name: str) \
+    def _prepare_middleware_context(self, class_name: str, config: Dict[str, Any]) \
             -> Tuple[List[Dict[str, Any]], str, Reservationist]:
         """
         Prepare the origin and reservationist for the middleware.
+        :param class_name: The class name of the middleware.
+        :param config: The middleware configuration dictionary.
         :return: A tuple of (middleware_origin, middleware_origin_str, reservationist).
         """
         tool_name_for_class: str = class_name.split(".")[-1]
@@ -196,10 +199,12 @@ Check these things:
         middleware_origin: List[Dict[str, Any]] = origination.add_spec_name_to_origin(self.origin, tool_name_for_class)
         middleware_origin_str: str = Origination.get_full_name_from_origin(middleware_origin)
 
-        real_reservationist: Reservationist = self.invocation_context.get_reservationist()
         reservationist: Reservationist = None
-        if real_reservationist is not None:
-            reservationist = AccumulatingAgentReservationist(real_reservationist, middleware_origin_str)
+        config_extractor = DictionaryExtractor(config)
+        if config_extractor.get("allow.reservations"):
+            real_reservationist: Reservationist = self.invocation_context.get_reservationist()
+            if real_reservationist is not None:
+                reservationist = AccumulatingAgentReservationist(real_reservationist, middleware_origin_str)
 
         return middleware_origin, middleware_origin_str, reservationist
 

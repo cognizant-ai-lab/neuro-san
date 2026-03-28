@@ -92,11 +92,9 @@ After this time the network can no longer be counted upon to exist.
 """
                                     } 
                                 },
-                                "required": ["reservation_id", "lifetime_in_seconds", "expiration_time_in_seconds"]
                             }
                         }
                     },
-                    "required": ["agent_reservations"]
                 }
             },
 
