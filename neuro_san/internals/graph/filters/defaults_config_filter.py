@@ -44,6 +44,9 @@ class DefaultsConfigFilter(ConfigFilter):
         "llm_config.verbose": "verbose",
         "verbose": None,
         "max_steps": None,
+        # Deprecated alias. Keep for now to avoid breaking existing networks that use it, but prefer max_steps.
+        # It should be removed in the future.
+        "max_iterations": None,
         "max_execution_seconds": None,
         "error_formatter": None,
         "error_fragments": None,
