@@ -155,8 +155,7 @@ class DirectAgentSession(AgentSession):
         chat_session = DataDrivenChatSession(agent_network=self.agent_network)
 
         # Prepare the response dictionary
-        template_response_dict = {
-        }
+        template_response_dict: Dict[str, Any] = {}
 
         if chat_session is None or user_input is None:
             # Can't go on to chat, so report back early with a single value.
