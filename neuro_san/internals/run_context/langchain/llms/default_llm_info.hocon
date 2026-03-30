@@ -1171,7 +1171,10 @@
                                             # When True, responses from ChatEngine are logged to stdout.
                                             # Can be "extra" to engage even more verbose logging from agent level.
 
-        "max_steps": 10000,                 # Agent control for how many steps can be done in one execution loop.
+        "max_iterations": 20,               # Agent control for how many iterations are done.
+                                            # People often want to increase this when there are timeouts
+                                            # and other retry-able errors due to bad network weather,
+                                            # but this is a decent default set by langchain.
 
         "max_execution_seconds": 120,       # Amount of time an agent should keep trying in retry
                                             # situations before giving up.
