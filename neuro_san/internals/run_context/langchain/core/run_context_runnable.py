@@ -112,16 +112,16 @@ class RunContextRunnable(NeuroSanRunnable):
         # Code:
         # https://github.com/langchain-ai/langchain/blob/master/libs/langchain_v1/langchain/agents/factory.py
         # https://github.com/langchain-ai/langgraph/blob/main/libs/langgraph/langgraph/pregel/_loop.py
-        max_steps: int = agent_spec.get("max_steps", 10_000)
-
-        if agent_spec.get("max_iterations") is not None:
+        max_iterations: int = agent_spec.get("max_iterations")
+        if max_iterations is not None:
             self.logger.warning(
                 "Agent config contains 'max_iterations' which is deprecated. "
                 "Please use 'max_steps' instead."
             )
-            # Only fall back to max_iterations if max_steps was not explicitly provided.
-            if "max_steps" not in agent_spec:
-                max_steps = agent_spec.get("max_iterations")
+        # Calling the parameter "max_steps" going forward to avoid confusion with the "max_iterations" parameter.
+        # Only fall back to "max_iterations" if "max_steps" was not explicitly provided.
+        # Default is 10,000 to match the default recursion limit in LangGraph.
+        max_steps: int = agent_spec.get("max_steps") or max_iterations or 10_000
 
         # Create the list of callbacks to pass when invoking
         parent_origin: List[Dict[str, Any]] = self.origin
