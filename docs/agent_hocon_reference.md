@@ -32,7 +32,7 @@ Items in ***bold*** are essentials. Try to understand these first.
     - [error_formatter](#error_formatter)
     - [error_fragments](#error_fragments)
     - [llm_info_file](#llm_info_file)
-    - [max_iterations](#max_iterations)
+    - [max_steps](#max_steps)
     - [max_execution_seconds](#max_execution_seconds)
     - [metadata](#metadata)
         - [description](#description)
@@ -73,7 +73,7 @@ Items in ***bold*** are essentials. Try to understand these first.
     - [display_as](#display_as)
     - [max_message_history](#max_message_history)
     - [verbose](#verbose-1)
-    - [max_iterations](#max_iterations-1)
+    - [max_steps](#max_steps-1)
     - [max_execution_seconds](#max_execution_seconds-1)
     - [error_formatter](#error_formatter-1)
     - [error_fragments](#error_fragments-1)
@@ -305,9 +305,9 @@ for a production environment.  It's worth noting that most of the same informati
 on verbose can also be obtained by AGENT ChatMessages returned when the client's chat_filter is set to
 MAXIMAL.
 
-### max_iterations
+### max_steps
 
-An integer controlling the max_iterations of the langchain
+An integer controlling the max_steps of the langchain
 [AgentExecutor](https://api.python.langchain.com/en/latest/agents/langchain.agents.agent.AgentExecutor.html)
 used for the agent.  Default is 20.
 
@@ -855,9 +855,9 @@ topics frequently.
 Same as top-level [verbose](#verbose), except at single-agent scope.
 
 <!--- pyml disable-next-line no-duplicate-heading -->
-### max_iterations
+### max_steps
 
-Same as top-level [max_iterations](#max_iterations), except at single-agent scope.
+Same as top-level [max_steps](#max_steps), except at single-agent scope.
 
 <!--- pyml disable-next-line no-duplicate-heading -->
 ### max_execution_seconds

@@ -43,7 +43,7 @@ class DefaultsConfigFilter(ConfigFilter):
         "llm_config": None,
         "llm_config.verbose": "verbose",
         "verbose": None,
-        "max_iterations": None,
+        "max_steps": None,
         "max_execution_seconds": None,
         "error_formatter": None,
         "error_fragments": None,

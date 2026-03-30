@@ -98,9 +98,21 @@ class RunContextRunnable(NeuroSanRunnable):
 
         max_execution_seconds: float = agent_spec.get("max_execution_seconds", 2.0 * MINUTES)
 
-        # Per advice from https://python.langchain.com/docs/how_to/migrate_agent/#max_iterations
-        max_iterations: int = agent_spec.get("max_iterations", 20)
-        recursion_limit: int = max_iterations * 2 + 1
+        # Langchain `create_agent` uses LangGraph under the hood, which has a default recursion limit of 10,000.
+        # Even though it is called "recursion limit", it is actually more of a step ("super-step") limit for
+        # the entire graph execution, which includes all calls to tools and LLMs.
+        # Nodes that run in parallel are part of the same super-step,
+        # while nodes that run sequentially belong to separate super-steps.
+        # Note that the documentation state that the default is 1,000 but the code itself has a default of 10,000.
+        #
+        # Documentation:
+        # https://docs.langchain.com/oss/python/langgraph/graph-api#recursion-limit
+        # https://docs.langchain.com/oss/python/langgraph/graph-api#graphs
+        #
+        # Code:
+        # https://github.com/langchain-ai/langchain/blob/master/libs/langchain_v1/langchain/agents/factory.py
+        # https://github.com/langchain-ai/langgraph/blob/main/libs/langgraph/langgraph/pregel/_loop.py
+        max_steps: int = agent_spec.get("max_steps", 10_000)
 
         # Create the list of callbacks to pass when invoking
         parent_origin: List[Dict[str, Any]] = self.origin
@@ -119,7 +131,7 @@ class RunContextRunnable(NeuroSanRunnable):
             callbacks.append(LoggingCallbackHandler(self.logger))
 
         runnable_config: Dict[str, Any] = self.prepare_runnable_config(callbacks=callbacks,
-                                                                       recursion_limit=recursion_limit)
+                                                                       recursion_limit=max_steps)
 
         # Attempt to count tokens/costs while invoking the agent.
         token_counter = LangChainTokenCounter(self.primary_llm, self.invocation_context, self.journal, self.origin)
