@@ -115,13 +115,13 @@ class RunContextRunnable(NeuroSanRunnable):
         max_steps: int = agent_spec.get("max_steps", 10_000)
 
         if agent_spec.get("max_iterations") is not None:
-            # Deprecated alias. Keep for now to avoid breaking existing networks that use it, but prefer max_steps.
-            # It should be removed in the future.
-            max_steps = agent_spec.get("max_iterations")
             self.logger.warning(
                 "Agent config contains 'max_iterations' which is deprecated. "
-                "Please use max_steps instead. Using max_steps=%s for this run.", max_steps
+                "Please use 'max_steps' instead."
             )
+            # Only fall back to max_iterations if max_steps was not explicitly provided.
+            if "max_steps" not in agent_spec:
+                max_steps = agent_spec.get("max_iterations")
 
         # Create the list of callbacks to pass when invoking
         parent_origin: List[Dict[str, Any]] = self.origin
@@ -138,6 +138,11 @@ class RunContextRunnable(NeuroSanRunnable):
             # This particular class adds a *lot* of very detailed messages
             # to the logs.  Add this because some people are interested in it.
             callbacks.append(LoggingCallbackHandler(self.logger))
+
+        self.logger.info(
+            "Using the following agent config: verbose=%s, max_execution_seconds=%s, max_steps=%s",
+            verbose, max_execution_seconds, max_steps
+        )
 
         runnable_config: Dict[str, Any] = self.prepare_runnable_config(callbacks=callbacks,
                                                                        recursion_limit=max_steps)
