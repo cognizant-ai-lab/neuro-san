@@ -97,6 +97,9 @@ class StorageWatcher(Startable):
         """
         Function runs manifest file update cycle.
         """
+        server_status: ServerStatus = self.server_context.get_server_status()
+        server_status.updater.set_status(True)
+
         if self.update_period_in_seconds <= 0:
             # We should not run at all.
             return
@@ -104,9 +107,6 @@ class StorageWatcher(Startable):
         # Initial value entering the loop
         sleep_for_seconds: float = self.update_period_in_seconds
         while self.keep_running:
-
-            server_status: ServerStatus = self.server_context.get_server_status()
-            server_status.updater.set_status(True)
 
             sleep(sleep_for_seconds)
 
