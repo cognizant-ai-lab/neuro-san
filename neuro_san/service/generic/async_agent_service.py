@@ -33,6 +33,7 @@ from leaf_common.utils.atomic_counter import AtomicCounter
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.graph.utils.allow_util import AllowUtil
 from neuro_san.internals.graph.utils.invocation_util import InvocationUtil
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
@@ -248,15 +249,15 @@ class AsyncAgentService:
                 "Received a %s request for %s",
                 f"{self.agent_name}.StreamingChat", log_marker)
 
-        # Create a reservationist for the occasion
-        reservationist: Reservationist = None
-        if self.queues is not None:
-            reservationist = ServiceAgentReservationist()
-            self.queues.sync_q.put(reservationist.get_queue())
-
         # Determine the effective invocation
         agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
         effective_invocation: str = InvocationUtil.get_effective_invocation(agent_network, request_dict)
+
+        # Create a reservationist for the occasion
+        reservationist: Reservationist = None
+        if self.queues is not None and AllowUtil.is_allowed(agent_network, "reservations", ["middleware"]):
+            reservationist = ServiceAgentReservationist()
+            self.queues.sync_q.put(reservationist.get_queue())
 
         # Prepare
         factory = ExternalAgentSessionFactory(use_direct=False)
