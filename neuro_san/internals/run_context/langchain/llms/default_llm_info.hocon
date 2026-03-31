@@ -1164,19 +1164,5 @@
         "max_tokens": null,                 # The maximum number of tokens to use in
                                             # computing prompt tokens. By default this comes from
                                             # the model description in this class.
-
-        # The following are more agent-level control as opposed to LLM control above.
-
-        "verbose": false,                   # Default is boolean false for quiet server operation.
-                                            # When True, responses from ChatEngine are logged to stdout.
-                                            # Can be "extra" to engage even more verbose logging from agent level.
-
-        "max_iterations": 20,               # Agent control for how many iterations are done.
-                                            # People often want to increase this when there are timeouts
-                                            # and other retry-able errors due to bad network weather,
-                                            # but this is a decent default set by langchain.
-
-        "max_execution_seconds": 120,       # Amount of time an agent should keep trying in retry
-                                            # situations before giving up.
     },
 }
