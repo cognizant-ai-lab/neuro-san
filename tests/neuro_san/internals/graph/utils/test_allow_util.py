@@ -44,3 +44,19 @@ class TestAllowUtil(TestCase):
         agent_network: AgentNetwork = self.get_agent_network("hello_world.hocon")
         is_allowed: bool = AllowUtil.is_allowed(agent_network, "reservations", ["middleware"])
         self.assertFalse(is_allowed)
+
+    def test_allow_in_agent(self):
+        """
+        Tests when the allow block is present in an agent
+        """
+        agent_network: AgentNetwork = self.get_agent_network("copy_cat.hocon")
+        is_allowed: bool = AllowUtil.is_allowed(agent_network, "reservations", ["middleware"])
+        self.assertTrue(is_allowed)
+
+    def test_allow_in_middleware(self):
+        """
+        Tests when the allow block is present in an agent
+        """
+        agent_network: AgentNetwork = self.get_agent_network("copy_cat_middleware.hocon")
+        is_allowed: bool = AllowUtil.is_allowed(agent_network, "reservations", ["middleware"])
+        self.assertTrue(is_allowed)
