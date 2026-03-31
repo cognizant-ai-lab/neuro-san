@@ -289,14 +289,6 @@ ENV AGENT_HTTP_SERVER_INSTANCES=1
 # Logging period is specified in seconds.
 ENV AGENT_HTTP_RESOURCES_MONITOR_INTERVAL=0
 
-# If this value is specified and >0,
-# it will enable dynamic temporary network updates of the server agents
-# allowing CodedTools to reserve temporary networks via the Reservationist
-# interface, if the agent network hocon file specifically allows it for the tool.
-# Update will be done every AGENT_TEMPORARY_NETWORK_UPDATE_PERIOD_SECONDS seconds;
-# if value is not specified or <= 0, no such dynamic updates will be executed.
-ENV AGENT_TEMPORARY_NETWORK_UPDATE_PERIOD_SECONDS=0
-
 # Optional URL describing how the server is to be referenced by the outside world.
 # This is useful when a server is behind a load-balancer as part of a larger cluster.
 ENV AGENT_EXTERNAL_SERVER_URL=""
