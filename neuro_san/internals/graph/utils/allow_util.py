@@ -92,10 +92,11 @@ class AllowUtil:
         if allow_extractor.get(look_for_key, False):
             return True
 
+        # Any deeper keys? Return early if not.
         if deeper_keys is None or len(deeper_keys) == 0:
             return False
 
-        # Maybe look in the middleware spec for the allow key
+        # Maybe look in the deeper_keys for the allow key
         for deeper_key in deeper_keys:
 
             # Make the value a list if we don't get one to consolidate on iterative logic
