@@ -153,6 +153,7 @@ class RunContextRunnable(NeuroSanRunnable):
 
         return inputs
 
+    # pylint: disable=too-many-locals
     async def invoke_agent_chain(self, inputs: Dict[str, Any], runnable_config: Dict[str, Any]):
         """
         Set the agent in motion
@@ -214,6 +215,17 @@ class RunContextRunnable(NeuroSanRunnable):
                     retries = retries - 1
                     exception = value_error
                     backtrace = traceback.format_exc()
+            # pylint: disable=broad-exception-caught
+            except Exception as exception_error:
+                # This catches any errors from running middlewares and also error form exceeding the recursion_limit.
+                self.logger.error("Got exception in  %s. Error: %s",
+                                  self.__class__.__name__,
+                                  exception_error,
+                                  )
+                # These are likely real issues and non-retryable.
+                retries = 0
+                exception = exception_error
+                backtrace = traceback.format_exc()
 
         output: str = self.parse_chain_result(chain_result, exception, backtrace)
         return_message: BaseMessage = AIMessage(output)
