@@ -36,6 +36,7 @@ from leaf_server_common.server.request_logger import RequestLogger
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.graph.utils.allow_util import AllowUtil
 from neuro_san.internals.graph.utils.invocation_util import InvocationUtil
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
@@ -250,15 +251,15 @@ class AgentService:
         if metadata.get("request_id") is None:
             metadata["request_id"] = service_logging_dict.get("request_id")
 
-        # Create a reservationist
-        reservationist: Reservationist = None
-        if self.queues is not None:
-            reservationist = ServiceAgentReservationist()
-            self.queues.sync_q.put(reservationist.get_queue())
-
         # Determine the effective invocation
         agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
         effective_invocation: str = InvocationUtil.get_effective_invocation(agent_network, request_dict)
+
+        # Create a reservationist
+        reservationist: Reservationist = None
+        if self.queues is not None and AllowUtil.is_allowed(agent_network, "reservations", ["middleware"]):
+            reservationist = ServiceAgentReservationist()
+            self.queues.sync_q.put(reservationist.get_queue())
 
         # Prepare
         factory = ExternalAgentSessionFactory(use_direct=False)
