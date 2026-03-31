@@ -643,6 +643,9 @@ For more details on tool extension, see the [Toolbox Extension Guide](./toolbox_
 
 For more information on tool schema, see the [toolbox_info_hocon_reference](./toolbox_info_hocon_reference.md).
 
+Note that an agent using `toolbox` cannot have a `tools` field. A toolbox agent executes code directly
+rather than calling an LLM, so it cannot invoke other tools as downstream agents.
+
 Example networks using tools from toolbox:
 
 - [date_time_timezone.hocon](../neuro_san/registries/date_time_timezone.hocon) which uses predefined
