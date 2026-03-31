@@ -101,8 +101,6 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
                                     None - implies chatbot
         :return: An AsyncAgentSession through which communications about the external agent can be made.
         """
-        _: str = invocation
-
         if agent_location is None:
             return None
 
@@ -132,7 +130,7 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
                     break
 
             agent_network: AgentNetwork = agent_network_provider.get_agent_network()
-            safe_invocation_context: InvocationContext = invocation_context.safe_shallow_copy()
+            safe_invocation_context: InvocationContext = invocation_context.safe_shallow_copy(invocation)
             session = AsyncDirectAgentSession(agent_network, safe_invocation_context, metadata=metadata)
 
         if session is None:
