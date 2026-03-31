@@ -260,7 +260,7 @@ Check these things:
         :param this_agent_tool_path: The root path from AGENT_TOOL_PATH plus the agent network name
         :param this_agent_tool_path_parts: The agent tool path split into parts
         :param agent_network_name_parts: The agent network name split into parts
-        :return: The resolved Python class, or None if not found
+        :return: The resolved Python class
         """
         # Phase 1 - Try the simplest thing first - a direct import from a fully-qualified path
         fully_qualified_name: str = f"{module_name}.{class_name}"
