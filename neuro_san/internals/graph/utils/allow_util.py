@@ -62,6 +62,7 @@ class AllowUtil:
 
         return allow
 
+    @staticmethod
     def is_allowed_in_agent_spec(agent_spec: Dict[str, Any], allow_key: str, deeper_keys: List[str] = None) -> bool:
         """
         Check if the agent spec allows the given key.
