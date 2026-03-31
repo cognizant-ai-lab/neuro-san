@@ -118,10 +118,6 @@ class ServerMainLoop:
                                 default=int(os.environ.get("AGENT_MANIFEST_UPDATE_PERIOD_SECONDS", "0")),
                                 help="Periodic run-time update period for manifest in seconds."
                                      " Value <= 0 disables updates.")
-        arg_parser.add_argument("--temporary_network_update_period_seconds", type=int,
-                                default=int(os.environ.get("AGENT_TEMPORARY_NETWORK_UPDATE_PERIOD_SECONDS", "0")),
-                                help="Periodic run-time update period for temporary networks in seconds."
-                                     " Value <= 0 disables updates.")
         arg_parser.add_argument("--http_connections_backlog", type=int,
                                 default=int(os.environ.get("AGENT_HTTP_CONNECTIONS_BACKLOG",
                                                            DEFAULT_HTTP_CONNECTIONS_BACKLOG)),
@@ -181,14 +177,9 @@ class ServerMainLoop:
             self.usage_logger_metadata = self.forwarded_request_metadata
         self.service_openapi_spec_file = args.openapi_service_spec_path
 
-        if args.manifest_update_period_seconds <= 0 and \
-                args.temporary_network_update_period_seconds <= 0:
+        if args.manifest_update_period_seconds <= 0:
             # StorageWatcher is disabled:
             server_status.updater.set_requested(False)
-        if args.temporary_network_update_period_seconds <= 0:
-            # We don't need the queues in this situation either.
-            # This is a signal to other code to not even bother with Reservationists
-            self.server_context.no_queues()
         # Do we to enable MCP service?
         if args.mcp_enable.lower() != "true":
             server_status.mcp_service.set_requested(False)
@@ -210,7 +201,6 @@ class ServerMainLoop:
         self.watcher_config = {
             "manifest_path": manifest_files,
             "manifest_update_period_seconds": args.manifest_update_period_seconds,
-            "temporary_network_update_period_seconds": args.temporary_network_update_period_seconds
         }
 
         self.agent_networks = manifest_agent_networks
