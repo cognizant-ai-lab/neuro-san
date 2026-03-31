@@ -202,10 +202,13 @@ class S3ReservationsStorage(AbstractReservationsStorage):
             # Build complete data structure containing reservation metadata,
             # the associated agent_spec, source information, and storage timestamp
             current_time: float = time.time()
-            agent_spec["metadata"] = {
+            new_metadata: Dict[str, Any] = {
                 "reservation": self.converter.to_dict(reservation),  # Serialized reservation object
                 "stored_at": current_time              # When stored in S3
             }
+            if agent_spec.get("metadata") is None:
+                agent_spec["metadata"] = {}
+            agent_spec["metadata"].update(new_metadata)
 
             # Generate S3 key using prefix and reservation ID for easy lookup
             reservation_id: str = reservation.get_reservation_id()
