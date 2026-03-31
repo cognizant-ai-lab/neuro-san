@@ -206,7 +206,7 @@ class AbstractClassActivation(AbstractCallableActivation):
 
         resolver_logger.setLevel(WARNING)
         try:
-            python_class: Type[Any] = self._attempt_resolve(
+            python_class = self._attempt_resolve(
                 class_name, module_name, this_agent_tool_path, this_agent_tool_path_parts, agent_network_name_parts
             )
         except (ValueError, AttributeError) as exception:
