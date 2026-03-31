@@ -18,6 +18,7 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Union
 
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
@@ -98,7 +99,7 @@ class AllowUtil:
         for deeper_key in deeper_keys:
 
             # Make the value a list if we don't get one to consolidate on iterative logic
-            deeper_list: List[Dict[str, Any]] | Dict[str, Any] = agent_spec.get(deeper_key, empty)
+            deeper_list: Union[List[Dict[str, Any]], Dict[str, Any]] = agent_spec.get(deeper_key, empty)
             if not isinstance(deeper_list, list):
                 deeper_list = [deeper_list]
 
