@@ -230,7 +230,7 @@ context with which it will proces input, essentially telling it what to do.
         our_agent_spec = self.get_agent_tool_spec()
         callable_component: CallableActivation = \
             self.factory.create_agent_activation(self.run_context, our_agent_spec, use_tool_name,
-                                                 self.sly_data, tool_arguments, invocation)
+                                                 self.sly_data, tool_arguments, None, invocation=invocation)
 
         message: BaseMessage = await callable_component.build()
 
