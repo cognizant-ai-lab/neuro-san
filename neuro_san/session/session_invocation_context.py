@@ -157,15 +157,22 @@ class SessionInvocationContext(InvocationContext):
         """
         return self.metadata
 
-    def close(self):
+    def close_of_request(self):
         """
-        Release resources owned by this context
+        Release resources owned by this context when the request is complete.
+        This can happen earlier than when the work is complete.
+        """
+        if self.queue is not None:
+            self.queue.close()
+
+    def close_of_work(self):
+        """
+        Release resources owned by this context when the work is all done.
+        This can happen later than when the request is complete.
         """
         if self.asyncio_executor is not None:
             self.async_executors_pool.return_executor(self.asyncio_executor)
             self.asyncio_executor = None
-        if self.queue is not None:
-            self.queue.close()
 
     def get_request_reporting(self) -> Dict[str, Any]:
         """

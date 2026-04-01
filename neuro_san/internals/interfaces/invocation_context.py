@@ -25,11 +25,12 @@ from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
+from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.messages.origination import Origination
 
 
-class InvocationContext:
+class InvocationContext(LingeringResource):
     """
     Interface for encapsulating specific policy classes that pertain to
     a single invocation of an AgentSession or AsyncAgentSession, whether by way of a
@@ -88,9 +89,17 @@ class InvocationContext:
         """
         raise NotImplementedError
 
-    def close(self):
+    def close_of_request(self):
         """
-        Release resources owned by this context
+        Release resources owned by this context when the request is complete.
+        This can happen earlier than when the work is complete.
+        """
+        raise NotImplementedError
+
+    def close_of_work(self):
+        """
+        Release resources owned by this context when the work is all done.
+        This can happen later than when the request is complete.
         """
         raise NotImplementedError
 
