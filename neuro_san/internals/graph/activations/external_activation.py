@@ -156,7 +156,7 @@ class ExternalActivation(AbstractCallableActivation):
         if self.session is None:
             invocation_context: InvocationContext = self.run_context.get_invocation_context()
             factory: AsyncAgentSessionFactory = invocation_context.get_async_session_factory()
-            self.session = factory.create_session(self.agent_url, invocation_context)
+            self.session = factory.create_session(self.agent_url, invocation_context, self.invocation)
 
         # Send off the input
         chat_request: Dict[str, Any] = self.gather_input(f"```json\n{json.dumps(self.arguments)}```",
