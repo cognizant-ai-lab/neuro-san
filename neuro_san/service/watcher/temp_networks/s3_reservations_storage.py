@@ -77,9 +77,16 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         try:
             expiration_check_period_seconds: float = float(envvar_value)
             self._check_interval_seconds = expiration_check_period_seconds
-        except ValueError:
-            self.logger.warning(
-                "Invalid value for %s, must be a number. Got: %s", envvar_name, envvar_value)
+        except ValueError as exc:
+            self.logger.error(
+                "Invalid value for %s, must be a number. Got: %s. "
+                "Please correct the environment variable or unset it.",
+                envvar_name,
+                envvar_value,
+            )
+            raise ValueError(
+                f"Invalid value for {envvar_name}: expected a numeric value, got {envvar_value!r}"
+            ) from exc
 
         # Configure bucket name from parameter or environment variable
         env_bucket: str = os.getenv("AGENT_RESERVATIONS_S3_BUCKET", "")
