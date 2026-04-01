@@ -23,6 +23,7 @@ from asyncio import AbstractEventLoop
 from asyncio import Event
 from asyncio import run_coroutine_threadsafe
 from asyncio import sleep as asyncio_sleep
+from asyncio import CancelledError
 from logging import getLogger
 from logging import Logger
 import functools
@@ -114,7 +115,6 @@ class TempNetworkStorageUpdater(Startable):
             # this task is expected to run for the lifetime of this TempNetworkStorageUpdater instance.
             _ = self.executor.create_task(self.add_new_queues_to_processing(), "incoming queue")
 
-
     async def add_new_queues_to_processing(self):
         """
         Checks our master queue of queues for any new additions
@@ -135,14 +135,14 @@ class TempNetworkStorageUpdater(Startable):
                     return
                 try:
                     await asyncio_sleep(idle_sleep_seconds)
-                except asyncio.CancelledError:
+                except CancelledError:
                     self.logger.info("Incoming queue task cancelled during sleep")
                     raise
                 # Continue polling for new queues to process.
                 continue
             except SyncQueueShutDown:
                 # Explicit shutdown signal from Janus queue machinery
-                self.logger.info(f"SHUTDOWN signal for incoming queue")
+                self.logger.info("SHUTDOWN signal for incoming queue")
                 return
 
             if self.reservationist is not None:
@@ -175,13 +175,13 @@ class TempNetworkStorageUpdater(Startable):
                     return
                 try:
                     await asyncio_sleep(idle_sleep_seconds)
-                except asyncio.CancelledError:
+                except CancelledError:
                     self.logger.info("Reservation queue task cancelled during sleep")
                     raise
                 continue
             except SyncQueueShutDown:
                 # Explicit shutdown signal from Janus queue machinery
-                self.logger.info(f"SHUTDOWN signal for reservation queue")
+                self.logger.info("SHUTDOWN signal for reservation queue")
                 return
             if async_collating_queue.is_final_item(queued_item):
                 # We have exhausted this queue.
