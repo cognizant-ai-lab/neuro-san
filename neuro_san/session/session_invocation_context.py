@@ -164,6 +164,7 @@ class SessionInvocationContext(InvocationContext):
         """
         if self.queue is not None:
             self.queue.close()
+            self.queue = None
 
     def close_of_work(self):
         """
