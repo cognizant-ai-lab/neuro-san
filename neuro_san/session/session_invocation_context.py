@@ -157,7 +157,7 @@ class SessionInvocationContext(InvocationContext):
         """
         return self.metadata
 
-    def close_of_request(self):
+    async def close_of_request(self):
         """
         Release resources owned by this context when the request is complete.
         This can happen earlier than when the work is complete.
@@ -166,7 +166,7 @@ class SessionInvocationContext(InvocationContext):
             self.queue.close()
             self.queue = None
 
-    def close_of_work(self):
+    async def close_of_work(self):
         """
         Release resources owned by this context when the work is all done.
         This can happen later than when the request is complete.

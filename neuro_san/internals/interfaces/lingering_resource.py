@@ -29,23 +29,23 @@ class LingeringResource:
     we are getting.
     """
 
-    def close_of_request(self):
+    async def close_of_request(self):
         """
         Release resources owned by this context when the request is complete.
         This can happen earlier than when the work is complete.
         """
         # Do nothing by default for easier implementation inheritance
 
-    def close_of_work(self):
+    async def close_of_work(self):
         """
         Release resources owned by this context when the work is all done.
         This can happen later than when the request is complete.
         """
         # Do nothing by default for easier implementation inheritance
 
-    def close(self):
+    async def close(self):
         """
         Compatibility method to close everything.
         """
-        self.close_of_request()
-        self.close_of_work()
+        await self.close_of_request()
+        await self.close_of_work()

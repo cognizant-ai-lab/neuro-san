@@ -19,6 +19,7 @@ from typing import Any
 from typing import Dict
 from typing import Iterator
 
+from asyncio import Task
 import contextlib
 import copy
 import json
@@ -311,9 +312,11 @@ class AgentService:
             if response_dict_iterator is not None:
                 with contextlib.suppress(Exception):
                     response_dict_iterator.close()
+
             # Ensure that our SessionInvocationContext is always closed,
             # even if iterator is interrupted.
-            invocation_context.close()
+            task: Task = executor.submit(None, invocation_context.close)
+            executor.get_event_loop().run_until_complete(task)
             invocation_context = None
 
         # Maybe report token accounting to a UsageLogger
