@@ -26,7 +26,6 @@ from asyncio import sleep as asyncio_sleep
 from asyncio import CancelledError
 from logging import getLogger
 from logging import Logger
-import functools
 import queue as queue_mod
 
 from janus import Queue
@@ -146,8 +145,7 @@ class TempNetworkStorageUpdater(Startable):
                 return
 
             if self.reservationist is not None:
-                queue_processor = functools.partial(self.process_one_queue, async_collating_queue)
-                _ = self.executor.create_task(queue_processor(), "queue_processor")
+                _ = self.executor.create_task(self.process_one_queue(async_collating_queue), "queue_processor")
             else:
                 # We don't have a reservation functionality set up,
                 # so we can't do anything with this queue, but we should still close it to avoid leaks.
