@@ -81,7 +81,7 @@ class ExternalActivation(AbstractCallableActivation):
                  invoke() method.
         :param allow_from_downstream: A dictionary describing how to handle information
                 coming in from the downstream external agent
-        :param invocation: The sytle of the invocation
+        :param invocation: The style of the invocation
         """
         # There is no spec on our end for the agent_tool_spec
         # Also worth noting that normally, sly_data is shared between all tools
