@@ -307,6 +307,13 @@ ENV AGENT_EXTERNAL_RESERVATIONS_STORAGE=""
 # to use for cross-pod reservations storage.
 ENV AGENT_RESERVATIONS_S3_BUCKET=""
 
+# If AGENT_EXTERNAL_RESERVATIONS_STORAGE is set,
+# then this parameter specifies the period in seconds for checking the external storage for expired reservations.
+# Value of 0 means no periodic checks will be performed by the service,
+# in this case it is expected that the external storage itself will handle expired reservations,
+# or it will be done on demand by other tools.
+ENV AGENT_RESERVATIONS_EXTERNAL_STORAGE_CHECK_PERIOD_SECONDS="0"
+
 # A hocon file with MCP servers information to be used by LangChainMcpAdapter
 # for connecting to external MCP servers with authentication and tool filtering.
 ENV MCP_SERVERS_INFO_FILE=""
