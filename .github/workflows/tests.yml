@@ -13,69 +13,25 @@ on:
       - main
 jobs:
   test:
-    runs-on: ubuntu-latest
     if: >
       (github.event_name == 'push' && github.ref != 'refs/heads/main') ||
       (github.event_name == 'pull_request' && github.base_ref == 'main')
-    container:
-      image: python:3.12-slim
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          apt-get update && apt-get install -y shellcheck
-          pip install -r requirements.txt -r requirements-build.txt
-
-      - name: Show installed packages
-        run: pip freeze
-
-      - name: Run pylint
-        run: build_scripts/run_pylint.sh
-
-      - name: Run pymarkdownlint
-        run: build_scripts/run_markdownlint.sh
-
-      - name: Run shellcheck
-        run: build_scripts/run_shellcheck.sh
-
-      - name: Run flake8
-        run: flake8
-
-      - name: Run pytest with start of server (excluding integration tests & Smoke tests)
-        shell: bash
-        run: |
-          build_scripts/server_start.sh
-          pytest --verbose -m "not integration and not smoke" --timer-top-n 10 -n auto --cov-config=.coveragerc --cov
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          AGENT_TOOL_PATH: "./neuro_san/coded_tools"
-          PYTHONPATH: ${{ env.PYTHONPATH }}:"."
-
-      - name: Check README renders correctly on PyPI
-        run: |
-          python -m readme_renderer README.md
-
-      - name: Notify Slack on success
-        if: success()
-        uses: slackapi/slack-github-action@v1.24.0
-        with:
-          payload: |
-            {
-              "text": "✅ *Tests Passed* for `${{ github.repository }}` on `${{ github.ref_name }}`"
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-
-      - name: Notify Slack on failure
-        if: failure()
-        uses: slackapi/slack-github-action@v1.24.0
-        with:
-          payload: |
-            {
-              "text": "❌ *Tests Failed* for `${{ github.repository }}` on `${{ github.ref_name }}`"
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    # 1.0.0
+    uses: cognizant-ai-lab/build-common/.github/workflows/_python-quality-gate.yml@455db3cc40e9ed6a0fb9bbaf8188888c1ae315c2
+    with:
+      python-version: '3.12'
+      lint-toolchain: 'legacy'  # flake8 only (black/isort are opt-in)
+      pylint-command: 'build_scripts/run_pylint.sh'
+      shellcheck-command: 'build_scripts/run_shellcheck.sh'
+      run-markdownlint: true
+      markdownlint-command: 'build_scripts/run_markdownlint.sh'
+      check-readme-pypi: true
+      test-command-override: >-
+        export AGENT_TOOL_PATH="./neuro_san/coded_tools" &&
+        export PYTHONPATH="${PYTHONPATH:+$PYTHONPATH:}." &&
+        build_scripts/server_start.sh &&
+        pytest --verbose -m "not integration and not smoke"
+        --timer-top-n 10 -n auto --cov-config=.coveragerc --cov
+    secrets:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
