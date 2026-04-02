@@ -36,11 +36,12 @@ class AbstractReservationsStorage(ReservationsStorage, Startable):
     Specific logic for adding, retrieving, and expiring reservations is left to concrete implementations.
     """
 
-    def __init__(self, storage_name: str = "", check_expirations_interval_seconds: float = 60.0):
+    def __init__(self, storage_name: str = "", check_expirations_interval_seconds: float = 0.0):
         """
         Constructor
         :param storage_name: A string name for this storage, used for logging purposes.
         :param check_expirations_interval_seconds: The number of seconds between checks for expired reservations.
+                            If set to 0 or negative, the background thread will not be started.
         """
         super().__init__()
         self._thread: threading.Thread = None
@@ -50,9 +51,13 @@ class AbstractReservationsStorage(ReservationsStorage, Startable):
         self._name: str = storage_name
 
     def start(self):
-        self._thread = threading.Thread(target=self._run_loop, daemon=True)
-        self._thread.start()
-        self._logger.debug("%s: Expiration cleanup thread started.", self._name)
+        if self._check_interval_seconds > 0:
+            self._thread = threading.Thread(target=self._run_loop, daemon=True)
+            self._thread.start()
+            self._logger.debug("%s: Expiration cleanup thread started with period %f sec.",
+                               self._name, self._check_interval_seconds)
+        else:
+            self._logger.debug("%s: Expiration cleanup thread not started.", self._name)
 
     def stop(self, timeout: Optional[float] = None):
         """

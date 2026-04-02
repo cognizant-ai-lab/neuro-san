@@ -24,7 +24,7 @@ class AsyncAgentSessionFactory:
     Creates asynchronous AsyncAgentSessions for external agents.
     """
 
-    def create_session(self, agent_url: str, invocation_context: Any) -> AsyncAgentSession:
+    def create_session(self, agent_url: str, invocation_context: Any, invocation: str = None) -> AsyncAgentSession:
         """
         :param agent_url: A url string pointing to an external agent that came from
                     a tools list in an agent spec.
@@ -33,6 +33,11 @@ class AsyncAgentSessionFactory:
 
                     Note: At this interface level we are typing this as Any to avoid
                     an import cycle.  This will always be an InvocationContext.
+
+        :param invocation: String describing how the agent wants to be invoked.
+                            Can be: "chatbot" - implies waiting for an answer.
+                                    "event" - implies no answer needed
+                                    None - implies chatbot
 
         :return: An implementation of AsyncAgentSession through which
                  communications about external agents can be made.
