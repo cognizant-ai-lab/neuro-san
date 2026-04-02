@@ -33,6 +33,7 @@ Items in ***bold*** are essentials. Try to understand these first.
     - [error_fragments](#error_fragments)
     - [llm_info_file](#llm_info_file)
     - [max_steps](#max_steps)
+    - [max_iterations](#max_iterations)
     - [max_execution_seconds](#max_execution_seconds)
     - [metadata](#metadata)
         - [description](#description)
@@ -74,6 +75,7 @@ Items in ***bold*** are essentials. Try to understand these first.
     - [max_message_history](#max_message_history)
     - [verbose](#verbose-1)
     - [max_steps](#max_steps-1)
+    - [max_iterations](#max_iterations-1)
     - [max_execution_seconds](#max_execution_seconds-1)
     - [error_formatter](#error_formatter-1)
     - [error_fragments](#error_fragments-1)
@@ -307,13 +309,16 @@ MAXIMAL.
 
 ### max_steps
 
-An integer controlling the max_steps of the langchain
-[AgentExecutor](https://api.python.langchain.com/en/latest/agents/langchain.agents.agent.AgentExecutor.html)
-used for the agent.  Default is 20.
+An integer that sets the [recursion limit](https://docs.langchain.com/oss/python/langgraph/graph-api#recursion-limit)
+for LangGraph's agent. Despite its name, the recursion limit acts as a
+[super-step](https://docs.langchain.com/oss/python/langgraph/graph-api#graphs) limit
+on the entire graph execution, encompassing all tool and LLM calls.
+Nodes that run in parallel share the same super-step,
+while sequential nodes each occupy a separate super-step. Defaults to 10,000.
 
-We don't recommend deviating too far from the default of 20.
-Some folks find it useful to _temporarily_ boost this waaaaay up when there is "network weather"
-effecting your favorite LLM provider and you start to see "Agent stopped due to max iterations" errors.
+### max_iterations
+
+Deprecated. Use [max_steps](#max_steps) instead.
 
 ### max_execution_seconds
 
@@ -857,10 +862,14 @@ topics frequently.
 
 Same as top-level [verbose](#verbose), except at single-agent scope.
 
-<!--- pyml disable-next-line no-duplicate-heading -->
 ### max_steps
 
-Same as top-level [max_steps](#max_steps), except at single-agent scope.
+Same as top-level [max_steps](#max_steps), except at single-agent scope. 
+
+<!--- pyml disable-next-line no-duplicate-heading -->
+### max_iterations 
+
+Deprecated. Use [max_steps](#max_steps-1) instead.
 
 <!--- pyml disable-next-line no-duplicate-heading -->
 ### max_execution_seconds
