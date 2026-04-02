@@ -222,10 +222,16 @@ class SessionInvocationContext(InvocationContext):
         self.origination.reset()
         self.queue.reset()
 
-    def safe_shallow_copy(self) -> SessionInvocationContext:
+    def safe_shallow_copy(self, invocation: str = None) -> SessionInvocationContext:
         """
         Makes a safe shallow copy of the invocation context.
         Generally used with direct sessions.
+
+        :param invocation: String describing how the agent wants to be invoked.
+                            Can be: "chatbot" - implies waiting for an answer.
+                                    "event" - implies no answer needed
+                                    None - implies chatbot
+        :return: A copy of the invocation context
         """
 
         invocation_context: SessionInvocationContext = copy(self)
@@ -236,5 +242,9 @@ class SessionInvocationContext(InvocationContext):
         # Now that the queue has changed, we need a new Journal as well
         # to be sure that the messages are sent to the correct queue.
         invocation_context.journal: Journal = MessageJournal(invocation_context.queue)
+
+        # If an invocation was provided, use it
+        if invocation is not None:
+            invocation_context.effective_invocation = invocation
 
         return invocation_context

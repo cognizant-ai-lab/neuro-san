@@ -31,8 +31,8 @@ class LangChainRun(Run):
 
     # pylint: disable=too-many-arguments
     # pylint: disable=too-many-positional-arguments
-    def __init__(self, run_id_base: str, chat_history: List[BaseMessage],
-                 tool_name: str = None, args: Any = None, tool_message: BaseMessage = None):
+    def __init__(self, run_id_base: str, chat_history: List[BaseMessage], tool_name: str = None,
+                 args: Any = None, tool_message: BaseMessage = None, invocation: str = None):
         """
         Constructor
 
@@ -43,12 +43,17 @@ class LangChainRun(Run):
                     represented by this instance.
         :param tool_message: The most recent tool message produced during the run
                              represented by this instance.
+        :param invocation: String describing how the tool wants to be invoked.
+                            Can be: "chatbot" - implies waiting for an answer.
+                                    "event" - implies no answer needed
+                                    None - implies chatbot
         """
         self.id: str = self._create_run_id(run_id_base, chat_history)
         self.chat_history: List[BaseMessage] = chat_history
         self.tool_name: str = tool_name
         self.args: Any = args
         self.tool_message: BaseMessage = tool_message
+        self.invocation: str = invocation
 
     @staticmethod
     def _create_run_id(run_id_base: str, chat_history: List[BaseMessage]) -> str:
@@ -93,7 +98,8 @@ class LangChainRun(Run):
             #
             # For now, we just do a single tool given the run...
             # Create a ToolCall with the correct args and add that to the ToolCalls list
-            tool_call: LangChainToolCall = LangChainToolCall(self.tool_name, self.args, self.id)
+            tool_call: LangChainToolCall = LangChainToolCall(self.tool_name, self.args, self.id,
+                                                             invocation=self.invocation)
             tool_calls.append(tool_call)
 
         return tool_calls
