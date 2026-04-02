@@ -128,7 +128,8 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
                                 name: str,
                                 sly_data: Dict[str, Any],
                                 arguments: Dict[str, Any] = None,
-                                factory: AgentToolFactory = None) -> CallableActivation:
+                                factory: AgentToolFactory = None,
+                                invocation: str = None) -> CallableActivation:
         """
         Create an active node for an agent from its spec.
         This is how CallableActivations create other CallableActivations.
@@ -140,6 +141,7 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
                  values should not appear in agent chat text. Can be an empty dictionary.
         :param arguments: A dictionary of arguments for the newly constructed agent
         :param factory: A factory that will be used to create the agent tool
+        :param invocation: The invocation style of the activation.
         :return: The CallableActivation agent referred to by the name.
         """
         if factory is None:
@@ -163,7 +165,7 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
             allow_from_downstream: Dict[str, Any] = extractor.get("allow.from_downstream", empty)
 
             agent_activation = ExternalActivation(parent_run_context, factory, name, arguments, redacted_sly_data,
-                                                  allow_from_downstream)
+                                                  allow_from_downstream, invocation)
             return agent_activation
 
         # Merge the arguments coming in from the LLM with those that were specified

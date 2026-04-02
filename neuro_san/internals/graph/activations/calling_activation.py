@@ -212,9 +212,10 @@ context with which it will proces input, essentially telling it what to do.
                 "tool_call_id" a string id representing the call to the tool itself
                 "output" a JSON string representing the output of the tool's function
         """
-        # Get the function args as a dictionary
+        # Get the essentials
         tool_name: str = component_tool_call.get_function_name()
         tool_arguments: Dict[str, Any] = component_tool_call.get_function_arguments()
+        invocation: str = component_tool_call.get_invocation()
 
         # Create a new instance of a JSON-speced tool using the supplied callable_tool_name.
         # At this point tool_name might be an internal reference to an external tool,
@@ -229,7 +230,7 @@ context with which it will proces input, essentially telling it what to do.
         our_agent_spec = self.get_agent_tool_spec()
         callable_component: CallableActivation = \
             self.factory.create_agent_activation(self.run_context, our_agent_spec, use_tool_name,
-                                                 self.sly_data, tool_arguments)
+                                                 self.sly_data, tool_arguments, None, invocation=invocation)
 
         message: BaseMessage = await callable_component.build()
 

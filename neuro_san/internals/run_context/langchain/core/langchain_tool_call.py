@@ -30,7 +30,7 @@ class LangChainToolCall(ToolCall):
     that a tool be called with certain structured function arguments.
     """
 
-    def __init__(self, tool_name: str, args: Any, run_id: str):
+    def __init__(self, tool_name: str, args: Any, run_id: str, invocation: str = None):
         """
         Constructor
 
@@ -40,10 +40,17 @@ class LangChainToolCall(ToolCall):
                 typing is Any, so we stick with that.
         :param run_id: The string id of the parent run so that the tool's
                     ids can be associated with that.
+        :param invocation: String describing how the tool wants to be invoked.
+                            Can be: "chatbot" - implies waiting for an answer.
+                                    "event" - implies no answer needed
+                                    None - implies chatbot
         """
         self.tool_name: str = tool_name
         self.args = args
         self.id: str = f"tool_call_{run_id}_{uuid.uuid4()}"
+        self.invocation: str = invocation
+        if invocation is None:
+            self.invocation = "chatbot"
 
     def get_id(self) -> str:
         """
@@ -62,3 +69,12 @@ class LangChainToolCall(ToolCall):
         :return: Returns the string name of the tool
         """
         return self.tool_name
+
+    def get_invocation(self) -> str:
+        """
+        :return: String describing how the tool wants to be invoked.
+                            Can be: "chatbot" - implies waiting for an answer.
+                                    "event" - implies no answer needed
+                                    None - implies chatbot
+        """
+        return self.invocation
