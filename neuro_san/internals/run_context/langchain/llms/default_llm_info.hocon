@@ -89,6 +89,23 @@
         "price_per_1k_input_tokens": 0.0025,
         "price_per_1k_output_tokens": 0.015,
     },
+    "gpt-5.4-mini": {
+        "use_model_name": "gpt-5.4-mini-2026-03-17",
+    },
+    "gpt-5.4-mini-2026-03-17": {
+        "class": "openai",
+        "model_info_url": "https://developers.openai.com/api/docs/models/gpt-5.4-mini",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1050000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "08/31/2025",
+        "price_per_1k_input_tokens": 0.00025,
+        "price_per_1k_output_tokens": 0.0015,
+    },
     "gpt-5.2": {
         "use_model_name": "gpt-5.2-2025-12-11",
     },
@@ -348,6 +365,16 @@
         "use_model_name": "gpt-3.5-turbo-0125",
         "model_info_url": "https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models?tabs=global-standard%2Cstandard-chat-completions#gpt-35"
     },
+    "azure-gpt-5.4": {
+        "class": "azure-openai",
+        "use_model_name": "gpt-5.4-2026-03-05",
+        "model_info_url": "https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure?tabs=global-standard-aoai%2Cglobal-standard&pivots=azure-openai#gpt-54"
+    },
+    "azure-gpt-5.4-mini": {
+        "class": "azure-openai",
+        "use_model_name": "gpt-5.4-mini-2026-03-17",
+        "model_info_url": "https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure?tabs=global-standard-aoai%2Cglobal-standard&pivots=azure-openai#gpt-54"
+    }
     "azure-gpt-4": {
         "class": "azure-openai",
         "use_model_name": "gpt-4-0613",
