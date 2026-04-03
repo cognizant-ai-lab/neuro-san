@@ -43,8 +43,11 @@ from neuro_san.internals.messages.origination import Origination
 class SessionInvocationContext(InvocationContext):
     """
     Implementation of InvocationContext which encapsulates specific policy classes that pertain to
-    a single invocation of an AgentSession, whether by way of a
-    service call or library call.
+    a single invocation of an AgentSession, whether by way of a service call or library call.
+
+    A SessionInvocationContext will last for the duration of the work initiated by Session/request,
+    which could outlive the Session/request itself, depending on just how its invocation is
+    configured.
     """
 
     # pylint: disable=too-many-arguments

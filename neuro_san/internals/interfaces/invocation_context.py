@@ -32,9 +32,13 @@ from neuro_san.internals.messages.origination import Origination
 
 class InvocationContext(LingeringResource):
     """
-    Interface for encapsulating specific policy classes that pertain to
+    Top-level interface for encapsulating specific policy classes that pertain to
     a single invocation of an AgentSession or AsyncAgentSession, whether by way of a
     service call or library call.
+
+    An InvocationContext will last for the duration of the work initiated by Session/request,
+    which could outlive the Session/request itself, depending on just how its invocation is
+    configured.
     """
 
     def start(self):
