@@ -250,7 +250,7 @@ context with which it will proces input, essentially telling it what to do.
         # that the CallableActivation's cleanup does not accidentally clean up
         # any resources that should still remain open for this
         # CallingActivation's purposes.
-        await callable_component.delete_resources(self.run_context)
+        await callable_component.close_of_work(self.run_context)
 
         return tool_output
 

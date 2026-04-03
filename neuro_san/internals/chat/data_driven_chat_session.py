@@ -414,7 +414,7 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         await self.close_sly_data()
 
         if self.front_man is not None:
-            await self.front_man.delete_any_resources()
+            await self.front_man.close_of_work()
             self.front_man = None
 
     async def close_sly_data(self):
