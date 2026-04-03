@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import Any
 from typing import Callable
 from typing import Dict
+from typing import List
 
 from copy import copy
 import functools
@@ -100,6 +101,7 @@ class SessionInvocationContext(InvocationContext):
         # safe_shallow_copy() below to keep AsyncDirectAgentSessions happy.
         self.queue: AsyncCollatingQueue = AsyncCollatingQueue()
         self.journal: Journal = MessageJournal(self.queue)
+        self.resources: List[LingeringResource] = []
 
     def start(self):
         """
@@ -161,6 +163,12 @@ class SessionInvocationContext(InvocationContext):
         """
         return self.metadata
 
+    def add_resource(self, resource: LingeringResource):
+        """
+        :param resource: The resource to add
+        """
+        self.resources.append(resource)
+
     async def close_of_request(self, parent_resource: LingeringResource = None):
         """
         Release resources owned by this context when the request is complete.
@@ -172,6 +180,9 @@ class SessionInvocationContext(InvocationContext):
             self.queue.close()
             self.queue = None
 
+        for resource in self.resources:
+            await resource.close_of_request()
+
     async def close_of_work(self, parent_resource: LingeringResource = None):
         """
         Release resources owned by this context when the work is all done.
@@ -182,6 +193,9 @@ class SessionInvocationContext(InvocationContext):
         if self.asyncio_executor is not None:
             self.async_executors_pool.return_executor(self.asyncio_executor)
             self.asyncio_executor = None
+
+        for resource in self.resources:
+            await resource.close_of_work()
 
     def get_request_reporting(self) -> Dict[str, Any]:
         """
