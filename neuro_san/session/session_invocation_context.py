@@ -260,6 +260,12 @@ class SessionInvocationContext(InvocationContext):
 
         invocation_context: SessionInvocationContext = copy(self)
 
+        # We need a different Event to signal work is done
+        invocation_context.work_done_event: Event = Event()
+
+        # We need different resources to close
+        invocation_context.resources: List[LingeringResource] = []
+
         # We need a different queue in order to call external agents with direct sessions.
         invocation_context.queue: AsyncCollatingQueue = AsyncCollatingQueue()
 
