@@ -89,17 +89,21 @@ class InvocationContext(LingeringResource):
         """
         raise NotImplementedError
 
-    async def close_of_request(self):
+    async def close_of_request(self, parent_resource: LingeringResource = None):
         """
         Release resources owned by this context when the request is complete.
         This can happen earlier than when the work is complete.
+
+        :param parent_resource: The parent resource, if any
         """
         raise NotImplementedError
 
-    async def close_of_work(self):
+    async def close_of_work(self, parent_resource: LingeringResource = None):
         """
         Release resources owned by this context when the work is all done.
         This can happen later than when the request is complete.
+
+        :param parent_resource: The parent resource, if any
         """
         raise NotImplementedError
 

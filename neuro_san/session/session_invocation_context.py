@@ -33,6 +33,7 @@ from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgen
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
+from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.journals.message_journal import MessageJournal
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.messages.origination import Origination
@@ -157,19 +158,23 @@ class SessionInvocationContext(InvocationContext):
         """
         return self.metadata
 
-    async def close_of_request(self):
+    async def close_of_request(self, parent_resource: LingeringResource = None):
         """
         Release resources owned by this context when the request is complete.
         This can happen earlier than when the work is complete.
+
+        :param parent_resource: The parent resource, if any
         """
         if self.queue is not None:
             self.queue.close()
             self.queue = None
 
-    async def close_of_work(self):
+    async def close_of_work(self, parent_resource: LingeringResource = None):
         """
         Release resources owned by this context when the work is all done.
         This can happen later than when the request is complete.
+
+        :param parent_resource: The parent resource, if any
         """
         if self.asyncio_executor is not None:
             self.async_executors_pool.return_executor(self.asyncio_executor)

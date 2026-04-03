@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from __future__ import annotations
 
 
 class LingeringResource:
@@ -29,23 +30,27 @@ class LingeringResource:
     we are getting.
     """
 
-    async def close_of_request(self):
+    async def close_of_request(self, parent_resource: LingeringResource = None):
         """
         Release resources owned by this context when the request is complete.
         This can happen earlier than when the work is complete.
+
+        :param parent_resource: parent resource, if any
         """
         # Do nothing by default for easier implementation inheritance
 
-    async def close_of_work(self):
+    async def close_of_work(self, parent_resource: LingeringResource = None):
         """
         Release resources owned by this context when the work is all done.
         This can happen later than when the request is complete.
+
+        :param parent_resource: parent resource, if any
         """
         # Do nothing by default for easier implementation inheritance
 
-    async def close(self):
+    async def close(self, parent_resource: LingeringResource = None):
         """
         Compatibility method to close everything.
         """
-        await self.close_of_request()
-        await self.close_of_work()
+        await self.close_of_request(parent_resource)
+        await self.close_of_work(parent_resource)

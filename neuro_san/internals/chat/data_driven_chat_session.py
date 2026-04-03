@@ -388,17 +388,21 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         message_processor = StructureMessageProcessor(structure_formats)
         return message_processor
 
-    async def close_of_request(self):
+    async def close_of_request(self, parent_resource: LingeringResource = None):
         """
         Release resources owned by this context when the request is complete.
         This can happen earlier than when the work is complete.
+
+        :param parent_resource: The parent resource, if any
         """
         # Do nothing by default for easier implementation inheritance
 
-    async def close_of_work(self):
+    async def close_of_work(self, parent_resource: LingeringResource = None):
         """
         Release resources owned by this context when the work is all done.
         This can happen later than when the request is complete.
+
+        :param parent_resource: The parent resource, if any
         """
         # Now that we are done, tell the Reservationist that we used for this request
         # that there will be no more Reservations to corral.
