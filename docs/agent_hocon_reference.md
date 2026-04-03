@@ -862,6 +862,7 @@ topics frequently.
 
 Same as top-level [verbose](#verbose), except at single-agent scope.
 
+<!--- pyml disable-next-line no-duplicate-heading -->
 ### max_steps
 
 Same as top-level [max_steps](#max_steps), except at single-agent scope.
