@@ -97,14 +97,16 @@ class AbstractCallableActivation(CallableActivation):
         """
         return self.run_context.get_origin()
 
-    async def delete_resources(self, parent_run_context: RunContext):
+    async def close_of_work(self, parent_resource: RunContext = None):
         """
-        Cleans up after any allocated resources on their server side.
-        :param parent_run_context: The RunContext which contains the scope
-                    of operation of this CallableActivation
+        Release resources owned by this context when the work is all done.
+        This can happen later than when the request is complete.
+
+        :param parent_resource: parent resource, if any. Expected to be the
+                RunContext which contains the scope of operation of this CallableActivation
         """
         if self.run_context is not None:
-            await self.run_context.delete_resources(parent_run_context)
+            await self.run_context.close_of_work(parent_resource)
             self.run_context = None
 
     async def build(self) -> BaseMessage:
