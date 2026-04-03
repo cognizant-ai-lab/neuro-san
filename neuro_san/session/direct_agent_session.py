@@ -215,7 +215,7 @@ class DirectAgentSession(AgentSession):
             with suppress(Exception):
                 # Cannot run as if in sync environment, so run async
                 # Use the asyncio_executor so as to not induce other async warnings
-                task: Task = asyncio_executor.submit(self.request_id, chat_session.delete_resources)
+                task: Task = asyncio_executor.submit(self.request_id, chat_session.close)
                 _ = task
 
     def reset(self):

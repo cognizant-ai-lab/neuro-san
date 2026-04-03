@@ -42,6 +42,7 @@ from neuro_san.internals.graph.activations.sly_data_redactor import SlyDataRedac
 from neuro_san.internals.interfaces.context_type_tracing_context_factory import ContextTypeTracingContextFactory
 from neuro_san.internals.interfaces.front_man import FrontMan
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
+from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.interfaces.run_target import RunTarget
 from neuro_san.internals.journals.intercepting_journal import InterceptingJournal
 from neuro_san.internals.journals.journal import Journal
@@ -61,7 +62,7 @@ PATIENCE_ERRORS: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
 
 
 # pylint: disable=too-many-instance-attributes
-class DataDrivenChatSession(RunTarget):
+class DataDrivenChatSession(RunTarget, LingeringResource):
     """
     ChatSession implementation that consolidates policy
     in using data-driven agent tool graphs.
@@ -105,9 +106,6 @@ class DataDrivenChatSession(RunTarget):
         # This ends up being the one reference to the sly_data that gets passed around
         # to the graph components. Updating this updates everyone else.
         self.sly_data = {}
-
-        # Reset what we might have created before.
-        await self.delete_resources()
 
         # Update sly data (if any) with what was passed in.
         # Note that since this instance is the owner of the sly_data,
@@ -340,23 +338,6 @@ class DataDrivenChatSession(RunTarget):
         # we would only be blocking our own event loop.
         await queue.put_final_item(synchronous=True)
 
-        # Now that we are done, tell the Reservationist that we used for this request
-        # that there will be no more Reservations to corral.
-        reservationist: Reservationist = self.invocation_context.get_reservationist()
-        if reservationist is not None:
-            await reservationist.close()
-
-        # Close any objects on sly data that can be closed.
-        await self.close_sly_data()
-
-    async def delete_resources(self):
-        """
-        Frees up any service-side resources.
-        """
-        if self.front_man is not None:
-            await self.front_man.delete_any_resources()
-            self.front_man = None
-
     def prepare_chat_context(self, chat_message_history: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Prepare the chat context.
@@ -406,6 +387,31 @@ class DataDrivenChatSession(RunTarget):
         # Eventually this might be a CompositeMessageProcessor
         message_processor = StructureMessageProcessor(structure_formats)
         return message_processor
+
+    async def close_of_request(self):
+        """
+        Release resources owned by this context when the request is complete.
+        This can happen earlier than when the work is complete.
+        """
+        # Do nothing by default for easier implementation inheritance
+
+    async def close_of_work(self):
+        """
+        Release resources owned by this context when the work is all done.
+        This can happen later than when the request is complete.
+        """
+        # Now that we are done, tell the Reservationist that we used for this request
+        # that there will be no more Reservations to corral.
+        reservationist: Reservationist = self.invocation_context.get_reservationist()
+        if reservationist is not None:
+            await reservationist.close()
+
+        # Close any objects on sly data that can be closed.
+        await self.close_sly_data()
+
+        if self.front_man is not None:
+            await self.front_man.delete_any_resources()
+            self.front_man = None
 
     async def close_sly_data(self):
         """
