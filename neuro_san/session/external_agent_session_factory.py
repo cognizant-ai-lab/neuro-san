@@ -50,18 +50,25 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
             self.network_storage_dict = network_storage_dict
 
     def create_session(self, agent_url: str,
-                       invocation_context: InvocationContext) -> AsyncAgentSession:
+                       invocation_context: InvocationContext,
+                       invocation: str = None) -> AsyncAgentSession:
         """
         :param agent_url: An url string pointing to an external agent that came from
                     a tools list in an agent spec.
         :param invocation_context: The context policy container that pertains to the invocation
                     of the agent.
+        :param invocation: String describing how the agent wants to be invoked.
+                            Can be: "chatbot" - implies waiting for an answer.
+                                    "event" - implies no answer needed
+                                    None - implies chatbot
         :return: An AsyncAgentSession through which communications about the external agent can be made.
         """
 
         server_port: int = invocation_context.get_port()
         agent_location: Dict[str, str] = ExternalAgentParsing.parse_external_agent(agent_url, server_port=server_port)
-        session: AsyncAgentSession = self.create_session_from_location_dict(agent_location, invocation_context)
+        session: AsyncAgentSession = self.create_session_from_location_dict(agent_location,
+                                                                            invocation_context,
+                                                                            invocation)
         return session
 
     def get_networks_order(self, network_storage_dict: Dict[str, AgentNetworkStorage]) -> List[str]:
@@ -81,16 +88,22 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
         return networks_order
 
     def create_session_from_location_dict(self, agent_location: Dict[str, str],
-                                          invocation_context: InvocationContext) -> AsyncAgentSession:
+                                          invocation_context: InvocationContext,
+                                          invocation: str = None) -> AsyncAgentSession:
         """
         :param agent_location: An agent location dictionary returned by
                     ExternalAgentParsing.parse_external_agent()
         :param invocation_context: The context policy container that pertains to the invocation
                     of the agent.
+        :param invocation: String describing how the agent wants to be invoked.
+                            Can be: "chatbot" - implies waiting for an answer.
+                                    "event" - implies no answer needed
+                                    None - implies chatbot
         :return: An AsyncAgentSession through which communications about the external agent can be made.
         """
         if agent_location is None:
             return None
+
         # Create the session.
         host = agent_location.get("host")
         port = agent_location.get("port")
@@ -117,7 +130,7 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
                     break
 
             agent_network: AgentNetwork = agent_network_provider.get_agent_network()
-            safe_invocation_context: InvocationContext = invocation_context.safe_shallow_copy()
+            safe_invocation_context: InvocationContext = invocation_context.safe_shallow_copy(invocation)
             session = AsyncDirectAgentSession(agent_network, safe_invocation_context, metadata=metadata)
 
         if session is None:

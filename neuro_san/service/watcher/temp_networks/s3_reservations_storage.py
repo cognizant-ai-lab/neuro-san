@@ -51,18 +51,43 @@ class S3ReservationsStorage(AbstractReservationsStorage):
     Stores reservations as JSON objects in an S3 bucket, with each reservation
     stored in its associated agent spec as metadata.
     """
+    # pylint: disable=too-many-instance-attributes
 
     def __init__(self, bucket_name: str = "", prefix: str = "reservations/",
-                 check_expirations_interval_seconds: float = 60.0):
+                 check_expirations_interval_seconds: float = 0.0):
         """
         Initialize S3 reservations storage.
 
         :param bucket_name: S3 bucket name (defaults to AGENT_RESERVATIONS_S3_BUCKET env var)
         :param prefix: S3 key prefix for reservation objects
-        :param check_expirations_interval_seconds: How often to check for expired reservations
+        :param check_expirations_interval_seconds: How often to check for expired reservations.
+                                    If 0 or negative, expiration checks are disabled.
         """
+        # Our default for check_expirations_interval_seconds is 0
+        # because S3 expiration check is generally a significant execution load,
+        # and we may want to run it externally on demand rather than on a fixed schedule inside the service.
         super().__init__(storage_name="s3_storage",
                          check_expirations_interval_seconds=check_expirations_interval_seconds)
+        self.logger: Logger = getLogger(self.__class__.__name__)
+
+        # Check if expiration interval is set by environment variable,
+        # and adjust it if so (overriding the constructor parameter)
+        envvar_name: str = "AGENT_RESERVATIONS_EXTERNAL_STORAGE_CHECK_PERIOD_SECONDS"
+        envvar_value: str = os.getenv(envvar_name, "0")
+        try:
+            expiration_check_period_seconds: float = float(envvar_value)
+            self._check_interval_seconds = expiration_check_period_seconds
+        except ValueError as exc:
+            self.logger.error(
+                "Invalid value for %s, must be a number. Got: %s. "
+                "Please correct the environment variable or unset it.",
+                envvar_name,
+                envvar_value,
+            )
+            raise ValueError(
+                f"Invalid value for {envvar_name}: expected a numeric value, got {envvar_value!r}"
+            ) from exc
+
         # Configure bucket name from parameter or environment variable
         env_bucket: str = os.getenv("AGENT_RESERVATIONS_S3_BUCKET", "")
         self.bucket_name: str = bucket_name or env_bucket
@@ -80,7 +105,6 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         self.last_sync_timestamp: float = 0.0
         self.converter = ReservationDictionaryConverter()
         self.max_keys_per_page: int = 1000  # Max allowed by S3 API for ListObjectsV2
-        self.logger: Logger = getLogger(self.__class__.__name__)
 
     def start(self):
         """
@@ -216,12 +240,13 @@ class S3ReservationsStorage(AbstractReservationsStorage):
 
             # Store as JSON object in S3 with proper content type
             json_body: str = dumps(agent_spec, indent=4)  # Pretty-printed JSON
-            self.s3_client.put_object(
-                Bucket=self.bucket_name,
-                Key=key,
-                Body=json_body,
-                ContentType="application/json"
-            )
+
+            put_function = partial(self.s3_client.put_object,
+                                   Bucket=self.bucket_name,
+                                   Key=key,
+                                   Body=json_body,
+                                   ContentType="application/json")
+            self._do_with_retries(put_function)
 
             self.logger.debug("%s: Successfully stored reservation %s in S3", self._name, reservation_id)
 
