@@ -18,6 +18,8 @@
 from typing import Any
 from typing import Dict
 
+from threading import Event
+
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 
 from neuro_san.interfaces.reservationist import Reservationist
@@ -138,5 +140,11 @@ class InvocationContext(LingeringResource):
     def get_port(self) -> int:
         """
         :return: The port on which the server was started
+        """
+        raise NotImplementedError
+
+    def get_work_done_event(self) -> Event:
+        """
+        :return: The Event (synchronous) that will be set when work is done for this event
         """
         raise NotImplementedError

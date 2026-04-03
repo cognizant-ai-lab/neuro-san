@@ -22,7 +22,8 @@ from typing import Dict
 from typing import List
 
 from copy import copy
-import functools
+from functools import partial
+from threading import Event
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
@@ -102,6 +103,7 @@ class SessionInvocationContext(InvocationContext):
         self.queue: AsyncCollatingQueue = AsyncCollatingQueue()
         self.journal: Journal = MessageJournal(self.queue)
         self.resources: List[LingeringResource] = []
+        self.work_done_event: Event = Event()
 
     def start(self):
         """
@@ -112,7 +114,7 @@ class SessionInvocationContext(InvocationContext):
         """
         # Wrap it up into a single function with no parameters
         # for easier handling downstream.
-        logging_setup: Callable = functools.partial(setup_extra_logging_fields, metadata_dict=self.metadata)
+        logging_setup: Callable = partial(setup_extra_logging_fields, metadata_dict=self.metadata)
         self.asyncio_executor.start()
         # Run logging setup as event-loop initialization step -
         # make sure it is finished before we start to use this AsyncioExecutor instance.
@@ -270,3 +272,9 @@ class SessionInvocationContext(InvocationContext):
             invocation_context.effective_invocation = invocation
 
         return invocation_context
+
+    def get_work_done_event(self) -> Event:
+        """
+        :return: The Event (synchronous) that will be set when work is done for this event
+        """
+        return self.work_done_event
