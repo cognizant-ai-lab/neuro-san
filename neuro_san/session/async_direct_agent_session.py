@@ -163,7 +163,6 @@ class AsyncDirectAgentSession(AsyncAgentSession):
 
         # Create the gateway to the internals.
         chat_session = DataDrivenChatSession(agent_network=self.agent_network)
-        self.invocation_context.add_resource(chat_session)
 
         # Prepare the response dictionary
         template_response_dict: Dict[str, Any] = {}
