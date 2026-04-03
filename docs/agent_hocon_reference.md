@@ -864,10 +864,10 @@ Same as top-level [verbose](#verbose), except at single-agent scope.
 
 ### max_steps
 
-Same as top-level [max_steps](#max_steps), except at single-agent scope. 
+Same as top-level [max_steps](#max_steps), except at single-agent scope.
 
 <!--- pyml disable-next-line no-duplicate-heading -->
-### max_iterations 
+### max_iterations
 
 Deprecated. Use [max_steps](#max_steps-1) instead.
 
