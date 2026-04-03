@@ -55,5 +55,8 @@ class LangChainLlmResources(LingeringResource):
 
         :param parent_resource: parent resource, if any
         """
+        # Note we are not changing the LlmPolicy interface to be LingeringResource at the moment.
+        # This is something that could be extended external to neuro-san for someone's pet LLM,
+        # so we are not going there to preserve backwards compatibility.
         if self.llm_policy is not None:
             await self.llm_policy.delete_resources()
