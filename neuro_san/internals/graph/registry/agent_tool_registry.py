@@ -46,7 +46,9 @@ class AgentToolRegistry(AgentNetworkInspector, AgentToolFactory):
                                 parent_agent_spec: Dict[str, Any],
                                 name: str,
                                 sly_data: Dict[str, Any],
-                                arguments: Dict[str, Any] = None) -> CallableActivation:
+                                arguments: Dict[str, Any] = None,
+                                factory: AgentToolFactory = None,
+                                invocation: str = None) -> CallableActivation:
         """
         Create an active node for an agent from its spec.
         This is how CallableActivations create other CallableActivations.
@@ -57,10 +59,12 @@ class AgentToolRegistry(AgentNetworkInspector, AgentToolFactory):
         :param sly_data: A mapping whose keys might be referenceable by agents, but whose
                  values should not appear in agent chat text. Can be an empty dictionary.
         :param arguments: A dictionary of arguments for the newly constructed agent
+        :param factory: A factory that will be used to create the agent tool
+        :param invocation: The invocation style of the activation.
         :return: The CallableActivation agent referred to by the name.
         """
         return self.factory.create_agent_activation(parent_run_context, parent_agent_spec,
-                                                    name, sly_data, arguments, self)
+                                                    name, sly_data, arguments, self, invocation)
 
     def create_front_man(self,
                          sly_data: Dict[str, Any] = None,
