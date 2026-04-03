@@ -104,7 +104,7 @@ class AbstractCallableActivation(CallableActivation):
                     of operation of this CallableActivation
         """
         if self.run_context is not None:
-            await self.run_context.delete_resources(parent_run_context)
+            await self.run_context.close_of_work(parent_run_context)
             self.run_context = None
 
     async def build(self) -> BaseMessage:
