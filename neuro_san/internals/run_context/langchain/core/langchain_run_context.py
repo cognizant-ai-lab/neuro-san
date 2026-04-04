@@ -451,16 +451,16 @@ class LangChainRunContext(RunContext):
 
         return tool_message
 
-    async def delete_resources(self, parent_run_context: RunContext = None):
+    async def close_of_work(self, parent_resource: RunContext = None):
         """
-        Cleans up the service-side resources associated with this instance
-        :param parent_run_context: A parent RunContext perhaps the same instance,
-                        but perhaps not.  Default is None
-        """
+        Release resources owned by this context when the work is all done.
+        This can happen later than when the request is complete.
 
+        :param parent_resource: parent resource, if any
+        """
         # Release model related resources:
         if self.llm_resources:
-            await self.llm_resources.delete_resources()
+            await self.llm_resources.close_of_work()
 
         self.tools = []
         self.chat_history = []

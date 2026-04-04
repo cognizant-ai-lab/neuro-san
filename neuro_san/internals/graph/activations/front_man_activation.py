@@ -89,9 +89,3 @@ class FrontManActivation(CallingActivation, FrontMan):
         # class heirarchy stemming from CallableActivation.
         # A FrontMan is not Callable.
         raise NotImplementedError
-
-    async def delete_any_resources(self):
-        """
-        Cleans up after any allocated resources
-        """
-        await self.delete_resources(None)

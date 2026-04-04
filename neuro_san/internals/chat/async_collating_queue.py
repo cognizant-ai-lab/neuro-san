@@ -28,6 +28,10 @@ class AsyncCollatingQueue(AsyncIterator, AsyncHopper):
     """
     AsyncIterator instance to asynchronously iterate over/consume the contents of
     a Queue as they come in.
+
+    Note that this is not considered a LingeringResource, as different instances
+    of this class are used in different situations where close_of_request() and
+    close_of_work() inconsistent in these different use cases.
     """
     # Constant for the end key
     END_KEY: str = "end"

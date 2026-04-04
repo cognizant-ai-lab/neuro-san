@@ -273,11 +273,13 @@ class ExternalActivation(AbstractCallableActivation):
 
         return chat_request
 
-    async def delete_resources(self, parent_run_context: RunContext):
+    async def close_of_work(self, parent_resource: RunContext = None):
         """
-        Cleans up after any allocated resources on their server side.
-        :param parent_run_context: The RunContext which contains the scope
-                    of operation of this CallableNode
+        Release resources owned by this context when the work is all done.
+        This can happen later than when the request is complete.
+
+        :param parent_resource: parent resource, if any. Expected to be the
+                RunContext which contains the scope of operation of this CallableActivation
         """
-        await super().delete_resources(parent_run_context)
+        await super().close_of_work(parent_resource)
         self.session = None

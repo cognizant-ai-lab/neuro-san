@@ -25,12 +25,13 @@ from typing import List
 from langchain_core.messages.base import BaseMessage
 
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
+from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.run_context.interfaces.agent_spec_provider import AgentSpecProvider
 from neuro_san.internals.run_context.interfaces.run import Run
 
 
-class RunContext(AgentSpecProvider):
+class RunContext(AgentSpecProvider, LingeringResource):
     """
     Interface supporting high-level LLM usage.
     """
@@ -87,11 +88,12 @@ class RunContext(AgentSpecProvider):
         """
         raise NotImplementedError
 
-    async def delete_resources(self, parent_run_context: RunContext = None):
+    async def close_of_work(self, parent_resource: RunContext = None):
         """
-        Cleans up the service-side resources associated with this instance
-        :param parent_run_context: A parent RunContext perhaps the same instance,
-                        but perhaps not.  Default is None
+        Release resources owned by this context when the work is all done.
+        This can happen later than when the request is complete.
+
+        :param parent_resource: parent resource, if any
         """
         raise NotImplementedError
 

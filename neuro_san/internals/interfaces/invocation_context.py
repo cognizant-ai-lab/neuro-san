@@ -25,15 +25,20 @@ from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
+from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.messages.origination import Origination
 
 
-class InvocationContext:
+class InvocationContext(LingeringResource):
     """
-    Interface for encapsulating specific policy classes that pertain to
+    Top-level interface for encapsulating specific policy classes that pertain to
     a single invocation of an AgentSession or AsyncAgentSession, whether by way of a
     service call or library call.
+
+    An InvocationContext will last for the duration of the work initiated by Session/request,
+    which could outlive the Session/request itself, depending on just how its invocation is
+    configured.
     """
 
     def start(self):
@@ -88,9 +93,21 @@ class InvocationContext:
         """
         raise NotImplementedError
 
-    def close(self):
+    async def close_of_request(self, parent_resource: LingeringResource = None):
         """
-        Release resources owned by this context
+        Release resources owned by this context when the request is complete.
+        This can happen earlier than when the work is complete.
+
+        :param parent_resource: The parent resource, if any
+        """
+        raise NotImplementedError
+
+    async def close_of_work(self, parent_resource: LingeringResource = None):
+        """
+        Release resources owned by this context when the work is all done.
+        This can happen later than when the request is complete.
+
+        :param parent_resource: The parent resource, if any
         """
         raise NotImplementedError
 
