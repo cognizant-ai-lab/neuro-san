@@ -15,10 +15,22 @@
 #
 # END COPYRIGHT
 
+from typing import Set
+
+from asyncio import Task
 from logging import getLogger
 from logging import Logger
+from queue import Empty
+from threading import Event
 from threading import Thread
+from time import sleep
 
+from janus import Queue
+from janus import SyncQueueShutDown
+
+from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
+
+from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.service.utils.server_context import ServerContext
@@ -41,6 +53,7 @@ class EventWorkMonitor(Startable):
         self.update_thread: Thread = Thread(target=self._run, name="EventWorkMonitor", daemon=True)
         self.keep_running: bool = True
         self.update_period_in_seconds: float = 0.5
+        self.invocation_context_pool: Set(InvocationContext) = set()
 
     def start(self):
         """
@@ -54,11 +67,57 @@ class EventWorkMonitor(Startable):
         """
         Main loop
         """
+        janus_queue: Queue = self.event_work_queue.get_queue()
+
         while self.keep_running:
 
-            # Do important stuff
+            queued_item: InvocationContext = None
+            try:
+                queued_item = janus_queue.sync_q.get_nowait()
 
-            self.update_thread.sleep(self.update_period_in_seconds)
+            except Empty:
+                if janus_queue.sync_q.closed:
+                    self.logger.info("EventWorkMonitor shutting down")
+                    return
+
+            except SyncQueueShutDown:
+                self.logger.info("SHUTDOWN signal for EventWorkMonitor queue")
+                return
+
+            if self.event_work_queue.is_final_item(queued_item):
+                self.event_work_queue.close()
+                self.logger.info("EventWorkMonitor shutting down from final item")
+                return
+
+            if queued_item is not None:
+                self.invocation_context_pool.add(queued_item)
+
+            self.process_pool()
+
+            sleep(self.update_period_in_seconds)
+
+    def process_pool(self):
+        """
+        Process the pool of InvocationContexts we need to monitor
+        """
+        done_invocations: Set(InvocationContext) = set()
+
+        # See which ones are done
+        for invocation_context in self.invocation_context_pool:
+            done_event: Event = invocation_context.get_work_done_event()
+            if done_event.is_set():
+                done_invocations.add(invocation_context)
+
+        # Process the done ones
+        for invocation_context in done_invocations:
+
+            # Call close_of_work to clean up the resources
+            asyncio_executor: AsyncioExecutor = invocation_context.get_asyncio_executor()
+            task: Task = asyncio_executor.submit(None, invocation_context.close_of_work)
+            asyncio_executor.get_event_loop().run_until_complete(task)
+
+            # Remove from pool
+            self.invocation_context_pool.remove(invocation_context)
 
     def stop(self):
         """

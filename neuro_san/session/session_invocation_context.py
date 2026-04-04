@@ -192,12 +192,13 @@ class SessionInvocationContext(InvocationContext):
 
         :param parent_resource: The parent resource, if any
         """
+        # Close resources first cuz they might need the executor
+        for resource in self.resources:
+            await resource.close_of_work()
+
         if self.asyncio_executor is not None:
             self.async_executors_pool.return_executor(self.asyncio_executor)
             self.asyncio_executor = None
-
-        for resource in self.resources:
-            await resource.close_of_work()
 
     def get_request_reporting(self) -> Dict[str, Any]:
         """
