@@ -44,12 +44,15 @@ class HttpServerApp(Application):
 
     def __init__(self, handlers,
                  requests_limit: int,
+                 max_concurrent_streaming_chat: int,
                  logger: EventLoopLogger,
                  forwarded_request_metadata: List[str]):
         """
         Constructor:
         :param handlers: list of request handlers
         :param requests_limit: limit for number of requests we can execute
+        :param max_concurrent_streaming_chat: maximum number of concurrent streaming chat requests;
+                                              0 or negative means unlimited
         :param logger: logger to use
         :param forwarded_request_metadata: list of client metadata keys
         """
@@ -57,8 +60,10 @@ class HttpServerApp(Application):
         super().__init__(handlers=handlers)
         self.total: int = 0
         self.num_processing: int = 0
+        self.num_streaming_chat: int = 0
         self.requests_stats: Dict[str, int] = {}
         self.requests_limit: int = requests_limit
+        self.max_concurrent_streaming_chat: int = max_concurrent_streaming_chat
         self.logger: EventLoopLogger = logger
         self.forwarded_request_metadata: List[str] = forwarded_request_metadata
         self.serving: bool = True
@@ -72,6 +77,44 @@ class HttpServerApp(Application):
         False otherwise.
         """
         return self.serving
+
+    def try_start_streaming_chat_request(self, metadata: Dict[str, Any], caller: str) -> bool:
+        """
+        Try to register start of a streaming chat request.
+        Returns True if the request is accepted, False if the concurrent request limit is exceeded.
+        :param metadata: request metadata
+        :param caller: name of request client to be used for stats
+        """
+        with self.lock:
+            if 0 < self.max_concurrent_streaming_chat <= self.num_streaming_chat:
+                return False
+            self.num_streaming_chat += 1
+            self.num_processing += 1
+            self.requests_stats[caller] = self.requests_stats.get(caller, 0) + 1
+        self.logger.info(metadata, "Start %s", caller)
+        return True
+
+    def finish_streaming_chat_request(self, metadata: Dict[str, Any],
+                                      caller: str, get_stats: bool = False):
+        """
+        Register finishing of a streaming chat request.
+        :param metadata: request metadata
+        :param caller: name of request client to be used for stats
+        :param get_stats: True if we need to log requests statistics,
+                          False otherwise.
+        """
+        limit_reached: bool = False
+        with self.lock:
+            self.num_streaming_chat -= 1
+            self.num_processing -= 1
+            self.total += 1
+            limit_reached = 0 <= self.requests_limit < self.total
+        self.logger.info(metadata, "Finish %s", caller)
+        if get_stats:
+            self.logger.info(metadata, "Stats: %s", self.get_stats())
+        if limit_reached:
+            self.serving = False
+            self.initiate_shutdown()
 
     def start_client_request(self, metadata: Dict[str, Any], caller: str):
         """
@@ -146,6 +189,7 @@ class HttpServerApp(Application):
         """
         stats_dict: Dict[str, Any] = {
             "NumProcessing": self.num_processing,
+            "NumStreamingChat": self.num_streaming_chat,
             "Total": self.total
         }
         stats_dict.update(self.requests_stats)

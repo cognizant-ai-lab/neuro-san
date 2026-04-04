@@ -79,7 +79,8 @@ class HttpServer(AgentStateListener):
                  openapi_service_spec_path: str,
                  requests_limit: int,
                  logging_config: Dict[str, Any],
-                 forwarded_request_metadata: str = AgentServer.DEFAULT_FORWARDED_REQUEST_METADATA):
+                 forwarded_request_metadata: str = AgentServer.DEFAULT_FORWARDED_REQUEST_METADATA,
+                 max_concurrent_requests: int = 0):
         """
         Constructor:
         :param server_context: ServerContext with global-ish state
@@ -91,6 +92,8 @@ class HttpServer(AgentStateListener):
         :param logging_config: logging configuration
         :param forwarded_request_metadata: A space-delimited list of http metadata request keys
                to forward to logs/other requests
+        :param max_concurrent_requests: Maximum number of concurrent streaming_chat requests;
+                                        0 or negative means unlimited.
         """
         self.server_name_for_logs: str = "Http Server"
         self.server_config = server_config
@@ -109,6 +112,7 @@ class HttpServer(AgentStateListener):
             self.requests_limit = random.randint(request_limit_lower, request_limit_upper)
 
         self.openapi_service_spec_path: str = openapi_service_spec_path
+        self.max_concurrent_requests: int = max_concurrent_requests
         self.forwarded_request_metadata: List[str] = forwarded_request_metadata.split(" ")
         self.logger = HttpLogger(self.forwarded_request_metadata, self.logging_config)
         self.allowed_agents: Dict[str, AsyncAgentServiceProvider] = {}
@@ -223,7 +227,8 @@ class HttpServer(AgentStateListener):
         if self.server_context.get_mcp_server_context().is_enabled():
             handlers.append((r"/mcp", McpRootHandler, request_initialize_data))
 
-        return HttpServerApp(handlers, requests_limit, logger, self.forwarded_request_metadata)
+        return HttpServerApp(handlers, requests_limit, self.max_concurrent_requests,
+                             logger, self.forwarded_request_metadata)
 
     def agent_added(self, agent_name: str, source: AgentStorageSource):
         """

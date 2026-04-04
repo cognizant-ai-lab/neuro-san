@@ -49,7 +49,10 @@ class StreamingChatHandler(BaseRequestHandler):
         if service is None:
             return
 
-        self.application.start_client_request(metadata, f"{agent_name}/streaming_chat")
+        if not self.application.try_start_streaming_chat_request(metadata, f"{agent_name}/streaming_chat"):
+            self.set_status(HTTPStatus.TOO_MANY_REQUESTS)
+            self.write({"error": "Too many concurrent requests"})
+            return
 
         # Set up request timeout if it is specified:
         request_timeout: float = service.get_request_timeout_seconds()
@@ -150,4 +153,4 @@ class StreamingChatHandler(BaseRequestHandler):
                 # on our result_generator - it is allowed and has no effect.
                 await result_generator.aclose()
         self.do_finish()
-        self.application.finish_client_request(metadata, f"{agent_name}/streaming_chat", get_stats=True)
+        self.application.finish_streaming_chat_request(metadata, f"{agent_name}/streaming_chat", get_stats=True)

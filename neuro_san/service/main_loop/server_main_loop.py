@@ -258,7 +258,8 @@ class ServerMainLoop:
             self.service_openapi_spec_file,
             self.request_limit,
             self.logging_config,
-            forwarded_request_metadata=metadata_str)
+            forwarded_request_metadata=metadata_str,
+            max_concurrent_requests=self.max_concurrent_requests)
 
         # Enable MCP service if requested:
         if server_status.mcp_service.is_requested():
