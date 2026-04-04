@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import Any
 from typing import Callable
 from typing import Dict
+from typing import List
 
 from copy import copy
 import functools
@@ -33,6 +34,7 @@ from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgen
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
+from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.journals.message_journal import MessageJournal
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.messages.origination import Origination
@@ -42,8 +44,11 @@ from neuro_san.internals.messages.origination import Origination
 class SessionInvocationContext(InvocationContext):
     """
     Implementation of InvocationContext which encapsulates specific policy classes that pertain to
-    a single invocation of an AgentSession, whether by way of a
-    service call or library call.
+    a single invocation of an AgentSession, whether by way of a service call or library call.
+
+    A SessionInvocationContext will last for the duration of the work initiated by Session/request,
+    which could outlive the Session/request itself, depending on just how its invocation is
+    configured.
     """
 
     # pylint: disable=too-many-arguments
@@ -96,6 +101,7 @@ class SessionInvocationContext(InvocationContext):
         # safe_shallow_copy() below to keep AsyncDirectAgentSessions happy.
         self.queue: AsyncCollatingQueue = AsyncCollatingQueue()
         self.journal: Journal = MessageJournal(self.queue)
+        self.resources: List[LingeringResource] = []
 
     def start(self):
         """
@@ -157,15 +163,39 @@ class SessionInvocationContext(InvocationContext):
         """
         return self.metadata
 
-    def close(self):
+    def add_resource(self, resource: LingeringResource):
         """
-        Release resources owned by this context
+        :param resource: The resource to add
+        """
+        self.resources.append(resource)
+
+    async def close_of_request(self, parent_resource: LingeringResource = None):
+        """
+        Release resources owned by this context when the request is complete.
+        This can happen earlier than when the work is complete.
+
+        :param parent_resource: The parent resource, if any
+        """
+        if self.queue is not None:
+            self.queue.close()
+            self.queue = None
+
+        for resource in self.resources:
+            await resource.close_of_request()
+
+    async def close_of_work(self, parent_resource: LingeringResource = None):
+        """
+        Release resources owned by this context when the work is all done.
+        This can happen later than when the request is complete.
+
+        :param parent_resource: The parent resource, if any
         """
         if self.asyncio_executor is not None:
             self.async_executors_pool.return_executor(self.asyncio_executor)
             self.asyncio_executor = None
-        if self.queue is not None:
-            self.queue.close()
+
+        for resource in self.resources:
+            await resource.close_of_work()
 
     def get_request_reporting(self) -> Dict[str, Any]:
         """

@@ -17,12 +17,13 @@
 
 from langchain_core.language_models.base import BaseLanguageModel
 
+from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 
 
-class LangChainLlmResources:
+class LangChainLlmResources(LingeringResource):
     """
-    Class for representing a LangChain model
+    LingeringResource implemenation representing a LangChain model paired
     together with run-time policy necessary for model usage by the service.
     """
 
@@ -47,9 +48,15 @@ class LangChainLlmResources:
         """
         return self.llm_policy
 
-    async def delete_resources(self):
+    async def close_of_work(self, parent_resource: LingeringResource = None):
         """
-        Release the run-time resources used by the model
+        Release resources owned by this context when the work is all done.
+        This can happen later than when the request is complete.
+
+        :param parent_resource: parent resource, if any
         """
+        # Note we are not changing the LlmPolicy interface to be LingeringResource at the moment.
+        # This is something that could be extended external to neuro-san for someone's pet LLM,
+        # so we are not going there to preserve backwards compatibility.
         if self.llm_policy is not None:
             await self.llm_policy.delete_resources()

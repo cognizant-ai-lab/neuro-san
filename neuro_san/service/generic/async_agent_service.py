@@ -313,7 +313,7 @@ class AsyncAgentService:
                     await response_dict_generator.aclose()
             # Ensure that our SessionInvocationContext is always closed,
             # even if generator is interrupted.
-            invocation_context.close()
+            await invocation_context.close()
             invocation_context = None
 
         # Maybe report token accounting to a UsageLogger

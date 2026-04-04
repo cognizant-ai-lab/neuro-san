@@ -110,12 +110,6 @@ class Reservationist:
         event: Event = await self.deploy(deployment_dict, confirmation=confirmation)
         return event
 
-    async def close(self):
-        """
-        Indicates we are done using the Reservationist instance.
-        By default this does nothing.
-        """
-
     def validate_with(self, external_networks: List[str] = None, mcp_servers: List[str] = None) -> Reservationist:
         """
         Allow passing of validation parameters when using a with-statement.
