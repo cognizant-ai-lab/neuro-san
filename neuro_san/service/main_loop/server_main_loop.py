@@ -255,7 +255,7 @@ class ServerMainLoop:
         components_to_start.append(temp_networks_updater)
 
         # Create the event work monitor:
-        event_work_monitor = EventWorkMonitor(self.server_context.get_event_work_queue())
+        event_work_monitor = EventWorkMonitor(self.server_context)
         components_to_start.append(event_work_monitor)
 
         # Create HTTP server;
