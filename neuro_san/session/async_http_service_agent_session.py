@@ -105,6 +105,8 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
         max_chunk_size: int = 64 * 1024
         path: str = self.get_request_path("streaming_chat")
         try:
+            # To specify complete timeout value, we must use "total" parameter of ClientTimeout.
+            # See https://docs.aiohttp.org/en/stable/client_reference.html#aiohttp.ClientTimeout for details.
             timeout: ClientTimeout = ClientTimeout(total=None)
             if self.streaming_timeout_in_seconds is not None:
                 timeout = ClientTimeout(total=self.streaming_timeout_in_seconds)
