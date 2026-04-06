@@ -105,9 +105,9 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
         max_chunk_size: int = 64 * 1024
         path: str = self.get_request_path("streaming_chat")
         try:
-            timeout: ClientTimeout = None
+            timeout: ClientTimeout = ClientTimeout(total=None)
             if self.streaming_timeout_in_seconds is not None:
-                timeout = ClientTimeout(self.streaming_timeout_in_seconds)
+                timeout = ClientTimeout(total=self.streaming_timeout_in_seconds)
             async with ClientSession(headers=self.get_headers(),
                                      timeout=timeout
                                      ) as session:
