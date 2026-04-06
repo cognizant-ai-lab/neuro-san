@@ -24,10 +24,11 @@ from asyncio import get_running_loop
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
+from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
 
 
-class ServiceAgentReservationist(Reservationist):
+class ServiceAgentReservationist(Reservationist, LingeringResource):
     """
     Reservationist implementation that allows procurement of agent ids
     for a specific amount of time.
@@ -114,10 +115,14 @@ class ServiceAgentReservationist(Reservationist):
 
         return None
 
-    async def close(self):
+    async def close_of_work(self, parent_resource: LingeringResource = None):
         """
-        Tell the deployment consumer we are all done.
+        Release resources owned by this context when the work is all done.
+        This can happen later than when the request is complete.
+
+        :param parent_resource: parent resource, if any
         """
+        # Tell the deployment consumer we are all done.
         # Use synchronous side of the queue because this will not
         # be part of the same event loop the put() in deploy() above is done.
         await self.queue.put_final_item(synchronous=True)
