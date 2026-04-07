@@ -99,6 +99,8 @@ class AsyncAgentService:
         self.port: int = server_context.get_server_port()
 
         self.async_executor_pool: AsyncioExecutorPool = server_context.get_executor_pool()
+        self.event_work_queue: AsyncCollatingQueue = server_context.get_event_work_queue()
+
         self.reload_factories()
 
     def reload_factories(self):
@@ -270,7 +272,8 @@ class AsyncAgentService:
             metadata,
             reservationist,
             self.port,
-            effective_invocation=effective_invocation)
+            effective_invocation=effective_invocation,
+            event_work_queue=self.event_work_queue)
         invocation_context.start()
 
         # Set up logging inside async thread
@@ -313,7 +316,7 @@ class AsyncAgentService:
                     await response_dict_generator.aclose()
             # Ensure that our SessionInvocationContext is always closed,
             # even if generator is interrupted.
-            await invocation_context.close()
+            await invocation_context.finish_request()
             invocation_context = None
 
         # Maybe report token accounting to a UsageLogger

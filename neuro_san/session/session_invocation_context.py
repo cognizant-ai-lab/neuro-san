@@ -108,6 +108,7 @@ class SessionInvocationContext(InvocationContext):
         self.journal: Journal = MessageJournal(self.queue)
         self.resources: List[LingeringResource] = []
         self.work_done_event: Event = Event()
+        self.request_finished: bool = False
 
     def start(self):
         """
@@ -294,6 +295,11 @@ class SessionInvocationContext(InvocationContext):
         """
         Queue ourselves to let our work finish on its own and resources can be cleaned up later.
         """
+        # Only ever do this once
+        if self.request_finished:
+            return
+        self.request_finished = True
+
         await self.asyncio_executor.submit(self.close_of_request)
 
         close_of_work_now: bool = True

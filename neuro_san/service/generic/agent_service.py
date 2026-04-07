@@ -112,6 +112,7 @@ class AgentService:
         self.port: int = server_context.get_server_port()
 
         self.request_timeout_seconds: float = agent_network.get_request_timeout_seconds()
+        self.event_work_queue: AsyncCollatingQueue = server_context.get_event_work_queue()
 
         # Load once
         self.llm_factory.load()
@@ -273,7 +274,8 @@ class AgentService:
             metadata,
             reservationist,
             self.port,
-            effective_invocation=effective_invocation)
+            effective_invocation=effective_invocation,
+            event_work_queue=self.event_work_queue)
         invocation_context.start()
 
         # Set up logging inside async thread
@@ -315,7 +317,7 @@ class AgentService:
 
             # Ensure that our SessionInvocationContext is always closed,
             # even if iterator is interrupted.
-            task: Task = executor.submit(None, invocation_context.close)
+            task: Task = executor.submit(None, invocation_context.finish_request)
             executor.get_event_loop().run_until_complete(task)
             invocation_context = None
 
