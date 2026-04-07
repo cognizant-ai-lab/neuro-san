@@ -218,7 +218,7 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         finally:
             # Release resources without exceptions
             with suppress(Exception):
-                await self.invocation_context.finish_request()
+                self.invocation_context.finish_request()
 
     def reset(self):
         """

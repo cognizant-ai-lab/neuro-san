@@ -214,9 +214,9 @@ class DirectAgentSession(AgentSession):
             # Release resources without exceptions
             with suppress(Exception):
                 # Cannot run as if in sync environment, so run async
-                # Use the asyncio_executor so as to not induce other async warnings
-                task: Task = asyncio_executor.submit(self.request_id, self.invocation_context.finish_request)
-                _ = task
+                # This finish_request() will dole out what is appropriate to run in the
+                # executor vs in the current thread.
+                self.invocation_context.finish_request()
 
     def reset(self):
         """

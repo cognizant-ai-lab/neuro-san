@@ -294,7 +294,7 @@ class SessionInvocationContext(InvocationContext):
         """
         return self.work_done_event
 
-    async def finish_request(self):
+    def finish_request(self):
         """
         Queue ourselves to let our work finish on its own and resources can be cleaned up later.
         """
@@ -310,7 +310,8 @@ class SessionInvocationContext(InvocationContext):
             # Finish the work later
             if self.event_work_queue is not None:
                 close_of_work_now = False
-                await self.event_work_queue.put(self, synchronous=True)
+                self.run_in_executor_until_complete("finish_request",
+                                                    self.event_work_queue.put(self, synchronous=True))
 
         if close_of_work_now:
             # Still need to close resources
@@ -336,6 +337,5 @@ class SessionInvocationContext(InvocationContext):
         self.run_in_executor_until_complete(submitter_id, self.close_of_work())
 
         if self.asyncio_executor is not None:
-            # Chicken and egg problem here - this will cancel all tasks
             self.async_executors_pool.return_executor(self.asyncio_executor)
             self.asyncio_executor = None
