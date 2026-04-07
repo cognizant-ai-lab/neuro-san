@@ -91,7 +91,6 @@ class HttpServerApp(Application):
                  the status code will be HTTPStatus.OK and error message will be empty.
                  Otherwise, some error status code will be returned and error message will contain the reason.
         """
-        self.logger.info(metadata, "Start %s", caller)
         if not self.serving:
             return HTTPStatus.SERVICE_UNAVAILABLE, "Server is shutting down"
         with self.lock:
@@ -100,6 +99,7 @@ class HttpServerApp(Application):
                 return HTTPStatus.SERVICE_UNAVAILABLE, "Too many concurrent requests"
             self.num_processing += 1
             self.requests_stats[caller] = self.requests_stats.get(caller, 0) + 1
+        self.logger.info(metadata, "Start %s", caller)
         return HTTPStatus.OK, ""
 
     def finish_client_request(self, metadata: Dict[str, Any],
