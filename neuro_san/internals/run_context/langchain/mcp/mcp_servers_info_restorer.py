@@ -31,7 +31,8 @@ class McpServersInfoRestorer(AbstractAsyncConfigRestorer):
     """
 
     def __init__(self):
-        super().__init__(file_purpose="MCP servers info", env_var="MCP_SERVERS_INFO_FILE")
+        # If the MCP info file does not exist, use values from the network HOCON file.
+        super().__init__(file_purpose="MCP servers info", env_var="MCP_SERVERS_INFO_FILE", must_exist=False)
 
     def filter_config(self, basis_config: Dict[str, Any], file_path: str = None) -> Dict[str, Any]:
         """
@@ -42,6 +43,10 @@ class McpServersInfoRestorer(AbstractAsyncConfigRestorer):
 
         # Basic file checking help in here
         basis_config = super().filter_config(basis_config, file_path)
+
+        # If there is no config (no file, or file not found), just return None to indicate that.
+        if basis_config is None:
+            return None
 
         # Now, MCP endpoints urls could put in quotes, so strip them out.
         result_dict: Dict[str, Any] = {}
