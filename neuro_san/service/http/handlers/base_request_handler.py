@@ -20,6 +20,7 @@ See class comment for details
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 
 from http import HTTPStatus
 
@@ -224,7 +225,7 @@ class BaseRequestHandler(RequestHandler):
 
         self.logger.debug(self.get_metadata(), f"[REQUEST RECEIVED] {self.request.method} {self.request.uri}")
 
-    def do_finish(self, status_code: int = HTTPStatus.OK, err_message: str = None):
+    def do_finish(self, status_code: int = HTTPStatus.OK, err_message: Optional[str] = None):
         """
         Wrapper for finish() call,
         with check for result status code and error message to write out if necessary,
