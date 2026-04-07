@@ -92,15 +92,15 @@ class HttpServerApp(Application):
                  Otherwise, some error status code will be returned and error message will contain the reason.
         """
         self.logger.info(metadata, "Start %s", caller)
+        if not self.serving:
+            return HTTPStatus.SERVICE_UNAVAILABLE, "Server is shutting down"
         with self.lock:
-            if not self.serving:
-                return HTTPStatus.SERVICE_UNAVAILABLE, "Server is shutting down"
             # num_processing is the number of currently served requests:
             if 0 < self.concurrent_requests_limit <= self.num_processing:
                 return HTTPStatus.SERVICE_UNAVAILABLE, "Too many concurrent requests"
             self.num_processing += 1
             self.requests_stats[caller] = self.requests_stats.get(caller, 0) + 1
-            return HTTPStatus.OK, ""
+        return HTTPStatus.OK, ""
 
     def finish_client_request(self, metadata: Dict[str, Any],
                               caller: str, get_stats: bool = False):
