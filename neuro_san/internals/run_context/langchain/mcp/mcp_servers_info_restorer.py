@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import Optional
 
 from neuro_san.internals.persistence.abstract_async_config_restorer import AbstractAsyncConfigRestorer
 
@@ -34,11 +35,11 @@ class McpServersInfoRestorer(AbstractAsyncConfigRestorer):
         # If the MCP info file does not exist, use values from the network HOCON file.
         super().__init__(file_purpose="MCP servers info", env_var="MCP_SERVERS_INFO_FILE", must_exist=False)
 
-    def filter_config(self, basis_config: Dict[str, Any], file_path: str = None) -> Dict[str, Any]:
+    def filter_config(self, basis_config: Dict[str, Any], file_path: str = None) -> Optional[Dict[str, Any]]:
         """
         :param basis_config: A dictionary with MCP servers information
         :param file_path: The path to the MCP servers info file
-        :return: a dictionary with MCP servers information
+        :return: a dictionary with MCP servers information or None if there is no config (no file, or file not found)
         """
 
         # Basic file checking help in here
