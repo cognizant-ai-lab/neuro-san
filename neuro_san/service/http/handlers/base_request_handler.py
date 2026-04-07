@@ -236,7 +236,7 @@ class BaseRequestHandler(RequestHandler):
         """
         if status_code != HTTPStatus.OK:
             self.set_status(status_code)
-            if err_message is not None:
+            if err_message:
                 self.write({"error": err_message})
         try:
             self.finish()

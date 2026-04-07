@@ -81,14 +81,14 @@ class HttpServerApp(Application):
         """
         return self.serving
 
-    def try_start_client_request(self, metadata: Dict[str, Any], caller: str) -> Tuple[int, str]:
+    def try_start_client_request(self, metadata: Dict[str, Any], caller: str) -> Tuple[HTTPStatus, str]:
         """
         Try to start new client request and register it if successful.
         :param metadata: request metadata
         :param caller: name of request client to be used for stats
         :return: A tuple of (HTTP status code, error message).
                  If the request can be started,
-                 the status code will be HTTPStatus.OK and error message will be None.
+                 the status code will be HTTPStatus.OK and error message will be empty.
                  Otherwise, some error status code will be returned and error message will contain the reason.
         """
         self.logger.info(metadata, "Start %s", caller)
