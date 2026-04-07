@@ -20,6 +20,8 @@ See class comment for details
 from typing import Any
 from typing import Dict
 
+from http import HTTPStatus
+
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
 
 
@@ -34,7 +36,11 @@ class OpenApiPublishHandler(BaseRequestHandler):
         for "publish my OpenAPI specification document" call.
         """
         metadata: Dict[str, Any] = self.get_metadata()
-        self.application.start_client_request(metadata, "/api/v1/docs")
+        status_code, err_message = self.application.try_start_client_request(metadata, "/api/v1/docs")
+        if status_code != HTTPStatus.OK:
+            self.do_finish(status_code, err_message)
+            return
+
         # Return json data to the HTTP client
         self.set_header("Content-Type", "application/json")
         self.write(self.openapi_service_spec)
