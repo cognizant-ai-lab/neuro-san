@@ -62,7 +62,8 @@ class SessionInvocationContext(InvocationContext):
                  metadata: Dict[str, str] = None,
                  reservationist: Reservationist = None,
                  port: int = None,
-                 effective_invocation: str = "chatbot"):
+                 effective_invocation: str = "chatbot",
+                 event_work_queue: AsyncCollatingQueue = None):
         """
         Constructor
 
@@ -79,6 +80,8 @@ class SessionInvocationContext(InvocationContext):
         :param reservationist: The Reservationist instance to use.
         :param port: The port on which the server was started
         :param effective_invocation: A string representing the effective invocation of the session.
+        :param event_work_queue: The AsyncCollatingQueue instance to use to queue up work
+                            for events that will be finished up after the request ends.
         """
 
         # From args
@@ -91,6 +94,7 @@ class SessionInvocationContext(InvocationContext):
         self.reservationist: Reservationist = reservationist
         self.port: int = port
         self.effective_invocation: str = effective_invocation
+        self.event_work_queue: AsyncCollatingQueue = event_work_queue
 
         # Internal
         # Get an async executor to run all tasks for this session instance:
@@ -285,3 +289,20 @@ class SessionInvocationContext(InvocationContext):
         :return: The Event (synchronous) that will be set when work is done for this event
         """
         return self.work_done_event
+
+    async def finish_request(self):
+        """
+        Queue ourselves to let our work finish on its own and resources can be cleaned up later.
+        """
+        await self.asyncio_executor.submit(self.close_of_request)
+
+        close_of_work_now: bool = True
+        if self.get_effective_invocation() == "event":
+            # Finish the work later
+            if self.event_work_queue is not None:
+                close_of_work_now = False
+                await self.event_work_queue.put(self, synchronous=True)
+
+        if close_of_work_now:
+            # Still need to close resources
+            await self.asyncio_executor.submit(self.close_of_work)
