@@ -43,7 +43,7 @@ class McpServersInfoRestorer(AbstractAsyncConfigRestorer):
         """
 
         # Basic file checking help in here
-        basis_config = super().filter_config(basis_config, file_path)
+        basis_config: Optional[Dict[str, Any]] = super().filter_config(basis_config, file_path)
 
         # If there is no config (no file, or file not found), just return None to indicate that.
         if basis_config is None:
