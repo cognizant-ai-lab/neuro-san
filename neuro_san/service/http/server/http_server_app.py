@@ -88,7 +88,7 @@ class HttpServerApp(Application):
         :param caller: name of request client to be used for stats
         :return: A tuple of (HTTP status code, error message).
                  If the request can be started,
-                 the status code will be HTTPStatus.OK and error message will be empty.
+                 the status code will be HTTPStatus.OK and error message will be None.
                  Otherwise, some error status code will be returned and error message will contain the reason.
         """
         self.logger.info(metadata, "Start %s", caller)
