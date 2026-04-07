@@ -20,10 +20,11 @@ from typing import List
 
 from langchain_core.messages.base import BaseMessage
 
+from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 
 
-class CallableActivation:
+class CallableActivation(LingeringResource):
     """
     Interface describing what a CallingActivation can access
     when invoking LLM function calls.
@@ -48,10 +49,20 @@ class CallableActivation:
         """
         raise NotImplementedError
 
-    async def delete_resources(self, parent_run_context: RunContext):
+    async def close_of_request(self, parent_resource: RunContext = None):
         """
-        Cleans up after any allocated resources on their server side.
-        :param parent_run_context: The RunContext which contains the scope
-                    of operation of this CallableNode
+        Release resources owned by this context when the request is complete.
+        This can happen earlier than when the work is complete.
+
+        :param parent_resource: parent resource, if any
+        """
+        # Do nothing by default for easier implementation inheritance
+
+    async def close_of_work(self, parent_resource: RunContext = None):
+        """
+        Release resources owned by this context when the work is all done.
+        This can happen later than when the request is complete.
+
+        :param parent_resource: parent resource, if any
         """
         raise NotImplementedError

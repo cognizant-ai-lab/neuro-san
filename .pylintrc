@@ -39,3 +39,6 @@ disable=
     duplicate-code,
     missing-module-docstring,
     too-few-public-methods,
+
+[DESIGN]
+max-parents=10

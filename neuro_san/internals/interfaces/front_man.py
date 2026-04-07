@@ -21,9 +21,10 @@ from typing import List
 from langchain_core.messages.base import BaseMessage
 
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
+from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 
 
-class FrontMan:
+class FrontMan(LingeringResource):
     """
     Interface that describes how a chat interface can interact with a FrontMan
     """
@@ -67,8 +68,21 @@ class FrontMan:
         """
         raise NotImplementedError
 
-    async def delete_any_resources(self):
+    async def close_of_request(self, parent_resource: LingeringResource = None):
         """
-        Cleans up after any allocated resources
+        Release resources owned by this context when the request is complete.
+        This can happen earlier than when the work is complete.
+
+        :param parent_resource: parent resource, if any
+        """
+        raise NotImplementedError
+
+    async def close_of_work(self, parent_resource: LingeringResource = None):
+        """
+        Release resources owned by this context when the work is all done.
+        This can happen later than when the request is complete.
+
+        :param parent_resource: parent resource, if any. Expected to be the
+                RunContext which contains the scope of operation of this CallableActivation
         """
         raise NotImplementedError
