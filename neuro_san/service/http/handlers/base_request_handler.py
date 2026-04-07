@@ -213,7 +213,7 @@ class BaseRequestHandler(RequestHandler):
     # pylint: disable=invalid-overridden-method
     async def prepare(self):
         if not self.application.is_serving():
-            self.set_status(503)
+            self.set_status(HTTPStatus.SERVICE_UNAVAILABLE)
             self.write({"error": "Server is shutting down"})
             self.logger.error(self.get_metadata(), "Server is shutting down")
             self.do_finish()
@@ -224,11 +224,19 @@ class BaseRequestHandler(RequestHandler):
 
         self.logger.debug(self.get_metadata(), f"[REQUEST RECEIVED] {self.request.method} {self.request.uri}")
 
-    def do_finish(self):
+    def do_finish(self, status_code: int = HTTPStatus.OK, err_message: str = None):
         """
-        Wrapper for finish() call
-        with check for closed client connection.
+        Wrapper for finish() call,
+        with check for result status code and error message to write out if necessary,
+        Also check for closed client connection.
+        :param status_code: HTTP status code to set for response; default is 200 OK
+        :param err_message: error message to write out in response body in case of error;
+            default is None, which means no error message will be written out.
         """
+        if status_code != HTTPStatus.OK:
+            self.set_status(status_code)
+            if err_message is not None:
+                self.write({"error": err_message})
         try:
             self.finish()
         except tornado.iostream.StreamClosedError:

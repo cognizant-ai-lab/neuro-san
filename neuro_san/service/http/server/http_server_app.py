@@ -20,8 +20,11 @@ See class comment for details
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Tuple
 
 import time
+
+from http import HTTPStatus
 
 from threading import Lock
 from threading import Thread
@@ -40,16 +43,20 @@ class HttpServerApp(Application):
     with redefined internal logger so we can include custom request metadata.
     """
     # pylint: disable=too-many-instance-attributes
+    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-positional-arguments
     SHUTDOWN_TIMEOUT_SECONDS: int = 30
 
     def __init__(self, handlers,
                  requests_limit: int,
+                 concurrent_requests_limit: int,
                  logger: EventLoopLogger,
                  forwarded_request_metadata: List[str]):
         """
         Constructor:
         :param handlers: list of request handlers
         :param requests_limit: limit for number of requests we can execute
+        :param concurrent_requests_limit: limit for number of concurrent requests we can execute
         :param logger: logger to use
         :param forwarded_request_metadata: list of client metadata keys
         """
@@ -59,6 +66,7 @@ class HttpServerApp(Application):
         self.num_processing: int = 0
         self.requests_stats: Dict[str, int] = {}
         self.requests_limit: int = requests_limit
+        self.concurrent_requests_limit: int = concurrent_requests_limit
         self.logger: EventLoopLogger = logger
         self.forwarded_request_metadata: List[str] = forwarded_request_metadata
         self.serving: bool = True
@@ -73,16 +81,26 @@ class HttpServerApp(Application):
         """
         return self.serving
 
-    def start_client_request(self, metadata: Dict[str, Any], caller: str):
+    def try_start_client_request(self, metadata: Dict[str, Any], caller: str) -> Tuple[int, str]:
         """
-        Register start of client request.
+        Try to start new client request and register it if successful.
         :param metadata: request metadata
         :param caller: name of request client to be used for stats
+        :return: A tuple of (HTTP status code, error message).
+                 If the request can be started,
+                 the status code will be HTTPStatus.OK and error message will be empty.
+                 Otherwise, some error status code will be returned and error message will contain the reason.
         """
         self.logger.info(metadata, "Start %s", caller)
         with self.lock:
+            if not self.serving:
+                return HTTPStatus.SERVICE_UNAVAILABLE, "Server is shutting down"
+            # num_processing is the number of currently served requests:
+            if 0 < self.concurrent_requests_limit <= self.num_processing:
+                return HTTPStatus.SERVICE_UNAVAILABLE, "Too many concurrent requests"
             self.num_processing += 1
             self.requests_stats[caller] = self.requests_stats.get(caller, 0) + 1
+            return HTTPStatus.OK, None
 
     def finish_client_request(self, metadata: Dict[str, Any],
                               caller: str, get_stats: bool = False):
