@@ -116,9 +116,11 @@ class HttpServerApp(Application):
             self.num_processing -= 1
             self.total += 1
             limit_reached = 0 <= self.requests_limit < self.total
+            if get_stats:
+                stats_data: Dict[str, Any] = self.get_stats()
         self.logger.info(metadata, "Finish %s", caller)
         if get_stats:
-            self.logger.info(metadata, "Stats: %s", self.get_stats())
+            self.logger.info(metadata, "Stats: %s", stats_data)
         # Now check if we reached requests limit:
         if limit_reached:
             self.serving = False
