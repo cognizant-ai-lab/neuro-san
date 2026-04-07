@@ -17,11 +17,15 @@
 from __future__ import annotations
 
 from typing import Any
+from typing import Awaitable
 from typing import Callable
 from typing import Dict
 from typing import List
 
+from asyncio import AbstractEventLoop
+from asyncio import run_coroutine_threadsafe
 from copy import copy
+from concurrent.futures import Future
 from functools import partial
 from threading import Event
 
@@ -202,6 +206,7 @@ class SessionInvocationContext(InvocationContext):
             await resource.close_of_work()
 
         if self.asyncio_executor is not None:
+            # Chicken and egg problem here - this will cancel all tasks
             self.async_executors_pool.return_executor(self.asyncio_executor)
             self.asyncio_executor = None
 
@@ -300,7 +305,7 @@ class SessionInvocationContext(InvocationContext):
             return
         self.request_finished = True
 
-        await self.asyncio_executor.submit(self.close_of_request)
+        self.run_until_complete("finish_request", self.close_of_request())
 
         close_of_work_now: bool = True
         if self.get_effective_invocation() == "event":
@@ -311,4 +316,17 @@ class SessionInvocationContext(InvocationContext):
 
         if close_of_work_now:
             # Still need to close resources
-            await self.asyncio_executor.submit(self.close_of_work)
+            self.run_until_complete("finish_request", self.close_of_work())
+
+    def run_until_complete(self, submitter_id: str, coroutine: Awaitable) -> Any:
+        """
+        Submits a function to be run on the executor and runs until complete.
+        Note this is synchronous.
+        """
+        _ = submitter_id
+
+        other_loop: AbstractEventLoop = self.asyncio_executor.get_event_loop()
+        future: Future = run_coroutine_threadsafe(coroutine, other_loop)
+
+        result: Any = future.result()
+        return result

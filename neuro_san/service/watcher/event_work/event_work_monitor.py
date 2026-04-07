@@ -17,7 +17,6 @@
 
 from typing import Set
 
-from asyncio import Task
 from logging import getLogger
 from logging import Logger
 from queue import Empty
@@ -28,7 +27,6 @@ from time import sleep
 from janus import Queue
 from janus import SyncQueueShutDown
 
-from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.startable import Startable
@@ -112,9 +110,7 @@ class EventWorkMonitor(Startable):
         for invocation_context in done_invocations:
 
             # Call close_of_work to clean up the resources
-            asyncio_executor: AsyncioExecutor = invocation_context.get_asyncio_executor()
-            task: Task = asyncio_executor.submit(None, invocation_context.close_of_work)
-            asyncio_executor.get_event_loop().run_until_complete(task)
+            invocation_context.run_until_complete("EventWorkMonitor", invocation_context.close_of_work())
 
             # Remove from pool
             self.invocation_context_pool.remove(invocation_context)
