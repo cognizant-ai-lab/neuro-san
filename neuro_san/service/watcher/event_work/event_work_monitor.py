@@ -109,10 +109,10 @@ class EventWorkMonitor(Startable):
         # Process the done ones
         for invocation_context in done_invocations:
 
-            # Call close_of_work to clean up the resources
-            invocation_context.run_until_complete("EventWorkMonitor", invocation_context.close_of_work())
+            # Clean up the resources of the invocation_context
+            invocation_context.done_with_work("EventWorkMonitor")
 
-            # Remove from pool
+            # No need to check on this guy any more
             self.invocation_context_pool.remove(invocation_context)
 
     def stop(self):

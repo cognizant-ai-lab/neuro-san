@@ -199,16 +199,14 @@ class SessionInvocationContext(InvocationContext):
         Release resources owned by this context when the work is all done.
         This can happen later than when the request is complete.
 
+        Note: Any time close_of_work() is called, return_executor() should also be called
+              but not in the executor.  Use the synchronous done_with_work() for that combo.
+
         :param parent_resource: The parent resource, if any
         """
         # Close resources first cuz they might need the executor
         for resource in self.resources:
             await resource.close_of_work()
-
-        if self.asyncio_executor is not None:
-            # Chicken and egg problem here - this will cancel all tasks
-            self.async_executors_pool.return_executor(self.asyncio_executor)
-            self.asyncio_executor = None
 
     def get_request_reporting(self) -> Dict[str, Any]:
         """
@@ -305,7 +303,7 @@ class SessionInvocationContext(InvocationContext):
             return
         self.request_finished = True
 
-        self.run_until_complete("finish_request", self.close_of_request())
+        self.run_in_executor_until_complete("finish_request", self.close_of_request())
 
         close_of_work_now: bool = True
         if self.get_effective_invocation() == "event":
@@ -316,9 +314,9 @@ class SessionInvocationContext(InvocationContext):
 
         if close_of_work_now:
             # Still need to close resources
-            self.run_until_complete("finish_request", self.close_of_work())
+            self.done_with_work("finish_request")
 
-    def run_until_complete(self, submitter_id: str, coroutine: Awaitable) -> Any:
+    def run_in_executor_until_complete(self, submitter_id: str, coroutine: Awaitable) -> Any:
         """
         Submits a function to be run on the executor and runs until complete.
         Note this is synchronous.
@@ -330,3 +328,14 @@ class SessionInvocationContext(InvocationContext):
 
         result: Any = future.result()
         return result
+
+    def done_with_work(self, submitter_id: str = None):
+        """
+        Returns the executor to the pool
+        """
+        self.run_in_executor_until_complete(submitter_id, self.close_of_work())
+
+        if self.asyncio_executor is not None:
+            # Chicken and egg problem here - this will cancel all tasks
+            self.async_executors_pool.return_executor(self.asyncio_executor)
+            self.asyncio_executor = None
