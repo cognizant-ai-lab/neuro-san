@@ -41,7 +41,7 @@ from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.messages.origination import Origination
 
 
-# pylint: disable=too-many-instance-attributes
+# pylint: disable=too-many-instance-attributes,too-many-public-methods
 class SessionInvocationContext(InvocationContext):
     """
     Implementation of InvocationContext which encapsulates specific policy classes that pertain to
