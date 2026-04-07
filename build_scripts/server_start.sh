@@ -2,7 +2,7 @@
   
 # Script to be run to start server before any of test case client that require HTTP services
 
-sudo apt-get update && sudo apt-get install --yes netcat-openbsd procps curl net-tools || echo "⚠️ apt-get failed (non-fatal); tools may already be installed"
+apt-get update && apt-get install -y netcat-openbsd procps curl net-tools
 
 nohup python -m neuro_san.service.main_loop.server_main_loop > agent.log 2>&1 &
   echo $! > agent.pid
@@ -17,7 +17,7 @@ fi
 
 echo "✅ Server process started with PID $(cat agent.pid)"
 
-for i in {1..60}; do
+for i in {1..30}; do
   PORT_8080_READY=false
 
   if nc -z localhost 8080; then
@@ -29,14 +29,12 @@ for i in {1..60}; do
     break
   fi
 
-  echo "⏳ Waiting for port 8080... ($i/60)"
+  echo "⏳ Waiting for port 8080... ($i/30)"
   sleep 1
 done
 
 if ! nc -z localhost 8080; then
-  echo "❌ Timeout: Port failed to open after 60 seconds"
-  echo "----- agent.log -----"
-  cat agent.log
+  echo "❌ Timeout: Port failed to open after $i seconds"
   exit 1
 fi
 
