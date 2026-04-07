@@ -100,7 +100,7 @@ class HttpServerApp(Application):
                 return HTTPStatus.SERVICE_UNAVAILABLE, "Too many concurrent requests"
             self.num_processing += 1
             self.requests_stats[caller] = self.requests_stats.get(caller, 0) + 1
-            return HTTPStatus.OK, None
+            return HTTPStatus.OK, ""
 
     def finish_client_request(self, metadata: Dict[str, Any],
                               caller: str, get_stats: bool = False):
