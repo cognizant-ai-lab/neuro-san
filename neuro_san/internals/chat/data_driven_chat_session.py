@@ -204,6 +204,8 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         """
         # Set up some member variable state so that run_it() can use it
         self.invocation_context = invocation_context
+        self.invocation_context.add_resource(self)
+
         journal: Journal = self.invocation_context.get_journal()
         self.interceptor = InterceptingJournal(journal, origin=None)
 
@@ -390,15 +392,6 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         # Eventually this might be a CompositeMessageProcessor
         message_processor = StructureMessageProcessor(structure_formats)
         return message_processor
-
-    async def close_of_request(self, parent_resource: LingeringResource = None):
-        """
-        Release resources owned by this context when the request is complete.
-        This can happen earlier than when the work is complete.
-
-        :param parent_resource: The parent resource, if any
-        """
-        # Do nothing by default for easier implementation inheritance
 
     async def close_of_work(self, parent_resource: LingeringResource = None):
         """
