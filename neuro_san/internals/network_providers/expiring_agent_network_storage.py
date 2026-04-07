@@ -42,14 +42,20 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
     which will be used as a "base" source of truth.
     """
 
-    def __init__(self, check_expirations_interval_seconds: float = 60.0):
+    def __init__(self, check_expirations_interval_seconds: float = 60.0,
+                 max_items: int = 0):
         """
         Constructor
         :param check_expirations_interval_seconds: The number of seconds between checks for expired reservations.
+        :param max_items: Maximum number of items to keep in storage.
+                          When exceeded, least recently used items are evicted.
+                          0 or negative means unlimited.
         """
         super().__init__(storage_name="temp_storage",
                          check_expirations_interval_seconds=check_expirations_interval_seconds)
         self.reservations_table: Dict[str, Reservation] = {}
+        self.access_times: Dict[str, float] = {}
+        self.max_items: int = max_items
         self.base_storage: ReservationsStorage = None
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -117,6 +123,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         # Need to do this while holding the lock
         added: List[str] = []
         replaced: List[str] = []
+        now: float = time.time()
         with self.lock:
             for reservation, agent_spec in reservations_dict.items():
 
@@ -126,6 +133,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
                 agent_network = AgentNetwork(agent_spec, agent_name)
                 self.agents_table[agent_name] = agent_network
                 self.reservations_table[agent_name] = reservation
+                self.access_times[agent_name] = now
 
                 if is_new:
                     added.append(agent_name)
@@ -141,6 +149,9 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             for agent_name in replaced:
                 listener.agent_modified(agent_name, self)
                 self.logger.info("%s: REPLACED network for agent %s from %s", self._name, agent_name, source)
+
+        # Evict least recently used items if we exceeded the limit
+        self._evict_lru_items()
 
     def get_one_reservation(self, obj_key: str) -> Tuple[Reservation, Any]:
         """
@@ -179,6 +190,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             for agent_name in expired:
                 self.reservations_table.pop(agent_name, None)
                 self.agents_table.pop(agent_name, None)
+                self.access_times.pop(agent_name, None)
 
         # Notify listeners about this state change:
         # do it outside of internal lock
@@ -186,6 +198,32 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             for agent_name in expired:
                 listener.agent_removed(agent_name, self)
                 self.logger.info("%s: REMOVED network for agent %s", self._name, agent_name)
+
+    def _evict_lru_items(self):
+        """
+        Remove least recently used items to bring storage size under max_items limit.
+        """
+        if self.max_items <= 0:
+            return
+
+        evicted: List[str] = []
+        with self.lock:
+            overflow: int = len(self.agents_table) - self.max_items
+            if overflow <= 0:
+                return
+            # Sort by access time, oldest first
+            sorted_agents = sorted(self.access_times.items(), key=lambda item: item[1])
+            for agent_name, _ in sorted_agents[:overflow]:
+                self.reservations_table.pop(agent_name, None)
+                self.agents_table.pop(agent_name, None)
+                self.access_times.pop(agent_name, None)
+                evicted.append(agent_name)
+
+        # Notify listeners outside of lock
+        for listener in self.listeners:
+            for agent_name in evicted:
+                listener.agent_removed(agent_name, self)
+                self.logger.info("%s: EVICTED (LRU) network for agent %s", self._name, agent_name)
 
     def get_agent_network_provider(self, agent_name: str) -> AgentNetworkProvider:
         """
@@ -201,6 +239,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
                 with self.lock:
                     self.reservations_table.pop(agent_name, None)
                     self.agents_table.pop(agent_name, None)
+                    self.access_times.pop(agent_name, None)
 
                 # Notify listeners about this state change:
                 # do it outside of internal lock
@@ -216,6 +255,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             # Reservation is still valid, so we can return the AgentNetworkProvider for this agent.
             agent_network: AgentNetwork = self.agents_table.get(agent_name, None)
             if agent_network is not None:
+                self.access_times[agent_name] = time.time()
                 return FixedAgentNetworkProvider(agent_network)
             return None
         # We don't have a reservation for this agent,
@@ -226,14 +266,19 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
                 # We have a valid reservation for this agent in the source storage,
                 # so return the AgentNetworkProvider for this agent.
                 # Also cache this reservation and agent network locally:
+                now: float = time.time()
                 with self.lock:
                     self.reservations_table[agent_name] = reservation
                     self.agents_table[agent_name] = agent_network
+                    self.access_times[agent_name] = now
                 # Notify listeners about this state change:
                 # do it outside of internal lock
                 for listener in self.listeners:
                     listener.agent_added(agent_name, self)
                     self.logger.info("ADDED network for agent %s from %s", agent_name, "base storage")
+
+                # Evict least recently used items if we exceeded the limit
+                self._evict_lru_items()
 
                 return FixedAgentNetworkProvider(agent_network)
         return None
