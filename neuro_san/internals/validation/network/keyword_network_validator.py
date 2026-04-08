@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import Iterable
 from typing import List
 from typing import Set
 
@@ -33,15 +34,15 @@ class KeywordNetworkValidator(AbstractNetworkValidator):
 
     ALL_KEYWORDS: Set[str] = {"instructions", "tools"}
 
-    def __init__(self, keywords: Set[str] = None):
+    def __init__(self, keywords: Iterable[str] = None):
         """
         Constructor
 
-        :param keywords: Set of keyword names to validate.
+        :param keywords: Iterable of keyword names to validate.
                          If None, all keywords are validated.
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
-        self.keywords: Set[str] = keywords if keywords is not None else self.ALL_KEYWORDS
+        self.keywords: Set[str] = set(keywords) if keywords is not None else self.ALL_KEYWORDS
 
     def validate_name_to_spec_dict(self, name_to_spec: Dict[str, Any]) -> List[str]:
         """
