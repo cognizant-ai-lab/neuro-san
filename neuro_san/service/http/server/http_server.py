@@ -221,14 +221,12 @@ class HttpServer(AgentStateListener):
         # Setup handlers for profiler control (start/stop)
         profiler_start_initialize_data: Dict[str, Any] = {
             "op": "start",
-            "logging_config": self.logging_config,
             "prof_data_path": None
         }
         handlers.append(("/prof/start", ProfilerControlHandler, profiler_start_initialize_data))
 
         profiler_stop_initialize_data: Dict[str, Any] = {
             "op": "stop",
-            "logging_config": self.logging_config,
             "prof_data_path": None
         }
         handlers.append(("/prof/stop", ProfilerControlHandler, profiler_stop_initialize_data))
