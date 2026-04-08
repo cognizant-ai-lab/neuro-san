@@ -13,8 +13,6 @@ except ImportError:
 from http import HTTPStatus
 from tornado.web import RequestHandler
 
-from neuro_san.service.http.logging.http_logger import HttpLogger
-
 
 class ProfilerControlHandler(RequestHandler):
 
