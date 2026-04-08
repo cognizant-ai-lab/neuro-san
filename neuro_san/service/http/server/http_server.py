@@ -43,6 +43,7 @@ from neuro_san.service.http.handlers.function_handler import FunctionHandler
 from neuro_san.service.http.handlers.health_check_handler import HealthCheckHandler
 from neuro_san.service.http.handlers.openapi_publish_handler import OpenApiPublishHandler
 from neuro_san.service.http.handlers.streaming_chat_handler import StreamingChatHandler
+from neuro_san.service.http.handlers.profiler_control_handler import ProfilerControlHandler
 from neuro_san.service.http.logging.http_logger import HttpLogger
 from neuro_san.service.http.server.agent_authorization_policy import AgentAuthorizationPolicy
 from neuro_san.service.http.server.http_server_app import HttpServerApp
@@ -216,6 +217,21 @@ class HttpServer(AgentStateListener):
         handlers.append(("/healthz", HealthCheckHandler, ready_request_initialize_data))
         handlers.append(("/readyz", HealthCheckHandler, ready_request_initialize_data))
         handlers.append(("/livez", HealthCheckHandler, live_request_initialize_data))
+
+        # Setup handlers for profiler control (start/stop)
+        profiler_start_initialize_data: Dict[str, Any] = {
+            "op": "start",
+            "logging_config": self.logging_config,
+            "prof_data_path": None
+        }
+        handlers.append(("/prof/start", ProfilerControlHandler, profiler_start_initialize_data))
+
+        profiler_stop_initialize_data: Dict[str, Any] = {
+            "op": "stop",
+            "logging_config": self.logging_config,
+            "prof_data_path": None
+        }
+        handlers.append(("/prof/stop", ProfilerControlHandler, profiler_stop_initialize_data))
 
         if enable_http_handlers:
             handlers.append(("/api/v1/list", ConciergeHandler, request_initialize_data))
