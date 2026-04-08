@@ -23,6 +23,7 @@ from typing import Dict
 from typing import List
 
 from asyncio import AbstractEventLoop
+from asyncio import get_event_loop
 from asyncio import run_coroutine_threadsafe
 from copy import copy
 from concurrent.futures import Future
@@ -113,6 +114,7 @@ class SessionInvocationContext(InvocationContext):
         self.resources: List[LingeringResource] = []
         self.work_done_event: Event = Event()
         self.request_finished: bool = False
+        self.is_cloned: bool = False
 
     def start(self):
         """
@@ -269,6 +271,9 @@ class SessionInvocationContext(InvocationContext):
 
         invocation_context: SessionInvocationContext = copy(self)
 
+        # Mark the invocation context as cloned
+        invocation_context.is_cloned = True
+
         # We need a different Event to signal work is done
         invocation_context.work_done_event: Event = Event()
 
@@ -303,38 +308,54 @@ class SessionInvocationContext(InvocationContext):
             return
         self.request_finished = True
 
-        self.run_in_executor_until_complete("finish_request", self.close_of_request())
+        self._run_in_executor_until_complete("finish_request", self.close_of_request())
 
         close_of_work_now: bool = True
         if self.get_effective_invocation() == "event":
             # Finish the work later
             if self.event_work_queue is not None:
                 close_of_work_now = False
-                self.run_in_executor_until_complete("finish_request",
-                                                    self.event_work_queue.put(self, synchronous=True))
+                self._run_in_executor_until_complete("finish_request",
+                                                     self.event_work_queue.put(self, synchronous=True))
 
         if close_of_work_now:
             # Still need to close resources
             self.done_with_work("finish_request")
 
-    def run_in_executor_until_complete(self, submitter_id: str, coroutine: Awaitable) -> Any:
+    def _run_in_executor_until_complete(self, submitter_id: str, coroutine: Awaitable) -> Future:
         """
         Submits a function to be run on the executor and runs until complete.
         Note this is synchronous.
         """
-        _ = submitter_id
-
         other_loop: AbstractEventLoop = self.asyncio_executor.get_event_loop()
-        future: Future = run_coroutine_threadsafe(coroutine, other_loop)
+        loop: AbstractEventLoop = None
+        try:
+            loop = get_event_loop()
+        except RuntimeError:
+            pass
 
-        result: Any = future.result()
-        return result
+        future: Future = None
+        if loop == other_loop:
+            future = self.asyncio_executor.create_task(coroutine, submitter_id, raise_exception=True)
+        else:
+            future = run_coroutine_threadsafe(coroutine, other_loop)
+
+            result: Any = future.result()
+            _ = result
+            future = None
+
+        return future
 
     def done_with_work(self, submitter_id: str = None):
         """
         Returns the executor to the pool
         """
-        self.run_in_executor_until_complete(submitter_id, self.close_of_work())
+        self._run_in_executor_until_complete(submitter_id, self.close_of_work())
+
+        if self.is_cloned:
+            # Clones via safe_shallow_copy() share the same AsyncioExecutor,
+            # so don't return it back to the pool just yet. Let the mama do that.
+            return
 
         if self.asyncio_executor is not None:
             self.async_executors_pool.return_executor(self.asyncio_executor)
