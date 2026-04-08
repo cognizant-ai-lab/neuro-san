@@ -208,9 +208,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         # Do the dirty deeds.
         with self.lock:
             for agent_name in expired:
-                self.reservations_table.pop(agent_name, None)
-                self.agents_table.pop(agent_name, None)
-                self.access_times.pop(agent_name, None)
+                self.remove_agent_network(agent_name)
 
         # Notify listeners about this state change:
         # do it outside of internal lock
@@ -280,7 +278,8 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             # Reservation is still valid, so we can return the AgentNetworkProvider for this agent.
             agent_network: AgentNetwork = self.agents_table.get(agent_name, None)
             if agent_network is not None:
-                self.access_times[agent_name] = time.time()
+                with self.lock:
+                    self.access_times[agent_name] = time.time()
                 return FixedAgentNetworkProvider(agent_network)
             return None
         # We don't have a reservation for this agent,
