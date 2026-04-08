@@ -39,6 +39,7 @@ class StreamingChatHandler(BaseRequestHandler):
     """
 
     # pylint: disable=too-many-statements
+    # pylint: disable=too-many-branches
     async def post(self, agent_name: str):
         """
         Implementation of POST request handler for streaming chat API call.
@@ -49,7 +50,10 @@ class StreamingChatHandler(BaseRequestHandler):
         if service is None:
             return
 
-        self.application.start_client_request(metadata, f"{agent_name}/streaming_chat")
+        status_code, err_message = self.application.try_start_client_request(metadata, f"{agent_name}/streaming_chat")
+        if status_code != HTTPStatus.OK:
+            self.do_finish(status_code, err_message)
+            return
 
         # Set up request timeout if it is specified:
         request_timeout: float = service.get_request_timeout_seconds()

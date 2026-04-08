@@ -264,6 +264,7 @@ class ServerMainLoop:
             self.http_server_config,
             self.service_openapi_spec_file,
             self.request_limit,
+            self.max_concurrent_requests,
             self.logging_config,
             forwarded_request_metadata=metadata_str)
 
