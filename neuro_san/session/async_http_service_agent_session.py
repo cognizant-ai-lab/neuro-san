@@ -105,9 +105,14 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
         max_chunk_size: int = 64 * 1024
         path: str = self.get_request_path("streaming_chat")
         try:
-            timeout: ClientTimeout = None
+            # To specify complete timeout value, we must use "total" parameter of ClientTimeout.
+            # See https://docs.aiohttp.org/en/stable/client_reference.html#aiohttp.ClientTimeout for details.
+            timeout: ClientTimeout = ClientTimeout(total=None)
+            # That will make sure that the connection will stay open until the (last) result is yielded,
+            # which is what we want here.
+            # Not specifying "total" parameter will invoke lower-level aiohttp timeout, which is 300 seconds by default
             if self.streaming_timeout_in_seconds is not None:
-                timeout = ClientTimeout(self.streaming_timeout_in_seconds)
+                timeout = ClientTimeout(total=self.streaming_timeout_in_seconds)
             async with ClientSession(headers=self.get_headers(),
                                      timeout=timeout
                                      ) as session:

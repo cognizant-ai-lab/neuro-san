@@ -24,6 +24,8 @@ from typing import List
 import http
 import os
 
+from http import HTTPStatus
+
 from importlib.metadata import version as library_version
 from importlib.metadata import PackageNotFoundError
 
@@ -83,11 +85,11 @@ class HealthCheckHandler(RequestHandler):
                 self.write(result_dict)
             else:
                 # Set "service unavailable" status
-                self.set_status(503)
+                self.set_status(HTTPStatus.SERVICE_UNAVAILABLE)
                 self.write({"error": "Service Unavailable"})
         except Exception:  # pylint: disable=broad-exception-caught
             # Handle unexpected errors
-            self.set_status(500)
+            self.set_status(HTTPStatus.INTERNAL_SERVER_ERROR)
             self.write({"error": "Internal server error"})
         finally:
             self.finish()
