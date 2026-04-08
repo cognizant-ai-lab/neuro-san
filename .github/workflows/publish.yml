@@ -15,46 +15,33 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi  # Match this to your configured GitHub Environment.
     permissions:
-      id-token: write #Mandatory for PyPi Trusted Publishing (configured at pypi.org)
+      id-token: write  # Mandatory for PyPi Trusted Publishing
 
     steps:
+      # v4.3.1
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      # 1.0.0
+      - name: Setup Python environment
+        uses: cognizant-ai-lab/build-common/actions/setup-python-env@455db3cc40e9ed6a0fb9bbaf8188888c1ae315c2
         with:
           python-version: '3.10'
-
-      - name: Install build tools
-        run: |
-          pip install --upgrade pip
-          pip install build
+          requirements-file: ''
+          requirements-build-file: ''
+          install-extras: 'build'
 
       - name: Build wheel and sdist
         run: python -m build
 
+      # v1.9.0
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@ec4db0b4ddc65acdf4bff5fa45ac92d78b56bdf0
 
-      - name: Notify Slack on success
-        if: success()
-        uses: slackapi/slack-github-action@v1.24.0
+      # 1.0.0
+      - name: Notify Slack
+        if: ${{ !cancelled() }}
+        uses: cognizant-ai-lab/build-common/actions/slack-notify@455db3cc40e9ed6a0fb9bbaf8188888c1ae315c2
         with:
-          payload: |
-            {
-              "text": "✅ *Publish Action Passed* for `${{ github.repository }}` on `${{ github.ref_name }}`"
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-
-      - name: Notify Slack on failure
-        if: failure()
-        uses: slackapi/slack-github-action@v1.24.0
-        with:
-          payload: |
-            {
-              "text": "❌ *Publish Action Failed* for `${{ github.repository }}` on `${{ github.ref_name }}`"
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          status: ${{ job.status }}
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
