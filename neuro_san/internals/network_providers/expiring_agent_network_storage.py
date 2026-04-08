@@ -42,20 +42,23 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
     which will be used as a "base" source of truth.
     """
 
-    def __init__(self, check_expirations_interval_seconds: float = 60.0,
-                 max_items: int = 0):
+    def __init__(self, check_expirations_interval_seconds: float = 60.0):
         """
         Constructor
         :param check_expirations_interval_seconds: The number of seconds between checks for expired reservations.
-        :param max_items: Maximum number of items to keep in storage.
-                          When exceeded, least recently used items are evicted.
-                          0 or negative means unlimited.
         """
         super().__init__(storage_name="temp_storage",
                          check_expirations_interval_seconds=check_expirations_interval_seconds)
         self.reservations_table: Dict[str, Reservation] = {}
+        # Table maps agent name to the latest time it was accessed:
         self.access_times: Dict[str, float] = {}
-        self.max_items: int = max_items
+
+        # Maximum number of items to keep in storage. 0 or negative means unlimited.
+        self.max_items: int = 0
+        # Threshold for items eviction when number of items in storage exceeds
+        # specified maximum by that number.
+        self.items_overflow_threshold: int = 0
+
         self.base_storage: ReservationsStorage = None
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -70,6 +73,23 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
                              as a source of truth for reservations and agent networks.
         """
         self.base_storage = base_storage
+
+    def set_max_agent_networks(self, max_items: int):
+        """
+        Configure the maximum number of temporary networks to keep in memory.
+        When exceeded, least recently used items are evicted.
+
+        :param max_items: Maximum number of items. 0 or negative means unlimited.
+        """
+        self.max_items = max_items
+        self.items_overflow_threshold = 0
+        # Compute some reasonable overflow threshold to avoid evicting items one by one
+        # when we are just slightly above the limit.
+        if max_items > 0:
+            # Set overflow threshold to 5% of max_items, rounded up, with a minimum of 1:
+            self.items_overflow_threshold = max(1, round(max_items * 0.05))
+        # Evict least recently used items if we exceeded the new limit
+        self.evict_lru_agent_networks()
 
     def start(self):
         """
@@ -151,7 +171,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
                 self.logger.info("%s: REPLACED network for agent %s from %s", self._name, agent_name, source)
 
         # Evict least recently used items if we exceeded the limit
-        self._evict_lru_items()
+        self.evict_lru_agent_networks()
 
     def get_one_reservation(self, obj_key: str) -> Tuple[Reservation, Any]:
         """
@@ -199,9 +219,18 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
                 listener.agent_removed(agent_name, self)
                 self.logger.info("%s: REMOVED network for agent %s", self._name, agent_name)
 
-    def _evict_lru_items(self):
+    def remove_agent_network(self, agent_name: str):
         """
-        Remove least recently used items to bring storage size under max_items limit.
+        Remove agent name and its AgentNetwork from service internal tables.
+        :param agent_name: name of an agent to remove
+        """
+        self.reservations_table.pop(agent_name, None)
+        self.agents_table.pop(agent_name, None)
+        self.access_times.pop(agent_name, None)
+
+    def evict_lru_agent_networks(self):
+        """
+        Remove least recently used agent networks to bring storage size under max_items limit.
         """
         if self.max_items <= 0:
             return
@@ -209,14 +238,12 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         evicted: List[str] = []
         with self.lock:
             overflow: int = len(self.agents_table) - self.max_items
-            if overflow <= 0:
+            if overflow <= self.items_overflow_threshold:
                 return
             # Sort by access time, oldest first
             sorted_agents = sorted(self.access_times.items(), key=lambda item: item[1])
             for agent_name, _ in sorted_agents[:overflow]:
-                self.reservations_table.pop(agent_name, None)
-                self.agents_table.pop(agent_name, None)
-                self.access_times.pop(agent_name, None)
+                self.remove_agent_network(agent_name)
                 evicted.append(agent_name)
 
         # Notify listeners outside of lock
@@ -237,9 +264,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             if self.is_expired(reservation):
                 # Reservation is expired, so AgentNetwork is gone for good:
                 with self.lock:
-                    self.reservations_table.pop(agent_name, None)
-                    self.agents_table.pop(agent_name, None)
-                    self.access_times.pop(agent_name, None)
+                    self.remove_agent_network(agent_name)
 
                 # Notify listeners about this state change:
                 # do it outside of internal lock
@@ -278,7 +303,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
                     self.logger.info("ADDED network for agent %s from %s", agent_name, "base storage")
 
                 # Evict least recently used items if we exceeded the limit
-                self._evict_lru_items()
+                self.evict_lru_agent_networks()
 
                 return FixedAgentNetworkProvider(agent_network)
         return None

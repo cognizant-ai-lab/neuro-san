@@ -60,7 +60,7 @@ class ServerContext:
         """
         temp_storage: ExpiringAgentNetworkStorage = self.network_storage_dict.get("temp")
         if temp_storage is not None:
-            temp_storage.max_items = max_items
+            temp_storage.set_max_agent_networks(max_items)
 
     def get_executor_pool(self) -> AsyncioExecutorPool:
         """
