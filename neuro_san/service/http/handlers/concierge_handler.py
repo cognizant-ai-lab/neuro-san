@@ -21,6 +21,8 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from http import HTTPStatus
+
 from neuro_san.interfaces.concierge_session import ConciergeSession
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
@@ -37,7 +39,11 @@ class ConciergeHandler(BaseRequestHandler):
         Implementation of GET request handler for "concierge" API call.
         """
         metadata: Dict[str, Any] = self.get_metadata()
-        self.application.start_client_request(metadata, "/api/v1/list")
+        status_code, err_message = self.application.try_start_client_request(metadata, "/api/v1/list")
+        if status_code != HTTPStatus.OK:
+            self.do_finish(status_code, err_message)
+            return
+
         network_storage_dict: Dict[str, AgentNetworkStorage] = self.server_context.get_network_storage_dict()
         public_storage: AgentNetworkStorage = network_storage_dict.get("public")
 
