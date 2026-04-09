@@ -317,8 +317,7 @@ class AgentService:
 
             # Ensure that our SessionInvocationContext is always closed,
             # even if iterator is interrupted.
-            task: Task = executor.submit(None, invocation_context.finish_request)
-            executor.get_event_loop().run_until_complete(task)
+            invocation_context.finish_request()
             invocation_context = None
 
         # Maybe report token accounting to a UsageLogger
