@@ -28,10 +28,10 @@ from janus import Queue
 from janus import SyncQueueShutDown
 
 
-from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.service.utils.server_context import ServerContext
+from neuro_san.session.session_invocation_context import SessionInvocationContext
 
 
 class EventWorkMonitor(Startable):
@@ -51,7 +51,7 @@ class EventWorkMonitor(Startable):
         self.update_thread: Thread = Thread(target=self._run, name="EventWorkMonitor", daemon=True)
         self.keep_running: bool = True
         self.update_period_in_seconds: float = 0.5
-        self.invocation_context_pool: Set[InvocationContext] = set()
+        self.invocation_context_pool: Set[SessionInvocationContext] = set()
 
     def start(self):
         """
@@ -69,7 +69,7 @@ class EventWorkMonitor(Startable):
 
         while self.keep_running:
 
-            queued_item: InvocationContext = None
+            queued_item: SessionInvocationContext = None
             try:
                 queued_item = janus_queue.sync_q.get_nowait()
 
@@ -96,9 +96,9 @@ class EventWorkMonitor(Startable):
 
     def process_pool(self):
         """
-        Process the pool of InvocationContexts we need to monitor
+        Process the pool of SessionInvocationContexts we need to monitor
         """
-        done_invocations: Set[InvocationContext] = set()
+        done_invocations: Set[SessionInvocationContext] = set()
 
         # See which ones are done
         for invocation_context in self.invocation_context_pool:
