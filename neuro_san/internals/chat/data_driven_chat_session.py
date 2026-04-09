@@ -234,11 +234,12 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         # For the factory args, we are our own run_target.
         tracing_context: RunTarget = tracing_factory.create_tracing_context(config, run_target=self)
 
-        # Run the run_target that was given back by the factory.
-        await tracing_context.run_it(input_message_for_show)
-
-        # Signal that all work is done
-        self.invocation_context.get_work_done_event().set()
+        try:
+            # Run the run_target that was given back by the factory.
+            await tracing_context.run_it(input_message_for_show)
+        finally:
+            # Signal that all work is done
+            self.invocation_context.get_work_done_event().set()
 
     async def run_it(self, inputs: AgentFrameworkMessage) -> AgentFrameworkMessage:
         """
