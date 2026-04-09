@@ -260,6 +260,7 @@ class SessionInvocationContext(InvocationContext):
             self.queue.reset()
         else:
             self.queue = AsyncCollatingQueue()
+            self.journal: Journal = MessageJournal(self.queue)
 
         if self.asyncio_executor is None:
             self.asyncio_executor = self.async_executors_pool.get_executor()
