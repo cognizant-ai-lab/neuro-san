@@ -138,6 +138,11 @@ class ServerMainLoop:
                                                            DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS)),
                                 help="Http server resources monitoring/logging interval in seconds "
                                      "0 means no logging")
+        arg_parser.add_argument("--max_temp_networks", type=int,
+                                default=int(os.environ.get("AGENT_MAX_TEMP_NETWORKS", "0")),
+                                help="Maximum number of temporary agent networks to keep in memory. "
+                                     "When exceeded, least recently used networks are evicted. "
+                                     "0 means unlimited.")
         arg_parser.add_argument("--mcp_enable", type=str,
                                 default=os.environ.get("AGENT_MCP_ENABLE", "true"),
                                 help="'true' if MCP protocol service should be enabled")
@@ -194,6 +199,8 @@ class ServerMainLoop:
         self.http_server_config.http_server_instances = args.http_server_instances
         self.http_server_config.http_server_monitor_interval_seconds = args.http_resources_monitor_interval_seconds
         self.http_server_config.http_port = args.http_port
+
+        self.server_context.set_temp_storage_max_items(args.max_temp_networks)
 
         manifest_restorer = RegistryManifestRestorer()
         manifest_agent_networks: Dict[str, Dict[str, AgentNetwork]] = manifest_restorer.restore()
