@@ -148,3 +148,9 @@ class InvocationContext(LingeringResource):
         :return: The Event (synchronous) that will be set when work is done for this event
         """
         raise NotImplementedError
+
+    def add_resource(self, resource: LingeringResource):
+        """
+        :param resource: The resource to add
+        """
+        raise NotImplementedError
