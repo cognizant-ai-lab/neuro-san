@@ -51,7 +51,7 @@ class EventWorkMonitor(Startable):
         self.update_thread: Thread = Thread(target=self._run, name="EventWorkMonitor", daemon=True)
         self.keep_running: bool = True
         self.update_period_in_seconds: float = 0.5
-        self.invocation_context_pool: Set(InvocationContext) = set()
+        self.invocation_context_pool: Set[InvocationContext] = set()
 
     def start(self):
         """
@@ -98,7 +98,7 @@ class EventWorkMonitor(Startable):
         """
         Process the pool of InvocationContexts we need to monitor
         """
-        done_invocations: Set(InvocationContext) = set()
+        done_invocations: Set[InvocationContext] = set()
 
         # See which ones are done
         for invocation_context in self.invocation_context_pool:
