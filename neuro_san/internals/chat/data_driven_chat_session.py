@@ -204,6 +204,10 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         """
         # Set up some member variable state so that run_it() can use it
         self.invocation_context = invocation_context
+
+        # Add ourselves as a resource to the invocation context
+        # so when its close_of_request() or close_of_work() is called, we also
+        # get called.
         self.invocation_context.add_resource(self)
 
         journal: Journal = self.invocation_context.get_journal()
@@ -238,7 +242,7 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
             # Run the run_target that was given back by the factory.
             await tracing_context.run_it(input_message_for_show)
         finally:
-            # Signal that all work is done
+            # Always signal that all work is done
             self.invocation_context.get_work_done_event().set()
 
     async def run_it(self, inputs: AgentFrameworkMessage) -> AgentFrameworkMessage:
