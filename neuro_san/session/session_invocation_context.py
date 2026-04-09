@@ -315,7 +315,9 @@ class SessionInvocationContext(InvocationContext):
 
     def finish_request(self):
         """
-        Queue ourselves to let our work finish on its own and resources can be cleaned up later.
+        Clean up our resources.
+        Depending on the invocation, we might Queue ourselves to let our work finish on its own
+        so that some of the resources can be cleaned up later.
         """
         # Only ever do this once
         if self.request_finished:
