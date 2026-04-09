@@ -57,7 +57,7 @@ class EventWorkMonitor(Startable):
         """
         Perform start up.
         """
-        self.logger.info("Starting EventWorkMonitor with %d seconds period",
+        self.logger.info("Starting EventWorkMonitor with %f seconds period",
                          self.update_period_in_seconds)
         self.update_thread.start()
 
@@ -120,7 +120,7 @@ class EventWorkMonitor(Startable):
         Perform steps to stop/shut-down
         By default this does nothing
         """
-        self.logger.info("Stopping EventWorkMonitor with %d seconds period",
+        self.logger.info("Stopping EventWorkMonitor with %f seconds period",
                          self.update_period_in_seconds)
 
         self.keep_running = False
