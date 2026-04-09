@@ -343,7 +343,7 @@ class SessionInvocationContext(InvocationContext):
     def _run_in_executor_until_complete(self, submitter_id: str, coroutine: Awaitable) -> Future:
         """
         Submits a function to be run on the executor and runs until complete.
-        Note this is synchronous.
+        Note this is synchronous and can be run from within the executor or another event loop.
         """
         # We need to know if we are running in the same event loop as the executor
         other_loop: AbstractEventLoop = self.asyncio_executor.get_event_loop()
