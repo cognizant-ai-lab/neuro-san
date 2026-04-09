@@ -316,19 +316,20 @@ class SessionInvocationContext(InvocationContext):
             return
         self.request_finished = True
 
-        self._run_in_executor_until_complete("finish_request", self.close_of_request())
-
         close_of_work_now: bool = True
-        if self.get_effective_invocation() == "event":
-            # Finish the work later
-            if self.event_work_queue is not None:
-                close_of_work_now = False
-                self._run_in_executor_until_complete("finish_request",
-                                                     self.event_work_queue.put(self, synchronous=True))
+        try:
+            self._run_in_executor_until_complete("finish_request", self.close_of_request())
 
-        if close_of_work_now:
-            # Still need to close resources
-            self.done_with_work("finish_request")
+            if self.get_effective_invocation() == "event":
+                # Finish the work later
+                if self.event_work_queue is not None:
+                    close_of_work_now = False
+                    self._run_in_executor_until_complete("finish_request",
+                                                         self.event_work_queue.put(self, synchronous=True))
+        finally:
+            if close_of_work_now:
+                # Still need to close resources
+                self.done_with_work("finish_request")
 
     def _run_in_executor_until_complete(self, submitter_id: str, coroutine: Awaitable) -> Future:
         """
