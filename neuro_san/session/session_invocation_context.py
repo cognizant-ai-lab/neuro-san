@@ -259,9 +259,11 @@ class SessionInvocationContext(InvocationContext):
         if self.queue is not None:
             self.queue.reset()
         else:
+            # When creating a new queue, we need to make sure that the journal knows about it
             self.queue = AsyncCollatingQueue()
             self.journal: Journal = MessageJournal(self.queue)
 
+        # Be sure we have an executor
         if self.asyncio_executor is None:
             self.asyncio_executor = self.async_executors_pool.get_executor()
 
@@ -280,12 +282,16 @@ class SessionInvocationContext(InvocationContext):
         invocation_context: SessionInvocationContext = copy(self)
 
         # Mark the invocation context as cloned
+        # This tells us that it is not the original/root and will prevent
+        # mis-happenings like returning the executor to the pool too early.
         invocation_context.is_cloned = True
 
         # We need a different Event to signal work is done
+        # Work being all done on a sub-invocation is not the same as work all done on the root.
         invocation_context.work_done_event: Event = Event()
 
         # We need different resources to close
+        # Resources are not shared between sub-invocations
         invocation_context.resources: List[LingeringResource] = []
 
         # We need a different queue in order to call external agents with direct sessions.
@@ -321,14 +327,15 @@ class SessionInvocationContext(InvocationContext):
             self._run_in_executor_until_complete("finish_request", self.close_of_request())
 
             if self.get_effective_invocation() == "event":
-                # Finish the work later
+                # Finish the event work later only if there is something that will finish it for us.
                 if self.event_work_queue is not None:
                     close_of_work_now = False
+                    # Need to do synchronous put because we are in a different event loop.
                     self._run_in_executor_until_complete("finish_request",
                                                          self.event_work_queue.put(self, synchronous=True))
         finally:
             if close_of_work_now:
-                # Still need to close resources
+                # Still need to close resources, per above determination
                 self.done_with_work("finish_request")
 
     def _run_in_executor_until_complete(self, submitter_id: str, coroutine: Awaitable) -> Future:
@@ -336,20 +343,26 @@ class SessionInvocationContext(InvocationContext):
         Submits a function to be run on the executor and runs until complete.
         Note this is synchronous.
         """
+        # We need to know if we are running in the same event loop as the executor
         other_loop: AbstractEventLoop = self.asyncio_executor.get_event_loop()
         loop: AbstractEventLoop = None
         try:
+            # Use get_event_loop() over get_running_loop(), as its more robust
             loop = get_event_loop()
         except RuntimeError:
             pass
 
         future: Future = None
         if loop == other_loop:
+            # If we are running in the same event loop as the executor, just run it directly
+            # If we try to wait for the result here it will never return.
             future = self.asyncio_executor.create_task(coroutine, submitter_id, raise_exception=True)
         else:
+            # Use some magic to run in a different event loop
             future = run_coroutine_threadsafe(coroutine, other_loop)
-
+            # Wait for the result...
             result: Any = future.result()
+            # ... that we don't really care about.
             _ = result
             future = None
 
@@ -357,7 +370,7 @@ class SessionInvocationContext(InvocationContext):
 
     def done_with_work(self, submitter_id: str = None):
         """
-        Returns the executor to the pool
+        Runs close_of_work() on the executor and potentially returns the executor back to the pool
         """
         self._run_in_executor_until_complete(submitter_id, self.close_of_work())
 
