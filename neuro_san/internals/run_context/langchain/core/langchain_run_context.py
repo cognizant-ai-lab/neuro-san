@@ -204,22 +204,26 @@ class LangChainRunContext(RunContext):
         fallbacks: List[Dict[str, Any]] = [self.llm_config]
         fallbacks = self.llm_config.get("fallbacks", fallbacks)
 
+        # Get the sly data to see if there are any optional user api_keys to use
+        sly_data: Dict[str, Any] = self.tool_caller.get_sly_data()
+        api_keys: Dict[str, str] = sly_data.get("api_keys")
+
         # Initialize a list of chain fallbacks. This may or may not get filled.
         chain_fallbacks: List[Runnable] = []
         first_llm: bool = True
 
         # Go through the list of fallbacks in the config.
-        for index, fallback in enumerate(fallbacks):
+        for fallback in fallbacks:
 
             # Create a model we might use.
-            one_llm_resources: LangChainLlmResources = llm_factory.create_llm(fallback)
+            one_llm_resources: LangChainLlmResources = llm_factory.create_llm(fallback, api_keys)
             if one_llm_resources is None:
                 # Skip this one.
                 continue
 
             one_agent: Runnable = self.create_agent(instructions, one_llm_resources.get_model())
 
-            if first:
+            if first_llm:
                 # The first agent is the one we want to be our main guy.
                 agent = one_agent
                 # For now. Could be problems with different providers w/ token counting.
