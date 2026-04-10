@@ -253,6 +253,14 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         :param inputs: An AgentFrameworkMessage populated with the user's input.
         :return: The user input. (Outputs are handled by the tracing context infrastructure.)
         """
+
+        # If we are invoked as an event, tell the caller that it's OK to disconnect early.
+        # By definition, they are not expecting a custom response.
+        if self.invocation_context.get_effective_invocation() == "event":
+            empty: Dict[str, Any] = {}
+            event_acknowledge = AgentFrameworkMessage(content="Event acknowledged", chat_context=empty)
+            await self.finalize_request(event_acknowledge)
+
         # Get all our real input values from the original_input_message.
         # If we got it from the inputs arg, we'd get the for-show message
         # which has fields rearranged and even redacted.
@@ -269,13 +277,6 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
                 message = AgentFrameworkMessage(content=str(exc))
                 await self.finalize_request(message)
                 return message
-
-        # If we are invoked as an event, tell the caller that it's OK to disconnect early.
-        # By definition, they are not expecting a custom response.
-        if self.invocation_context.get_effective_invocation() == "event":
-            empty: Dict[str, Any] = {}
-            event_acknowledge = AgentFrameworkMessage(content="Event acknowledged", chat_context=empty)
-            await self.finalize_request(event_acknowledge)
 
         # Actually run the chat and save information about it
         chat_messages: Iterator[Dict[str, Any]] = await self.chat(user_input, self.invocation_context, sly_data)
