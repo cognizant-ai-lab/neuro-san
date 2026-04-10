@@ -314,6 +314,12 @@ ENV AGENT_RESERVATIONS_S3_BUCKET=""
 # or it will be done on demand by other tools.
 ENV AGENT_RESERVATIONS_EXTERNAL_STORAGE_CHECK_PERIOD_SECONDS="0"
 
+# The maximum number of temporary agent networks that will be kept internally
+# in service memory at the same time. If this limit is reached,
+# the oldest temporary networks (by access time) will be evicted.
+# 0 or negative value means unlimited.
+ENV AGENT_MAX_TEMP_NETWORKS="0"
+
 # A hocon file with MCP servers information to be used by LangChainMcpAdapter
 # for connecting to external MCP servers with authentication and tool filtering.
 ENV MCP_SERVERS_INFO_FILE=""

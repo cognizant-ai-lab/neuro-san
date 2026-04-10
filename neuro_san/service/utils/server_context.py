@@ -52,6 +52,16 @@ class ServerContext:
             "temp": ExpiringAgentNetworkStorage()
         }
 
+    def set_temp_storage_max_items(self, max_items: int):
+        """
+        Configure the maximum number of temporary networks to keep in memory.
+        When exceeded, least recently used items are evicted.
+        :param max_items: Maximum number of items. 0 or negative means unlimited.
+        """
+        temp_storage: ExpiringAgentNetworkStorage = self.network_storage_dict.get("temp")
+        if temp_storage is not None:
+            temp_storage.set_max_agent_networks(max_items)
+
     def get_executor_pool(self) -> AsyncioExecutorPool:
         """
         :return: The AsyncioExecutorPool
