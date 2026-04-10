@@ -178,21 +178,27 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
         """
-        _ = api_keys        # For now
-        full_config: Dict[str, Any] = self.create_full_llm_config(config)
+        full_config: Dict[str, Any] = self.create_full_llm_config(config, api_keys)
         llm_resources: LangChainLlmResources = self.create_llm_resources(full_config)
         return llm_resources
 
-    def create_full_llm_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
+    def create_full_llm_config(self, config: Dict[str, Any], api_keys: Dict[str, str]) -> Dict[str, Any]:
         """
         :param config: The llm_config from the user
+        :param api_keys: A dictionary of user API keys to use for user billing.
+                The keys in this dictionary are the names of the API keys (ala "OPENAI_API_KEY").
+                The values for the keys are the API keys themselves.
+                Can be None indiciating no API keys are provided at all and the system defaults will be used.
+        :return: A LangChainLlmResources instance containing
         :return: The fully specified config with defaults filled in.
         """
-
+        _ = api_keys
         class_from_llm_config: str = config.get("class")
         if class_from_llm_config:
+
             if not isinstance(class_from_llm_config, str):
                 raise ValueError("Value of 'class' has to be string.")
+
             # A "class" key in the config indicates the user has specified a particular LLM implementation.
             # However, the config may only contain partial arguments (e.g., {"arg_1": 0.5}) and omit others.
             #
