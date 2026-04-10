@@ -22,9 +22,9 @@ import logging
 
 try:
     import yappi
-    has_profiler = True
+    HAS_PROFILER = True
 except ImportError:
-    has_profiler = False
+    HAS_PROFILER = False
     print("yappi library is required for profiling. Please install it with 'pip install yappi'")
 
 from http import HTTPStatus
@@ -58,7 +58,7 @@ class ProfilerControlHandler(RequestHandler):
         """
         Implementation of GET request handler for profiler control.
         """
-        if not has_profiler:
+        if not HAS_PROFILER:
             self.set_status(HTTPStatus.SERVICE_UNAVAILABLE)
             self.write("Profiler library yappi is not available. Please install it with 'pip install yappi'")
             self.logger.info("Profiler library yappi is not available. Please install it with 'pip install yappi'")
@@ -81,3 +81,10 @@ class ProfilerControlHandler(RequestHandler):
                               self.op, str(exception), exc_info=True)
             self.write(f"FAILED to {self.op} profiler")
             self.set_status(HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    def data_received(self, chunk):
+        """
+        This method is required to be implemented as part of RequestHandler subclass,
+        but is not used in our case as we do not expect any data in the request body.
+        """
+        pass
