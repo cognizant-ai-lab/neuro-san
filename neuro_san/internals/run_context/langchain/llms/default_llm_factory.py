@@ -193,6 +193,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         :return: The fully specified config with defaults filled in.
         """
         _ = api_keys
+        full_config: Dict[str, Any] = None
+
         class_from_llm_config: str = config.get("class")
         if class_from_llm_config:
 
@@ -214,19 +216,20 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
             # Merge the defaults from llm_info with the user-defined config,
             # giving priority to values in config.
-            return self.overlayer.overlay(config_from_class_in_llm_info, config)
+            full_config = self.overlayer.overlay(config_from_class_in_llm_info, config)
+            return full_config
 
         default_config: Dict[str, Any] = self.llm_infos.get("default_config")
-        use_config = self.overlayer.overlay(default_config, config)
+        use_config: Dict[str, Any] = self.overlayer.overlay(default_config, config)
 
-        model_name = use_config.get("model_name")
+        model_name: str = use_config.get("model_name")
 
-        llm_entry = self.llm_infos.get(model_name)
+        llm_entry: Dict[str, Any] = self.llm_infos.get(model_name)
         if llm_entry is None:
             raise ValueError(f"No llm entry for model_name {model_name}")
 
         # Get some bits from the llm_entry
-        use_model_name = llm_entry.get("use_model_name", model_name)
+        use_model_name: str = llm_entry.get("use_model_name", model_name)
         if len(llm_entry.keys()) <= 2 and use_model_name is not None:
             # We effectively have an alias. Switch out the llm entry.
             llm_entry = self.llm_infos.get(use_model_name)
@@ -246,7 +249,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         # Now that we have the true defaults, overlay the config that came in to get the
         # config we are going to use.
-        full_config: Dict[str, Any] = self.overlayer.overlay(default_config, config)
+        full_config = self.overlayer.overlay(default_config, config)
         full_config["class"] = chat_class_name
         full_config["model_name"] = llm_entry.get("use_model_name", use_model_name)
 
