@@ -20,6 +20,8 @@ See class comment for details
 from typing import Any
 from typing import Dict
 
+from http import HTTPStatus
+
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
 
@@ -38,7 +40,11 @@ class FunctionHandler(BaseRequestHandler):
         if service is None:
             return
 
-        self.application.start_client_request(metadata, f"{agent_name}/function")
+        status_code, err_message = self.application.try_start_client_request(metadata, f"{agent_name}/function")
+        if status_code != HTTPStatus.OK:
+            self.do_finish(status_code, err_message)
+            return
+
         try:
             data: Dict[str, Any] = {}
             result_dict: Dict[str, Any] = await service.function(data, metadata)
