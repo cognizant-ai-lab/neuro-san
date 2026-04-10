@@ -217,6 +217,9 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             # Merge the defaults from llm_info with the user-defined config,
             # giving priority to values in config.
             full_config = self.overlayer.overlay(config_from_class_in_llm_info, config)
+
+            # Get any required api keys into the full config.
+            full_config = self.replace_any_required_api_keys(full_config, api_keys)
             return full_config
 
         default_config: Dict[str, Any] = self.llm_infos.get("default_config")
@@ -253,6 +256,9 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         full_config["class"] = chat_class_name
         full_config["model_name"] = llm_entry.get("use_model_name", use_model_name)
 
+        # Get any required api keys into the full config.
+        full_config = self.replace_any_required_api_keys(full_config, api_keys)
+
         # Attempt to get a max_tokens through calculation
         full_config["max_tokens"] = self.get_max_prompt_tokens(full_config)
 
@@ -288,6 +294,33 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             args = self.overlayer.overlay(args, extends_args)
 
         return args
+
+    def replace_any_required_api_keys(self, config: Dict[str, Any], api_keys: Dict[str, str]) -> Dict[str, Any]:
+        """
+        Get any required api keys into the config.
+        :param config: The fully specified llm config which is a product of
+                    _create_full_llm_config() above.
+        :param api_keys: A dictionary of api keys to replace in the config.
+            The keys in this dictionary are the names of the API keys (ala "OPENAI_API_KEY").
+            The values for the keys are the API keys themselves.
+            Can be None indiciating no API keys are provided at all and the system defaults will be used.
+        :return: The config with any required api keys replaced.
+        """
+        use_api_keys: Dict[str, str] = {}
+        if api_keys is not None and isinstance(api_keys, Dict):
+            use_api_keys = api_keys
+
+        for key, value in config.items():
+            # If any value is "required", replace it with the same value from the api_key dictionary
+            small_value: str = str(value).lower()
+            if small_value == "required":
+                # If we have a value in the api_keys dictionary, use it,
+                # otherwise, leave the "required" value alone, which is likely to trigger an error, appropriately.
+                new_value: str = use_api_keys.get(key)
+                if new_value is not None:
+                    config[key] = new_value
+
+        return config
 
     def create_base_chat_model(self, config: Dict[str, Any]) -> BaseLanguageModel:
         """
