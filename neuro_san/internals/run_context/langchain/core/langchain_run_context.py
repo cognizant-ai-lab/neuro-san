@@ -206,22 +206,32 @@ class LangChainRunContext(RunContext):
 
         # Initialize a list of chain fallbacks. This may or may not get filled.
         chain_fallbacks: List[Runnable] = []
+        first_llm: bool = True
 
         # Go through the list of fallbacks in the config.
         for index, fallback in enumerate(fallbacks):
 
             # Create a model we might use.
             one_llm_resources: LangChainLlmResources = llm_factory.create_llm(fallback)
+            if one_llm_resources is None:
+                # Skip this one.
+                continue
+
             one_agent: Runnable = self.create_agent(instructions, one_llm_resources.get_model())
 
-            if index == 0:
+            if first:
                 # The first agent is the one we want to be our main guy.
                 agent = one_agent
                 # For now. Could be problems with different providers w/ token counting.
                 self.llm_resources = one_llm_resources
+                # Anything that comes later will not be the first
+                first_llm = False
             else:
                 # Anything later than the first guy is considered a fallback. Add it to the list.
                 chain_fallbacks.append(one_agent)
+
+        if agent is None:
+            raise ValueError("No LLM found in llm_config or fallbacks")
 
         if len(chain_fallbacks) > 0:
             # Set up fallbacks.
