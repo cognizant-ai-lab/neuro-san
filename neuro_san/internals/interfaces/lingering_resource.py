@@ -47,10 +47,3 @@ class LingeringResource:
         :param parent_resource: parent resource, if any
         """
         # Do nothing by default for easier implementation inheritance
-
-    async def close(self, parent_resource: LingeringResource = None):
-        """
-        Compatibility method to close everything.
-        """
-        await self.close_of_request(parent_resource)
-        await self.close_of_work(parent_resource)
