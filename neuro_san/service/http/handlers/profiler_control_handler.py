@@ -17,8 +17,6 @@
 """
 See class comment for details
 """
-from typing import Any
-from typing import Dict
 from typing import Optional
 import logging
 
@@ -56,7 +54,7 @@ class ProfilerControlHandler(RequestHandler):
             self.prof_data_path = "profile.prof"
         self.logger = logging.getLogger(self.__class__.__name__)
 
-    def get(self):
+    async def get(self):
         """
         Implementation of GET request handler for profiler control.
         """
@@ -66,14 +64,20 @@ class ProfilerControlHandler(RequestHandler):
             self.logger.info("Profiler library yappi is not available. Please install it with 'pip install yappi'")
             return
 
-        if self.op == "start":
-            yappi.set_clock_type("wall")
-            yappi.start()
-            self.write("profiling started")
-            self.logger.info(">>>>>PROFILER STARTED")
-        else:
-            yappi.stop()
-            stats = yappi.get_func_stats()
-            stats.save(self.prof_data_path, type="pstat")
-            self.write(f"profiling stopped and saved to {self.prof_data_path}")
-            self.logger.info(">>>>>PROFILER STOPPED AND SAVED TO %s", self.prof_data_path)
+        try:
+            if self.op == "start":
+                yappi.set_clock_type("wall")
+                yappi.start()
+                self.write("profiling started")
+                self.logger.info(">>>>>PROFILER STARTED")
+            else:
+                yappi.stop()
+                stats = yappi.get_func_stats()
+                stats.save(self.prof_data_path, type="pstat")
+                self.write(f"profiling stopped and saved to {self.prof_data_path}")
+                self.logger.info(">>>>>PROFILER STOPPED AND SAVED TO %s", self.prof_data_path)
+        except Exception as exception:  # pylint: disable=broad-exception-caught
+            self.logger.error("Error during profiler control operation '%s': %s",
+                              self.op, str(exception), exc_info=True)
+            self.write(f"FAILED to {self.op} profiler")
+            self.set_status(HTTPStatus.INTERNAL_SERVER_ERROR)
