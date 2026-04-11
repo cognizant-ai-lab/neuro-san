@@ -177,8 +177,11 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 necessary for managing the model run-time lifecycle.
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
+                Can return None if required api_keys are not provided.
         """
         full_config: Dict[str, Any] = self.create_full_llm_config(config, api_keys)
+        if full_config is None:
+            return None
         llm_resources: LangChainLlmResources = self.create_llm_resources(full_config)
         return llm_resources
 
@@ -258,9 +261,9 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         # Get any required api keys into the full config.
         full_config = self.replace_any_required_api_keys(full_config, api_keys)
-
-        # Attempt to get a max_tokens through calculation
-        full_config["max_tokens"] = self.get_max_prompt_tokens(full_config)
+        if full_config is not None:
+            # Attempt to get a max_tokens through calculation
+            full_config["max_tokens"] = self.get_max_prompt_tokens(full_config)
 
         return full_config
 
@@ -305,6 +308,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             The values for the keys are the API keys themselves.
             Can be None indiciating no API keys are provided at all and the system defaults will be used.
         :return: The config with any required api keys replaced.
+            Can return None if any of the required api keys are not provided.
         """
         use_api_keys: Dict[str, str] = {}
         if api_keys is not None and isinstance(api_keys, Dict):
@@ -319,6 +323,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 new_value: str = use_api_keys.get(key)
                 if new_value is not None:
                     config[key] = new_value
+                else:
+                    return None
 
         return config
 
