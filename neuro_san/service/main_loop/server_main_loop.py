@@ -26,6 +26,7 @@ from leaf_server_common.logging.logging_setup import setup_logging
 
 from neuro_san import TOP_LEVEL_DIR
 from neuro_san.interfaces.agent_session import AgentSession
+from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
@@ -41,8 +42,9 @@ from neuro_san.service.http.server.http_server import DEFAULT_MAX_CONCURRENT_REQ
 from neuro_san.service.http.server.http_server import DEFAULT_REQUEST_LIMIT
 from neuro_san.service.http.server.http_server import HttpServer
 from neuro_san.service.interfaces.agent_server import AgentServer
-from neuro_san.service.interfaces.startable import Startable
+from neuro_san.service.watcher.event_work.event_work_monitor import EventWorkMonitor
 from neuro_san.service.watcher.main_loop.storage_watcher import StorageWatcher
+from neuro_san.service.watcher.temp_networks.temp_network_storage_updater import TempNetworkStorageUpdater
 from neuro_san.service.utils.server_status import ServerStatus
 from neuro_san.service.utils.server_context import ServerContext
 
@@ -117,10 +119,6 @@ class ServerMainLoop:
                                 default=int(os.environ.get("AGENT_MANIFEST_UPDATE_PERIOD_SECONDS", "0")),
                                 help="Periodic run-time update period for manifest in seconds."
                                      " Value <= 0 disables updates.")
-        arg_parser.add_argument("--temporary_network_update_period_seconds", type=int,
-                                default=int(os.environ.get("AGENT_TEMPORARY_NETWORK_UPDATE_PERIOD_SECONDS", "0")),
-                                help="Periodic run-time update period for temporary networks in seconds."
-                                     " Value <= 0 disables updates.")
         arg_parser.add_argument("--http_connections_backlog", type=int,
                                 default=int(os.environ.get("AGENT_HTTP_CONNECTIONS_BACKLOG",
                                                            DEFAULT_HTTP_CONNECTIONS_BACKLOG)),
@@ -140,6 +138,11 @@ class ServerMainLoop:
                                                            DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS)),
                                 help="Http server resources monitoring/logging interval in seconds "
                                      "0 means no logging")
+        arg_parser.add_argument("--max_temp_networks", type=int,
+                                default=int(os.environ.get("AGENT_MAX_TEMP_NETWORKS", "0")),
+                                help="Maximum number of temporary agent networks to keep in memory. "
+                                     "When exceeded, least recently used networks are evicted. "
+                                     "0 means unlimited.")
         arg_parser.add_argument("--mcp_enable", type=str,
                                 default=os.environ.get("AGENT_MCP_ENABLE", "true"),
                                 help="'true' if MCP protocol service should be enabled")
@@ -180,14 +183,9 @@ class ServerMainLoop:
             self.usage_logger_metadata = self.forwarded_request_metadata
         self.service_openapi_spec_file = args.openapi_service_spec_path
 
-        if args.manifest_update_period_seconds <= 0 and \
-                args.temporary_network_update_period_seconds <= 0:
+        if args.manifest_update_period_seconds <= 0:
             # StorageWatcher is disabled:
             server_status.updater.set_requested(False)
-        if args.temporary_network_update_period_seconds <= 0:
-            # We don't need the queues in this situation either.
-            # This is a signal to other code to not even bother with Reservationists
-            self.server_context.no_queues()
         # Do we to enable MCP service?
         if args.mcp_enable.lower() != "true":
             server_status.mcp_service.set_requested(False)
@@ -202,6 +200,8 @@ class ServerMainLoop:
         self.http_server_config.http_server_monitor_interval_seconds = args.http_resources_monitor_interval_seconds
         self.http_server_config.http_port = args.http_port
 
+        self.server_context.set_temp_storage_max_items(args.max_temp_networks)
+
         manifest_restorer = RegistryManifestRestorer()
         manifest_agent_networks: Dict[str, Dict[str, AgentNetwork]] = manifest_restorer.restore()
         manifest_files: List[str] = manifest_restorer.get_manifest_files()
@@ -209,7 +209,6 @@ class ServerMainLoop:
         self.watcher_config = {
             "manifest_path": manifest_files,
             "manifest_update_period_seconds": args.manifest_update_period_seconds,
-            "temporary_network_update_period_seconds": args.temporary_network_update_period_seconds
         }
 
         self.agent_networks = manifest_agent_networks
@@ -247,6 +246,7 @@ class ServerMainLoop:
         # List of components which should be started after http server is created
         # and have spun up all its instances:
         components_to_start: List[Startable] = []
+
         if server_status.updater.is_requested():
             current_dir: str = os.path.dirname(os.path.abspath(__file__))
             setup_logging(server_status.updater.get_service_name(),
@@ -256,12 +256,22 @@ class ServerMainLoop:
             watcher = StorageWatcher(self.watcher_config, self.server_context)
             components_to_start.append(watcher)
 
+        # Another component to start is the temporary networks updater
+        temp_networks_updater: TempNetworkStorageUpdater =\
+            TempNetworkStorageUpdater(self.server_context.get_network_storage_dict(), self.server_context.get_queues())
+        components_to_start.append(temp_networks_updater)
+
+        # Create the event work monitor:
+        event_work_monitor = EventWorkMonitor(self.server_context)
+        components_to_start.append(event_work_monitor)
+
         # Create HTTP server;
         self.http_server = HttpServer(
             self.server_context,
             self.http_server_config,
             self.service_openapi_spec_file,
             self.request_limit,
+            self.max_concurrent_requests,
             self.logging_config,
             forwarded_request_metadata=metadata_str)
 

@@ -20,6 +20,7 @@ See class comment for details
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 
 from http import HTTPStatus
 
@@ -31,6 +32,9 @@ import tornado
 from tornado.web import RequestHandler
 
 from leaf_common.utils.async_atomic_counter import AsyncAtomicCounter
+from neuro_san.internals.reservations.agent_reservation import AgentReservation
+from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
+from neuro_san.internals.network_providers.expiring_agent_network_storage import ExpiringAgentNetworkStorage
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
@@ -137,20 +141,49 @@ class BaseRequestHandler(RequestHandler):
         service_provider: AsyncAgentServiceProvider = None
         is_authorized, service_provider = await self.agent_policy.allow_agent(agent_name, metadata)
 
-        if service_provider is None:
-            # Resource not found
-            self.set_status(404)
-            self.logger.error(metadata, "error: Invalid request path %s", self.request.path)
-            self.do_finish()
-            return None
-
         if not is_authorized:
             # Forbidden
             self.set_status(403)
             self.do_finish()
             return None
 
-        return service_provider.get_service()
+        if service_provider is not None:
+            return service_provider.get_service()
+
+        # Now, this could be a temporary network created outside of our service:
+        # Does it look like a temporary network name?
+        if AgentReservation.is_reservation_name(agent_name):
+            # Get temporary network storage:
+            network_storage_dict: Dict[str, AgentNetworkStorage] = self.server_context.get_network_storage_dict()
+            temp_storage: AgentNetworkStorage = network_storage_dict.get("temp", None)
+            if temp_storage is None or not isinstance(temp_storage, ExpiringAgentNetworkStorage):
+                self.set_status(500)
+                self.logger.error(metadata, "error: Temporary network storage is not properly configured.")
+                self.do_finish()
+                return None
+            # This call will trigger temp network lookup in external storage
+            # and if found, it will be registered in our service
+            # and become available for future requests until it expires.
+            # Note that "network_provider" result is not used directly here,
+            # but the call is necessary to trigger the "side effect" of lookup and registration of temp network.
+            # We delegate call execution to a thread to avoid blocking server event loop
+            # with potentially slow external storage access.
+            network_provider = await asyncio.to_thread(temp_storage.get_agent_network_provider, agent_name)
+            if network_provider is not None:
+                # Now that our service is aware of this temp network,
+                # we can query our policy again,
+                # and we already know that this agent has been authorized:
+                _, service_provider = await self.agent_policy.allow_agent(agent_name, metadata)
+                # If service provider is still None,
+                # that means something went very wrong - bail out:
+                if service_provider is not None:
+                    return service_provider.get_service()
+
+        # Nothing worked - so we report resource not found
+        self.set_status(404)
+        self.logger.error(metadata, "error: Invalid request path %s", self.request.path)
+        self.do_finish()
+        return None
 
     def process_exception(self, exc: Exception):
         """
@@ -181,7 +214,7 @@ class BaseRequestHandler(RequestHandler):
     # pylint: disable=invalid-overridden-method
     async def prepare(self):
         if not self.application.is_serving():
-            self.set_status(503)
+            self.set_status(HTTPStatus.SERVICE_UNAVAILABLE)
             self.write({"error": "Server is shutting down"})
             self.logger.error(self.get_metadata(), "Server is shutting down")
             self.do_finish()
@@ -192,11 +225,19 @@ class BaseRequestHandler(RequestHandler):
 
         self.logger.debug(self.get_metadata(), f"[REQUEST RECEIVED] {self.request.method} {self.request.uri}")
 
-    def do_finish(self):
+    def do_finish(self, status_code: HTTPStatus = HTTPStatus.OK, err_message: Optional[str] = None):
         """
-        Wrapper for finish() call
-        with check for closed client connection.
+        Wrapper for finish() call,
+        with check for result status code and error message to write out if necessary,
+        Also check for closed client connection.
+        :param status_code: HTTP status code to set for response; default is 200 OK
+        :param err_message: error message to write out in response body in case of error;
+            default is None, which means no error message will be written out.
         """
+        if status_code != HTTPStatus.OK:
+            self.set_status(status_code)
+            if err_message:
+                self.write({"error": err_message})
         try:
             self.finish()
         except tornado.iostream.StreamClosedError:

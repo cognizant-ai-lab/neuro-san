@@ -24,7 +24,8 @@ from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
 from neuro_san.interfaces.agent_session_constants import AgentSessionConstants
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
-from neuro_san.internals.network_providers.expiring_agent_network_storage import ExpiringAgentNetworkStorage
+from neuro_san.internals.network_providers.expiring_agent_network_storage \
+    import ExpiringAgentNetworkStorage
 from neuro_san.service.utils.server_status import ServerStatus
 from neuro_san.service.utils.mcp_server_context import McpServerContext
 
@@ -43,6 +44,7 @@ class ServerContext:
         self.queues: Queue[AsyncCollatingQueue] = Queue()
         self.mcp_server_context: McpServerContext = McpServerContext()
         self.server_port: int = AgentSessionConstants.DEFAULT_HTTP_PORT
+        self.event_work_queue: AsyncCollatingQueue = AsyncCollatingQueue()
 
         # Dictionary is string key (describing scope) to AgentNetworkStorage grouping.
         self.network_storage_dict: Dict[str, AgentNetworkStorage] = {
@@ -50,6 +52,16 @@ class ServerContext:
             "public": AgentNetworkStorage(),
             "temp": ExpiringAgentNetworkStorage()
         }
+
+    def set_temp_storage_max_items(self, max_items: int):
+        """
+        Configure the maximum number of temporary networks to keep in memory.
+        When exceeded, least recently used items are evicted.
+        :param max_items: Maximum number of items. 0 or negative means unlimited.
+        """
+        temp_storage: ExpiringAgentNetworkStorage = self.network_storage_dict.get("temp")
+        if temp_storage is not None:
+            temp_storage.set_max_agent_networks(max_items)
 
     def get_executor_pool(self) -> AsyncioExecutorPool:
         """
@@ -105,3 +117,9 @@ class ServerContext:
         :return: The Server port
         """
         return self.server_port
+
+    def get_event_work_queue(self) -> AsyncCollatingQueue:
+        """
+        :return: The event work queue
+        """
+        return self.event_work_queue

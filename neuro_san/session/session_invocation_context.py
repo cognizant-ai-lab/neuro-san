@@ -17,11 +17,18 @@
 from __future__ import annotations
 
 from typing import Any
+from typing import Awaitable
 from typing import Callable
 from typing import Dict
+from typing import List
 
+from asyncio import AbstractEventLoop
+from asyncio import get_event_loop
+from asyncio import run_coroutine_threadsafe
 from copy import copy
-import functools
+from concurrent.futures import Future
+from functools import partial
+from threading import Event
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
@@ -33,17 +40,21 @@ from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgen
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
+from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.journals.message_journal import MessageJournal
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.messages.origination import Origination
 
 
-# pylint: disable=too-many-instance-attributes
+# pylint: disable=too-many-instance-attributes,too-many-public-methods
 class SessionInvocationContext(InvocationContext):
     """
     Implementation of InvocationContext which encapsulates specific policy classes that pertain to
-    a single invocation of an AgentSession, whether by way of a
-    service call or library call.
+    a single invocation of an AgentSession, whether by way of a service call or library call.
+
+    A SessionInvocationContext will last for the duration of the work initiated by Session/request,
+    which could outlive the Session/request itself, depending on just how its invocation is
+    configured.
     """
 
     # pylint: disable=too-many-arguments
@@ -55,7 +66,9 @@ class SessionInvocationContext(InvocationContext):
                  toolbox_factory: ContextTypeToolboxFactory = None,
                  metadata: Dict[str, str] = None,
                  reservationist: Reservationist = None,
-                 port: int = None):
+                 port: int = None,
+                 effective_invocation: str = "chatbot",
+                 event_work_queue: AsyncCollatingQueue = None):
         """
         Constructor
 
@@ -71,6 +84,9 @@ class SessionInvocationContext(InvocationContext):
                          dictionary of string keys to string values.
         :param reservationist: The Reservationist instance to use.
         :param port: The port on which the server was started
+        :param effective_invocation: A string representing the effective invocation of the session.
+        :param event_work_queue: The AsyncCollatingQueue instance to use to queue up work
+                            for events that will be finished up after the request ends.
         """
 
         # From args
@@ -82,6 +98,8 @@ class SessionInvocationContext(InvocationContext):
         self.metadata: Dict[str, str] = metadata
         self.reservationist: Reservationist = reservationist
         self.port: int = port
+        self.effective_invocation: str = effective_invocation
+        self.event_work_queue: AsyncCollatingQueue = event_work_queue
 
         # Internal
         # Get an async executor to run all tasks for this session instance:
@@ -93,6 +111,10 @@ class SessionInvocationContext(InvocationContext):
         # safe_shallow_copy() below to keep AsyncDirectAgentSessions happy.
         self.queue: AsyncCollatingQueue = AsyncCollatingQueue()
         self.journal: Journal = MessageJournal(self.queue)
+        self.resources: List[LingeringResource] = []
+        self.work_done_event: Event = Event()
+        self.request_finished: bool = False
+        self.is_cloned: bool = False
 
     def start(self):
         """
@@ -103,11 +125,17 @@ class SessionInvocationContext(InvocationContext):
         """
         # Wrap it up into a single function with no parameters
         # for easier handling downstream.
-        logging_setup: Callable = functools.partial(setup_extra_logging_fields, metadata_dict=self.metadata)
+        logging_setup: Callable = partial(setup_extra_logging_fields, metadata_dict=self.metadata)
         self.asyncio_executor.start()
         # Run logging setup as event-loop initialization step -
         # make sure it is finished before we start to use this AsyncioExecutor instance.
         self.asyncio_executor.initialize(logging_setup)
+
+    def get_effective_invocation(self) -> str:
+        """
+        :return: The effective invocation of the session
+        """
+        return self.effective_invocation
 
     def get_async_session_factory(self) -> AsyncAgentSessionFactory:
         """
@@ -148,15 +176,39 @@ class SessionInvocationContext(InvocationContext):
         """
         return self.metadata
 
-    def close(self):
+    def add_resource(self, resource: LingeringResource):
         """
-        Release resources owned by this context
+        :param resource: The resource to add
         """
-        if self.asyncio_executor is not None:
-            self.async_executors_pool.return_executor(self.asyncio_executor)
-            self.asyncio_executor = None
+        self.resources.append(resource)
+
+    async def close_of_request(self, parent_resource: LingeringResource = None):
+        """
+        Release resources owned by this context when the request is complete.
+        This can happen earlier than when the work is complete.
+
+        :param parent_resource: The parent resource, if any
+        """
         if self.queue is not None:
             self.queue.close()
+            self.queue = None
+
+        for resource in self.resources:
+            await resource.close_of_request()
+
+    async def close_of_work(self, parent_resource: LingeringResource = None):
+        """
+        Release resources owned by this context when the work is all done.
+        This can happen later than when the request is complete.
+
+        Note: Any time close_of_work() is called, return_executor() should also be called
+              but not in the executor.  Use the synchronous done_with_work() for that combo.
+
+        :param parent_resource: The parent resource, if any
+        """
+        # Close resources first cuz they might need the executor
+        for resource in self.resources:
+            await resource.close_of_work()
 
     def get_request_reporting(self) -> Dict[str, Any]:
         """
@@ -204,13 +256,43 @@ class SessionInvocationContext(InvocationContext):
         # in subsequent interactions with the same network.
         self.origination.reset()
 
-    def safe_shallow_copy(self) -> SessionInvocationContext:
+        if self.queue is not None:
+            self.queue.reset()
+        else:
+            # When creating a new queue, we need to make sure that the journal knows about it
+            self.queue = AsyncCollatingQueue()
+            self.journal: Journal = MessageJournal(self.queue)
+
+        # Be sure we have an executor
+        if self.asyncio_executor is None:
+            self.asyncio_executor = self.async_executors_pool.get_executor()
+
+    def safe_shallow_copy(self, invocation: str = None) -> SessionInvocationContext:
         """
         Makes a safe shallow copy of the invocation context.
         Generally used with direct sessions.
+
+        :param invocation: String describing how the agent wants to be invoked.
+                            Can be: "chatbot" - implies waiting for an answer.
+                                    "event" - implies no answer needed
+                                    None - implies chatbot
+        :return: A copy of the invocation context
         """
 
         invocation_context: SessionInvocationContext = copy(self)
+
+        # Mark the invocation context as cloned
+        # This tells us that it is not the original/root and will prevent
+        # mis-happenings like returning the executor to the pool too early.
+        invocation_context.is_cloned = True
+
+        # We need a different Event to signal work is done
+        # Work being all done on a sub-invocation is not the same as work all done on the root.
+        invocation_context.work_done_event: Event = Event()
+
+        # We need different resources to close
+        # Resources are not shared between sub-invocations
+        invocation_context.resources: List[LingeringResource] = []
 
         # We need a different queue in order to call external agents with direct sessions.
         invocation_context.queue: AsyncCollatingQueue = AsyncCollatingQueue()
@@ -219,4 +301,86 @@ class SessionInvocationContext(InvocationContext):
         # to be sure that the messages are sent to the correct queue.
         invocation_context.journal: Journal = MessageJournal(invocation_context.queue)
 
+        # If an invocation was provided, use it
+        if invocation is not None:
+            invocation_context.effective_invocation = invocation
+
         return invocation_context
+
+    def get_work_done_event(self) -> Event:
+        """
+        :return: The Event (synchronous) that will be set when work is done for this event
+        """
+        return self.work_done_event
+
+    def finish_request(self):
+        """
+        Clean up our resources.
+        Depending on the invocation, we might Queue ourselves to let our work finish on its own
+        so that some of the resources can be cleaned up later.
+        """
+        # Only ever do this once
+        if self.request_finished:
+            return
+        self.request_finished = True
+
+        close_of_work_now: bool = True
+        try:
+            self._run_in_executor_until_complete("finish_request", self.close_of_request())
+
+            if self.get_effective_invocation() == "event":
+                # Finish the event work later only if there is something that will finish it for us.
+                if self.event_work_queue is not None:
+                    close_of_work_now = False
+                    # Need to do synchronous put because we are in a different event loop.
+                    self._run_in_executor_until_complete("finish_request",
+                                                         self.event_work_queue.put(self, synchronous=True))
+        finally:
+            if close_of_work_now:
+                # Still need to close resources, per above determination
+                self.done_with_work("finish_request")
+
+    def _run_in_executor_until_complete(self, submitter_id: str, coroutine: Awaitable) -> Future:
+        """
+        Submits a function to be run on the executor and runs until complete.
+        Note this is synchronous and can be run from within the executor or another event loop.
+        """
+        # We need to know if we are running in the same event loop as the executor
+        other_loop: AbstractEventLoop = self.asyncio_executor.get_event_loop()
+        loop: AbstractEventLoop = None
+        try:
+            # Use get_event_loop() over get_running_loop(), as its more robust
+            loop = get_event_loop()
+        except RuntimeError:
+            pass
+
+        future: Future = None
+        if loop == other_loop:
+            # If we are running in the same event loop as the executor, just run it directly
+            # If we try to wait for the result here it will never return.
+            future = self.asyncio_executor.create_task(coroutine, submitter_id, raise_exception=True)
+        else:
+            # Use some magic to run in a different event loop
+            future = run_coroutine_threadsafe(coroutine, other_loop)
+            # Wait for the result...
+            result: Any = future.result()
+            # ... that we don't really care about.
+            _ = result
+            future = None
+
+        return future
+
+    def done_with_work(self, submitter_id: str = None):
+        """
+        Runs close_of_work() on the executor and potentially returns the executor back to the pool
+        """
+        self._run_in_executor_until_complete(submitter_id, self.close_of_work())
+
+        if self.is_cloned:
+            # Clones via safe_shallow_copy() share the same AsyncioExecutor,
+            # so don't return it back to the pool just yet. Let the mama do that.
+            return
+
+        if self.asyncio_executor is not None:
+            self.async_executors_pool.return_executor(self.asyncio_executor)
+            self.asyncio_executor = None

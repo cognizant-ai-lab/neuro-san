@@ -32,6 +32,7 @@ Items in ***bold*** are essentials. Try to understand these first.
     - [error_formatter](#error_formatter)
     - [error_fragments](#error_fragments)
     - [llm_info_file](#llm_info_file)
+    - [max_steps](#max_steps)
     - [max_iterations](#max_iterations)
     - [max_execution_seconds](#max_execution_seconds)
     - [metadata](#metadata)
@@ -49,6 +50,7 @@ Items in ***bold*** are essentials. Try to understand these first.
             - [properties](#properties)
             - [required](#required)
         - [sly_data_schema](#sly_data_schema)
+        - [sly_data_output_schema](#sly_data_output_schema)
     - [***instructions*** - main system prompt for the agent](#instructions)
     - [***tools*** - list of other agents/tools that this agent may access](#tools-agents)
         - [External Agents](#external-agents)
@@ -71,6 +73,7 @@ Items in ***bold*** are essentials. Try to understand these first.
     - [display_as](#display_as)
     - [max_message_history](#max_message_history)
     - [verbose](#verbose-1)
+    - [max_steps](#max_steps-1)
     - [max_iterations](#max_iterations-1)
     - [max_execution_seconds](#max_execution_seconds-1)
     - [error_formatter](#error_formatter-1)
@@ -79,8 +82,10 @@ Items in ***bold*** are essentials. Try to understand these first.
     - [middleware](#middleware)
         - [class](#class-2)
         - [args](#args-1)
+            - [chat_history](#chat_history)
             - [origin](#origin)
             - [origin_str](#origin_str)
+            - [progress_reporter](#progress_reporter)
             - [sly_data](#sly_data-3)
 
 <!--TOC-->
@@ -301,15 +306,18 @@ for a production environment.  It's worth noting that most of the same informati
 on verbose can also be obtained by AGENT ChatMessages returned when the client's chat_filter is set to
 MAXIMAL.
 
+### max_steps
+
+An integer that sets the [recursion limit](https://docs.langchain.com/oss/python/langgraph/graph-api#recursion-limit)
+for LangGraph's agent. Despite its name, the recursion limit acts as a
+[super-step](https://docs.langchain.com/oss/python/langgraph/graph-api#graphs) limit
+on the entire graph execution, encompassing all tool and LLM calls.
+Nodes that run in parallel share the same super-step,
+while sequential nodes each occupy a separate super-step. Defaults to 10,000.
+
 ### max_iterations
 
-An integer controlling the max_iterations of the langchain
-[AgentExecutor](https://api.python.langchain.com/en/latest/agents/langchain.agents.agent.AgentExecutor.html)
-used for the agent.  Default is 20.
-
-We don't recommend deviating too far from the default of 20.
-Some folks find it useful to _temporarily_ boost this waaaaay up when there is "network weather"
-effecting your favorite LLM provider and you start to see "Agent stopped due to max iterations" errors.
+Deprecated. Use [max_steps](#max_steps) instead.
 
 ### max_execution_seconds
 
@@ -479,6 +487,15 @@ Example networks that advertise their sly_data_schema:
 
 - [math_guy.hocon](../neuro_san/registries/math_guy.hocon)
 
+#### sly_data_output_schema
+
+Similar optional dictionary to [sly_data_schema](#sly_data_schema) above, but this specifies the schema
+for the sly_data being output by the agent network.
+
+Example networks that advertise their sly_data_output_schema:
+
+- [math_guy.hocon](../neuro_san/registries/math_guy.hocon)
+
 ### instructions
 
 When included, the single (often very long) string value here tells an LLM-enabled agent
@@ -579,9 +596,13 @@ Optional string specifying a Python class which implements the
 interface.
 
 <!-- pyml disable no-inline-html -->
+Implementations can be specified as a fully-qualified class name, as long as that is in your PYTHONPATH.
+
+OR, to contribute to hocon brevity, there is a shortcut ...
+
 Implementations must be found in the directory where the class can be resolved by looking
 under the `AGENT_TOOL_PATH` environment variable setting as part of the `PYTHONPATH`.
-By default neuro-san deployments assume that `PYTHONPATH` is set to contain the
+By default, neuro-san deployments assume that `PYTHONPATH` is set to contain the
 top-level of your project's repo and that `AGENT_TOOL_PATH` is set to `<top-level>/coded_tools`.
 In that directory each agent has its own folder and the value of the class is resolved
 from there:  `<top-level>/coded_tools/<agent-name>`.  If there is no appropriate class found there,
@@ -626,6 +647,9 @@ To use your own tools, create a custom toolbox `.hocon` file and reference it in
 For more details on tool extension, see the [Toolbox Extension Guide](./toolbox_info_hocon_reference.md#extending-toolbox-info).
 
 For more information on tool schema, see the [toolbox_info_hocon_reference](./toolbox_info_hocon_reference.md).
+
+Note that an agent using `toolbox` cannot have a `tools` field. A toolbox agent executes code directly
+rather than calling an LLM, so it cannot invoke other tools as downstream agents.
 
 Example networks using tools from toolbox:
 
@@ -797,9 +821,14 @@ topics frequently.
 Same as top-level [verbose](#verbose), except at single-agent scope.
 
 <!--- pyml disable-next-line no-duplicate-heading -->
+### max_steps
+
+Same as top-level [max_steps](#max_steps), except at single-agent scope.
+
+<!--- pyml disable-next-line no-duplicate-heading -->
 ### max_iterations
 
-Same as top-level [max_iterations](#max_iterations), except at single-agent scope.
+Deprecated. Use [max_steps](#max_steps-1) instead.
 
 <!--- pyml disable-next-line no-duplicate-heading -->
 ### max_execution_seconds
@@ -864,6 +893,8 @@ AgentMiddleware allows for calling code to be executed in the following situatio
 - after the agent execution starts (aafter_agent())
 - before the LLM is called (abefore_model())
 - after the LLM is called (aafter_model())
+- intercept and control async model execution (awrap_model_call())
+- intercept and control async tool execution (awrap_tool_call())
 
 We list the asynchronous methods here as those are preferred in the asynchronous environment of
 a Neuro SAN server.
@@ -883,6 +914,12 @@ These will depend on the constructor signature of the class you are trying to in
 There are some special args that will be populated with information provided by the agent framework
 if they are specified in both the middleware dictionary and the class constructor signature:
 
+##### chat_history
+
+A list of langchain BaseMessages that are the full history of the conversation so far for the Middleware's agent.
+We allow this because some middleware may need to inspect and/or modify the history that neuro-san keeps
+as per-agent state (Think: summarization middleware).
+
 ##### origin
 
 A list of dictionaries that describe the origin of the middleware instantiation in terms of
@@ -891,6 +928,10 @@ where it is in the hierarchy of the agent network.
 ##### origin_str
 
 A simpler string representation of the [origin](#origin)
+
+##### progress_reporter
+
+A ProgressReporter instance that can be used to report progress dictionaries via the chat stream.
 
 <!--- pyml disable-next-line no-duplicate-heading -->
 ##### sly_data

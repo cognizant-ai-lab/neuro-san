@@ -56,5 +56,10 @@ class ToolboxNetworkValidator(AbstractNetworkValidator):
                     errors.append(f"Toolbox is unavailable. Cannot create Toolbox agent '{agent_name}'.")
                 elif agent_name not in self.tools:
                     errors.append(f"Toolbox agent '{agent_name}' has no matching tool in toolbox.")
+                elif agent.get("tools"):
+                    errors.append(
+                        "Toolbox agent cannot have 'tools'. "
+                        f"[{agent.get('tools')}] cannot be under Toolbox agent '{agent_name}'"
+                    )
 
         return errors

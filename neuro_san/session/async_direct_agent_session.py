@@ -17,10 +17,10 @@
 
 from typing import Any
 from typing import Dict
-from typing import Generator
+from typing import AsyncGenerator
 from typing import List
 
-from asyncio import Future
+from asyncio import Task
 from contextlib import suppress
 from copy import copy
 import logging
@@ -141,7 +141,7 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         return response_dict
 
     # pylint: disable=too-many-locals,too-many-statements,too-many-branches
-    async def streaming_chat(self, request_dict: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:
+    async def streaming_chat(self, request_dict: Dict[str, Any]) -> AsyncGenerator[Dict[str, Any], None]:
         """
         :param request_dict: A dictionary version of the ChatRequest
                     protobufs structure. Has the following keys:
@@ -165,8 +165,7 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         chat_session = DataDrivenChatSession(agent_network=self.agent_network)
 
         # Prepare the response dictionary
-        template_response_dict = {
-        }
+        template_response_dict: Dict[str, Any] = {}
 
         if chat_session is None or user_input is None:
             # Can't go on to chat, so report back early with a single value.
@@ -185,11 +184,11 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         # This might take a few minutes, which can be longer than some
         # sockets stay open.
         asyncio_executor: AsyncioExecutor = self.invocation_context.get_asyncio_executor()
-        future: Future = asyncio_executor.submit(self.request_id, chat_session.streaming_chat,
-                                                 user_input, self.invocation_context, sly_data,
-                                                 chat_context)
+        task: Task = asyncio_executor.submit(self.request_id, chat_session.streaming_chat,
+                                             user_input, self.invocation_context, sly_data,
+                                             chat_context)
         # Ignore the future. Live in the now.
-        _ = future
+        _ = task
 
         # Late-stage conversions for any and all messages
         message_processor: MessageProcessor = chat_session.create_outgoing_message_processor()
@@ -219,7 +218,7 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         finally:
             # Release resources without exceptions
             with suppress(Exception):
-                await chat_session.delete_resources()
+                self.invocation_context.finish_request()
 
     def reset(self):
         """
@@ -229,9 +228,10 @@ class AsyncDirectAgentSession(AsyncAgentSession):
 
     def close(self):
         """
-        Tears down resources created
+        Tears down all resources created
         """
         if self.invocation_context is None:
             return
-        self.invocation_context.close()
+
+        self.invocation_context.finish_request()
         self.invocation_context = None

@@ -17,7 +17,9 @@
 
 from typing import Any
 from typing import Dict
+from typing import Iterable
 from typing import List
+from typing import Set
 
 from logging import getLogger
 from logging import Logger
@@ -30,11 +32,17 @@ class KeywordNetworkValidator(AbstractNetworkValidator):
     AgentNetworkValidator that looks for correct keywords in an agent network
     """
 
-    def __init__(self):
+    ALL_KEYWORDS: Set[str] = {"instructions", "tools"}
+
+    def __init__(self, keywords: Iterable[str] = None):
         """
         Constructor
+
+        :param keywords: Iterable of keyword names to validate.
+                         If None, all keywords are validated.
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
+        self.keywords: Set[str] = set(keywords) if keywords is not None else self.ALL_KEYWORDS
 
     def validate_name_to_spec_dict(self, name_to_spec: Dict[str, Any]) -> List[str]:
         """
@@ -47,14 +55,58 @@ class KeywordNetworkValidator(AbstractNetworkValidator):
 
         self.logger.info("Validating agent network keywords...")
 
-        # Currently, only required "instructions" for non-function agents.
         for agent_name, agent in name_to_spec.items():
-            if agent.get("instructions") == "":
-                error_msg = f"{agent_name} 'instructions' cannot be empty."
-                errors.append(error_msg)
+            if "instructions" in self.keywords:
+                errors.extend(self.validate_instructions(agent_name, agent))
+            if "tools" in self.keywords:
+                errors.extend(self.validate_tools(agent_name, agent))
 
         # Only warn if there is a problem
         if len(errors) > 0:
             self.logger.warning(str(errors))
 
+        return errors
+
+    @staticmethod
+    def validate_instructions(agent_name: str, agent: Dict[str, Any]) -> List[str]:
+        """
+        Validate that 'instructions' is a non-empty string when present.
+
+        :param agent_name: The name of the agent being validated
+        :param agent: The agent spec dictionary
+        :return: A list of error messages
+        """
+        errors: List[str] = []
+        instructions: Any = agent.get("instructions")
+        if instructions is not None and not isinstance(instructions, str):
+            errors.append(
+                f"{agent_name} 'instructions' must be a str,"
+                f" got {type(instructions).__name__}."
+            )
+        elif instructions == "":
+            errors.append(f"{agent_name} 'instructions' cannot be empty.")
+        return errors
+
+    @staticmethod
+    def validate_tools(agent_name: str, agent: Dict[str, Any]) -> List[str]:
+        """
+        Validate that 'tools' is a list where each element is a str or dict.
+
+        :param agent_name: The name of the agent being validated
+        :param agent: The agent spec dictionary
+        :return: A list of error messages
+        """
+        errors: List[str] = []
+        tools: Any = agent.get("tools")
+        if tools is not None and not isinstance(tools, list):
+            errors.append(
+                f"{agent_name} 'tools' must be a list, got {type(tools).__name__}."
+            )
+        elif isinstance(tools, list):
+            for i, tool in enumerate(tools):
+                if not isinstance(tool, (str, dict)):
+                    errors.append(
+                        f"{agent_name} 'tools[{i}]' must be a str or dict,"
+                        f" got {type(tool).__name__}."
+                    )
         return errors

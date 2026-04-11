@@ -54,6 +54,71 @@
         "max_output_tokens": 100000,
         "knowledge_cutoff": "09/30/2023",
     },
+
+    "gpt-5.4-pro": {
+        "use_model_name": "gpt-5.4-pro-2026-03-05",
+    },
+    "gpt-5.4-pro-2026-03-05": {
+        "class": "openai",
+        "model_info_url": "https://developers.openai.com/api/docs/models/gpt-5.4-pro",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1050000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "08/31/2025",
+        "price_per_1k_input_tokens": 0.03,
+        "price_per_1k_output_tokens": 0.18,
+    },
+    "gpt-5.4": {
+        "use_model_name": "gpt-5.4-2026-03-05",
+    },
+    "gpt-5.4-2026-03-05": {
+        "class": "openai",
+        "model_info_url": "https://developers.openai.com/api/docs/models/gpt-5.4",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1050000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "08/31/2025",
+        "price_per_1k_input_tokens": 0.0025,
+        "price_per_1k_output_tokens": 0.015,
+    },
+    "gpt-5.4-mini": {
+        "use_model_name": "gpt-5.4-mini-2026-03-17",
+    },
+    "gpt-5.4-mini-2026-03-17": {
+        "class": "openai",
+        "model_info_url": "https://developers.openai.com/api/docs/models/gpt-5.4-mini",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 400000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "08/31/2025",
+    },
+    "gpt-5.4-nano": {
+        "use_model_name": "gpt-5.4-nano-2026-03-17",
+    },
+    "gpt-5.4-nano-2026-03-17": {
+        "class": "openai",
+        "model_info_url": "https://developers.openai.com/api/docs/models/gpt-5.4-nano",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 400000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "08/31/2025",
+    },
     "gpt-5.2": {
         "use_model_name": "gpt-5.2-2025-12-11",
     },
@@ -68,6 +133,9 @@
         "context_window_size": 400000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "08/31/2025",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.00175,
+        "price_per_1k_output_tokens": 0.014,
     },
     "gpt-5.1": {
         "use_model_name": "gpt-5.1-2025-11-13",
@@ -310,6 +378,26 @@
         "use_model_name": "gpt-3.5-turbo-0125",
         "model_info_url": "https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models?tabs=global-standard%2Cstandard-chat-completions#gpt-35"
     },
+    "azure-gpt-5.4": {
+        "class": "azure-openai",
+        "use_model_name": "gpt-5.4-2026-03-05",
+        "model_info_url": "https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure?tabs=global-standard-aoai%2Cglobal-standard&pivots=azure-openai#gpt-54"
+    },
+    "azure-gpt-5.4-mini": {
+        "class": "azure-openai",
+        "use_model_name": "gpt-5.4-mini-2026-03-17",
+        "model_info_url": "https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure?tabs=global-standard-aoai%2Cglobal-standard&pivots=azure-openai#gpt-54"
+    },
+    "azure-gpt-5.4-nano": {
+        "class": "azure-openai",
+        "use_model_name": "gpt-5.4-nano-2026-03-17",
+        "model_info_url": "https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure?tabs=global-standard-aoai%2C-global-standard&pivots=azure-openai#gpt-54"
+    },
+    "azure-gpt-5.4-pro": {
+        "class": "azure-openai",
+        "use_model_name": "gpt-5.4-pro-2026-03-05",
+        "model_info_url": "https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure?tabs=global-standard-aoai%2C-global-standard&pivots=azure-openai#gpt-54"
+    },
     "azure-gpt-4": {
         "class": "azure-openai",
         "use_model_name": "gpt-4-0613",
@@ -317,7 +405,7 @@
     },
     "azure-gpt-4o-mini": {
         "class": "azure-openai",
-        "use_model_name": "gpt-4o-mini-2024-07-18"
+        "use_model_name": "gpt-4o-mini-2024-07-18",
         "model_info_url": "https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models?tabs=global-standard%2Cstandard-chat-completions#gpt-4-and-gpt-4-turbo-models"
     },
     "azure-gpt-4o": {
@@ -1126,19 +1214,5 @@
         "max_tokens": null,                 # The maximum number of tokens to use in
                                             # computing prompt tokens. By default this comes from
                                             # the model description in this class.
-
-        # The following are more agent-level control as opposed to LLM control above.
-
-        "verbose": false,                   # Default is boolean false for quiet server operation.
-                                            # When True, responses from ChatEngine are logged to stdout.
-                                            # Can be "extra" to engage even more verbose logging from agent level.
-
-        "max_iterations": 20,               # Agent control for how many iterations are done.
-                                            # People often want to increase this when there are timeouts
-                                            # and other retry-able errors due to bad network weather,
-                                            # but this is a decent default set by langchain.
-
-        "max_execution_seconds": 120,       # Amount of time an agent should keep trying in retry
-                                            # situations before giving up.
     },
 }

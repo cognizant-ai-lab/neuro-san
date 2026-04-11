@@ -42,6 +42,7 @@ from neuro_san.internals.graph.activations.sly_data_redactor import SlyDataRedac
 from neuro_san.internals.interfaces.context_type_tracing_context_factory import ContextTypeTracingContextFactory
 from neuro_san.internals.interfaces.front_man import FrontMan
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
+from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.interfaces.run_target import RunTarget
 from neuro_san.internals.journals.intercepting_journal import InterceptingJournal
 from neuro_san.internals.journals.journal import Journal
@@ -61,7 +62,7 @@ PATIENCE_ERRORS: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
 
 
 # pylint: disable=too-many-instance-attributes
-class DataDrivenChatSession(RunTarget):
+class DataDrivenChatSession(RunTarget, LingeringResource):
     """
     ChatSession implementation that consolidates policy
     in using data-driven agent tool graphs.
@@ -86,6 +87,7 @@ class DataDrivenChatSession(RunTarget):
         self.invocation_context: InvocationContext = None
         self.interceptor: InterceptingJournal = None
         self.original_input_message: AgentFrameworkMessage = None
+        self.last_message_sent: bool = False
 
     async def set_up(self, invocation_context: InvocationContext,
                      sly_data: Dict[str, Any] = None,
@@ -104,9 +106,6 @@ class DataDrivenChatSession(RunTarget):
         # This ends up being the one reference to the sly_data that gets passed around
         # to the graph components. Updating this updates everyone else.
         self.sly_data = {}
-
-        # Reset what we might have created before.
-        await self.delete_resources()
 
         # Update sly data (if any) with what was passed in.
         # Note that since this instance is the owner of the sly_data,
@@ -205,6 +204,12 @@ class DataDrivenChatSession(RunTarget):
         """
         # Set up some member variable state so that run_it() can use it
         self.invocation_context = invocation_context
+
+        # Add ourselves as a resource to the invocation context
+        # so when its close_of_request() or close_of_work() is called, we also
+        # get called.
+        self.invocation_context.add_resource(self)
+
         journal: Journal = self.invocation_context.get_journal()
         self.interceptor = InterceptingJournal(journal, origin=None)
 
@@ -233,8 +238,12 @@ class DataDrivenChatSession(RunTarget):
         # For the factory args, we are our own run_target.
         tracing_context: RunTarget = tracing_factory.create_tracing_context(config, run_target=self)
 
-        # Run the run_target that was given back by the factory.
-        await tracing_context.run_it(input_message_for_show)
+        try:
+            # Run the run_target that was given back by the factory.
+            await tracing_context.run_it(input_message_for_show)
+        finally:
+            # Always signal that all work is done
+            self.invocation_context.get_work_done_event().set()
 
     async def run_it(self, inputs: AgentFrameworkMessage) -> AgentFrameworkMessage:
         """
@@ -244,6 +253,14 @@ class DataDrivenChatSession(RunTarget):
         :param inputs: An AgentFrameworkMessage populated with the user's input.
         :return: The user input. (Outputs are handled by the tracing context infrastructure.)
         """
+
+        # If we are invoked as an event, tell the caller that it's OK to disconnect early.
+        # By definition, they are not expecting a custom response.
+        if self.invocation_context.get_effective_invocation() == "event":
+            empty: Dict[str, Any] = {}
+            event_acknowledge = AgentFrameworkMessage(content="Event acknowledged", chat_context=empty)
+            await self.finalize_request(event_acknowledge)
+
         # Get all our real input values from the original_input_message.
         # If we got it from the inputs arg, we'd get the for-show message
         # which has fields rearranged and even redacted.
@@ -252,9 +269,16 @@ class DataDrivenChatSession(RunTarget):
         chat_context: Dict[str, Any] = self.original_input_message.chat_context
 
         if self.front_man is None:
-            await self.set_up(self.invocation_context, sly_data, chat_context)
+            try:
+                await self.set_up(self.invocation_context, sly_data, chat_context)
+            except ValueError as exc:
+                # This can happen if we have problems with LLM clients API keys:
+                # Construct a message to send back to the client with the error information.
+                message = AgentFrameworkMessage(content=str(exc))
+                await self.finalize_request(message)
+                return message
 
-        # Save information about chat
+        # Actually run the chat and save information about it
         chat_messages: Iterator[Dict[str, Any]] = await self.chat(user_input, self.invocation_context, sly_data)
         message_list: List[Dict[str, Any]] = list(chat_messages)
 
@@ -290,6 +314,28 @@ class DataDrivenChatSession(RunTarget):
         # at the end of the tracing context.
         message = AgentFrameworkMessage(content=answer, chat_context=return_chat_context,
                                         sly_data=return_sly_data, structure=structure)
+        await self.finalize_request(message)
+
+        # Bogus output, but need something for interface
+        outputs: AgentFrameworkMessage = inputs
+        return outputs
+
+    async def finalize_request(self, message: BaseMessage):
+        """
+        This is a method that publishes the resulting message of the request
+        and performs necessary finalization steps for request resources.
+
+        :param message: The final message delivered from the run.
+        :return: Nothing.
+        """
+        if self.last_message_sent:
+            return
+        self.last_message_sent = True
+
+        # Use the interceptor to write the final message.
+        # This guy wraps the journal from the invocation context and listens to the
+        # messages coming across, which allows us to report to the tracing infrastructure
+        # at the end of the tracing context.
         await self.interceptor.write_message(message, origin=None)
 
         # Put an end-marker on the queue to tell the consumer we truly are done
@@ -302,27 +348,6 @@ class DataDrivenChatSession(RunTarget):
         # taken here ends up being harmless in the synchronous request case (like for gRPC) because
         # we would only be blocking our own event loop.
         await queue.put_final_item(synchronous=True)
-
-        # Now that we are done, tell the Reservationist that we used for this request
-        # that there will be no more Reservations to corral.
-        reservationist: Reservationist = self.invocation_context.get_reservationist()
-        if reservationist is not None:
-            await reservationist.close()
-
-        # Close any objects on sly data that can be closed.
-        await self.close_sly_data()
-
-        # Bogus output, but need something for interface
-        outputs: AgentFrameworkMessage = inputs
-        return outputs
-
-    async def delete_resources(self):
-        """
-        Frees up any service-side resources.
-        """
-        if self.front_man is not None:
-            await self.front_man.delete_any_resources()
-            self.front_man = None
 
     def prepare_chat_context(self, chat_message_history: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
@@ -373,6 +398,26 @@ class DataDrivenChatSession(RunTarget):
         # Eventually this might be a CompositeMessageProcessor
         message_processor = StructureMessageProcessor(structure_formats)
         return message_processor
+
+    async def close_of_work(self, parent_resource: LingeringResource = None):
+        """
+        Release resources owned by this context when the work is all done.
+        This can happen later than when the request is complete.
+
+        :param parent_resource: The parent resource, if any
+        """
+        # Now that we are done, tell the Reservationist that we used for this request
+        # that there will be no more Reservations to corral.
+        reservationist: Reservationist = self.invocation_context.get_reservationist()
+        if reservationist is not None and isinstance(reservationist, LingeringResource):
+            await reservationist.close_of_work()
+
+        # Close any objects on sly data that can be closed.
+        await self.close_sly_data()
+
+        if self.front_man is not None:
+            await self.front_man.close_of_work()
+            self.front_man = None
 
     async def close_sly_data(self):
         """

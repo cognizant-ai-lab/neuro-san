@@ -49,7 +49,8 @@
 
                     # Optional: restricts which tools are available.
                     # If omitted, all tools are enabled.
-                    "tools": ["read_wiki_structure", "ask_question"]
+                    # note that tools [read_wiki_content & ask_question] not work on www.wikipedia.org/cognizant-ai-lab/neuro-san
+                    "tools": ["read_wiki_structure"]
 
                     # For authentication, see https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#authentication
                 }

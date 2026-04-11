@@ -40,3 +40,12 @@ class ToolCall:
         :return: Returns the string name of the tool
         """
         raise NotImplementedError
+
+    def get_invocation(self) -> str:
+        """
+        :return: String describing how the tool wants to be invoked.
+                            Can be: "chatbot" - implies waiting for an answer.
+                                    "event" - implies no answer needed
+                                    None - implies chatbot
+        """
+        raise NotImplementedError

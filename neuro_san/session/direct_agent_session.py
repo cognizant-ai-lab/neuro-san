@@ -20,7 +20,7 @@ from typing import Dict
 from typing import Generator
 from typing import List
 
-from asyncio import Future
+from asyncio import Task
 from contextlib import suppress
 from copy import copy
 
@@ -155,8 +155,7 @@ class DirectAgentSession(AgentSession):
         chat_session = DataDrivenChatSession(agent_network=self.agent_network)
 
         # Prepare the response dictionary
-        template_response_dict = {
-        }
+        template_response_dict: Dict[str, Any] = {}
 
         if chat_session is None or user_input is None:
             # Can't go on to chat, so report back early with a single value.
@@ -175,11 +174,11 @@ class DirectAgentSession(AgentSession):
         # This might take a few minutes, which can be longer than some
         # sockets stay open.
         asyncio_executor: AsyncioExecutor = self.invocation_context.get_asyncio_executor()
-        future: Future = asyncio_executor.submit(self.request_id, chat_session.streaming_chat,
-                                                 user_input, self.invocation_context, sly_data,
-                                                 chat_context)
+        task: Task = asyncio_executor.submit(self.request_id, chat_session.streaming_chat,
+                                             user_input, self.invocation_context, sly_data,
+                                             chat_context)
         # Ignore the future. Live in the now.
-        _ = future
+        _ = task
 
         # Late-stage conversions for any and all messages
         message_processor: MessageProcessor = chat_session.create_outgoing_message_processor()
@@ -215,9 +214,9 @@ class DirectAgentSession(AgentSession):
             # Release resources without exceptions
             with suppress(Exception):
                 # Cannot run as if in sync environment, so run async
-                # Use the asyncio_executor so as to not induce other async warnings
-                future: Future = asyncio_executor.submit(self.request_id, chat_session.delete_resources)
-                _ = future
+                # This finish_request() will dole out what is appropriate to run in the
+                # executor vs in the current thread.
+                self.invocation_context.finish_request()
 
     def reset(self):
         """
@@ -231,5 +230,6 @@ class DirectAgentSession(AgentSession):
         """
         if self.invocation_context is None:
             return
-        self.invocation_context.close()
+
+        self.invocation_context.finish_request()
         self.invocation_context = None

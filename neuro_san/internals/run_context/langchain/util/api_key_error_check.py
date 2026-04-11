@@ -77,7 +77,7 @@ class ApiKeyErrorCheck:
             keys_str = ", ".join(matched_keys)
             return f"""
 A value for the {keys_str} environment variable must be correctly set in the neuro-san
-server or run-time enviroment in order to use this agent network.
+server or run-time environment in order to use this agent network.
 
 Some things to try:
 1) Double check that your value for {keys_str} is set correctly

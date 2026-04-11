@@ -28,6 +28,7 @@ from janus import Queue
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.utils.atomic_counter import AtomicCounter
 
 from leaf_server_common.server.request_logger import RequestLogger
@@ -35,6 +36,8 @@ from leaf_server_common.server.request_logger import RequestLogger
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.graph.utils.allow_util import AllowUtil
+from neuro_san.internals.graph.utils.invocation_util import InvocationUtil
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
@@ -108,6 +111,7 @@ class AgentService:
         self.port: int = server_context.get_server_port()
 
         self.request_timeout_seconds: float = agent_network.get_request_timeout_seconds()
+        self.event_work_queue: AsyncCollatingQueue = server_context.get_event_work_queue()
 
         # Load once
         self.llm_factory.load()
@@ -248,9 +252,13 @@ class AgentService:
         if metadata.get("request_id") is None:
             metadata["request_id"] = service_logging_dict.get("request_id")
 
+        # Determine the effective invocation
+        agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
+        effective_invocation: str = InvocationUtil.get_effective_invocation(agent_network, request_dict)
+
         # Create a reservationist
         reservationist: Reservationist = None
-        if self.queues is not None:
+        if self.queues is not None and AllowUtil.is_allowed(agent_network, "reservations", ["middleware"]):
             reservationist = ServiceAgentReservationist()
             self.queues.sync_q.put(reservationist.get_queue())
 
@@ -264,7 +272,9 @@ class AgentService:
             self.toolbox_factory,
             metadata,
             reservationist,
-            self.port)
+            self.port,
+            effective_invocation=effective_invocation,
+            event_work_queue=self.event_work_queue)
         invocation_context.start()
 
         # Set up logging inside async thread
@@ -273,7 +283,6 @@ class AgentService:
         _ = executor.submit(None, self.server_logging.setup_logging, metadata, metadata.get("request_id"))
 
         # Delegate to Direct*Session
-        agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
         session = DirectAgentSession(agent_network=agent_network,
                                      invocation_context=invocation_context,
                                      metadata=metadata,
@@ -282,9 +291,8 @@ class AgentService:
         response_dict_iterator: Iterator[Dict[str, Any]] = session.streaming_chat(request_dict)
 
         # See if we want to put the request dict in the response
-        chat_filter_dict: Dict[str, Any] = {}
-        chat_filter_dict = request_dict.get("chat_filter", chat_filter_dict)
-        chat_filter_type: str = chat_filter_dict.get("chat_filter_type", "MINIMAL")
+        extractor = DictionaryExtractor(request_dict)
+        chat_filter_type: str = extractor.get("chat_filter.chat_filter_type", "MINIMAL")
 
         try:
             for response_dict in response_dict_iterator:
@@ -305,9 +313,10 @@ class AgentService:
             if response_dict_iterator is not None:
                 with contextlib.suppress(Exception):
                     response_dict_iterator.close()
+
             # Ensure that our SessionInvocationContext is always closed,
             # even if iterator is interrupted.
-            invocation_context.close()
+            invocation_context.finish_request()
             invocation_context = None
 
         # Maybe report token accounting to a UsageLogger
@@ -326,3 +335,11 @@ class AgentService:
             self.request_logger.finish_request(f"{self.agent_name}.StreamingChat", log_marker, request_log)
 
         self.request_counter.decrement()
+
+    def should_process_as_event(self, request_dict: Dict[str, Any]) -> bool:
+        """
+        :return: True if the request should be processed as an event. False otherwise
+        """
+        agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
+        process_as_event: bool = InvocationUtil.get_effective_invocation(agent_network, request_dict) == "event"
+        return process_as_event

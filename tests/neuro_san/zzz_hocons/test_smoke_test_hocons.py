@@ -65,6 +65,7 @@ class TestSmokeTestHocons(TestCase):
         # Barring that, try to stick to alphabetical order.
         "music_nerd_pro/combination_responses_with_history_mcp.hocon",
         "copy_cat/create_and_use_temp_network_http.hocon",
+        "copy_cat_middleware/create_temp_network_http.hocon",
         # Issue #734:
         # "music_nerd_pro_sly/combination_responses_with_history_mcp.hocon",
 
@@ -90,8 +91,7 @@ class TestSmokeTestHocons(TestCase):
         # These can be in any order.
         # Ideally more basic functionality will come first.
         # Barring that, try to stick to alphabetical order.
-        # Issue #762 and #763:
-        # "music_nerd_pro_llm_anthropic/combination_responses_with_history_direct.hocon",
+        "music_nerd_pro_llm_anthropic/combination_responses_with_history_direct.hocon",
         "music_nerd_pro_llm_gemini/combination_responses_with_history_direct.hocon",
         "music_nerd_pro_llm_azure/combination_responses_with_history_direct.hocon",
         "music_nerd_pro_llm_bedrock_claude/combination_responses_with_history_direct.hocon",
@@ -124,7 +124,7 @@ class TestSmokeTestHocons(TestCase):
     ]), skip_on_empty=True)
     @pytest.mark.smoke
     @pytest.mark.smoke_non_default_llm_provider_needs_server
-    @pytest.mark.smoke_ollama
+    @pytest.mark.ollama
     def test_hocon_with_server_non_default_llm(self, test_name: str, test_hocon: str):
         """
         Test method for a single parameterized test case specified by a hocon file.

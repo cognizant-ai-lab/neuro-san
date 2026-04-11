@@ -25,10 +25,9 @@ from threading import Thread
 from time import sleep
 from time import time
 
-from neuro_san.service.interfaces.startable import Startable
+from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.service.watcher.interfaces.storage_updater import StorageUpdater
 from neuro_san.service.watcher.registries.registry_storage_updater import RegistryStorageUpdater
-from neuro_san.service.watcher.temp_networks.temp_network_storage_updater import TempNetworkStorageUpdater
 from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.service.utils.server_status import ServerStatus
 
@@ -54,9 +53,7 @@ class StorageWatcher(Startable):
         self.server_context: ServerContext = server_context
 
         self.storage_updaters: List[StorageUpdater] = [
-            RegistryStorageUpdater(server_context.get_network_storage_dict(), watcher_config),
-            TempNetworkStorageUpdater(server_context.get_network_storage_dict(), watcher_config,
-                                      server_context.get_queues())
+            RegistryStorageUpdater(server_context.get_network_storage_dict(), watcher_config)
         ]
 
         self.update_period_in_seconds: int = self.compute_update_period_in_seconds(self.storage_updaters)

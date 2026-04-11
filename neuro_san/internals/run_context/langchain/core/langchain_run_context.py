@@ -17,7 +17,6 @@
 from typing import Any
 from typing import Dict
 from typing import List
-from typing import Tuple
 from typing import Union
 
 import json
@@ -35,7 +34,6 @@ from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.human import HumanMessage
 from langchain_core.messages.system import SystemMessage
-from langchain_core.prompts.chat import ChatPromptTemplate
 from langchain_core.runnables.base import Runnable
 from langchain_core.runnables.passthrough import RunnablePassthrough
 from langchain_core.tools.base import BaseTool
@@ -182,15 +180,18 @@ class LangChainRunContext(RunContext):
                     else:
                         self.tools.append(tool)
 
-        prompt_template: ChatPromptTemplate = await self.create_prompt_template(instructions)
+        if not self.chat_history:
+            # Write instructions as the first message in the journal.
+            # "instructions" is provided to the agent in create_agent() and is not in the chat history.
+            await self.journal.write_message(SystemMessage(instructions))
 
-        self.agent_chain = self.create_agent_with_fallbacks(prompt_template)
+        self.agent_chain = self.create_agent_with_fallbacks(instructions)
         self.resources_created = True
 
-    def create_agent_with_fallbacks(self, prompt_template: ChatPromptTemplate) -> Runnable:
+    def create_agent_with_fallbacks(self, instructions: str) -> Runnable:
         """
         Creates an agent with potential fallback llms to use.
-        :param prompt_template: The ChatPromptTemplate to use for the agent
+        :param instructions: The instructions to use for the agent
         :return: An Agent (Runnable)
         """
         # Initialize our return value
@@ -211,7 +212,7 @@ class LangChainRunContext(RunContext):
 
             # Create a model we might use.
             one_llm_resources: LangChainLlmResources = llm_factory.create_llm(fallback)
-            one_agent: Runnable = self.create_agent(prompt_template, one_llm_resources.get_model())
+            one_agent: Runnable = self.create_agent(instructions, one_llm_resources.get_model())
 
             if index == 0:
                 # The first agent is the one we want to be our main guy.
@@ -229,69 +230,30 @@ class LangChainRunContext(RunContext):
 
         return agent
 
-    def create_agent(self, prompt_template: ChatPromptTemplate, llm: BaseLanguageModel) -> Runnable:
+    def create_agent(self, instructions: str, llm: BaseLanguageModel) -> Runnable:
         """
         Creates an agent.
-        :param prompt_template: The ChatPromptTemplate to use for the agent
+        :param instructions: The instructions to use for the agent
         :param llm: The BaseLanguageModel to use for the agent
         :return: An Agent (Runnable)
         """
-        # Initialize our return value
-        agent: Runnable = None
 
         # Create any middleware instances that were specified, in the order they were specified.
         # This will be None for most simple situations.
-        middleware_factory = MiddlewareFactory(self.origin, self.invocation_context.get_journal())
+        middleware_factory = MiddlewareFactory(self.invocation_context, self.origin, self.chat_history)
         sly_data: Dict[str, Any] = self.tool_caller.get_sly_data()
 
         middleware: List[AgentMiddleware] = None
         checkpointer: Any = None
         middleware, checkpointer = middleware_factory.create_agent_middleware(self.middleware_config, sly_data)
 
-        # Determine how complex the meat of our agent chain will be
-        meat: Runnable = llm
-        if len(self.tools) > 0 or len(middleware) > 0:
-
-            meat = create_agent(model=llm, tools=self.tools, middleware=middleware, checkpointer=checkpointer)
-
-        # This uses LangChain Expression Language (LCEL), which enables a functional, pipeline-style composition
-        # using "|". Here, we pass `agent_scratchpad` in the input message, but since we don't explicitly assign it
-        # to `intermediate_steps` (as done in the old `create_tool_calling_agent`), it remains unused by the prompt.
-        #
-        # In contrast, the old `create_tool_calling_agent` can be written in LCEL as
-        # RunnablePassthrough | prompt | llm_with_tools | ToolsAgentOutputParser
-        # where RunnablePassthrough `agent scratchpad` convert (AgentAction, tool output) tuples into ToolMessages.
-        #
-        # By skipping this step, our agent functions as a pure LLM-driven system with a defined role,
-        # without tool invocation or middleware logic influencing its decision-making.
-
-        agent = prompt_template | meat
-
-        return agent
-
-    async def create_prompt_template(self, instructions: str) -> ChatPromptTemplate:
-        """
-        Creates a ChatPromptTemplate given the generic instructions
-        """
-        # Assemble the prompt message list
-        message_list: List[Tuple[str, str]] = []
-
-        system_message = SystemMessage(instructions)
-        if not self.chat_history:
-            await self.journal.write_message(system_message)
-        message_list.append(("system", instructions))
-
-        # Fill out the rest of the prompt per the docs for create_tooling_agent()
-        # Note we are not write_message()-ing the chat history because that is redundant
-        # Unclear if we should somehow/someplace write_message() the agent_scratchpad at all.
-        message_list.extend([
-            ("placeholder", "{chat_history}"),
-            ("human", "{input}"),
-        ])
-
-        prompt: ChatPromptTemplate = ChatPromptTemplate.from_messages(message_list)
-
-        return prompt
+        return create_agent(
+            model=llm,
+            tools=self.tools,
+            middleware=middleware,
+            checkpointer=checkpointer,
+            system_prompt=instructions,
+        )
 
     async def submit_message(self, user_message: str) -> Run:
         """
@@ -333,9 +295,15 @@ class LangChainRunContext(RunContext):
         previous_chat_history: List[BaseMessage] = copy(self.chat_history)
 
         inputs = {
-            "chat_history": previous_chat_history,
-            "input": self.recent_human_message.content
+            # All agents have a "messages" field, which is a list of messages.
+            # To invoke the agent, pass a new list containing the previous chat history
+            # along with the new user message.
+            # https://docs.langchain.com/oss/python/langchain/agents#invocation
+            "messages": previous_chat_history + [self.recent_human_message]
         }
+
+        # Chat history is updated in write_message
+        await self.journal.write_message(self.recent_human_message)
 
         run: Run = LangChainRun(self.run_id_base, self.chat_history)
         session_id: str = run.get_id()
@@ -483,16 +451,16 @@ class LangChainRunContext(RunContext):
 
         return tool_message
 
-    async def delete_resources(self, parent_run_context: RunContext = None):
+    async def close_of_work(self, parent_resource: RunContext = None):
         """
-        Cleans up the service-side resources associated with this instance
-        :param parent_run_context: A parent RunContext perhaps the same instance,
-                        but perhaps not.  Default is None
-        """
+        Release resources owned by this context when the work is all done.
+        This can happen later than when the request is complete.
 
+        :param parent_resource: parent resource, if any
+        """
         # Release model related resources:
         if self.llm_resources:
-            await self.llm_resources.delete_resources()
+            await self.llm_resources.close_of_work()
 
         self.tools = []
         self.chat_history = []

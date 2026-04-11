@@ -289,14 +289,6 @@ ENV AGENT_HTTP_SERVER_INSTANCES=1
 # Logging period is specified in seconds.
 ENV AGENT_HTTP_RESOURCES_MONITOR_INTERVAL=0
 
-# If this value is specified and >0,
-# it will enable dynamic temporary network updates of the server agents
-# allowing CodedTools to reserve temporary networks via the Reservationist
-# interface, if the agent network hocon file specifically allows it for the tool.
-# Update will be done every AGENT_TEMPORARY_NETWORK_UPDATE_PERIOD_SECONDS seconds;
-# if value is not specified or <= 0, no such dynamic updates will be executed.
-ENV AGENT_TEMPORARY_NETWORK_UPDATE_PERIOD_SECONDS=0
-
 # Optional URL describing how the server is to be referenced by the outside world.
 # This is useful when a server is behind a load-balancer as part of a larger cluster.
 ENV AGENT_EXTERNAL_SERVER_URL=""
@@ -315,7 +307,20 @@ ENV AGENT_EXTERNAL_RESERVATIONS_STORAGE=""
 # to use for cross-pod reservations storage.
 ENV AGENT_RESERVATIONS_S3_BUCKET=""
 
-# A hocon file with MCP clients and servers information to be used by LangChainMcpAdapter
+# If AGENT_EXTERNAL_RESERVATIONS_STORAGE is set,
+# then this parameter specifies the period in seconds for checking the external storage for expired reservations.
+# Value of 0 means no periodic checks will be performed by the service,
+# in this case it is expected that the external storage itself will handle expired reservations,
+# or it will be done on demand by other tools.
+ENV AGENT_RESERVATIONS_EXTERNAL_STORAGE_CHECK_PERIOD_SECONDS="0"
+
+# The maximum number of temporary agent networks that will be kept internally
+# in service memory at the same time. If this limit is reached,
+# the oldest temporary networks (by access time) will be evicted.
+# 0 or negative value means unlimited.
+ENV AGENT_MAX_TEMP_NETWORKS="0"
+
+# A hocon file with MCP servers information to be used by LangChainMcpAdapter
 # for connecting to external MCP servers with authentication and tool filtering.
 ENV AGENT_MCP_INFO_FILE=""
 

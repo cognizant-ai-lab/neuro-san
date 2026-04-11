@@ -17,7 +17,7 @@
 
 from typing import Any
 from typing import Dict
-from typing import Generator
+from typing import AsyncGenerator
 
 import contextlib
 import json
@@ -27,11 +27,14 @@ from janus import Queue
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.utils.atomic_counter import AtomicCounter
 
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.graph.utils.allow_util import AllowUtil
+from neuro_san.internals.graph.utils.invocation_util import InvocationUtil
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
@@ -96,6 +99,8 @@ class AsyncAgentService:
         self.port: int = server_context.get_server_port()
 
         self.async_executor_pool: AsyncioExecutorPool = server_context.get_executor_pool()
+        self.event_work_queue: AsyncCollatingQueue = server_context.get_event_work_queue()
+
         self.reload_factories()
 
     def reload_factories(self):
@@ -221,7 +226,7 @@ class AsyncAgentService:
     # pylint: disable=too-many-locals
     async def streaming_chat(self, request_dict: Dict[str, Any],
                              request_metadata: Dict[str, Any]) \
-            -> Generator[Dict[str, Any], None, None]:
+            -> AsyncGenerator[Dict[str, Any], None]:
         """
         Initiates or continues the agent chat with the session_id
         context in the request.
@@ -246,9 +251,13 @@ class AsyncAgentService:
                 "Received a %s request for %s",
                 f"{self.agent_name}.StreamingChat", log_marker)
 
+        # Determine the effective invocation
+        agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
+        effective_invocation: str = InvocationUtil.get_effective_invocation(agent_network, request_dict)
+
         # Create a reservationist for the occasion
         reservationist: Reservationist = None
-        if self.queues is not None:
+        if self.queues is not None and AllowUtil.is_allowed(agent_network, "reservations", ["middleware"]):
             reservationist = ServiceAgentReservationist()
             self.queues.sync_q.put(reservationist.get_queue())
 
@@ -262,7 +271,9 @@ class AsyncAgentService:
             self.toolbox_factory,
             metadata,
             reservationist,
-            self.port)
+            self.port,
+            effective_invocation=effective_invocation,
+            event_work_queue=self.event_work_queue)
         invocation_context.start()
 
         # Set up logging inside async thread
@@ -271,7 +282,6 @@ class AsyncAgentService:
         _ = executor.submit(None, self.server_logging.setup_logging, metadata, metadata.get("request_id"))
 
         # Delegate to Direct*Session
-        agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
         session: AsyncDirectAgentSession =\
             AsyncDirectAgentSession(
                 agent_network=agent_network,
@@ -279,12 +289,11 @@ class AsyncAgentService:
                 metadata=metadata,
                 security_cfg=self.security_cfg)
         # Get our args in order to pass to transport-agnostic session level
-        response_dict_generator: Generator[Dict[str, Any], None, None] = session.streaming_chat(request_dict)
+        response_dict_generator: AsyncGenerator[Dict[str, Any], None] = session.streaming_chat(request_dict)
 
         # See if we want to put the request dict in the response
-        chat_filter_dict: Dict[str, Any] = {}
-        chat_filter_dict = request_dict.get("chat_filter", chat_filter_dict)
-        chat_filter_type: str = chat_filter_dict.get("chat_filter_type", "MINIMAL")
+        extractor = DictionaryExtractor(request_dict)
+        chat_filter_type: str = extractor.get("chat_filter.chat_filter_type", "MINIMAL")
 
         try:
             async for response_dict in response_dict_generator:
@@ -307,7 +316,7 @@ class AsyncAgentService:
                     await response_dict_generator.aclose()
             # Ensure that our SessionInvocationContext is always closed,
             # even if generator is interrupted.
-            invocation_context.close()
+            invocation_context.finish_request()
             invocation_context = None
 
         # Maybe report token accounting to a UsageLogger
@@ -329,3 +338,11 @@ class AsyncAgentService:
                 f"{self.agent_name}.StreamingChat", log_marker)
 
         self.request_counter.decrement()
+
+    def should_process_as_event(self, request_dict: Dict[str, Any]) -> bool:
+        """
+        :return: True if the request should be processed as an event. False otherwise
+        """
+        agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
+        process_as_event: bool = InvocationUtil.get_effective_invocation(agent_network, request_dict) == "event"
+        return process_as_event

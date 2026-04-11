@@ -62,7 +62,8 @@ class ExternalActivation(AbstractCallableActivation):
                  agent_url: str,
                  arguments: Dict[str, Any],
                  sly_data: Dict[str, Any],
-                 allow_from_downstream: Dict[str, Any]):
+                 allow_from_downstream: Dict[str, Any],
+                 invocation: str):
         """
         Constructor
 
@@ -80,6 +81,7 @@ class ExternalActivation(AbstractCallableActivation):
                  invoke() method.
         :param allow_from_downstream: A dictionary describing how to handle information
                 coming in from the downstream external agent
+        :param invocation: The style of the invocation
         """
         # There is no spec on our end for the agent_tool_spec
         # Also worth noting that normally, sly_data is shared between all tools
@@ -96,6 +98,7 @@ class ExternalActivation(AbstractCallableActivation):
         self.session: AsyncAgentSession = None
         self.chat_context: Dict[str, Any] = None
         self.processor = BasicMessageProcessor()
+        self.invocation: str = invocation
 
         # Allow for precedence of keys from "allow.from_downstream" in the agent spec.
         extractor = DictionaryExtractor(self.allow_from_downstream)
@@ -153,7 +156,7 @@ class ExternalActivation(AbstractCallableActivation):
         if self.session is None:
             invocation_context: InvocationContext = self.run_context.get_invocation_context()
             factory: AsyncAgentSessionFactory = invocation_context.get_async_session_factory()
-            self.session = factory.create_session(self.agent_url, invocation_context)
+            self.session = factory.create_session(self.agent_url, invocation_context, self.invocation)
 
         # Send off the input
         chat_request: Dict[str, Any] = self.gather_input(f"```json\n{json.dumps(self.arguments)}```",
@@ -270,11 +273,13 @@ class ExternalActivation(AbstractCallableActivation):
 
         return chat_request
 
-    async def delete_resources(self, parent_run_context: RunContext):
+    async def close_of_work(self, parent_resource: RunContext = None):
         """
-        Cleans up after any allocated resources on their server side.
-        :param parent_run_context: The RunContext which contains the scope
-                    of operation of this CallableNode
+        Release resources owned by this context when the work is all done.
+        This can happen later than when the request is complete.
+
+        :param parent_resource: parent resource, if any. Expected to be the
+                RunContext which contains the scope of operation of this CallableActivation
         """
-        await super().delete_resources(parent_run_context)
+        await super().close_of_work(parent_resource)
         self.session = None
