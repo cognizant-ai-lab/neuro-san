@@ -161,7 +161,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         return llm_factory
 
-    def create_llm(self, config: Dict[str, Any], api_keys: Dict[str, str] = None) -> LangChainLlmResources:
+    def create_llm(self, config: Dict[str, Any], api_keys: Dict[str, Any] = None) -> LangChainLlmResources:
         """
         Creates a langchain LLM based on the 'model_name' value of
         the config passed in.
@@ -170,7 +170,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 See the class comment for details.
         :param api_keys: A dictionary of user API keys to use for user billing.
                 The keys in this dictionary are the names of the API keys (ala "OPENAI_API_KEY").
-                The values for the keys are the API keys themselves.
+                The values for the keys are the API keys themselves to be inserted into any llm configuration.
                 Can be None indiciating no API keys are provided at all and the system defaults will be used.
         :return: A LangChainLlmResources instance containing
                 a BaseLanguageModel (can be Chat or LLM) and all related resources
@@ -185,17 +185,16 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         llm_resources: LangChainLlmResources = self.create_llm_resources(full_config)
         return llm_resources
 
-    def create_full_llm_config(self, config: Dict[str, Any], api_keys: Dict[str, str]) -> Dict[str, Any]:
+    def create_full_llm_config(self, config: Dict[str, Any], api_keys: Dict[str, Any]) -> Dict[str, Any]:
         """
         :param config: The llm_config from the user
         :param api_keys: A dictionary of user API keys to use for user billing.
                 The keys in this dictionary are the names of the API keys (ala "OPENAI_API_KEY").
-                The values for the keys are the API keys themselves.
+                The values for the keys are the API keys themselves to be inserted into any llm configuration.
                 Can be None indiciating no API keys are provided at all and the system defaults will be used.
         :return: A LangChainLlmResources instance containing
         :return: The fully specified config with defaults filled in.
         """
-        _ = api_keys
         full_config: Dict[str, Any] = None
 
         class_from_llm_config: str = config.get("class")
@@ -298,14 +297,14 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         return args
 
-    def replace_any_required_api_keys(self, config: Dict[str, Any], api_keys: Dict[str, str]) -> Dict[str, Any]:
+    def replace_any_required_api_keys(self, config: Dict[str, Any], api_keys: Dict[str, Any]) -> Dict[str, Any]:
         """
         Get any required api keys into the config.
         :param config: The fully specified llm config which is a product of
                     _create_full_llm_config() above.
         :param api_keys: A dictionary of api keys to replace in the config.
             The keys in this dictionary are the names of the API keys (ala "OPENAI_API_KEY").
-            The values for the keys are the API keys themselves.
+            The values for the keys are the API keys themselves to be inserted into any llm configuration.
             Can be None indiciating no API keys are provided at all and the system defaults will be used.
         :return: The config with any required api keys replaced.
             Can return None if any of the required api keys are not provided.
@@ -320,7 +319,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             if small_value == "required":
                 # If we have a value in the api_keys dictionary, use it,
                 # otherwise, leave the "required" value alone, which is likely to trigger an error, appropriately.
-                new_value: str = use_api_keys.get(key)
+                new_value: Any = use_api_keys.get(key)
                 if new_value is not None:
                     config[key] = new_value
                 else:

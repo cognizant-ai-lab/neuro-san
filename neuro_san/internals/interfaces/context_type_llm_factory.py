@@ -53,14 +53,14 @@ class ContextTypeLlmFactory:
         """
         raise NotImplementedError
 
-    def create_llm(self, config: Dict[str, Any], api_keys: Dict[str, str] = None) -> Any:
+    def create_llm(self, config: Dict[str, Any], api_keys: Dict[str, Any] = None) -> Any:
         """
         Create an llm instance BaseLanguageModel from the fully-specified llm config.
         :param config: The fully specified llm config from which the LLM instance
                     should be created.
         :param api_keys: A dictionary of user API keys to use for user billing.
                 The keys in this dictionary are the names of the API keys (ala "OPENAI_API_KEY").
-                The values for the keys are the API keys themselves.
+                The values for the keys are the API keys themselves to be inserted into any llm configuration.
                 Can be None indiciating no API keys are provided at all and the system defaults will be used.
         :return: An llm instance native to the context type.
                 Can raise a ValueError if the config's class or model_name value is

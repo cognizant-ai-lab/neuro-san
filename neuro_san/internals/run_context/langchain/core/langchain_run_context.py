@@ -206,7 +206,7 @@ class LangChainRunContext(RunContext):
 
         # Get the sly data to see if there are any optional user api_keys to use
         sly_data: Dict[str, Any] = self.tool_caller.get_sly_data()
-        api_keys: Dict[str, str] = sly_data.get("api_keys")
+        api_keys: Dict[str, Any] = sly_data.get("api_keys")
 
         # Initialize a list of chain fallbacks. This may or may not get filled.
         chain_fallbacks: List[Runnable] = []
