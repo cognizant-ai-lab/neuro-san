@@ -204,6 +204,12 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         """
         # Set up some member variable state so that run_it() can use it
         self.invocation_context = invocation_context
+
+        # Add ourselves as a resource to the invocation context
+        # so when its close_of_request() or close_of_work() is called, we also
+        # get called.
+        self.invocation_context.add_resource(self)
+
         journal: Journal = self.invocation_context.get_journal()
         self.interceptor = InterceptingJournal(journal, origin=None)
 
@@ -232,8 +238,12 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         # For the factory args, we are our own run_target.
         tracing_context: RunTarget = tracing_factory.create_tracing_context(config, run_target=self)
 
-        # Run the run_target that was given back by the factory.
-        await tracing_context.run_it(input_message_for_show)
+        try:
+            # Run the run_target that was given back by the factory.
+            await tracing_context.run_it(input_message_for_show)
+        finally:
+            # Always signal that all work is done
+            self.invocation_context.get_work_done_event().set()
 
     async def run_it(self, inputs: AgentFrameworkMessage) -> AgentFrameworkMessage:
         """
@@ -243,6 +253,14 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         :param inputs: An AgentFrameworkMessage populated with the user's input.
         :return: The user input. (Outputs are handled by the tracing context infrastructure.)
         """
+
+        # If we are invoked as an event, tell the caller that it's OK to disconnect early.
+        # By definition, they are not expecting a custom response.
+        if self.invocation_context.get_effective_invocation() == "event":
+            empty: Dict[str, Any] = {}
+            event_acknowledge = AgentFrameworkMessage(content="Event acknowledged", chat_context=empty)
+            await self.finalize_request(event_acknowledge)
+
         # Get all our real input values from the original_input_message.
         # If we got it from the inputs arg, we'd get the for-show message
         # which has fields rearranged and even redacted.
@@ -257,15 +275,8 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
                 # This can happen if we have problems with LLM clients API keys:
                 # Construct a message to send back to the client with the error information.
                 message = AgentFrameworkMessage(content=str(exc))
-                await self.finalize_run(message)
+                await self.finalize_request(message)
                 return message
-
-        # If we are invoked as an event, tell the caller that it's OK to disconnect early.
-        # By definition, they are not expecting a custom response.
-        if self.invocation_context.get_effective_invocation() == "event":
-            empty: Dict[str, Any] = {}
-            event_acknowledge = AgentFrameworkMessage(content="Event acknowledged", chat_context=empty)
-            await self.finalize_run(event_acknowledge)
 
         # Actually run the chat and save information about it
         chat_messages: Iterator[Dict[str, Any]] = await self.chat(user_input, self.invocation_context, sly_data)
@@ -303,16 +314,16 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         # at the end of the tracing context.
         message = AgentFrameworkMessage(content=answer, chat_context=return_chat_context,
                                         sly_data=return_sly_data, structure=structure)
-        await self.finalize_run(message)
+        await self.finalize_request(message)
 
         # Bogus output, but need something for interface
         outputs: AgentFrameworkMessage = inputs
         return outputs
 
-    async def finalize_run(self, message: BaseMessage):
+    async def finalize_request(self, message: BaseMessage):
         """
-        This is a method that publishes the resulting message of the run
-        and performs necessary finalization steps for run resources.
+        This is a method that publishes the resulting message of the request
+        and performs necessary finalization steps for request resources.
 
         :param message: The final message delivered from the run.
         :return: Nothing.
@@ -387,15 +398,6 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         # Eventually this might be a CompositeMessageProcessor
         message_processor = StructureMessageProcessor(structure_formats)
         return message_processor
-
-    async def close_of_request(self, parent_resource: LingeringResource = None):
-        """
-        Release resources owned by this context when the request is complete.
-        This can happen earlier than when the work is complete.
-
-        :param parent_resource: The parent resource, if any
-        """
-        # Do nothing by default for easier implementation inheritance
 
     async def close_of_work(self, parent_resource: LingeringResource = None):
         """
