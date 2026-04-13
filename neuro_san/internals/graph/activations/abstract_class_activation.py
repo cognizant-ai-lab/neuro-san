@@ -23,7 +23,6 @@ from typing import Union
 from asyncio import AbstractEventLoop
 
 from copy import deepcopy
-from logging import WARNING
 from logging import getLogger
 from logging import Logger
 import traceback
@@ -196,26 +195,17 @@ class AbstractClassActivation(AbstractCallableActivation):
         python_class: Type[Any] = None
         last_exception: Union[ValueError, AttributeError] = None
 
-        # Suppress the Resolver logger during intermediate attempts to avoid noisy logs.
-        # The Resolver always logs at INFO when it can't find a module, which is normal
-        # behavior during our progressive resolution strategy.
-        resolver_logger: Logger = getLogger("Resolver")
-        original_resolver_level: int = resolver_logger.level
+        self.logger.debug("Attempting to resolve class `%s` in module `%s`", class_name, module_name)
 
-        self.logger.info("Attempting to resolve class `%s` in module `%s`", class_name, module_name)
-
-        resolver_logger.setLevel(WARNING)
         try:
             python_class = self._attempt_resolve(
                 class_name, module_name, this_agent_tool_path, this_agent_tool_path_parts, agent_network_name_parts
             )
         except (ValueError, AttributeError) as exception:
             last_exception: Union[ValueError, AttributeError] = exception
-        finally:
-            resolver_logger.setLevel(original_resolver_level)
 
         if python_class is not None:
-            self.logger.info("Successfully resolved class `%s` in module `%s`", class_name, module_name)
+            self.logger.debug("Successfully resolved class `%s` in module `%s`", class_name, module_name)
             return python_class
 
         # If we exhausted all levels without success, warn and raise an error
