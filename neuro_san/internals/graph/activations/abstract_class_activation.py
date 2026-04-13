@@ -274,18 +274,21 @@ Check these things:
 
             try:
                 python_class = resolver.resolve_class_in_module(class_name, module_name)
-                return python_class
+                if python_class is not None:
+                    return python_class
             # The Resolver internally catches ImportError (and SyntaxError, etc.) in try_to_import_module()
             # and converts them into messages. What it raises outward is:
             # ValueError — when the module can't be found at all
             # AttributeError — from getattr(found_module, class_name) when the module was found
             # but the class doesn't exist in it
             except (ValueError, AttributeError) as exception:
-                last_exception: Union[ValueError, AttributeError] = exception
+                last_exception = exception
 
         # Re-raise the last exception so the caller knows resolution failed
-        raise last_exception
+        if last_exception is not None:
+            raise last_exception
 
+        raise ValueError(f'Could not resolve class "{class_name}" in module "{module_name}".')
     def instantiate_coded_tool(self, python_class) -> CodedTool:
         """
         Instantiate the CodedTool from the resolved class.
