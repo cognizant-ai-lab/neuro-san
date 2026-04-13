@@ -180,8 +180,9 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 Can return None if required api_keys are not provided.
         """
         full_config: Dict[str, Any] = self.create_full_llm_config(config, api_keys)
-        if full_config is None:
-            return None
+        if full_config is None or isinstance(full_config, str):
+            return full_config
+
         llm_resources: LangChainLlmResources = self.create_llm_resources(full_config)
         return llm_resources
 
@@ -260,7 +261,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         # Get any required api keys into the full config.
         full_config = self.replace_any_required_api_keys(full_config, api_keys)
-        if full_config is not None:
+        if full_config is not None and not isinstance(full_config, str):
             # Attempt to get a max_tokens through calculation
             full_config["max_tokens"] = self.get_max_prompt_tokens(full_config)
 
@@ -313,6 +314,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         if api_keys is not None and isinstance(api_keys, Dict):
             use_api_keys = api_keys
 
+        required_list: List[str] = []
         for key, value in config.items():
             # If any value is "required", replace it with the same value from the api_key dictionary
             small_value: str = str(value).lower()
@@ -323,7 +325,10 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 if new_value is not None:
                     config[key] = new_value
                 else:
-                    return None
+                    required_list.append(key)
+
+        if len(required_list) > 0:
+            return ", ".join(required_list)
 
         return config
 

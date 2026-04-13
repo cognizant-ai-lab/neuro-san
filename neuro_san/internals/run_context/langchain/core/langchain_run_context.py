@@ -211,6 +211,7 @@ class LangChainRunContext(RunContext):
         # Initialize a list of chain fallbacks. This may or may not get filled.
         chain_fallbacks: List[Runnable] = []
         first_llm: bool = True
+        required: List[str] = []
 
         # Go through the list of fallbacks in the config.
         for fallback in fallbacks:
@@ -219,6 +220,9 @@ class LangChainRunContext(RunContext):
             one_llm_resources: LangChainLlmResources = llm_factory.create_llm(fallback, api_keys)
             if one_llm_resources is None:
                 # Skip this one.
+                continue
+            if isinstance(one_llm_resources, str):
+                required.append(one_llm_resources)
                 continue
 
             one_agent: Runnable = self.create_agent(instructions, one_llm_resources.get_model())
@@ -235,7 +239,10 @@ class LangChainRunContext(RunContext):
                 chain_fallbacks.append(one_agent)
 
         if agent is None:
-            raise ValueError("No LLM found in llm_config or fallbacks")
+            error: str = "No fully-specified LLM found in llm_config or fallbacks."
+            if len(required) > 0:
+                error = f"{error} Requires: {str(required)}"
+            raise ValueError(error)
 
         if len(chain_fallbacks) > 0:
             # Set up fallbacks.

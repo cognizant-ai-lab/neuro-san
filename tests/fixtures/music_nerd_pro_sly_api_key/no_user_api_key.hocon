@@ -41,35 +41,14 @@
 
             # The response block treats how we are going to test what comes back
             "response": {
-                # Structure block says how we are going to examine the structure
-                # (dictionary) returned as part of the response.               
-                "structure": {
-                    # "answer" is a key that is supposed to be in the dictionary.
-                    "answer": {
-                        # Keywords says we are going to look for exact matches for each
-                        # element in a list of strings.  All elements need to show up
-                        # in order to pass.
-                        "keywords": "Beatles"
-                    },
-                    "running_cost": {
-                        "value": 3.0
-                    }
-                }
-            }
-        },
-        {
-            # This next interaction block tests the ability for an agent
-            # to continue its conversation with the context from the previous
-            # interaction.
-            "text": "Where were they from?",
-            "response": {
-                "structure": {
-                    "answer": {
-                        "keywords": "Liverpool"
-                    },
-                    "running_cost": {
-                        "value": 6.0
-                    }
+
+                # Text block says how we are going to examine the text of the response.
+                "text": { 
+    
+                    # Gist says we are going to ask an LLM about how the response
+                    # matches up to our description of acceptance criteria.
+                    # Each component of the list needs to pass muster in order to pass.
+                    "gist": ["The text sample should say that no LLM was found and list requirements as to what should be specified in order to successfully create an LLM response."]
                 }
             }
         }
