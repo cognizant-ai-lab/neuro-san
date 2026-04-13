@@ -56,7 +56,8 @@ from neuro_san.service.utils.server_status import ServerStatus
 
 DEFAULT_SERVER_NAME: str = 'neuro-san.Agent'
 DEFAULT_SERVER_NAME_FOR_LOGS: str = 'Agent Server'
-DEFAULT_MAX_CONCURRENT_REQUESTS: int = 10
+# By default, we allow unlimited concurrent requests, but this can be overridden by configuration.
+DEFAULT_MAX_CONCURRENT_REQUESTS: int = 0
 
 # Better that we kill ourselves than kubernetes doing it for us
 # in the middle of a request if there are resource leaks.
@@ -78,6 +79,7 @@ class HttpServer(AgentStateListener):
                  server_config: HttpServerConfig,
                  openapi_service_spec_path: str,
                  requests_limit: int,
+                 concurrent_requests_limit: int,
                  logging_config: Dict[str, Any],
                  forwarded_request_metadata: str = AgentServer.DEFAULT_FORWARDED_REQUEST_METADATA):
         """
@@ -88,6 +90,7 @@ class HttpServer(AgentStateListener):
         :param requests_limit: The number of requests to service before shutting down.
                         This is useful to be sure production environments can handle
                         a service occasionally going down.
+        :param concurrent_requests_limit: The number of concurrent requests to allow before rejecting new ones.
         :param logging_config: logging configuration
         :param forwarded_request_metadata: A space-delimited list of http metadata request keys
                to forward to logs/other requests
@@ -107,6 +110,7 @@ class HttpServer(AgentStateListener):
             request_limit_lower = round(requests_limit * 0.90)
             request_limit_upper = round(requests_limit * 1.10)
             self.requests_limit = random.randint(request_limit_lower, request_limit_upper)
+        self.concurrent_requests_limit = concurrent_requests_limit
 
         self.openapi_service_spec_path: str = openapi_service_spec_path
         self.forwarded_request_metadata: List[str] = forwarded_request_metadata.split(" ")
@@ -128,7 +132,7 @@ class HttpServer(AgentStateListener):
         :param startables: List of Startable instances to start once server
             has forked its multiple running instances.
         """
-        app = self.make_app(self.requests_limit, self.logger)
+        app = self.make_app(self.requests_limit, self.concurrent_requests_limit, self.logger)
 
         self.logger.debug({}, "Serving agents: %s", repr(self.allowed_agents.keys()))
 
@@ -161,6 +165,9 @@ class HttpServer(AgentStateListener):
         self.logger.info({}, "HTTP server idle connections timeout: %d seconds",
                          self.server_config.http_idle_connection_timeout_seconds)
         self.logger.info({}, "HTTP server is shutting down after %d requests", self.requests_limit)
+        if self.concurrent_requests_limit > 0:
+            self.logger.info({}, "HTTP server allows no more than %d concurrent requests",
+                             self.concurrent_requests_limit)
 
         # If HTTP server is ready, our MCP server is also ready, if requested to run.
         if server_status.mcp_service.is_requested():
@@ -181,7 +188,7 @@ class HttpServer(AgentStateListener):
         tornado.ioloop.IOLoop.current().start()
         self.logger.info({}, "Http server stopped.")
 
-    def make_app(self, requests_limit: int, logger: EventLoopLogger):
+    def make_app(self, requests_limit: int, concurrent_requests_limit: int, logger: EventLoopLogger):
         """
         Construct tornado HTTP "application" to run.
         """
@@ -223,7 +230,12 @@ class HttpServer(AgentStateListener):
         if self.server_context.get_mcp_server_context().is_enabled():
             handlers.append((r"/mcp", McpRootHandler, request_initialize_data))
 
-        return HttpServerApp(handlers, requests_limit, logger, self.forwarded_request_metadata)
+        return HttpServerApp(
+            handlers,
+            requests_limit,
+            concurrent_requests_limit,
+            logger,
+            self.forwarded_request_metadata)
 
     def agent_added(self, agent_name: str, source: AgentStorageSource):
         """
