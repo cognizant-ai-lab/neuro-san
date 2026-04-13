@@ -89,13 +89,14 @@ class KeywordNetworkValidator(AbstractNetworkValidator):
             )
             return errors
         description: Any = function.get("description")
-        if description is not None and not isinstance(description, str):
-            errors.append(
-                f"{agent_name} 'function.description' must be a str,"
-                f" got {type(description).__name__}."
-            )
-        elif description == "":
-            errors.append(f"{agent_name} 'function.description' cannot be empty.")
+        if description is not None:
+            if not isinstance(description, str):
+                errors.append(
+                    f"{agent_name} 'function.description' must be a str,"
+                    f" got {type(description).__name__}."
+                )
+            elif description.strip() == "":
+                errors.append(f"{agent_name} 'function.description' cannot be empty.")
         return errors
 
     @staticmethod
@@ -109,13 +110,14 @@ class KeywordNetworkValidator(AbstractNetworkValidator):
         """
         errors: List[str] = []
         instructions: Any = agent.get("instructions")
-        if instructions is not None and not isinstance(instructions, str):
-            errors.append(
-                f"{agent_name} 'instructions' must be a str,"
-                f" got {type(instructions).__name__}."
-            )
-        elif instructions == "":
-            errors.append(f"{agent_name} 'instructions' cannot be empty.")
+        if instructions is not None:
+            if not isinstance(instructions, str):
+                errors.append(
+                    f"{agent_name} 'instructions' must be a str,"
+                    f" got {type(instructions).__name__}."
+                )
+            elif instructions.strip() == "":
+                errors.append(f"{agent_name} 'instructions' cannot be empty.")
         return errors
 
     @staticmethod
