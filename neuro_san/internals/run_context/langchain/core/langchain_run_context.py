@@ -241,7 +241,7 @@ class LangChainRunContext(RunContext):
         if agent is None:
             error: str = "No fully-specified LLM found in llm_config or fallbacks."
             if len(required) > 0:
-                error = f"{error} Requires: {str(required)}"
+                error += f"\nRequires at least one of: {','.join(required)} set in sly_data."
             raise ValueError(error)
 
         if len(chain_fallbacks) > 0:
