@@ -41,7 +41,7 @@
 
             "sly_data": {
                 "api_keys": {
-                    "openai_api_key": "${OPENAI_API_KEY}",
+                    "openai_api_key": ${OPENAI_API_KEY},
                 }
             },
 
@@ -68,11 +68,9 @@
             # to continue its conversation with the context from the previous
             # interaction.
             "text": "Where were they from?",
-            "sly_data": {
-                "api_keys": {
-                    "openai_api_key": "${OPENAI_API_KEY}",
-                }
-            },
+
+            # sly_data is accumulated via StreamingInputProcessor
+
             "response": {
                 "structure": {
                     "answer": {
