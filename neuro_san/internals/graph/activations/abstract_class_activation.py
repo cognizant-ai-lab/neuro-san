@@ -177,7 +177,6 @@ class AbstractClassActivation(AbstractCallableActivation):
 
         return message
 
-    # pylint: disable=too-many-locals
     def resolve_class(self, class_name: str, module_name: str):
         """
         Resolve the class by trying progressively higher levels in the agent network hierarchy.
@@ -289,6 +288,7 @@ Check these things:
             raise last_exception
 
         raise ValueError(f'Could not resolve class "{class_name}" in module "{module_name}".')
+
     def instantiate_coded_tool(self, python_class) -> CodedTool:
         """
         Instantiate the CodedTool from the resolved class.
