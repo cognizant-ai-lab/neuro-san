@@ -32,7 +32,7 @@ class KeywordNetworkValidator(AbstractNetworkValidator):
     AgentNetworkValidator that looks for correct keywords in an agent network
     """
 
-    ALL_KEYWORDS: Set[str] = {"instructions", "tools"}
+    ALL_KEYWORDS: Set[str] = {"description", "instructions", "tools"}
 
     def __init__(self, keywords: Iterable[str] = None):
         """
@@ -56,6 +56,8 @@ class KeywordNetworkValidator(AbstractNetworkValidator):
         self.logger.info("Validating agent network keywords...")
 
         for agent_name, agent in name_to_spec.items():
+            if "description" in self.keywords:
+                errors.extend(self.validate_description(agent_name, agent))
             if "instructions" in self.keywords:
                 errors.extend(self.validate_instructions(agent_name, agent))
             if "tools" in self.keywords:
@@ -65,6 +67,36 @@ class KeywordNetworkValidator(AbstractNetworkValidator):
         if len(errors) > 0:
             self.logger.warning(str(errors))
 
+        return errors
+
+    @staticmethod
+    def validate_description(agent_name: str, agent: Dict[str, Any]) -> List[str]:
+        """
+        Validate that 'function.description' is a non-empty string when present.
+
+        :param agent_name: The name of the agent being validated
+        :param agent: The agent spec dictionary
+        :return: A list of error messages
+        """
+        errors: List[str] = []
+        function: Any = agent.get("function")
+        if function is None:
+            return errors
+        if not isinstance(function, dict):
+            errors.append(
+                f"{agent_name} 'function' must be a dict,"
+                f" got {type(function).__name__}."
+            )
+            return errors
+        description: Any = function.get("description")
+        if description is not None:
+            if not isinstance(description, str):
+                errors.append(
+                    f"{agent_name} 'function.description' must be a str,"
+                    f" got {type(description).__name__}."
+                )
+            elif description.strip() == "":
+                errors.append(f"{agent_name} 'function.description' cannot be empty.")
         return errors
 
     @staticmethod
@@ -78,13 +110,14 @@ class KeywordNetworkValidator(AbstractNetworkValidator):
         """
         errors: List[str] = []
         instructions: Any = agent.get("instructions")
-        if instructions is not None and not isinstance(instructions, str):
-            errors.append(
-                f"{agent_name} 'instructions' must be a str,"
-                f" got {type(instructions).__name__}."
-            )
-        elif instructions == "":
-            errors.append(f"{agent_name} 'instructions' cannot be empty.")
+        if instructions is not None:
+            if not isinstance(instructions, str):
+                errors.append(
+                    f"{agent_name} 'instructions' must be a str,"
+                    f" got {type(instructions).__name__}."
+                )
+            elif instructions.strip() == "":
+                errors.append(f"{agent_name} 'instructions' cannot be empty.")
         return errors
 
     @staticmethod

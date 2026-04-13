@@ -100,6 +100,45 @@ class TestKeywordNetworkValidator(TestCase, AbstractNetworkValidatorTest):
         errors: List[str] = validator.validate(config)
         self.assertEqual(0, len(errors))
 
+    def test_description_empty(self):
+        """
+        Tests a network where function.description is empty
+        """
+        validator: DictionaryValidator = self.create_validator()
+
+        config: Dict[str, Any] = self.restore("hello_world.hocon")
+        config["tools"][0]["function"]["description"] = ""
+
+        errors: List[str] = validator.validate(config)
+        self.assertEqual(1, len(errors))
+        self.assertIn("function.description", errors[0])
+
+    def test_description_wrong_type(self):
+        """
+        Tests a network where function.description is not a string
+        """
+        validator: DictionaryValidator = self.create_validator()
+
+        config: Dict[str, Any] = self.restore("hello_world.hocon")
+        config["tools"][0]["function"]["description"] = 123
+
+        errors: List[str] = validator.validate(config)
+        self.assertEqual(1, len(errors))
+        self.assertIn("must be a str", errors[0])
+
+    def test_function_wrong_type(self):
+        """
+        Tests a network where function is not a dict
+        """
+        validator: DictionaryValidator = self.create_validator()
+
+        config: Dict[str, Any] = self.restore("hello_world.hocon")
+        config["tools"][0]["function"] = "not a dict"
+
+        errors: List[str] = validator.validate(config)
+        self.assertEqual(1, len(errors))
+        self.assertIn("'function' must be a dict", errors[0])
+
     def test_keywords_filter(self):
         """
         Tests that the keywords parameter controls which validations run
