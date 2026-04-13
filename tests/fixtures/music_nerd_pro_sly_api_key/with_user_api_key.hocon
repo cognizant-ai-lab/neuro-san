@@ -39,6 +39,12 @@
             # This is what we send as input to streaming_chat()
             "text": "Who did Yellow Submarine?",
 
+            "sly_data": {
+                "api_keys": {
+                    "openai_api_key": "${OPENAI_API_KEY}",
+                }
+            },
+
             # The response block treats how we are going to test what comes back
             "response": {
                 # Structure block says how we are going to examine the structure
@@ -62,6 +68,11 @@
             # to continue its conversation with the context from the previous
             # interaction.
             "text": "Where were they from?",
+            "sly_data": {
+                "api_keys": {
+                    "openai_api_key": "${OPENAI_API_KEY}",
+                }
+            },
             "response": {
                 "structure": {
                     "answer": {
