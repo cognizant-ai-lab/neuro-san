@@ -12,7 +12,7 @@ langchain-ollama>=1.0.0,<2.0
 openfga-sdk
 
 # Tests
-pytest==8.3.3
+pytest==9.0.3
 pytest-asyncio==1.1.0
 pytest-timer==1.0.0
 pytest-timeout>=2.3.1
