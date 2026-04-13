@@ -256,8 +256,8 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
 
         # If we are invoked as an event, tell the caller that it's OK to disconnect early.
         # By definition, they are not expecting a custom response.
+        empty: Dict[str, Any] = {}
         if self.invocation_context.get_effective_invocation() == "event":
-            empty: Dict[str, Any] = {}
             event_acknowledge = AgentFrameworkMessage(content="Event acknowledged", chat_context=empty)
             await self.finalize_request(event_acknowledge)
 
@@ -274,7 +274,7 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
             except ValueError as exc:
                 # This can happen if we have problems with LLM clients API keys:
                 # Construct a message to send back to the client with the error information.
-                message = AgentFrameworkMessage(content=str(exc))
+                message = AgentFrameworkMessage(content=str(exc), chat_context=empty)
                 await self.finalize_request(message)
                 return message
 
