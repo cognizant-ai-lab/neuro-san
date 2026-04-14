@@ -72,7 +72,7 @@ I can help with music-related inquiries.
                         },
                         # The following is an example of how to specify that sly_data is required
                         # to provide a single API key from the user for OpenAI.
-                        # Concievably, this could be expanded to include multiple API keys,
+                        # Conceivably, this could be expanded to include multiple API keys,
                         # each of which may or may not be required for fallbacks, in which case
                         # the "required" list on this inner structure would be optional, as long
                         # as each of the api_keys listed are themselves optional.
