@@ -64,6 +64,6 @@ class ContextTypeLlmFactory:
         :return: An llm instance native to the context type.
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
-                Can return None if required api_keys are not provided.
+                Can return None if required llm_config keys are not provided.
         """
         raise NotImplementedError
