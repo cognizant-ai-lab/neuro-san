@@ -17,6 +17,7 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Set
 from typing import Union
 
 import json
@@ -204,24 +205,50 @@ class LangChainRunContext(RunContext):
         fallbacks: List[Dict[str, Any]] = [self.llm_config]
         fallbacks = self.llm_config.get("fallbacks", fallbacks)
 
+        # Get the sly data to see if there are any optional user llm_config (like API keys) to use
+        sly_data: Dict[str, Any] = self.tool_caller.get_sly_data()
+
         # Initialize a list of chain fallbacks. This may or may not get filled.
         chain_fallbacks: List[Runnable] = []
+        first_llm: bool = True
+        required_llm_config: Set[str] = set()
 
         # Go through the list of fallbacks in the config.
-        for index, fallback in enumerate(fallbacks):
+        for fallback in fallbacks:
 
             # Create a model we might use.
-            one_llm_resources: LangChainLlmResources = llm_factory.create_llm(fallback)
+            one_llm_resources: LangChainLlmResources | Set[str] = llm_factory.create_llm(fallback, sly_data)
+            if one_llm_resources is None:
+                # Nothing to use or report.
+                # Skip for now, a fallback might still be fulfilled.
+                continue
+
+            if isinstance(one_llm_resources, set):
+                # Report later on which required llm_config are missing
+                # Skip for now, a fallback might still be fulfilled.
+                required_llm_config.update(one_llm_resources)
+                continue
+
             one_agent: Runnable = self.create_agent(instructions, one_llm_resources.get_model())
 
-            if index == 0:
-                # The first agent is the one we want to be our main guy.
+            if first_llm:
+                # The first fully-specified agent is the one we want to be our main guy.
                 agent = one_agent
                 # For now. Could be problems with different providers w/ token counting.
                 self.llm_resources = one_llm_resources
+                # Anything that comes later will not be the first
+                first_llm = False
             else:
                 # Anything later than the first guy is considered a fallback. Add it to the list.
                 chain_fallbacks.append(one_agent)
+
+        if agent is None:
+            error: str = "No fully-specified LLM found in llm_config or fallbacks."
+            if len(required_llm_config) > 0:
+                error += "\nLLM operation for this agent requires at least one "
+                error += "of the following set in sly_data.llm_config:\n"
+                error += "\n".join(sorted(required_llm_config)) + "\n"
+            raise ValueError(error)
 
         if len(chain_fallbacks) > 0:
             # Set up fallbacks.
