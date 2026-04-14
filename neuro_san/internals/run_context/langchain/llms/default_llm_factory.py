@@ -169,7 +169,9 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         :param config: A dictionary which describes which LLM to use.
                 See the class comment for details.
         :param api_keys: A dictionary of user API keys to use for user billing.
-                The keys in this dictionary are the names of the API keys (ala "OPENAI_API_KEY").
+                The keys in this dictionary must match the llm config field names
+                for API key settings (for example, "openai_api_key"), not env-var
+                style names such as "OPENAI_API_KEY".
                 The values for the keys are the API keys themselves to be inserted into any llm configuration.
                 Can be None indiciating no API keys are provided at all and the system defaults will be used.
         :return: A LangChainLlmResources instance containing
