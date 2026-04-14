@@ -316,10 +316,10 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             use_api_keys = sly_data.get("llm_config", use_api_keys)
 
         # Loop through each of the config values and replace any "sly_data" values
-        # with their corresponding values from the api_keys dictionary.
+        # with their corresponding values from the llm_config dictionary.
         required_set: Set[str] = set()
         for key, value in config.items():
-            # If any value is "sly_data", replace it with the same value from the api_key dictionary
+            # If any value is "sly_data", replace it with the same value from the llm_config dictionary
             small_value: str = str(value).lower()
             if small_value == "sly_data":
                 # If we have a value in the sly_data.llm_config dictionary, use it,
