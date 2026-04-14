@@ -48,7 +48,12 @@
                     # Gist says we are going to ask an LLM about how the response
                     # matches up to our description of acceptance criteria.
                     # Each component of the list needs to pass muster in order to pass.
-                    "gist": ["The text sample should say that no LLM was found and list requirements as to what should be specified in order to successfully create an LLM response."]
+                    "gist": ["""
+The text sample should say:
+1) that no fully-specified LLM was found
+AND
+2) list what should be set in sly_data
+"""]
                 }
             }
         }
