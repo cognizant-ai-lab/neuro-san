@@ -258,7 +258,7 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         # By definition, they are not expecting a custom response.
         empty: Dict[str, Any] = {}
         if self.invocation_context.get_effective_invocation() == "event":
-            event_acknowledge = AgentFrameworkMessage(content="Event acknowledged", chat_context=empty)
+            event_acknowledge = AgentFrameworkMessage(content="Event acknowledged")
             await self.finalize_request(event_acknowledge)
 
         # Get all our real input values from the original_input_message.
