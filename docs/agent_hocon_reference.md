@@ -23,6 +23,7 @@ Items in ***bold*** are essentials. Try to understand these first.
         - [***model_name*** - specifies the name of the default LLM to use](#model_name)
         - [class](#class)
         - [fallbacks](#fallbacks)
+        - [Client-Provided API Keys](#client-provided-api-keys)
         - [temperature](#temperature)
         - [Other LLM-specific Parameters](#other-llm-specific-parameters)
     - [***tools*** - list of agent/tool definitions](#tools)
@@ -50,6 +51,7 @@ Items in ***bold*** are essentials. Try to understand these first.
             - [properties](#properties)
             - [required](#required)
         - [sly_data_schema](#sly_data_schema)
+            - [api_keys](#api_keys)
         - [sly_data_output_schema](#sly_data_output_schema)
     - [***instructions*** - main system prompt for the agent](#instructions)
     - [***tools*** - list of other agents/tools that this agent may access](#tools-agents)
@@ -195,7 +197,7 @@ you will need to use a model that has been specifically trained for "tool use" f
 branches off work to any other agent/tool.  You can browse the `capabilities` section of the
 `default_llm_info.hocon` to be sure the llm you choose can use tools.
 
-You will need your own access key set as an environment variable in order
+The most common situation is one where you will need your own access key set as an environment variable in order
 to use LLMs from various providers.
 
 | LLM Provider  | API Key environment variable                   |
@@ -230,6 +232,18 @@ you can still use it by specifying the [class](#class) key directly, or by exten
 
 For complete information on adding your own llm models or providers to the default llm info,
 see the [llm_info_hocon_reference](./llm_info_hocon_reference.md).
+
+#### Client-Provided API Keys
+
+It is possible to set any one of the api_keys described above as "required" in the llm_config.
+This will cause the system to look at the sly_data for the appropriate api key(s) depending on
+the model provider.
+
+See also: [api_keys](#api_keys) in the [sly_data_schema](#sly_data_schema) section.
+
+Example networks that advertise that their sly_data_schema needs external api_keys:
+
+- [music_nerd_pro_sly_api_key.hocon](../neuro_san/registries/music_nerd_pro_sly_api_key.hocon)
 
 #### temperature
 
@@ -477,7 +491,7 @@ schema definition above.  Ideally there should be one [properties](#properties) 
 sly_data dictionary input key, and any absolutely necessary keys should be listed in the [required](#required)
 list.
 
-Note that it is not strictly necessary to advertise to the outside world the sly_data_schema that
+Note that it is not always strictly necessary to advertise to the outside world the sly_data_schema that
 your agent network requires, but doing so does allow generic clients to prompt for this extra
 information before sending any chat input.
 
@@ -487,6 +501,23 @@ definition, as sly_data itself is already visible to all other internal agents o
 Example networks that advertise their sly_data_schema:
 
 - [math_guy.hocon](../neuro_san/registries/math_guy.hocon)
+
+There are select few tacit conventions supported for certain sly_data values that need to come from the client:
+
+##### api_keys
+
+The sly_data dictionary can contain an optional `api_keys` key whose value is a dictionary
+containing per-user API keys to be filled in when an agent's llm_config has certain values
+specified as "required" for its values.
+
+This enables any or all agent networks to potentially offload the costs operation onto the user
+by having the user fill in their own API keys.
+
+Any key in this dictionary will be specific to an particular LLM (i.e. "openai_api_key" or "anthropic_api_key").
+
+Example networks that advertise that their sly_data_schema needs external api_keys:
+
+- [music_nerd_pro_sly_api_key.hocon](../neuro_san/registries/music_nerd_pro_sly_api_key.hocon)
 
 #### sly_data_output_schema
 
