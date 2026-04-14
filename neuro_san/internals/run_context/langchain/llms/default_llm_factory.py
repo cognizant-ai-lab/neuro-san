@@ -311,7 +311,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             Can return None if any of the required api keys are not provided.
         """
         use_api_keys: Dict[str, str] = {}
-        if api_keys is not None and isinstance(api_keys, Dict):
+        if api_keys is not None and isinstance(api_keys, dict):
             use_api_keys = api_keys
 
         # Loop through each of the config values and replace any "required" values
