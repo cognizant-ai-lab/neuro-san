@@ -161,7 +161,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         return llm_factory
 
-    def create_llm(self, config: Dict[str, Any], api_keys: Dict[str, Any] = None) -> LangChainLlmResources | str:
+    def create_llm(self, config: Dict[str, Any], api_keys: Dict[str, Any] = None) -> LangChainLlmResources | Set[str]:
         """
         Creates a langchain LLM based on the 'model_name' value of
         the config passed in.
@@ -177,26 +177,26 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         :return: A LangChainLlmResources instance containing
                 a BaseLanguageModel (can be Chat or LLM) and all related resources
                 necessary for managing the model run-time lifecycle.
-                Can also return a string describing any required api_keys that are not provided.
+                Can also return a set of strings describing any required api_keys that are not provided.
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
         """
-        full_config: Dict[str, Any] = self.create_full_llm_config(config, api_keys)
-        if full_config is None or isinstance(full_config, str):
+        full_config: Dict[str, Any] | Set[str] = self.create_full_llm_config(config, api_keys)
+        if full_config is None or isinstance(full_config, set):
             return full_config
 
         llm_resources: LangChainLlmResources = self.create_llm_resources(full_config)
         return llm_resources
 
-    def create_full_llm_config(self, config: Dict[str, Any], api_keys: Dict[str, Any]) -> Dict[str, Any]:
+    def create_full_llm_config(self, config: Dict[str, Any], api_keys: Dict[str, Any]) -> Dict[str, Any] | Set[str]:
         """
         :param config: The llm_config from the user
         :param api_keys: A dictionary of user API keys to use for user billing.
                 The keys in this dictionary are the names of the API keys (ala "OPENAI_API_KEY").
                 The values for the keys are the API keys themselves to be inserted into any llm configuration.
                 Can be None indiciating no API keys are provided at all and the system defaults will be used.
-        :return: A LangChainLlmResources instance containing
         :return: The fully specified config with defaults filled in.
+                Can also return a set of strings describing any required api_keys that are not provided.
         """
         full_config: Dict[str, Any] = None
 
@@ -263,7 +263,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         # Get any required api keys into the full config.
         full_config = self.replace_any_required_api_keys(full_config, api_keys)
-        if full_config is not None and not isinstance(full_config, str):
+        if full_config is not None and not isinstance(full_config, set):
             # Attempt to get a max_tokens through calculation
             full_config["max_tokens"] = self.get_max_prompt_tokens(full_config)
 
@@ -300,7 +300,11 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         return args
 
-    def replace_any_required_api_keys(self, config: Dict[str, Any], api_keys: Dict[str, Any]) -> Dict[str, Any]:
+    def replace_any_required_api_keys(
+                self,
+                config: Dict[str, Any],
+                api_keys: Dict[str, Any]
+            ) -> Dict[str, Any] | Set[str]:
         """
         Get any required api keys into the config.
         :param config: The fully specified llm config which is a product of
@@ -318,7 +322,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         # Loop through each of the config values and replace any "required" values
         # with their corresponding values from the api_keys dictionary.
-        required_list: List[str] = []
+        required_set: Set[str] = set()
         for key, value in config.items():
             # If any value is "required", replace it with the same value from the api_key dictionary
             small_value: str = str(value).lower()
@@ -330,11 +334,11 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                     config[key] = new_value
                 else:
                     # Add to the list of complaints about what is missing.
-                    required_list.append(key)
+                    required_set.add(key)
 
-        if len(required_list) > 0:
+        if len(required_set) > 0:
             # We have complaints about what is missing. Return that.
-            return ", ".join(required_list)
+            return required_set
 
         # We have a nice complete config. Return that.
         return config
