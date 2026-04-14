@@ -23,9 +23,9 @@ Items in ***bold*** are essentials. Try to understand these first.
         - [***model_name*** - specifies the name of the default LLM to use](#model_name)
         - [class](#class)
         - [fallbacks](#fallbacks)
-        - [Client-Provided API Keys](#client-provided-api-keys)
         - [temperature](#temperature)
         - [Other LLM-specific Parameters](#other-llm-specific-parameters)
+        - [Client-Provided API Keys](#client-provided-api-keys)
     - [***tools*** - list of agent/tool definitions](#tools)
     - [commondefs](#commondefs)
         - [replacement_strings](#replacement_strings)
@@ -51,7 +51,7 @@ Items in ***bold*** are essentials. Try to understand these first.
             - [properties](#properties)
             - [required](#required)
         - [sly_data_schema](#sly_data_schema)
-            - [api_keys](#api_keys)
+            - [llm_config](#llm_config-1)
         - [sly_data_output_schema](#sly_data_output_schema)
     - [***instructions*** - main system prompt for the agent](#instructions)
     - [***tools*** - list of other agents/tools that this agent may access](#tools-agents)
@@ -59,7 +59,7 @@ Items in ***bold*** are essentials. Try to understand these first.
         - [MCP Servers](#mcp-servers)
             - [Authentication](#authentication)
     - [***class*** - Python class name to invoke for Coded Tools](#class-1)
-    - [llm_config - agent-specific LLM configuration](#llm_config-1)
+    - [llm_config - agent-specific LLM configuration](#llm_config-2)
     - [command](#command)
     - [toolbox](#toolbox)
     - [args](#args)
@@ -235,9 +235,10 @@ see the [llm_info_hocon_reference](./llm_info_hocon_reference.md).
 
 #### Client-Provided API Keys
 
-It is possible to set any one of the api_keys described above as "required" in the llm_config.
-This will cause the system to look at the sly_data for the appropriate api key(s) depending on
-the model provider.
+It is possible to set any one of the api_keys described above as "sly_data" in the llm_config.
+This will cause the system to look at the sly_data's llm_config dictionary for the appropriate
+api key(s) depending on the model provider. Note that key names are all-smalls versions of any
+environment variable names above.
 
 See also: [api_keys](#api_keys) in the [sly_data_schema](#sly_data_schema) section.
 
@@ -504,11 +505,11 @@ Example networks that advertise their sly_data_schema:
 
 There are select few tacit conventions supported for certain sly_data values that need to come from the client:
 
-##### api_keys
+##### llm_config
 
-The sly_data dictionary can contain an optional `api_keys` key whose value is a dictionary
+The sly_data dictionary can contain an optional `llm_config` key whose value is a dictionary
 containing per-user API keys to be filled in when an agent's llm_config has certain values
-specified as "required" for its values.
+specified as "sly_data" for its values.
 
 This enables any or all agent networks to potentially offload the costs operation onto the user
 by having the user fill in their own API keys.
