@@ -205,32 +205,28 @@ class LangChainRunContext(RunContext):
         fallbacks: List[Dict[str, Any]] = [self.llm_config]
         fallbacks = self.llm_config.get("fallbacks", fallbacks)
 
-        # Get the sly data to see if there are any optional user api_keys to use
+        # Get the sly data to see if there are any optional user llm_config (like API keys) to use
         sly_data: Dict[str, Any] = self.tool_caller.get_sly_data()
-
-        # Get any api_keys provided by the client in sly_data.
-        # These are used to fill in anything in the llm_config whose value is "required".
-        api_keys: Dict[str, Any] = sly_data.get("api_keys")
 
         # Initialize a list of chain fallbacks. This may or may not get filled.
         chain_fallbacks: List[Runnable] = []
         first_llm: bool = True
-        required_api_keys: Set[str] = set()
+        required_llm_config: Set[str] = set()
 
         # Go through the list of fallbacks in the config.
         for fallback in fallbacks:
 
             # Create a model we might use.
-            one_llm_resources: LangChainLlmResources | Set[str] = llm_factory.create_llm(fallback, api_keys)
+            one_llm_resources: LangChainLlmResources | Set[str] = llm_factory.create_llm(fallback, sly_data)
             if one_llm_resources is None:
                 # Nothing to use or report.
                 # Skip for now, a fallback might still be fulfilled.
                 continue
 
             if isinstance(one_llm_resources, set):
-                # Report later on which required api_keys are missing
+                # Report later on which required llm_config are missing
                 # Skip for now, a fallback might still be fulfilled.
-                required_api_keys.update(one_llm_resources)
+                required_llm_config.update(one_llm_resources)
                 continue
 
             one_agent: Runnable = self.create_agent(instructions, one_llm_resources.get_model())
@@ -248,9 +244,9 @@ class LangChainRunContext(RunContext):
 
         if agent is None:
             error: str = "No fully-specified LLM found in llm_config or fallbacks."
-            if len(required_api_keys) > 0:
+            if len(required_llm_config) > 0:
                 error += "\nLLM operation for this agent requires at least one of the following set in sly_data:\n"
-                error += "\n".join(sorted(required_api_keys)) + "\n"
+                error += "\n".join(sorted(required_llm_config)) + "\n"
             raise ValueError(error)
 
         if len(chain_fallbacks) > 0:

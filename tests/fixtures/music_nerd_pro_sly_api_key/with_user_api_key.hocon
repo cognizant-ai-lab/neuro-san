@@ -40,7 +40,7 @@
             "text": "Who did Yellow Submarine?",
 
             "sly_data": {
-                "api_keys": {
+                "llm_config": {
                     "openai_api_key": ${OPENAI_API_KEY},
                 }
             },

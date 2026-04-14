@@ -161,42 +161,38 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         return llm_factory
 
-    def create_llm(self, config: Dict[str, Any], api_keys: Dict[str, Any] = None) -> LangChainLlmResources | Set[str]:
+    def create_llm(self, config: Dict[str, Any], sly_data: Dict[str, Any] = None) -> LangChainLlmResources | Set[str]:
         """
         Creates a langchain LLM based on the 'model_name' value of
         the config passed in.
 
         :param config: A dictionary which describes which LLM to use.
                 See the class comment for details.
-        :param api_keys: A dictionary of user API keys to use for user billing.
-                The keys in this dictionary must match the llm config field names
-                for API key settings (for example, "openai_api_key"), not env-var
-                style names such as "OPENAI_API_KEY".
-                The values for the keys are the API keys themselves to be inserted into any llm configuration.
+        :param sly_data: A user-provided dictionary of private data,
+                from which we might extract API keys to use for user billing.
                 Can be None indicating no API keys are provided at all and the system defaults will be used.
         :return: A LangChainLlmResources instance containing
                 a BaseLanguageModel (can be Chat or LLM) and all related resources
                 necessary for managing the model run-time lifecycle.
-                Can also return a set of strings describing any required api_keys that are not provided.
+                Can also return a set of strings describing any required sly_data API keys that are not provided.
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
         """
-        full_config: Dict[str, Any] | Set[str] = self.create_full_llm_config(config, api_keys)
+        full_config: Dict[str, Any] | Set[str] = self.create_full_llm_config(config, sly_data)
         if full_config is None or isinstance(full_config, set):
             return full_config
 
         llm_resources: LangChainLlmResources = self.create_llm_resources(full_config)
         return llm_resources
 
-    def create_full_llm_config(self, config: Dict[str, Any], api_keys: Dict[str, Any]) -> Dict[str, Any] | Set[str]:
+    def create_full_llm_config(self, config: Dict[str, Any], sly_data: Dict[str, Any]) -> Dict[str, Any] | Set[str]:
         """
         :param config: The llm_config from the user
-        :param api_keys: A dictionary of user API keys to use for user billing.
-                The keys in this dictionary are llm_config field names (for example, "openai_api_key").
-                The values for the keys are the API keys themselves to be inserted into any llm configuration.
+        :param sly_data: A user-provided dictionary of private data,
+                from which we might extract API keys to use for user billing.
                 Can be None indicating no API keys are provided at all and the system defaults will be used.
         :return: The fully specified config with defaults filled in.
-                Can also return a set of strings describing any required api_keys that are not provided.
+                Can also return a set of strings describing any required sly_data API keys that are not provided.
         """
         full_config: Dict[str, Any] = None
 
@@ -224,7 +220,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             full_config = self.overlayer.overlay(config_from_class_in_llm_info, config)
 
             # Get any required api keys into the full config.
-            full_config = self.replace_any_required_api_keys(full_config, api_keys)
+            full_config = self.replace_any_required_api_keys(full_config, sly_data)
             return full_config
 
         default_config: Dict[str, Any] = self.llm_infos.get("default_config")
@@ -262,7 +258,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         full_config["model_name"] = llm_entry.get("use_model_name", use_model_name)
 
         # Get any required api keys into the full config.
-        full_config = self.replace_any_required_api_keys(full_config, api_keys)
+        full_config = self.replace_any_required_api_keys(full_config, sly_data)
         if full_config is not None and not isinstance(full_config, set):
             # Attempt to get a max_tokens through calculation
             full_config["max_tokens"] = self.get_max_prompt_tokens(full_config)
@@ -303,34 +299,30 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
     def replace_any_required_api_keys(
                 self,
                 config: Dict[str, Any],
-                api_keys: Dict[str, Any]
+                sly_data: Dict[str, Any]
             ) -> Dict[str, Any] | Set[str]:
         """
         Get any required api keys into the config.
         :param config: The fully specified llm config which is a product of
                     _create_full_llm_config() above.
-        :param api_keys: A dictionary of api keys to replace in the config.
-            The keys in this dictionary are the corresponding llm config field names
-            (for example, "openai_api_key"), not environment variable names.
-            The values for the keys are the API keys themselves to be inserted into
-            the llm configuration. Can be None, indicating no API keys are provided
-            and the system defaults will be used.
+        :param sly_data: A user-provided dictionary of private data,
+                from which we might extract API keys to use for user billing.
+                Can be None indicating no API keys are provided at all and the system defaults will be used.
         :return: The config with any required api keys replaced, or a set of missing
             required config field names if any required api keys were not provided.
         """
         use_api_keys: Dict[str, str] = {}
-        if api_keys is not None and isinstance(api_keys, dict):
-            use_api_keys = api_keys
+        if sly_data is not None and isinstance(sly_data, dict):
+            use_api_keys = sly_data.get("llm_config", use_api_keys)
 
-        # Loop through each of the config values and replace any "required" values
+        # Loop through each of the config values and replace any "sly_data" values
         # with their corresponding values from the api_keys dictionary.
         required_set: Set[str] = set()
         for key, value in config.items():
-            # If any value is "required", replace it with the same value from the api_key dictionary
+            # If any value is "sly_data", replace it with the same value from the api_key dictionary
             small_value: str = str(value).lower()
-            if small_value == "required":
-                # If we have a value in the api_keys dictionary, use it,
-                # otherwise, leave the "required" value alone, which is likely to trigger an error, appropriately.
+            if small_value == "sly_data":
+                # If we have a value in the sly_data.llm_config dictionary, use it,
                 new_value: Any = use_api_keys.get(key)
                 if new_value is not None:
                     config[key] = new_value
