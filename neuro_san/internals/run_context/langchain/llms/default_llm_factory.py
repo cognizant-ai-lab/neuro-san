@@ -310,11 +310,13 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         :param config: The fully specified llm config which is a product of
                     _create_full_llm_config() above.
         :param api_keys: A dictionary of api keys to replace in the config.
-            The keys in this dictionary are the names of the API keys (ala "OPENAI_API_KEY").
-            The values for the keys are the API keys themselves to be inserted into any llm configuration.
-            Can be None indiciating no API keys are provided at all and the system defaults will be used.
-        :return: The config with any required api keys replaced.
-            Can return None if any of the required api keys are not provided.
+            The keys in this dictionary are the corresponding llm config field names
+            (for example, "openai_api_key"), not environment variable names.
+            The values for the keys are the API keys themselves to be inserted into
+            the llm configuration. Can be None, indicating no API keys are provided
+            and the system defaults will be used.
+        :return: The config with any required api keys replaced, or a set of missing
+            required config field names if any required api keys were not provided.
         """
         use_api_keys: Dict[str, str] = {}
         if api_keys is not None and isinstance(api_keys, dict):
