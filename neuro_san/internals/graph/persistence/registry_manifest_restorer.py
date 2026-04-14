@@ -151,6 +151,11 @@ class RegistryManifestRestorer(Restorer):
         raw_restorer = RawManifestRestorer()
         raw_manifest: Dict[str, Any] = raw_restorer.restore(file_reference=manifest_file)
 
+        if raw_manifest is None:
+            self.logger.warning("Manifest file %s is empty or could not be read. Skipping.",
+                                manifest_file)
+            return agent_networks
+
         # By the end of the filter chain, only served entries will be included.
         manifest_filter = ManifestFilterChain(manifest_file)
         one_manifest: Dict[str, Dict[str, Any]] = manifest_filter.filter_config(raw_manifest)
@@ -194,6 +199,11 @@ class RegistryManifestRestorer(Restorer):
 
         raw_restorer = RawManifestRestorer()
         raw_manifest: Dict[str, Any] = await raw_restorer.async_restore(file_reference=manifest_file)
+
+        if raw_manifest is None:
+            self.logger.warning("Manifest file %s is empty or could not be read. Skipping.",
+                                manifest_file)
+            return agent_networks
 
         # By the end of the filter chain, only served entries will be included.
         manifest_filter = ManifestFilterChain(manifest_file)
