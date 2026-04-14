@@ -330,9 +330,9 @@ Have external tools that can be found in the local agent manifest use a
 direct connection instead of requiring a service to be stood up. (The default)
                            """)
         group.add_argument("--local_externals_service", dest="local_externals_direct", action="store_false",
-                            help="""
+                           help="""
 Have external tools that can be found in the local agent manifest use a service connection.
-                            """)
+                           """)
         self.arg_groups[group.title] = group
 
         # How do we receive messages?
