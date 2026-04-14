@@ -323,15 +323,16 @@ All choices require an agent name.
         # How do we handle calls to external agents?
         group = arg_parser.add_argument_group(title="Local External Agents",
                                               description="How do handle calls to local /external agents?")
-        group.add_argument("--local_externals_direct", default=False, action="store_true",
+        # Set the default to True so that external tools are used on directly connection by default.
+        group.add_argument("--local_externals_direct", default=True, action="store_true",
                            help="""
 Have external tools that can be found in the local agent manifest use a
-direct connection instead of requiring a service to be stood up.
+direct connection instead of requiring a service to be stood up. (The default)
                            """)
         group.add_argument("--local_externals_service", dest="local_externals_direct", action="store_false",
-                           help="""
-Have external tools that can be found in the local agent manifest use a service connection. (The default)
-                           """)
+                   help="""
+Have external tools that can be found in the local agent manifest use a service connection.
+                   """)
         self.arg_groups[group.title] = group
 
         # How do we receive messages?
