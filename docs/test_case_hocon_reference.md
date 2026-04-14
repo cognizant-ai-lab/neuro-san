@@ -3,6 +3,9 @@
 This document describes the neuro-san specifications for the test case .hocon files
 found within this repo under the [tests/fixtures](../tests/fixtures) section of this repo.
 
+For instructions on how to run tests and register new test cases with pytest,
+see [tests.md](tests.md).
+
 The neuro-san system uses the HOCON (Human-Optimized Config Object Notation) file format
 for its data-driven configuration elements.  Very simply put, you can think of
 .hocon files as JSON files that allow comments, but there is more to the hocon

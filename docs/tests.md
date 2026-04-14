@@ -78,6 +78,38 @@ Required environment variables:
     export AGENT_TOOL_PATH="./neuro_san/coded_tools"
     export AGENT_MANIFEST_FILE="./neuro_san/registries/manifest.hocon"
 
+### Adding a new data-driven test case
+
+Data-driven tests use HOCON fixture files to define test cases declaratively.
+See [test_case_hocon_reference.md](test_case_hocon_reference.md) for the full HOCON schema.
+
+To add a new test case:
+
+1. Create a fixture HOCON file under `tests/fixtures/<agent_name>/your_test.hocon`
+
+2. Register the HOCON file in the appropriate test class under
+   `tests/neuro_san/zzz_hocons/` by adding it to the list inside
+   `@parameterized.expand()`:
+
+   - For integration tests: `test_integration_test_hocons.py`
+   - For smoke tests: `test_smoke_test_hocons.py`
+
+   Example:
+
+        @parameterized.expand(DynamicHoconUnitTests.from_hocon_list([
+            "my_agent/my_new_test.hocon",
+        ]), skip_on_empty=True)
+
+3. Run the test (integration example):
+
+        export PYTHONPATH=$(pwd)
+        export AGENT_TOOL_PATH="./neuro_san/coded_tools"
+        export AGENT_MANIFEST_FILE="./neuro_san/registries/manifest.hocon"
+        pytest -s --verbose -m "integration" -k "my_agent_my_new_test" --timer-top-n 100
+
+   The `-k` filter name is derived from the HOCON path: slashes become `_`
+   and `.hocon` is stripped.
+
 ### Debugging
 
 To debug a specific unit test, import pytest in the test source file
