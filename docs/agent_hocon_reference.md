@@ -505,6 +505,7 @@ Example networks that advertise their sly_data_schema:
 
 There are select few tacit conventions supported for certain sly_data values that need to come from the client:
 
+<!--- pyml disable-next-line no-duplicate-heading -->
 ##### llm_config
 
 The sly_data dictionary can contain an optional `llm_config` key whose value is a dictionary
