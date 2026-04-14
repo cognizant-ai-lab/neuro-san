@@ -209,8 +209,8 @@ Some suggestions:
 
             print(f"\nResponse from {state.get('origin_str')}:")
             print(f"{state.get('last_chat_response')}")
-            if state.get("sly_data") is not None:
-                pretty_sly: str = json.dumps(state.get('sly_data'), indent=4, sort_keys=True)
+            if state.get("returned_sly_data") is not None:
+                pretty_sly: str = json.dumps(state.get('returned_sly_data'), indent=4, sort_keys=True)
                 print(f"Returned sly_data is: {pretty_sly}")
 
             if self.args.tokens:
