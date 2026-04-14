@@ -39,7 +39,7 @@
             # This is what we send as input to streaming_chat()
             "text": "Who did Yellow Submarine?",
 
-            # Note that there is no sly_data specified for the required api_keys for this test.
+            # Note that there is no sly_data specified for the required API keys for this test.
 
             # The response block treats how we are going to test what comes back
             "response": {

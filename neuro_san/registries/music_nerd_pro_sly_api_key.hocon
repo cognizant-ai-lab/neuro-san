@@ -31,7 +31,7 @@
         # If you have a list of fallbacks, you can specify that each of their models'
         # api keys are required as well.
         # You can also specify any other llm_config parameter should be specified in the
-        # api_keys structure within sly_data, however these cases are much less common.
+        # llm_config structure within sly_data, however these cases are much less common.
         "openai_api_key": "sly_data"
     },
     "tools": [
