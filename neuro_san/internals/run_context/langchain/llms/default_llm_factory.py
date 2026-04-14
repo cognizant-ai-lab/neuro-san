@@ -173,7 +173,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 for API key settings (for example, "openai_api_key"), not env-var
                 style names such as "OPENAI_API_KEY".
                 The values for the keys are the API keys themselves to be inserted into any llm configuration.
-                Can be None indiciating no API keys are provided at all and the system defaults will be used.
+                Can be None indicating no API keys are provided at all and the system defaults will be used.
         :return: A LangChainLlmResources instance containing
                 a BaseLanguageModel (can be Chat or LLM) and all related resources
                 necessary for managing the model run-time lifecycle.
