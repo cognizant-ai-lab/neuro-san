@@ -59,7 +59,7 @@ class ContextTypeLlmFactory:
         :param config: The fully specified llm config from which the LLM instance
                     should be created.
         :param api_keys: A dictionary of user API keys to use for user billing.
-                The keys in this dictionary are the names of the API keys (ala "OPENAI_API_KEY").
+                The keys in this dictionary are the names of the API keys (ala "openai_api_key").
                 The values for the keys are the API keys themselves to be inserted into any llm configuration.
                 Can be None indiciating no API keys are provided at all and the system defaults will be used.
         :return: An llm instance native to the context type.
