@@ -161,7 +161,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         return llm_factory
 
-    def create_llm(self, config: Dict[str, Any], api_keys: Dict[str, Any] = None) -> LangChainLlmResources:
+    def create_llm(self, config: Dict[str, Any], api_keys: Dict[str, Any] = None) -> LangChainLlmResources | str:
         """
         Creates a langchain LLM based on the 'model_name' value of
         the config passed in.
@@ -175,9 +175,9 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         :return: A LangChainLlmResources instance containing
                 a BaseLanguageModel (can be Chat or LLM) and all related resources
                 necessary for managing the model run-time lifecycle.
+                Can also return a string describing any required api_keys that are not provided.
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
-                Can return None if required api_keys are not provided.
         """
         full_config: Dict[str, Any] = self.create_full_llm_config(config, api_keys)
         if full_config is None or isinstance(full_config, str):

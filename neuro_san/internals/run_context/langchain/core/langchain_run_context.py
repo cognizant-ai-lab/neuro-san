@@ -206,23 +206,30 @@ class LangChainRunContext(RunContext):
 
         # Get the sly data to see if there are any optional user api_keys to use
         sly_data: Dict[str, Any] = self.tool_caller.get_sly_data()
+
+        # Get any api_keys provided by the client in sly_data.
+        # These are used to fill in anything in the llm_config whose value is "required".
         api_keys: Dict[str, Any] = sly_data.get("api_keys")
 
         # Initialize a list of chain fallbacks. This may or may not get filled.
         chain_fallbacks: List[Runnable] = []
         first_llm: bool = True
-        required: List[str] = []
+        required_api_keys: List[str] = []
 
         # Go through the list of fallbacks in the config.
         for fallback in fallbacks:
 
             # Create a model we might use.
-            one_llm_resources: LangChainLlmResources = llm_factory.create_llm(fallback, api_keys)
+            one_llm_resources: LangChainLlmResources | str = llm_factory.create_llm(fallback, api_keys)
             if one_llm_resources is None:
-                # Skip this one.
+                # Nothing to use or report.
+                # Skip for now, a fallback might still be fulfilled.
                 continue
+
             if isinstance(one_llm_resources, str):
-                required.append(one_llm_resources)
+                # Report later on which required api_keys are missing
+                # Skip for now, a fallback might still be fulfilled.
+                required_api_keys.append(one_llm_resources)
                 continue
 
             one_agent: Runnable = self.create_agent(instructions, one_llm_resources.get_model())
@@ -240,8 +247,9 @@ class LangChainRunContext(RunContext):
 
         if agent is None:
             error: str = "No fully-specified LLM found in llm_config or fallbacks."
-            if len(required) > 0:
-                error += f"\nRequires at least one of: {','.join(required)} set in sly_data."
+            if len(required_api_keys) > 0:
+                error += f"\nLLM operation for this agent requires at least one of the following set in sly_data:\n"
+                error += ','.join(required_api_keys)
             raise ValueError(error)
 
         if len(chain_fallbacks) > 0:
