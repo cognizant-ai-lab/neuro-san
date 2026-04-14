@@ -513,7 +513,7 @@ specified as "required" for its values.
 This enables any or all agent networks to potentially offload the costs operation onto the user
 by having the user fill in their own API keys.
 
-Any key in this dictionary will be specific to an particular LLM (i.e. "openai_api_key" or "anthropic_api_key").
+Any key in this dictionary will be specific to a particular LLM (i.e. "openai_api_key" or "anthropic_api_key").
 
 Example networks that advertise that their sly_data_schema needs external api_keys:
 
