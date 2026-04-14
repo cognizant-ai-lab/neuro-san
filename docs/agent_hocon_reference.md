@@ -235,14 +235,14 @@ see the [llm_info_hocon_reference](./llm_info_hocon_reference.md).
 
 #### Client-Provided API Keys
 
-It is possible to set any one of the api_keys described above as "sly_data" in the llm_config.
+It is possible to set any one of the API keys described above as "sly_data" in the llm_config.
 This will cause the system to look at the sly_data's llm_config dictionary for the appropriate
 api key(s) depending on the model provider. Note that key names are all-smalls versions of any
 environment variable names above.
 
-See also: [api_keys](#api_keys) in the [sly_data_schema](#sly_data_schema) section.
+See also: [llm_config](#llm_config-1) in the [sly_data_schema](#sly_data_schema) section.
 
-Example networks that advertise that their sly_data_schema needs external api_keys:
+Example networks that advertise that their sly_data_schema needs external API keys:
 
 - [music_nerd_pro_sly_api_key.hocon](../neuro_san/registries/music_nerd_pro_sly_api_key.hocon)
 
@@ -517,7 +517,7 @@ by having the user fill in their own API keys.
 
 Any key in this dictionary will be specific to a particular LLM (i.e. "openai_api_key" or "anthropic_api_key").
 
-Example networks that advertise that their sly_data_schema needs external api_keys:
+Example networks that advertise that their sly_data_schema needs external API keys:
 
 - [music_nerd_pro_sly_api_key.hocon](../neuro_san/registries/music_nerd_pro_sly_api_key.hocon)
 
