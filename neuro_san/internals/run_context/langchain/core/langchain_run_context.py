@@ -235,7 +235,7 @@ class LangChainRunContext(RunContext):
             one_agent: Runnable = self.create_agent(instructions, one_llm_resources.get_model())
 
             if first_llm:
-                # The first agent is the one we want to be our main guy.
+                # The first fully-specified agent is the one we want to be our main guy.
                 agent = one_agent
                 # For now. Could be problems with different providers w/ token counting.
                 self.llm_resources = one_llm_resources
