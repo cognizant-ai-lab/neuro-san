@@ -314,6 +314,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         if api_keys is not None and isinstance(api_keys, Dict):
             use_api_keys = api_keys
 
+        # Loop through each of the config values and replace any "required" values
+        # with their corresponding values from the api_keys dictionary.
         required_list: List[str] = []
         for key, value in config.items():
             # If any value is "required", replace it with the same value from the api_key dictionary
@@ -325,11 +327,14 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 if new_value is not None:
                     config[key] = new_value
                 else:
+                    # Add to the list of complaints about what is missing.
                     required_list.append(key)
 
         if len(required_list) > 0:
+            # We have complaints about what is missing. Return that.
             return ", ".join(required_list)
 
+        # We have a nice complete config. Return that.
         return config
 
     def create_base_chat_model(self, config: Dict[str, Any]) -> BaseLanguageModel:
