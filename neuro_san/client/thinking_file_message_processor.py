@@ -125,7 +125,6 @@ class ThinkingFileMessageProcessor(MessageProcessor):
                 text += "\n"
             text += f"\nchat_context:\n{json.dumps(chat_context, indent=4, sort_keys=True)}\n"
 
-
         # Figure out how we are going to report the origin given the message.
         use_origin: str = self._determine_origin_reporting(response, origin_str)
 
