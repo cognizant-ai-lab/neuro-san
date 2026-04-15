@@ -209,8 +209,8 @@ Some suggestions:
 
             print(f"\nResponse from {state.get('origin_str')}:")
             print(f"{state.get('last_chat_response')}")
-            if state.get("sly_data") is not None:
-                pretty_sly: str = json.dumps(state.get('sly_data'), indent=4, sort_keys=True)
+            if state.get("returned_sly_data") is not None:
+                pretty_sly: str = json.dumps(state.get('returned_sly_data'), indent=4, sort_keys=True)
                 print(f"Returned sly_data is: {pretty_sly}")
 
             if self.args.tokens:
@@ -323,14 +323,15 @@ All choices require an agent name.
         # How do we handle calls to external agents?
         group = arg_parser.add_argument_group(title="Local External Agents",
                                               description="How do handle calls to local /external agents?")
-        group.add_argument("--local_externals_direct", default=False, action="store_true",
+        # Set the default to True so that external tools are used on directly connection by default.
+        group.add_argument("--local_externals_direct", default=True, action="store_true",
                            help="""
 Have external tools that can be found in the local agent manifest use a
-direct connection instead of requiring a service to be stood up.
+direct connection instead of requiring a service to be stood up. (The default)
                            """)
         group.add_argument("--local_externals_service", dest="local_externals_direct", action="store_false",
                            help="""
-Have external tools that can be found in the local agent manifest use a service connection. (The default)
+Have external tools that can be found in the local agent manifest use a service connection.
                            """)
         self.arg_groups[group.title] = group
 

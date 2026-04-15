@@ -218,7 +218,7 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         finally:
             # Release resources without exceptions
             with suppress(Exception):
-                await chat_session.close()
+                self.invocation_context.finish_request()
 
     def reset(self):
         """
@@ -228,13 +228,10 @@ class AsyncDirectAgentSession(AsyncAgentSession):
 
     def close(self):
         """
-        Tears down resources created
+        Tears down all resources created
         """
         if self.invocation_context is None:
             return
 
-        asyncio_executor: AsyncioExecutor = self.invocation_context.get_asyncio_executor()
-        task: Task = asyncio_executor.submit(None, self.invocation_context.close)
-        asyncio_executor.get_event_loop().run_until_complete(task)
-
+        self.invocation_context.finish_request()
         self.invocation_context = None

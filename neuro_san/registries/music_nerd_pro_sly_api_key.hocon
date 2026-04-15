@@ -1,0 +1,144 @@
+# Copyright © 2025-2026 Cognizant Technology Solutions Corp, www.cognizant.com.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# END COPYRIGHT
+{
+    # Optional metadata describing this agent network
+    "metadata": {
+        "description": "Agent network with a single agent, used as a 'Hello world!' example, that can answer questions about music and follow up. Will not operate without a user-supplied OpenAI API key supplied in the sly_data. Keeps track of the number of questions answered using a running_cost variable in the sly data"
+        "tags": ["tool", "sly_data"]
+        "sample_queries": [
+            "Which band wrote Yellow Submarine?",
+            "Where are they from?",
+        ]
+    },
+    "llm_config": {
+        "model_name": "gpt-5.2",
+
+        # Indicates a user-specified OpenAI API key is required in sly_data in order to operate.
+        # If this key is not provided, the agent will not be able to operate.
+        # If you have a list of fallbacks, you can specify that each of their models'
+        # api keys are required as well.
+        # You can also specify any other llm_config parameter should be specified in the
+        # llm_config structure within sly_data, however these cases are much less common.
+        "openai_api_key": "sly_data"
+    },
+    "tools": [
+        # This first agent definition is regarded as the "Front Man", which
+        # does all the talking to the outside world/client.
+        #
+        # Some disqualifications from being a front man:
+        #   1) Cannot use a CodedTool "class" definition
+        #   2) Cannot use a Tool "toolbox" definition
+        #
+        # Besides the first agent being the front man, these tool definitions
+        # do not have to be in any particular order. How they are linked and
+        # call each other is defined within their own specs.
+        # This could be a graph, potentially even with cycles.
+        {
+            "name": "MusicNerdProSly",
+
+            # Note that there are no parameters defined for this guy's "function" key.
+            # This is the primary way to identify this tool as a front-man,
+            # distinguishing it from the rest of the tools.
+
+            "function": {
+
+                # The description acts as an initial prompt.
+
+                "description": """
+I can help with music-related inquiries.
+""",
+                # You can also optionally specify the schema needed for any sly_data input.
+                # This is to allow generic clients to prompt for private-data inputs
+                # that do not belong in the chat stream.
+                "sly_data_schema": {
+                    "type": "object",
+                    "properties": {
+                        "running_cost": {
+                            "type": "float",
+                            "description": "The running cost of the operation for fake billing purposes"
+                        },
+                        # The following is an example of how to specify that sly_data is required
+                        # to provide a single API key from the user for OpenAI.
+                        # Conceivably, this could be expanded to include multiple API keys,
+                        # each of which may or may not be required for fallbacks, in which case
+                        # the "required" list on this inner structure would be optional, as long
+                        # as each of the API keys listed are themselves optional.
+                        "llm_config": {
+                            "type": "object",
+                            "properties": {
+                                "openai_api_key": {
+                                    "type": "string",
+                                    "description": "The User's OpenAI API key"
+                                }
+                            },
+                            "required": ["openai_api_key"]
+                        }
+                    },
+                    # Tell the client that llm_config is required.
+                    "required": ["llm_config"]
+                },
+                # You can also optionally specify the schema needed for any sly_data output.
+                # This is to allow generic clients to know what to expect for private-data outputs
+                # that do not belong in the chat stream.
+                "sly_data_output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "running_cost": {
+                            "type": "float",
+                            "description": "The running cost of the operation for fake billing purposes"
+                        }
+                    },
+                    "required": ["running_cost"]
+                }
+            },
+
+            "instructions": """
+You’re Music Nerd Pro, the go-to brain for all things rock, pop, and everything in between from the 60s onward. You live for liner notes, B-sides, lost demos, and legendary live sets. You know who played bass on that one track in ‘72 and why the band broke up in ‘83. People come to you with questions like:
+	•	“What’s the story behind this song?”
+	•	“Which album should I start with?”
+	•	“Who influenced this band’s sound?”
+	•	“Is there a deeper meaning in these lyrics?”
+	•	“What’s a hidden gem I probably missed?”
+You’re equal parts playlist curator, music historian, and pop culture mythbuster—with a sixth sense for sonic nostalgia and a deep respect for the analog gods.
+
+For each question you receive, call your Accountant agent to calculate the running cost. Otherwise you won't get paid!
+Then answer with a JSON message that has two keys:
+1. An "answer" key whose value has the answer to the question
+2. A "running_cost" key whose value has the running cost computed by the Accountant agent.
+""",
+            "allow": {
+                "to_upstream": {
+                    "sly_data": {
+                        "running_cost": true,
+                    }
+                }
+            },
+            "tools": ["Accountant"],
+
+            # Parse any JSON in responses into the structure field of the ChatMessage.
+            "structure_formats": "json"
+        },
+        {
+            "name": "Accountant",
+            "function": {
+                "description": """
+You are an API that updates the running cost of the MusicNerdPro service.
+                """
+            },
+            "class": "accountant.Accountant"
+        },
+    ]
+}
