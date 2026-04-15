@@ -177,7 +177,6 @@ class AbstractClassActivation(AbstractCallableActivation):
 
         return message
 
-    # pylint: disable=too-many-locals
     def resolve_class(self, class_name: str, module_name: str):
         """
         Resolve the class by trying progressively higher levels in the agent network hierarchy.
@@ -195,55 +194,23 @@ class AbstractClassActivation(AbstractCallableActivation):
         python_class: Type[Any] = None
         last_exception: Union[ValueError, AttributeError] = None
 
-        warnings: list[str] = []
+        self.logger.debug("Attempting to resolve class `%s` in module `%s`", class_name, module_name)
 
-        if python_class is None:
-            # Phase 1 - Try the simplest thing first - a direct import from a fully-qualified path
-            fully_qualified_name: str = f"{module_name}.{class_name}"
-            python_class = ResolverUtil.create_type(fully_qualified_name, raise_if_not_found=False)
-            if python_class is None:
-                warning_str: str = f"Failed to resolve class `{class_name}` in module `{module_name}` using path " \
-                                   f"`{fully_qualified_name}`"
-                warnings.append(warning_str)
+        try:
+            python_class = self._attempt_resolve(
+                class_name, module_name, this_agent_tool_path, this_agent_tool_path_parts, agent_network_name_parts
+            )
+        except (ValueError, AttributeError) as exception:
+            last_exception: Union[ValueError, AttributeError] = exception
 
-        if python_class is None:
-            # Phase 2 - Try resolving from most specific to most general (root level)
-            for i in range(len(agent_network_name_parts) + 1):
-                if i == 0:
-                    # First attempt: try the most specific path
-                    packages: List[str] = [this_agent_tool_path]
-                else:
-                    # Subsequent attempts: remove one level at a time from the end
-                    path_parts: List[str] = this_agent_tool_path_parts[:-i]
-                    current_path: str = ".".join(path_parts)
-                    packages = [current_path]
+        if python_class is not None:
+            self.logger.debug("Successfully resolved class `%s` in module `%s`", class_name, module_name)
+            return python_class
 
-                resolver = Resolver(packages)
-
-                try:
-                    self.logger.info("Attempting to resolve class `%s` in module `%s` using path `%s`",
-                                     class_name, module_name, packages[0])
-                    python_class = resolver.resolve_class_in_module(class_name, module_name)
-                    break  # Successfully resolved, exit the loop
-                except (ValueError, AttributeError) as exception:
-                    last_exception = exception
-                    # Accumulate warnings but only issue them if we didn't actually find a class.
-                    # Issuing these warnings too early can be a false positive w/rt warnings that is normal behavior.
-                    warning_str: str = f"Failed to resolve class `{class_name}` in module `{module_name}` using path " \
-                                       f"`{packages[0]}`: {str(exception)}"
-                    warnings.append(warning_str)
-
-        # If we exhausted all levels without success, raise an error
-        if python_class is None:
-
-            # Issue warnings only now that we know we have no class.
-            if len(warnings) > 0:
-                for warning_str in warnings:
-                    self.logger.warning(warning_str)
-
-            agent_name: str = self.factory.get_name_from_spec(self.agent_tool_spec)
-            agent_tool_path: str = ".".join(this_agent_tool_path_parts[:-len(agent_network_name_parts)])
-            message = f"""
+        # If we exhausted all levels without success, warn and raise an error
+        agent_name: str = self.factory.get_name_from_spec(self.agent_tool_spec)
+        agent_tool_path: str = ".".join(this_agent_tool_path_parts[:-len(agent_network_name_parts)])
+        message = f"""
 Could not find class "{class_name}"
 in module "{module_name}"
 under AGENT_TOOL_PATH "{agent_tool_path}"
@@ -266,10 +233,61 @@ Check these things:
         the global module must not have the same name as the agent network.
 3. Is AGENT_TOOL_PATH findable from what is set for your PYTHONPATH?
 """
-            self.logger.error(message)
-            raise ValueError(message) from last_exception
+        self.logger.error(message)
+        raise ValueError(message) from last_exception
 
-        return python_class
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def _attempt_resolve(self, class_name: str, module_name: str,
+                         this_agent_tool_path: str,
+                         this_agent_tool_path_parts: List[str],
+                         agent_network_name_parts: List[str]) -> Type[Any]:
+        """
+        Try to resolve the class through progressive resolution strategies.
+
+        :param class_name: The name of the class to resolve
+        :param module_name: The module name containing the class
+        :param this_agent_tool_path: The root path from AGENT_TOOL_PATH plus the agent network name
+        :param this_agent_tool_path_parts: The agent tool path split into parts
+        :param agent_network_name_parts: The agent network name split into parts
+        :return: The resolved Python class
+        """
+        # Phase 1 - Try the simplest thing first - a direct import from a fully-qualified path
+        fully_qualified_name: str = f"{module_name}.{class_name}"
+        python_class: Type[Any] = ResolverUtil.create_type(fully_qualified_name, raise_if_not_found=False)
+        if python_class is not None:
+            return python_class
+
+        # Phase 2 - Try resolving from most specific to most general (root level)
+        last_exception: Union[ValueError, AttributeError] = None
+        for i in range(len(agent_network_name_parts) + 1):
+            if i == 0:
+                # First attempt: try the most specific path
+                packages: List[str] = [this_agent_tool_path]
+            else:
+                # Subsequent attempts: remove one level at a time from the end
+                path_parts: List[str] = this_agent_tool_path_parts[:-i]
+                current_path: str = ".".join(path_parts)
+                packages = [current_path]
+
+            resolver = Resolver(packages)
+
+            try:
+                python_class = resolver.resolve_class_in_module(class_name, module_name)
+                if python_class is not None:
+                    return python_class
+            # The Resolver internally catches ImportError (and SyntaxError, etc.) in try_to_import_module()
+            # and converts them into messages. What it raises outward is:
+            # ValueError — when the module can't be found at all
+            # AttributeError — from getattr(found_module, class_name) when the module was found
+            # but the class doesn't exist in it
+            except (ValueError, AttributeError) as exception:
+                last_exception = exception
+
+        # Re-raise the last exception so the caller knows resolution failed
+        if last_exception is not None:
+            raise last_exception
+
+        raise ValueError(f'Could not resolve class "{class_name}" in module "{module_name}".')
 
     def instantiate_coded_tool(self, python_class) -> CodedTool:
         """
