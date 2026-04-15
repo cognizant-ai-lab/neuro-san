@@ -25,6 +25,7 @@ from http import HTTPStatus
 
 from neuro_san.interfaces.concierge_session import ConciergeSession
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
+from neuro_san.internals.graph.utils.storage_class import StorageClass
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
 from neuro_san.session.direct_concierge_session import DirectConciergeSession
 
@@ -45,7 +46,7 @@ class ConciergeHandler(BaseRequestHandler):
             return
 
         network_storage_dict: Dict[str, AgentNetworkStorage] = self.server_context.get_network_storage_dict()
-        public_storage: AgentNetworkStorage = network_storage_dict.get("public")
+        public_storage: AgentNetworkStorage = network_storage_dict.get(StorageClass.PUBLIC)
 
         # See what the authorizer says
         allowed_agents: List[str] = await self.agent_policy.list_agents(metadata)

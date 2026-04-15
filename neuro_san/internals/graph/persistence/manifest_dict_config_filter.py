@@ -22,6 +22,8 @@ from logging import Logger
 
 from leaf_common.config.config_filter import ConfigFilter
 
+from neuro_san.internals.graph.utils.storage_class import StorageClass
+
 
 class ManifestDictConfigFilter(ConfigFilter):
     """
@@ -64,7 +66,7 @@ class ManifestDictConfigFilter(ConfigFilter):
 
             expanded_value: Dict[str, Any] = {
                 "serve": True,
-                "public": True,
+                StorageClass.PUBLIC: True,
                 "mcp": self.MCP_DEFAULT_MODE
             }
 
@@ -73,7 +75,7 @@ class ManifestDictConfigFilter(ConfigFilter):
                 if not value:
                     expanded_value = {
                         "serve": False,
-                        "public": False,
+                        StorageClass.PUBLIC: False,
                         "mcp": self.MCP_DEFAULT_MODE
                     }
             elif isinstance(value, Dict):
@@ -88,7 +90,7 @@ class ManifestDictConfigFilter(ConfigFilter):
             if "mcp" not in expanded_value:
                 expanded_value["mcp"] = False
             if expanded_value["mcp"]:
-                expanded_value["public"] = True
+                expanded_value[StorageClass.PUBLIC] = True
 
             filtered[key] = expanded_value
 

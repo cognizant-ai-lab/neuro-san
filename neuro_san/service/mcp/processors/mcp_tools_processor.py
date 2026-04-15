@@ -28,6 +28,7 @@ import json
 import tornado
 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.graph.utils.storage_class import StorageClass
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
@@ -66,7 +67,7 @@ class McpToolsProcessor:
         # See which agents the user has access to per authorization policy
         authorized_agents: List[str] = await self.agent_policy.list_agents(metadata)
 
-        public_storage: AgentNetworkStorage = self.network_storage_dict.get("public")
+        public_storage: AgentNetworkStorage = self.network_storage_dict.get(StorageClass.PUBLIC)
         tools_description: List[Dict[str, Any]] = []
         for agent_name in public_storage.get_agent_names():
 

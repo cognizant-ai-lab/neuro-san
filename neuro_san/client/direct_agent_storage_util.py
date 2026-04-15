@@ -18,6 +18,7 @@ from typing import Dict
 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
+from neuro_san.internals.graph.utils.storage_class import StorageClass
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 
 
@@ -28,7 +29,7 @@ class DirectAgentStorageUtil:
 
     @staticmethod
     def create_network_storage(manifest_networks: Dict[str, Dict[str, AgentNetwork]] = None,
-                               storage_type: str = "public") -> AgentNetworkStorage:
+                               storage_type: str = StorageClass.PUBLIC) -> AgentNetworkStorage:
         """
         Creates an AgentNetworkStorage instance for a given type.
 

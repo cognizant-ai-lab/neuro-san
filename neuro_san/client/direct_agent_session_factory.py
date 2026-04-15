@@ -22,17 +22,18 @@ from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
 
 from neuro_san.client.direct_agent_storage_util import DirectAgentStorageUtil
 from neuro_san.interfaces.agent_session import AgentSession
-from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
-from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
-from neuro_san.internals.run_context.factory.master_toolbox_factory import MasterToolboxFactory
-from neuro_san.internals.run_context.factory.master_llm_factory import MasterLlmFactory
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
+from neuro_san.internals.graph.utils.storage_class import StorageClass
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
+from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
+from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.network_providers.expiring_agent_network_storage import ExpiringAgentNetworkStorage
 from neuro_san.internals.reservations.direct_agent_reservationist import DirectAgentReservationist
+from neuro_san.internals.run_context.factory.master_toolbox_factory import MasterToolboxFactory
+from neuro_san.internals.run_context.factory.master_llm_factory import MasterLlmFactory
 from neuro_san.session.direct_agent_session import DirectAgentSession
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
 from neuro_san.session.missing_agent_check import MissingAgentCheck
@@ -61,10 +62,10 @@ class DirectAgentSessionFactory:
             "temp": ExpiringAgentNetworkStorage()
         }
 
-        for storage_type in ["public", "protected"]:
+        for storage_class in StorageClass.ALL:
             storage: AgentNetworkStorage = DirectAgentStorageUtil.create_network_storage(manifest_networks,
-                                                                                         storage_type=storage_type)
-            self.network_storage_dict[storage_type] = storage
+                                                                                         storage_type=storage_class)
+            self.network_storage_dict[storage_class] = storage
 
     def create_session(self, agent_name: str, use_direct: bool = False,
                        metadata: Dict[str, str] = None, umbrella_timeout: Timeout = None) -> AgentSession:
@@ -126,7 +127,7 @@ class DirectAgentSessionFactory:
             agent_network = restorer.restore(file_reference=agent_name)
         else:
             # Use the standard stuff available via the manifest file.
-            for storage_type in ["public", "protected"]:
+            for storage_type in StorageClass.ALL:
                 storage: AgentNetworkStorage = self.network_storage_dict.get(storage_type)
                 agent_network_provider: AgentNetworkProvider = storage.get_agent_network_provider(agent_name)
                 if agent_network_provider is None:
