@@ -37,17 +37,117 @@ class TestKeywordNetworkValidator(TestCase, AbstractNetworkValidatorTest):
         """
         return KeywordNetworkValidator()
 
-    def test_no_instructions(self):
+    def test_empty_instructions(self):
         """
-        Tests a network where at least one of the nodes does not have instructions
+        Tests a network where at least one of the nodes has empty instructions
         """
         validator: DictionaryValidator = self.create_validator()
 
-        # Open a known good network file
         config: Dict[str, Any] = self.restore("hello_world.hocon")
-
-        # Invalidate per the test
         config["tools"][0]["instructions"] = ""
 
         errors: List[str] = validator.validate(config)
         self.assertEqual(1, len(errors))
+
+    def test_instructions_wrong_type(self):
+        """
+        Tests a network where instructions is not a string
+        """
+        validator: DictionaryValidator = self.create_validator()
+
+        config: Dict[str, Any] = self.restore("hello_world.hocon")
+        config["tools"][0]["instructions"] = 123
+
+        errors: List[str] = validator.validate(config)
+        self.assertEqual(1, len(errors))
+        self.assertIn("must be a str", errors[0])
+
+    def test_tools_wrong_type(self):
+        """
+        Tests a network where tools is a string instead of a list
+        """
+        validator: DictionaryValidator = self.create_validator()
+
+        config: Dict[str, Any] = self.restore("hello_world.hocon")
+        config["tools"][0]["tools"] = "synonymizer"
+
+        errors: List[str] = validator.validate(config)
+        self.assertEqual(1, len(errors))
+        self.assertIn("must be a list", errors[0])
+
+    def test_tools_invalid_element(self):
+        """
+        Tests a network where a tools list element is neither str nor dict
+        """
+        validator: DictionaryValidator = self.create_validator()
+
+        config: Dict[str, Any] = self.restore("hello_world.hocon")
+        config["tools"][0]["tools"] = ["synonymizer", 123]
+
+        errors: List[str] = validator.validate(config)
+        self.assertEqual(1, len(errors))
+        self.assertIn("must be a str or dict", errors[0])
+
+    def test_tools_valid_with_dict_element(self):
+        """
+        Tests that a tools list with str and dict elements is valid
+        """
+        validator: DictionaryValidator = self.create_validator()
+
+        config: Dict[str, Any] = self.restore("hello_world.hocon")
+        config["tools"][0]["tools"] = ["synonymizer", {"server": "mcp_server"}]
+
+        errors: List[str] = validator.validate(config)
+        self.assertEqual(0, len(errors))
+
+    def test_description_empty(self):
+        """
+        Tests a network where function.description is empty
+        """
+        validator: DictionaryValidator = self.create_validator()
+
+        config: Dict[str, Any] = self.restore("hello_world.hocon")
+        config["tools"][0]["function"]["description"] = ""
+
+        errors: List[str] = validator.validate(config)
+        self.assertEqual(1, len(errors))
+        self.assertIn("function.description", errors[0])
+
+    def test_description_wrong_type(self):
+        """
+        Tests a network where function.description is not a string
+        """
+        validator: DictionaryValidator = self.create_validator()
+
+        config: Dict[str, Any] = self.restore("hello_world.hocon")
+        config["tools"][0]["function"]["description"] = 123
+
+        errors: List[str] = validator.validate(config)
+        self.assertEqual(1, len(errors))
+        self.assertIn("must be a str", errors[0])
+
+    def test_function_wrong_type(self):
+        """
+        Tests a network where function is not a dict
+        """
+        validator: DictionaryValidator = self.create_validator()
+
+        config: Dict[str, Any] = self.restore("hello_world.hocon")
+        config["tools"][0]["function"] = "not a dict"
+
+        errors: List[str] = validator.validate(config)
+        self.assertEqual(1, len(errors))
+        self.assertIn("'function' must be a dict", errors[0])
+
+    def test_keywords_filter(self):
+        """
+        Tests that the keywords parameter controls which validations run
+        """
+        validator = KeywordNetworkValidator(keywords={"tools"})
+
+        config: Dict[str, Any] = self.restore("hello_world.hocon")
+        # Empty instructions should be ignored when only validating tools
+        config["tools"][0]["instructions"] = ""
+
+        errors: List[str] = validator.validate(config)
+        self.assertEqual(0, len(errors))

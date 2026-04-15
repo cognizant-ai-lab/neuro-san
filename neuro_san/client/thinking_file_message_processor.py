@@ -27,6 +27,7 @@ from time import localtime
 from time import strftime
 from time import time
 
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from neuro_san.internals.messages.chat_message_type import ChatMessageType
 from neuro_san.internals.messages.origination import Origination
 from neuro_san.message_processing.message_processor import MessageProcessor
@@ -80,6 +81,16 @@ class ThinkingFileMessageProcessor(MessageProcessor):
         origin_str: str = ""
         if test_origin_str is not None:
             origin_str = test_origin_str
+        else:
+            # AgentFramework messages carry the final answer, but don't have an origin.
+            # Have them get their origin for reporting here (only!) from the chat history.
+            extractor = DictionaryExtractor(chat_message_dict)
+            histories: List[Dict[str, Any]] = extractor.get("chat_context.chat_histories")
+            if histories is not None and len(histories) > 0:
+                origin = histories[0].get("origin")
+                test_origin_str = Origination.get_full_name_from_origin(origin)
+                if test_origin_str is not None:
+                    origin_str = test_origin_str
 
         self.write_message(chat_message_dict, origin_str)
 
@@ -97,6 +108,7 @@ class ThinkingFileMessageProcessor(MessageProcessor):
 
         text: str = response.get("text")
         structure: Dict[str, Any] = response.get("structure")
+        chat_context: Dict[str, Any] = response.get("chat_context")
 
         if text is None:
             text = ""
@@ -106,6 +118,12 @@ class ThinkingFileMessageProcessor(MessageProcessor):
             if len(text) > 0:
                 text += "\n"
             text += f"```json\n{json.dumps(structure, indent=4, sort_keys=True)}\n```"
+
+        if chat_context is not None:
+            # There is no real text, but there is a chat_context. JSON-ify it.
+            if len(text) > 0:
+                text += "\n"
+            text += f"\nchat_context:\n{json.dumps(chat_context, indent=4, sort_keys=True)}\n"
 
         # Figure out how we are going to report the origin given the message.
         use_origin: str = self._determine_origin_reporting(response, origin_str)

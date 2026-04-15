@@ -42,6 +42,7 @@ from neuro_san.service.http.server.http_server import DEFAULT_MAX_CONCURRENT_REQ
 from neuro_san.service.http.server.http_server import DEFAULT_REQUEST_LIMIT
 from neuro_san.service.http.server.http_server import HttpServer
 from neuro_san.service.interfaces.agent_server import AgentServer
+from neuro_san.service.watcher.event_work.event_work_monitor import EventWorkMonitor
 from neuro_san.service.watcher.main_loop.storage_watcher import StorageWatcher
 from neuro_san.service.watcher.temp_networks.temp_network_storage_updater import TempNetworkStorageUpdater
 from neuro_san.service.utils.server_status import ServerStatus
@@ -137,6 +138,11 @@ class ServerMainLoop:
                                                            DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS)),
                                 help="Http server resources monitoring/logging interval in seconds "
                                      "0 means no logging")
+        arg_parser.add_argument("--max_temp_networks", type=int,
+                                default=int(os.environ.get("AGENT_MAX_TEMP_NETWORKS", "0")),
+                                help="Maximum number of temporary agent networks to keep in memory. "
+                                     "When exceeded, least recently used networks are evicted. "
+                                     "0 means unlimited.")
         arg_parser.add_argument("--mcp_enable", type=str,
                                 default=os.environ.get("AGENT_MCP_ENABLE", "true"),
                                 help="'true' if MCP protocol service should be enabled")
@@ -194,6 +200,8 @@ class ServerMainLoop:
         self.http_server_config.http_server_monitor_interval_seconds = args.http_resources_monitor_interval_seconds
         self.http_server_config.http_port = args.http_port
 
+        self.server_context.set_temp_storage_max_items(args.max_temp_networks)
+
         manifest_restorer = RegistryManifestRestorer()
         manifest_agent_networks: Dict[str, Dict[str, AgentNetwork]] = manifest_restorer.restore()
         manifest_files: List[str] = manifest_restorer.get_manifest_files()
@@ -238,6 +246,7 @@ class ServerMainLoop:
         # List of components which should be started after http server is created
         # and have spun up all its instances:
         components_to_start: List[Startable] = []
+
         if server_status.updater.is_requested():
             current_dir: str = os.path.dirname(os.path.abspath(__file__))
             setup_logging(server_status.updater.get_service_name(),
@@ -246,10 +255,15 @@ class ServerMainLoop:
                           logging_config=self.logging_config)
             watcher = StorageWatcher(self.watcher_config, self.server_context)
             components_to_start.append(watcher)
+
         # Another component to start is the temporary networks updater
         temp_networks_updater: TempNetworkStorageUpdater =\
             TempNetworkStorageUpdater(self.server_context.get_network_storage_dict(), self.server_context.get_queues())
         components_to_start.append(temp_networks_updater)
+
+        # Create the event work monitor:
+        event_work_monitor = EventWorkMonitor(self.server_context)
+        components_to_start.append(event_work_monitor)
 
         # Create HTTP server;
         self.http_server = HttpServer(
