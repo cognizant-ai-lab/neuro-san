@@ -37,7 +37,7 @@ class InvocationUtil:
         :param inspector: The AgentNetworkInspector instance.  Common internal implementations of
                         AgentNetworkInspector include AgentNetwork, AgentToolRegistry.
         :return: A string representing the invocation type.
-                 Can be "event", "chatbot", or "periodic" for now.
+                 Can be "event" or "chatbot".
         """
         if inspector is None:
             return Invocations.CHATBOT
