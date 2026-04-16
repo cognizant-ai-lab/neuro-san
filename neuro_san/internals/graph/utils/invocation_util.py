@@ -84,7 +84,7 @@ class InvocationUtil:
             chat_filter = request_extractor.get("chat_filter.chat_filter_type", chat_filter)
 
         # More possibilities will come for more invocations and chat filters.
-        if invocation in (Invocations.EVENT, Invocations.PERIODIC) and chat_filter in ("MINIMAL",):
+        if invocation in (Invocations.EVENT,) and chat_filter in ("MINIMAL",):
             return Invocations.EVENT
 
         # Note that even if the spec wants event but the request is a MAXIMAL filter,

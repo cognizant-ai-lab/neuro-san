@@ -25,6 +25,5 @@ class Invocations:
 
     EVENT: str = "event"
     CHATBOT: str = "chatbot"
-    PERIODIC: str = "periodic"
 
-    ALL: List[str] = [EVENT, CHATBOT, PERIODIC]
+    ALL: List[str] = [EVENT, CHATBOT]
