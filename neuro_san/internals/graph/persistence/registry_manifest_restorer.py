@@ -67,6 +67,7 @@ class RegistryManifestRestorer(Restorer):
             self.agent_mapper = AgentFileTreeMapper()
 
         self.manifest_files: List[str] = []
+        self.periodic_configs: Dict[str, Dict[str, Any]] = {}
 
         if manifest_files is None:
             # We have no manifest list coming in, so check an env variable for a definition.
@@ -264,6 +265,7 @@ class RegistryManifestRestorer(Restorer):
             storage = StorageClass.PROTECTED
         if manifest_dict.get(StorageClass.PERIODIC, False):
             storage = StorageClass.PERIODIC
+            self.periodic_configs[network_name] = manifest_dict
 
         agent_networks[storage][network_name] = agent_network
 
@@ -379,3 +381,9 @@ class RegistryManifestRestorer(Restorer):
             external_network_names.append(f"/{network_name}")
 
         return external_network_names
+
+    def get_periodic_configs(self) -> Dict[str, Dict[str, Any]]:
+        """
+        :return: a map of agent name -> periodic config
+        """
+        return self.periodic_configs
