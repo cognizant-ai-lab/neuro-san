@@ -29,6 +29,7 @@ from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_CONNECTIONS_BACKLOG
 from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_IDLE_CONNECTIONS_TIMEOUT_SECONDS
@@ -282,9 +283,9 @@ class ServerMainLoop:
         # Now - our http server is created and listens to updates of network_storage
         # Perform the initial setup
         network_storage_dict: Dict[str, AgentNetworkStorage] = self.server_context.get_network_storage_dict()
-        for storage_type in ["public", "protected"]:
-            storage: AgentNetworkStorage = network_storage_dict.get(storage_type)
-            storage.setup_agent_networks(self.agent_networks.get(storage_type))
+        for storage_class in StorageClass.ALL_PERMANENT:
+            storage: AgentNetworkStorage = network_storage_dict.get(storage_class)
+            storage.setup_agent_networks(self.agent_networks.get(storage_class))
 
         # Start http server:
         self.http_server.start(components_to_start)

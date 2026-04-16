@@ -20,6 +20,7 @@ from typing import Dict
 
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
+from neuro_san.internals.interfaces.invocations import Invocations
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 
 
@@ -29,19 +30,17 @@ class InvocationUtil:
     """
 
     @staticmethod
-    def get_effective_invocation(inspector: AgentNetworkInspector, request_dict: Dict[str, Any]) -> str:
+    def get_invocation(inspector: AgentNetworkInspector) -> str:
         """
-        Check if the agent network should process the request as an event.
+        Get the invocation type from the agent network.
 
         :param inspector: The AgentNetworkInspector instance.  Common internal implementations of
                         AgentNetworkInspector include AgentNetwork, AgentToolRegistry.
-        :param request_dict: A ChatRequest dictionary.
-
         :return: A string representing the invocation type.
-                 Can be "event" or "chatbot" for now.
+                 Can be "event" or "chatbot".
         """
         if inspector is None:
-            return "chatbot"
+            return Invocations.CHATBOT
 
         invocation: str = None
         front_man: str = None
@@ -55,7 +54,29 @@ class InvocationUtil:
             front_man_spec: Dict[str, Any] = inspector.get_agent_tool_spec(front_man)
             spec_extractor = DictionaryExtractor(front_man_spec)
             # Default invocation if none specified is chatbot
-            invocation = spec_extractor.get("function.invocation", "chatbot")
+            invocation = spec_extractor.get("function.invocation", Invocations.CHATBOT)
+
+        if isinstance(invocation, dict):
+            invocation = invocation.get("invocation_type", Invocations.CHATBOT)
+
+        return invocation
+
+    @staticmethod
+    def get_effective_invocation(inspector: AgentNetworkInspector, request_dict: Dict[str, Any]) -> str:
+        """
+        Check how the agent network should process the request.
+
+        :param inspector: The AgentNetworkInspector instance.  Common internal implementations of
+                        AgentNetworkInspector include AgentNetwork, AgentToolRegistry.
+        :param request_dict: A ChatRequest dictionary.
+
+        :return: A string representing the invocation type.
+                 Can be "event" or "chatbot" for now.
+        """
+        if inspector is None:
+            return Invocations.CHATBOT
+
+        invocation: str = InvocationUtil.get_invocation(inspector)
 
         chat_filter: str = "MINIMAL"
         if request_dict is not None:
@@ -63,10 +84,10 @@ class InvocationUtil:
             chat_filter = request_extractor.get("chat_filter.chat_filter_type", chat_filter)
 
         # More possibilities will come for more invocations and chat filters.
-        if invocation in ("event",) and chat_filter in ("MINIMAL",):
-            return "event"
+        if invocation in (Invocations.EVENT,) and chat_filter in ("MINIMAL",):
+            return Invocations.EVENT
 
         # Note that even if the spec wants event but the request is a MAXIMAL filter,
         # we are taking that to mean that the client wants to hang around for the queued messages
         # to debug what is going on with the event.
-        return "chatbot"
+        return Invocations.CHATBOT

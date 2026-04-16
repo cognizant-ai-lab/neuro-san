@@ -32,6 +32,7 @@ import tornado
 from tornado.web import RequestHandler
 
 from leaf_common.utils.async_atomic_counter import AsyncAtomicCounter
+from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.network_providers.expiring_agent_network_storage import ExpiringAgentNetworkStorage
@@ -155,7 +156,7 @@ class BaseRequestHandler(RequestHandler):
         if AgentReservation.is_reservation_name(agent_name):
             # Get temporary network storage:
             network_storage_dict: Dict[str, AgentNetworkStorage] = self.server_context.get_network_storage_dict()
-            temp_storage: AgentNetworkStorage = network_storage_dict.get("temp", None)
+            temp_storage: AgentNetworkStorage = network_storage_dict.get(StorageClass.TEMP, None)
             if temp_storage is None or not isinstance(temp_storage, ExpiringAgentNetworkStorage):
                 self.set_status(500)
                 self.logger.error(metadata, "error: Temporary network storage is not properly configured.")
