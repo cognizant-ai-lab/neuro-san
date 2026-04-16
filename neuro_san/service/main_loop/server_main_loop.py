@@ -29,7 +29,7 @@ from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
-from neuro_san.internals.graph.utils.storage_class import StorageClass
+from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_CONNECTIONS_BACKLOG
 from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_IDLE_CONNECTIONS_TIMEOUT_SECONDS

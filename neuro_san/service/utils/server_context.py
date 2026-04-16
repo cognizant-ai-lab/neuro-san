@@ -23,7 +23,7 @@ from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
 
 from neuro_san.interfaces.agent_session_constants import AgentSessionConstants
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
-from neuro_san.internals.graph.utils.storage_class import StorageClass
+from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.network_providers.expiring_agent_network_storage \
     import ExpiringAgentNetworkStorage

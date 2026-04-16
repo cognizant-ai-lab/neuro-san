@@ -24,8 +24,8 @@ from typing import List
 from http import HTTPStatus
 
 from neuro_san.interfaces.concierge_session import ConciergeSession
+from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
-from neuro_san.internals.graph.utils.storage_class import StorageClass
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
 from neuro_san.session.direct_concierge_session import DirectConciergeSession
 

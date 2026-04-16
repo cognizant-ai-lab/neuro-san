@@ -22,7 +22,7 @@ from logging import Logger
 
 from leaf_common.config.config_filter import ConfigFilter
 
-from neuro_san.internals.graph.utils.storage_class import StorageClass
+from neuro_san.internals.interfaces.storage_class import StorageClass
 
 
 class ManifestDictConfigFilter(ConfigFilter):

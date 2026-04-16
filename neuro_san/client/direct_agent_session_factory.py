@@ -25,10 +25,10 @@ from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
-from neuro_san.internals.graph.utils.storage_class import StorageClass
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
+from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.network_providers.expiring_agent_network_storage import ExpiringAgentNetworkStorage
 from neuro_san.internals.reservations.direct_agent_reservationist import DirectAgentReservationist

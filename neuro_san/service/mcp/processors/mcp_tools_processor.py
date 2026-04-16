@@ -28,8 +28,8 @@ import json
 import tornado
 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
-from neuro_san.internals.graph.utils.storage_class import StorageClass
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
+from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider

@@ -18,7 +18,7 @@ from typing import Dict
 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
-from neuro_san.internals.graph.utils.storage_class import StorageClass
+from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 
 

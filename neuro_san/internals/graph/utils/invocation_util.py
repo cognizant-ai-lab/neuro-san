@@ -20,7 +20,7 @@ from typing import Dict
 
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
-from neuro_san.internals.graph.utils.invocations import Invocations
+from neuro_san.internals.interfaces.invocations import Invocations
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 
 

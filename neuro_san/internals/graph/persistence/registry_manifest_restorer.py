@@ -34,14 +34,14 @@ from leaf_common.config.file_of_class import FileOfClass
 from leaf_common.persistence.interface.restorer import Restorer
 
 from neuro_san import REGISTRIES_DIR
-from neuro_san.internals.interfaces.agent_name_mapper import AgentNameMapper
 from neuro_san.internals.graph.persistence.agent_filetree_mapper import AgentFileTreeMapper
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
 from neuro_san.internals.graph.persistence.manifest_filter_chain import ManifestFilterChain
 from neuro_san.internals.graph.persistence.raw_manifest_restorer import RawManifestRestorer
 from neuro_san.internals.graph.persistence.served_manifest_config_filter import ServedManifestConfigFilter
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
-from neuro_san.internals.graph.utils.storage_class import StorageClass
+from neuro_san.internals.interfaces.agent_name_mapper import AgentNameMapper
+from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.validation.network.manifest_network_validator import ManifestNetworkValidator
 
 
