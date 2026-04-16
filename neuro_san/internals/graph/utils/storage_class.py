@@ -23,10 +23,10 @@ class StorageClass:
     Constants for AgentNetwork storage classes
     """
 
-    PUBLIC: str = "public"          # The default - listed in Connectivity
-    PROTECTED: str = "protected"    # Not listed in Connectivity, but still accessible
-    PERIODIC: str = "periodic"      # Not listed in Connectivity, reserved for periodic events
-    TEMP: str = "temp"              # Not listed in Connectivity, reserved for temporary networks that expire
+    PUBLIC: str = "public"          # The default - listed in Concierge
+    PROTECTED: str = "protected"    # Not listed in Concierge, but still accessible
+    PERIODIC: str = "periodic"      # Not listed in Concierge, reserved for periodic events
+    TEMP: str = "temp"              # Not listed in Concierge, reserved for temporary networks that expire
 
     # Note: "temp" not listed here because it is so unlike everything else.
     ALL: List[str] = [PUBLIC, PROTECTED, PERIODIC]
