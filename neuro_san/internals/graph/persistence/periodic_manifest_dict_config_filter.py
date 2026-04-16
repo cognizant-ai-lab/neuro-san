@@ -39,6 +39,8 @@ class PeriodicManifestDictConfigFilter(ConfigFilter):
     # See https://en.wikipedia.org/wiki/Cron , https://crontab.cronhub.io/ , https://github.com/pallets-eco/croniter
     ONCE_A_MINUTE: str = "*/1 * * * * *"
 
+    DEFAULT_CRON_SPEC: str = ONCE_A_MINUTE
+
     def filter_config(self, basis_config: Dict[str, Any]) -> Dict[str, Any]:
         """
         Filters the given basis config.
@@ -57,7 +59,7 @@ class PeriodicManifestDictConfigFilter(ConfigFilter):
             "interactions": [
                 {
                     "enable": True,
-                    "cron_spec": self.ONCE_A_MINUTE,
+                    "cron_spec": self.DEFAULT_CRON_SPEC,
                     "text": "Do your thing",
                     "sly_data": {}
                 }
