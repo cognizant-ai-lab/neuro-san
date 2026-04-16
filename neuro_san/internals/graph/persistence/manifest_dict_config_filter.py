@@ -64,6 +64,7 @@ class ManifestDictConfigFilter(ConfigFilter):
 
         for key, value in basis_config.items():
 
+            # Default template
             expanded_value: Dict[str, Any] = {
                 "serve": True,
                 StorageClass.PUBLIC: True,
@@ -73,11 +74,11 @@ class ManifestDictConfigFilter(ConfigFilter):
             # Traditional, easy entry in a manifest file.
             if isinstance(value, bool):
                 if not value:
-                    expanded_value = {
+                    updated_value: Dict[str, Any] = {
                         "serve": False,
-                        StorageClass.PUBLIC: False,
-                        "mcp": self.MCP_DEFAULT_MODE
+                        StorageClass.PUBLIC: False
                     }
+                    expanded_value.update(updated_value)
             elif isinstance(value, Dict):
                 expanded_value = value
             else:
