@@ -76,9 +76,14 @@ class PeriodicManifestDictConfigFilter(ConfigFilter):
             # Take the value as the cron_spec for periodicity
             template["interactions"][0]["cron_spec"] = value
         elif isinstance(value, dict):
-            # Take the dictionary value and merge it onto the template
-            # to account for any missing values.
-            template.update(value)
+            if "interactions" not in value:
+                # Take the dictionary value and merge it onto the template
+                # as the first and only interaction.
+                template["interactions"][0] = value
+            else:
+                # Take the dictionary value and shallow-merge it onto the template
+                # to account for any missing values.
+                template.update(value)
         # anything else gets the template as-is
 
         basis_config[StorageClass.PERIODIC] = template
