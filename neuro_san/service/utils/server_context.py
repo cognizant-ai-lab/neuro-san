@@ -59,7 +59,7 @@ class ServerContext:
         When exceeded, least recently used items are evicted.
         :param max_items: Maximum number of items. 0 or negative means unlimited.
         """
-        temp_storage: ExpiringAgentNetworkStorage = self.network_storage_dict.get("temp")
+        temp_storage: ExpiringAgentNetworkStorage = self.network_storage_dict.get(StorageClass.TEMP)
         if temp_storage is not None:
             temp_storage.set_max_agent_networks(max_items)
 

@@ -59,7 +59,7 @@ class DirectAgentSessionFactory:
         manifest_networks: Dict[str, Dict[str, AgentNetwork]] = manifest_restorer.restore()
 
         self.network_storage_dict: Dict[str, AgentNetworkStorage] = {
-            "temp": ExpiringAgentNetworkStorage()
+            StorageClass.TEMP: ExpiringAgentNetworkStorage()
         }
 
         for storage_class in StorageClass.ALL_PERMANENT:
@@ -94,7 +94,7 @@ class DirectAgentSessionFactory:
         executors_pool = AsyncioExecutorPool()
 
         # DEF - We could do max_lifetime here, but waiting until that seems necessary.
-        reservationist = DirectAgentReservationist(set([self.network_storage_dict.get("temp")]))
+        reservationist = DirectAgentReservationist(set([self.network_storage_dict.get(StorageClass.TEMP)]))
         invocation_context = SessionInvocationContext(agent_name,
                                                       factory,
                                                       executors_pool,
