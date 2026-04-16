@@ -24,6 +24,7 @@ from logging import Logger
 
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.watcher.interfaces.abstract_storage_updater import AbstractStorageUpdater
 from neuro_san.service.watcher.registries.event_registry_observer import EventRegistryObserver
@@ -109,8 +110,8 @@ class RegistryStorageUpdater(AbstractStorageUpdater):
 
         agent_networks: Dict[str, Dict[str, AgentNetwork]] = RegistryManifestRestorer(self.manifest_path).restore()
 
-        for storage_type in ["public", "protected"]:
-            storage: AgentNetworkStorage = self.network_storage_dict.get(storage_type)
-            storage.setup_agent_networks(agent_networks.get(storage_type))
+        for storage_class in StorageClass.ALL_PERMANENT:
+            storage: AgentNetworkStorage = self.network_storage_dict.get(storage_class)
+            storage.setup_agent_networks(agent_networks.get(storage_class))
 
         self.log_next_update_time()

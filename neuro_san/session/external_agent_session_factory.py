@@ -19,9 +19,10 @@ from typing import List
 
 from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
-from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
+from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
+from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.run_context.utils.external_agent_parsing import ExternalAgentParsing
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.session.async_direct_agent_session import AsyncDirectAgentSession
@@ -78,13 +79,12 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
         Note: we need our "temp" storage to be checked last,
         because in the general case this might involve querying external storage, which is potentially slow.
         """
-        temp_name: str = "temp"
         networks_order: List[str] = []
         for storage_name in network_storage_dict.keys():
-            if storage_name != temp_name:
+            if storage_name != StorageClass.TEMP:
                 networks_order.append(storage_name)
-        if temp_name in network_storage_dict:
-            networks_order.append(temp_name)
+        if StorageClass.TEMP in network_storage_dict:
+            networks_order.append(StorageClass.TEMP)
         return networks_order
 
     def create_session_from_location_dict(self, agent_location: Dict[str, str],
