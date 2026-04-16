@@ -25,8 +25,7 @@ class StorageClass:
 
     PUBLIC: str = "public"          # The default - listed in Concierge
     PROTECTED: str = "protected"    # Not listed in Concierge, but still accessible
-    PERIODIC: str = "periodic"      # Not listed in Concierge, reserved for periodic events
     TEMP: str = "temp"              # Not listed in Concierge, reserved for temporary networks that expire
 
     # Note: "temp" not listed here because it is so unlike everything else.
-    ALL_PERMANENT: List[str] = [PUBLIC, PROTECTED, PERIODIC]
+    ALL_PERMANENT: List[str] = [PUBLIC, PROTECTED]
