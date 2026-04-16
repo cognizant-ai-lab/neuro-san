@@ -39,7 +39,7 @@ class PeriodicManifestDictConfigFilter(ConfigFilter):
     # See https://en.wikipedia.org/wiki/Cron , https://crontab.cronhub.io/ , https://github.com/pallets-eco/croniter
     ONCE_A_MINUTE: str = "*/1 * * * * *"
 
-    DEFAULT_CRON_SPEC: str = ONCE_A_MINUTE
+    DEFAULT_CRON_SCHEDULE: str = ONCE_A_MINUTE
 
     def filter_config(self, basis_config: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -59,22 +59,22 @@ class PeriodicManifestDictConfigFilter(ConfigFilter):
             "interactions": [
                 {
                     "enable": True,
-                    "cron_spec": self.DEFAULT_CRON_SPEC,
+                    "cron_schedule": self.DEFAULT_CRON_SCHEDULE,
                     "text": "Do your thing",
                     "sly_data": {}
                 }
             ]
         }
 
-        # First pass. Maybe populate with template or single cron_spec string.
+        # First pass. Maybe populate with template or single cron_schedule string.
         value: Any = basis_config.get(StorageClass.PERIODIC)
         if isinstance(value, bool):
             if not value:
                 # Just be sure we keep this whole thing off, keep the false value.
                 return basis_config
         elif isinstance(value, str):
-            # Take the value as the cron_spec for periodicity
-            template["interactions"][0]["cron_spec"] = value
+            # Take the value as the cron_schedule for periodicity
+            template["interactions"][0]["cron_schedule"] = value
         elif isinstance(value, dict):
             if "interactions" not in value:
                 # Take the dictionary value and merge it onto the template
