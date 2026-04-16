@@ -18,6 +18,7 @@
 from leaf_common.config.config_filter_chain import ConfigFilterChain
 
 from neuro_san.internals.graph.persistence.mcp_manifest_dict_config_filter import McpManifestDictConfigFilter
+from neuro_san.internals.graph.persistence.periodic_manifest_dict_config_filter import PeriodicManifestDictConfigFilter
 
 
 class ManifestDictFilterChain(ConfigFilterChain):
@@ -33,3 +34,4 @@ class ManifestDictFilterChain(ConfigFilterChain):
 
         # Order matters
         self.register(McpManifestDictConfigFilter())
+        self.register(PeriodicManifestDictConfigFilter())

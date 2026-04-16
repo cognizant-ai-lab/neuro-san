@@ -92,6 +92,6 @@ class ManifestDictConfigFilter(ConfigFilter):
                 continue
 
             # Apply the filter chain to the basis dictionary
-            filtered[key] = entry_filter_chain.filter(expanded_value)
+            filtered[key] = entry_filter_chain.filter_config(expanded_value)
 
         return filtered
