@@ -283,7 +283,7 @@ class ServerMainLoop:
         # Now - our http server is created and listens to updates of network_storage
         # Perform the initial setup
         network_storage_dict: Dict[str, AgentNetworkStorage] = self.server_context.get_network_storage_dict()
-        for storage_class in StorageClass.ALL:
+        for storage_class in StorageClass.ALL_PERMANENT:
             storage: AgentNetworkStorage = network_storage_dict.get(storage_class)
             storage.setup_agent_networks(self.agent_networks.get(storage_class))
 

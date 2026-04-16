@@ -29,4 +29,4 @@ class StorageClass:
     TEMP: str = "temp"              # Not listed in Concierge, reserved for temporary networks that expire
 
     # Note: "temp" not listed here because it is so unlike everything else.
-    ALL: List[str] = [PUBLIC, PROTECTED, PERIODIC]
+    ALL_PERMANENT: List[str] = [PUBLIC, PROTECTED, PERIODIC]

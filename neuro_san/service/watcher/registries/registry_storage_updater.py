@@ -110,7 +110,7 @@ class RegistryStorageUpdater(AbstractStorageUpdater):
 
         agent_networks: Dict[str, Dict[str, AgentNetwork]] = RegistryManifestRestorer(self.manifest_path).restore()
 
-        for storage_class in StorageClass.ALL:
+        for storage_class in StorageClass.ALL_PERMANENT:
             storage: AgentNetworkStorage = self.network_storage_dict.get(storage_class)
             storage.setup_agent_networks(agent_networks.get(storage_class))
 

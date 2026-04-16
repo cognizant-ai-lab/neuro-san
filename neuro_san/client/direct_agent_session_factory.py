@@ -62,7 +62,7 @@ class DirectAgentSessionFactory:
             "temp": ExpiringAgentNetworkStorage()
         }
 
-        for storage_class in StorageClass.ALL:
+        for storage_class in StorageClass.ALL_PERMANENT:
             storage: AgentNetworkStorage = DirectAgentStorageUtil.create_network_storage(manifest_networks,
                                                                                          storage_type=storage_class)
             self.network_storage_dict[storage_class] = storage
@@ -127,7 +127,7 @@ class DirectAgentSessionFactory:
             agent_network = restorer.restore(file_reference=agent_name)
         else:
             # Use the standard stuff available via the manifest file.
-            for storage_type in StorageClass.ALL:
+            for storage_type in StorageClass.ALL_PERMANENT:
                 storage: AgentNetworkStorage = self.network_storage_dict.get(storage_type)
                 agent_network_provider: AgentNetworkProvider = storage.get_agent_network_provider(agent_name)
                 if agent_network_provider is None:

@@ -49,7 +49,7 @@ class ServerContext:
 
         # Dictionary is string key (describing scope) to AgentNetworkStorage grouping.
         self.network_storage_dict: Dict[str, AgentNetworkStorage] = {}
-        for storage_class in StorageClass.ALL:
+        for storage_class in StorageClass.ALL_PERMANENT:
             self.network_storage_dict[storage_class] = AgentNetworkStorage()
         self.network_storage_dict[StorageClass.TEMP] = ExpiringAgentNetworkStorage()
 

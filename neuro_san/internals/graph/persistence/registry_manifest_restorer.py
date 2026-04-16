@@ -145,7 +145,7 @@ class RegistryManifestRestorer(Restorer):
         """
 
         agent_networks: Dict[str, Dict[str, AgentNetwork]] = {}
-        for storage_class in StorageClass.ALL:
+        for storage_class in StorageClass.ALL_PERMANENT:
             agent_networks[storage_class] = {}
 
         raw_restorer = RawManifestRestorer()
@@ -188,7 +188,7 @@ class RegistryManifestRestorer(Restorer):
         """
 
         agent_networks: Dict[str, Dict[str, AgentNetwork]] = {}
-        for storage_class in StorageClass.ALL:
+        for storage_class in StorageClass.ALL_PERMANENT:
             agent_networks[storage_class] = {}
 
         raw_restorer = RawManifestRestorer()
