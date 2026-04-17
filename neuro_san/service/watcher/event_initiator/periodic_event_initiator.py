@@ -50,6 +50,7 @@ class PeriodicEventInitiator(WatcherThread):
 
         while self.keep_running:
 
+            # What do we want? Events!! When do we want them?...
             now = datetime.now()
 
             # Update the next firing dictionary for all the periodic agents
