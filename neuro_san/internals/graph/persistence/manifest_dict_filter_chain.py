@@ -26,12 +26,15 @@ class ManifestDictFilterChain(ConfigFilterChain):
     ConfigFilterChain for manifest dictionary entries.
     """
 
-    def __init__(self):
+    def __init__(self, manifest_file: str, agent_network: str):
         """
         Constructor
+
+        :param manifest_file: The name of the manifest file we are processing for logging purposes
+        :param agent_network: The name of the agent network for logging purposes
         """
         super().__init__()
 
         # Order matters
         self.register(McpManifestDictConfigFilter())
-        self.register(PeriodicManifestDictConfigFilter())
+        self.register(PeriodicManifestDictConfigFilter(manifest_file, agent_network))

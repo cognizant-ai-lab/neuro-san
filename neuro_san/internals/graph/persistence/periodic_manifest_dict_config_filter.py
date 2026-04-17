@@ -41,6 +41,17 @@ class PeriodicManifestDictConfigFilter(ConfigFilter):
 
     DEFAULT_CRON_SCHEDULE: str = ONCE_A_MINUTE
 
+    def __init__(self, manifest_file: str, agent_network: str):
+        """
+        Constructor
+
+        :param manifest_file: The name of the manifest file we are processing for logging purposes
+        :param agent_network: The name of the agent network for logging purposes
+        """
+        super().__init__()
+        self.manifest_file: str = manifest_file
+        self.agent_network: str = agent_network
+
     def filter_config(self, basis_config: Dict[str, Any]) -> Dict[str, Any]:
         """
         Filters the given basis config.
