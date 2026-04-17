@@ -56,6 +56,11 @@ class PeriodicManifestDictConfigFilter(ConfigFilter):
             return basis_config
 
         template: Dict[str, Any] = {
+            # Interactions is a list of dictionaries so that we have the ability
+            # to trigger multiple interactions of the same event with different data.
+            # The idea here is that different specific interactions could correspond
+            # to different periodicity on different state-keeping instances controlled
+            # by the same event-invoked agent.
             "interactions": [
                 {
                     "enable": True,
