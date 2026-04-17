@@ -71,7 +71,7 @@ class PeriodicManifestDictConfigFilter(ConfigFilter):
             ]
         }
 
-        # First pass. Maybe populate with template or single cron_schedule string.
+        # First pass. Maybe populate with template or single False boolean saying this doesn't apply.
         value: Any = basis_config.get(StorageClass.PERIODIC)
         if isinstance(value, bool):
             if not value:
