@@ -16,6 +16,12 @@
 # END COPYRIGHT
 from typing import Any
 from typing import Dict
+from typing import List
+
+from logging import getLogger
+from logging import Logger
+
+from croniter import croniter as CronIter
 
 from leaf_common.config.config_filter import ConfigFilter
 
@@ -103,5 +109,29 @@ class PeriodicManifestDictConfigFilter(ConfigFilter):
         # anything else gets the template as-is
 
         basis_config[StorageClass.PERIODIC] = template
+
+        empty: List[Dict[str, Any]] = []
+        interactions: List[Dict[str, Any]] = template.get("interactions", empty)
+
+        # Now do late validation of chron_schedule string in each interaction
+        for index, interaction in enumerate(interactions):
+
+            cron_schedule: str = interaction.get("cron_schedule")
+            if cron_schedule is None:
+                interaction["cron_schedule"] = self.DEFAULT_CRON_SCHEDULE
+
+            elif not CronIter.is_valid(cron_schedule):
+
+                message: str = f"""
+The cron_schedule "{cron_schedule}", from the {index}th interaction for network {self.agent_network}
+in manifest {self.manifest_file}, does not pass strict validation.
+See https://github.com/pallets-eco/croniter?tab=readme-ov-file#strict-validation as to why this might happen.
+Disabling this interaction to continue.
+"""
+                logger: Logger = getLogger(self.__class__.__name__)
+                logger.warning(message)
+
+                # Disable the periodic dict for this interaction
+                interaction["enable"] = False
 
         return basis_config
