@@ -157,6 +157,9 @@ class PeriodicEventInitiator(WatcherThread):
                 next_firing_time = cron_iter.get_next()
                 new_next_firing[tuple_key] = next_firing_time
 
+                # Slow event processing might require skipping/compressing
+                # some iterator times that are in the past, but not there yet.
+
         return new_next_firing
 
     def initiate_agent_network(self, agent_network: str, periodic_config: Dict[str, Any]):
