@@ -36,6 +36,7 @@ from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
+from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.network_providers.expiring_agent_network_storage import ExpiringAgentNetworkStorage
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
@@ -62,7 +63,7 @@ class TempNetworkStorageUpdater(Startable):
 
         self.reservationist: AbstractAgentReservationist = None
         self.executor: AsyncioExecutor = None
-        self.temp_storage: ReservationsStorage = network_storage_dict.get("temp")
+        self.temp_storage: ReservationsStorage = network_storage_dict.get(StorageClass.TEMP)
         if self.temp_storage is not None:
             # If we don't have temp storage, we don't got nothin'
             # Check that the temp storage instance is indeed an ExpiringReservationsStorage,

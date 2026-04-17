@@ -53,13 +53,17 @@ class ContextTypeLlmFactory:
         """
         raise NotImplementedError
 
-    def create_llm(self, config: Dict[str, Any]) -> Any:
+    def create_llm(self, config: Dict[str, Any], sly_data: Dict[str, Any] = None) -> Any:
         """
         Create an llm instance BaseLanguageModel from the fully-specified llm config.
         :param config: The fully specified llm config from which the LLM instance
                     should be created.
+        :param sly_data: A user-provided dictionary of private data,
+                from which we might extract API keys to use for user billing.
+                Can be None indicating no API keys are provided at all and the system defaults will be used.
         :return: An llm instance native to the context type.
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
+                Can return None if required llm_config keys are not provided.
         """
         raise NotImplementedError

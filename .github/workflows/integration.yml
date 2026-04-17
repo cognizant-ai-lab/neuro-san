@@ -12,50 +12,17 @@ jobs:
   test:
     # don't run this job in sync'd clones
     if: github.repository == 'cognizant-ai-lab/neuro-san'
-    runs-on: ubuntu-latest
-    container:
-      image: python:3.12-slim
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          apt-get update && apt-get install -y shellcheck
-          pip install -r requirements-build.txt
-          pip install -r requirements.txt
-
-      - name: Show installed packages
-        run: pip freeze
-
-
-      - name: Run pytest integration tests
-        run: pytest -s --verbose -m "integration" --timer-top-n 100
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          PYTHONPATH: ${{ env.PYTHONPATH }}:.
-          AGENT_TOOL_PATH: "./neuro_san/coded_tools"
-          AGENT_MANIFEST_FILE: "./neuro_san/registries/manifest.hocon"
-
-      - name: Notify Slack on success
-        if: success()
-        uses: slackapi/slack-github-action@v1.24.0
-        with:
-          payload: |
-            {
-              "text": "✅ *Integration Tests Passed* for `${{ github.repository }}` on `${{ github.ref_name }}`"
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-
-      - name: Notify Slack on failure
-        if: failure()
-        uses: slackapi/slack-github-action@v1.24.0
-        with:
-          payload: |
-            {
-              "text": "❌ *Integration Tests Failed* for `${{ github.repository }}` on `${{ github.ref_name }}`"
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    # 1.0.0
+    uses: cognizant-ai-lab/build-common/.github/workflows/_python-quality-gate.yml@455db3cc40e9ed6a0fb9bbaf8188888c1ae315c2
+    with:
+      python-version: '3.12'
+      lint-command-override: 'true'  # no lint in this workflow
+      run-pytest: false
+      test-command-override: >-
+        export AGENT_TOOL_PATH="./neuro_san/coded_tools" &&
+        export PYTHONPATH="${PYTHONPATH:+$PYTHONPATH:}." &&
+        export AGENT_MANIFEST_FILE="./neuro_san/registries/manifest.hocon" &&
+        pytest --capture=no --verbose -m "integration" --timer-top-n 100
+    secrets:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

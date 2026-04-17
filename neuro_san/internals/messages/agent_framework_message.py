@@ -63,7 +63,13 @@ class AgentFrameworkMessage(TracedMessage):
         :param kwargs: Additional fields to pass to the superclass
         """
         super().__init__(content=content, trace_source=trace_source, **kwargs)
+
         self.chat_context: Dict[str, Any] = chat_context
+        if chat_context is None:
+            # Special case default so that the MinimalMessageFilter, which only
+            # looks for chat_context, does not fail to send the final AgentFrameworkMessage.
+            self.chat_context = {}
+
         self.sly_data: Dict[str, Any] = sly_data
         self.structure: Dict[str, Any] = structure
 

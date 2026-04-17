@@ -269,46 +269,12 @@
         "knowledge_cutoff": "11/30/2023",
     },
 
-    "gpt-4-turbo-preview": {
-        # FYI: LLMs that do not support tools cannot be used as front-men or branch nodes
-        # Per OpenAI, marked for shutdown on 03/26/2026.
-        "use_model_name": "gpt-4-0125-preview",
-    },
-    "gpt-4-0125-preview": {
-        # FYI: LLMs that do not support tools cannot be used as front-men or branch nodes
-        # Per OpenAI, marked for shutdown on 03/26/2026.
-        "class": "openai",
-        "model_info_url": "https://platform.openai.com/docs/models/gpt-4-turbo",
-        "modalities": {
-            "input": [ "text" ],
-            "output": [ "text" ],
-        },
-        "capabilities": [ ],
-        "context_window_size": 128000,
-        "max_output_tokens": 4096,
-        "knowledge_cutoff": "11/30/2023",
-    },
-
     "gpt-4": {
         # FYI: LLMs that do not support tools cannot be used as front-men or branch nodes
         "use_model_name": "gpt-4-0613",
     },
     "gpt-4-0613": {
         # FYI: LLMs that do not support tools cannot be used as front-men or branch nodes
-        "class": "openai",
-        "model_info_url": "https://platform.openai.com/docs/models/gpt-4",
-        "modalities": {
-            "input": [ "text" ],
-            "output": [ "text" ],
-        },
-        "capabilities": [ ],
-        "context_window_size": 8192,
-        "max_output_tokens": 8192,
-        "knowledge_cutoff": "11/30/2023",
-    },
-    "gpt-4-0314": {
-        # FYI: LLMs that do not support tools cannot be used as front-men or branch nodes
-        # Per OpenAI, marked for shutdown on 03/26/2026.
         "class": "openai",
         "model_info_url": "https://platform.openai.com/docs/models/gpt-4",
         "modalities": {
@@ -353,20 +319,6 @@
         },
         "capabilities": [],
         "context_window_size": 16384,
-        "max_output_tokens": 4096,
-        "knowledge_cutoff": "08/31/2021",
-    },
-    "gpt-3.5-turbo-instruct": {
-        # FYI: LLMs that do not support tools cannot be used as front-men or branch nodes
-        # Per OpenAI, marked for shutdown on 09/28/2026.
-        "class": "openai",
-        "model_info_url": "https://platform.openai.com/docs/models/gpt-3.5-turbo",
-        "modalities": {
-            "input": [ "text" ],
-            "output": [ "text" ],
-        },
-        "capabilities": [],
-        "context_window_size": 4096,
         "max_output_tokens": 4096,
         "knowledge_cutoff": "08/31/2021",
     },
@@ -444,7 +396,7 @@
         "use_model_name": "claude-sonnet-4-6"
     },
     "claude-opus": {
-        "use_model_name": "claude-opus-4-6"
+        "use_model_name": "claude-opus-4-7"
     },
 
     "claude-sonnet-4-0": {
@@ -595,6 +547,22 @@
         "context_window_size": 200000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "08/2025",
+        # https://platform.claude.com/docs/en/about-claude/pricing
+        "price_per_1k_input_tokens": 0.005,
+        "price_per_1k_output_tokens": 0.025,
+    },
+    "claude-opus-4-7": {
+        "class": "anthropic",
+        "model_info_url": "https://platform.claude.com/docs/en/about-claude/models/overview",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "01/2026",
         # https://platform.claude.com/docs/en/about-claude/pricing
         "price_per_1k_input_tokens": 0.005,
         "price_per_1k_output_tokens": 0.025,
@@ -1078,12 +1046,15 @@
                 # The following parameters are for reasoning models only.
                 # Supported models
                 # Extended thinking is supported in the following models:
+                # Claude Opus 4.6 (claude-opus-4-6)
+                # Claude Sonnet 4.6 (claude-sonnet-4-6)
                 # Claude Sonnet 4.5 (claude-sonnet-4-5-20250929)
-                # Claude Sonnet 4 (claude-sonnet-4-20250514)
-                # Claude Sonnet 3.7 (claude-3-7-sonnet-20250219)
-                # Claude Haiku 4.5 (claude-haiku-4-5-20251001)
+                # Claude Opus 4.5 (claude-opus-4-5-20251101)
                 # Claude Opus 4.1 (claude-opus-4-1-20250805)
+                # Claude Haiku 4.5 (claude-haiku-4-5-20251001)
+                # Claude Sonnet 4 (claude-sonnet-4-20250514)
                 # Claude Opus 4 (claude-opus-4-20250514)
+                # Note: Claude Opus 4.7 does NOT support extended thinking (uses adaptive thinking instead)
                 "thinking": null, # Parameters for Claude reasoning, e.g., {"type": "enabled", "budget_tokens": 10_000}
             }
         },

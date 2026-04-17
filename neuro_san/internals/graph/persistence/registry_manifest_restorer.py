@@ -34,13 +34,14 @@ from leaf_common.config.file_of_class import FileOfClass
 from leaf_common.persistence.interface.restorer import Restorer
 
 from neuro_san import REGISTRIES_DIR
-from neuro_san.internals.interfaces.agent_name_mapper import AgentNameMapper
 from neuro_san.internals.graph.persistence.agent_filetree_mapper import AgentFileTreeMapper
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
 from neuro_san.internals.graph.persistence.manifest_filter_chain import ManifestFilterChain
 from neuro_san.internals.graph.persistence.raw_manifest_restorer import RawManifestRestorer
 from neuro_san.internals.graph.persistence.served_manifest_config_filter import ServedManifestConfigFilter
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.interfaces.agent_name_mapper import AgentNameMapper
+from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.validation.network.manifest_network_validator import ManifestNetworkValidator
 
 
@@ -143,10 +144,9 @@ class RegistryManifestRestorer(Restorer):
         :return: a nested map of storage type -> (mapping of name -> agent networks)
         """
 
-        agent_networks: Dict[str, Dict[str, AgentNetwork]] = {
-            "public": {},
-            "protected": {},
-        }
+        agent_networks: Dict[str, Dict[str, AgentNetwork]] = {}
+        for storage_class in StorageClass.ALL_PERMANENT:
+            agent_networks[storage_class] = {}
 
         raw_restorer = RawManifestRestorer()
         raw_manifest: Dict[str, Any] = raw_restorer.restore(file_reference=manifest_file)
@@ -187,10 +187,9 @@ class RegistryManifestRestorer(Restorer):
         :return: a nested map of storage type -> (mapping of name -> agent networks)
         """
 
-        agent_networks: Dict[str, Dict[str, AgentNetwork]] = {
-            "public": {},
-            "protected": {},
-        }
+        agent_networks: Dict[str, Dict[str, AgentNetwork]] = {}
+        for storage_class in StorageClass.ALL_PERMANENT:
+            agent_networks[storage_class] = {}
 
         raw_restorer = RawManifestRestorer()
         raw_manifest: Dict[str, Any] = await raw_restorer.async_restore(file_reference=manifest_file)
@@ -260,9 +259,9 @@ class RegistryManifestRestorer(Restorer):
             agent_network.set_as_mcp_tool()
 
         # Figure out where we want to put the network per the network's manifest dictionary
-        storage: str = "public"
-        if not manifest_dict.get("public"):
-            storage = "protected"
+        storage: str = StorageClass.PUBLIC
+        if not manifest_dict.get(StorageClass.PUBLIC):
+            storage = StorageClass.PROTECTED
 
         agent_networks[storage][network_name] = agent_network
 
