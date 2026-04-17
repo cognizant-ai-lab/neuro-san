@@ -43,6 +43,7 @@ from neuro_san.service.http.server.http_server import DEFAULT_MAX_CONCURRENT_REQ
 from neuro_san.service.http.server.http_server import DEFAULT_REQUEST_LIMIT
 from neuro_san.service.http.server.http_server import HttpServer
 from neuro_san.service.interfaces.agent_server import AgentServer
+from neuro_san.service.watcher.event_initiator.periodic_event_initiator import PeriodicEventInitiator
 from neuro_san.service.watcher.event_work.event_work_monitor import EventWorkMonitor
 from neuro_san.service.watcher.main_loop.storage_watcher import StorageWatcher
 from neuro_san.service.watcher.temp_networks.temp_network_storage_updater import TempNetworkStorageUpdater
@@ -213,6 +214,7 @@ class ServerMainLoop:
         }
 
         self.agent_networks = manifest_agent_networks
+        self.server_context.set_periodic_configs(manifest_restorer.get_periodic_configs())
 
     def _get_default_openapi_spec_path(self) -> str:
         """
@@ -265,6 +267,10 @@ class ServerMainLoop:
         # Create the event work monitor:
         event_work_monitor = EventWorkMonitor(self.server_context)
         components_to_start.append(event_work_monitor)
+
+        # Create the periodic event initiator
+        event_initiator = PeriodicEventInitiator(self.server_context)
+        components_to_start.append(event_initiator)
 
         # Create HTTP server;
         self.http_server = HttpServer(

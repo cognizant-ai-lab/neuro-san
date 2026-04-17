@@ -15,6 +15,7 @@
 #
 # END COPYRIGHT
 
+from typing import Any
 from typing import Dict
 
 from janus import Queue
@@ -31,6 +32,7 @@ from neuro_san.service.utils.server_status import ServerStatus
 from neuro_san.service.utils.mcp_server_context import McpServerContext
 
 
+# pylint: disable=too-many-instance-attributes
 class ServerContext:
     """
     Class that contains global-ish state for each instance of a server.
@@ -52,6 +54,8 @@ class ServerContext:
         for storage_class in StorageClass.ALL_PERMANENT:
             self.network_storage_dict[storage_class] = AgentNetworkStorage()
         self.network_storage_dict[StorageClass.TEMP] = ExpiringAgentNetworkStorage()
+
+        self.periodic_configs: Dict[str, Dict[str, Any]] = {}
 
     def set_temp_storage_max_items(self, max_items: int):
         """
@@ -123,3 +127,15 @@ class ServerContext:
         :return: The event work queue
         """
         return self.event_work_queue
+
+    def set_periodic_configs(self, periodic_configs: Dict[str, Dict[str, Any]]):
+        """
+        Sets the periodic configs
+        """
+        self.periodic_configs = periodic_configs
+
+    def get_periodic_configs(self) -> Dict[str, Dict[str, Any]]:
+        """
+        :return: the periodic configs
+        """
+        return self.periodic_configs
