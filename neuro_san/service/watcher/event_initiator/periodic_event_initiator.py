@@ -52,9 +52,10 @@ class PeriodicEventInitiator(WatcherThread):
 
             # What do we want? Events!! When do we want them?...
             now = datetime.now()
+            start: datetime = now
 
             # Update the next firing dictionary for all the periodic agents
-            next_firing = self.update_next_firing(now, iterators, next_firing)
+            next_firing = self.update_next_firing(start, iterators, next_firing)
 
             fire_these_now: Dict[str, Dict[str, Any]] = {}
 
@@ -65,7 +66,7 @@ class PeriodicEventInitiator(WatcherThread):
             for tuple_key, next_firing_time in next_firing.items():
 
                 # If the next firing time is in the past, record that we need to initiate the agent
-                if next_firing_time < now:
+                if next_firing_time < start:
                     agent_network: str = tuple_key[0]
                     periodic_config: Dict[str, Any] = tuple_key[1]
                     fire_these_now[agent_network] = periodic_config
@@ -74,8 +75,25 @@ class PeriodicEventInitiator(WatcherThread):
             for agent_network, periodic_config in fire_these_now.items():
                 self.initiate_agent_network(agent_network, periodic_config)
 
-            # Can be more efficient here.
-            sleep(self.update_period_in_seconds)
+            self.maybe_sleep(start, verbose=True)
+
+    def maybe_sleep(self, start: datetime, verbose: bool = False):
+        """
+        Maybe sleep
+
+        :param start: The start datetime of the iteration
+        :param verbose: If true, log when we took longer than the required interval
+        """
+        finish: datetime = datetime.now()
+        duration: datetime = finish - start
+        duration_seconds: float = duration.total_seconds()
+        if duration_seconds > self.update_period_in_seconds:
+            if verbose:
+                self.logger.warning("%s took %f seconds", self.__class__.__name__, duration_seconds)
+        elif duration_seconds < self.update_period_in_seconds:
+            # Try to be more efficient w/rt getting to the next iteration
+            remaining_seconds: float = self.update_period_in_seconds - duration_seconds
+            sleep(remaining_seconds)
 
     def set_up_iterators(
                 self,
