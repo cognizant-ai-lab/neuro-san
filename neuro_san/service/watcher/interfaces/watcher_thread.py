@@ -15,9 +15,11 @@
 #
 # END COPYRIGHT
 
+from datetime import datetime
 from logging import getLogger
 from logging import Logger
 from threading import Thread
+from time import sleep
 
 from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.service.utils.server_context import ServerContext
@@ -53,6 +55,24 @@ class WatcherThread(Startable):
         Main loop
         """
         raise NotImplementedError
+
+    def maybe_sleep_at_end_of_iteration(self, start: datetime, verbose: bool = False):
+        """
+        Maybe sleep at the end of an iteration.
+
+        :param start: The start datetime of the iteration
+        :param verbose: If true, log when we took longer than the required interval
+        """
+        finish: datetime = datetime.now()
+        duration: datetime = finish - start
+        duration_seconds: float = duration.total_seconds()
+        if duration_seconds > self.update_period_in_seconds:
+            if verbose:
+                self.logger.warning("%s took %f seconds", self.__class__.__name__, duration_seconds)
+        elif duration_seconds < self.update_period_in_seconds:
+            # Try to be more efficient w/rt getting to the next iteration
+            remaining_seconds: float = self.update_period_in_seconds - duration_seconds
+            sleep(remaining_seconds)
 
     def stop(self):
         """
