@@ -56,6 +56,12 @@ class WatcherThread(Startable):
         """
         raise NotImplementedError
 
+    def should_keep_running(self) -> bool:
+        """
+        :return: True if this instance should keep running. False otherwise.
+        """
+        return self.keep_running
+
     def maybe_sleep_at_end_of_iteration(self, start: datetime, verbose: bool = False):
         """
         Maybe sleep at the end of an iteration.

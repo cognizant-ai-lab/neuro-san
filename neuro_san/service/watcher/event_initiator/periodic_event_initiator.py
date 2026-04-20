@@ -47,11 +47,10 @@ class PeriodicEventInitiator(WatcherThread):
 
         next_firing: Dict[Tuple[str, Dict[str, Any]], datetime] = {}
 
-        while self.keep_running:
+        while self.should_keep_running():
 
-            # What do we want? Events!! When do we want them?...
-            now = datetime.now()
-            start: datetime = now
+            # Time how long it takes to process the iteration for finer-grained sleep() adjustments at end.
+            start: datetime = datetime.now()
 
             # Update the next firing dictionary for all the periodic agents
             next_firing = self.update_next_firing(start, iterators, next_firing)
