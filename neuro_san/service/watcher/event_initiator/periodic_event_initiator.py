@@ -241,6 +241,8 @@ class PeriodicEventInitiator(WatcherThread):
         # Get any request metadata from the interaction
         empty_dict: Dict[str, Any] = {}
         metadata: Dict[str, Any] = interaction.get("metadata", empty_dict)
+        if metadata.get("user_id") is None:
+            metadata["user_id"] = "system"
 
         authorized: bool = False
         service_provider: AsyncAgentServiceProvider = None
