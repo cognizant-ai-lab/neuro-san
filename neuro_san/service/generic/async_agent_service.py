@@ -118,6 +118,12 @@ class AsyncAgentService:
         self.llm_factory.load()
         self.toolbox_factory.load()
 
+    def get_agent_network(self) -> AgentNetwork:
+        """
+        :return: The agent network for this service
+        """
+        return self.agent_network_provider.get_agent_network()
+
     def get_request_count(self) -> int:
         """
         :return: The number of currently active requests

@@ -53,6 +53,7 @@ class PeriodicEventInitiator(WatcherThread):
         Constructor
         """
         super().__init__(server_context)
+        self.verbose: bool = True
         self.executor = AsyncioExecutor()
         # Probably need to set up logging in this guy
 
@@ -73,6 +74,10 @@ class PeriodicEventInitiator(WatcherThread):
 
         # Keep track of the next firing times for each index in the agent_interaction_list
         next_firing: Dict[int, datetime] = {}
+        closest_firing: datetime = datetime.max
+
+        # Update the next firing times
+        next_firing, closest_firing = self.update_next_firing(now, agent_interaction_list, next_firing, closest_firing)
 
         while self.should_keep_running():
 
@@ -86,7 +91,8 @@ class PeriodicEventInitiator(WatcherThread):
             self.fire_all_these_now(fire_these_now)
 
             # Update the next firing dictionary for all the periodic agents
-            next_firing = self.update_next_firing(start, agent_interaction_list, next_firing)
+            next_firing, closest_firing = self.update_next_firing(start, agent_interaction_list,
+                                                                  next_firing, closest_firing)
 
             # Optimize sleeping for the next iteration
             self.maybe_sleep_at_end_of_iteration(start, verbose=True)
@@ -146,7 +152,8 @@ class PeriodicEventInitiator(WatcherThread):
                 self,
                 now: datetime,
                 agent_interaction_list: List[Dict[str, Any]],
-                next_firing: Dict[int, datetime]
+                next_firing: Dict[int, datetime],
+                last_closest_firing: datetime
             ) -> Dict[int, datetime]:
         """
         Updates the next firing times
@@ -154,10 +161,16 @@ class PeriodicEventInitiator(WatcherThread):
         :param now: The current time
         :param agent_interaction_list: A list of single agent interactions
         :param next_firing: A mapping of agent_interaction_list index -> datetime of next firing
+        :param last_closest_firing: The last closest firing
         :return: A new next firing mapping
         """
         # What we will return
         new_next_firing: Dict[int, datetime] = {}
+
+        # Set up for figuring out the closest firing
+        closest_firing: datetime = last_closest_firing
+        if closest_firing < now:
+            closest_firing = datetime.max
 
         # Loop through the agent interactions
         for index, agent_interaction in enumerate(agent_interaction_list):
@@ -169,6 +182,8 @@ class PeriodicEventInitiator(WatcherThread):
                 # If the next firing time is in the future, don't disturb it.
                 if next_firing_time > now:
                     new_next_firing[index] = next_firing_time
+                    if next_firing_time < closest_firing:
+                        closest_firing = next_firing_time
                     continue
 
             # Get a new next firing for this agent_interaction
@@ -178,10 +193,16 @@ class PeriodicEventInitiator(WatcherThread):
             next_firing_time = cron_iter.get_next(datetime)
             new_next_firing[index] = next_firing_time
 
+            if next_firing_time < closest_firing:
+                closest_firing = next_firing_time
+
             # Slow event processing might require skipping/compressing
             # some iterator times that are in the past, but not there yet.
 
-        return new_next_firing
+        if self.verbose and closest_firing != last_closest_firing:
+            self.logger.info("Next event firing is at %s", closest_firing)
+
+        return new_next_firing, closest_firing
 
     def figure_which_to_fire(
                 self,
@@ -275,10 +296,10 @@ class PeriodicEventInitiator(WatcherThread):
 
         # Get the agent network so we can be sure it has the right invocation set
         agent_service: AsyncAgentService = service_provider.get_service()
-        agent_network: AgentNetwork = service_provider.get_inspector()
+        agent_network: AgentNetwork = agent_service.get_agent_network()
         invocation: str = InvocationUtil.get_invocation(agent_network)
         if invocation != Invocations.EVENT:
-            self.logger.warning("Network %s is not configured for event invocation, some work may not complete",
+            self.logger.warning("Network %s is not configured for event invocation. Some work may not complete.",
                                 agent_network_name)
 
         # Perform a streaming_chat() on the agent with the formulated request
