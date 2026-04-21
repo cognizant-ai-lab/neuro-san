@@ -26,7 +26,7 @@ from leaf_server_common.server.request_logger import RequestLogger
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.service.generic.agent_service import AgentService
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
-from neuro_san.service.utils.server_context import ServerContext
+from neuro_san.service.interfaces.server_context_lite import ServerContextLite
 
 
 # pylint: disable=too-many-instance-attributes
@@ -43,7 +43,7 @@ class AgentServiceProvider:
                  agent_name: str,
                  agent_network_provider: AgentNetworkProvider,
                  server_logging: AgentServerLogging,
-                 server_context: ServerContext):
+                 server_context: ServerContextLite):
         """
         Constructor.
         :param request_logger: The instance of the RequestLogger that helps
@@ -65,7 +65,7 @@ class AgentServiceProvider:
         self.agent_network_provider: AgentNetworkProvider = agent_network_provider
         self.agent_name: str = agent_name
         self.lock: Lock = Lock()
-        self.server_context: ServerContext = server_context
+        self.server_context: ServerContextLite = server_context
         self.service_instance: AgentService = None
 
     def get_service(self) -> AgentService:
