@@ -83,7 +83,8 @@ class PeriodicManifestDictConfigFilter(ConfigFilter):
                     "enable": True,
                     "cron_schedule": self.DEFAULT_CRON_SCHEDULE,
                     "text": "Do your thing",
-                    "sly_data": {}
+                    "sly_data": {},
+                    "metadata": {},
                 }
             ]
         }

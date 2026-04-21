@@ -16,15 +16,24 @@
 # END COPYRIGHT
 
 from typing import Any
+from typing import AsyncGenerator
+from typing import Awaitable
 from typing import Dict
 from typing import List
 from typing import Tuple
 
+from asyncio import Task
 from datetime import datetime
 
 from croniter import croniter as CronIter
 
+from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
+
 from neuro_san.internals.graph.persistence.periodic_manifest_dict_config_filter import PeriodicManifestDictConfigFilter
+from neuro_san.internals.messages.chat_message_type import ChatMessageType
+from neuro_san.service.generic.async_agent_service import AsyncAgentService
+from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
+from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
 from neuro_san.service.watcher.interfaces.watcher_thread import WatcherThread
 
 
@@ -36,6 +45,14 @@ class PeriodicEventInitiator(WatcherThread):
     DEF: Need to be sure a storage watcher update can trigger changes in here.
     """
 
+    def __init__(self, server_context: Any):
+        """
+        Constructor
+        """
+        super().__init__(server_context)
+        self.executor = AsyncioExecutor()
+        # Probably need to set up logging in this guy
+
     def run(self):
         """
         Main loop
@@ -44,6 +61,8 @@ class PeriodicEventInitiator(WatcherThread):
 
         now: datetime = datetime.now()
         iterators: Dict[str, Dict[Dict[str, Any], CronIter]] = self.set_up_iterators(now, periodic_configs)
+
+        self.executor.start()
 
         next_firing: Dict[Tuple[str, Dict[str, Any]], datetime] = {}
 
@@ -70,10 +89,12 @@ class PeriodicEventInitiator(WatcherThread):
                     fire_these_now[agent_network] = periodic_config
 
             # Fire off the periodic agents we need to for this iteration
-            for agent_network, periodic_config in fire_these_now.items():
-                self.initiate_agent_network(agent_network, periodic_config)
+            self.fire_all_these_now(fire_these_now)
 
+            # Optimize sleeping for the next iteration
             self.maybe_sleep_at_end_of_iteration(start, verbose=True)
+
+        self.executor.shutdown()
 
     def set_up_iterators(
                 self,
@@ -161,12 +182,56 @@ class PeriodicEventInitiator(WatcherThread):
 
         return new_next_firing
 
-    def initiate_agent_network(self, agent_network: str, periodic_config: Dict[str, Any]):
+    def fire_all_these_now(self, fire_these_now: Dict[str, Dict[str, Any]]):
         """
-        Pokes the given agent_network with input described by the periodic_config
+        Pokes the given agent_network keys with input described by
+        the periodic_config values.
 
         :param agent_network: The agent_network to poke
         :param periodic_config: The periodic config
         """
-        _ = periodic_config
-        self.logger.info("Poking agent_network: %s", agent_network)
+        if not fire_these_now:
+            return
+
+        for agent_network, periodic_config in fire_these_now.items():
+            coroutine: Awaitable = self.initiate_event(agent_network, periodic_config)
+            _: Task = self.executor.create_task(coroutine, self.__class__.__name__)
+            # Note that we don't really care when the task completes, just as long as it runs.
+
+    async def initiate_event(self, agent_network: str, periodic_config: Dict[str, Any]):
+        """
+        Pokes the given agent_network with the periodic_config
+
+        :param agent_network: The agent_network to poke
+        :param periodic_config: The periodic config to use for the event
+        """
+        agent_authorizer: AgentAuthorizer = self.server_context.get_agent_authorizer()
+
+        empty_dict: Dict[str, Any] = {}
+        metadata: Dict[str, Any] = periodic_config.get("metadata", empty_dict)
+
+        authorized: bool = False
+        service_provider: AsyncAgentServiceProvider = None
+        authorized, service_provider = await agent_authorizer.allow_agent(agent_network, metadata)
+        if not authorized:
+            self.logger.warning("Not authorized to initiate periodic event for agent_network %s", agent_network)
+            return
+
+        agent_service: AsyncAgentService = service_provider.get_service()
+
+        request_dict: Dict[str, Any] = {
+            "user_message": {
+                "type": ChatMessageType.HUMAN.name,
+                "text": periodic_config.get("text", ""),
+                "sly_data": periodic_config.get("sly_data", empty_dict),
+                "chat_filter": {
+                    "chat_filter_type": "MINIMAL"   # Always minimal for event invocation.
+                }
+            }
+        }
+
+        results: AsyncGenerator[Dict[str, Any], None] = await agent_service.streaming_chat(request_dict, metadata)
+        async for result_dict in results:
+            # We don't care about the results.
+            # We just want to poke the agent and wait for it to be done.
+            _: Dict[str, Any] = result_dict

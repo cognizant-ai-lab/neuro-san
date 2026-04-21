@@ -28,12 +28,14 @@ from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.internals.network_providers.expiring_agent_network_storage \
     import ExpiringAgentNetworkStorage
+from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
+from neuro_san.service.interfaces.server_context_lite import ServerContextLite
 from neuro_san.service.utils.server_status import ServerStatus
 from neuro_san.service.utils.mcp_server_context import McpServerContext
 
 
 # pylint: disable=too-many-instance-attributes
-class ServerContext:
+class ServerContext(ServerContextLite):
     """
     Class that contains global-ish state for each instance of a server.
     """
@@ -56,6 +58,7 @@ class ServerContext:
         self.network_storage_dict[StorageClass.TEMP] = ExpiringAgentNetworkStorage()
 
         self.periodic_configs: Dict[str, Dict[str, Any]] = {}
+        self.agent_authorizer: AgentAuthorizer = None
 
     def set_temp_storage_max_items(self, max_items: int):
         """
@@ -139,3 +142,15 @@ class ServerContext:
         :return: the periodic configs
         """
         return self.periodic_configs
+
+    def set_agent_authorizer(self, agent_authorizer: AgentAuthorizer):
+        """
+        Sets the periodic configs
+        """
+        self.agent_authorizer = agent_authorizer
+
+    def get_agent_authorizer(self) -> AgentAuthorizer:
+        """
+        :return: the agent authorizer instance
+        """
+        return self.agent_authorizer
