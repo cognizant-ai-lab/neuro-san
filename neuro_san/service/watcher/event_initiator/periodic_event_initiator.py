@@ -269,7 +269,8 @@ class PeriodicEventInitiator(WatcherThread):
 
         # Get any request metadata from the interaction
         empty_dict: Dict[str, Any] = {}
-        metadata: Dict[str, Any] = interaction.get("metadata", empty_dict)
+        interaction_metadata: Dict[str, Any] = interaction.get("metadata") or empty_dict
+        metadata: Dict[str, Any] = dict(interaction_metadata)
         if metadata.get("user_id") is None:
             metadata["user_id"] = "system"
 
