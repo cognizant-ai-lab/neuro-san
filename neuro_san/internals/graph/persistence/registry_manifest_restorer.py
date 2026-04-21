@@ -263,9 +263,8 @@ class RegistryManifestRestorer(Restorer):
         storage: str = StorageClass.PUBLIC
         if not manifest_dict.get(StorageClass.PUBLIC):
             storage = StorageClass.PROTECTED
-        if manifest_dict.get(StorageClass.PERIODIC, False):
-            storage = StorageClass.PERIODIC
-            self.periodic_configs[network_name] = manifest_dict[StorageClass.PERIODIC]
+        if manifest_dict.get("periodic", False):
+            self.periodic_configs[network_name] = manifest_dict["periodic"]
 
         agent_networks[storage][network_name] = agent_network
 

@@ -25,8 +25,6 @@ from croniter import croniter as CronIter
 
 from leaf_common.config.config_filter import ConfigFilter
 
-from neuro_san.internals.interfaces.storage_class import StorageClass
-
 
 class PeriodicManifestDictConfigFilter(ConfigFilter):
     """
@@ -68,8 +66,8 @@ class PeriodicManifestDictConfigFilter(ConfigFilter):
                 policy encapsulated by the implementation
         """
 
-        if StorageClass.PERIODIC not in basis_config:
-            basis_config[StorageClass.PERIODIC] = False
+        if "periodic" not in basis_config:
+            basis_config["periodic"] = False
             return basis_config
 
         template: Dict[str, Any] = {
@@ -93,7 +91,7 @@ class PeriodicManifestDictConfigFilter(ConfigFilter):
         }
 
         # First pass. Maybe populate with template or single False boolean saying this doesn't apply.
-        value: Any = basis_config.get(StorageClass.PERIODIC)
+        value: Any = basis_config.get("periodic")
         if isinstance(value, bool):
             if not value:
                 # Just be sure we keep this whole thing off, keep the false value.
@@ -112,7 +110,7 @@ class PeriodicManifestDictConfigFilter(ConfigFilter):
                 template.update(value)
         # anything else gets the template as-is
 
-        basis_config[StorageClass.PERIODIC] = template
+        basis_config["periodic"] = template
 
         logger: Logger = getLogger(self.__class__.__name__)
 

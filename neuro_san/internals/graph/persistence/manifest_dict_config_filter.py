@@ -70,7 +70,7 @@ class ManifestDictConfigFilter(ConfigFilter):
                 "serve": True,
                 StorageClass.PUBLIC: True,
                 "mcp": self.MCP_DEFAULT_MODE,
-                StorageClass.PERIODIC: False
+                "periodic": False
             }
 
             # Traditional, easy entry in a manifest file.
