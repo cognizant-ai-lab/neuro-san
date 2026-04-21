@@ -34,6 +34,7 @@ from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
 from neuro_san.service.watcher.interfaces.watcher_thread import WatcherThread
+from neuro_san.service.utils.server_context import ServerContext
 
 
 class PeriodicEventInitiator(WatcherThread):
@@ -44,7 +45,7 @@ class PeriodicEventInitiator(WatcherThread):
     DEF: Need to be sure a storage watcher update can trigger changes in here.
     """
 
-    def __init__(self, server_context: Any):
+    def __init__(self, server_context: ServerContext):
         """
         Constructor
         """
