@@ -78,8 +78,7 @@ class PeriodicEventInitiator(WatcherThread):
             next_firing = self.update_next_firing(start, agent_interaction_list, next_firing)
 
             # Figure out which periodic agents need to fire now
-            fire_these_now: Dict[str, Dict[str, Any]] = self.figure_which_to_fire(start, agent_interaction_list,
-                                                                                  next_firing)
+            fire_these_now: List[Dict[str, Any]] = self.figure_which_to_fire(start, agent_interaction_list, next_firing)
 
             # Fire off the periodic agents we need to for this iteration
             self.fire_all_these_now(fire_these_now)
@@ -126,7 +125,7 @@ class PeriodicEventInitiator(WatcherThread):
 
                 # Create an agent interaction dictionary for the list
                 agent_interaction: Dict[str, Any] = {
-                    "agent_interaction": agent_network,
+                    "agent_network": agent_network,
                     "interaction": interaction,
                     "cron_iter": iterator
                 }
@@ -180,17 +179,17 @@ class PeriodicEventInitiator(WatcherThread):
                 now: datetime,
                 agent_interaction_list: List[Dict[str, Any]],
                 next_firing: Dict[int, datetime]
-            ) -> Dict[str, Dict[str, Any]]:
+            ) -> List[Dict[str, Any]]:
         """
         Figures out which periodic agent interactions need to fire now.
 
         :param now: The datetime corresponding to the current moment
         :param agent_interaction_list: A list of single agent interactions
         :param next_firing: A mapping of agent_interaction_list index -> datetime of next firing
-        :return: A mapping of agent_network -> periodic config
+        :return: A list of agent interactions to fire
         """
         # What we will return
-        fire_these_now: Dict[str, Dict[str, Any]] = {}
+        fire_these_now: List[Dict[str, Any]] = []
 
         # Loop through all the next firing times to see which ones are in the past.
         # Those we want to fire now.
@@ -202,25 +201,26 @@ class PeriodicEventInitiator(WatcherThread):
             if next_firing_time < now:
                 # Look up the agent interaction given the index
                 agent_interaction: Dict[str, Any] = agent_interaction_list[agent_interaction_index]
-
-                # Update the dictionary with agent_network -> interaction
-                agent_network: str = agent_interaction.get("agent_interaction")
-                interaction: Dict[str, Any] = agent_interaction.get("interaction")
-                fire_these_now[agent_network] = interaction
+                fire_these_now.append(agent_interaction)
 
         return fire_these_now
 
-    def fire_all_these_now(self, fire_these_now: Dict[str, Dict[str, Any]]):
+    def fire_all_these_now(self, fire_these_now: List[Dict[str, Any]]):
         """
-        Pokes the given agent_network keys with input described by the interaction values.
+        Pokes the given agent netowkrs in the list of agent interactions by their configs.
 
-        :param fire_these_now: A mapping of agent_network -> interaction config
+        :param fire_these_now: A list of agent interaction dictionaries
         """
         if not fire_these_now:
             # Nothing to do
             return
 
-        for agent_network, interaction in fire_these_now.items():
+        for agent_interaction in fire_these_now:
+
+            # Get the relevant information from the agent interaction dictionary
+            agent_network: str = agent_interaction.get("agent_network")
+            interaction: Dict[str, Any] = agent_interaction.get("interaction")
+
             # Create a task for each agent interaction
             coroutine: Awaitable = self.initiate_event(agent_network, interaction)
             _: Task = self.executor.create_task(coroutine, self.__class__.__name__)
