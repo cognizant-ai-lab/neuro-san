@@ -111,6 +111,8 @@ class PeriodicManifestDictConfigFilter(ConfigFilter):
 
         basis_config[StorageClass.PERIODIC] = template
 
+        logger: Logger = getLogger(self.__class__.__name__)
+
         empty: List[Dict[str, Any]] = []
         interactions: List[Dict[str, Any]] = template.get("interactions", empty)
 
@@ -129,7 +131,6 @@ in manifest {self.manifest_file}, does not pass strict validation.
 See https://github.com/pallets-eco/croniter?tab=readme-ov-file#strict-validation as to why this might happen.
 Disabling this interaction to continue.
 """
-                logger: Logger = getLogger(self.__class__.__name__)
                 logger.warning(message)
 
                 # Disable the periodic dict for this interaction
