@@ -174,7 +174,7 @@ class PeriodicEventInitiator(WatcherThread):
                         continue
 
                 # Get a new next firing for this agent_network
-                next_firing_time = cron_iter.get_next()
+                next_firing_time = cron_iter.get_next(datetime)
                 new_next_firing[tuple_key] = next_firing_time
 
                 # Slow event processing might require skipping/compressing
