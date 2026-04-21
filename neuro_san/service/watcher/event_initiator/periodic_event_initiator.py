@@ -182,8 +182,7 @@ class PeriodicEventInitiator(WatcherThread):
                 # If the next firing time is in the future, don't disturb it.
                 if next_firing_time > now:
                     new_next_firing[index] = next_firing_time
-                    if next_firing_time < closest_firing:
-                        closest_firing = next_firing_time
+                    closest_firing = min(closest_firing, next_firing_time)
                     continue
 
             # Get a new next firing for this agent_interaction
@@ -193,8 +192,7 @@ class PeriodicEventInitiator(WatcherThread):
             next_firing_time = cron_iter.get_next(datetime)
             new_next_firing[index] = next_firing_time
 
-            if next_firing_time < closest_firing:
-                closest_firing = next_firing_time
+            closest_firing = min(closest_firing, next_firing_time)
 
             # Slow event processing might require skipping/compressing
             # some iterator times that are in the past, but not there yet.
