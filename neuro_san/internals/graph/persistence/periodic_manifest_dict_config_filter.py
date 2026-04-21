@@ -43,7 +43,7 @@ class PeriodicManifestDictConfigFilter(ConfigFilter):
     # 5 is Day of Week (0-6) where 0 is Sunday
     # 6 is Second (0-59)
     # See https://en.wikipedia.org/wiki/Cron , https://crontab.cronhub.io/ , https://github.com/pallets-eco/croniter
-    ONCE_A_MINUTE: str = "*/1 * * * * *"
+    ONCE_A_MINUTE: str = "*/1 * * * * 0"
 
     DEFAULT_CRON_SCHEDULE: str = ONCE_A_MINUTE
 
@@ -82,9 +82,12 @@ class PeriodicManifestDictConfigFilter(ConfigFilter):
                 {
                     "enable": True,
                     "cron_schedule": self.DEFAULT_CRON_SCHEDULE,
+                    "second_at_beginning": False,
                     "text": "Do your thing",
                     "sly_data": {},
-                    "metadata": {},
+                    "metadata": {
+                        "user_id": "system"
+                    }
                 }
             ]
         }

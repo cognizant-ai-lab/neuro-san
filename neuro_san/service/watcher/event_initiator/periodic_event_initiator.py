@@ -122,8 +122,10 @@ class PeriodicEventInitiator(WatcherThread):
                 # Get the string representing the cron schedule
                 cron_schedule: str = interaction.get("cron_schedule",
                                                      PeriodicManifestDictConfigFilter.DEFAULT_CRON_SCHEDULE)
-                # Put an iterator in the inner mapping
-                iterator = CronIter(cron_schedule, start_time)
+                second_at_beginning: bool = interaction.get("second_at_beginning", False)
+
+                # Put an iterator in the agent interaction
+                iterator = CronIter(cron_schedule, start_time, second_at_beginning=second_at_beginning)
 
                 # Create an agent interaction dictionary for the list
                 agent_interaction: Dict[str, Any] = {
@@ -152,7 +154,7 @@ class PeriodicEventInitiator(WatcherThread):
         # What we will return
         new_next_firing: Dict[int, datetime] = {}
 
-        # Loop through the outer mapping whose key is the agent network name
+        # Loop through the agent interactions
         for index, agent_interaction in enumerate(agent_interaction_list):
 
             # See if we already have a next firing
