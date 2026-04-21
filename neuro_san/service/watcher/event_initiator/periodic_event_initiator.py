@@ -243,7 +243,7 @@ class PeriodicEventInitiator(WatcherThread):
         authorized: bool = False
         service_provider: AsyncAgentServiceProvider = None
         authorized, service_provider = await agent_authorizer.allow_agent(agent_network, metadata)
-        if not authorized:
+        if not authorized or not service_provider:
             self.logger.warning("Not authorized to initiate periodic event for agent_network %s", agent_network)
             return
 
