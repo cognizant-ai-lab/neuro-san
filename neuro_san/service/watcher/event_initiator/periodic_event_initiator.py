@@ -75,14 +75,14 @@ class PeriodicEventInitiator(WatcherThread):
             # Time how long it takes to process the iteration for finer-grained sleep() adjustments at end.
             start: datetime = datetime.now()
 
-            # Update the next firing dictionary for all the periodic agents
-            next_firing = self.update_next_firing(start, agent_interaction_list, next_firing)
-
             # Figure out which periodic agents need to fire now
             fire_these_now: List[Dict[str, Any]] = self.figure_which_to_fire(start, agent_interaction_list, next_firing)
 
             # Fire off the periodic agents we need to for this iteration
             self.fire_all_these_now(fire_these_now)
+
+            # Update the next firing dictionary for all the periodic agents
+            next_firing = self.update_next_firing(start, agent_interaction_list, next_firing)
 
             # Optimize sleeping for the next iteration
             self.maybe_sleep_at_end_of_iteration(start, verbose=True)
