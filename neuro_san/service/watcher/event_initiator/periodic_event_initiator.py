@@ -208,7 +208,7 @@ class PeriodicEventInitiator(WatcherThread):
 
     def fire_all_these_now(self, fire_these_now: List[Dict[str, Any]]):
         """
-        Pokes the given agent netowkrs in the list of agent interactions by their configs.
+        Pokes the given agent networks in the list of agent interactions by their configs.
 
         :param fire_these_now: A list of agent interaction dictionaries
         """
