@@ -145,7 +145,7 @@ class ServerContext(ServerContextLite):
 
     def set_agent_authorizer(self, agent_authorizer: AgentAuthorizer):
         """
-        Sets the periodic configs
+        Sets the agent authorizer instance
         """
         self.agent_authorizer = agent_authorizer
 
