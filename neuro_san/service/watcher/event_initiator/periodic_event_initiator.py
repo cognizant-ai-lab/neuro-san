@@ -190,13 +190,16 @@ class PeriodicEventInitiator(WatcherThread):
 
             # Need to pass the type of what we want back from the iterator
             next_firing_time = cron_iter.get_next(datetime)
+
+            # Slow event processing might require skipping/compressing
+            # iterator times that are already in the past. Advance until
+            # the next firing is strictly in the future.
+            while next_firing_time <= now:
+                next_firing_time = cron_iter.get_next(datetime)
+
             new_next_firing[index] = next_firing_time
 
             closest_firing = min(closest_firing, next_firing_time)
-
-            # Slow event processing might require skipping/compressing
-            # some iterator times that are in the past, but not there yet.
-
         if self.verbose and closest_firing != last_closest_firing:
             self.logger.info("Next event firing is at %s", closest_firing)
 
