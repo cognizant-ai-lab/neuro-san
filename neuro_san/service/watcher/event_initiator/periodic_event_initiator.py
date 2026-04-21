@@ -230,7 +230,7 @@ class PeriodicEventInitiator(WatcherThread):
             }
         }
 
-        results: AsyncGenerator[Dict[str, Any], None] = await agent_service.streaming_chat(request_dict, metadata)
+        results: AsyncGenerator[Dict[str, Any], None] = agent_service.streaming_chat(request_dict, metadata)
         async for result_dict in results:
             # We don't care about the results.
             # We just want to poke the agent and wait for it to be done.
