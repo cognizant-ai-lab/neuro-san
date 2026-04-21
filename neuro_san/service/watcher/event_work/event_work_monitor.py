@@ -43,6 +43,7 @@ class EventWorkMonitor(WatcherThread):
         :param server_context: ServerContext for global-ish state
         """
         super().__init__(server_context)
+        self.update_period_in_seconds = 0.5
         self.event_work_queue: AsyncCollatingQueue = server_context.get_event_work_queue()
         self.invocation_context_pool: Set[SessionInvocationContext] = set()
 
