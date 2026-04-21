@@ -53,7 +53,7 @@ class PeriodicEventInitiator(WatcherThread):
         Constructor
         """
         super().__init__(server_context)
-        self.verbose: bool = True
+        self.verbose: bool = False
         self.executor = AsyncioExecutor()
         # Probably need to set up logging in this guy
 
