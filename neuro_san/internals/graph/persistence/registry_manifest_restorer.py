@@ -339,6 +339,9 @@ class RegistryManifestRestorer(Restorer):
                 implementation.
         :return: a nested map of storage type -> (mapping of name -> agent networks)
         """
+        # Reset the periodic configs
+        self.periodic_configs = {}
+
         if file_reference is not None:
             return self.restore_from_files([file_reference])
 
@@ -352,6 +355,9 @@ class RegistryManifestRestorer(Restorer):
                 implementation.
         :return: a nested map of storage type -> (mapping of name -> agent networks)
         """
+        # Reset the periodic configs
+        self.periodic_configs = {}
+
         if file_reference is not None:
             return await self.async_restore_from_files([file_reference])
 
