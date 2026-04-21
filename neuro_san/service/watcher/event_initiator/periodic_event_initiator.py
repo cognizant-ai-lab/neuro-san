@@ -61,6 +61,7 @@ class PeriodicEventInitiator(WatcherThread):
         self.executor.start()
 
         # Get the periodic configs from the ServerContext
+        # Will need to update these every so often to pick up changes from the file system watcher.
         periodic_configs: Dict[str, Dict[str, Any]] = self.server_context.get_periodic_configs()
 
         # Set up the periodic agent interactions in a list
