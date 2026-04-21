@@ -154,7 +154,7 @@ class PeriodicEventInitiator(WatcherThread):
                 agent_interaction_list: List[Dict[str, Any]],
                 next_firing: Dict[int, datetime],
                 last_closest_firing: datetime
-            ) -> Dict[int, datetime]:
+            ) -> Tuple[Dict[int, datetime], datetime]:
         """
         Updates the next firing times
 
@@ -162,7 +162,7 @@ class PeriodicEventInitiator(WatcherThread):
         :param agent_interaction_list: A list of single agent interactions
         :param next_firing: A mapping of agent_interaction_list index -> datetime of next firing
         :param last_closest_firing: The last closest firing
-        :return: A new next firing mapping
+        :return: A tuple of 1) the new next firing mapping  2) The new closest firing datetime
         """
         # What we will return
         new_next_firing: Dict[int, datetime] = {}
