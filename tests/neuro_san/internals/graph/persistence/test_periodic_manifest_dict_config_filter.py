@@ -80,8 +80,9 @@ class TestPeriodicManifestDictConfigFilter(TestCase):
         periodic: Dict[str, Any] = filtered_config.get("periodic")
         self.assertIsNotNone(periodic)
 
+        # None is OK. Default is True.
         enabled: bool = periodic.get("enable")
-        self.assertTrue(enabled)
+        self.assertIsNone(enabled)
 
         interactions: List[Dict[str, Any]] = periodic.get("interactions")
         self.assertIsNotNone(interactions)
