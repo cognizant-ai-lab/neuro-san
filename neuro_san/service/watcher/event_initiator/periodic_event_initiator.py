@@ -28,7 +28,10 @@ from croniter import croniter as CronIter
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.persistence.periodic_manifest_dict_config_filter import PeriodicManifestDictConfigFilter
+from neuro_san.internals.graph.utils.invocation_util import InvocationUtil
+from neuro_san.internals.interfaces.invocations import Invocations
 from neuro_san.internals.messages.chat_message_type import ChatMessageType
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
@@ -135,6 +138,8 @@ class PeriodicEventInitiator(WatcherThread):
                 }
                 agent_interaction_list.append(agent_interaction)
 
+        self.logger.info("Found %d periodic agent interactions", len(agent_interaction_list))
+
         return agent_interaction_list
 
     def update_next_firing(
@@ -230,11 +235,11 @@ class PeriodicEventInitiator(WatcherThread):
             _: Task = self.executor.create_task(coroutine, self.__class__.__name__)
             # Note that we don't really care when the task completes, just as long as it runs.
 
-    async def initiate_event(self, agent_network: str, interaction: Dict[str, Any]):
+    async def initiate_event(self, agent_network_name: str, interaction: Dict[str, Any]):
         """
-        Pokes the given agent_network with the interaction
+        Pokes the given agent_network_name with the interaction
 
-        :param agent_network: The agent_network to poke
+        :param agent_network_name: The agent_network to poke
         :param interaction: The interaction config to use for the event
         """
         # Get the agent authorizer that is going to tell us whether we are allowed to initiate the event
@@ -248,9 +253,9 @@ class PeriodicEventInitiator(WatcherThread):
 
         authorized: bool = False
         service_provider: AsyncAgentServiceProvider = None
-        authorized, service_provider = await agent_authorizer.allow_agent(agent_network, metadata)
+        authorized, service_provider = await agent_authorizer.allow_agent(agent_network_name, metadata)
         if not authorized or not service_provider:
-            self.logger.warning("Not authorized to initiate periodic event for agent_network %s", agent_network)
+            self.logger.warning("Not authorized to initiate periodic event for agent_network %s", agent_network_name)
             return
 
         # We are allowed to initiate the event and we have the service_provider with which to do that.
@@ -268,8 +273,15 @@ class PeriodicEventInitiator(WatcherThread):
             }
         }
 
-        # Perform a streaming_chat() on the agent with the formulated request
+        # Get the agent network so we can be sure it has the right invocation set
         agent_service: AsyncAgentService = service_provider.get_service()
+        agent_network: AgentNetwork = service_provider.get_inspector()
+        invocation: str = InvocationUtil.get_invocation(agent_network)
+        if invocation != Invocations.EVENT:
+            self.logger.warning("Network %s is not configured for event invocation, some work may not complete",
+                                agent_network_name)
+
+        # Perform a streaming_chat() on the agent with the formulated request
         results: AsyncGenerator[Dict[str, Any], None] = agent_service.streaming_chat(request_dict, metadata)
 
         # Wait for the results
