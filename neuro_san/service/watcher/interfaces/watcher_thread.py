@@ -91,5 +91,6 @@ class WatcherThread(Startable):
 
         self.keep_running = False
 
-        # Wait for the thread to finish
-        self.update_thread.join()
+        # Wait for the thread to finish only if it was successfully started.
+        if self.update_thread.is_alive():
+            self.update_thread.join()
