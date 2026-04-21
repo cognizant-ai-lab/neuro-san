@@ -16,6 +16,7 @@
 # END COPYRIGHT
 
 from datetime import datetime
+from datetime import timedelta
 from logging import getLogger
 from logging import Logger
 from threading import Thread
@@ -70,7 +71,7 @@ class WatcherThread(Startable):
         :param verbose: If true, log when we took longer than the required interval
         """
         finish: datetime = datetime.now()
-        duration: datetime = finish - start
+        duration: timedelta = finish - start
         duration_seconds: float = duration.total_seconds()
         if duration_seconds > self.update_period_in_seconds:
             if verbose:
