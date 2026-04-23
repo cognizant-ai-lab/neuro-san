@@ -97,7 +97,7 @@ If no server is running, it will:
 - ✅ Or start the server before running:
 
 ```bash
-python -m run --server-only
+python -m neuro_san.service.main_loop.server_main_loop
 ```
 
 ---
