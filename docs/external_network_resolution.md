@@ -1,8 +1,10 @@
 # External Network Resolution
 
 > **TL;DR:**  
-> If you're using **direct mode without a server**, you **must set `use_direct=True`** —  
-> otherwise the request will **hang silently** (no error, just timeout).
+> If you're using the **library/API** in **direct mode without a server**, make sure external
+> networks are resolved with `use_direct=True` (or the equivalent setting). The CLI already
+> defaults to direct external resolution unless you override it. If `use_direct=False` and no
+> server is running, the request will **hang silently** (no error, just timeout).
 
 > **⚠️ Common Pitfall:**  
 > In direct mode, if `use_direct=False` and no server is running,  
