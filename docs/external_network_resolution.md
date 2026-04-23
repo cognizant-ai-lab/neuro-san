@@ -178,5 +178,5 @@ for configuration in data-driven test fixtures.
   ```
 - Or start the server:
   ```bash
-  python -m run --server-only
+  python -m neuro_san.service.main_loop.server_main_loop
   ```
