@@ -5,7 +5,7 @@
 > networks are resolved with `use_direct=True` (or the equivalent setting). The CLI already
 > defaults to direct external resolution unless you override it. If `use_direct=False` and no
 > server is running, the request will **hang silently** (no error, just timeout).
-
+>
 > **⚠️ Common Pitfall:**  
 > In direct mode, if `use_direct=False` and no server is running,  
 > the system will **wait indefinitely for an HTTP server that doesn’t exist**.
@@ -15,7 +15,15 @@
 ## What are external networks?
 
 External networks are agent networks referenced via `/`-prefixed tool names  
-(e.g. `/agent_network_editor`).
+(e.g. `/agent_network_editor`).> **TL;DR:**  
+> If you're using the **library/API** in **direct mode without a server**, make sure external
+> networks are resolved with `use_direct=True` (or the equivalent setting). The CLI already
+> defaults to direct external resolution unless you override it. If `use_direct=False` and no
+> server is running, the request will **hang silently** (no error, just timeout).
+>
+> **⚠️ Common Pitfall:**  
+> In direct mode, if `use_direct=False` and no server is running,  
+> the system will **wait indefinitely for an HTTP server that doesn’t exist**.
 
 For example, if your main agent calls `/agent_network_editor`, that editor  
 is an **external network**. It must be resolved either:
@@ -54,7 +62,7 @@ These control **different parts** of the system:
 
 ### HTTP & MCP connections
 
-```
+```text
 client → server → use_direct=False (hardcoded) → HTTP → external network
 ```
 
@@ -68,7 +76,7 @@ client → server → use_direct=False (hardcoded) → HTTP → external network
 
 Direct mode runs the agent **in-process**, but external resolution depends on `use_direct`:
 
-```
+```text
 client → in-process → use_direct=True  → in-process → external network
 client → in-process → use_direct=False → HTTP → external network (requires server)
 ```
@@ -163,14 +171,17 @@ for configuration in data-driven test fixtures.
 
 ## Troubleshooting
 
-**Symptom:** CLI hangs with no output  
+### Symptom
 
-**Likely cause:**  
+CLI hangs with no output
+
+### Likely cause
+
 - Running in direct mode  
 - `use_direct=False`  
 - No server running  
 
-**Fix:**
+### Fix
 
 - Set:
   ```python
