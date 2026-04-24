@@ -150,8 +150,7 @@ Same behavior as CLI:
 - `use_direct=False` → requires server
 
 > **Note:** The library API currently defaults `use_direct` to `False`.  
-> This will change to `True` in a future release.  
-> Until then, **always pass `use_direct=True` explicitly** for local direct usage.
+> For local direct usage, **always pass `use_direct=True` explicitly**.
 
 ---
 
