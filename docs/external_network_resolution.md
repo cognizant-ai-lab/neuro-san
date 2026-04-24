@@ -14,22 +14,14 @@
 
 ## What are external networks?
 
-External networks are agent networks referenced via `/`-prefixed tool names  
-(e.g. `/agent_network_editor`).> **TL;DR:**  
-> If you're using the **library/API** in **direct mode without a server**, make sure external
-> networks are resolved with `use_direct=True` (or the equivalent setting). The CLI already
-> defaults to direct external resolution unless you override it. If `use_direct=False` and no
-> server is running, the request will **hang silently** (no error, just timeout).
->
-> **⚠️ Common Pitfall:**  
-> In direct mode, if `use_direct=False` and no server is running,  
-> the system will **wait indefinitely for an HTTP server that doesn’t exist**.
+External networks are agent networks referenced via `/`-prefixed tool names
+(e.g. `/agent_network_editor`).
 
-For example, if your main agent calls `/agent_network_editor`, that editor  
-is an **external network**. It must be resolved either:
+For example, if your main agent calls `/agent_network_editor`, that editor is an
+external network. It must be resolved either:
 
 - via **HTTP (through a server)**, or  
-- **in-process (direct execution)**
+- in-process (direct execution)
 
 For full details on how to define them in HOCON, see:  
 [External Agents in the agent HOCON reference](agent_hocon_reference.md#external-agents)
@@ -40,8 +32,8 @@ For full details on how to define them in HOCON, see:
 
 These control **different parts** of the system:
 
-- **Connection type** (`direct` / `http` / `mcp`)  
-  → how the **client connects to the top-level agent network**
+- Connection type (`direct` / `http` / `mcp`)  
+  → how the client connects to the top-level agent network
 
 - **`use_direct`** (`True` / `False`)  
   → how the **top-level agent resolves external networks**
@@ -91,7 +83,7 @@ client → in-process → use_direct=False → HTTP → external network (requir
 
 - Top-level agent runs in-process
 - External networks are resolved via HTTP
-- **Requires a running server**
+- Requires a running server
 
 If no server is running, it will:
 
@@ -152,9 +144,10 @@ session = AgentSessionFactory().create_session(
 )
 ```
 
-> Same behavior as CLI:
-> - `use_direct=True` → in-process  
-> - `use_direct=False` → requires server  
+Same behavior as CLI:
+
+- `use_direct=True` → in-process
+- `use_direct=False` → requires server
 
 > **Note:** The library API currently defaults `use_direct` to `False`.  
 > This will change to `True` in a future release.  
@@ -183,11 +176,14 @@ CLI hangs with no output
 
 ### Fix
 
-- Set:
-  ```python
-  use_direct=True
-  ```
-- Or start the server:
-  ```bash
-  python -m neuro_san.service.main_loop.server_main_loop
-  ```
+Set:
+
+```python
+use_direct=True
+```
+
+Or start the server:
+
+```bash
+python -m neuro_san.service.main_loop.server_main_loop
+```
