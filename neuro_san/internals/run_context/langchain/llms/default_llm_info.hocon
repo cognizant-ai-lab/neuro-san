@@ -55,6 +55,23 @@
         "knowledge_cutoff": "09/30/2023",
     },
 
+    "gpt-5.5": {
+        "use_model_name": "gpt-5.5-2026-04-23",
+    },
+    "gpt-5.5-2026-04-23": {
+        "class": "openai",
+        "model_info_url": "https://developers.openai.com/api/docs/models/gpt-5.5",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1050000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "12/01/2025",
+        "price_per_1k_input_tokens": 0.005,
+        "price_per_1k_output_tokens": 0.030,
+    },
     "gpt-5.4-pro": {
         "use_model_name": "gpt-5.4-pro-2026-03-05",
     },
