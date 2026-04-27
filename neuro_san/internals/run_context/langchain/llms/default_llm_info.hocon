@@ -1078,7 +1078,7 @@
                 "thinking": null,
 
                 # "effort" — A coarse knob to trade off token usage vs. response depth.
-                #   Typed as: Literal['max', 'high', 'medium', 'low'] | None (default: None)
+                #   Typed as: Literal['max', 'xhigh', 'high', 'medium', 'low'] | None (default: None)
                 #   Merged into the output_config parameter when making API calls.
                 #   Works in conjunction with adaptive thinking.
                 #
