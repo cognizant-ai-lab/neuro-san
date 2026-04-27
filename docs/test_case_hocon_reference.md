@@ -110,10 +110,12 @@ not the agent itself.
 
 ### use_direct
 
-Boolean value that describes how an external agent is called.
-When False (the default), an http request is used to contact the server of the external agent,
-even if it is on the same server.
-When True, no new socket is created and a direct/library connection is used instead.
+Boolean value that controls how external networks are resolved when using a direct connection.
+When False (the default), external networks are contacted via HTTP, requiring a running server.
+When True, external networks are loaded from the local manifest and called in-process — no server needed.
+
+For a full explanation of how `use_direct` interacts with connection types,
+see [Connection modes in clients.md](clients.md#connection-modes).
 
 ### metadata
 
