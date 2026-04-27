@@ -1060,19 +1060,64 @@
                 # streaming is always set to True so that ...
                 # stream_usage is always set to True so that token counting can work correctly
 
-                # The following parameters are for reasoning models only.
-                # Supported models
-                # Extended thinking is supported in the following models:
-                # Claude Opus 4.6 (claude-opus-4-6)
-                # Claude Sonnet 4.6 (claude-sonnet-4-6)
-                # Claude Sonnet 4.5 (claude-sonnet-4-5-20250929)
-                # Claude Opus 4.5 (claude-opus-4-5-20251101)
-                # Claude Opus 4.1 (claude-opus-4-1-20250805)
-                # Claude Haiku 4.5 (claude-haiku-4-5-20251001)
-                # Claude Sonnet 4 (claude-sonnet-4-20250514)
-                # Claude Opus 4 (claude-opus-4-20250514)
-                # Note: Claude Opus 4.7 does NOT support extended thinking (uses adaptive thinking instead)
-                "thinking": null, # Parameters for Claude reasoning, e.g., {"type": "enabled", "budget_tokens": 10_000}
+                # Reasoning / thinking parameters
+                #
+                # "thinking" — Controls Claude's extended or adaptive reasoning mode.
+                #   Typed as: dict[str, Any] | None (default: None)
+                #   NOTE: None means the parameter is OMITTED from the API call entirely
+                #   (i.e., the model uses its default behavior). It is NOT the same as
+                #   explicitly passing {"type": "disabled"}, which actively turns off thinking.
+                #
+                #   Manual extended thinking (type: "enabled"):
+                #     Supported on Claude Opus 4.6, Sonnet 4.6, Sonnet 4.5, Opus 4.5,
+                #     Opus 4.1, Haiku 4.5, Sonnet 4, and Opus 4.
+                #     Pass a token budget: {"type": "enabled", "budget_tokens": 10_000}
+                #     Minimum budget_tokens is 1_024. This mode is DEPRECATED on Opus 4.6
+                #     and Sonnet 4.6 and will be removed in a future model release.
+                #     ⚠ Returns a 400 error on Claude Opus 4.7 and later models.
+                #     Ref: https://platform.claude.com/docs/en/build-with-claude/extended-thinking
+                #
+                #   Adaptive thinking (type: "adaptive"):
+                #     Recommended for Claude Opus 4.7, Opus 4.6, and Sonnet 4.6.
+                #     Claude dynamically decides when and how much to think based on
+                #     request complexity — no manual budget_tokens needed.
+                #     This is the ONLY supported thinking mode on Claude Opus 4.7+.
+                #     Pair with `effort` to coarsely control thinking depth.
+                #     Example: {"type": "adaptive"}
+                #     Ref: https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking
+                #
+                #   Disabling thinking (type: "disabled"):
+                #     Explicitly turns off extended thinking. This is distinct from null/None.
+                #
+                #   LangChain usage:
+                #     https://docs.langchain.com/oss/python/integrations/chat/anthropic#extended-thinking
+                #
+                "thinking": null,
+
+                # "effort" — A coarse knob to trade off token usage vs. response depth.
+                #   Typed as: Literal['max', 'xhigh', 'high', 'medium', 'low'] | None (default: None)
+                #   Merged into the output_config parameter when making API calls.
+                #   Works in conjunction with adaptive thinking.
+                #
+                #   "low"    — Faster, cheaper; less thorough reasoning.
+                #   "medium" — Balanced.
+                #   "high"   — ⚠ Identical to omitting the parameter altogether (None).
+                #   "max"    — Maximum reasoning; only supported on Claude Opus 4.6.
+                #   "xhigh"  — Extra-high reasoning; only supported on Claude Opus 4.7.
+                #
+                #   Supported models: Claude Mythos Preview, Opus 4.7, Opus 4.6, Sonnet 4.6,
+                #   and Opus 4.5. Not supported on Haiku or Sonnet 4.5 and below.
+                #
+                #   For Opus 4.6 and Sonnet 4.6, `effort` replaces `budget_tokens` as the
+                #   recommended way to control thinking depth. `budget_tokens` is still
+                #   accepted on those models but is deprecated.
+                #   No beta header is required to use this parameter.
+                #
+                #   Ref: https://platform.claude.com/docs/en/build-with-claude/effort
+                #   LangChain usage:
+                #     https://docs.langchain.com/oss/python/integrations/chat/anthropic#effort
+                #
+                "effort": null,
             }
         },
         "ollama": {
