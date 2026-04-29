@@ -841,7 +841,6 @@
         "price_per_1k_input_tokens": 0.002,
         "price_per_1k_output_tokens": 0.012,
     },
-
     "gemini-3-flash": {
         "use_model_name": "gemini-3-flash-preview"
     },
