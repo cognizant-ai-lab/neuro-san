@@ -28,8 +28,17 @@
             "Greet developers that wrote their very first program",
         ]
     },
+#    "llm_config": {
+#        "model_name": "mock"
+#    },
     "llm_config": {
-        "model_name": "gpt-5.2"
+      "class": "mock",
+      "min_latency": 0.05,
+      "max_latency": 0.5,
+      "responses": [
+          "Custom response one.",
+          "Custom response two."
+      ]
     },
     "tools": [
         # This first agent definition is regarded as the "Front Man", which
