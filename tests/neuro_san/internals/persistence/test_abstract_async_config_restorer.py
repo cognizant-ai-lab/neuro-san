@@ -203,7 +203,7 @@ class TestAbstractAsyncConfigRestorer:
         r: ConcreteRestorer = self.make_restorer()
         result: Dict[str, Any] = r.deserialize_file_contents(
             str(FIXTURES_DIR / "valid.json"),
-            (FIXTURES_DIR / "valid.json").read_text(encoding="utf-8"),
+            (FIXTURES_DIR / "valid.json").read_bytes(),
         )
         assert result == VALID_DICT
 
@@ -212,7 +212,7 @@ class TestAbstractAsyncConfigRestorer:
         r: ConcreteRestorer = self.make_restorer()
         result: Dict[str, Any] = r.deserialize_file_contents(
             str(FIXTURES_DIR / "valid.hocon"),
-            (FIXTURES_DIR / "valid.hocon").read_text(encoding="utf-8"),
+            (FIXTURES_DIR / "valid.hocon").read_bytes(),
         )
         assert result == VALID_DICT
 
@@ -228,7 +228,7 @@ class TestAbstractAsyncConfigRestorer:
         with pytest.raises(ParseException):
             r.deserialize_file_contents(
                 str(FIXTURES_DIR / "invalid.json"),
-                (FIXTURES_DIR / "invalid.json").read_text(encoding="utf-8"),
+                (FIXTURES_DIR / "invalid.json").read_bytes(),
             )
 
     def test_deserialize_raises_parse_exception_on_invalid_hocon(self) -> None:
@@ -237,7 +237,7 @@ class TestAbstractAsyncConfigRestorer:
         with pytest.raises(ParseException):
             r.deserialize_file_contents(
                 str(FIXTURES_DIR / "invalid.hocon"),
-                (FIXTURES_DIR / "invalid.hocon").read_text(encoding="utf-8"),
+                (FIXTURES_DIR / "invalid.hocon").read_bytes(),
             )
 
     def test_deserialize_parse_exception_wraps_original(self) -> None:
@@ -246,7 +246,7 @@ class TestAbstractAsyncConfigRestorer:
         with pytest.raises(ParseException) as exc_info:
             r.deserialize_file_contents(
                 str(FIXTURES_DIR / "invalid.json"),
-                (FIXTURES_DIR / "invalid.json").read_text(encoding="utf-8"),
+                (FIXTURES_DIR / "invalid.json").read_bytes(),
             )
         assert exc_info.value.__cause__ is not None
 
