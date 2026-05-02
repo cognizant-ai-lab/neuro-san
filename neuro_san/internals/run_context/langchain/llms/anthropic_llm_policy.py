@@ -69,6 +69,7 @@ class AnthropicLlmPolicy(LlmPolicy):
             # Set stream_usage to True in order to get token counting chunks.
             stream_usage=True,
             thinking=config.get("thinking"),
+            effort=config.get("effort"),
             mcp_servers=config.get("mcp_servers"),
             context_management=config.get("context_management"),
             # If omitted, this defaults to the global verbose value,
