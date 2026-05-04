@@ -29,6 +29,7 @@ from pathlib import Path
 from timedinput import timedinput
 
 from leaf_common.config.file_of_class import FileOfClass
+from leaf_common.serialization.util.bytes_decoder import BytesDecoder
 
 from neuro_san.client.agent_session_factory import AgentSessionFactory
 from neuro_san.client.concierge_session_factory import ConciergeSessionFactory
@@ -108,9 +109,10 @@ class AgentCli:
             #           recognize pathlib as a valid library with which to resolve these kinds
             #           of issues.  Furthermore, this is a client command line tool that is never
             #           used inside servers which just happens to be part of a library offering.
-            prompt: Path = Path(self.args.first_prompt_file)
-            with prompt.open('r', encoding="utf-8") as prompt_file:
-                user_input = prompt_file.read()
+            prompt_path: str = self.args.first_prompt_file
+            with open(prompt_path, "rb") as binary_file:
+                contents: bytes = binary_file.read()
+                user_input, _ = BytesDecoder.decode_bytes(contents, source_name=prompt_path)
 
         sly_data: Dict[str, Any] = None
         if self.args.sly_data is not None:

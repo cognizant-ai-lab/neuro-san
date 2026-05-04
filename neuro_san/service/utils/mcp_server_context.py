@@ -25,6 +25,7 @@ from neuro_san.service.mcp.validation.mcp_request_validator import McpRequestVal
 from neuro_san.service.mcp.interfaces.client_session_policy import ClientSessionPolicy
 from neuro_san.service.mcp.session.mcp_no_sessions_policy import McpNoSessionsPolicy
 from neuro_san.service.mcp.util.mcp_request_util import McpRequestUtil
+from neuro_san.internals.utils.text_file_reader import TextFileReader
 
 
 class McpServerContext:
@@ -51,9 +52,9 @@ class McpServerContext:
             schema_name: str = f"service/mcp/validation/mcp-schema-{McpRequestUtil.get_mcp_version()}.json"
             self.protocol_schema_filepath = TOP_LEVEL_DIR.get_file_in_basis(schema_name)
             try:
-                with open(self.protocol_schema_filepath, "r", encoding="utf-8") as schema_file:
-                    self.protocol_schema = json.load(schema_file)
-                    self.request_validator = McpRequestValidator(self.protocol_schema)
+                schema_str: str = TextFileReader.read_text_file(self.protocol_schema_filepath)
+                self.protocol_schema = json.loads(schema_str)
+                self.request_validator = McpRequestValidator(self.protocol_schema)
             except Exception as exc:  # pylint: disable=broad-exception-caught
                 raise RuntimeError(f"Cannot load MCP protocol schema from "
                                    f"'{self.protocol_schema_filepath}': {str(exc)}") from exc
