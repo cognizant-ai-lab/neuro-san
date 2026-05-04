@@ -23,7 +23,6 @@ from logging import Logger
 
 import json
 import os
-import aiofiles
 
 from openfga_sdk import ClientConfiguration
 from openfga_sdk.credentials import CredentialConfiguration

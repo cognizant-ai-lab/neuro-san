@@ -39,7 +39,7 @@ class TextFileReader:
             return text
 
     @staticmethod
-    async def async_read_text_file(self, filepath: str) -> str:
+    async def async_read_text_file(filepath: str) -> str:
         """
         Asynchronously read the content of a text file in some encoding and return it as a string.
         :param filepath: The path to the text file to read
