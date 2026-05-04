@@ -220,7 +220,7 @@ class TestAbstractAsyncConfigRestorer:
         """A ValueError is raised for file extensions other than .json and .hocon."""
         r: ConcreteRestorer = self.make_restorer()
         with pytest.raises(ValueError, match="must be a .json or .hocon file"):
-            r.deserialize_file_contents("config.yaml", "{}")
+            r.deserialize_file_contents("config.yaml", b'{}')
 
     def test_deserialize_raises_parse_exception_on_invalid_json(self) -> None:
         """A ParseException is raised when JSON content is syntactically invalid."""
