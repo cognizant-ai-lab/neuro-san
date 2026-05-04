@@ -222,6 +222,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                 "tools":      <list>,   # Agent definitions making up the network
                 ...                     # Any other top-level spec fields
                 "metadata": {
+                    ...                                          # User-authored keys (merged in)
                     "reservation": {                    # Injected by this method
                         "id":                          <str>,    # "<prefix>-<uuid4>"
                         "lifetime_in_seconds":         <float>,  # Lease duration
@@ -231,7 +232,10 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                 }
             }
  
-        Notes on the time-related fields:
+        Notes:
+          * User-authored metadata keys (e.g. "description", "tags") are
+            preserved; this method merges into agent_spec["metadata"]
+            rather than replacing it.
           * lifetime_in_seconds:        client-requested duration.
           * expiration_time_in_seconds: now + min(lifetime, server max);
                                         Unix timestamp the system enforces against.
