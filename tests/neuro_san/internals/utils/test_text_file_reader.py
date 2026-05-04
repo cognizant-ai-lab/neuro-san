@@ -43,7 +43,7 @@ CP1252_BYTES: bytes = b"hello \x92world\x92"
 CP1252_EXPECTED: str = "hello ’world’"
 
 LATIN1_BYTES: bytes = b"hello \x81world\x81"
-LATIN1_EXPECTED: str = "hello world"
+LATIN1_EXPECTED: str = "hello \u0081world\u0081"
 
 
 class TestTextFileReader:
