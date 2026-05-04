@@ -29,7 +29,7 @@ from pathlib import Path
 from timedinput import timedinput
 
 from leaf_common.config.file_of_class import FileOfClass
-from leaf_common.serialization.util.bytes_decoder import BytesDecoder
+from leaf_common.serialization.util.text_file_reader import TextFileReader
 
 from neuro_san.client.agent_session_factory import AgentSessionFactory
 from neuro_san.client.concierge_session_factory import ConciergeSessionFactory
@@ -110,9 +110,7 @@ class AgentCli:
             #           of issues.  Furthermore, this is a client command line tool that is never
             #           used inside servers which just happens to be part of a library offering.
             prompt_path: str = self.args.first_prompt_file
-            with open(prompt_path, "rb") as binary_file:
-                contents: bytes = binary_file.read()
-                user_input, _ = BytesDecoder.decode_bytes(contents, source_name=prompt_path)
+            user_input = TextFileReader.read_text_file(prompt_path)
 
         sly_data: Dict[str, Any] = None
         if self.args.sly_data is not None:
