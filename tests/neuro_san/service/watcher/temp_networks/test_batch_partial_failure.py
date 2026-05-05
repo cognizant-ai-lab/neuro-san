@@ -66,6 +66,12 @@ class TestBatchPartialFailure(S3ReservationsStorageTestBase):
         # Status 403 lands the error on the non-retryable branch of
         # _is_retryable_client_error so we know the failure is final.
         real_put = self.fake_s3.put_object
+        # Defensively restore put_object on the fake at end-of-test. The
+        # base class hands each test a fresh FakeS3Client in setUp, so
+        # this is a no-op today; the cleanup is here to document intent
+        # and to keep the test correct if a future refactor turns
+        # self.fake_s3 into a shared object.
+        self.addCleanup(setattr, self.fake_s3, "put_object", real_put)
         call_log = {"count": 0}
 
         # pylint: disable=invalid-name,unused-argument

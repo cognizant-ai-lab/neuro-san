@@ -28,23 +28,68 @@ External consumers (CLI tools, dashboards, debugging operators) read
 these objects directly and rely on the format being stable. T1's
 round-trip would still pass if the read+write paths were updated
 together but the on-disk format silently changed; this module pins
-the format by reading the raw bytes and asserting on the parsed
-shape, independent of the storage's read path.
+the format by reading the raw bytes and validating the parsed
+document against a JSON Schema, independent of the storage's read
+path.
 
 Encoding/line-ending properties (UTF-8, no BOM, no CRLF) are
 boto3+Python concerns and are intentionally NOT tested here.
 """
 from json import loads
 
+from jsonschema import validate
+
 from tests.neuro_san.service.watcher.temp_networks._test_base \
     import S3ReservationsStorageTestBase
+
+
+# Documents the on-disk JSON shape that S3ReservationsStorage commits
+# to. The schema is the single source of truth for the format and is
+# what external consumers (CLI tools, dashboards, debug operators) can
+# rely on. Any future test that needs to pin the same shape can reuse
+# this constant.
+RESERVATION_OBJECT_SCHEMA = {
+    "type": "object",
+    "required": ["name", "llm_config", "tools", "metadata"],
+    "properties": {
+        # Original agent_spec fields are preserved at the top level.
+        # The storage does NOT wrap the spec in an outer envelope
+        # like {"data": ...}.
+        "name": {"type": "string"},
+        "llm_config": {"type": "object"},
+        "tools": {"type": "array"},
+        # Storage-injected bookkeeping fields live under "metadata",
+        # side by side with any user-authored metadata fields.
+        "metadata": {
+            "type": "object",
+            "required": ["reservation", "stored_at"],
+            "properties": {
+                "reservation": {
+                    "type": "object",
+                    "required": [
+                        "id",
+                        "lifetime_in_seconds",
+                        "expiration_time_in_seconds",
+                    ],
+                    "properties": {
+                        "id": {"type": "string"},
+                        "lifetime_in_seconds": {"type": "number"},
+                        "expiration_time_in_seconds": {"type": "number"},
+                    },
+                },
+                "stored_at": {"type": "number"},
+            },
+        },
+    },
+}
 
 
 class TestJsonBodyFormat(S3ReservationsStorageTestBase):
     """
     Pin the on-disk JSON shape produced by add_reservations. Reads
-    the raw bytes from the FakeS3Client and asserts on the parsed
-    structure, independent of the storage's read path.
+    the raw bytes from the FakeS3Client and validates the parsed
+    document against RESERVATION_OBJECT_SCHEMA, independent of the
+    storage's read path.
     """
 
     def test_add_writes_json_body_with_expected_top_level_shape(self):
@@ -52,9 +97,9 @@ class TestJsonBodyFormat(S3ReservationsStorageTestBase):
         After add_reservations, the S3 object body should:
           - Decode as a JSON object (we chose JSON over
             pickle/yaml/proto).
-          - Carry the original agent_spec fields at the top level
-            (no wrap-in-envelope).
-          - Carry the storage-injected reservation+stored_at under
+          - Match RESERVATION_OBJECT_SCHEMA: original agent_spec
+            fields at the top level (no wrap-in-envelope), with
+            storage-injected reservation+stored_at under
             "metadata".
 
         Catches regressions in our serialization choice: a switch
@@ -80,72 +125,29 @@ class TestJsonBodyFormat(S3ReservationsStorageTestBase):
         )
         body: bytes = self.fake_s3.objects[expected_key]
 
-        # Parses as a JSON object. Catches a switch in our
+        # Parse the raw bytes as JSON. Catches a switch in our
         # serialization choice (pickle, yaml, protobuf) - all of
         # which would either raise or yield a non-dict here.
         parsed = loads(body)
-        self.assertIsInstance(
-            parsed,
-            dict,
-            f"On-disk body parsed but the top-level value is not a "
-            f"dict; got {type(parsed).__name__}.",
-        )
 
-        # Original agent_spec fields are preserved at the top level.
-        # Catches a wrap-in-envelope refactor (e.g.,
-        # {"data": agent_spec}) and field-renaming refactors that
-        # would relocate the spec under a different key.
-        self.assertEqual(
-            "copy_cat",
-            parsed.get("name"),
-            f"Top-level 'name' missing or wrong; parsed top-level "
-            f"keys: {list(parsed)}.",
-        )
-        self.assertIn(
-            "llm_config",
-            parsed,
-            f"Top-level 'llm_config' missing; parsed top-level "
-            f"keys: {list(parsed)}.",
-        )
-        self.assertIn(
-            "tools",
-            parsed,
-            f"Top-level 'tools' missing; parsed top-level keys: "
-            f"{list(parsed)}.",
-        )
+        # Single declarative shape assertion against the documented
+        # schema. Catches wrap-in-envelope refactors, dropped or
+        # relocated metadata fields, renamed top-level keys, and
+        # mistyped values (e.g., reservation.id stored as a number).
+        # jsonschema raises ValidationError on mismatch, which
+        # pytest surfaces with a JSONPath pointing at the offending
+        # node.
+        validate(instance=parsed, schema=RESERVATION_OBJECT_SCHEMA)
 
-        # Storage-injected metadata is at the documented path.
-        # Catches a regression where the bookkeeping fields are
-        # dropped, relocated to the top level, or written under a
-        # differently-named key (e.g., "info" instead of
-        # "metadata").
-        self.assertIn(
-            "metadata",
-            parsed,
-            f"On-disk JSON has no 'metadata' key; parsed top-level "
-            f"keys: {list(parsed)}.",
-        )
-        metadata = parsed["metadata"]
-        self.assertIn(
-            "reservation",
-            metadata,
-            f"metadata['reservation'] missing; metadata keys: "
-            f"{list(metadata)}.",
-        )
-        self.assertIn(
-            "stored_at",
-            metadata,
-            f"metadata['stored_at'] missing; metadata keys: "
-            f"{list(metadata)}.",
-        )
-
-        # The reservation id under metadata matches what we wrote.
-        # Catches regressions where the wrong reservation is
-        # serialized into the body or the id field is renamed.
+        # Schema validates shape; this assert pins value correctness:
+        # the reservation id we wrote is the id stored under
+        # metadata.reservation.id. Catches a regression where the
+        # storage writes a placeholder or the wrong id while still
+        # producing a schema-valid document.
         self.assertEqual(
             reservation_id,
-            metadata["reservation"].get("id"),
-            f"On-disk metadata.reservation.id does not match the "
-            f"written reservation id; metadata.reservation: "
-            f"{metadata['reservation']}.",
+            parsed["metadata"]["reservation"]["id"],
+            f"Reservation id under metadata.reservation.id did not "
+            f"match the id we wrote; expected {reservation_id!r}, "
+            f"got {parsed['metadata']['reservation'].get('id')!r}.",
         )
