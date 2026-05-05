@@ -36,7 +36,7 @@ from openfga_sdk.models.write_authorization_model_request import WriteAuthorizat
 from openfga_sdk.models.write_authorization_model_response import WriteAuthorizationModelResponse
 from openfga_sdk.client.client import OpenFgaClient
 
-from neuro_san.internals.utils.text_file_reader import TextFileReader
+from leaf_common.serialization.util.text_file_reader import TextFileReader
 
 
 class OpenFgaInit:

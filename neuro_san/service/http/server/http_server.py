@@ -28,6 +28,8 @@ import threading
 
 import tornado
 
+from leaf_common.serialization.util.text_file_reader import TextFileReader
+
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
@@ -52,7 +54,6 @@ from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.service.mcp.handlers.mcp_root_handler import McpRootHandler
 from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.service.utils.server_status import ServerStatus
-from neuro_san.internals.utils.text_file_reader import TextFileReader
 
 
 DEFAULT_SERVER_NAME: str = 'neuro-san.Agent'
