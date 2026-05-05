@@ -212,10 +212,10 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                          source: str = None):
         """
         Add reservations to S3 storage.
- 
+
         On-disk JSON schema written per reservation
         (key = "<prefix><reservation_id>.json"):
- 
+
             {
                 "name":       <str>,    # Authored network name (HOCON "name")
                 "llm_config": <dict>,   # Optional LLM settings
@@ -231,7 +231,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                     "stored_at": <float>,                        # time.time() at write
                 }
             }
- 
+
         Notes:
           * User-authored metadata keys (e.g. "description", "tags") are
             preserved; this method merges into agent_spec["metadata"]
@@ -241,7 +241,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                                         Unix timestamp the system enforces against.
           * stored_at:                  time.time() at write; useful for
                                         clock-skew audit and orphan detection.
- 
+
         :param reservations_dict: A mapping of Reservation -> some deployable agent spec
         :param source: A string describing where the deployment was coming fromrom
         """
