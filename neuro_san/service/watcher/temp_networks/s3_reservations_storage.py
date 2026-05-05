@@ -243,7 +243,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                                         clock-skew audit and orphan detection.
 
         :param reservations_dict: A mapping of Reservation -> some deployable agent spec
-        :param source: A string describing where the deployment was coming fromrom
+        :param source: A string describing where the deployment was coming from
         """
         self.logger.info("%s: Adding %d reservations to S3", self._name, len(reservations_dict))
 
