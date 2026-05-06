@@ -29,6 +29,12 @@ class TestSmokeTestHocons(TestCase):
     Data-driven dynamic test cases where each test case is specified by a single hocon file.
     """
 
+    # A single instance of the DynamicHoconUnitTests helper class.
+    # We pass it our source file location and a relative path to the common
+    # root of the test hocon files listed in the @parameterized.expand()
+    # annotation below so the instance can find the hocon test cases listed.
+    DYNAMIC = DynamicHoconUnitTests(__file__, path_to_basis="../../fixtures")
+
     # Hocon test cases that are temporarily disabled at runtime via pytest.skip().
     # We deliberately keep these listed in the @parameterized.expand() blocks
     # below so they remain visible in test reports as SKIPPED (with a reason)
