@@ -27,7 +27,6 @@ try:
     HAS_PROFILER = True
 except ImportError:
     HAS_PROFILER = False
-    print("yappi library is required for profiling. Please install it with 'pip install yappi'")
 
 from http import HTTPStatus
 from tornado.web import RequestHandler
@@ -56,27 +55,6 @@ class ProfilerControlHandler(RequestHandler):
             self.prof_data_path = "profile.prof"
         self.logger = logging.getLogger(self.__class__.__name__)
 
-    @staticmethod
-    def get_profiler_context_id() -> int:
-        """
-        Get the context ID for the current execution context, which is used by yappi to differentiate
-        between different threads or async tasks. In this case, we use the ID of the current asyncio task.
-        If there is no current task (e.g., if we're not in an async context), we return 0.
-        """
-        try:
-            print("Getting profiler context ID for current asyncio task...")
-            task_id = id(asyncio.current_task())
-            if task_id:
-                return 1   #task_id & 0x7FFFFFFF  # yappi expects a 32-bit integer context ID
-            return 0
-        except RuntimeError:
-            # This can happen if we're not in an async context, so we return 0 as the default context ID.
-            print(f"Error getting profiler context ID: RuntimeError")
-            return 0
-        except Exception as exc:  # pylint: disable=broad-exception-caught
-            print(f"Error getting profiler context ID: {str(exc)}")
-            return 0
-
     async def get(self):
         """
         Implementation of GET request handler for profiler control.
@@ -89,7 +67,7 @@ class ProfilerControlHandler(RequestHandler):
 
         try:
             if self.op == "start":
-                #yappi.set_context_id_callback(ProfilerControlHandler.get_profiler_context_id)
+                # Set clock type to "wall" time to get more accurate profiling results in async code
                 yappi.set_clock_type("wall")
                 yappi.start()
                 self.write("profiling started")
@@ -111,3 +89,4 @@ class ProfilerControlHandler(RequestHandler):
         This method is required to be implemented as part of RequestHandler subclass,
         but is not used in our case as we do not expect any data in the request body.
         """
+        pass
