@@ -20,8 +20,6 @@ See class comment for details
 from typing import Optional
 import logging
 
-import asyncio
-
 try:
     import yappi
     HAS_PROFILER = True
