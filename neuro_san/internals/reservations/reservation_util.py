@@ -56,10 +56,10 @@ class ReservationUtil:
         reservationist: Reservationist = args.get("reservationist")
         if reservationist is None:
             error = """
-Reservationist is None.  Make sure that temporary networks reservations 
-are allowed in agent network definition by specifying:
-"allow": { "reservations": True } or 
-add a NetworkCopyMiddleware entry with allow.reservations = true.
+Reservationist is None.  Make sure that temporary networks reservations
+ are allowed in agent network definition by specifying:
+"allow": { "reservations": True } or
+ add a NetworkCopyMiddleware entry with allow.reservations = true.
 """
             return (reservation, error)
 
