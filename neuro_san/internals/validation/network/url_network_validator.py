@@ -71,12 +71,16 @@ class UrlNetworkValidator(AbstractNetworkValidator):
 
     def check_safe_urls(self, agent_name: str, safe_tools: List[str], urls: List[str], errors: List[str]):
         """
-        Check that urls are valid
+        Validate that URL- or path-like tool references resolve to a known endpoint.
 
-        :param agent_name: Name of agent
-        :param safe_tools: List of tools
-        :param urls: List of URLs
-        :param errors: List of errors. Potentially modified on exit.
+        A tool reference is considered valid if it matches one of the configured
+        external agents / MCP servers, is an http(s):// URL, or ends with "mcp"
+        or "mcp/". Any unrecognized URL- or path-like tool is appended to errors.
+
+        :param agent_name: Name of the agent that owns these tools
+        :param safe_tools: Tool references to check (with dictionary-form tools removed)
+        :param urls: Known-valid URLs (configured external agents and MCP servers)
+        :param errors: List of errors. Modified in place when invalid tools are found.
         """
         for tool in safe_tools:
             # pylint: disable=too-many-boolean-expressions
@@ -86,6 +90,10 @@ class UrlNetworkValidator(AbstractNetworkValidator):
                     not tool.startswith("https://") and \
                     not tool.endswith("mcp") and \
                     not tool.endswith("mcp/"):
-                error_msg = f"Agent '{agent_name}' has invalid URL or path in tools." + \
-                            f" Invalid tool: '{tool}' urls: {urls}"
+                error_msg = (
+                    f"Agent '{agent_name}' references an unrecognized URL or path tool '{tool}'."
+                    " Expected a configured external agent or network name starting with '/'"
+                    " (e.g. '/bank_ops'), an MCP server, an http(s):// URL,"
+                    f" or an MCP endpoint. Known URLs: {urls}"
+                )
                 errors.append(error_msg)
