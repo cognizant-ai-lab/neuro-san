@@ -40,7 +40,8 @@
             "text": "Copy the hello_world agent",
             "response": {
                 "text": {
-                    "gist": ["The response should contain a short greeting-related word or phrase (e.g. 'Hello', 'Greet', 'Howdy', 'Hi'), indicating the temporary agent was created and called successfully"]
+                    "gist": ["The response should contain the temporary agent name starting with 'copy_cat-hello_world', and the amount of time the network is available for."]
+                },
                 "sly_data": {
                     "agent_reservations": {
                         "gist": ["Should contain at least one reservation with a reservation_id, lifetime_in_seconds, and expiration_time_in_seconds"]
