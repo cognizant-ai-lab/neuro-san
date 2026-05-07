@@ -92,8 +92,8 @@ class UrlNetworkValidator(AbstractNetworkValidator):
                     not tool.endswith("mcp/"):
                 error_msg = (
                     f"Agent '{agent_name}' references an unrecognized URL or path tool '{tool}'."
-                    " Expected a configured external agent or network name starting with '/'"
+                    " Expected an external agent or network name starting with '/'"
                     " (e.g. '/bank_ops'), an MCP server, an http(s):// URL,"
-                    f" or an MCP endpoint. Known URLs: {urls}"
+                    f" or an MCP endpoint. Available URLs: {urls}"
                 )
                 errors.append(error_msg)
