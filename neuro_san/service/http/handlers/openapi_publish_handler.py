@@ -30,7 +30,7 @@ class OpenApiPublishHandler(BaseRequestHandler):
     Handler class for neuro-san OpenAPI service spec publishing"concierge" API call.
     """
 
-    def get(self):
+    async def get(self):
         """
         Implementation of GET request handler
         for "publish my OpenAPI specification document" call.
