@@ -129,8 +129,10 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
 
                 # If there is anything left in the accumulator, yield it
                 if len(accumulator) > 0:
-                    result_dict = json.loads(accumulator.decode("utf-8"))
-                    yield result_dict
+                    unicode_line: str = accumulator.decode("utf-8").strip()
+                    if unicode_line:
+                        result_dict = json.loads(unicode_line)
+                        yield result_dict
 
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(self.help_message(path)) from exc
