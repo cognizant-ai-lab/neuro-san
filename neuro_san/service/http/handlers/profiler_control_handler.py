@@ -73,6 +73,7 @@ class ProfilerControlHandler(RequestHandler):
             else:
                 yappi.stop()
                 stats = yappi.get_func_stats()
+                # pylint: disable=no-member
                 stats.save(self.prof_data_path, type="pstat")
                 self.write(f"profiling stopped and saved to {self.prof_data_path}")
                 self.logger.info("PROFILER STOPPED AND SAVED TO %s", self.prof_data_path)
