@@ -102,26 +102,28 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                 #       and split on universal newlines instead of strict "\n".
                 #       We now buffer raw bytes, split strictly on "\n",
                 #       and decode UTF-8 explicitly -- mirroring the async client.
-                accumulator: bytes = b""
+                accumulator: bytearray = bytearray(b"")
                 for data in response.iter_content(chunk_size=max_chunk_size):
 
                     # Concatenate data as it comes in
-                    accumulator += data
+                    accumulator.extend(data)
 
                     # Try to find our line separator
                     index: int = accumulator.find(separator)
                     while index >= 0:
+
                         # Grab a single line
-                        line: bytes = accumulator[:index]
-                        unicode_line = line.decode("utf-8")
-                        if unicode_line.strip():    # Skip empty lines
+                        unicode_line: str = accumulator[:index].decode("utf-8")
+                        if unicode_line.strip():  # Skip empty lines
+
                             # We have a line with something in it.
                             # Decode and yield as a dictionary
                             result_dict = json.loads(unicode_line)
                             yield result_dict
 
                         # Remove the previous line from the accumulator
-                        accumulator = accumulator[index + len(separator):]
+                        del accumulator[:index + len(separator)]
+
                         # Allow for case of multiple lines in one chunk
                         index = accumulator.find(separator)
 
