@@ -23,7 +23,6 @@ from logging import Logger
 
 import json
 import os
-import aiofiles
 
 from openfga_sdk import ClientConfiguration
 from openfga_sdk.credentials import CredentialConfiguration
@@ -36,6 +35,8 @@ from openfga_sdk.models.read_authorization_models_response import ReadAuthorizat
 from openfga_sdk.models.write_authorization_model_request import WriteAuthorizationModelRequest
 from openfga_sdk.models.write_authorization_model_response import WriteAuthorizationModelResponse
 from openfga_sdk.client.client import OpenFgaClient
+
+from leaf_common.serialization.util.text_file_reader import TextFileReader
 
 
 class OpenFgaInit:
@@ -180,9 +181,8 @@ class OpenFgaInit:
 
         # Read the OpenFGA policy from configuration
         policy: Dict[str, Any] = {}
-        async with aiofiles.open(open_fga_policy_file, "r", encoding="utf-8") as policy_file:
-            content: str = await policy_file.read()
-            policy = json.loads(content)
+        content: str = await TextFileReader.async_read_text_file(open_fga_policy_file)
+        policy = json.loads(content)
 
         found_auth_model: str = await self.find_auth_model(open_fga_client, policy)
 
