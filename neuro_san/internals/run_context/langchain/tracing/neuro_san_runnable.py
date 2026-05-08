@@ -195,6 +195,15 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
         to_add: Dict[str, Any] = MetadataUtil.minimize_metadata(request_metadata, request_keys)
         runnable_metadata.update(to_add)
 
+        # Add langfuse-prefixed keys so the Langfuse LangChain
+        # CallbackHandler maps them to first-class trace attributes.
+        user_id: str = runnable_metadata.get("user_id")
+        if user_id:
+            runnable_metadata["langfuse_user_id"] = user_id
+        session_id: str = runnable_metadata.get("request_id")
+        if session_id:
+            runnable_metadata["langfuse_session_id"] = session_id
+
         return runnable_metadata
 
     def get_intercepted_outputs(self) -> Dict[str, Any]:
