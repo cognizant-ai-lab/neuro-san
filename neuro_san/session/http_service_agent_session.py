@@ -113,9 +113,8 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                     while index >= 0:
 
                         # Grab a single line
-                        unicode_line: str = accumulator[:index].decode("utf-8")
-                        if unicode_line.strip():  # Skip empty lines
-
+                        unicode_line: str = accumulator[:index].decode("utf-8").strip()
+                        if unicode_line:  # Skip empty lines
                             # We have a line with something in it.
                             # Decode and yield as a dictionary
                             result_dict = json.loads(unicode_line)

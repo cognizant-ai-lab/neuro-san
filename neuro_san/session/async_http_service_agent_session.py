@@ -137,9 +137,8 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
                         while index >= 0:
 
                             # Grab a single line
-                            unicode_line: str = accumulator[:index].decode("utf-8")
-                            if unicode_line.strip():    # Skip empty lines
-
+                            unicode_line: str = accumulator[:index].decode("utf-8").strip()
+                            if unicode_line:    # Skip empty lines
                                 # We have a line with something in it.
                                 # Decode and yield as a dictionary
                                 result_dict = json.loads(unicode_line)
@@ -153,8 +152,10 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
 
                     # If there is anything left in the accumulator, yield it
                     if len(accumulator) > 0:
-                        result_dict = json.loads(accumulator.decode("utf-8"))
-                        yield result_dict
+                        unicode_line: str = accumulator.decode("utf-8").strip()
+                        if unicode_line:
+                            result_dict = json.loads(unicode_line)
+                            yield result_dict
 
         except (asyncio.TimeoutError, ClientOSError, ClientPayloadError) as exc:
             # Pass on a couple of asserts that are known to represent
