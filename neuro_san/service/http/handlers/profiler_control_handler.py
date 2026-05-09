@@ -25,6 +25,8 @@ import logging
 from http import HTTPStatus
 from tornado.web import RequestHandler
 
+from neuro_san.service.utils.request_util import RequestUtil
+
 try:
     import yappi
     HAS_PROFILER = True
@@ -77,7 +79,7 @@ class ProfilerControlHandler(RequestHandler):
                 stats = yappi.get_func_stats()
                 # pylint: disable=no-member
                 stats.save(profiler_data_path, type="pstat")
-                self.write(f"profiling stopped and saved to {profiler_data_path}")
+                self.write(f"profiling stopped and saved to {RequestUtil.safe_message(str(profiler_data_path))}")
                 logger.info("PROFILER STOPPED AND SAVED TO %s", profiler_data_path)
             else:
                 self.write("Invalid profiler control action. Expected 'start' or 'stop'.")
@@ -86,7 +88,7 @@ class ProfilerControlHandler(RequestHandler):
         except Exception as exception:  # pylint: disable=broad-exception-caught
             logger.error("Error during profiler control operation '%s': %s",
                          action, str(exception), exc_info=True)
-            self.write(f"FAILED to {action} profiler")
+            self.write(f"FAILED to {RequestUtil.safe_message(str(action))} profiler")
             self.set_status(HTTPStatus.INTERNAL_SERVER_ERROR)
 
     def data_received(self, chunk):
