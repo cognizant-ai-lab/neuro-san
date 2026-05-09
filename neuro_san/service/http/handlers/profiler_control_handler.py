@@ -17,20 +17,19 @@
 """
 See class comment for details
 """
-from typing import Optional
+from typing import Any, Dict, Optional
+import json
+from json.decoder import JSONDecodeError
 import logging
+
+from http import HTTPStatus
+from tornado.web import RequestHandler
 
 try:
     import yappi
     HAS_PROFILER = True
 except ImportError:
     HAS_PROFILER = False
-
-from http import HTTPStatus
-from tornado.web import RequestHandler
-
-import json
-from json.decoder import JSONDecodeError
 
 
 class ProfilerControlHandler(RequestHandler):
@@ -76,6 +75,7 @@ class ProfilerControlHandler(RequestHandler):
             elif action == "stop":
                 yappi.stop()
                 stats = yappi.get_func_stats()
+                # pylint: disable=no-member
                 stats.save(profiler_data_path, type="pstat")
                 self.write(f"profiling stopped and saved to {profiler_data_path}")
                 logger.info("PROFILER STOPPED AND SAVED TO %s", profiler_data_path)
@@ -85,7 +85,7 @@ class ProfilerControlHandler(RequestHandler):
                 self.set_status(HTTPStatus.BAD_REQUEST)
         except Exception as exception:  # pylint: disable=broad-exception-caught
             logger.error("Error during profiler control operation '%s': %s",
-                              action, str(exception), exc_info=True)
+                         action, str(exception), exc_info=True)
             self.write(f"FAILED to {action} profiler")
             self.set_status(HTTPStatus.INTERNAL_SERVER_ERROR)
 
