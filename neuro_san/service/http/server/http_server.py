@@ -218,18 +218,8 @@ class HttpServer(AgentStateListener):
         handlers.append(("/readyz", HealthCheckHandler, ready_request_initialize_data))
         handlers.append(("/livez", HealthCheckHandler, live_request_initialize_data))
 
-        # Setup handlers for profiler control (start/stop)
-        profiler_start_initialize_data: Dict[str, Any] = {
-            "op": "start",
-            "prof_data_path": None
-        }
-        handlers.append(("/prof/start", ProfilerControlHandler, profiler_start_initialize_data))
-
-        profiler_stop_initialize_data: Dict[str, Any] = {
-            "op": "stop",
-            "prof_data_path": None
-        }
-        handlers.append(("/prof/stop", ProfilerControlHandler, profiler_stop_initialize_data))
+        # Setup handler for profiler control
+        handlers.append(("/profiler", ProfilerControlHandler))
 
         if enable_http_handlers:
             handlers.append(("/api/v1/list", ConciergeHandler, request_initialize_data))

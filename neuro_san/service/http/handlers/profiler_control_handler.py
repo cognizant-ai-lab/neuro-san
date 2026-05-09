@@ -29,57 +29,64 @@ except ImportError:
 from http import HTTPStatus
 from tornado.web import RequestHandler
 
+import json
+from json.decoder import JSONDecodeError
+
 
 class ProfilerControlHandler(RequestHandler):
     """
     Handler class for controlling run-time profiler (yappi) via HTTP API calls.
     """
-    # pylint: disable=attribute-defined-outside-init
-    def initialize(self,
-                   op: str,
-                   prof_data_path: Optional[str]):
-        """
-        This method is called by Tornado framework to allow
-        injecting service-specific data into local handler context.
-        :param op: requested profiler operation:
-                   "start" for starting run-time profiler
-                   "stop" for stopping profiler
-        :param prof_data_path: optional path to save profiler data when stopping profiler;
-            if not provided, data will be saved in current working directory with default name "profile.prof"
-        """
-        self.op: str = op
-        self.prof_data_path: Optional[str] = prof_data_path
-        if self.prof_data_path is None:
-            self.prof_data_path = "profile.prof"
-        self.logger = logging.getLogger(self.__class__.__name__)
 
-    async def get(self):
+    async def post(self):
         """
-        Implementation of GET request handler for profiler control.
+        Implementation of POST request handler for profiler control.
         """
+        logger = logging.getLogger(self.__class__.__name__)
+
         if not HAS_PROFILER:
             self.set_status(HTTPStatus.SERVICE_UNAVAILABLE)
             self.write("Profiler library yappi is not available. Please install it with 'pip install yappi'")
             self.logger.info("Profiler library yappi is not available. Please install it with 'pip install yappi'")
             return
 
+        action: Optional[str] = None
+        profiler_data_path: Optional[str] = None
+
+        # Parse the JSON request body:
+        request_dict: Dict[str, Any] = None
         try:
-            if self.op == "start":
+            # Parse JSON body
+            request_dict = json.loads(self.request.body)
+            action = request_dict.get("action", "none").lower()
+            profiler_data_path = request_dict.get("profiler_data_path")
+        except JSONDecodeError as exc:
+            self.set_status(HTTPStatus.BAD_REQUEST)
+            self.write("Invalid JSON in request body")
+            logger.info("Invalid JSON in request body: %s", str(exc))
+            return
+
+        try:
+            if action == "start":
                 # Set clock type to "wall" time to get more accurate profiling results in async code
                 yappi.set_clock_type("wall")
                 yappi.start()
                 self.write("profiling started")
-                self.logger.info("PROFILER STARTED")
-            else:
+                logger.info("PROFILER STARTED")
+            elif action == "stop":
                 yappi.stop()
                 stats = yappi.get_func_stats()
-                stats.save(self.prof_data_path, type="pstat")
-                self.write(f"profiling stopped and saved to {self.prof_data_path}")
-                self.logger.info("PROFILER STOPPED AND SAVED TO %s", self.prof_data_path)
+                stats.save(profiler_data_path, type="pstat")
+                self.write(f"profiling stopped and saved to {profiler_data_path}")
+                logger.info("PROFILER STOPPED AND SAVED TO %s", profiler_data_path)
+            else:
+                self.write("Invalid profiler control action. Expected 'start' or 'stop'.")
+                logger.info("Invalid profiler control action received: %s", action)
+                self.set_status(HTTPStatus.BAD_REQUEST)
         except Exception as exception:  # pylint: disable=broad-exception-caught
-            self.logger.error("Error during profiler control operation '%s': %s",
-                              self.op, str(exception), exc_info=True)
-            self.write(f"FAILED to {self.op} profiler")
+            logger.error("Error during profiler control operation '%s': %s",
+                              action, str(exception), exc_info=True)
+            self.write(f"FAILED to {action} profiler")
             self.set_status(HTTPStatus.INTERNAL_SERVER_ERROR)
 
     def data_received(self, chunk):
