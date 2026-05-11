@@ -76,7 +76,7 @@ jobs:
           PYTHONPATH: ${{ env.PYTHONPATH }}:.
         run: |
           build_scripts/server_start.sh
- 
+
           set +e
           pytest --capture=no --verbose -m "smoke" --timer-top-n 100 -n auto 2>&1 | tee pytest_output.txt
           exit_code=${PIPESTATUS[0]}
@@ -93,7 +93,6 @@ jobs:
             echo "===================================================="
             exit 1
           fi
-
 
       - name: Notify Slack
         if: ${{ !cancelled() }}
