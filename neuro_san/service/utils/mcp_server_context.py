@@ -19,6 +19,8 @@ See class comment for details
 """
 import json
 
+from leaf_common.serialization.util.text_file_reader import TextFileReader
+
 from neuro_san import TOP_LEVEL_DIR
 from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
 from neuro_san.service.mcp.validation.mcp_request_validator import McpRequestValidator
@@ -51,9 +53,9 @@ class McpServerContext:
             schema_name: str = f"service/mcp/validation/mcp-schema-{McpRequestUtil.get_mcp_version()}.json"
             self.protocol_schema_filepath = TOP_LEVEL_DIR.get_file_in_basis(schema_name)
             try:
-                with open(self.protocol_schema_filepath, "r", encoding="utf-8") as schema_file:
-                    self.protocol_schema = json.load(schema_file)
-                    self.request_validator = McpRequestValidator(self.protocol_schema)
+                schema_str: str = TextFileReader.read_text_file(self.protocol_schema_filepath)
+                self.protocol_schema = json.loads(schema_str)
+                self.request_validator = McpRequestValidator(self.protocol_schema)
             except Exception as exc:  # pylint: disable=broad-exception-caught
                 raise RuntimeError(f"Cannot load MCP protocol schema from "
                                    f"'{self.protocol_schema_filepath}': {str(exc)}") from exc

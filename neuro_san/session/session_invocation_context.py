@@ -23,7 +23,7 @@ from typing import Dict
 from typing import List
 
 from asyncio import AbstractEventLoop
-from asyncio import get_event_loop
+from asyncio import get_running_loop
 from asyncio import run_coroutine_threadsafe
 from copy import copy
 from concurrent.futures import Future
@@ -349,8 +349,7 @@ class SessionInvocationContext(InvocationContext):
         other_loop: AbstractEventLoop = self.asyncio_executor.get_event_loop()
         loop: AbstractEventLoop = None
         try:
-            # Use get_event_loop() over get_running_loop(), as its more robust
-            loop = get_event_loop()
+            loop = get_running_loop()
         except RuntimeError:
             pass
 

@@ -29,7 +29,7 @@
         ]
     },
     "llm_config": {
-        "model_name": "bedrock-us-claude-3-7-sonnet",
+        "model_name": "bedrock-us-claude-sonnet-4",
     },
     "tools": [
         # This first agent definition is regarded as the "Front Man", which

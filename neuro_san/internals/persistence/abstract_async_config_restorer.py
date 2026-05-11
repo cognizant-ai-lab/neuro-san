@@ -100,10 +100,10 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
             return config
 
         # Do a synchronous read of the file contents
-        file_contents: str = None
+        file_contents: bytes = None
 
         try:
-            with open(file_path, "r", encoding="utf-8") as file_obj:
+            with open(file_path, "rb") as file_obj:
                 file_contents = file_obj.read()
         except FileNotFoundError:
             # Swallow this in favor of common exception verbiage in filter_config()
@@ -130,9 +130,9 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
             return config
 
         # Do an asynchronous read of the file contents
-        file_contents: str = None
+        file_contents: bytes = None
         try:
-            async with async_open(file_path, "r", encoding="utf-8") as file_obj:
+            async with async_open(file_path, "rb") as file_obj:
                 file_contents = await file_obj.read()
         except FileNotFoundError:
             # Swallow this in favor of common exception verbiage in filter_config()
@@ -143,14 +143,15 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
 
         return self.filter_config(config, file_path)
 
-    def deserialize_file_contents(self, file_path: str, file_contents: str) -> Dict[str, Any]:
+    def deserialize_file_contents(self, file_path: str, file_contents: bytes) -> Dict[str, Any]:
         """
         :param file_path: The path to the file being restored
-        :param file_contents: The contents of the file
+        :param file_contents: The contents of the file as bytes
         :return: a dictionary
         """
-        # Create a file-like object from the string
-        string_file = BytesIO(file_contents.encode("utf-8"))
+        # Create a file-like object from the input bytes.
+        # This allows us to use the same deserialization code for both sync and async reads.
+        bytes_file = BytesIO(file_contents)
 
         # Determine the serialization format
         serialization: SerializationFormat = None
@@ -165,7 +166,7 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
 
         # Read the contents
         try:
-            config = serialization.to_object(string_file)
+            config = serialization.to_object(bytes_file)
         except (ParseException, ParseSyntaxException, JSONDecodeError, ConfigException) as exception:
             message: str = f"""
 There was an error parsing {self.file_purpose} file "{file_path}".

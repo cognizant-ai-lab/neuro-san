@@ -213,6 +213,35 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         """
         Add reservations to S3 storage.
 
+        On-disk JSON schema written per reservation
+        (key = "<prefix><reservation_id>.json"):
+
+            {
+                "name":       <str>,    # Authored network name (HOCON "name")
+                "llm_config": <dict>,   # Optional LLM settings
+                "tools":      <list>,   # Agent definitions making up the network
+                ...                     # Any other top-level spec fields
+                "metadata": {
+                    ...                                          # User-authored keys (merged in)
+                    "reservation": {                    # Injected by this method
+                        "id":                          <str>,    # "<prefix>-<uuid4>"
+                        "lifetime_in_seconds":         <float>,  # Lease duration
+                        "expiration_time_in_seconds":  <float>,  # Wall-clock deadline
+                    },
+                    "stored_at": <float>,                        # time.time() at write
+                }
+            }
+
+        Notes:
+          * User-authored metadata keys (e.g. "description", "tags") are
+            preserved; this method merges into agent_spec["metadata"]
+            rather than replacing it.
+          * lifetime_in_seconds:        client-requested duration.
+          * expiration_time_in_seconds: now + min(lifetime, server max);
+                                        Unix timestamp the system enforces against.
+          * stored_at:                  time.time() at write; useful for
+                                        clock-skew audit and orphan detection.
+
         :param reservations_dict: A mapping of Reservation -> some deployable agent spec
         :param source: A string describing where the deployment was coming from
         """

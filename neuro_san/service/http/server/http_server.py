@@ -28,6 +28,8 @@ import threading
 
 import tornado
 
+from leaf_common.serialization.util.text_file_reader import TextFileReader
+
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
@@ -297,8 +299,8 @@ class HttpServer(AgentStateListener):
         """
         open_api_dict: Dict[str, Any] = None
         try:
-            with open(self.openapi_service_spec_path, "r", encoding='utf-8') as f_out:
-                open_api_dict = json.load(f_out)
+            f_str: str = TextFileReader.read_text_file(self.openapi_service_spec_path)
+            open_api_dict = json.loads(f_str)
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(f"Failed to load '{self.openapi_service_spec_path}'") from exc
 
