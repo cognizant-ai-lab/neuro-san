@@ -63,6 +63,7 @@ jobs:
         run: pip freeze
 
       - name: Start server and run smoke tests
+        id: smoke
         shell: bash
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -75,8 +76,16 @@ jobs:
           PYTHONPATH: ${{ env.PYTHONPATH }}:.
         run: |
           build_scripts/server_start.sh
-
-          if ! pytest --capture=no --verbose -m "smoke" --timer-top-n 100 -n auto; then
+ 
+          set +e
+          pytest --capture=no --verbose -m "smoke" --timer-top-n 100 -n auto 2>&1 | tee pytest_output.txt
+          exit_code=${PIPESTATUS[0]}
+          set -e
+ 
+          summary=$(tail --lines=20 pytest_output.txt | grep -E '(passed|failed|error)' | tail --lines=1)
+          echo "summary=${summary}" >> "$GITHUB_OUTPUT"
+ 
+          if [ "$exit_code" -ne 0 ]; then
             echo "===================================================="
             echo "===================================================="
             echo "=== Server_Sevice_Agent.LOG ==="
@@ -87,8 +96,9 @@ jobs:
 
       - name: Notify Slack
         if: ${{ !cancelled() }}
-        # 1.0.3
-        uses: cognizant-ai-lab/build-common/actions/slack-notify@a5d90457ea6e44b8f24f878755f77c00216e2947
+        # 1.0.4
+        uses: cognizant-ai-lab/build-common/actions/slack-notify@f5836555ee8e04413a8f9b313a431ab36337045b
         with:
           status: ${{ job.status }}
+          details: ${{ steps.smoke.outputs.summary }}
           webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}

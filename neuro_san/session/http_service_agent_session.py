@@ -84,6 +84,8 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
             Note that responses to the chat input might be numerous and will come as they
             are produced until the system decides there are no more messages to be sent.
         """
+        separator: bytes = b"\n"
+        max_chunk_size: int = 64 * 1024
         path: str = self.get_request_path("streaming_chat")
         try:
             with requests.post(path, json=request_dict, headers=self.get_headers(),
@@ -91,9 +93,45 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                                timeout=self.streaming_timeout_in_seconds) as response:
                 response.raise_for_status()
 
-                for line in response.iter_lines(decode_unicode=True):
-                    if line.strip():  # Skip empty lines
-                        result_dict = json.loads(line)
+                # Iterate over the content stream as it comes in.
+                # Note: We used to iterate over lines with the simpler:
+                #           for line in response.iter_lines(decode_unicode=True):
+                #               ...
+                #       but that delegated UTF-8 handling to the response's
+                #       Content-Type charset (which the server may not set),
+                #       and split on universal newlines instead of strict "\n".
+                #       We now buffer raw bytes, split strictly on "\n",
+                #       and decode UTF-8 explicitly -- mirroring the async client.
+                accumulator: bytearray = bytearray(b"")
+                for data in response.iter_content(chunk_size=max_chunk_size):
+
+                    # Concatenate data as it comes in
+                    accumulator.extend(data)
+
+                    # Try to find our line separator
+                    index: int = accumulator.find(separator)
+                    while index >= 0:
+
+                        # Grab a single line
+                        unicode_line: str = accumulator[:index].decode("utf-8").strip()
+                        if unicode_line:  # Skip empty lines
+                            # We have a line with something in it.
+                            # Decode and yield as a dictionary
+                            result_dict = json.loads(unicode_line)
+                            yield result_dict
+
+                        # Remove the previous line from the accumulator
+                        del accumulator[:index + len(separator)]
+
+                        # Allow for case of multiple lines in one chunk
+                        index = accumulator.find(separator)
+
+                # If there is anything left in the accumulator, yield it
+                if len(accumulator) > 0:
+                    unicode_line: str = accumulator.decode("utf-8").strip()
+                    if unicode_line:
+                        result_dict = json.loads(unicode_line)
                         yield result_dict
+
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(self.help_message(path)) from exc
