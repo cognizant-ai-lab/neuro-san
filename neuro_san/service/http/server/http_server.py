@@ -128,6 +128,8 @@ class HttpServer(AgentStateListener):
         for network_storage in network_storage_dict.values():
             network_storage.add_listener(self)
 
+        self.server_context.set_agent_authorizer(self.authorization_policy)
+
     def start(self, startables: List[Startable]):
         """
         Method to be called by a thread running tornado HTTP server
@@ -307,7 +309,7 @@ class HttpServer(AgentStateListener):
             raise ValueError(f"Failed to load '{self.openapi_service_spec_path}'") from exc
 
         return {
-            "agent_policy": self.authorization_policy,
+            "agent_policy": self.authorization_policy,  # now redundant cuz server_context has it
             "forwarded_request_metadata": self.forwarded_request_metadata,
             "openapi_service_spec": open_api_dict,
             "server_context": self.server_context,

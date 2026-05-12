@@ -23,9 +23,9 @@ from threading import Lock
 
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
+from neuro_san.service.interfaces.server_context_lite import ServerContextLite
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
-from neuro_san.service.utils.server_context import ServerContext
 
 
 # pylint: disable=too-many-instance-attributes
@@ -42,7 +42,7 @@ class AsyncAgentServiceProvider:
                  agent_name: str,
                  agent_network_provider: AgentNetworkProvider,
                  server_logging: AgentServerLogging,
-                 server_context: ServerContext):
+                 server_context: ServerContextLite):
         """
         Constructor.
         :param request_logger: The instance of the EventLoopLogger that helps
@@ -64,7 +64,7 @@ class AsyncAgentServiceProvider:
         self.agent_network_provider: AgentNetworkProvider = agent_network_provider
         self.agent_name: str = agent_name
         self.lock: Lock = Lock()
-        self.server_context: ServerContext = server_context
+        self.server_context: ServerContextLite = server_context
         self.service_instance: AsyncAgentService = None
 
     def get_service(self) -> AsyncAgentService:

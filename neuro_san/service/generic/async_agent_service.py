@@ -44,9 +44,9 @@ from neuro_san.service.generic.service_agent_reservationist import ServiceAgentR
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.chat_message_converter import ChatMessageConverter
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
+from neuro_san.service.interfaces.server_context_lite import ServerContextLite
 from neuro_san.service.usage.usage_logger_factory import UsageLoggerFactory
 from neuro_san.service.usage.wrapped_usage_logger import WrappedUsageLogger
-from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.session.async_direct_agent_session import AsyncDirectAgentSession
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
 from neuro_san.session.session_invocation_context import SessionInvocationContext
@@ -71,7 +71,7 @@ class AsyncAgentService:
                  agent_name: str,
                  agent_network_provider: AgentNetworkProvider,
                  server_logging: AgentServerLogging,
-                 server_context: ServerContext):
+                 server_context: ServerContextLite):
         """
         :param request_logger: The instance of the EventLoopLogger that helps
                         log information from running event loop
@@ -117,6 +117,12 @@ class AsyncAgentService:
         # Load once.
         self.llm_factory.load()
         self.toolbox_factory.load()
+
+    def get_agent_network(self) -> AgentNetwork:
+        """
+        :return: The agent network for this service
+        """
+        return self.agent_network_provider.get_agent_network()
 
     def get_request_count(self) -> int:
         """
