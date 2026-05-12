@@ -126,36 +126,36 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
                     #               ... blah blah ...
                     #       but that could fail with ValueError("Chunk too big")
                     #       if a single line was too long.
-                    accumulator: bytes = b""
+                    accumulator: bytearray = bytearray(b"")
                     async for data in response.content.iter_chunked(max_chunk_size):
 
                         # Concatenate data as it comes in
-                        accumulator += data
+                        accumulator.extend(data)
 
                         # Try to find our line separator
                         index: int = accumulator.find(separator)
                         while index >= 0:
 
                             # Grab a single line
-                            line: bytes = accumulator[:index]
-                            unicode_line = line.decode("utf-8")
-                            if unicode_line.strip():    # Skip empty lines
-
+                            unicode_line: str = accumulator[:index].decode("utf-8").strip()
+                            if unicode_line:    # Skip empty lines
                                 # We have a line with something in it.
                                 # Decode and yield as a dictionary
                                 result_dict = json.loads(unicode_line)
                                 yield result_dict
 
                             # Remove the previous line from the accumulator
-                            accumulator = accumulator[index + len(separator):]
+                            del accumulator[:index + len(separator)]
 
                             # Allow for case of multiple lines in one chunk
                             index = accumulator.find(separator)
 
                     # If there is anything left in the accumulator, yield it
                     if len(accumulator) > 0:
-                        result_dict = json.loads(accumulator.decode("utf-8"))
-                        yield result_dict
+                        unicode_line: str = accumulator.decode("utf-8").strip()
+                        if unicode_line:
+                            result_dict = json.loads(unicode_line)
+                            yield result_dict
 
         except (asyncio.TimeoutError, ClientOSError, ClientPayloadError) as exc:
             # Pass on a couple of asserts that are known to represent
