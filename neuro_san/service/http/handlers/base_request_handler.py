@@ -39,6 +39,7 @@ from neuro_san.internals.network_providers.expiring_agent_network_storage import
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
+from neuro_san.service.utils.request_util import RequestUtil
 from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.service.http.logging.http_logger import HttpLogger
 
@@ -238,7 +239,9 @@ class BaseRequestHandler(RequestHandler):
         if status_code != HTTPStatus.OK:
             self.set_status(status_code)
             if err_message:
-                self.write({"error": err_message})
+                # HTML-escape the error message defensively, since some err_message
+                # values may originate from user-controlled input.
+                self.write({"error": RequestUtil.safe_message(err_message)})
         try:
             self.finish()
         except tornado.iostream.StreamClosedError:
