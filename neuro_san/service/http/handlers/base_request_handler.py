@@ -39,6 +39,7 @@ from neuro_san.internals.network_providers.expiring_agent_network_storage import
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
+from neuro_san.service.utils.request_util import RequestUtil
 from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.service.http.logging.http_logger import HttpLogger
 
@@ -238,7 +239,9 @@ class BaseRequestHandler(RequestHandler):
         if status_code != HTTPStatus.OK:
             self.set_status(status_code)
             if err_message:
-                self.write({"error": err_message})
+                # HTML-escape the error message defensively, since some err_message
+                # values may originate from user-controlled input.
+                self.write({"error": RequestUtil.safe_message(err_message)})
         try:
             self.finish()
         except tornado.iostream.StreamClosedError:
@@ -251,19 +254,6 @@ class BaseRequestHandler(RequestHandler):
         """
         try:
             await self.flush()
-            # What happens here: we have finished writing out one data item in our output stream,
-            # and we have flushed Tornado output.
-            # BUT: this does not guarantee in general that underlying TCP/IP transport
-            # will flush its own buffers, so low-level buffering is still possible.
-            # Result would be that several chat responses will be bunched together
-            # and received by a client as one data piece.
-            # If client is not ready for this, there will be problems.
-            # SO: this real wall clock delay here helps to encourage underlying transport
-            # to flush its own buffers - and we are good.
-            # Duration of delay is speculative and maybe could be adjusted.
-            # But best solution and reliable one: make client accept multiple data items
-            # in one "get" request - as it should when dealing with streaming service.
-            await asyncio.sleep(0.3)
             return True
         except tornado.iostream.StreamClosedError:
             self.logger.warning(self.get_metadata(), "Flush: client closed connection unexpectedly.")

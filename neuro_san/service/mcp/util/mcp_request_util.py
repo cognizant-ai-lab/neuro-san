@@ -19,10 +19,8 @@ See class comment for details
 """
 from typing import Any
 from typing import Dict
-from typing import Union
 
-import html
-
+from neuro_san.service.utils.request_util import RequestUtil
 from neuro_san.session.mcp_service_agent_session import MCP_VERSION
 
 
@@ -48,7 +46,7 @@ class McpRequestUtil:
         """
         return {
             "jsonrpc": "2.0",
-            "id": McpRequestUtil.safe_request_id(request_id),
+            "id": RequestUtil.safe_request_id(request_id),
             "result": {
                 "protocolVersion": MCP_VERSION,
                 "capabilities": {
@@ -67,27 +65,3 @@ class McpRequestUtil:
                 "instructions": ""
             }
         }
-
-    @staticmethod
-    def safe_request_id(request_id: Union[int, str]) -> str:
-        """
-        Return HTML-safe representation of user request id to be sent back in MCP response.
-        :param request_id: MCP request id (as received from user);
-        :return: HTML-escaped request id string
-        """
-        # Always return a string and always HTML-escape it to avoid XSS
-        # vulnerabilities in any HTML-based consumers of the MCP response.
-        if isinstance(request_id, str):
-            return html.escape(request_id)
-        # For non-string IDs (including integers), convert to string first,
-        # then escape to ensure the returned value is HTML-safe.
-        return html.escape(str(request_id))
-
-    @staticmethod
-    def safe_message(msg: str) -> str:
-        """
-        Return HTML-safe representation of string message to be sent back in MCP response.
-        :param msg: message string;
-        :return: HTML-escaped message string
-        """
-        return html.escape(msg)
