@@ -18,6 +18,7 @@ from typing import List
 
 from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
 from neuro_san.internals.validation.common.composite_dictionary_validator import CompositeDictionaryValidator
+from neuro_san.internals.validation.network.empty_dict_network_validator import EmptyDictNetworkValidator
 from neuro_san.internals.validation.network.keyword_network_validator import KeywordNetworkValidator
 from neuro_san.internals.validation.network.missing_nodes_network_validator import MissingNodesNetworkValidator
 from neuro_san.internals.validation.network.tool_name_network_validator import ToolNameNetworkValidator
@@ -40,6 +41,7 @@ class ManifestNetworkValidator(CompositeDictionaryValidator):
         """
         validators: List[DictionaryValidator] = [
             # Note we do use the CyclesNetworkValidator here because cycles are actually OK.
+            EmptyDictNetworkValidator(),
             KeywordNetworkValidator(),
             MissingNodesNetworkValidator(),
             UnreachableNodesNetworkValidator(),
