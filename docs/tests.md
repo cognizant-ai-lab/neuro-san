@@ -18,6 +18,10 @@ Many (but not absolutely all) tests will require an active OPENAI_API_KEY or oth
 from another LLM provider in order to run successfully.  Please be sure you have a basic
 agent network running in your environment as described in the top-level README.md to this repo.
 
+Some unit tests (for example, the S3 reservations storage suite under
+`tests/neuro_san/service/watcher/temp_networks/`) are fully mocked and run without any
+LLM, AWS, or external service keys.
+
 ### Basic unit tests
 
 Unit tests are run in this repo with every push to every branch.
@@ -30,6 +34,29 @@ To run all basic unit tests:
     pytest -v -m "not integration and not smoke and not needs_server" -n auto
 
 The -n auto allows the tests to run in parallel on available CPUs.
+
+### Mock-based unit tests for cloud-backed storage
+
+Some unit tests exercise components that talk to AWS or other cloud
+services in production but use an in-memory mock of the SDK client
+in tests.  These tests do not need any AWS credentials, do not pull
+in `moto` or `localstack`, and run anywhere a basic Python
+environment is available.
+
+The first such suite covers `S3ReservationsStorage`:
+
+    pytest --verbose tests/neuro_san/service/watcher/temp_networks/
+
+Layout:
+
+- `_test_base.py` — `FakeS3Client` (in-memory stand-in for boto3 S3
+  client) and `S3ReservationsStorageTestBase` (shared scaffolding,
+  patches `boto3_client` to inject the fake).
+- `conftest.py` — scoped override of the `OPENAI_API_KEY` autouse
+  fixture for this subtree only.
+- `test_*.py` — one file per scenario (round-trip, retries, batch
+  semantics, custom prefix, etc.). One test per file keeps failure
+  diagnostics clean.
 
 ### needs_server
 

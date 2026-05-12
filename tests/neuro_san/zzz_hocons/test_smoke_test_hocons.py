@@ -35,6 +35,25 @@ class TestSmokeTestHocons(TestCase):
     # annotation below so the instance can find the hocon test cases listed.
     DYNAMIC = DynamicHoconUnitTests(__file__, path_to_basis="../../fixtures")
 
+    # Hocon test cases that are temporarily disabled at runtime via pytest.skip().
+    # We deliberately keep these listed in the @parameterized.expand() blocks
+    # below so they remain visible in test reports as SKIPPED (with a reason)
+    # rather than being silently commented out. To disable a new hocon, append
+    # an entry to this dict. Remove an entry once its underlying blocker is
+    # resolved.
+    DISABLED_HOCONS = {
+        "music_nerd_pro_llm_azure/combination_responses_with_history_direct.hocon":
+            "Issue #910: disabled until #909 (Anthropic API key) is resolved.",
+        "music_nerd_pro_llm_bedrock_claude/combination_responses_with_history_direct.hocon":
+            "Issue #910: disabled until #909 (Anthropic API key) is resolved.",
+    }
+
+    def _skip_if_disabled(self, test_hocon: str) -> None:
+        """Skip the current test if its hocon is listed in DISABLED_HOCONS."""
+        reason = self.DISABLED_HOCONS.get(test_hocon)
+        if reason is not None:
+            pytest.skip(reason)
+
     @parameterized.expand(DynamicHoconUnitTests.from_hocon_list([
         # These can be in any order.
         # Ideally more basic functionality will come first.
@@ -54,6 +73,9 @@ class TestSmokeTestHocons(TestCase):
         :param test_name: The name of a single test.
         :param test_hocon: The hocon file of a single data-driven test case.
         """
+        # Skip hocons listed in DISABLED_HOCONS (e.g. temporarily blocked tests).
+        self._skip_if_disabled(test_hocon)
+
         # Call the guts of the dynamic test driver.
         # This will expand the test_hocon file name from the expanded list to
         # include the file basis implied by the __file__ and path_to_basis above.
@@ -82,6 +104,9 @@ class TestSmokeTestHocons(TestCase):
         :param test_name: The name of a single test.
         :param test_hocon: The hocon file of a single data-driven test case.
         """
+        # Skip hocons listed in DISABLED_HOCONS (e.g. temporarily blocked tests).
+        self._skip_if_disabled(test_hocon)
+
         # Call the guts of the dynamic test driver.
         # This will expand the test_hocon file name from the expanded list to
         # include the file basis implied by the __file__ and path_to_basis above.
@@ -109,6 +134,9 @@ class TestSmokeTestHocons(TestCase):
         :param test_name: The name of a single test.
         :param test_hocon: The hocon file of a single data-driven test case.
         """
+        # Skip hocons listed in DISABLED_HOCONS (e.g. temporarily blocked tests).
+        self._skip_if_disabled(test_hocon)
+
         # Call the guts of the dynamic test driver.
         # This will expand the test_hocon file name from the expanded list to
         # include the file basis implied by the __file__ and path_to_basis above.
@@ -134,6 +162,9 @@ class TestSmokeTestHocons(TestCase):
         :param test_name: The name of a single test.
         :param test_hocon: The hocon file of a single data-driven test case.
         """
+        # Skip hocons listed in DISABLED_HOCONS (e.g. temporarily blocked tests).
+        self._skip_if_disabled(test_hocon)
+
         # Call the guts of the dynamic test driver.
         # This will expand the test_hocon file name from the expanded list to
         # include the file basis implied by the __file__ and path_to_basis above.
