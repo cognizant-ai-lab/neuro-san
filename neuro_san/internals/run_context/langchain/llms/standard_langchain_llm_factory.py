@@ -28,7 +28,6 @@ from neuro_san.internals.run_context.langchain.llms.gemini_llm_policy import Gem
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
-from neuro_san.internals.run_context.langchain.llms.mock_llm_policy import MockLlmPolicy
 from neuro_san.internals.run_context.langchain.llms.nvidia_llm_policy import NvidiaLlmPolicy
 from neuro_san.internals.run_context.langchain.llms.ollama_llm_policy import OllamaLlmPolicy
 from neuro_san.internals.run_context.langchain.llms.openai_llm_policy import OpenAILlmPolicy
@@ -74,7 +73,6 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 "azure-openai": AzureLlmPolicy,
                 "bedrock": BedrockLlmPolicy,
                 "gemini": GeminiLlmPolicy,
-                "mock": MockLlmPolicy,
                 "nvidia": NvidiaLlmPolicy,
                 "openai": OpenAILlmPolicy,
                 "ollama": OllamaLlmPolicy,

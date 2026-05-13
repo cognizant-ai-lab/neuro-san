@@ -31,14 +31,20 @@
 #    "llm_config": {
 #        "model_name": "mock"
 #    },
+#    "llm_config": {
+#      "class": "mock",
+#      "min_latency": 0.05,
+#      "max_latency": 0.5,
+#      "responses": [
+#          "Custom response one.",
+#          "Custom response two."
+#      ]
+#    },
     "llm_config": {
-      "class": "mock",
-      "min_latency": 0.05,
-      "max_latency": 0.5,
-      "responses": [
-          "Custom response one.",
-          "Custom response two."
-      ]
+        "class": "openai",
+        "model_name": "mock-model",
+        "openai_api_base": "http://localhost:8888/v1",
+        "openai_api_key": "not-needed"
     },
     "tools": [
         # This first agent definition is regarded as the "Front Man", which
