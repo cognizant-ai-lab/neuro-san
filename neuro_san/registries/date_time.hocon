@@ -28,15 +28,8 @@
             "What time is it in San Francisco?",
         ]
     },
-#    "llm_config": {
-#        #"model_name": "gpt-5.2"
-#        "model_name": "mock"
-#    },
-    llm_config {
-      class = "openai"
-      model_name = "mock-model"
-      openai_api_base = "http://localhost:8888/v1"
-      openai_api_key = "not-needed"
+    "llm_config": {
+        "model_name": "gpt-5.2"
     },
     "tools": [
         # This first agent definition is regarded as the "Front Man", which
