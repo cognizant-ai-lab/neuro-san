@@ -29,4 +29,9 @@ class HealthHandler(tornado.web.RequestHandler):
     """
 
     def get(self) -> None:
+        """Return a fixed liveness payload."""
         self.write({"status": "ok"})
+
+    def data_received(self, chunk):
+        """Required override of RequestHandler abstract method; no-op for GET."""
+        return

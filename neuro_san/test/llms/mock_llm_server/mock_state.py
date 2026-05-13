@@ -51,6 +51,7 @@ class MockState:
         "prioritize the critical items first, then address the remaining tasks in order.",
     ]
 
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     def __init__(
         self,
         responses: List[str],

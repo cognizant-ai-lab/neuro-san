@@ -34,10 +34,12 @@ class ModelsHandler(tornado.web.RequestHandler):
     """
 
     def initialize(self, state: MockState) -> None:
+        """Receive the shared MockState from the Tornado application."""
         # pylint: disable=attribute-defined-outside-init
         self.state = state
 
     def get(self) -> None:
+        """Return a one-entry list containing the mock model."""
         self.write(
             {
                 "object": "list",
@@ -51,3 +53,7 @@ class ModelsHandler(tornado.web.RequestHandler):
                 ],
             }
         )
+
+    def data_received(self, chunk):
+        """Required override of RequestHandler abstract method; no-op for GET."""
+        return
