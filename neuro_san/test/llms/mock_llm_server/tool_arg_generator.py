@@ -31,23 +31,22 @@ class ToolArgGenerator:
     emit plausible tool_calls without understanding the tool's semantics.
     """
 
+    # Defaults for the simple JSON Schema primitive types that need no inspection
+    # beyond their "type" field. Compound types (string/object) are handled separately.
+    PRIMITIVE_DEFAULTS: Dict[str, Any] = {
+        "integer": 0,
+        "number": 0.0,
+        "boolean": True,
+        "array": [],
+    }
+
     @classmethod
     def default_value_for_schema(cls, schema: Dict[str, Any]) -> Any:
         """Generate a minimal default value that satisfies a JSON Schema type."""
         schema_type = schema.get("type", "string")
         if schema_type == "string":
             enum = schema.get("enum")
-            if enum:
-                return enum[0]
-            return "test"
-        if schema_type == "integer":
-            return 0
-        if schema_type == "number":
-            return 0.0
-        if schema_type == "boolean":
-            return True
-        if schema_type == "array":
-            return []
+            return enum[0] if enum else "test"
         if schema_type == "object":
             properties = schema.get("properties", {})
             required = schema.get("required", [])
@@ -56,7 +55,8 @@ class ToolArgGenerator:
                 prop_schema = properties.get(prop_name, {"type": "string"})
                 obj[prop_name] = cls.default_value_for_schema(prop_schema)
             return obj
-        return "test"
+        # Primitives via lookup; unknown types fall back to a generic string placeholder.
+        return cls.PRIMITIVE_DEFAULTS.get(schema_type, "test")
 
     @classmethod
     def generate_tool_args(cls, tool_schema: Dict[str, Any]) -> Dict[str, Any]:

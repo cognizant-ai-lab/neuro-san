@@ -46,10 +46,12 @@ class ChatCompletionsHandler(tornado.web.RequestHandler):
     """
 
     def initialize(self, state: MockState) -> None:
+        """Receive the shared MockState from the Tornado application."""
         # pylint: disable=attribute-defined-outside-init
         self.state = state
 
     async def post(self) -> None:
+        """Handle a chat-completions request, streaming or one-shot."""
         try:
             body: Dict[str, Any] = json.loads(self.request.body or b"{}")
         except json.JSONDecodeError as exc:
@@ -113,66 +115,95 @@ class ChatCompletionsHandler(tornado.web.RequestHandler):
         completion_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
         created = int(time.time())
 
-        def chunk(delta: Dict[str, Any], finish_reason: Optional[str] = None) -> Dict[str, Any]:
-            return {
-                "id": completion_id,
-                "object": "chat.completion.chunk",
-                "created": created,
-                "model": model,
-                "choices": [
-                    {"index": 0, "delta": delta, "finish_reason": finish_reason}
-                ],
-            }
-
         try:
             if tools and not ToolArgGenerator.has_tool_results(messages):
-                tool = random.choice(tools)
-                func_info = tool.get("function", tool)
-                tool_name = func_info.get("name", "unknown_tool")
-                args_str = json.dumps(ToolArgGenerator.generate_tool_args(func_info))
-                tool_call_id = f"call_{uuid.uuid4().hex[:24]}"
-
-                # Opening chunk: role + tool_call skeleton with the function name.
-                await self._send_event(chunk({
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": [{
-                        "index": 0,
-                        "id": tool_call_id,
-                        "type": "function",
-                        "function": {"name": tool_name, "arguments": ""},
-                    }],
-                }))
-                # Argument chunk: full JSON arg string in one delta. OpenAI may
-                # split this across many chunks; clients concatenate them, so
-                # one chunk is protocol-valid and simpler.
-                await self._send_event(chunk({
-                    "tool_calls": [{
-                        "index": 0,
-                        "function": {"arguments": args_str},
-                    }],
-                }))
-                await self._send_event(chunk({}, finish_reason="tool_calls"))
+                await self._stream_tool_call(completion_id, created, model, tools)
             else:
-                text = self.state.next_response()
-                await self._send_event(chunk({"role": "assistant", "content": ""}))
-                words = text.split(" ")
-                for idx, word in enumerate(words):
-                    token = word if idx == 0 else " " + word
-                    await self._send_event(chunk({"content": token}))
-                    if self.state.stream_token_delay > 0:
-                        await asyncio.sleep(self.state.stream_token_delay)
-                await self._send_event(chunk({}, finish_reason="stop"))
-
+                await self._stream_text_response(completion_id, created, model)
             self.write("data: [DONE]\n\n")
             await self.flush()
         except tornado.iostream.StreamClosedError:
             # Client disconnected mid-stream; nothing more to do.
             return
 
+    @staticmethod
+    def _chunk_envelope(
+        completion_id: str,
+        created: int,
+        model: str,
+        delta: Dict[str, Any],
+        finish_reason: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Build one OpenAI chat.completion.chunk envelope."""
+        return {
+            "id": completion_id,
+            "object": "chat.completion.chunk",
+            "created": created,
+            "model": model,
+            "choices": [
+                {"index": 0, "delta": delta, "finish_reason": finish_reason}
+            ],
+        }
+
+    async def _stream_tool_call(
+        self,
+        completion_id: str,
+        created: int,
+        model: str,
+        tools: List[Dict[str, Any]],
+    ) -> None:
+        """Stream a single tool_call across three SSE chunks."""
+        tool = random.choice(tools)
+        func_info = tool.get("function", tool)
+        tool_name = func_info.get("name", "unknown_tool")
+        args_str = json.dumps(ToolArgGenerator.generate_tool_args(func_info))
+        tool_call_id = f"call_{uuid.uuid4().hex[:24]}"
+
+        # Opening chunk: role + tool_call skeleton with the function name.
+        await self._send_event(self._chunk_envelope(completion_id, created, model, {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [{
+                "index": 0,
+                "id": tool_call_id,
+                "type": "function",
+                "function": {"name": tool_name, "arguments": ""},
+            }],
+        }))
+        # Argument chunk: full JSON arg string in one delta. OpenAI may split
+        # this across many chunks; clients concatenate them, so one chunk is
+        # protocol-valid and simpler.
+        await self._send_event(self._chunk_envelope(completion_id, created, model, {
+            "tool_calls": [{
+                "index": 0,
+                "function": {"arguments": args_str},
+            }],
+        }))
+        await self._send_event(self._chunk_envelope(
+            completion_id, created, model, {}, finish_reason="tool_calls"))
+
+    async def _stream_text_response(self, completion_id: str, created: int, model: str) -> None:
+        """Stream a text response one whitespace-split word per SSE chunk."""
+        text = self.state.next_response()
+        await self._send_event(self._chunk_envelope(
+            completion_id, created, model, {"role": "assistant", "content": ""}))
+        for idx, word in enumerate(text.split(" ")):
+            token = word if idx == 0 else " " + word
+            await self._send_event(self._chunk_envelope(
+                completion_id, created, model, {"content": token}))
+            if self.state.stream_token_delay > 0:
+                await asyncio.sleep(self.state.stream_token_delay)
+        await self._send_event(self._chunk_envelope(
+            completion_id, created, model, {}, finish_reason="stop"))
+
     async def _send_event(self, payload: Dict[str, Any]) -> None:
+        """Write one `data: {json}\\n\\n` SSE frame and flush it to the client."""
         self.write(f"data: {json.dumps(payload)}\n\n")
         await self.flush()
+
+    def data_received(self, chunk):
+        """Required override of RequestHandler abstract method; full body comes via self.request.body."""
+        return
 
     @staticmethod
     def _chat_completion_envelope(
