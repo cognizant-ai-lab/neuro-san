@@ -586,18 +586,6 @@
     }
 
 
-    # Mock model for load testing (no LLM tokens consumed)
-    "mock": {
-        "class": "mock",
-        "modalities": {
-            "input": [ "text" ],
-            "output": [ "text" ],
-        },
-        "capabilities": [ "tools" ],
-        "context_window_size": 128000,
-        "max_output_tokens": 4096,
-    },
-
     # Ollama models
     # See https://ollama.com/search?c=tools for latest in tool-supporting Ollama models
 
@@ -1002,17 +990,6 @@
         #   * Exist in the PYTHONPATH of your server
         #   * Derive from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory.LangChainLlmFactory
         #   * Have a no-args constructor
-
-        "mock": {
-            "args": {
-                # MockChatModel for load testing — no tokens consumed.
-                # responses: list of canned response strings to cycle through (null = use built-in defaults)
-                "responses": null,
-                # min_latency / max_latency: simulated thinking time in seconds
-                "min_latency": 0.1,
-                "max_latency": 1.5,
-            }
-        },
 
         "openai": {
             "args": {
