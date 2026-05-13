@@ -54,9 +54,9 @@ class ChatCompletionsHandler(tornado.web.RequestHandler):
         """Handle a chat-completions request, streaming or one-shot."""
         try:
             body: Dict[str, Any] = json.loads(self.request.body or b"{}")
-        except json.JSONDecodeError as exc:
+        except json.JSONDecodeError:
             self.set_status(400)
-            self.write({"error": {"message": f"invalid JSON body: {exc}"}})
+            self.write({"error": {"message": "invalid JSON body"}})
             return
 
         messages: List[Dict[str, Any]] = body.get("messages", []) or []
