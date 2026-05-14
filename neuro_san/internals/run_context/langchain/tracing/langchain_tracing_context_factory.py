@@ -40,6 +40,7 @@ class LangChainTracingContextFactory(ContextTypeTracingContextFactory):
         :param run_target: The RunTarget instance to be traced
         :return: Another RunTarget which will be the tracing context
         """
+        tracing_context: RunTarget = None
 
         test_for_langfuse: bool = getenv("LANGFUSE_ENABLED", "false").lower() == "true"
 
