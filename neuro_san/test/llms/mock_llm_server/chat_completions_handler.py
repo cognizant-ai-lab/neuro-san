@@ -84,7 +84,7 @@ class ChatCompletionsHandler(tornado.web.RequestHandler):
         tool = random.choice(tools)
         # OpenAI tool spec: {"type":"function","function":{"name":..., "parameters":...}}
         func_info = tool.get("function", tool)
-        tool_name = html.escape(str(func_info.get("name", "unknown_tool")), quote=True)
+        tool_name = str(func_info.get("name", "unknown_tool"))
         args = ToolArgGenerator.generate_tool_args(func_info)
         message = {
             "role": "assistant",
@@ -199,7 +199,7 @@ class ChatCompletionsHandler(tornado.web.RequestHandler):
 
     async def _send_event(self, payload: Dict[str, Any]) -> None:
         """Write one `data: {json}\\n\\n` SSE frame and flush it to the client."""
-        serialized_payload = html.escape(json.dumps(payload), quote=True)
+        serialized_payload = json.dumps(payload, separators=(",", ":"))
         self.write(f"data: {serialized_payload}\n\n")
         await self.flush()
 
