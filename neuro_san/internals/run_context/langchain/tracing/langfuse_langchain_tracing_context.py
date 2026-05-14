@@ -14,8 +14,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-from __future__ import annotations
-
 from typing import Any
 from typing import Dict
 from typing import List
