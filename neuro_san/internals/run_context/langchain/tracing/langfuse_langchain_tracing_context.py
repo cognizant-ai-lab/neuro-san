@@ -43,7 +43,7 @@ class LangFuseLangChainTracingContext(LangChainTracingContext):
 
         handler = ResolverUtil.create_instance("langfuse.langchain.CallbackHandler", "langfuse", BaseCallbackHandler)
         if handler is None:
-            raise Exception("""
+            raise ValueError("""
 Failed to create LangFuse CallbackHandler. Try one of the following:
 
 If you really wanted to use langfuse for observability, you can install it with
