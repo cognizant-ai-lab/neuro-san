@@ -20,6 +20,8 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from socket import gethostname
+
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.runnables.base import Runnable
 
@@ -41,6 +43,7 @@ class LangFuseLangChainTracingContext(LangChainTracingContext):
         :param runnable_config: The config for the runnable
         """
 
+        # See if we can get a langfuse handler instance.
         handler = ResolverUtil.create_instance("langfuse.langchain.CallbackHandler", "langfuse", BaseCallbackHandler)
         if handler is None:
             raise ValueError("""
@@ -53,15 +56,20 @@ If you didn't mean to use langfuse for observability, you can do this:
     export LANGFUSE_ENABLED=false
 """)
 
+        # Set the callbacks per the langfuse docs
         callbacks: List[BaseCallbackHandler] = runnable_config.get("callbacks", [])
         callbacks.append(handler)
         runnable_config["callbacks"] = callbacks
 
+        # Get the user_id for the trace
         request_metadata: Dict[str, Any] = runnable_config.get("metadata")
         user_id: str = request_metadata.get("user_id")
+
+        # Create a session_id for the trace.
+        # It's possible we should move the addition of hostname up to the services infra.
+        hostname: str = gethostname()
         request_id: str = request_metadata.get("request_id")
-        # We might want to add IP address to the session_id.
-        session_id: str = request_id
+        session_id: str = f"{request_id}@{hostname}"
 
         # We have a handler, therefore we have langfuse installed.
         # No need to ResolverUtil absolutely everything, but we still need to locally import
