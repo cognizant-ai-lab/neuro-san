@@ -53,16 +53,6 @@ If you didn't mean to use langfuse for observability, you can do this:
     export LANGFUSE_ENABLED=false
 """)
 
-        # We have a handler, therefore we have langfuse installed.
-        # No need to ResolverUtil absolutely everything, but we still need to locally import
-        # for the rest of the system to behave without langfuse installed.
-
-        # pylint: disable=import-outside-toplevel
-        from langfuse import get_client
-        from langfuse import propagate_attributes
-
-        langfuse_client: Any = get_client()
-
         callbacks: List[BaseCallbackHandler] = runnable_config.get("callbacks", [])
         callbacks.append(handler)
         runnable_config["callbacks"] = callbacks
@@ -70,14 +60,17 @@ If you didn't mean to use langfuse for observability, you can do this:
         request_metadata: Dict[str, Any] = runnable_config.get("metadata")
         user_id: str = request_metadata.get("user_id")
 
-        run_name: str = runnable_config.get("run_name")
+        # We have a handler, therefore we have langfuse installed.
+        # No need to ResolverUtil absolutely everything, but we still need to locally import
+        # for the rest of the system to behave without langfuse installed.
+
+        # pylint: disable=import-outside-toplevel
+        from langfuse import propagate_attributes
 
         # Weird: Langfuse docs here ...
         #   https://langfuse.com/docs/observability/features/users
         # ... say to use the with/ContextManager here, but pylint doesn't like it.
         # It works. :shrug:
         # pylint: disable=not-context-manager
-        with langfuse_client.start_as_current_observation(as_type="span", name=run_name):
-            # pylint: disable=not-context-manager
-            with propagate_attributes(user_id=user_id):
-                await super().ainvoke(chain, inputs, runnable_config)
+        with propagate_attributes(user_id=user_id):
+            await super().ainvoke(chain, inputs, runnable_config)
