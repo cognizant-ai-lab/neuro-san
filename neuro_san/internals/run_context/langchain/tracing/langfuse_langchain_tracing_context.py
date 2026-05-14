@@ -20,6 +20,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from datetime import datetime
 from socket import gethostname
 
 from langchain_core.callbacks.base import BaseCallbackHandler
@@ -67,9 +68,11 @@ If you didn't mean to use langfuse for observability, you can do this:
 
         # Create a session_id for the trace.
         # It's possible we should move the addition of hostname up to the services infra.
-        hostname: str = gethostname()
         request_id: str = request_metadata.get("request_id")
-        session_id: str = f"{request_id}@{hostname}"
+        now: datetime = datetime.now()
+        session_id: str = f"{request_id}@{now.strftime('%Y-%m-%d-%H:%M:%S.%f')}"
+        hostname: str = gethostname()
+        session_id: str = f"{session_id}@{hostname}"
 
         # We have a handler, therefore we have langfuse installed.
         # No need to ResolverUtil absolutely everything, but we still need to locally import
