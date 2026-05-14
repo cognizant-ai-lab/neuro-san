@@ -59,6 +59,9 @@ If you didn't mean to use langfuse for observability, you can do this:
 
         request_metadata: Dict[str, Any] = runnable_config.get("metadata")
         user_id: str = request_metadata.get("user_id")
+        request_id: str = request_metadata.get("request_id")
+        # We might want to add IP address to the session_id.
+        session_id: str = request_id
 
         # We have a handler, therefore we have langfuse installed.
         # No need to ResolverUtil absolutely everything, but we still need to locally import
@@ -72,5 +75,5 @@ If you didn't mean to use langfuse for observability, you can do this:
         # ... say to use the with/ContextManager here, but pylint doesn't like it.
         # It works. :shrug:
         # pylint: disable=not-context-manager
-        with propagate_attributes(user_id=user_id):
+        with propagate_attributes(user_id=user_id, session_id=session_id):
             await super().ainvoke(chain, inputs, runnable_config)
