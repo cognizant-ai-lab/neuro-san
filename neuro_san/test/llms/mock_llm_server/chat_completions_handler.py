@@ -84,7 +84,7 @@ class ChatCompletionsHandler(tornado.web.RequestHandler):
         tool = random.choice(tools)
         # OpenAI tool spec: {"type":"function","function":{"name":..., "parameters":...}}
         func_info = tool.get("function", tool)
-        tool_name = func_info.get("name", "unknown_tool")
+        tool_name = html.escape(str(func_info.get("name", "unknown_tool")), quote=True)
         args = ToolArgGenerator.generate_tool_args(func_info)
         message = {
             "role": "assistant",
@@ -217,7 +217,7 @@ class ChatCompletionsHandler(tornado.web.RequestHandler):
             "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
             "object": "chat.completion",
             "created": int(time.time()),
-            "model": model,
+            "model": html.escape(str(model), quote=True),
             "choices": [
                 {
                     "index": 0,
