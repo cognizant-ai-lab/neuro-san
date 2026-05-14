@@ -82,6 +82,7 @@ If you didn't mean to use langfuse for observability, you can do this:
         #   https://langfuse.com/docs/observability/features/users
         # ... say to use the with/ContextManager here, but pylint doesn't like it.
         # It works. :shrug:
+        # According to langfuse docs, this should be safe for use in async code.
         # pylint: disable=not-context-manager
         with propagate_attributes(user_id=user_id, session_id=session_id):
             await super().ainvoke(chain, inputs, runnable_config)
