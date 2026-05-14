@@ -61,12 +61,13 @@ If you didn't mean to use langfuse for observability, you can do this:
         runnable_config["callbacks"] = callbacks
 
         # Get the user_id for the trace
-        request_metadata: Dict[str, Any] = runnable_config.get("metadata")
-        user_id: str = request_metadata.get("user_id")
+        empty: Dict[str, Any] = {}
+        request_metadata: Dict[str, Any] = runnable_config.get("metadata", empty)
+        user_id: str = request_metadata.get("user_id", "<Unknown>")
 
         # Create a session_id for the trace.
         # It's possible we should move the addition of hostname up to the services infra.
-        request_id: str = request_metadata.get("request_id")
+        request_id: str = request_metadata.get("request_id", "<Unknown>")
         now: datetime = datetime.now()
         session_id: str = f"{request_id}@{now.strftime('%Y-%m-%d-%H:%M:%S.%f')}"
         hostname: str = gethostname()
