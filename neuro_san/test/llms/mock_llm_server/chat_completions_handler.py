@@ -51,7 +51,7 @@ class ChatCompletionsHandler(tornado.web.RequestHandler):
         # pylint: disable=attribute-defined-outside-init
         self.state = state
 
-    def _check_arg_shape(self, arg: Any) -> bool
+    def _check_arg_shape(self, arg: Any) -> bool:
         """
         Check that the argument from request body
         has the expected shape - list of dictionaries; 
