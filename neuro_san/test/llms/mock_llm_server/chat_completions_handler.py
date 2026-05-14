@@ -217,7 +217,7 @@ class ChatCompletionsHandler(tornado.web.RequestHandler):
             "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
             "object": "chat.completion",
             "created": int(time.time()),
-            "model": html.escape(str(model), quote=True),
+            "model": str(model),
             "choices": [
                 {
                     "index": 0,
