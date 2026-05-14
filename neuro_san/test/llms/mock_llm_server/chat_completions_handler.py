@@ -20,6 +20,7 @@ See class comment for details.
 from __future__ import annotations
 
 import asyncio
+import html
 import json
 import random
 import time
@@ -198,7 +199,8 @@ class ChatCompletionsHandler(tornado.web.RequestHandler):
 
     async def _send_event(self, payload: Dict[str, Any]) -> None:
         """Write one `data: {json}\\n\\n` SSE frame and flush it to the client."""
-        self.write(f"data: {json.dumps(payload)}\n\n")
+        serialized_payload = html.escape(json.dumps(payload), quote=True)
+        self.write(f"data: {serialized_payload}\n\n")
         await self.flush()
 
     def data_received(self, chunk):
