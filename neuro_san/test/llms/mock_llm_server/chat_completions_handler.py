@@ -51,6 +51,17 @@ class ChatCompletionsHandler(tornado.web.RequestHandler):
         # pylint: disable=attribute-defined-outside-init
         self.state = state
 
+    def _check_arg_shape(self, arg: Any) -> bool
+        """
+        Check that the argument from request body
+        has the expected shape - list of dictionaries; 
+        if not, return False.
+        """
+        if arg is not None and isinstance(arg, list):
+            if all(isinstance(item, dict) for item in arg):
+                return True
+        return False
+
     async def post(self) -> None:
         """Handle a chat-completions request, streaming or one-shot."""
         try:
@@ -60,9 +71,15 @@ class ChatCompletionsHandler(tornado.web.RequestHandler):
             self.write({"error": {"message": "invalid JSON body"}})
             return
 
-        messages: List[Dict[str, Any]] = body.get("messages", []) or []
-        tools: List[Dict[str, Any]] = body.get("tools", []) or []
+        messages: List[Dict[str, Any]] = body.get("messages", [])
+        tools: List[Dict[str, Any]] = body.get("tools", [])
+        if not self._check_arg_shape(messages) or not self._check_arg_shape(tools):
+            self.set_status(400)
+            self.write({"error": {"message": "invalid JSON body"}})
+            return
+
         requested_model: str = body.get("model") or self.state.model_name
+        requested_model = html.escape(requested_model)  # Sanitize for HTML safety in logs
         stream: bool = bool(body.get("stream"))
 
         await self.state.sleep()
@@ -85,6 +102,7 @@ class ChatCompletionsHandler(tornado.web.RequestHandler):
         # OpenAI tool spec: {"type":"function","function":{"name":..., "parameters":...}}
         func_info = tool.get("function", tool)
         tool_name = str(func_info.get("name", "unknown_tool"))
+        tool_name = html.escape(tool_name)  # Sanitize for HTML safety in logs
         args = ToolArgGenerator.generate_tool_args(func_info)
         message = {
             "role": "assistant",
