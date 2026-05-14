@@ -18,9 +18,13 @@
 from typing import Any
 from typing import Dict
 
+from os import getenv
+
 from neuro_san.internals.interfaces.context_type_tracing_context_factory import ContextTypeTracingContextFactory
 from neuro_san.internals.interfaces.run_target import RunTarget
 from neuro_san.internals.run_context.langchain.tracing.langchain_tracing_context import LangChainTracingContext
+from neuro_san.internals.run_context.langchain.tracing.langfuse_langchain_tracing_context \
+    import LangFuseLangChainTracingContext
 
 
 class LangChainTracingContextFactory(ContextTypeTracingContextFactory):
@@ -36,5 +40,12 @@ class LangChainTracingContextFactory(ContextTypeTracingContextFactory):
         :param run_target: The RunTarget instance to be traced
         :return: Another RunTarget which will be the tracing context
         """
-        tracing_context = LangChainTracingContext(run_target=run_target, config=config)
+
+        test_for_langfuse: bool = getenv("LANGFUSE_ENABLED", "false").lower() == "true"
+
+        if test_for_langfuse:
+            tracing_context = LangFuseLangChainTracingContext(run_target=run_target, config=config)
+        else:
+            tracing_context = LangChainTracingContext(run_target=run_target, config=config)
+
         return tracing_context

@@ -53,6 +53,15 @@ class LangChainTracingContext(RunTarget):
 
         chain: Runnable = RunnablePassthrough() | runnable
 
-        await chain.ainvoke(input=inputs, config=runnable_config)
+        await self.ainvoke(chain, inputs, runnable_config)
 
         return inputs
+
+    async def ainvoke(self, chain: Runnable, inputs: Any, runnable_config: Dict[str, Any]):
+        """
+        Invoke the chain with the inputs and config
+        :param chain: The chain to invoke
+        :param inputs: The inputs to the chain
+        :param runnable_config: The config for the runnable
+        """
+        await chain.ainvoke(input=inputs, config=runnable_config)
