@@ -17,11 +17,10 @@
 """
 See class comment for details
 """
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 import json
 import logging
 
-from http import HTTPStatus
 from tornado.web import RequestHandler
 
 from neuro_san.service.utils.service_resources import ServiceResources

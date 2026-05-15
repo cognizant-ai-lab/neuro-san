@@ -305,8 +305,7 @@ class ServiceResources:
         """
         p = psutil.Process()
         mem_info = p.memory_info()
-        if mem_info.rss > cls.max_memory_used_bytes:
-            cls.max_memory_used_bytes = mem_info.rss
+        cls.max_memory_used_bytes = max(cls.max_memory_used_bytes, mem_info.rss)
         # Return memory sizes in megabytes
         return mem_info.rss / (1024 * 1024), cls.max_memory_used_bytes / (1024 * 1024)
 
