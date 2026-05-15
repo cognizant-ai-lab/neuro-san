@@ -1,0 +1,32 @@
+---
+name: Checkmarx One
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+
+jobs:
+  checkmarx-scan:
+    runs-on: ubuntu-latest
+    steps:
+      # v6.0.2
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+
+      - name: Run Checkmarx One scan
+        # build-common 1.0.4
+        uses: cognizant-ai-lab/build-common/actions/checkmarx-one@f5836555ee8e04413a8f9b313a431ab36337045b
+        with:
+          base-uri: ${{ vars.CX_BASE_URI }}
+          cx-tenant: ${{ vars.CX_TENANT }}
+          cx-client-id: ${{ vars.CX_CLIENT_ID }}
+          cx-client-secret: ${{ secrets.CX_CLIENT_SECRET }}
