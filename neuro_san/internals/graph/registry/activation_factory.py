@@ -27,8 +27,10 @@ from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from neuro_san import TOP_LEVEL_DIR
 from neuro_san.internals.graph.activations.branch_activation import BranchActivation
 from neuro_san.internals.graph.activations.class_activation import ClassActivation
+from neuro_san.internals.graph.activations.client_side_tool_activation import ClientSideToolActivation
 from neuro_san.internals.graph.activations.external_activation import ExternalActivation
 from neuro_san.internals.graph.activations.front_man_activation import FrontManActivation
+from neuro_san.internals.graph.activations.remote_tool_activation import RemoteToolActivation
 from neuro_san.internals.graph.activations.sly_data_redactor import SlyDataRedactor
 from neuro_san.internals.graph.activations.toolbox_activation import ToolboxActivation
 from neuro_san.internals.graph.interfaces.agent_tool_factory import AgentToolFactory
@@ -171,6 +173,26 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
         # Merge the arguments coming in from the LLM with those that were specified
         # in the hocon file for the agent.
         use_args: Dict[str, Any] = self._merge_args(arguments, agent_tool_spec)
+
+        # Agent Web: if the spec carries a coded_tool_url, this is a server-side
+        # tool living at some origin. Dispatch via RemoteToolActivation; it
+        # takes precedence over class/toolbox (those should not be present in
+        # a scrubbed wire form, but we are defensive here).
+        if agent_tool_spec.get("coded_tool_url") is not None:
+            agent_activation = RemoteToolActivation(
+                parent_run_context, factory, use_args, agent_tool_spec, sly_data
+            )
+            return agent_activation
+
+        # Agent Web: if the spec carries client_side_source, the Python source
+        # was shipped to us by the origin. Run it locally via ClientSideToolActivation.
+        # This branch only fires in a runtime ("browser") that loaded a scrubbed
+        # wire config; server-resident networks never have client_side_source.
+        if agent_tool_spec.get("client_side_source") is not None:
+            agent_activation = ClientSideToolActivation(
+                parent_run_context, factory, use_args, agent_tool_spec, sly_data
+            )
+            return agent_activation
 
         if agent_tool_spec.get("toolbox") is not None:
             # If a toolbox is in the spec, this is a shared coded tool where tool's description and

@@ -41,8 +41,10 @@ from neuro_san.service.http.handlers.concierge_handler import ConciergeHandler
 from neuro_san.service.http.handlers.connectivity_handler import ConnectivityHandler
 from neuro_san.service.http.handlers.function_handler import FunctionHandler
 from neuro_san.service.http.handlers.health_check_handler import HealthCheckHandler
+from neuro_san.service.http.handlers.network_handler import NetworkHandler
 from neuro_san.service.http.handlers.openapi_publish_handler import OpenApiPublishHandler
 from neuro_san.service.http.handlers.streaming_chat_handler import StreamingChatHandler
+from neuro_san.service.http.handlers.tool_handler import ToolHandler
 from neuro_san.service.http.handlers.profiler_control_handler import ProfilerControlHandler
 from neuro_san.service.http.logging.http_logger import HttpLogger
 from neuro_san.service.http.server.agent_authorization_policy import AgentAuthorizationPolicy
@@ -229,6 +231,17 @@ class HttpServer(AgentStateListener):
 
             # Register templated request paths for agent API methods:
             # regexp format used here is that of Python Re standard library.
+            # Agent Web endpoints (distributable networks only).
+            # Register BEFORE the greedy `(.+)/function|connectivity|streaming_chat`
+            # routes so the more specific patterns match first. Note: /network
+            # and /tool/{tool_name} are gated by the per-network
+            # `distributable: true` manifest flag inside the handlers themselves
+            # (not via the agent_policy authorizer).
+            handlers.append((r"/api/v1/([^/]+)/network", NetworkHandler, request_initialize_data))
+            handlers.append(
+                (r"/api/v1/([^/]+)/tool/([^/]+)", ToolHandler, request_initialize_data)
+            )
+
             handlers.append((r"/api/v1/(.+)/function", FunctionHandler, request_initialize_data))
             handlers.append((r"/api/v1/(.+)/connectivity", ConnectivityHandler, request_initialize_data))
             handlers.append((r"/api/v1/(.+)/streaming_chat", StreamingChatHandler, request_initialize_data))

@@ -45,4 +45,11 @@ class McpManifestDictConfigFilter(ConfigFilter):
         if basis_config["mcp"]:
             basis_config[StorageClass.PUBLIC] = True
 
+        # Agent Web distributable flag also defaults to False; if set, the
+        # network must be public so the runtime can fetch its notebook.
+        if "distributable" not in basis_config:
+            basis_config["distributable"] = False
+        if basis_config["distributable"]:
+            basis_config[StorageClass.PUBLIC] = True
+
         return basis_config

@@ -1,0 +1,84 @@
+{
+    "metadata": {
+        "description": "Hotel inventory and ranking agent for hotels.example",
+        "tags": ["agent_web", "demo", "hotels"],
+    },
+    "llm_config": {
+        "model_name": "claude-haiku",
+    },
+    "tools": [
+        {
+            "name": "hotel_finder",
+            "function": {
+                "description": """
+Searches a private hotel inventory and ranks results against user preferences.
+search_hotels runs on hotels.example servers; score_hotel runs in the
+caller's runtime (it ships as Python source).
+""",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "request": {
+                            "type": "string",
+                            "description": "User's hotel request"
+                        },
+                    },
+                    "required": ["request"]
+                },
+            },
+            "instructions": """
+You are the hotel_finder agent.  Call search_hotels with the right city,
+checkin, checkout, and max_price.  Then for each candidate hotel, call
+score_hotel with its amenities and the user's preferences to compute a
+ranking score.  Return the top hotels sorted by score.
+
+Be concise: return at most the top 3 hotels with their name, area, nightly
+USD price, score, and a one-line reason.
+""",
+            "tools": ["search_hotels", "score_hotel"],
+        },
+
+        {
+            "name": "search_hotels",
+            "function": {
+                "description": "Searches the hotels.example private inventory",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "city": {"type": "string"},
+                        "checkin": {"type": "string", "description": "YYYY-MM-DD"},
+                        "checkout": {"type": "string", "description": "YYYY-MM-DD"},
+                        "max_price_usd": {"type": "number"},
+                    },
+                    "required": ["city", "checkin", "checkout"],
+                },
+            },
+            "class": "search_hotels.SearchHotels",
+        },
+
+        {
+            "name": "score_hotel",
+            "function": {
+                "description": "Computes a preference score for a single hotel",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "amenities": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                        "user_preferences": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                        "price_usd": {"type": "number"},
+                    },
+                    "required": ["name", "amenities", "user_preferences", "price_usd"],
+                },
+            },
+            "client_side": true,
+            "class": "score_hotel.ScoreHotel",
+        },
+    ],
+}

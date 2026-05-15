@@ -1,0 +1,91 @@
+{
+    "metadata": {
+        "description": "Cross-publisher trip planner that composes flight_finder and hotel_finder from independent origins, with one client-side computation tool.",
+        "tags": ["agent_web", "demo", "trip_planner"],
+        "sample_queries": [
+            "SFO to Tokyo around June 14-21, hotel near Shinjuku under $300/night with a gym. My email is bob@example.com.",
+        ],
+    },
+    "llm_config": {
+        "model_name": "claude-haiku",
+    },
+    "tools": [
+        {
+            "name": "trip_planner",
+            "function": {
+                "description": """
+Plans a trip end-to-end by composing flight options from flights.example
+with hotel options from hotels.example, then summing the total cost using
+a client-side tool.
+""",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "request": {
+                            "type": "string",
+                            "description": "The full trip request in plain English"
+                        },
+                    },
+                    "required": ["request"]
+                },
+            },
+            "instructions": """
+You are a cross-publisher trip planner.
+
+When the user describes a trip, do the following:
+
+1. Call the flight_finder external agent with the relevant details
+   (origin, destination, dates).  Capture the flight options it returns
+   and remember a chosen recommended option.
+2. Call the hotel_finder external agent with the relevant details
+   (city, checkin, checkout, max price, requested amenities).  Capture
+   the top-ranked hotel.
+3. Call total_cost with the recommended flight price and hotel nightly
+   price * number of nights.
+4. Reply to the user with a concise itinerary recommendation that
+   includes the flight_id, the hotel name, and the total estimated cost
+   in USD.
+
+If, on a follow-up message, the user asks to "hold" or "book" a flight
+option, call the flight_finder external agent again and pass through the
+hold request along with sly_data.passenger_email.
+""",
+            "tools": [
+                "http://localhost:8801/flight_finder",
+                "http://localhost:8802/hotel_finder",
+                "total_cost",
+            ],
+            "allow": {
+                "to_downstream": {
+                    "sly_data": {
+                        "passenger_email": true,
+                    },
+                },
+                "from_downstream": {
+                    "sly_data": ["last_booking_code"],
+                },
+                "to_upstream": {
+                    "sly_data": ["last_booking_code"],
+                },
+            },
+        },
+
+        {
+            "name": "total_cost",
+            "function": {
+                "description": "Sums flight cost and hotel nightly cost * nights to give a total trip USD cost",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "flight_cost_usd": {"type": "number"},
+                        "hotel_nightly_usd": {"type": "number"},
+                        "nights": {"type": "integer"},
+                    },
+                    "required": ["flight_cost_usd", "hotel_nightly_usd", "nights"],
+                },
+            },
+            "client_side": true,
+            "class": "total_cost.TotalCost",
+        },
+    ],
+}

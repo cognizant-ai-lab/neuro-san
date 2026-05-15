@@ -45,6 +45,12 @@ class AgentNetwork(AgentNetworkInspector):
         # False otherwise.
         self.is_mcp_network: bool = False
 
+        # True if this agent network is published to the "Agent Web" - that is,
+        # served as a downloadable agent-network notebook plus a tool-RPC endpoint
+        # so a runtime ("browser") can fetch and execute it locally.
+        # False otherwise.  See docs/agent_web_design.md.
+        self.is_distributable_network: bool = False
+
         self.first_agent: str = None
 
         agent_specs = self.config.get("tools")
@@ -70,6 +76,20 @@ class AgentNetwork(AgentNetworkInspector):
                  False otherwise.
         """
         return self.is_mcp_network
+
+    def set_as_distributable(self):
+        """
+        Marks this agent network as being published to the Agent Web.
+        """
+        self.is_distributable_network = True
+
+    def is_distributable(self) -> bool:
+        """
+        :return: True if this agent network is published to the Agent Web,
+                 i.e. fetchable as a notebook and callable via the per-tool
+                 RPC endpoint. False otherwise.
+        """
+        return self.is_distributable_network
 
     def register(self, agent_spec: Dict[str, Any]):
         """

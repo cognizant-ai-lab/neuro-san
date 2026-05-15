@@ -1,0 +1,7 @@
+{
+    "hotel_finder.hocon": {
+        "serve": true,
+        "public": true,
+        "distributable": true,
+    },
+}

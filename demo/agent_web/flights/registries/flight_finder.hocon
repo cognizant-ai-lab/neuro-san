@@ -1,0 +1,95 @@
+{
+    "metadata": {
+        "description": "Flight inventory and booking-hold agent for flights.example",
+        "tags": ["agent_web", "demo", "flights"],
+    },
+    "llm_config": {
+        "model_name": "claude-haiku",
+    },
+    "tools": [
+        {
+            "name": "flight_finder",
+            "function": {
+                "description": """
+Searches a private flight inventory and (optionally) places a refundable hold
+on a chosen flight.  Always uses the search_flights tool to fetch live options
+from the flights.example inventory, summarizes them, then if the user asks to
+hold a flight calls book_hold with the chosen flight_id.
+""",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "request": {
+                            "type": "string",
+                            "description": "The user's request, in plain English"
+                        },
+                    },
+                    "required": ["request"]
+                },
+            },
+            "instructions": """
+You are the flight_finder agent.  When asked about flights, call
+search_flights with the right origin/destination/date parameters.  Return
+flight options clearly to the caller.  If the caller asks you to hold an
+option, call book_hold with the corresponding flight_id.
+
+book_hold requires `passenger_email` in sly_data; if you do not see it,
+politely tell the caller you cannot place a hold without an email.
+
+Always include the flight_id in any option you describe so the caller can
+reference it back to you.
+""",
+            "tools": ["search_flights", "book_hold"],
+            "allow": {
+                "to_downstream": {
+                    "sly_data": {
+                        "passenger_email": true,
+                    },
+                },
+                "to_upstream": {
+                    "sly_data": ["last_booking_code"],
+                },
+            },
+        },
+
+        {
+            "name": "search_flights",
+            "function": {
+                "description": "Searches the flights.example private inventory",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "origin": {"type": "string", "description": "IATA origin airport code"},
+                        "destination": {"type": "string", "description": "IATA destination airport code"},
+                        "date": {"type": "string", "description": "Departure date YYYY-MM-DD"},
+                    },
+                    "required": ["origin", "destination", "date"],
+                },
+            },
+            "class": "search_flights.SearchFlights",
+        },
+
+        {
+            "name": "book_hold",
+            "function": {
+                "description": "Places a 15-minute refundable hold on a flight option",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "flight_id": {"type": "string", "description": "ID from search_flights"},
+                    },
+                    "required": ["flight_id"],
+                },
+            },
+            "class": "book_hold.BookHold",
+            "allow": {
+                "to_downstream": {
+                    "sly_data": {"passenger_email": true},
+                },
+                "from_downstream": {
+                    "sly_data": ["last_booking_code"],
+                },
+            },
+        },
+    ],
+}
