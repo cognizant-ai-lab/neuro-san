@@ -48,6 +48,9 @@ class ServiceResources:
     on_macos: bool = sys.platform.startswith("darwin")
     on_windows: bool = sys.platform.startswith("win")
 
+    # High watermark for memory usage in bytes since process start (for logging purposes)
+    max_memory_used_bytes: float = 0.0
+
     # ---------------------------
     # POSIX helpers (Linux/macOS)
     # ---------------------------
@@ -292,9 +295,6 @@ class ServiceResources:
             "inbound_accepted": len(inbound_accepted_list),
             "outbound_tcp": cls.classify_outbound_sockets(outbound_list),
         }
-
-    # High watermark for memory usage in bytes since process start (for logging purposes)
-    max_memory_used_bytes: float = 0.0
 
     @classmethod
     def get_memory_used_mbytes(cls) -> Tuple[float, float]:
