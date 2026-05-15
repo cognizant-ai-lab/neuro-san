@@ -54,7 +54,7 @@ class ResourcesUsageLogger(Startable):
         Log current usage of server run-time resources:
         file descriptors and open inet connections on server port.
         """
-        snapshot_dict: Dict[str, Any] = ServiceResources.get_resources_snapshot(self.http_port)
+        snapshot_dict: Dict[str, Any] = ServiceResources.get_snapshot_dict(self.http_port)
         self.logger.info({}, "Used: %s", json.dumps(snapshot_dict, indent=4))
 
     async def run_resources_usage(self):
