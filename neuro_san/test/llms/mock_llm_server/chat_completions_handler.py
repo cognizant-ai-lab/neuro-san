@@ -54,7 +54,7 @@ class ChatCompletionsHandler(tornado.web.RequestHandler):
     def _check_arg_shape(self, arg: Any) -> bool:
         """
         Check that the argument from request body
-        has the expected shape - list of dictionaries; 
+        has the expected shape - list of dictionaries;
         if not, return False.
         """
         if arg is not None and isinstance(arg, list):
@@ -73,14 +73,15 @@ class ChatCompletionsHandler(tornado.web.RequestHandler):
 
         messages: List[Dict[str, Any]] = body.get("messages", [])
         tools: List[Dict[str, Any]] = body.get("tools", [])
-        if not self._check_arg_shape(messages) or not self._check_arg_shape(tools):
+        stream_value: Any = body.get("stream", False)
+        if not self._check_arg_shape(messages) or not self._check_arg_shape(tools) or \
+                not isinstance(stream_value, bool):
             self.set_status(400)
             self.write({"error": {"message": "invalid JSON body"}})
             return
 
+        stream: bool = stream_value
         requested_model: str = body.get("model") or self.state.model_name
-        requested_model = html.escape(requested_model)  # Sanitize for HTML safety in logs
-        stream: bool = bool(body.get("stream"))
 
         await self.state.sleep()
 
@@ -102,7 +103,6 @@ class ChatCompletionsHandler(tornado.web.RequestHandler):
         # OpenAI tool spec: {"type":"function","function":{"name":..., "parameters":...}}
         func_info = tool.get("function", tool)
         tool_name = str(func_info.get("name", "unknown_tool"))
-        tool_name = html.escape(tool_name)  # Sanitize for HTML safety in logs
         args = ToolArgGenerator.generate_tool_args(func_info)
         message = {
             "role": "assistant",
@@ -112,7 +112,7 @@ class ChatCompletionsHandler(tornado.web.RequestHandler):
                     "id": f"call_{uuid.uuid4().hex[:24]}",
                     "type": "function",
                     "function": {
-                        "name": tool_name,
+                        "name": html.escape(str(tool_name)),
                         "arguments": json.dumps(args),
                     },
                 }
@@ -158,7 +158,7 @@ class ChatCompletionsHandler(tornado.web.RequestHandler):
             "id": completion_id,
             "object": "chat.completion.chunk",
             "created": created,
-            "model": model,
+            "model": html.escape(str(model)),
             "choices": [
                 {"index": 0, "delta": delta, "finish_reason": finish_reason}
             ],
@@ -174,7 +174,7 @@ class ChatCompletionsHandler(tornado.web.RequestHandler):
         """Stream a single tool_call across three SSE chunks."""
         tool = random.choice(tools)
         func_info = tool.get("function", tool)
-        tool_name = func_info.get("name", "unknown_tool")
+        tool_name = str(func_info.get("name", "unknown_tool"))
         args_str = json.dumps(ToolArgGenerator.generate_tool_args(func_info))
         tool_call_id = f"call_{uuid.uuid4().hex[:24]}"
 
@@ -235,7 +235,7 @@ class ChatCompletionsHandler(tornado.web.RequestHandler):
             "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
             "object": "chat.completion",
             "created": int(time.time()),
-            "model": str(model),
+            "model": html.escape(str(model)),
             "choices": [
                 {
                     "index": 0,
