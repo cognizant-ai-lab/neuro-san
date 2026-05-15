@@ -35,6 +35,8 @@ class ToolArgGenerator:
     # beyond their "type" field. Compound types (string/object) are handled separately.
     PRIMITIVE_DEFAULTS: Dict[str, Any] = {
         "integer": 0,
+        "int": 0,
+        "float": 0.0,
         "number": 0.0,
         "boolean": True,
         "array": [],

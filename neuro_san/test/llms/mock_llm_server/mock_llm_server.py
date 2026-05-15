@@ -71,7 +71,7 @@ class MockLlmServer:
     def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         """Parse CLI arguments for the mock LLM server."""
         parser = argparse.ArgumentParser(description="Mock OpenAI-compatible LLM server")
-        parser.add_argument("--host", default="0.0.0.0", help="Bind host (default: 0.0.0.0)")
+        parser.add_argument("--host", default="localhost", help="Bind host (default: localhost)")
         parser.add_argument("--port", type=int, default=8888, help="Bind port (default: 8888)")
         parser.add_argument(
             "--model-name",
@@ -125,6 +125,10 @@ class MockLlmServer:
         """CLI entry point: configure logging, parse args, run until interrupted."""
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
         args = cls.parse_args(argv)
+        # Clamp latencies and delay to valid values: non-negative, and max >= min.
+        args.min_latency = max(0.0, args.min_latency)
+        args.max_latency = max(args.min_latency, args.max_latency)
+        args.stream_token_delay = max(0.0, args.stream_token_delay)
         try:
             asyncio.run(cls.run(args))
         except KeyboardInterrupt:

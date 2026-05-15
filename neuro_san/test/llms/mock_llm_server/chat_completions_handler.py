@@ -186,7 +186,10 @@ class ChatCompletionsHandler(tornado.web.RequestHandler):
                 "index": 0,
                 "id": tool_call_id,
                 "type": "function",
-                "function": {"name": tool_name, "arguments": ""},
+                "function": {
+                    "name": html.escape(tool_name),
+                    "arguments": ""
+                },
             }],
         }))
         # Argument chunk: full JSON arg string in one delta. OpenAI may split
