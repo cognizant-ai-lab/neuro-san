@@ -292,3 +292,44 @@ class ServiceResources:
             "inbound_accepted": len(inbound_accepted_list),
             "outbound_tcp": cls.classify_outbound_sockets(outbound_list),
         }
+
+    # High watermark for memory usage in bytes since process start (for logging purposes)
+    max_memory_used_bytes: float = 0.0
+
+    @classmethod
+    def get_memory_used_mbytes(cls) -> Tuple[float, float]:
+        """
+        Get the current memory usage of the process in megabytes
+        and maximum memory used since process start, and update the maximum if current usage is higher.
+        :return: tuple of (current_memory_used_mbytes, max_memory_used_mbytes)
+        """
+        p = psutil.Process()
+        mem_info = p.memory_info()
+        if mem_info.rss > cls.max_memory_used_bytes:
+            cls.max_memory_used_bytes = mem_info.rss
+        # Return memory sizes in megabytes
+        return mem_info.rss / (1024 * 1024), cls.max_memory_used_bytes / (1024 * 1024)
+
+    @classmethod
+    def get_snapshot_dict(cls, server_port: int) -> Dict[str, Any]:
+        """
+        Get a snapshot of current resource usage for logging or metrics.
+        :param server_port: server port to classify sockets
+        :return: dictionary with resource usage information
+        """
+        # Get used file descriptors:
+        fd_usage, soft_limit, hard_limit = cls.get_fd_usage()
+        mem_used, mem_max = cls.get_memory_used_mbytes()
+        snapshot: Dict[str, Any] = {
+            "fd_usage": fd_usage,
+            "fd_limits": {
+                "soft": soft_limit,
+                "hard": hard_limit
+            },
+            "memory_usage_mbytes": {
+                "current": mem_used,
+                "max_since_start": mem_max
+            },
+            "socket_usage": cls.classify_sockets(server_port)
+        }
+        return snapshot
