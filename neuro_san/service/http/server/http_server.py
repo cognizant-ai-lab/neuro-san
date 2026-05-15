@@ -225,7 +225,7 @@ class HttpServer(AgentStateListener):
         handlers.append(("/profiler", ProfilerControlHandler))
 
         # Setup handler for system snapshot query:
-        handlers.append(("/snapshot", SnapshotHandler, {"http_port": self.http_port}))
+        handlers.append(("/resources_utilization", SnapshotHandler, {"http_port": self.http_port}))
 
         if enable_http_handlers:
             handlers.append(("/api/v1/list", ConciergeHandler, request_initialize_data))
