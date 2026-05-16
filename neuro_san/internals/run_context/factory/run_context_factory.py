@@ -29,12 +29,14 @@ class RunContextFactory:
     Creates the correct kind of RunContext
     """
 
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     @staticmethod
     def create_run_context(parent_run_context: RunContext,
                            tool_caller: ToolCaller,
                            invocation_context: InvocationContext = None,
                            chat_context: Dict[str, Any] = None,
-                           config: Dict[str, Any] = None) \
+                           config: Dict[str, Any] = None,
+                           tracing_config: Dict[str, Any] = None) \
             -> RunContext:
         """
         Creates an appropriate RunContext
@@ -50,6 +52,7 @@ class RunContextFactory:
                 to carry on a previous conversation, possibly from a different server.
         :param config: The config dictionary which may or may not contain
                        keys for the context_type and default llm_config
+        :param tracing_config: An dictionary for tracing configurations
         """
 
         # Initialize return value
@@ -80,11 +83,13 @@ class RunContextFactory:
         if context_type.startswith("langchain"):
             run_context = LangChainRunContext(default_llm_config, parent_run_context,
                                               tool_caller, use_invocation_context,
-                                              chat_context, use_config.get("middleware_config"))
+                                              chat_context, use_config.get("middleware_config"),
+                                              tracing_config=tracing_config)
         else:
             # Default case
             run_context = LangChainRunContext(default_llm_config, parent_run_context,
                                               tool_caller, use_invocation_context,
-                                              chat_context, use_config.get("middleware_config"))
+                                              chat_context, use_config.get("middleware_config"),
+                                              tracing_config=tracing_config)
 
         return run_context

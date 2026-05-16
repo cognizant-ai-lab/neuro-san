@@ -88,6 +88,7 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         self.interceptor: InterceptingJournal = None
         self.original_input_message: AgentFrameworkMessage = None
         self.last_message_sent: bool = False
+        self.tracing_config: Dict[str, Any] = None
 
     async def set_up(self, invocation_context: InvocationContext,
                      sly_data: Dict[str, Any] = None,
@@ -125,7 +126,8 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
 
         run_context: RunContext = RunContextFactory.create_run_context(None, None,
                                                                        invocation_context=invocation_context,
-                                                                       chat_context=chat_context)
+                                                                       chat_context=chat_context,
+                                                                       tracing_config=self.tracing_config)
 
         self.front_man = self.registry.create_front_man(self.sly_data, run_context)
 
@@ -237,6 +239,7 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
             MasterTracingContextFactory.create_tracing_context_factory()
         # For the factory args, we are our own run_target.
         tracing_context: RunTarget = tracing_factory.create_tracing_context(config, run_target=self)
+        self.tracing_config = tracing_context.get_tracing_config()
 
         try:
             # Run the run_target that was given back by the factory.

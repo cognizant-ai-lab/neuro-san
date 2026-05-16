@@ -16,17 +16,16 @@
 # END COPYRIGHT
 from typing import Any
 from typing import Dict
-from typing import List
 
 from datetime import datetime
 from socket import gethostname
 
-from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.runnables.base import Runnable
 
 from leaf_common.config.resolver_util import ResolverUtil
 
 from neuro_san.internals.run_context.langchain.tracing.langchain_tracing_context import LangChainTracingContext
+from neuro_san.internals.run_context.langchain.tracing.langfuse_config_augmenter import LangfuseConfigAugmenter
 
 
 class LangFuseLangChainTracingContext(LangChainTracingContext):
@@ -43,8 +42,8 @@ class LangFuseLangChainTracingContext(LangChainTracingContext):
         """
 
         # See if we can get a langfuse handler instance.
-        handler = ResolverUtil.create_instance("langfuse.langchain.CallbackHandler", "langfuse", BaseCallbackHandler)
-        if handler is None:
+        handler_type = ResolverUtil.create_type("langfuse.langchain.CallbackHandler", raise_if_not_found=False)
+        if handler_type is None:
             raise ValueError("""
 Failed to create LangFuse CallbackHandler. Try one of the following:
 
@@ -55,10 +54,10 @@ If you didn't mean to use langfuse for observability, you can do this:
     export LANGFUSE_ENABLED=false
 """)
 
-        # Set the callbacks per the langfuse docs
-        callbacks: List[BaseCallbackHandler] = runnable_config.get("callbacks", [])
-        callbacks.append(handler)
-        runnable_config["callbacks"] = callbacks
+        # Augment the callbacks with the handler.
+        self.tracing_config["caller"] = "langfuse_langchain_tracing_context"
+        config_augmenter: LangfuseConfigAugmenter = LangfuseConfigAugmenter()
+        runnable_config = config_augmenter.augment_config(runnable_config, self.tracing_config)
 
         # Get the user_id for the trace
         empty: Dict[str, Any] = {}

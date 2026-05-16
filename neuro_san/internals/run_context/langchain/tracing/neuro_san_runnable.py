@@ -40,6 +40,7 @@ from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.run_target import RunTarget
 from neuro_san.internals.journals.intercepting_journal import InterceptingJournal
 from neuro_san.internals.messages.origination import Origination
+from neuro_san.internals.run_context.langchain.tracing.langfuse_config_augmenter import LangfuseConfigAugmenter
 from neuro_san.internals.utils.metadata_util import MetadataUtil
 
 
@@ -64,6 +65,8 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
     logger: Optional[Logger] = None
 
     run_target: Optional[RunTarget] = None
+
+    tracing_config: Optional[Dict[str, Any]] = {}
 
     # This guy needs to be a pydantic class and in order to have
     # any non-pydantic non-serializable members, we need to do this.
@@ -170,6 +173,9 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
         if runnable_metadata:
             runnable_config["metadata"] = runnable_metadata
 
+        runnable_config = self.augment_config_for_tracing(runnable_config)
+        self.tracing_config = runnable_config.get("neuro_san_tracing_config", self.tracing_config)
+
         return runnable_config
 
     def prepare_tracing_metadata(self) -> Dict[str, Any]:
@@ -208,3 +214,15 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
             "messages": messages
         }
         return outputs
+
+    def augment_config_for_tracing(self, runnable_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Add stuff to the runnable config based on env vars for tracing.
+
+        :param runnable_config: The runnable config to augment
+        :return: The augmented runnable config
+        """
+        if os.getenv("LANGFUSE_ENABLED", "false").lower() == "true":
+            runnable_config = LangfuseConfigAugmenter().augment_config(runnable_config, self.tracing_config)
+
+        return runnable_config

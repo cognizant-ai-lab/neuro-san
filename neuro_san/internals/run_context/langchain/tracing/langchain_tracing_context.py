@@ -38,6 +38,9 @@ class LangChainTracingContext(RunTarget):
         """
         self.run_target: RunTarget = run_target
         self.config: Dict[str, Any] = config
+        self.tracing_config: Dict[str, Any] = {
+            "caller": "langchain_tracing_context"
+        }
 
     async def run_it(self, inputs: Any) -> Any:
         """
@@ -46,8 +49,9 @@ class LangChainTracingContext(RunTarget):
         :param inputs: A list of inputs from the user.
         :return: The outputs of the run.
         """
-        runnable = NeuroSanRunnable(run_target=self.run_target, **self.config)
+        runnable = NeuroSanRunnable(run_target=self.run_target, tracing_config=self.tracing_config, **self.config)
         runnable_config: Dict[str, Any] = runnable.prepare_runnable_config(use_run_name=True)
+        self.tracing_config = runnable_config.get("neuro_san_tracing_config", self.tracing_config)
 
         chain: Runnable = RunnablePassthrough() | runnable
 
@@ -63,3 +67,10 @@ class LangChainTracingContext(RunTarget):
         :param runnable_config: The config for the runnable
         """
         await chain.ainvoke(input=inputs, config=runnable_config)
+
+    def get_tracing_config(self) -> Dict[str, Any]:
+        """
+        Get the tracing config
+        :return: The tracing config
+        """
+        return self.tracing_config
