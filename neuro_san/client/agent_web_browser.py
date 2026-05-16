@@ -43,7 +43,9 @@ See docs/agent_web_design.md (§6.3) for design details.
 """
 import argparse
 import asyncio
+import contextlib
 import json
+import logging
 import sys
 from typing import Any
 from typing import Dict
@@ -176,7 +178,8 @@ def open_agent_from_notebook(notebook: Optional[Dict[str, Any]] = None,
                              url: Optional[str] = None,
                              initial_message: Optional[str] = None,
                              sly_data: Optional[Dict[str, Any]] = None,
-                             interactive: bool = True) -> None:
+                             interactive: bool = True,
+                             inactivity_timeout: float = 120.0) -> None:
     """
     Public helper invoked by the notebook's kickoff cell.
 
@@ -197,13 +200,15 @@ def open_agent_from_notebook(notebook: Optional[Dict[str, Any]] = None,
     verify_wire_config(wire)
 
     sly_data = dict(sly_data or {})
-    asyncio.run(_run_session(wire, initial_message, sly_data, interactive))
+    asyncio.run(_run_session(wire, initial_message, sly_data, interactive,
+                             inactivity_timeout=inactivity_timeout))
 
 
 async def _run_session(wire: Dict[str, Any],
                        initial_message: Optional[str],
                        sly_data: Dict[str, Any],
-                       interactive: bool) -> None:
+                       interactive: bool,
+                       inactivity_timeout: float = 120.0) -> None:
     """Build the network, set up the invocation context, and run a chat loop."""
     agent_network = build_agent_network_from_wire(wire)
 
@@ -260,9 +265,59 @@ async def _run_session(wire: Dict[str, Any],
                 request["sly_data"] = current_sly
 
             processor = BasicMessageProcessor()
-            async for chat_response in session.streaming_chat(request):
-                response: Dict[str, Any] = chat_response.get("response", {}) or {}
-                await processor.async_process_message(response)
+            # AsyncDirectAgentSession submits the real chat work to a
+            # separate AsyncioExecutor thread. If that work fails or hangs,
+            # the leaf_common executor either silently logs the exception or
+            # holds the thread, and never puts a final marker on the queue —
+            # so a naive `async for` over the stream would hang forever.
+            # Defend with two mechanisms:
+            #   1) An inactivity watchdog: abort if no message arrives in
+            #      `inactivity_timeout` seconds.
+            #   2) Surface the warning prominently so the user knows the LLM
+            #      call hasn't produced anything and can check its logs.
+            stream_iter = session.streaming_chat(request).__aiter__()
+
+            # One persistent pending task per stream step. Async generators
+            # don't allow concurrent __anext__ calls, so we keep the same task
+            # across loop iterations until it resolves.
+            next_task: Optional[asyncio.Task] = None
+            elapsed_no_progress: float = 0.0
+            poll_interval: float = 2.0
+            try:
+                while True:
+                    if next_task is None:
+                        next_task = asyncio.ensure_future(stream_iter.__anext__())
+
+                    done, _ = await asyncio.wait(
+                        {next_task}, timeout=poll_interval
+                    )
+                    if next_task in done:
+                        elapsed_no_progress = 0.0
+                        try:
+                            chat_response = next_task.result()
+                        except StopAsyncIteration:
+                            break
+                        next_task = None
+                        response = chat_response.get("response", {}) or {}
+                        await processor.async_process_message(response)
+                        continue
+
+                    elapsed_no_progress += poll_interval
+                    if elapsed_no_progress >= inactivity_timeout:
+                        raise RuntimeError(
+                            f"Agent has produced no output for "
+                            f"{inactivity_timeout:.0f}s — the LLM call has "
+                            f"likely failed or is hung. Check the runtime log "
+                            f"for exceptions (set --log-level INFO; common "
+                            f"causes: bad API key, unreachable provider URL, "
+                            f"or wrong model name)."
+                        )
+                    # No message yet; loop and keep waiting.
+            finally:
+                if next_task is not None and not next_task.done():
+                    next_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError, Exception):
+                        await next_task
             answer: str = processor.get_compiled_answer() or ""
             new_ctx = processor.get_chat_context()
             if new_ctx:
@@ -313,6 +368,9 @@ def _parse_sly_data(items: List[str]) -> Dict[str, Any]:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    # Surface logger messages from leaf_common's AsyncioExecutor that would
+    # otherwise be invisible. The executor logs swallowed exceptions at INFO,
+    # so we set the bar there.  Users can quieten with `--log-level WARNING`.
     parser = argparse.ArgumentParser(
         description="Agent Web browser: fetch a notebook URL and chat with the agent."
     )
@@ -338,7 +396,27 @@ def main(argv: Optional[List[str]] = None) -> int:
         action="store_true",
         help="Do not enter interactive mode after the initial message.",
     )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        help="Python logging level for the runtime (default INFO so executor "
+             "exceptions surface). Set to WARNING for quieter output.",
+    )
+    parser.add_argument(
+        "--inactivity-timeout",
+        type=float,
+        default=120.0,
+        help="Seconds to wait for the agent to produce its next message "
+             "before aborting (default 120s). Most often a shorter value "
+             "of 30-60s surfaces a stuck LLM call faster.",
+    )
     args = parser.parse_args(argv)
+
+    logging.basicConfig(
+        level=getattr(logging, args.log_level.upper(), logging.INFO),
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        force=True,    # override anything langchain/anthropic set up at import
+    )
 
     sly_data: Dict[str, Any] = _parse_sly_data(args.sly_data)
     interactive: bool = not args.no_interactive and (args.message is None or sys.stdin.isatty())
@@ -349,6 +427,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             initial_message=args.message,
             sly_data=sly_data,
             interactive=interactive,
+            inactivity_timeout=args.inactivity_timeout,
         )
     except KeyboardInterrupt:
         return 130
