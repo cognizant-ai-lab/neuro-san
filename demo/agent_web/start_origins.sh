@@ -28,6 +28,28 @@ fi
 
 mkdir -p /tmp
 
+# The demo HOCONs default to `claude-haiku`, which needs langchain-anthropic.
+# neuro-san's base requirements only pull in langchain-openai. Auto-install
+# the provider package the demo needs if it isn't there yet, so a fresh
+# checkout works without manual setup.  Switch to gpt-4o-mini in the HOCONs
+# if you'd rather not pull in another provider package.
+ensure_anthropic_provider() {
+    if "${PYTHON}" -c "import langchain_anthropic" >/dev/null 2>&1; then
+        return 0
+    fi
+    echo "demo needs langchain-anthropic (the HOCONs use claude-haiku); installing..."
+    "${PYTHON}" -m pip install --quiet 'langchain-anthropic>=1.0,<2.0' || {
+        echo "" >&2
+        echo "error: pip install langchain-anthropic failed." >&2
+        echo "If you don't have an Anthropic key, switch the demo to OpenAI:" >&2
+        echo "  sed -i.bak 's/\"claude-haiku\"/\"gpt-4o-mini\"/' \\" >&2
+        echo "    demo/agent_web/{flights,hotels,travelgenius}/registries/*.hocon" >&2
+        echo "  rm demo/agent_web/*/registries/*.bak" >&2
+        exit 1
+    }
+}
+ensure_anthropic_provider
+
 start_origin() {
     local origin_name="$1"
     local port="$2"

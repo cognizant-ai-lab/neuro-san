@@ -23,6 +23,31 @@ data** for inventory and bookings.
 
 ## Running it
 
+### Prerequisites
+
+The demo HOCONs default to `claude-haiku`, so you'll need:
+
+```bash
+pip install -e .                       # neuro-san itself (one time)
+pip install 'langchain-anthropic>=1.0' # provider package the HOCONs reference
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+`start_origins.sh` will auto-install `langchain-anthropic` if it can't import
+it, so you can usually skip the second step.
+
+If you'd rather use OpenAI (which neuro-san already pulls in by default),
+swap the model name in all three HOCONs first:
+
+```bash
+sed -i.bak 's/"claude-haiku"/"gpt-4o-mini"/' \
+  demo/agent_web/{flights,hotels,travelgenius}/registries/*.hocon
+rm demo/agent_web/*/registries/*.bak
+export OPENAI_API_KEY=sk-...
+```
+
+### Run
+
 ```bash
 # from the repo root
 ./demo/agent_web/start_origins.sh
