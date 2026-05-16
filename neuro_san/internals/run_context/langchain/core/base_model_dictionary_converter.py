@@ -38,7 +38,9 @@ class BaseModelDictionaryConverter(DictionaryConverter):
     TYPE_LOOKUP: Dict[str, Type] = {
         "string": str,
         "int": int,
+        "integer": int,         # JSON Schema alias for int
         "float": float,
+        "number": float,        # JSON Schema alias for float
         "boolean": bool,
         "array": List,
 
@@ -107,19 +109,21 @@ class BaseModelDictionaryConverter(DictionaryConverter):
             description: str = one_property.get("description")
             field_type: Type = self.get_type_from_property_dict(field_name, one_property)
 
-            # Assemble a pydantic Field
-            field_kwargs: Dict[str, Any] = {}
+            # Assemble a pydantic Field.
+            # Always provide a description (falling back to the field name) and
+            # always provide an explicit default — including the pydantic
+            # `...` (Ellipsis) sentinel for required fields. Without these,
+            # pydantic.v1.Field() leaves an UndefinedType in place which
+            # raises "no validator found for UndefinedType" on Python 3.14+.
+            field_kwargs: Dict[str, Any] = {
+                "description": description if description else field_name,
+            }
 
-            # Description helps the agents communicate upstream what the field does
-            if description is not None:
-                field_kwargs["description"] = description
-
-            # Setting a default to None is like saying that it's not required.
-            # This allows agent infra to not include the field in the args
-            # when a value is not there.  By contrast, we do not set a default
-            # for something that is required, which leaves the pydantic definition
-            # of "Undefined" in place which to agent infra implies a required arg.
-            if field_name not in required:
+            if field_name in required:
+                # Pydantic-v1 canonical "required, no default" sentinel.
+                field_kwargs["default"] = ...
+            else:
+                # Optional: missing arg is fine.
                 field_kwargs["default"] = None
             field = Field(**field_kwargs)
 

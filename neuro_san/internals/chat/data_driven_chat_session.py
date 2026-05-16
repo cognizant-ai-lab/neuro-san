@@ -270,10 +270,19 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         if self.front_man is None:
             try:
                 await self.set_up(self.invocation_context, sly_data, chat_context)
-            except ValueError as exc:
-                # This can happen if we have problems with LLM clients API keys:
-                # Construct a message to send back to the client with the error information.
-                message = AgentFrameworkMessage(content=str(exc))
+            except Exception as exc:    # pylint: disable=broad-exception-caught
+                # set_up() can fail for several authoring/environment reasons:
+                # missing LLM API keys (ValueError), bad function specs in tools
+                # (e.g. pydantic.v1 + Python 3.14 raising RuntimeError on
+                # under-described parameters), or runtime errors in
+                # CodedTool sub-class init. Without catching these here, the
+                # exception goes up through the executor's submission_done
+                # which logs at INFO and never closes the journal queue —
+                # making consumers hang. Surface the error as the final
+                # message so the caller can act on it.
+                message = AgentFrameworkMessage(
+                    content=f"Failed to set up agent network: {type(exc).__name__}: {exc}"
+                )
                 await self.finalize_request(message)
                 return message
 
