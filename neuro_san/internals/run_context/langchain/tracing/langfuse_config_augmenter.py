@@ -19,8 +19,6 @@ from typing import Dict
 from typing import List
 from typing import Type
 
-import traceback
-
 from langchain_core.callbacks.base import BaseCallbackHandler
 
 from leaf_common.config.resolver_util import ResolverUtil
@@ -45,7 +43,6 @@ class LangfuseConfigAugmenter:
         caller: str = "None"
         if tracing_config is not None:
             caller: str = tracing_config.get("caller", "unknown")
-        print(f"langfuse_config_augmenter caller: {caller}")
 
         callback_handler_type: Type[BaseCallbackHandler] = None
         handler: BaseCallbackHandler = tracing_config.get("langfuse_handler")
@@ -53,9 +50,6 @@ class LangfuseConfigAugmenter:
             # See if we can create a new langfuse handler instance.
             callback_handler_type = ResolverUtil.create_type("langfuse.langchain.CallbackHandler",
                                                              raise_if_not_found=False)
-            traceback.print_stack()
-            print("\n\n\n")
-
             if callback_handler_type is None:
                 # Nothing we can do. Skip.
                 return None
