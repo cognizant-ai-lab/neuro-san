@@ -14,25 +14,21 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-
 from typing import Any
-from typing import Dict
 
 from neuro_san.internals.interfaces.run_target import RunTarget
-from neuro_san.internals.interfaces.tracing_context import TracingContext
 
 
-class ContextTypeTracingContextFactory:
+class TracingContext(RunTarget):
     """
-    Interface for Factory classes creating TracingContexts for RunTargets.
+    Interface for a single request's tracing needs.
     """
 
-    def create_tracing_context(self, config: Dict[str, Any], run_target: RunTarget) -> TracingContext:
+    async def run_it(self, inputs: Any) -> Any:
         """
-        Creates a RunTarget based on another RunTarget
+        Entry point method for the run.
 
-        :param config: The configuration for the tracing context
-        :param run_target: The RunTarget instance to be traced
-        :return: An appropriate TracingContext
+        :param inputs: A list of inputs from the user.
+        :return: The outputs of the run.
         """
         raise NotImplementedError

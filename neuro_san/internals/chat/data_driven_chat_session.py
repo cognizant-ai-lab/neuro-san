@@ -44,6 +44,7 @@ from neuro_san.internals.interfaces.front_man import FrontMan
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.interfaces.run_target import RunTarget
+from neuro_san.internals.interfaces.tracing_context import TracingContext
 from neuro_san.internals.journals.intercepting_journal import InterceptingJournal
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.messages.agent_framework_message import AgentFrameworkMessage
@@ -238,7 +239,7 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         tracing_factory: ContextTypeTracingContextFactory = \
             MasterTracingContextFactory.create_tracing_context_factory()
         # For the factory args, we are our own run_target.
-        tracing_context: RunTarget = tracing_factory.create_tracing_context(config, run_target=self)
+        tracing_context: TracingContext = tracing_factory.create_tracing_context(config, run_target=self)
         self.tracing_config = tracing_context.get_tracing_config()
 
         try:

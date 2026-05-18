@@ -21,12 +21,13 @@ from langchain_core.runnables.base import Runnable
 from langchain_core.runnables.passthrough import RunnablePassthrough
 
 from neuro_san.internals.interfaces.run_target import RunTarget
+from neuro_san.internals.interfaces.tracing_context import TracingContext
 from neuro_san.internals.run_context.langchain.tracing.neuro_san_runnable import NeuroSanRunnable
 
 
-class LangChainTracingContext(RunTarget):
+class LangChainTracingContext(TracingContext):
     """
-    RunTarget interface for a TracingContext in langchain.
+    TracingContext implementation for unadorned langchain runs.
     """
 
     def __init__(self, run_target: RunTarget, config: Dict[str, Any]):
