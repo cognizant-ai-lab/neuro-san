@@ -24,6 +24,7 @@ from langchain_core.runnables.base import Runnable
 
 from leaf_common.config.resolver_util import ResolverUtil
 
+from neuro_san.internals.interfaces.run_target import RunTarget
 from neuro_san.internals.run_context.langchain.tracing.langchain_tracing_context import LangChainTracingContext
 from neuro_san.internals.run_context.langchain.tracing.langfuse_config_augmenter import LangfuseConfigAugmenter
 
@@ -33,13 +34,14 @@ class LangFuseLangChainTracingContext(LangChainTracingContext):
     RunTarget interface for a TracingContext in langchain with LangFuse tracing hooks.
     """
 
-    async def ainvoke(self, chain: Runnable, inputs: Any, runnable_config: Dict[str, Any]):
+    def __init__(self, run_target: RunTarget, config: Dict[str, Any]):
         """
-        Invoke the chain with the inputs and config
-        :param chain: The chain to invoke
-        :param inputs: The inputs to the chain
-        :param runnable_config: The config for the runnable
+        Constructor
+
+        :param run_target: The RunTarget instance to be traced
+        :param config: The configuration for the tracing context
         """
+        super().__init__(run_target=run_target, config=config)
 
         # See if we can get a langfuse handler instance.
         handler_type = ResolverUtil.create_type("langfuse.langchain.CallbackHandler", raise_if_not_found=False)
@@ -54,9 +56,19 @@ If you didn't mean to use langfuse for observability, you can do this:
     export LANGFUSE_ENABLED=false
 """)
 
-        # Augment the callbacks with the handler.
         self.tracing_config["caller"] = "langfuse_langchain_tracing_context"
-        config_augmenter: LangfuseConfigAugmenter = LangfuseConfigAugmenter()
+        config_augmenter: LangfuseConfigAugmenter = LangfuseConfigAugmenter(self.tracing_config)
+        config_augmenter.maybe_create_handler(self.tracing_config)
+
+    async def ainvoke(self, chain: Runnable, inputs: Any, runnable_config: Dict[str, Any]):
+        """
+        Invoke the chain with the inputs and config
+        :param chain: The chain to invoke
+        :param inputs: The inputs to the chain
+        :param runnable_config: The config for the runnable
+        """
+        # Augment the callbacks with the handler.
+        config_augmenter: LangfuseConfigAugmenter = LangfuseConfigAugmenter(self.tracing_config)
         runnable_config = config_augmenter.augment_config(runnable_config, self.tracing_config)
 
         # Get the user_id for the trace

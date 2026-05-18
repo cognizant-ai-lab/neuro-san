@@ -31,18 +31,21 @@ class LangfuseConfigAugmenter:
     Augments Runnable configs with langfuse tracing.
     """
 
-    def augment_config(self, runnable_config: Dict[str, Any], tracing_config: Dict[str, Any]) -> Dict[str, Any]:
+    def __init__(self, tracing_config: Dict[str, Any]):
         """
-        Augment the callbacks with the handler.
-        :param runnable_config: The config for the runnable
-        :param handler: The optional handler to use
-        :return: The augmented config
+        Constructor
         """
+        self.maybe_create_handler(tracing_config)
 
-        caller: str = tracing_config.get("caller", "unknown")
-        print(f"langfuse_config_augmenter: caller: {caller}")
-        if "unknown" in caller:
-            traceback.print_stack()
+    def maybe_create_handler(self, tracing_config: Dict[str, Any]):
+        """
+        If the tracing config has a handler, create it.
+        :param tracing_config: The tracing config
+        """
+        caller: str = "None"
+        if tracing_config is not None:
+            caller: str = tracing_config.get("caller", "unknown")
+        print(f"langfuse_config_augmenter caller: {caller}")
 
         callback_handler_type: Type[BaseCallbackHandler] = None
         handler: BaseCallbackHandler = tracing_config.get("langfuse_handler")
@@ -50,18 +53,34 @@ class LangfuseConfigAugmenter:
             # See if we can create a new langfuse handler instance.
             callback_handler_type = ResolverUtil.create_type("langfuse.langchain.CallbackHandler",
                                                              raise_if_not_found=False)
+            traceback.print_stack()
+            print("\n\n\n")
 
-        if callback_handler_type is None:
+            if callback_handler_type is None:
+                # Nothing we can do. Skip.
+                return None
+
+            handler = callback_handler_type()
+            tracing_config["langfuse_handler"] = handler
+
+        print(f"using langfuse handler: {handler}")
+        return handler
+
+    def augment_config(self, runnable_config: Dict[str, Any], tracing_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Augment the callbacks with the handler.
+        :param runnable_config: The config for the runnable
+        :param handler: The optional handler to use
+        :return: The augmented config
+        """
+        handler = self.maybe_create_handler(tracing_config)
+        if handler is None:
             # Nothing we can do. Skip.
             return runnable_config
 
-        handler = callback_handler_type()
-        tracing_config["langfuse_handler"] = handler
-        print(f"using langfuse handler: {handler}")
-
         # trace_id: str = handler.get_trace_id()
-        trace_id: str = "unknown"
-        print(f"    with trace_id: {trace_id}")
+        # trace_id: str = "unknown"
+        # print(f"    with trace_id: {trace_id}")
 
         # Set the callbacks per the langfuse docs
         callbacks: List[BaseCallbackHandler] = runnable_config.get("callbacks", [])

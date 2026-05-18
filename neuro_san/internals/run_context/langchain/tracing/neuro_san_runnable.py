@@ -223,6 +223,7 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
         :return: The augmented runnable config
         """
         if os.getenv("LANGFUSE_ENABLED", "false").lower() == "true":
-            runnable_config = LangfuseConfigAugmenter().augment_config(runnable_config, self.tracing_config)
+            augmenter = LangfuseConfigAugmenter(self.tracing_config)
+            runnable_config = augmenter.augment_config(runnable_config, self.tracing_config)
 
         return runnable_config
