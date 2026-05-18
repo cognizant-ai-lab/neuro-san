@@ -43,10 +43,10 @@ from typing import Optional
 
 import tornado.web
 
-from neuro_san.test.llms.mock_llm_server.chat_completions_handler import ChatCompletionsHandler
-from neuro_san.test.llms.mock_llm_server.health_handler import HealthHandler
-from neuro_san.test.llms.mock_llm_server.mock_state import MockState
-from neuro_san.test.llms.mock_llm_server.models_handler import ModelsHandler
+from tests.mock_llm_server.chat_completions_handler import ChatCompletionsHandler
+from tests.mock_llm_server.health_handler import HealthHandler
+from tests.mock_llm_server.mock_state import MockState
+from tests.mock_llm_server.models_handler import ModelsHandler
 
 
 class MockLlmServer:

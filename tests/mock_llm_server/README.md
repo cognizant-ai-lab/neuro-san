@@ -36,14 +36,14 @@ Behavioral guarantees:
 The package is runnable as a module:
 
 ```bash
-python -m neuro_san.test.llms.mock_llm_server.mock_llm_server [OPTIONS]
+python -m tests.mock_llm_server.mock_llm_server [OPTIONS]
 ```
 
 From a checked-out neuro-san repo, that becomes:
 
 ```bash
 export PYTHONPATH=$(pwd)
-python -m neuro_san.test.llms.mock_llm_server.mock_llm_server --port 8888
+python -m tests.mock_llm_server.mock_llm_server --port 8888
 ```
 
 It logs a one-line startup banner and then blocks until interrupted with

@@ -35,8 +35,8 @@ from typing import Tuple
 import tornado.iostream
 import tornado.web
 
-from neuro_san.test.llms.mock_llm_server.mock_state import MockState
-from neuro_san.test.llms.mock_llm_server.tool_arg_generator import ToolArgGenerator
+from tests.mock_llm_server.mock_state import MockState
+from tests.mock_llm_server.tool_arg_generator import ToolArgGenerator
 
 
 class ChatCompletionsHandler(tornado.web.RequestHandler):

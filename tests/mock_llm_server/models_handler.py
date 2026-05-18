@@ -23,7 +23,7 @@ import time
 
 import tornado.web
 
-from neuro_san.test.llms.mock_llm_server.mock_state import MockState
+from tests.mock_llm_server.mock_state import MockState
 
 
 class ModelsHandler(tornado.web.RequestHandler):
