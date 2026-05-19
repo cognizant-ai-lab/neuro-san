@@ -14,6 +14,8 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from __future__ import annotations
+
 from typing import Any
 from typing import Dict
 
@@ -31,6 +33,14 @@ class TracingContext(RunTarget):
 
         :param inputs: A list of inputs from the user.
         :return: The outputs of the run.
+        """
+        raise NotImplementedError
+
+    def clone(self) -> TracingContext:
+        """
+        Creates a copy the tracing context.
+
+        :return: A clone of the tracing context.
         """
         raise NotImplementedError
 
