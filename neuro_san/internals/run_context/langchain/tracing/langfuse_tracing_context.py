@@ -46,7 +46,10 @@ class LangfuseTracingContext(LangChainTracingContext):
         :param run_target: The RunTarget instance to be traced
         :param config: The configuration for the tracing context
         """
-        super().__init__(run_target=run_target, config=config, tracing_config=tracing_config)
+        super().__init__(run_target=run_target, config=config)
+
+        self.tracing_config: Dict[str, Any] = tracing_config or {
+        }
 
         # See if we can get a langfuse handler instance.
         handler_type = ResolverUtil.create_type("langfuse.langchain.CallbackHandler", raise_if_not_found=False)
@@ -61,7 +64,6 @@ If you didn't mean to use langfuse for observability, you can do this:
     export LANGFUSE_ENABLED=false
 """)
 
-        self.tracing_config["caller"] = "langfuse_tracing_context"
         self.maybe_create_handler()
 
     def clone(self) -> TracingContext:
@@ -118,10 +120,6 @@ If you didn't mean to use langfuse for observability, you can do this:
         """
         If the tracing config doesn't have a handler, create it.
         """
-        # caller: str = "None"
-        # if self.tracing_config is not None:
-        #    caller: str = self.tracing_config.get("caller", "unknown")
-
         callback_handler_type: Type[BaseCallbackHandler] = None
         handler: BaseCallbackHandler = self.tracing_config.get("langfuse_handler")
         if handler is None:
