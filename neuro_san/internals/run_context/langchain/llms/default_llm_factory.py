@@ -405,16 +405,44 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                     # fallback path, while still being on by default in most deployments
                     # so the trail isn't lost.
                     #
+                    # Scope of this check: only failures that fire at LLM *construction*
+                    # time land here — i.e. the key is missing (None) or of the wrong
+                    # data type (e.g. list/dict supplied via sly_data where a string is
+                    # expected). A key that is structurally a string but rejected by the
+                    # provider (wrong/expired/over-quota) doesn't fail construction; it
+                    # fails at *runtime* on the first API call, and is handled by the
+                    # analogous check in RunContextRunnable.invoke_agent_chain()
+                    # (see run_context_runnable.py).
+                    #
                     # The user-friendly `message` we raise is still reported to the user.
-                    # Two cases to consider:
+                    # The raised ValueError is collected by the fallback loop in
+                    # LangChainRunContext.create_agent_with_fallbacks() and, if no
+                    # fallback succeeds, aggregated into a final ValueError surfaced
+                    # to the caller. Two cases to consider:
+                    #
                     #   a) Env var missing / misconfigured — server-side fix.
                     #      The aggregated ValueError lands in server output (the operator
                     #      sees it), and this log line provides the technical detail to
-                    #      diagnose it.
+                    #      diagnose it. The surfaced text looks like:
+                    #
+                    #          No fully-specified LLM found in llm_config or fallbacks.
+                    #          The following errors occurred while constructing LLMs:
+                    #
+                    #          A value for the OPENAI_API_KEY environment variable must be
+                    #          correctly set in the neuro-san server or run-time environment
+                    #          in order to use this agent network.
+                    #          ...
+                    #
                     #   b) sly_data was supposed to supply the key — client-side fix.
                     #      The aggregated ValueError surfaces to the chat client so the
                     #      end user (or calling system) knows to provide the key in
-                    #      sly_data.llm_config.
+                    #      sly_data.llm_config. The surfaced text looks like:
+                    #
+                    #          No fully-specified LLM found in llm_config or fallbacks.
+                    #          LLM operation for this agent requires at least one of the
+                    #          following set in sly_data.llm_config:
+                    #          anthropic_api_key
+                    #
                     self.logger.info("API KEY error detected: %s", str(exception))
                     raise ValueError(message) from exception
                 found_exception = exception
