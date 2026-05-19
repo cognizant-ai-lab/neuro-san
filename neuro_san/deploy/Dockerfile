@@ -369,6 +369,11 @@ ENV AGENT_AUTHORIZER_RESOURCE_KEY=AgentNetwork
 # Typically "read" from CRUD-based permissions.
 ENV AGENT_AUTHORIZER_ALLOW_RELATION=read
 
+# Whether to enable run-time statistics endpoints for neuro-san server as a whole.
+# These endpoints can be used to get information about the server's current resource usage
+# and also to control run-time service profiler.
+ENV ENABLE_RUN_TIME_STATISTICS="false"
+
 # Below: Env vars specific to OpenFgaAuthorizer
 
 # Where the OpenFGA HTTP server is running for the OpenFgaAuthorizer
