@@ -115,6 +115,10 @@ If you didn't mean to use langfuse for observability, you can do this:
                 await super().ainvoke(chain, inputs, runnable_config)
 
     def create_main_span(self, runnable_config: Dict[str, Any]):
+        """
+        Create the main span for the run
+        :param runnable_config: The config for the runnable
+        """
 
         if self.main_span is not None:
             return
