@@ -149,7 +149,6 @@ If you didn't mean to use langfuse for observability, you can do this:
         :param runnable_config: The config for the runnable
         :return: The augmented config
         """
-        self.maybe_create_handler()
         if self.callback_handler is None:
             # Nothing we can do. Skip.
             return runnable_config
