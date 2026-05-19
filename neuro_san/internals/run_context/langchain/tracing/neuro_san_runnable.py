@@ -38,6 +38,7 @@ from langchain_core.runnables.utils import Output
 
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.run_target import RunTarget
+from neuro_san.internals.interfaces.tracing_context import TracingContext
 from neuro_san.internals.journals.intercepting_journal import InterceptingJournal
 from neuro_san.internals.messages.origination import Origination
 from neuro_san.internals.run_context.langchain.tracing.langfuse_config_augmenter import LangfuseConfigAugmenter
@@ -66,7 +67,7 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
 
     run_target: Optional[RunTarget] = None
 
-    tracing_config: Optional[Dict[str, Any]] = {}
+    tracing_context: Optional[TracingContext] = None
 
     # This guy needs to be a pydantic class and in order to have
     # any non-pydantic non-serializable members, we need to do this.
@@ -174,7 +175,6 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
             runnable_config["metadata"] = runnable_metadata
 
         runnable_config = self.augment_config_for_tracing(runnable_config)
-        self.tracing_config = runnable_config.get("neuro_san_tracing_config", self.tracing_config)
 
         return runnable_config
 
@@ -223,7 +223,8 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
         :return: The augmented runnable config
         """
         if os.getenv("LANGFUSE_ENABLED", "false").lower() == "true":
-            augmenter = LangfuseConfigAugmenter(self.tracing_config)
-            runnable_config = augmenter.augment_config(runnable_config, self.tracing_config)
+            tracing_config: Dict[str, Any] = self.tracing_context.get_tracing_config()
+            augmenter = LangfuseConfigAugmenter(tracing_config)
+            runnable_config = augmenter.augment_config(runnable_config, tracing_config)
 
         return runnable_config

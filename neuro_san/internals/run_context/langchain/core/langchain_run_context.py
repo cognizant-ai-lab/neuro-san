@@ -42,6 +42,7 @@ from langchain_core.tools.base import BaseTool
 from neuro_san.internals.errors.error_detector import ErrorDetector
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
+from neuro_san.internals.interfaces.tracing_context import TracingContext
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.journals.intercepting_journal import InterceptingJournal
 from neuro_san.internals.journals.originating_journal import OriginatingJournal
@@ -74,7 +75,7 @@ class LangChainRunContext(RunContext):
                  invocation_context: InvocationContext,
                  chat_context: Dict[str, Any],
                  middleware_config: List[Dict[str, Any]] = None,
-                 tracing_config: Dict[str, Any] = None):
+                 tracing_context: TracingContext = None):
         """
         Constructor
 
@@ -87,7 +88,7 @@ class LangChainRunContext(RunContext):
         :param chat_context: A ChatContext dictionary that contains all the state necessary
                 to carry on a previous conversation, possibly from a different server.
         :param middleware_config: An ordered list of middleware configurations
-        :param tracing_config: An ordered list of tracing configurations
+        :param tracing_context: A TracingContext for the request
         """
         self.chat_history: List[BaseMessage] = []
         self.middleware_config: List[Dict[str, Any]] = middleware_config
@@ -113,7 +114,7 @@ class LangChainRunContext(RunContext):
         self.logger: Logger = getLogger(self.__class__.__name__)
 
         # A Placeholder for observabilty-specific tracing objects
-        self.tracing_config: Dict[str, Any] = tracing_config
+        self.tracing_context: TracingContext = tracing_context
 
         parent_origin: List[Dict[str, Any]] = []
         if parent_run_context is not None:
@@ -124,7 +125,7 @@ class LangChainRunContext(RunContext):
             if self.chat_context is None:
                 self.chat_context = parent_run_context.get_chat_context()
 
-            self.tracing_config = copy(parent_run_context.get_tracing_config())
+            self.tracing_context = copy(parent_run_context.get_tracing_context())
             parent_origin = parent_run_context.get_origin()
 
             # Initialize the origin.
@@ -351,11 +352,9 @@ class LangChainRunContext(RunContext):
                                       tool_caller=self.tool_caller,
                                       error_detector=self.error_detector,
                                       session_id=session_id,
-                                      tracing_config=self.tracing_config)
+                                      tracing_context=self.tracing_context)
         runnable_config: Dict[str, Any] = runnable.prepare_runnable_config(session_id=session_id,
                                                                            use_run_name=True)
-        # Keep this around so child RunContexts can query it.
-        self.tracing_config = runnable_config.get("neuro_san_tracing_config")
 
         # This needs to be run as a chain otherwise LangSmith will pick up two
         # trace names for the same request.
@@ -606,8 +605,8 @@ class LangChainRunContext(RunContext):
         """
         return self.journal
 
-    def get_tracing_config(self) -> Dict[str, Any]:
+    def get_tracing_context(self) -> TracingContext:
         """
-        :return: The tracing dictionary associated with the instance
+        :return: The TracingContext associated with the instance
         """
-        return self.tracing_config
+        return self.tracing_context

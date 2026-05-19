@@ -50,7 +50,7 @@ class LangChainTracingContext(TracingContext):
         :param inputs: A list of inputs from the user.
         :return: The outputs of the run.
         """
-        runnable = NeuroSanRunnable(run_target=self.run_target, tracing_config=self.tracing_config, **self.config)
+        runnable = NeuroSanRunnable(run_target=self.run_target, tracing_context=self, **self.config)
         runnable_config: Dict[str, Any] = runnable.prepare_runnable_config(use_run_name=True)
         self.tracing_config = runnable_config.get("neuro_san_tracing_config", self.tracing_config)
 

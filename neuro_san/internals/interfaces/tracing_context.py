@@ -15,6 +15,7 @@
 #
 # END COPYRIGHT
 from typing import Any
+from typing import Dict
 
 from neuro_san.internals.interfaces.run_target import RunTarget
 
@@ -30,5 +31,13 @@ class TracingContext(RunTarget):
 
         :param inputs: A list of inputs from the user.
         :return: The outputs of the run.
+        """
+        raise NotImplementedError
+
+    def get_tracing_config(self) -> Dict[str, Any]:
+        """
+        Get the configuration for the tracing context.
+
+        :return: The configuration for the tracing context.
         """
         raise NotImplementedError
