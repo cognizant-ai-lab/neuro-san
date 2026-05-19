@@ -14,6 +14,8 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from __future__ import annotations
+
 from typing import Any
 from typing import Dict
 from typing import List
@@ -40,17 +42,19 @@ class LangfuseTracingContext(LangChainTracingContext):
 
     def __init__(self, run_target: RunTarget,
                  config: Dict[str, Any],
-                 callback_handler: BaseCallbackHandler = None):
+                 parent_context: LangfuseTracingContext = None):
         """
         Constructor
 
         :param run_target: The RunTarget instance to be traced
         :param config: The configuration for the tracing context
-        :param callback_handler: The langfuse CallbackHandler instance to use
+        :param parent_context: The parent instance to riff from.
         """
         super().__init__(run_target=run_target, config=config)
 
-        self.callback_handler: BaseCallbackHandler = callback_handler
+        self.callback_handler: BaseCallbackHandler = None
+        if parent_context is not None:
+            self.callback_handler = parent_context.callback_handler
 
         # See if we can get a langfuse handler instance.
         handler_type = ResolverUtil.create_type("langfuse.langchain.CallbackHandler", raise_if_not_found=False)
@@ -73,8 +77,7 @@ If you didn't mean to use langfuse for observability, you can do this:
 
         :return: A clone of the tracing context.
         """
-        clone = LangfuseTracingContext(run_target=self.run_target, config=self.config,
-                                       callback_handler=self.callback_handler)
+        clone = LangfuseTracingContext(run_target=self.run_target, config=self.config, parent_context=self)
         return clone
 
     async def ainvoke(self, chain: Runnable, inputs: Any, runnable_config: Dict[str, Any]):
