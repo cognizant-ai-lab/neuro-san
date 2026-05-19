@@ -401,7 +401,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 if message is not None:
                     # Log the error with technical details for debugging purposes,
                     # but we are returning a more user-friendly message to the client.
-                    self.logger.error("API KEY error detected: %s", str(exception))
+                    self.logger.debug("API KEY error detected: %s", str(exception))
                     raise ValueError(message) from exception
                 found_exception = exception
 
