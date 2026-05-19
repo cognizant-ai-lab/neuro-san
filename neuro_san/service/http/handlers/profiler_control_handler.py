@@ -18,6 +18,7 @@
 See class comment for details
 """
 from typing import Any, Dict, Optional
+import os
 import json
 from json.decoder import JSONDecodeError
 import logging
@@ -43,7 +44,15 @@ class ProfilerControlHandler(RequestHandler):
         """
         Implementation of POST request handler for profiler control.
         """
+        is_enabled: bool = os.getenv("ENABLE_RUN_TIME_STATISTICS", "false").lower() == "true"
         logger = logging.getLogger(self.__class__.__name__)
+
+        if not is_enabled:
+            self.set_status(HTTPStatus.SERVICE_UNAVAILABLE)
+            self.write("Run-time profiler is disabled. "
+                       "To enable it, set environment variable ENABLE_RUN_TIME_STATISTICS to 'true'.")
+            logger.info("Run-time profiler is disabled.")
+            return
 
         if not HAS_PROFILER:
             self.set_status(HTTPStatus.SERVICE_UNAVAILABLE)
