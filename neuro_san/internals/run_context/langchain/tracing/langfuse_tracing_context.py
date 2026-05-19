@@ -31,9 +31,9 @@ from neuro_san.internals.run_context.langchain.tracing.langchain_tracing_context
 from neuro_san.internals.run_context.langchain.tracing.langfuse_config_augmenter import LangfuseConfigAugmenter
 
 
-class LangFuseLangChainTracingContext(LangChainTracingContext):
+class LangfuseTracingContext(LangChainTracingContext):
     """
-    RunTarget interface for a TracingContext in langchain with LangFuse tracing hooks.
+    RunTarget interface for a TracingContext in langchain with Langfuse tracing hooks.
     """
 
     def __init__(self, run_target: RunTarget, config: Dict[str, Any], tracing_config: Dict[str, Any] = None):
@@ -49,7 +49,7 @@ class LangFuseLangChainTracingContext(LangChainTracingContext):
         handler_type = ResolverUtil.create_type("langfuse.langchain.CallbackHandler", raise_if_not_found=False)
         if handler_type is None:
             raise ValueError("""
-Failed to create LangFuse CallbackHandler. Try one of the following:
+Failed to create Langfuse CallbackHandler. Try one of the following:
 
 If you really wanted to use langfuse for observability, you can install it with
     pip install langfuse
@@ -58,7 +58,7 @@ If you didn't mean to use langfuse for observability, you can do this:
     export LANGFUSE_ENABLED=false
 """)
 
-        self.tracing_config["caller"] = "langfuse_langchain_tracing_context"
+        self.tracing_config["caller"] = "langfuse_tracing_context"
         config_augmenter: LangfuseConfigAugmenter = LangfuseConfigAugmenter(self.tracing_config)
         config_augmenter.maybe_create_handler(self.tracing_config)
 
@@ -68,9 +68,9 @@ If you didn't mean to use langfuse for observability, you can do this:
 
         :return: A clone of the tracing context.
         """
-        clone = LangFuseLangChainTracingContext(run_target=self.run_target,
-                                                config=copy(self.config),
-                                                tracing_config=copy(self.tracing_config))
+        clone = LangfuseTracingContext(run_target=self.run_target,
+                                       config=copy(self.config),
+                                       tracing_config=copy(self.tracing_config))
         return clone
 
     async def ainvoke(self, chain: Runnable, inputs: Any, runnable_config: Dict[str, Any]):

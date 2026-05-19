@@ -24,8 +24,7 @@ from neuro_san.internals.interfaces.context_type_tracing_context_factory import 
 from neuro_san.internals.interfaces.run_target import RunTarget
 from neuro_san.internals.interfaces.tracing_context import TracingContext
 from neuro_san.internals.run_context.langchain.tracing.langchain_tracing_context import LangChainTracingContext
-from neuro_san.internals.run_context.langchain.tracing.langfuse_langchain_tracing_context \
-    import LangFuseLangChainTracingContext
+from neuro_san.internals.run_context.langchain.tracing.langfuse_tracing_context import LangfuseTracingContext
 
 
 class LangChainTracingContextFactory(ContextTypeTracingContextFactory):
@@ -46,7 +45,7 @@ class LangChainTracingContextFactory(ContextTypeTracingContextFactory):
         test_for_langfuse: bool = getenv("LANGFUSE_ENABLED", "false").lower() == "true"
 
         if test_for_langfuse:
-            tracing_context = LangFuseLangChainTracingContext(run_target=run_target, config=config)
+            tracing_context = LangfuseTracingContext(run_target=run_target, config=config)
         else:
             tracing_context = LangChainTracingContext(run_target=run_target, config=config)
 
