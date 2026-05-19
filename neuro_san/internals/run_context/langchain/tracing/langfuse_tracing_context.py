@@ -37,7 +37,7 @@ from neuro_san.internals.run_context.langchain.tracing.langchain_tracing_context
 
 class LangfuseTracingContext(LangChainTracingContext):
     """
-    RunTarget interface for a TracingContext in langchain with Langfuse tracing hooks.
+    TracingContext implementation for runs that use Langfuse.
     """
 
     def __init__(self, run_target: RunTarget,
