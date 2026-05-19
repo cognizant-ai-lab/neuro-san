@@ -48,6 +48,9 @@ class ServiceResources:
     on_macos: bool = sys.platform.startswith("darwin")
     on_windows: bool = sys.platform.startswith("win")
 
+    # High watermark for memory usage in bytes since process start (for logging purposes)
+    max_memory_used_bytes: float = 0.0
+
     # ---------------------------
     # POSIX helpers (Linux/macOS)
     # ---------------------------
@@ -292,3 +295,60 @@ class ServiceResources:
             "inbound_accepted": len(inbound_accepted_list),
             "outbound_tcp": cls.classify_outbound_sockets(outbound_list),
         }
+
+    @classmethod
+    def get_memory_used_mbytes(cls) -> Tuple[float, float]:
+        """
+        Get the current memory usage of the process in megabytes
+        and maximum memory used since process start, and update the maximum if current usage is higher.
+        :return: tuple of (current_memory_used_mbytes, max_memory_used_mbytes)
+        """
+        p = psutil.Process()
+        mem_info = p.memory_info()
+        cls.max_memory_used_bytes = max(cls.max_memory_used_bytes, mem_info.rss)
+        # Return memory sizes in megabytes
+        return mem_info.rss / (1024 * 1024), cls.max_memory_used_bytes / (1024 * 1024)
+
+    @classmethod
+    def get_cpu_load(cls) -> float:
+        """
+        Get the current CPU load percentage of the process.
+        :return: CPU load percentage over a short interval (e.g., 0.1 seconds)
+                 in the range [0.0, 100.0]
+        """
+        if hasattr(os, "sched_getaffinity"):
+            # sched_getaffinity returns the set of CPUs the process is allowed to run on,
+            # which is more accurate for containerized environments.
+            denom = len(os.sched_getaffinity(0))
+        else:
+            denom = max(psutil.cpu_count(), 1)
+        cpu_load = psutil.Process().cpu_percent(interval=0.1)
+        cpu_load = min(cpu_load / denom, 100.0)
+        return cpu_load
+
+    @classmethod
+    def get_snapshot_dict(cls, server_port: int) -> Dict[str, Any]:
+        """
+        Get a snapshot of current resource usage for logging or metrics.
+        :param server_port: server port to classify sockets
+        :return: dictionary with resource usage information
+        """
+        # Get used file descriptors:
+        fd_usage, soft_limit, hard_limit = cls.get_fd_usage()
+        mem_used, mem_max = cls.get_memory_used_mbytes()
+        cpu_load: float = cls.get_cpu_load()
+        snapshot: Dict[str, Any] = {
+            "fd_usage": fd_usage,
+            "fd_limits": {
+                "soft": soft_limit,
+                "hard": hard_limit
+            },
+            "memory_usage_mbytes": {
+                "current": mem_used,
+                "max_since_start": mem_max
+            },
+            # Round CPU load to 3 decimal places for more compact output
+            "cpu_load": round(cpu_load, 3),
+            "socket_usage": cls.classify_sockets(server_port)
+        }
+        return snapshot
