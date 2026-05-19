@@ -50,8 +50,8 @@ class LangfuseConfigAugmenter:
         handler: BaseCallbackHandler = tracing_config.get("langfuse_handler")
         if handler is None:
 
-            # traceback.print_stack()
             _ = traceback
+            # traceback.print_stack()
             print("\n\n")
 
             # See if we can create a new langfuse handler instance.

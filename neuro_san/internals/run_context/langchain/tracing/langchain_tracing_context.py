@@ -17,6 +17,8 @@
 from typing import Any
 from typing import Dict
 
+from copy import copy
+
 from langchain_core.runnables.base import Runnable
 from langchain_core.runnables.passthrough import RunnablePassthrough
 
@@ -30,7 +32,7 @@ class LangChainTracingContext(TracingContext):
     TracingContext implementation for unadorned langchain runs.
     """
 
-    def __init__(self, run_target: RunTarget, config: Dict[str, Any]):
+    def __init__(self, run_target: RunTarget, config: Dict[str, Any], tracing_config: Dict[str, Any] = None):
         """
         Constructor
 
@@ -39,7 +41,7 @@ class LangChainTracingContext(TracingContext):
         """
         self.run_target: RunTarget = run_target
         self.config: Dict[str, Any] = config
-        self.tracing_config: Dict[str, Any] = {
+        self.tracing_config: Dict[str, Any] = tracing_config or {
             "caller": "langchain_tracing_context"
         }
 
@@ -69,9 +71,20 @@ class LangChainTracingContext(TracingContext):
         """
         await chain.ainvoke(input=inputs, config=runnable_config)
 
+    def clone(self) -> TracingContext:
+        """
+        Creates a copy the tracing context.
+
+        :return: A clone of the tracing context.
+        """
+        clone = LangChainTracingContext(run_target=self.run_target, config=copy(self.config))
+        self.tracing_config = copy(self.tracing_config)
+        return clone
+
     def get_tracing_config(self) -> Dict[str, Any]:
         """
         Get the tracing config
+
         :return: The tracing config
         """
         return self.tracing_config

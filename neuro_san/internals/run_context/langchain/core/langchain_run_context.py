@@ -125,7 +125,7 @@ class LangChainRunContext(RunContext):
             if self.chat_context is None:
                 self.chat_context = parent_run_context.get_chat_context()
 
-            self.tracing_context = copy(parent_run_context.get_tracing_context())
+            self.tracing_context = parent_run_context.get_tracing_context().clone()
             parent_origin = parent_run_context.get_origin()
 
             # Initialize the origin.

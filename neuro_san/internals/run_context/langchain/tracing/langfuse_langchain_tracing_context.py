@@ -17,6 +17,7 @@
 from typing import Any
 from typing import Dict
 
+from copy import copy
 from datetime import datetime
 from socket import gethostname
 
@@ -25,6 +26,7 @@ from langchain_core.runnables.base import Runnable
 from leaf_common.config.resolver_util import ResolverUtil
 
 from neuro_san.internals.interfaces.run_target import RunTarget
+from neuro_san.internals.interfaces.tracing_context import TracingContext
 from neuro_san.internals.run_context.langchain.tracing.langchain_tracing_context import LangChainTracingContext
 from neuro_san.internals.run_context.langchain.tracing.langfuse_config_augmenter import LangfuseConfigAugmenter
 
@@ -34,14 +36,14 @@ class LangFuseLangChainTracingContext(LangChainTracingContext):
     RunTarget interface for a TracingContext in langchain with LangFuse tracing hooks.
     """
 
-    def __init__(self, run_target: RunTarget, config: Dict[str, Any]):
+    def __init__(self, run_target: RunTarget, config: Dict[str, Any], tracing_config: Dict[str, Any] = None):
         """
         Constructor
 
         :param run_target: The RunTarget instance to be traced
         :param config: The configuration for the tracing context
         """
-        super().__init__(run_target=run_target, config=config)
+        super().__init__(run_target=run_target, config=config, tracing_config=tracing_config)
 
         # See if we can get a langfuse handler instance.
         handler_type = ResolverUtil.create_type("langfuse.langchain.CallbackHandler", raise_if_not_found=False)
@@ -59,6 +61,17 @@ If you didn't mean to use langfuse for observability, you can do this:
         self.tracing_config["caller"] = "langfuse_langchain_tracing_context"
         config_augmenter: LangfuseConfigAugmenter = LangfuseConfigAugmenter(self.tracing_config)
         config_augmenter.maybe_create_handler(self.tracing_config)
+
+    def clone(self) -> TracingContext:
+        """
+        Creates a copy the tracing context.
+
+        :return: A clone of the tracing context.
+        """
+        clone = LangFuseLangChainTracingContext(run_target=self.run_target,
+                                                config=copy(self.config),
+                                                tracing_config=copy(self.tracing_config))
+        return clone
 
     async def ainvoke(self, chain: Runnable, inputs: Any, runnable_config: Dict[str, Any]):
         """
