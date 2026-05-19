@@ -93,8 +93,8 @@ COPY --from=builder /install /usr/local
 # Note: The registries directory where agent definitions live is mandatory
 #       The coded_tools directory where agent code lives is optional
 #       [s] allows for registries/coded_tools from within client repo or neuro-san repo
-COPY ./neuro_san/registrie[s] ./registrie[s] ${APP_SOURCE}/registries
-COPY ./neuro_san/coded_tool[s] ./coded_tool[s] ${APP_SOURCE}/coded_tools
+COPY ./neuro_san/registrie[s] ./registrie[s] ${APP_SOURCE}/registries/
+COPY ./neuro_san/coded_tool[s] ./coded_tool[s] ${APP_SOURCE}/coded_tools/
 
 # Copy application code and necessary files if we are running within the neuro-san repo
 # [n] allows this to not have to be there for client repo builds.
@@ -389,4 +389,4 @@ ENV FGA_POLICY_FILE=
 ENV FGA_STORE_NAME=
 
 
-ENTRYPOINT "${APP_ENTRYPOINT}"
+ENTRYPOINT ["/bin/bash", "-c", "exec ${APP_ENTRYPOINT}"]
