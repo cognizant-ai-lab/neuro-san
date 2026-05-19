@@ -257,6 +257,7 @@ class LangChainRunContext(RunContext):
                 error += "of the following set in sly_data.llm_config:\n"
                 error += "\n".join(sorted(required_llm_config)) + "\n"
             if len(construction_errors) > 0:
+                error += "\nThe following errors occurred while constructing LLMs:\n"
                 error += "\n".join(construction_errors) + "\n"
             raise ValueError(error)
 
