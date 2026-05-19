@@ -44,6 +44,7 @@ from neuro_san.service.http.handlers.health_check_handler import HealthCheckHand
 from neuro_san.service.http.handlers.openapi_publish_handler import OpenApiPublishHandler
 from neuro_san.service.http.handlers.streaming_chat_handler import StreamingChatHandler
 from neuro_san.service.http.handlers.profiler_control_handler import ProfilerControlHandler
+from neuro_san.service.http.handlers.snapshot_handler import SnapshotHandler
 from neuro_san.service.http.logging.http_logger import HttpLogger
 from neuro_san.service.http.server.agent_authorization_policy import AgentAuthorizationPolicy
 from neuro_san.service.http.server.http_server_app import HttpServerApp
@@ -222,6 +223,9 @@ class HttpServer(AgentStateListener):
 
         # Setup handler for profiler control
         handlers.append(("/profiler", ProfilerControlHandler))
+
+        # Setup handler for system snapshot query:
+        handlers.append(("/resources_utilization", SnapshotHandler, {"http_port": self.http_port}))
 
         if enable_http_handlers:
             handlers.append(("/api/v1/list", ConciergeHandler, request_initialize_data))
