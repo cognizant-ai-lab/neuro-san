@@ -30,8 +30,13 @@ from neuro_san.internals.run_context.langchain.core.langchain_run_context import
 pytestmark = [pytest.mark.non_default_llm_provider, pytest.mark.ollama]
 
 
-class TestLangChainRunContext:
-    """Tests for the LangChainRunContext class."""
+class TestLangChainContextLlmFallbacks:
+    """
+    Tests covering the LLM-fallback slice of LangChainRunContext —
+    specifically create_agent_with_fallbacks(), which iterates over llm_config
+    fallbacks, tolerates construction failures and missing-sly_data outcomes,
+    and aggregates a final ValueError when no fallback succeeds.
+    """
 
     @staticmethod
     def _make_run_context(llm_config: Dict[str, Any], create_llm_side_effect) -> LangChainRunContext:
