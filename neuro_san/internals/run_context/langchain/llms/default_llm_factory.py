@@ -399,9 +399,23 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 # also provide some more helpful failure text.
                 message: str = ApiKeyErrorCheck.check_for_api_key_exception(exception)
                 if message is not None:
-                    # Log the error with technical details for debugging purposes,
-                    # but we are returning a more user-friendly message to the client.
-                    self.logger.debug("API KEY error detected: %s", str(exception))
+                    # Log the error with technical details so a sysadmin can correlate
+                    # user-visible failures with the underlying provider error. INFO
+                    # level (rather than ERROR) avoids alarming on the recovered-via-
+                    # fallback path, while still being on by default in most deployments
+                    # so the trail isn't lost.
+                    #
+                    # The user-friendly `message` we raise is still reported to the user.
+                    # Two cases to consider:
+                    #   a) Env var missing / misconfigured — server-side fix.
+                    #      The aggregated ValueError lands in server output (the operator
+                    #      sees it), and this log line provides the technical detail to
+                    #      diagnose it.
+                    #   b) sly_data was supposed to supply the key — client-side fix.
+                    #      The aggregated ValueError surfaces to the chat client so the
+                    #      end user (or calling system) knows to provide the key in
+                    #      sly_data.llm_config.
+                    self.logger.info("API KEY error detected: %s", str(exception))
                     raise ValueError(message) from exception
                 found_exception = exception
 
