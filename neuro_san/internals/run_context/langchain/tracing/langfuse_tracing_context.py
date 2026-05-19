@@ -16,11 +16,15 @@
 # END COPYRIGHT
 from typing import Any
 from typing import Dict
+from typing import List
+from typing import Type
 
 from copy import copy
 from datetime import datetime
 from socket import gethostname
+import traceback
 
+from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.runnables.base import Runnable
 
 from leaf_common.config.resolver_util import ResolverUtil
@@ -28,7 +32,6 @@ from leaf_common.config.resolver_util import ResolverUtil
 from neuro_san.internals.interfaces.run_target import RunTarget
 from neuro_san.internals.interfaces.tracing_context import TracingContext
 from neuro_san.internals.run_context.langchain.tracing.langchain_tracing_context import LangChainTracingContext
-from neuro_san.internals.run_context.langchain.tracing.langfuse_config_augmenter import LangfuseConfigAugmenter
 
 
 class LangfuseTracingContext(LangChainTracingContext):
@@ -59,8 +62,7 @@ If you didn't mean to use langfuse for observability, you can do this:
 """)
 
         self.tracing_config["caller"] = "langfuse_tracing_context"
-        config_augmenter: LangfuseConfigAugmenter = LangfuseConfigAugmenter(self.tracing_config)
-        config_augmenter.maybe_create_handler(self.tracing_config)
+        self.maybe_create_handler()
 
     def clone(self) -> TracingContext:
         """
@@ -81,8 +83,7 @@ If you didn't mean to use langfuse for observability, you can do this:
         :param runnable_config: The config for the runnable
         """
         # Augment the callbacks with the handler.
-        config_augmenter: LangfuseConfigAugmenter = LangfuseConfigAugmenter(self.tracing_config)
-        runnable_config = config_augmenter.augment_config(runnable_config, self.tracing_config)
+        runnable_config = self.augment_config(runnable_config)
 
         # Get the user_id for the trace
         empty: Dict[str, Any] = {}
@@ -112,3 +113,66 @@ If you didn't mean to use langfuse for observability, you can do this:
         # pylint: disable=not-context-manager
         with propagate_attributes(user_id=user_id, session_id=session_id):
             await super().ainvoke(chain, inputs, runnable_config)
+
+    def maybe_create_handler(self):
+        """
+        If the tracing config doesn't have a handler, create it.
+        """
+        # caller: str = "None"
+        # if self.tracing_config is not None:
+        #    caller: str = self.tracing_config.get("caller", "unknown")
+
+        callback_handler_type: Type[BaseCallbackHandler] = None
+        handler: BaseCallbackHandler = self.tracing_config.get("langfuse_handler")
+        if handler is None:
+
+            _ = traceback
+            # traceback.print_stack()
+            print("\n\n")
+
+            # See if we can create a new langfuse handler instance.
+            callback_handler_type = ResolverUtil.create_type("langfuse.langchain.CallbackHandler",
+                                                             raise_if_not_found=False)
+            if callback_handler_type is None:
+                # Nothing we can do. Skip.
+                return None
+
+            handler = callback_handler_type()
+            self.tracing_config["langfuse_handler"] = handler
+
+        print(f"using langfuse handler: {handler}")
+        return handler
+
+    def augment_config(self, runnable_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Augment the callbacks with the handler.
+        :param runnable_config: The config for the runnable
+        :return: The augmented config
+        """
+        handler = self.maybe_create_handler()
+        if handler is None:
+            # Nothing we can do. Skip.
+            return runnable_config
+
+        # trace_id: str = handler.get_trace_id()
+        # trace_id: str = "unknown"
+        # print(f"    with trace_id: {trace_id}")
+
+        # Set the callbacks per the langfuse docs
+        callbacks: List[BaseCallbackHandler] = runnable_config.get("callbacks", [])
+        if handler not in callbacks:
+            callbacks.append(handler)
+        runnable_config["callbacks"] = callbacks
+
+        runnable_config["neuro_san_tracing_config"] = self.tracing_config
+
+        # Get the run_name, which is the full name of the runnable with origin information
+        # run_name: str = runnable_config.get("run_name")
+        # if run_name:
+        #     empty: Dict[str, Any] = {}
+        #     metadata: Dict[str, Any] = runnable_config.get("metadata", empty)
+        #     metadata["langfuse_trace_name"] = run_name
+        #     runnable_config["metadata"] = metadata
+        #     print(f"metadata: {metadata}")
+
+        return runnable_config

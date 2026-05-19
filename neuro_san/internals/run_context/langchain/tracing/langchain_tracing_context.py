@@ -81,10 +81,11 @@ class LangChainTracingContext(TracingContext):
         self.tracing_config = copy(self.tracing_config)
         return clone
 
-    def get_tracing_config(self) -> Dict[str, Any]:
+    def augment_config(self, runnable_config: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Get the tracing config
-
-        :return: The tracing config
+        Augment the callbacks with the handler.
+        :param runnable_config: The config for the runnable
+        :return: The augmented config
         """
-        return self.tracing_config
+        # Do nothing special
+        return runnable_config

@@ -44,10 +44,10 @@ class TracingContext(RunTarget):
         """
         raise NotImplementedError
 
-    def get_tracing_config(self) -> Dict[str, Any]:
+    def augment_config(self, runnable_config: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Get the configuration for the tracing context.
-
-        :return: The configuration for the tracing context.
+        Augment the callbacks with the handler.
+        :param runnable_config: The config for the runnable
+        :return: The augmented config
         """
         raise NotImplementedError

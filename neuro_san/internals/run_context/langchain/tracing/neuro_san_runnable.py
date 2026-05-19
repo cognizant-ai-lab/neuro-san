@@ -41,7 +41,6 @@ from neuro_san.internals.interfaces.run_target import RunTarget
 from neuro_san.internals.interfaces.tracing_context import TracingContext
 from neuro_san.internals.journals.intercepting_journal import InterceptingJournal
 from neuro_san.internals.messages.origination import Origination
-from neuro_san.internals.run_context.langchain.tracing.langfuse_config_augmenter import LangfuseConfigAugmenter
 from neuro_san.internals.utils.metadata_util import MetadataUtil
 
 
@@ -174,7 +173,7 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
         if runnable_metadata:
             runnable_config["metadata"] = runnable_metadata
 
-        runnable_config = self.augment_config_for_tracing(runnable_config)
+        runnable_config = self.tracing_context.augment_config(runnable_config)
 
         return runnable_config
 
@@ -214,17 +213,3 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
             "messages": messages
         }
         return outputs
-
-    def augment_config_for_tracing(self, runnable_config: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Add stuff to the runnable config based on env vars for tracing.
-
-        :param runnable_config: The runnable config to augment
-        :return: The augmented runnable config
-        """
-        if os.getenv("LANGFUSE_ENABLED", "false").lower() == "true":
-            tracing_config: Dict[str, Any] = self.tracing_context.get_tracing_config()
-            augmenter = LangfuseConfigAugmenter(tracing_config)
-            runnable_config = augmenter.augment_config(runnable_config, tracing_config)
-
-        return runnable_config
