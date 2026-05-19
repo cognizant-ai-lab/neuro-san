@@ -173,7 +173,9 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
         if runnable_metadata:
             runnable_config["metadata"] = runnable_metadata
 
-        runnable_config = self.tracing_context.augment_config(runnable_config)
+        # Augment the config per the TracingContext
+        if self.tracing_context:
+            runnable_config = self.tracing_context.augment_config(runnable_config)
 
         return runnable_config
 
