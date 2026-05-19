@@ -18,8 +18,10 @@
 See class comment for details
 """
 from typing import Any, Dict
+import os
 import json
 import logging
+from http import HTTPStatus
 
 from tornado.web import RequestHandler
 
@@ -42,14 +44,21 @@ class SnapshotHandler(RequestHandler):
         # Set up local members from kwargs dictionary passed in:
         self.http_port: int = int(kwargs.pop("http_port"))
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.is_enabled: bool = os.getenv("ENABLE_RUN_TIME_STATISTICS", "false").lower() == "true"
 
     async def get(self):
         """
         Implementation of GET request handler for system snapshot query.
         """
-        snapshot_dict: Dict[str, Any] = ServiceResources.get_snapshot_dict(self.http_port)
-        self.write(json.dumps(snapshot_dict, indent=4))
-        self.logger.info("Returned system snapshot: %s", json.dumps(snapshot_dict, indent=4))
+        if self.is_enabled:
+            snapshot_dict: Dict[str, Any] = ServiceResources.get_snapshot_dict(self.http_port)
+            self.write(json.dumps(snapshot_dict, indent=4))
+            self.logger.info("Returned system snapshot: %s", json.dumps(snapshot_dict, indent=4))
+        else:
+            self.set_status(HTTPStatus.SERVICE_UNAVAILABLE)
+            self.write("Run-time statistics collection is disabled. "
+                       "To enable it, set environment variable ENABLE_RUN_TIME_STATISTICS to 'true'.")
+            self.logger.info("Run-time statistics collection is disabled.")
 
     def data_received(self, chunk):
         """

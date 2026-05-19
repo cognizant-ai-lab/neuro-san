@@ -310,6 +310,23 @@ class ServiceResources:
         return mem_info.rss / (1024 * 1024), cls.max_memory_used_bytes / (1024 * 1024)
 
     @classmethod
+    def get_cpu_load(cls) -> float:
+        """
+        Get the current CPU load percentage of the process.
+        :return: CPU load percentage over a short interval (e.g., 0.1 seconds)
+                 in the range [0.0, 100.0]
+        """
+        if hasattr(os, "sched_getaffinity"):
+            # sched_getaffinity returns the set of CPUs the process is allowed to run on,
+            # which is more accurate for containerized environments.
+            denom = len(os.sched_getaffinity(0))
+        else:
+            denom = max(psutil.cpu_count(), 1)
+        cpu_load = psutil.Process().cpu_percent(interval=0.1)
+        cpu_load = min(cpu_load / denom, 100.0)
+        return cpu_load
+
+    @classmethod
     def get_snapshot_dict(cls, server_port: int) -> Dict[str, Any]:
         """
         Get a snapshot of current resource usage for logging or metrics.
@@ -319,6 +336,7 @@ class ServiceResources:
         # Get used file descriptors:
         fd_usage, soft_limit, hard_limit = cls.get_fd_usage()
         mem_used, mem_max = cls.get_memory_used_mbytes()
+        cpu_load: float = cls.get_cpu_load()
         snapshot: Dict[str, Any] = {
             "fd_usage": fd_usage,
             "fd_limits": {
@@ -329,6 +347,8 @@ class ServiceResources:
                 "current": mem_used,
                 "max_since_start": mem_max
             },
+            # Round CPU load to 3 decimal places for more compact output
+            "cpu_load": round(cpu_load, 3),
             "socket_usage": cls.classify_sockets(server_port)
         }
         return snapshot
