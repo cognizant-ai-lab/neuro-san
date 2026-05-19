@@ -19,7 +19,6 @@ from typing import Dict
 from typing import List
 from typing import Type
 
-from copy import copy
 from datetime import datetime
 from socket import gethostname
 import traceback
@@ -39,17 +38,19 @@ class LangfuseTracingContext(LangChainTracingContext):
     RunTarget interface for a TracingContext in langchain with Langfuse tracing hooks.
     """
 
-    def __init__(self, run_target: RunTarget, config: Dict[str, Any], tracing_config: Dict[str, Any] = None):
+    def __init__(self, run_target: RunTarget,
+                 config: Dict[str, Any],
+                 callback_handler: BaseCallbackHandler = None):
         """
         Constructor
 
         :param run_target: The RunTarget instance to be traced
         :param config: The configuration for the tracing context
+        :param callback_handler: The langfuse CallbackHandler instance to use
         """
         super().__init__(run_target=run_target, config=config)
 
-        self.tracing_config: Dict[str, Any] = tracing_config or {
-        }
+        self.callback_handler: BaseCallbackHandler = callback_handler
 
         # See if we can get a langfuse handler instance.
         handler_type = ResolverUtil.create_type("langfuse.langchain.CallbackHandler", raise_if_not_found=False)
@@ -72,9 +73,8 @@ If you didn't mean to use langfuse for observability, you can do this:
 
         :return: A clone of the tracing context.
         """
-        clone = LangfuseTracingContext(run_target=self.run_target,
-                                       config=copy(self.config),
-                                       tracing_config=copy(self.tracing_config))
+        clone = LangfuseTracingContext(run_target=self.run_target, config=self.config,
+                                       callback_handler=self.callback_handler)
         return clone
 
     async def ainvoke(self, chain: Runnable, inputs: Any, runnable_config: Dict[str, Any]):
@@ -120,26 +120,24 @@ If you didn't mean to use langfuse for observability, you can do this:
         """
         If the tracing config doesn't have a handler, create it.
         """
-        callback_handler_type: Type[BaseCallbackHandler] = None
-        handler: BaseCallbackHandler = self.tracing_config.get("langfuse_handler")
-        if handler is None:
+        if self.callback_handler is None:
 
             _ = traceback
             # traceback.print_stack()
             print("\n\n")
 
             # See if we can create a new langfuse handler instance.
+            callback_handler_type: Type[BaseCallbackHandler] = None
             callback_handler_type = ResolverUtil.create_type("langfuse.langchain.CallbackHandler",
                                                              raise_if_not_found=False)
             if callback_handler_type is None:
                 # Nothing we can do. Skip.
-                return None
+                self.callback_handler = None
+                return
 
-            handler = callback_handler_type()
-            self.tracing_config["langfuse_handler"] = handler
+            self.callback_handler = callback_handler_type()
 
-        print(f"using langfuse handler: {handler}")
-        return handler
+        print(f"using langfuse handler: {self.callback_handler}")
 
     def augment_config(self, runnable_config: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -147,22 +145,22 @@ If you didn't mean to use langfuse for observability, you can do this:
         :param runnable_config: The config for the runnable
         :return: The augmented config
         """
-        handler = self.maybe_create_handler()
-        if handler is None:
+        self.maybe_create_handler()
+        if self.callback_handler is None:
             # Nothing we can do. Skip.
             return runnable_config
 
-        # trace_id: str = handler.get_trace_id()
+        # trace_id: str = self.callback_handler.get_trace_id()
         # trace_id: str = "unknown"
         # print(f"    with trace_id: {trace_id}")
 
         # Set the callbacks per the langfuse docs
         callbacks: List[BaseCallbackHandler] = runnable_config.get("callbacks", [])
-        if handler not in callbacks:
-            callbacks.append(handler)
+        if self.callback_handler not in callbacks:
+            callbacks.append(self.callback_handler)
         runnable_config["callbacks"] = callbacks
 
-        runnable_config["neuro_san_tracing_config"] = self.tracing_config
+        runnable_config["neuro_san_tracing_context"] = self
 
         # Get the run_name, which is the full name of the runnable with origin information
         # run_name: str = runnable_config.get("run_name")
