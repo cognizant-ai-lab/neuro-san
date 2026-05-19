@@ -52,9 +52,8 @@ class LangfuseTracingContext(LangChainTracingContext):
         """
         super().__init__(run_target=run_target, config=config)
 
+        self.parent_context: LangfuseTracingContext = parent_context
         self.callback_handler: BaseCallbackHandler = None
-        if parent_context is not None:
-            self.callback_handler = parent_context.callback_handler
 
         # See if we can get a langfuse handler instance.
         handler_type = ResolverUtil.create_type("langfuse.langchain.CallbackHandler", raise_if_not_found=False)
@@ -123,8 +122,10 @@ If you didn't mean to use langfuse for observability, you can do this:
         """
         If the tracing config doesn't have a handler, create it.
         """
-        if self.callback_handler is None:
+        if self.callback_handler is None and self.parent_context is not None:
+            self.callback_handler = self.parent_context.callback_handler
 
+        if self.callback_handler is None:
             _ = traceback
             # traceback.print_stack()
             print("\n\n")
