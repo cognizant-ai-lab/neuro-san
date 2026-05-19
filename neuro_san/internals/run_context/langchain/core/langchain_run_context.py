@@ -214,10 +214,18 @@ class LangChainRunContext(RunContext):
         required_llm_config: Set[str] = set()
 
         # Go through the list of fallbacks in the config.
+        construction_errors: List[str] = []
         for fallback in fallbacks:
 
             # Create a model we might use.
-            one_llm_resources: LangChainLlmResources | Set[str] = llm_factory.create_llm(fallback, sly_data)
+            # If construction fails (e.g. missing API key in env), record the error and
+            # try the next fallback rather than aborting the whole loop.
+            try:
+                one_llm_resources: LangChainLlmResources | Set[str] = llm_factory.create_llm(fallback, sly_data)
+            except ValueError as exception:
+                construction_errors.append(str(exception))
+                continue
+
             if one_llm_resources is None:
                 # Nothing to use or report.
                 # Skip for now, a fallback might still be fulfilled.
@@ -248,6 +256,8 @@ class LangChainRunContext(RunContext):
                 error += "\nLLM operation for this agent requires at least one "
                 error += "of the following set in sly_data.llm_config:\n"
                 error += "\n".join(sorted(required_llm_config)) + "\n"
+            if len(construction_errors) > 0:
+                error += "\n".join(construction_errors) + "\n"
             raise ValueError(error)
 
         if len(chain_fallbacks) > 0:
