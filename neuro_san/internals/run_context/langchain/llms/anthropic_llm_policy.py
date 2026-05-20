@@ -65,9 +65,12 @@ class AnthropicLlmPolicy(LlmPolicy):
                                                     "ANTHROPIC_API_KEY"),
             default_headers=config.get("default_headers"),
             betas=config.get("betas"),
-            streaming=True,  # streaming is always on. Without it token counting will not work.
-            # Set stream_usage to True in order to get token counting chunks.
-            stream_usage=True,
+            # Disable streaming: neuro-san does not consume per-token chunks from the model,
+            # and disabling streaming reduces per-request LangChain pipeline overhead. Token
+            # usage is still reported via llm_output["token_usage"] from the non-streaming
+            # response. We pass streaming explicitly so langchain_core._should_stream()
+            # recognizes it as opted-out even when a streaming-aware callback is attached.
+            streaming=False,
             thinking=config.get("thinking"),
             effort=config.get("effort"),
             mcp_servers=config.get("mcp_servers"),

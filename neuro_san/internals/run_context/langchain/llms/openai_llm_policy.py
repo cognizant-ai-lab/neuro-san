@@ -141,7 +141,13 @@ class OpenAILlmPolicy(LlmPolicy):
             logprobs=config.get("logprobs"),
             top_logprobs=config.get("top_logprobs"),
             logit_bias=config.get("logit_bias"),
-            streaming=True,  # streaming is always on. Without it token counting will not work.
+            # Disable streaming: neuro-san does not consume per-token chunks from the model,
+            # and disabling streaming reduces per-request LangChain pipeline overhead. Token
+            # usage is still reported via llm_output["token_usage"] from _agenerate().
+            # We pass streaming explicitly (rather than relying on the False default) so that
+            # langchain_core._should_stream() recognizes it as opted-out even when a
+            # streaming-aware callback handler is attached to the run manager.
+            streaming=False,
             n=1,  # n is always 1.  neuro-san will only ever consider one chat completion.
             top_p=config.get("top_p"),
             max_tokens=config.get("max_tokens"),  # This is always for output
