@@ -174,8 +174,8 @@ class OpenAILlmPolicy(LlmPolicy):
             # global verbose value) so that the warning is never triggered.
             verbose=False,
 
-            # Set stream_usage to True in order to get token counting chunks.
-            stream_usage=True
+            # Set stream_usage to False - we don't use streaming.
+            stream_usage=False
         )
 
         return llm

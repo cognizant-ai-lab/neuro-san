@@ -111,12 +111,6 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         :param client: The web client to use (if any)
         :return: A BaseLanguageModel (can be Chat or LLM)
         """
-        model_kwargs: Dict[str, Any] = {
-            "stream_options": {
-                "include_usage": True
-            }
-        }
-
         # AzureChatOpenAI just happens to come with langchain_openai
         # pylint: disable=invalid-name
         AzureChatOpenAI = self.resolver.resolve_class_in_module("AzureChatOpenAI",
@@ -189,10 +183,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
             openai_api_type=self.get_value_or_env(config, "openai_api_type",
                                                   "OPENAI_API_TYPE", client),
 
-            model_version=config.get("model_version"),
-
-            # Needed for token counting
-            model_kwargs=model_kwargs,
+            model_version=config.get("model_version")
         )
 
         return llm

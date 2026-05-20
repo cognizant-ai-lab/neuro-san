@@ -71,6 +71,7 @@ class AnthropicLlmPolicy(LlmPolicy):
             # response. We pass streaming explicitly so langchain_core._should_stream()
             # recognizes it as opted-out even when a streaming-aware callback is attached.
             streaming=False,
+            stream_usage=False,  # Don't even include token usage in the streaming response, since we're not streaming
             thinking=config.get("thinking"),
             effort=config.get("effort"),
             mcp_servers=config.get("mcp_servers"),
