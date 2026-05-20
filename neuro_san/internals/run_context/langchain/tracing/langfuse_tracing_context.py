@@ -175,7 +175,7 @@ If you didn't mean to use langfuse for observability, you can do this:
 
         return runnable_config
 
-    def flush(self):
+    async def flush(self):
         """
         Flush the tracing context.
         """

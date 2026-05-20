@@ -52,7 +52,7 @@ class TracingContext(RunTarget):
         """
         raise NotImplementedError
 
-    def flush(self):
+    async def flush(self):
         """
         Flush the tracing context.
         """
