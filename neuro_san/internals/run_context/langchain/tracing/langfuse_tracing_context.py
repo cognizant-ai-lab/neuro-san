@@ -100,10 +100,6 @@ If you didn't mean to use langfuse for observability, you can do this:
         # pylint: disable=import-outside-toplevel
         from langfuse import propagate_attributes
 
-        # Weird: Langfuse docs here ...
-        #   https://langfuse.com/docs/observability/features/users
-        # ... say to use the with/ContextManager here, but pylint doesn't like it.
-        # It works. :shrug:
         # According to langfuse docs, this should be safe for use in async code.
         with self.main_span:
             propagate_attributes(user_id=user_id, session_id=session_id)
