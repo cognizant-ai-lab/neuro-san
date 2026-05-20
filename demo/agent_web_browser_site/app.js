@@ -1,21 +1,18 @@
-/* Agent Web Browser — JS side.
+/* Agent Web Browser — UI driver.
  *
- * Imports the neuro_san_lite ES module bundle and wires it into the chat /
- * trace UI. No Pyodide, no python-in-the-browser. The runtime is a few KB
- * of TypeScript compiled to plain ES.
- *
- * The BYOK contract: the user pastes their LLM key into the settings dialog.
- * On each turn we thread it into `sly_data.llm_config` of the streaming_chat
- * request. The origin uses it without persisting (see neuro-san's
- * replace_any_required_api_keys).
+ * Imports the runtime bundle (neuro-san-lite). Listens to its event stream
+ * and renders the chat, the live agent-graph, and the per-origin network
+ * trace. No URL bar — visiting an origin IS picking that origin's network,
+ * just like the WWW. To visit a different origin, navigate your real browser
+ * there.
  */
 
 import { runAgentTurn } from "./neuro_san_lite.js";
 
-// --- DOM handles ---
-const $banner = document.getElementById("banner-status");
-const $url = document.getElementById("url-input");
-const $loadBtn = document.getElementById("load-btn");
+// --- DOM ---
+const $brandLogo = document.getElementById("brand-logo");
+const $brandName = document.getElementById("brand-name");
+const $brandTagline = document.getElementById("brand-tagline");
 const $settingsBtn = document.getElementById("settings-btn");
 const $settingsModal = document.getElementById("settings-modal");
 const $anthropicKey = document.getElementById("anthropic-key");
@@ -27,10 +24,10 @@ const $chatInput = document.getElementById("chat-input");
 const $sendBtn = document.getElementById("send-btn");
 const $traceLog = document.getElementById("trace-log");
 const $networksList = document.getElementById("networks-list");
-const $originLabel = document.getElementById("origin-label");
+const $agentGraph = document.getElementById("agent-graph");
+const $banner = document.getElementById("banner-status");
 
 // --- Bootstrap data injected by LandingHandler ---
-// Shape: { origin: string, networks: [{name, description, url, sample_queries}] }
 const BOOTSTRAP = window.AGENT_WEB_BOOTSTRAP ?? null;
 
 // --- localStorage keys ---
@@ -38,14 +35,12 @@ const LS = {
     anthropicKey: "agentweb.anthropic_key",
     openaiKey:    "agentweb.openai_key",
     slyData:      "agentweb.sly_data",
-    lastUrl:      "agentweb.last_url",
 };
 
 function loadSettings() {
     $anthropicKey.value = localStorage.getItem(LS.anthropicKey) || "";
     $openaiKey.value    = localStorage.getItem(LS.openaiKey)    || "";
     $slyDataInput.value = localStorage.getItem(LS.slyData)      || "";
-    $url.value          = localStorage.getItem(LS.lastUrl)      || "";
 }
 
 function saveSettings() {
@@ -54,11 +49,22 @@ function saveSettings() {
     localStorage.setItem(LS.slyData,      $slyDataInput.value.trim());
 }
 
-function rememberUrl(u) {
-    localStorage.setItem(LS.lastUrl, u);
+// --- Branding ---
+function applyBranding() {
+    const b = (BOOTSTRAP && BOOTSTRAP.branding) || {};
+    if (b.name) {
+        $brandName.textContent = b.name;
+        document.title = b.name;
+    }
+    if (b.logo) {
+        $brandLogo.textContent = b.logo;
+    }
+    if (b.tagline) {
+        $brandTagline.textContent = b.tagline;
+    }
 }
 
-// --- UI helpers ---
+// --- Chat rendering ---
 function appendBubble(kind, text) {
     const div = document.createElement("div");
     div.className = `bubble ${kind}`;
@@ -73,12 +79,17 @@ function setStatus(text, isError) {
     $banner.classList.toggle("error", !!isError);
 }
 
+function clearChat() {
+    $chatLog.innerHTML = "";
+}
+
+function clearTrace() {
+    $traceLog.innerHTML = "";
+}
+
+// --- Network trace panel ---
 function appendTrace(entry) {
-    // entry: {kind, method, url, status, ms?, via?}
     const li = document.createElement("li");
-    // Server-reported (via) entries get a distinct CSS class so they read as
-    // "this call happened, but our browser didn't make it — it was reported
-    // to us by the origin we DID call."
     const cls = entry.via ? "trace-entry via" : "trace-entry";
     li.className = cls;
     const ts = new Date().toLocaleTimeString();
@@ -104,39 +115,222 @@ function appendTrace(entry) {
     return li;
 }
 
-function clearChat() {
-    $chatLog.innerHTML = "";
+// --- Agent graph ---
+//
+// The bootstrap's networks[0].tools is a pre-classified node list provided by
+// the LandingHandler:
+//   [
+//     { name, kind: "front_man", tools: [child1, child2, ...], description },
+//     { name, kind: "cross_origin" | "client_side" | "coded_tool" | ..., url? }
+//   ]
+//
+// We render the front-man as a parent box with its direct children below.
+// Each node has a `state` of idle | active | done; events transition them.
+
+let GRAPH_NODES = [];      // array of node objects
+const $graphRows = new Map();   // node.name -> li element
+
+function buildGraph() {
+    $agentGraph.innerHTML = "";
+    const first = (BOOTSTRAP && BOOTSTRAP.networks && BOOTSTRAP.networks[0]) || null;
+    if (!first || !Array.isArray(first.tools) || first.tools.length === 0) {
+        $agentGraph.innerHTML = "<div class=\"muted graph-empty\">(no graph)</div>";
+        return null;
+    }
+    GRAPH_NODES = first.tools.map((t) => ({ ...t, state: "idle" }));
+
+    // Front-man at the top, children below.
+    const frontMan = GRAPH_NODES.find((n) => n.kind === "front_man");
+    const children = GRAPH_NODES.filter((n) => n.kind !== "front_man");
+
+    const fragment = document.createDocumentFragment();
+    if (frontMan) {
+        fragment.appendChild(renderNode(frontMan, /*isChild=*/ false));
+        if (children.length > 0) {
+            const stem = document.createElement("div");
+            stem.className = "graph-stem";
+            fragment.appendChild(stem);
+        }
+    }
+    const childrenWrap = document.createElement("div");
+    childrenWrap.className = "graph-children";
+    for (const child of children) {
+        childrenWrap.appendChild(renderNode(child, /*isChild=*/ true));
+    }
+    fragment.appendChild(childrenWrap);
+    $agentGraph.appendChild(fragment);
+    return frontMan;
 }
 
-function clearTrace() {
-    $traceLog.innerHTML = "";
+function renderNode(node, isChild) {
+    const li = document.createElement("div");
+    li.className = `graph-node state-idle kind-${node.kind} ${isChild ? "is-child" : "is-front"}`;
+    li.dataset.name = node.name;
+
+    const badge = document.createElement("span");
+    badge.className = "kind-badge";
+    badge.textContent = kindLabel(node.kind);
+    li.appendChild(badge);
+
+    const name = document.createElement("div");
+    name.className = "node-name";
+    name.textContent = node.name;
+    li.appendChild(name);
+
+    if (node.url) {
+        const url = document.createElement("div");
+        url.className = "node-url";
+        try {
+            const u = new URL(node.url);
+            url.textContent = u.host;
+        } catch {
+            url.textContent = node.url;
+        }
+        li.appendChild(url);
+    }
+
+    if (node.description) {
+        const desc = document.createElement("div");
+        desc.className = "node-desc";
+        desc.textContent = node.description.length > 80
+            ? node.description.slice(0, 77) + "…"
+            : node.description;
+        li.appendChild(desc);
+    }
+
+    $graphRows.set(node.name, li);
+    return li;
+}
+
+function kindLabel(kind) {
+    switch (kind) {
+        case "front_man":     return "agent";
+        case "cross_origin":  return "cross-origin";
+        case "client_side":   return "client-side";
+        case "coded_tool":    return "coded tool";
+        case "internal_agent": return "sub-agent";
+        default:              return kind || "?";
+    }
+}
+
+function setNodeState(name, state) {
+    const node = GRAPH_NODES.find((n) => n.name === name);
+    if (!node) return;
+    node.state = state;
+    const el = $graphRows.get(name);
+    if (!el) return;
+    el.classList.remove("state-idle", "state-active", "state-done");
+    el.classList.add(`state-${state}`);
+}
+
+function resetGraphStates() {
+    for (const node of GRAPH_NODES) setNodeState(node.name, "idle");
+}
+
+/** Find which graph node a network event refers to.
+ *  Returns the node name, or null if we don't recognize the URL. */
+function nodeForNetworkUrl(url) {
+    if (!url) return null;
+    // Direct URL match against children that have one.
+    for (const node of GRAPH_NODES) {
+        if (node.url && url.startsWith(node.url)) {
+            return node.name;
+        }
+    }
+    // The front-man's own streaming_chat call comes in via the parent URL the
+    // browser hit. We match that explicitly.
+    const first = (BOOTSTRAP && BOOTSTRAP.networks && BOOTSTRAP.networks[0]) || null;
+    if (!first || !first.url) return null;
+    try {
+        const parent = new URL(first.url);
+        const u = new URL(url);
+        if (parent.host === u.host && u.pathname.endsWith("/streaming_chat")) {
+            const fm = GRAPH_NODES.find((n) => n.kind === "front_man");
+            return fm ? fm.name : null;
+        }
+    } catch { /* ignore */ }
+    return null;
+}
+
+// --- Networks list (left pane bottom section) ---
+function renderNetworksList() {
+    if (!BOOTSTRAP || !Array.isArray(BOOTSTRAP.networks)) {
+        $networksList.innerHTML =
+            "<li class=\"muted\">(open this page via http://&lt;origin&gt;/ to see its networks)</li>";
+        return;
+    }
+    if (BOOTSTRAP.networks.length === 0) {
+        $networksList.innerHTML =
+            "<li class=\"muted\">(this origin has no distributable networks)</li>";
+        return;
+    }
+    $networksList.innerHTML = "";
+    for (const net of BOOTSTRAP.networks) {
+        const li = document.createElement("li");
+        const a = document.createElement("a");
+        a.href = "#";
+        a.className = "network-link";
+        a.textContent = net.name;
+        a.title = net.url;
+        a.addEventListener("click", (e) => {
+            e.preventDefault();
+            for (const sib of $networksList.querySelectorAll(".network-link")) {
+                sib.classList.remove("active");
+            }
+            a.classList.add("active");
+            switchToNetwork(net);
+        });
+        li.appendChild(a);
+        if (net.description) {
+            const desc = document.createElement("div");
+            desc.className = "network-desc";
+            desc.textContent = net.description;
+            li.appendChild(desc);
+        }
+        $networksList.appendChild(li);
+    }
+    // Pre-mark the first as active since we auto-load it.
+    const firstLink = $networksList.querySelector(".network-link");
+    if (firstLink) firstLink.classList.add("active");
 }
 
 // --- Per-turn chat ---
+let activeNetwork = null;
 let currentChatContext = {};
 let currentSlyData = {};
 let inFlight = false;
 
-function resetSession() {
+function switchToNetwork(net) {
+    activeNetwork = net;
     currentChatContext = {};
     currentSlyData = {};
+    clearChat();
+    clearTrace();
+    resetGraphStates();
+    $chatInput.disabled = false;
+    $sendBtn.disabled = false;
+    $chatInput.placeholder = "Send a message";
+    if (Array.isArray(net.sample_queries) && net.sample_queries.length > 0) {
+        $chatInput.value = net.sample_queries[0];
+    } else {
+        $chatInput.value = "";
+    }
+    $chatInput.focus();
+    const haveKey = !!(localStorage.getItem(LS.anthropicKey) || localStorage.getItem(LS.openaiKey));
+    setStatus(haveKey
+        ? `Loaded ${net.name}. Edit the prompt and click Send.`
+        : `Loaded ${net.name}. Open ⚙ first and set your LLM key.`,
+        !haveKey);
 }
 
 async function runTurn(message) {
-    if (inFlight) {
-        return;  // single-flight: ignore submits during a turn
-    }
-    const url = $url.value.trim();
-    if (!url) {
-        appendBubble("error", "No agent network URL loaded.");
-        return;
-    }
+    if (inFlight || !activeNetwork) return;
     inFlight = true;
     $sendBtn.disabled = true;
     $chatInput.disabled = true;
     appendBubble("user", message);
+    resetGraphStates();
 
-    // Build sly_data from the user's settings + carried state.
     let extraSly = {};
     const raw = ($slyDataInput.value || localStorage.getItem(LS.slyData) || "").trim();
     if (raw) {
@@ -156,7 +350,7 @@ async function runTurn(message) {
     const slyData = { ...currentSlyData, ...extraSly };
 
     const opts = {
-        url,
+        url: activeNetwork.url,
         message,
         anthropicKey: (localStorage.getItem(LS.anthropicKey) || "").trim(),
         openaiKey:    (localStorage.getItem(LS.openaiKey)    || "").trim(),
@@ -174,11 +368,22 @@ async function runTurn(message) {
                 appendBubble("error", String(event.payload));
             } else if (event.kind === "network") {
                 appendTrace(event.payload);
+                // Drive the agent-graph animation from these events.
+                const payload = event.payload || {};
+                const target = nodeForNetworkUrl(payload.url);
+                if (target) {
+                    // Status null = call started. Status 200ish = finished.
+                    if (payload.status === null || payload.status === undefined) {
+                        setNodeState(target, "active");
+                    } else if (payload.status >= 200 && payload.status < 300) {
+                        setNodeState(target, "done");
+                    } else {
+                        setNodeState(target, "done");
+                    }
+                }
             } else if (event.kind === "done") {
                 const result = event.payload;
                 currentChatContext = result.chatContext || {};
-                // Don't carry secret-looking keys back into the next turn's
-                // visible sly_data state — they were sent for this turn only.
                 currentSlyData = stripSecretKeys(result.slyData || {});
             }
         }
@@ -193,9 +398,6 @@ async function runTurn(message) {
     }
 }
 
-// Strip api_key-like keys from a sly_data dict before persisting it across
-// turns. They get re-injected on the next request from localStorage anyway,
-// and we don't want them lingering in JS memory longer than necessary.
 function stripSecretKeys(obj) {
     const SECRET_RE = /(api_key|apikey|secret|token|password|credential|private_key)/i;
     function strip(v) {
@@ -219,9 +421,6 @@ $settingsModal.addEventListener("close", () => {
         setStatus("settings saved");
     }
 });
-
-$loadBtn.addEventListener("click", triggerLoad);
-
 $chatForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const text = $chatInput.value.trim();
@@ -230,78 +429,15 @@ $chatForm.addEventListener("submit", async (e) => {
     await runTurn(text);
 });
 
-// --- Networks panel (bootstrap-driven) ---
-function renderNetworksList() {
-    if (!BOOTSTRAP || !Array.isArray(BOOTSTRAP.networks)) {
-        // Loaded as standalone (no LandingHandler injection); show a hint.
-        $networksList.innerHTML =
-            "<li class=\"muted\">(open this page via http://&lt;origin&gt;/ to see its networks)</li>";
-        return;
-    }
-    if ($originLabel) {
-        try {
-            const u = new URL(BOOTSTRAP.origin);
-            $originLabel.textContent = u.host;
-        } catch {
-            $originLabel.textContent = BOOTSTRAP.origin;
-        }
-    }
-    if (BOOTSTRAP.networks.length === 0) {
-        $networksList.innerHTML =
-            "<li class=\"muted\">(this origin has no distributable networks)</li>";
-        return;
-    }
-    $networksList.innerHTML = "";
-    for (const net of BOOTSTRAP.networks) {
-        const li = document.createElement("li");
-        const a = document.createElement("a");
-        a.href = "#";
-        a.className = "network-link";
-        a.textContent = net.name;
-        a.title = net.url;
-        a.addEventListener("click", (e) => {
-            e.preventDefault();
-            $url.value = net.url;
-            triggerLoad();
-            // Highlight the active item.
-            for (const sibling of $networksList.querySelectorAll(".network-link")) {
-                sibling.classList.remove("active");
-            }
-            a.classList.add("active");
-            // If the network metadata lists a sample query, preload it into
-            // the chat input so the user can hit Enter and go.
-            if (Array.isArray(net.sample_queries) && net.sample_queries.length > 0) {
-                $chatInput.value = net.sample_queries[0];
-            }
-        });
-        li.appendChild(a);
-        if (net.description) {
-            const desc = document.createElement("div");
-            desc.className = "network-desc";
-            desc.textContent = net.description;
-            li.appendChild(desc);
-        }
-        $networksList.appendChild(li);
-    }
-}
-
-function triggerLoad() {
-    const url = $url.value.trim();
-    if (!url) return;
-    rememberUrl(url);
-    clearChat();
-    clearTrace();
-    resetSession();
-    setStatus(`loaded ${url}`);
-    $chatInput.disabled = false;
-    $sendBtn.disabled = false;
-    $chatInput.placeholder = "Send a message";
-    $chatInput.focus();
-}
-
 // --- Init ---
 loadSettings();
+applyBranding();
+buildGraph();
 renderNetworksList();
-if (!localStorage.getItem(LS.anthropicKey) && !localStorage.getItem(LS.openaiKey)) {
-    setStatus("⚠ no LLM key configured — open ⚙ first.", true);
+
+// Auto-load the first distributable network so the user doesn't have to click.
+if (BOOTSTRAP && Array.isArray(BOOTSTRAP.networks) && BOOTSTRAP.networks.length > 0) {
+    switchToNetwork(BOOTSTRAP.networks[0]);
+} else {
+    setStatus("⚠ no distributable networks on this origin.", true);
 }

@@ -7,33 +7,37 @@
 </head>
 <body>
     <header>
-        <div class="brand">Agent Web</div>
-        <div id="origin-label" class="origin-label" title="The origin currently serving this page"></div>
-        <div class="urlbar">
-            <input id="url-input" type="url"
-                   placeholder="paste an Agent Web URL, e.g. http://localhost:8803/api/v1/trip_planner/network"
-                   spellcheck="false" />
-            <button id="load-btn">Load</button>
+        <div class="brand">
+            <span id="brand-logo" class="brand-logo"></span>
+            <span id="brand-name" class="brand-name">Agent Web</span>
+            <span id="brand-tagline" class="brand-tagline"></span>
         </div>
-        <button id="settings-btn" title="Settings (LLM keys)">⚙</button>
+        <button id="settings-btn" title="Settings (LLM keys)" aria-label="Settings">⚙</button>
     </header>
 
     <main>
-        <aside id="networks-pane">
-            <div class="pane-title">Networks on this origin</div>
-            <ul id="networks-list">
-                <li class="muted">(loading…)</li>
-            </ul>
+        <aside id="left-pane">
+            <section id="agent-graph-pane">
+                <div class="pane-title">Agent network</div>
+                <div id="agent-graph"></div>
+            </section>
+
+            <section id="networks-pane-section">
+                <div class="pane-title">Networks on this origin</div>
+                <ul id="networks-list">
+                    <li class="muted">(loading…)</li>
+                </ul>
+            </section>
         </aside>
 
         <section id="chat-pane">
             <div id="banner">
-                <div id="banner-status">Set your LLM key in ⚙ then click a network on the left.</div>
+                <div id="banner-status">Loading…</div>
             </div>
             <div id="chat-log"></div>
             <form id="chat-form">
                 <input id="chat-input" type="text"
-                       placeholder="(load an agent network first)" disabled />
+                       placeholder="Send a message" disabled />
                 <button id="send-btn" type="submit" disabled>Send</button>
             </form>
         </section>

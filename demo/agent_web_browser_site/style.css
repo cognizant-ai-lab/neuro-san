@@ -1,19 +1,29 @@
-/* Agent Web Browser — minimal but legible. */
+/* Agent Web Browser — minimal, brand-variable-driven.
+ *
+ * Each origin can override the --brand-* variables via the inline <style>
+ * block injected by the server's LandingHandler. When no branding is
+ * provided, the defaults below kick in.
+ */
 
 :root {
-    --bg: #f7f7f8;
-    --card: #fff;
-    --border: #e5e5e7;
-    --text: #1f1f23;
-    --muted: #777;
-    --accent: #2b6cb0;
-    --user-bg: #2b6cb0;
-    --user-fg: #fff;
-    --agent-bg: #f1f1f3;
+    /* Brand-overridable */
+    --brand-primary: #2b6cb0;
+    --brand-accent:  #06b6d4;
+    --brand-bg:      #f7f7f8;
+    --brand-fg:      #1f1f23;
+    --brand-muted:   #777;
+    --brand-card:    #ffffff;
+    --brand-font:    -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+
+    /* Computed */
+    --border: rgba(0, 0, 0, 0.08);
+    --user-bg: var(--brand-primary);
+    --user-fg: #ffffff;
+    --agent-bg: rgba(0, 0, 0, 0.04);
     --thinking-bg: #fff7e6;
     --error-bg: #fef1f1;
     --error-fg: #9b1f1f;
-    --net-bg: #f9fbff;
+    --net-bg: rgba(0, 0, 0, 0.02);
     --code: 'SFMono-Regular', Menlo, monospace;
 }
 
@@ -22,87 +32,95 @@
 html, body {
     margin: 0;
     height: 100%;
-    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
-    color: var(--text);
-    background: var(--bg);
+    font-family: var(--brand-font);
+    color: var(--brand-fg);
+    background: var(--brand-bg);
 }
 
+/* ---- header ---- */
 header {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 10px 14px;
-    background: var(--card);
+    padding: 14px 22px;
+    background: var(--brand-card);
     border-bottom: 1px solid var(--border);
+    box-shadow: 0 1px 0 rgba(0,0,0,0.02);
 }
 .brand {
-    font-weight: 600;
-    font-size: 14px;
-    color: var(--accent);
-    letter-spacing: 0.5px;
-}
-.urlbar {
     flex: 1;
     display: flex;
-    gap: 6px;
+    align-items: baseline;
+    gap: 10px;
 }
-.urlbar input {
-    flex: 1;
-    padding: 6px 10px;
-    font-family: var(--code);
-    font-size: 13px;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    background: var(--bg);
+.brand-logo {
+    font-size: 22px;
+    line-height: 1;
+    color: var(--brand-primary);
+}
+.brand-name {
+    font-weight: 700;
+    font-size: 17px;
+    color: var(--brand-primary);
+    letter-spacing: 0.3px;
+}
+.brand-tagline {
+    font-size: 12px;
+    color: var(--brand-muted);
+    font-style: italic;
 }
 button {
     padding: 6px 12px;
     font-size: 13px;
     border: 1px solid var(--border);
-    background: var(--card);
+    background: var(--brand-card);
+    color: var(--brand-fg);
     border-radius: 4px;
     cursor: pointer;
+    font-family: inherit;
 }
-button:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
-button:hover:not(:disabled) {
-    border-color: var(--accent);
-    color: var(--accent);
-}
-#settings-btn {
-    padding: 6px 10px;
-    font-size: 16px;
-}
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button:hover:not(:disabled) { border-color: var(--brand-primary); color: var(--brand-primary); }
+#settings-btn { padding: 6px 10px; font-size: 16px; }
 
-.origin-label {
-    font-family: var(--code);
-    font-size: 12px;
-    color: var(--muted);
-    background: var(--bg);
-    padding: 3px 8px;
-    border-radius: 3px;
-    border: 1px solid var(--border);
-}
-
+/* ---- layout ---- */
 main {
     display: flex;
-    height: calc(100vh - 53px);
+    height: calc(100vh - 60px);
 }
 
-#networks-pane {
-    flex: 0 0 220px;
+#left-pane {
+    flex: 0 0 260px;
     overflow-y: auto;
     background: var(--net-bg);
     border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
 }
-#networks-pane #networks-list {
+.pane-title {
+    position: sticky;
+    top: 0;
+    padding: 10px 14px;
+    background: var(--brand-card);
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--brand-muted);
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+}
+#agent-graph-pane {
+    border-bottom: 1px solid var(--border);
+}
+#networks-pane-section {
+    flex: 1;
+}
+#networks-list {
     list-style: none;
-    padding: 8px 0;
+    padding: 6px 0;
     margin: 0;
 }
-#networks-pane #networks-list li {
+#networks-list li {
     padding: 8px 14px;
     border-bottom: 1px solid var(--border);
 }
@@ -110,44 +128,151 @@ main {
     display: block;
     font-family: var(--code);
     font-size: 13px;
-    color: var(--accent);
+    color: var(--brand-primary);
     text-decoration: none;
 }
 .network-link:hover,
-.network-link.active {
-    text-decoration: underline;
-}
-.network-link.active::before {
-    content: "▸ ";
-}
+.network-link.active { text-decoration: underline; }
+.network-link.active::before { content: "▸ "; }
 .network-desc {
-    color: var(--muted);
+    color: var(--brand-muted);
     font-size: 11px;
     margin-top: 4px;
     line-height: 1.35;
 }
-.muted { color: var(--muted); font-style: italic; font-size: 12px; }
+.muted { color: var(--brand-muted); font-style: italic; font-size: 12px; }
 
+/* ---- agent graph ---- */
+#agent-graph {
+    padding: 12px 14px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+.graph-node {
+    position: relative;
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    background: var(--brand-card);
+    padding: 8px 10px;
+    margin-bottom: 2px;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.3s;
+}
+.graph-node.is-front {
+    border-color: var(--brand-primary);
+    background: color-mix(in srgb, var(--brand-primary) 6%, var(--brand-card));
+}
+.graph-node.is-child {
+    margin-left: 14px;
+    margin-top: 4px;
+}
+.graph-node .kind-badge {
+    display: inline-block;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--brand-muted);
+    background: var(--brand-bg);
+    padding: 1px 6px;
+    border-radius: 2px;
+    margin-bottom: 4px;
+}
+.graph-node.kind-cross_origin .kind-badge {
+    color: var(--brand-card);
+    background: var(--brand-accent);
+}
+.graph-node.kind-client_side .kind-badge,
+.graph-node.kind-coded_tool .kind-badge {
+    color: var(--brand-card);
+    background: var(--brand-primary);
+    opacity: 0.7;
+}
+.node-name {
+    font-family: var(--code);
+    font-size: 13px;
+    color: var(--brand-fg);
+    font-weight: 600;
+}
+.node-url {
+    font-family: var(--code);
+    font-size: 10px;
+    color: var(--brand-muted);
+    margin-top: 2px;
+}
+.node-desc {
+    font-size: 11px;
+    color: var(--brand-muted);
+    margin-top: 3px;
+    line-height: 1.35;
+}
+.graph-stem {
+    width: 1.5px;
+    height: 12px;
+    background: var(--brand-muted);
+    margin-left: 18px;
+    opacity: 0.4;
+}
+.graph-children .graph-node::before {
+    /* Visual connector from front-man to each child. */
+    content: "";
+    position: absolute;
+    left: -10px;
+    top: 18px;
+    width: 8px;
+    height: 1.5px;
+    background: var(--brand-muted);
+    opacity: 0.4;
+}
+.graph-empty { padding: 12px; }
+
+/* ---- agent-graph state animation ----
+ * active = pulsing border to indicate this agent is currently running.
+ * done   = lightly highlighted (color holds) to leave a trail of progress.
+ * idle   = default (no special highlight).
+ */
+@keyframes graph-pulse {
+    0%   { box-shadow: 0 0 0 0    color-mix(in srgb, var(--brand-accent) 60%, transparent); }
+    70%  { box-shadow: 0 0 0 10px color-mix(in srgb, var(--brand-accent) 0%, transparent); }
+    100% { box-shadow: 0 0 0 0    color-mix(in srgb, var(--brand-accent) 0%, transparent); }
+}
+.graph-node.state-active {
+    border-color: var(--brand-accent);
+    background: color-mix(in srgb, var(--brand-accent) 10%, var(--brand-card));
+    animation: graph-pulse 1.4s ease-out infinite;
+}
+.graph-node.state-done {
+    border-color: var(--brand-primary);
+    background: color-mix(in srgb, var(--brand-primary) 4%, var(--brand-card));
+    opacity: 0.85;
+}
+.graph-node.state-done::after {
+    content: "✓";
+    position: absolute;
+    top: 8px; right: 8px;
+    font-size: 12px;
+    color: var(--brand-primary);
+    font-weight: 700;
+}
+
+/* ---- chat pane ---- */
 #chat-pane {
     flex: 2;
     display: flex;
     flex-direction: column;
     border-right: 1px solid var(--border);
 }
-
 #banner {
     padding: 10px 14px;
-    background: var(--card);
+    background: var(--brand-card);
     border-bottom: 1px solid var(--border);
     font-size: 12px;
-    color: var(--muted);
+    color: var(--brand-muted);
     min-height: 36px;
     display: flex;
     align-items: center;
     gap: 12px;
 }
-#boot-progress { font-family: var(--code); }
-#banner-status { font-family: var(--code); color: var(--text); }
+#banner-status { font-family: var(--code); }
 #banner-status.error { color: var(--error-fg); }
 
 #chat-log {
@@ -158,12 +283,11 @@ main {
     flex-direction: column;
     gap: 8px;
 }
-
 .bubble {
-    max-width: 70%;
+    max-width: 75%;
     padding: 9px 12px;
     border-radius: 12px;
-    line-height: 1.4;
+    line-height: 1.45;
     font-size: 14px;
     white-space: pre-wrap;
     word-wrap: break-word;
@@ -199,7 +323,7 @@ main {
     display: flex;
     gap: 6px;
     padding: 10px;
-    background: var(--card);
+    background: var(--brand-card);
     border-top: 1px solid var(--border);
 }
 #chat-input {
@@ -208,26 +332,18 @@ main {
     border: 1px solid var(--border);
     border-radius: 4px;
     font-size: 14px;
+    font-family: inherit;
+    background: var(--brand-bg);
+    color: var(--brand-fg);
 }
 
+/* ---- trace pane ---- */
 #trace-pane {
-    flex: 1;
+    flex: 0 0 260px;
     overflow-y: auto;
     background: var(--net-bg);
 }
-.pane-title {
-    position: sticky;
-    top: 0;
-    padding: 10px 14px;
-    background: var(--card);
-    border-bottom: 1px solid var(--border);
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--muted);
-    letter-spacing: 0.6px;
-    text-transform: uppercase;
-}
-#trace-log {
+ol#trace-log {
     list-style: none;
     padding: 8px 0;
     margin: 0;
@@ -239,49 +355,47 @@ main {
     font-size: 11px;
     line-height: 1.4;
 }
-.trace-entry .ts { color: var(--muted); margin-right: 6px; }
-.trace-entry .method { color: var(--accent); font-weight: 600; }
+.trace-entry .ts { color: var(--brand-muted); margin-right: 6px; }
+.trace-entry .method { color: var(--brand-primary); font-weight: 600; }
 .trace-entry .url { word-break: break-all; }
 .trace-entry .status { float: right; }
 .trace-entry .status.ok { color: #2c7a4b; }
 .trace-entry .status.err { color: var(--error-fg); }
-.trace-entry .summary { color: var(--muted); margin-top: 2px; }
+.trace-entry .summary { color: var(--brand-muted); margin-top: 2px; }
 .trace-entry.via {
-    /* Server-reported (via) entries are nested visually so the viewer can
-       tell at a glance: "this call happened on the origin we just called,
-       not in our browser." */
-    background: #f6f6fa;
-    border-left: 3px solid var(--accent);
+    background: color-mix(in srgb, var(--brand-accent) 6%, transparent);
+    border-left: 3px solid var(--brand-accent);
     padding-left: 22px;
 }
 .trace-entry.via .via-label {
-    background: var(--accent);
-    color: #fff;
+    background: var(--brand-accent);
+    color: #ffffff;
     padding: 1px 6px;
     border-radius: 3px;
     font-size: 10px;
     margin-left: 6px;
 }
 
+/* ---- settings modal ---- */
 dialog {
     border: 1px solid var(--border);
     border-radius: 6px;
     box-shadow: 0 12px 40px rgba(0,0,0,0.18);
     padding: 0;
     width: min(520px, 90vw);
+    color: var(--brand-fg);
+    background: var(--brand-card);
+    font-family: var(--brand-font);
 }
 dialog::backdrop { background: rgba(0,0,0,0.3); }
 dialog form { padding: 18px 22px; }
-dialog h2 { margin: 0 0 8px; font-size: 18px; }
-dialog .muted { font-size: 12px; color: var(--muted); margin-top: 0; }
-dialog label {
-    display: block;
-    margin: 14px 0;
-}
+dialog h2 { margin: 0 0 8px; font-size: 18px; color: var(--brand-primary); }
+dialog .muted { font-size: 12px; color: var(--brand-muted); margin-top: 0; }
+dialog label { display: block; margin: 14px 0; }
 dialog label span {
     display: block;
     font-size: 12px;
-    color: var(--muted);
+    color: var(--brand-muted);
     margin-bottom: 4px;
 }
 dialog input,
@@ -292,6 +406,8 @@ dialog textarea {
     border-radius: 4px;
     font-family: var(--code);
     font-size: 13px;
+    background: var(--brand-bg);
+    color: var(--brand-fg);
 }
 dialog textarea { height: 60px; resize: vertical; }
 dialog menu {

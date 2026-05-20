@@ -2,6 +2,18 @@
     "metadata": {
         "description": "Hotel inventory and ranking agent for hotels.example",
         "tags": ["agent_web", "demo", "hotels"],
+        "branding": {
+            "name": "Nest Hotels",
+            "tagline": "Stay anywhere, feel at home",
+            "logo": "🏨",
+            "primary_color": "#B8552C",
+            "accent_color": "#F2A65A",
+            "background": "#FBF5EE",
+            "foreground": "#3a2418",
+            "muted": "#8a6f5b",
+            "card": "#ffffff",
+            "font_stack": "Georgia, 'Times New Roman', serif",
+        },
     },
     "llm_config": {
         "model_name": "claude-haiku",

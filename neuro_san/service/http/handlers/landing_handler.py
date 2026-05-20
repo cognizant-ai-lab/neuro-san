@@ -35,7 +35,120 @@ from typing import Any, Dict, List
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
+from neuro_san.internals.run_context.utils.external_agent_parsing import ExternalAgentParsing
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
+
+
+# Mapping from branding-dict keys to CSS custom property names.
+_BRANDING_CSS_KEYS: Dict[str, str] = {
+    "primary_color":   "--brand-primary",
+    "accent_color":    "--brand-accent",
+    "background":      "--brand-bg",
+    "foreground":      "--brand-fg",
+    "muted":           "--brand-muted",
+    "card":            "--brand-card",
+    "font_stack":      "--brand-font",
+}
+
+
+def _branding_to_css_vars(branding: Dict[str, Any]) -> str:
+    """Translate a branding dict into CSS custom-property declarations.
+    Only keys in _BRANDING_CSS_KEYS produce output; unknown keys are ignored
+    (they may still be read from the JS bootstrap)."""
+    lines: List[str] = []
+    for src_key, css_var in _BRANDING_CSS_KEYS.items():
+        value = branding.get(src_key)
+        if not isinstance(value, str) or not value:
+            continue
+        # Conservative validation: reject anything containing characters that
+        # could close the <style> block or inject other declarations.
+        if any(c in value for c in (";", "{", "}", "<", ">")):
+            continue
+        lines.append(f"    {css_var}: {value};")
+    return "\n".join(lines)
+
+
+def _summarize_tool_graph(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Extract a graph summary suitable for client-side visualization:
+        [
+          {"name": "trip_planner", "kind": "front_man", "tools": ["...", "..."]},
+          {"name": "flight_finder", "kind": "cross_origin",
+           "url": "http://localhost:8801/flight_finder"},
+          {"name": "total_cost", "kind": "client_side"},
+          ...
+        ]
+
+    Classification matches the dispatch logic in ActivationFactory:
+      * front_man: the first agent in the network (no class/toolbox/url)
+      * cross_origin: tool reference is a URL (starts with http(s):// or /)
+      * client_side: agent spec has client_side: true
+      * coded_tool: agent has `class` or `toolbox` reference
+      * internal_agent: another LLM agent in this same network
+    """
+    tools_block: List[Dict[str, Any]] = config.get("tools") or []
+    by_name: Dict[str, Dict[str, Any]] = {}
+    order: List[str] = []
+    for spec in tools_block:
+        if not isinstance(spec, dict):
+            continue
+        name = (spec.get("function") or {}).get("name") or spec.get("name")
+        if not isinstance(name, str):
+            continue
+        by_name[name] = spec
+        order.append(name)
+    if not order:
+        return []
+
+    front_man_name = order[0]
+    front_man_spec = by_name[front_man_name]
+
+    front_man_node: Dict[str, Any] = {
+        "name": front_man_name,
+        "kind": "front_man",
+        "tools": [],
+        "description": (front_man_spec.get("function") or {}).get("description") or "",
+    }
+    nodes: List[Dict[str, Any]] = [front_man_node]
+
+    for tool_ref in front_man_spec.get("tools") or []:
+        if isinstance(tool_ref, dict):
+            # MCP tool ref — skip for now (out of scope for the demo viz).
+            continue
+        if not isinstance(tool_ref, str):
+            continue
+
+        # Cross-origin URL?
+        if ExternalAgentParsing.is_external_agent(tool_ref):
+            parsed = ExternalAgentParsing.parse_external_agent(tool_ref)
+            child_name = (parsed or {}).get("agent_name") or tool_ref
+            front_man_node["tools"].append(child_name)
+            nodes.append({
+                "name": child_name,
+                "kind": "cross_origin",
+                "url": tool_ref,
+            })
+            continue
+
+        # Internal reference (by agent name within this network).
+        child_spec = by_name.get(tool_ref)
+        front_man_node["tools"].append(tool_ref)
+        if child_spec is None:
+            nodes.append({"name": tool_ref, "kind": "unknown"})
+            continue
+
+        if child_spec.get("client_side"):
+            kind = "client_side"
+        elif child_spec.get("class") or child_spec.get("toolbox"):
+            kind = "coded_tool"
+        else:
+            kind = "internal_agent"
+        nodes.append({
+            "name": tool_ref,
+            "kind": kind,
+            "description": (child_spec.get("function") or {}).get("description") or "",
+        })
+    return nodes
 
 
 # Default template used when AGENT_STATIC_DIR is not set (no chat UI bundled).
@@ -103,8 +216,8 @@ class LandingHandler(BaseRequestHandler):
         return f"{scheme}://{host}"
 
     def _collect_distributable_networks(self, origin: str) -> List[Dict[str, Any]]:
-        """Return [{name, description, url}, ...] for each distributable
-        network this origin publishes."""
+        """Return [{name, description, url, tools, branding?}, ...] for each
+        distributable network this origin publishes."""
         network_storage_dict: Dict[str, AgentNetworkStorage] = (
             self.server_context.get_network_storage_dict()
         )
@@ -123,15 +236,30 @@ class LandingHandler(BaseRequestHandler):
             meta = config.get("metadata") or {}
             description = meta.get("description") or ""
             sample_queries = meta.get("sample_queries") or []
-            out.append({
+            entry: Dict[str, Any] = {
                 "name": name,
                 "description": description,
                 "sample_queries": sample_queries,
                 "url": f"{origin}/api/v1/{name}/network",
-            })
+                "tools": _summarize_tool_graph(config),
+            }
+            branding = meta.get("branding")
+            if isinstance(branding, dict):
+                entry["branding"] = branding
+            out.append(entry)
         # Stable order so the demo is deterministic.
         out.sort(key=lambda n: n["name"])
         return out
+
+    def _pick_branding(self, networks: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Pick the first network's branding block (if any) for the page's
+        chrome. Multi-network origins use the first distributable network as
+        the face."""
+        for n in networks:
+            b = n.get("branding")
+            if isinstance(b, dict):
+                return b
+        return {}
 
     def _render(self, origin: str, networks: List[Dict[str, Any]]) -> str:
         """Return the rendered HTML.
@@ -149,6 +277,7 @@ class LandingHandler(BaseRequestHandler):
                         index_path.read_text(encoding="utf-8"),
                         origin,
                         networks,
+                        branding=self._pick_branding(networks),
                     )
                 # pylint: disable=broad-exception-caught
                 except Exception:
@@ -159,23 +288,35 @@ class LandingHandler(BaseRequestHandler):
     @staticmethod
     def _render_with_bootstrap(template_html: str,
                                 origin: str,
-                                networks: List[Dict[str, Any]]) -> str:
-        """Inject window.AGENT_WEB_BOOTSTRAP into the index.html template."""
-        bootstrap = {
+                                networks: List[Dict[str, Any]],
+                                branding: Dict[str, Any] | None = None) -> str:
+        """Inject window.AGENT_WEB_BOOTSTRAP into the index.html template.
+        When branding is present, also inject a <style> block that exposes
+        each branding key as a CSS custom property under :root so the page
+        can pick it up without any JS work."""
+        bootstrap: Dict[str, Any] = {
             "origin": origin,
             "networks": networks,
         }
-        script = (
+        if branding:
+            bootstrap["branding"] = branding
+
+        injected = (
             "<script>\n"
             f"window.AGENT_WEB_BOOTSTRAP = {json.dumps(bootstrap)};\n"
             "</script>\n"
         )
+        if branding:
+            css_vars = _branding_to_css_vars(branding)
+            if css_vars:
+                injected += "<style>\n:root {\n" + css_vars + "\n}\n</style>\n"
+
         # Insert before </head> if present, else prepend.
         lower = template_html.lower()
         head_close = lower.find("</head>")
         if head_close >= 0:
-            return template_html[:head_close] + script + template_html[head_close:]
-        return script + template_html
+            return template_html[:head_close] + injected + template_html[head_close:]
+        return injected + template_html
 
     @staticmethod
     def _render_default(origin: str, networks: List[Dict[str, Any]]) -> str:

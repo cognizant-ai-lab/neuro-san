@@ -27,7 +27,11 @@ from typing import Any, Dict, List
 
 import pytest
 
-from neuro_san.service.http.handlers.landing_handler import LandingHandler
+from neuro_san.service.http.handlers.landing_handler import (
+    LandingHandler,
+    _branding_to_css_vars,
+    _summarize_tool_graph,
+)
 
 
 # ---------- _render_default ----------
@@ -186,3 +190,190 @@ def _stub_handler() -> LandingHandler:
     the pure-rendering methods. We never touch attributes that the real
     handler relies on at request time."""
     return LandingHandler.__new__(LandingHandler)
+
+
+# ---------- _branding_to_css_vars ----------
+
+
+class TestBrandingToCssVars:
+    def test_emits_expected_variables(self):
+        branding = {
+            "primary_color": "#0033A0",
+            "accent_color":  "#E1241B",
+            "background":    "#F4F7FB",
+            "foreground":    "#0a1d3f",
+            "muted":         "#5d6a85",
+            "card":          "#ffffff",
+            "font_stack":    "Helvetica, Arial, sans-serif",
+        }
+        css = _branding_to_css_vars(branding)
+        assert "--brand-primary: #0033A0;" in css
+        assert "--brand-accent: #E1241B;" in css
+        assert "--brand-bg: #F4F7FB;" in css
+        assert "--brand-fg: #0a1d3f;" in css
+        assert "--brand-muted: #5d6a85;" in css
+        assert "--brand-card: #ffffff;" in css
+        assert "--brand-font: Helvetica, Arial, sans-serif;" in css
+
+    def test_skips_unknown_keys(self):
+        css = _branding_to_css_vars({"name": "Foo", "logo": "🔥", "primary_color": "#abc"})
+        assert "--brand-primary: #abc;" in css
+        # name/logo are bootstrap-only, not CSS.
+        assert "Foo" not in css
+        assert "🔥" not in css
+
+    def test_rejects_injection_payloads(self):
+        branding = {
+            "primary_color": "red; } body { display: none } /*",
+            "accent_color":  "#abc",
+        }
+        css = _branding_to_css_vars(branding)
+        # The malicious value must be rejected entirely.
+        assert "display: none" not in css
+        assert "--brand-primary" not in css
+        # The clean one passes.
+        assert "--brand-accent: #abc;" in css
+
+    def test_empty_dict_returns_empty_string(self):
+        assert _branding_to_css_vars({}) == ""
+
+    def test_non_string_values_ignored(self):
+        css = _branding_to_css_vars({"primary_color": 123, "accent_color": None,
+                                      "background": "#fff"})
+        assert "--brand-primary" not in css
+        assert "--brand-accent" not in css
+        assert "--brand-bg: #fff;" in css
+
+
+# ---------- _summarize_tool_graph ----------
+
+
+class TestSummarizeToolGraph:
+    def test_basic_front_man_with_internal_tool(self):
+        config = {
+            "tools": [
+                {"name": "front",  "instructions": "...", "tools": ["calc"]},
+                {"name": "calc",   "function": {"description": "math"},
+                 "class": "calc.Calc"},
+            ],
+        }
+        nodes = _summarize_tool_graph(config)
+        assert nodes[0]["name"] == "front"
+        assert nodes[0]["kind"] == "front_man"
+        assert nodes[0]["tools"] == ["calc"]
+        assert nodes[1]["name"] == "calc"
+        assert nodes[1]["kind"] == "coded_tool"
+
+    def test_cross_origin_tool_reference(self):
+        config = {
+            "tools": [
+                {"name": "trip", "tools": [
+                    "http://flights.example:8801/flight_finder",
+                ]},
+            ],
+        }
+        nodes = _summarize_tool_graph(config)
+        # Front man is trip; child is the cross-origin agent extracted from URL.
+        assert nodes[0]["name"] == "trip"
+        assert nodes[0]["tools"] == ["flight_finder"]
+        child = nodes[1]
+        assert child["name"] == "flight_finder"
+        assert child["kind"] == "cross_origin"
+        assert child["url"] == "http://flights.example:8801/flight_finder"
+
+    def test_client_side_tool(self):
+        config = {
+            "tools": [
+                {"name": "trip", "tools": ["total_cost"]},
+                {"name": "total_cost", "client_side": True,
+                 "class": "total_cost.TotalCost"},
+            ],
+        }
+        nodes = _summarize_tool_graph(config)
+        assert nodes[1]["kind"] == "client_side"
+
+    def test_internal_llm_subagent(self):
+        # Sub-agent with no class/toolbox/client_side = another LLM agent
+        config = {
+            "tools": [
+                {"name": "front", "tools": ["helper"]},
+                {"name": "helper", "function": {"description": "...",
+                                                "parameters": {"type": "object",
+                                                               "properties": {}}}},
+            ],
+        }
+        nodes = _summarize_tool_graph(config)
+        assert nodes[1]["kind"] == "internal_agent"
+
+    def test_missing_tool_reference_marked_unknown(self):
+        config = {
+            "tools": [
+                {"name": "front", "tools": ["ghost"]},
+            ],
+        }
+        nodes = _summarize_tool_graph(config)
+        assert nodes[1]["name"] == "ghost"
+        assert nodes[1]["kind"] == "unknown"
+
+    def test_empty_config(self):
+        assert _summarize_tool_graph({}) == []
+        assert _summarize_tool_graph({"tools": []}) == []
+
+    def test_function_name_takes_precedence(self):
+        # When function.name is set, that's the canonical name (consistent
+        # with AgentNetwork.get_name_from_spec).
+        config = {
+            "tools": [
+                {"function": {"name": "the_front"}, "tools": []},
+            ],
+        }
+        nodes = _summarize_tool_graph(config)
+        assert nodes[0]["name"] == "the_front"
+
+    def test_dict_tool_ref_is_skipped(self):
+        # Dict tool refs (MCP servers) are out of scope for the demo viz.
+        config = {
+            "tools": [
+                {"name": "front", "tools": [{"url": "https://mcp.x/"}, "calc"]},
+                {"name": "calc", "class": "calc.Calc"},
+            ],
+        }
+        nodes = _summarize_tool_graph(config)
+        # Only 'calc' should be in the front-man's tools list.
+        assert nodes[0]["tools"] == ["calc"]
+
+
+# ---------- branding pickup in _collect_distributable_networks ----------
+
+
+class TestBrandingPickup:
+    def test_render_with_bootstrap_injects_css_when_branding_present(self):
+        template = "<html><head></head><body></body></html>"
+        branding = {"primary_color": "#abc", "name": "TestBrand"}
+        out = LandingHandler._render_with_bootstrap(
+            template, "http://x.example", [], branding=branding,
+        )
+        assert "--brand-primary: #abc;" in out
+        # And the bootstrap JSON includes the branding so JS can read name/logo.
+        assert "TestBrand" in out
+
+    def test_render_with_bootstrap_skips_css_block_when_no_branding(self):
+        template = "<html><head></head><body></body></html>"
+        out = LandingHandler._render_with_bootstrap(
+            template, "http://x.example", [], branding=None,
+        )
+        # No <style> block since there's nothing to declare.
+        assert "<style>" not in out
+
+    def test_pick_branding_finds_first_with_branding(self):
+        handler = _stub_handler()
+        networks = [
+            {"name": "no_branding"},
+            {"name": "has_branding", "branding": {"name": "X"}},
+            {"name": "also_branded", "branding": {"name": "Y"}},
+        ]
+        assert handler._pick_branding(networks) == {"name": "X"}
+
+    def test_pick_branding_empty_when_none(self):
+        handler = _stub_handler()
+        assert handler._pick_branding([{"name": "a"}, {"name": "b"}]) == {}

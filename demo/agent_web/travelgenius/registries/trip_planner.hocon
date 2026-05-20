@@ -5,6 +5,18 @@
         "sample_queries": [
             "SFO to Tokyo around June 14-21, hotel near Shinjuku under $300/night with a gym. My email is bob@example.com.",
         ],
+        "branding": {
+            "name": "TravelGenius",
+            "tagline": "One question, every itinerary",
+            "logo": "✨",
+            "primary_color": "#6D28D9",
+            "accent_color": "#0EA5A4",
+            "background": "#FAF7FF",
+            "foreground": "#1f1a2e",
+            "muted": "#6e6587",
+            "card": "#ffffff",
+            "font_stack": "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif",
+        },
     },
     "llm_config": {
         "model_name": "claude-haiku",

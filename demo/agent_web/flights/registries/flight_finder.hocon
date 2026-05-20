@@ -2,6 +2,22 @@
     "metadata": {
         "description": "Flight inventory and booking-hold agent for flights.example",
         "tags": ["agent_web", "demo", "flights"],
+        # Per-origin branding picked up by neuro-san's LandingHandler.
+        # Visually distinguishes this origin's landing page from other
+        # Agent Web origins, demonstrating that each business can ship
+        # its own look while sharing the same protocol.
+        "branding": {
+            "name": "SkyHop Airways",
+            "tagline": "Fly farther for less",
+            "logo": "✈",
+            "primary_color": "#0033A0",
+            "accent_color": "#E1241B",
+            "background": "#F4F7FB",
+            "foreground": "#0a1d3f",
+            "muted": "#5d6a85",
+            "card": "#ffffff",
+            "font_stack": "'Helvetica Neue', Helvetica, Arial, sans-serif",
+        },
     },
     "llm_config": {
         "model_name": "claude-haiku",
