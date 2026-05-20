@@ -421,6 +421,10 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
             await self.front_man.close_of_work()
             self.front_man = None
 
+        if self.tracing_context is not None:
+            await self.tracing_context.flush()
+            self.tracing_context = None
+
     async def close_sly_data(self):
         """
         Close any sly data value that can be closed.

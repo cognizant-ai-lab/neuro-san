@@ -51,3 +51,9 @@ class TracingContext(RunTarget):
         :return: The augmented config
         """
         raise NotImplementedError
+
+    def flush(self):
+        """
+        Flush the tracing context.
+        """
+        raise NotImplementedError

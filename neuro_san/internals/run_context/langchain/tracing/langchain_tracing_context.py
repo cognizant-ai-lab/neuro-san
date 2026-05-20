@@ -82,3 +82,9 @@ class LangChainTracingContext(TracingContext):
         """
         # Do nothing special
         return runnable_config
+
+    def flush(self):
+        """
+        Flush the tracing context.
+        """
+        # Do nothing

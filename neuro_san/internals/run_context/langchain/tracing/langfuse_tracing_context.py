@@ -174,3 +174,12 @@ If you didn't mean to use langfuse for observability, you can do this:
         runnable_config["neuro_san_tracing_context"] = self
 
         return runnable_config
+
+    def flush(self):
+        """
+        Flush the tracing context.
+        """
+        # pylint: disable=import-outside-toplevel
+        from langfuse import get_client
+        langfuse_client: Any = get_client()
+        langfuse_client.flush()
