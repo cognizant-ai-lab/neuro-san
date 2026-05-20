@@ -22,6 +22,7 @@ from typing import Union
 
 import contextlib
 import json
+import time
 
 from logging import getLogger
 from logging import Logger
@@ -147,7 +148,17 @@ class ExternalActivation(AbstractCallableActivation):
         """
         arguments_dict: Dict[str, Any] = {
             "tool_start": True,
-            "tool_args": self.arguments
+            "tool_args": self.arguments,
+            # Structured network-call event so upstream runtimes (the browser)
+            # can render the cross-origin call in their trace panel. The
+            # request starts here; we'll emit a matching network_call_end
+            # below once the stream completes.
+            "network_call": {
+                "kind": "streaming_chat",
+                "method": "POST",
+                "url": self.agent_url,
+                "status": None,
+            },
         }
         message = AgentMessage(content="Received arguments:", structure=arguments_dict)
         await self.journal.write_message(message)
@@ -157,6 +168,7 @@ class ExternalActivation(AbstractCallableActivation):
             invocation_context: InvocationContext = self.run_context.get_invocation_context()
             factory: AsyncAgentSessionFactory = invocation_context.get_async_session_factory()
             self.session = factory.create_session(self.agent_url, invocation_context, self.invocation)
+        call_start_ts: float = time.time()
 
         # Send off the input
         chat_request: Dict[str, Any] = self.gather_input(f"```json\n{json.dumps(self.arguments)}```",
@@ -224,9 +236,19 @@ class ExternalActivation(AbstractCallableActivation):
         #       This ends up needing to be re-integrated in the RunContext.
         self.sly_data = redactor.filter_config(returned_sly_data)
 
+        elapsed_ms: int = int((time.time() - call_start_ts) * 1000)
         answer_dict: Dict[str, Any] = {
             "tool_end": True,
-            "tool_output": answer
+            "tool_output": answer,
+            # Matching network_call_end. Surface duration so the browser
+            # trace panel can show how long the cross-origin call took.
+            "network_call": {
+                "kind": "streaming_chat",
+                "method": "POST",
+                "url": self.agent_url,
+                "status": 200,
+                "ms": elapsed_ms,
+            },
         }
         message = AgentMessage(content="Got result:", structure=answer_dict)
         await self.journal.write_message(message)

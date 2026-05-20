@@ -15,6 +15,7 @@ set -euo pipefail
 
 DEMO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${DEMO_ROOT}/../.." && pwd)"
+BROWSER_SITE_DIR="${REPO_ROOT}/demo/agent_web_browser_site"
 
 # Pick the Python that has neuro-san installed.
 PYTHON="${PYTHON:-${REPO_ROOT}/.venv/bin/python}"
@@ -65,6 +66,11 @@ start_origin() {
     # PYTHONPATH must include the origin dir so the `coded_tools` package under
     # it is importable. We also prepend REPO_ROOT so neuro_san is found when
     # the venv is not present.
+    #
+    # AGENT_LANDING_ENABLE + AGENT_STATIC_DIR turn each origin into its own
+    # web "homepage": visiting http://localhost:<port>/ shows a landing page
+    # listing this origin's distributable networks and embeds the chat UI
+    # directly. Eliminates the need for a separate static-file server.
     PYTHONPATH="${origin_dir}:${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" \
     AGENT_MANIFEST_FILE="${origin_dir}/registries/manifest.hocon" \
     AGENT_TOOL_PATH="${origin_dir}/coded_tools" \
@@ -72,6 +78,8 @@ start_origin() {
     AGENT_HTTP_SERVER_INSTANCES=1 \
     AGENT_ALLOW_CORS_HEADERS=1 \
     AGENT_MCP_ENABLE=false \
+    AGENT_LANDING_ENABLE=1 \
+    AGENT_STATIC_DIR="${BROWSER_SITE_DIR}" \
         nohup "${PYTHON}" -m neuro_san.service.main_loop.server_main_loop \
         > "${log_file}" 2>&1 &
     local pid=$!
@@ -97,7 +105,15 @@ for port in 8801 8802 8803; do
 done
 
 echo ""
-echo "All origins ready. Try:"
+echo "All origins ready. Browse to any of them:"
+echo "  open http://localhost:8801/    (flights.example landing page)"
+echo "  open http://localhost:8802/    (hotels.example  landing page)"
+echo "  open http://localhost:8803/    (travelgenius   landing page)"
+echo ""
+echo "Each landing page lists that origin's distributable networks and"
+echo "embeds the chat UI inline. Set your LLM key once via the ⚙ button."
+echo ""
+echo "Headless variants:"
 echo "  curl -s http://localhost:8801/api/v1/flight_finder/network | head"
 echo "  ${PYTHON} -m neuro_san.client.agent_web_browser \\"
 echo "      --url http://localhost:8803/api/v1/trip_planner/network \\"

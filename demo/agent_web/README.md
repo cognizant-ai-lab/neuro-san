@@ -23,6 +23,28 @@ data** for inventory and bookings.
 
 ## Running it
 
+## Billing model: full-chain BYOK
+
+This demo is configured so the calling client pays for **every LLM call along
+the chain it triggered**. Concretely:
+
+* All three HOCONs declare `"anthropic_api_key": "sly_data"`. The server's
+  `replace_any_required_api_keys` resolves it from the request's
+  `sly_data.llm_config` per-request, never persists it.
+* `trip_planner`'s `allow.to_downstream.sly_data` rule includes
+  `llm_config: true`, so the user's key crosses the cross-origin boundary
+  into flight_finder and hotel_finder.
+* Each sub-origin then uses the **same** key for its own LLM calls.
+
+The result: Bob runs trip_planner with Bob's key, every flight_finder /
+hotel_finder LLM call on Bob's behalf bills Bob. Alice does the same on
+Alice's key, the same flight_finder code serves her, but bills Alice. The
+origin operators run the services and never subsidize anyone's tokens.
+
+Trust implication: every origin in the chain sees the calling client's key.
+Only invoke chains you trust — same as how using a website implies trusting
+all the sub-services it embeds.
+
 ### Prerequisites
 
 The demo HOCONs default to `claude-haiku`, so you'll need:

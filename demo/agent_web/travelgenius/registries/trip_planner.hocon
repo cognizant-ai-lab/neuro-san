@@ -8,6 +8,13 @@
     },
     "llm_config": {
         "model_name": "claude-haiku",
+        # BYOK: trip_planner is the user-facing top-level agent in this demo,
+        # so its LLM call uses the client's own Anthropic key. The key is
+        # supplied in sly_data.llm_config.anthropic_api_key on each request.
+        # The provider-specific field name matters: ChatAnthropic reads
+        # `anthropic_api_key`, not `api_key`. See
+        # neuro_san.internals.run_context.langchain.llms.anthropic_llm_policy.
+        "anthropic_api_key": "sly_data",
     },
     "tools": [
         {
@@ -58,6 +65,12 @@ hold request along with sly_data.passenger_email.
             "allow": {
                 "to_downstream": {
                     "sly_data": {
+                        # Forward the user's BYOK LLM credentials into every
+                        # downstream agent so each origin's LLM call bills
+                        # the same client, not the origin operator. Trust
+                        # implication: every origin in the chain sees the
+                        # client's key; only invoke chains you trust.
+                        "llm_config": true,
                         "passenger_email": true,
                     },
                 },

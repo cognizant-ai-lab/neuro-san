@@ -5,6 +5,11 @@
     },
     "llm_config": {
         "model_name": "claude-haiku",
+        # Full-chain BYOK — see flight_finder.hocon for the rationale.
+        # The calling client supplies the key via sly_data.llm_config;
+        # trip_planner forwards it inward via allow.to_downstream;
+        # hotel_finder uses that same key for its own LLM calls.
+        "anthropic_api_key": "sly_data",
     },
     "tools": [
         {

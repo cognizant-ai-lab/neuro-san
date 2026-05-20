@@ -5,6 +5,12 @@
     },
     "llm_config": {
         "model_name": "claude-haiku",
+        # Full-chain BYOK: the calling client is responsible for the LLM
+        # bill of every agent in the chain it triggered. trip_planner
+        # forwards the client's key via its allow.to_downstream rule;
+        # flight_finder then uses that same key. Different clients bring
+        # different keys; the same flight_finder code answers them all.
+        "anthropic_api_key": "sly_data",
     },
     "tools": [
         {

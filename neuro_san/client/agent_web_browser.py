@@ -200,6 +200,23 @@ def open_agent_from_notebook(notebook: Optional[Dict[str, Any]] = None,
     verify_wire_config(wire)
 
     sly_data = dict(sly_data or {})
+    # BYOK auto-injection: if the env has ANTHROPIC_API_KEY / OPENAI_API_KEY,
+    # thread them into sly_data.llm_config so HOCONs that declare
+    # `api_key: "sly_data"` get a key on each request. Caller-supplied
+    # values in sly_data take precedence (we use setdefault semantics).
+    import os as _os
+    llm_cfg: Dict[str, Any] = dict(sly_data.get("llm_config") or {})
+    anth = _os.environ.get("ANTHROPIC_API_KEY")
+    oai = _os.environ.get("OPENAI_API_KEY")
+    if anth:
+        llm_cfg.setdefault("api_key", anth)
+        llm_cfg.setdefault("anthropic_api_key", anth)
+    if oai:
+        llm_cfg.setdefault("api_key", oai)
+        llm_cfg.setdefault("openai_api_key", oai)
+    if llm_cfg:
+        sly_data["llm_config"] = llm_cfg
+
     asyncio.run(_run_session(wire, initial_message, sly_data, interactive,
                              inactivity_timeout=inactivity_timeout))
 
@@ -332,8 +349,9 @@ async def _run_session(wire: Dict[str, Any],
             print(f"\n[user]   {initial_message}", flush=True)
             answer = await turn(initial_message)
             print(f"[agent]  {answer}\n", flush=True)
-            if current_sly:
-                print(f"[sly_data] {json.dumps(current_sly)}\n", flush=True)
+            visible = _redact_secrets_for_display(current_sly)
+            if visible:
+                print(f"[sly_data] {json.dumps(visible)}\n", flush=True)
 
         if interactive:
             print("Type your messages (Ctrl-D to end):", flush=True)
@@ -347,14 +365,40 @@ async def _run_session(wire: Dict[str, Any],
                     continue
                 answer = await turn(user_message)
                 print(f"[agent]  {answer}\n", flush=True)
-                if current_sly:
-                    print(f"[sly_data] {json.dumps(current_sly)}\n", flush=True)
+                visible = _redact_secrets_for_display(current_sly)
+                if visible:
+                    print(f"[sly_data] {json.dumps(visible)}\n", flush=True)
 
     finally:
         await invocation_context.close_of_request()
 
 
 # ---- CLI entry point -----------------------------------------------------
+
+
+_SECRET_KEY_PATTERNS = ("api_key", "apikey", "secret", "token", "password",
+                        "credential", "private_key")
+
+
+def _redact_secrets_for_display(sly: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a copy of `sly` with any secret-looking values replaced by a
+    short hint. Used for diagnostic print only."""
+    def _is_secret_key(k: str) -> bool:
+        lk = k.lower()
+        return any(pat in lk for pat in _SECRET_KEY_PATTERNS)
+
+    def _redact(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {
+                k: ("<redacted>" if _is_secret_key(k) and isinstance(v, str) and v
+                    else _redact(v))
+                for k, v in value.items()
+            }
+        if isinstance(value, list):
+            return [_redact(item) for item in value]
+        return value
+
+    return _redact(sly)
 
 
 def _parse_sly_data(items: List[str]) -> Dict[str, Any]:
