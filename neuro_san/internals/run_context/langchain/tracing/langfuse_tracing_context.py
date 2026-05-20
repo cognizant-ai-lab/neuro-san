@@ -156,7 +156,7 @@ If you didn't mean to use langfuse for observability, you can do this:
 
     def augment_config(self, runnable_config: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Augment the callbacks with the handler.
+        Augment the configuration however the implementation sees fit (if at all).
         :param runnable_config: The config for the runnable
         :return: The augmented config
         """
