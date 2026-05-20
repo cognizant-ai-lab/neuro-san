@@ -128,16 +128,22 @@ function appendTrace(entry) {
 // Each node has a `state` of idle | active | done; events transition them.
 
 let GRAPH_NODES = [];      // array of node objects
+let GRAPH_NETWORK = null;   // network the graph is currently rendering
 const $graphRows = new Map();   // node.name -> li element
 
-function buildGraph() {
+function buildGraph(network) {
     $agentGraph.innerHTML = "";
-    const first = (BOOTSTRAP && BOOTSTRAP.networks && BOOTSTRAP.networks[0]) || null;
-    if (!first || !Array.isArray(first.tools) || first.tools.length === 0) {
+    $graphRows.clear();
+    GRAPH_NETWORK = network ?? null;
+    const src = network
+        || (BOOTSTRAP && BOOTSTRAP.networks && BOOTSTRAP.networks[0])
+        || null;
+    if (!src || !Array.isArray(src.tools) || src.tools.length === 0) {
         $agentGraph.innerHTML = "<div class=\"muted graph-empty\">(no graph)</div>";
+        GRAPH_NODES = [];
         return null;
     }
-    GRAPH_NODES = first.tools.map((t) => ({ ...t, state: "idle" }));
+    GRAPH_NODES = src.tools.map((t) => ({ ...t, state: "idle" }));
 
     // Front-man at the top, children below.
     const frontMan = GRAPH_NODES.find((n) => n.kind === "front_man");
@@ -237,12 +243,14 @@ function nodeForNetworkUrl(url) {
             return node.name;
         }
     }
-    // The front-man's own streaming_chat call comes in via the parent URL the
-    // browser hit. We match that explicitly.
-    const first = (BOOTSTRAP && BOOTSTRAP.networks && BOOTSTRAP.networks[0]) || null;
-    if (!first || !first.url) return null;
+    // The front-man's own streaming_chat call comes in via the URL the
+    // browser hit. Match it against the network we're currently graphing.
+    const src = GRAPH_NETWORK
+        || (BOOTSTRAP && BOOTSTRAP.networks && BOOTSTRAP.networks[0])
+        || null;
+    if (!src || !src.url) return null;
     try {
-        const parent = new URL(first.url);
+        const parent = new URL(src.url);
         const u = new URL(url);
         if (parent.host === u.host && u.pathname.endsWith("/streaming_chat")) {
             const fm = GRAPH_NODES.find((n) => n.kind === "front_man");
@@ -306,7 +314,10 @@ function switchToNetwork(net) {
     currentSlyData = {};
     clearChat();
     clearTrace();
-    resetGraphStates();
+    // Rebuild the graph for the newly-selected network. Different networks
+    // on the same origin have different shapes; the graph should reflect
+    // whichever one we're about to chat with.
+    buildGraph(net);
     $chatInput.disabled = false;
     $sendBtn.disabled = false;
     $chatInput.placeholder = "Send a message";
@@ -432,12 +443,13 @@ $chatForm.addEventListener("submit", async (e) => {
 // --- Init ---
 loadSettings();
 applyBranding();
-buildGraph();
 renderNetworksList();
 
 // Auto-load the first distributable network so the user doesn't have to click.
+// switchToNetwork() also builds the graph for that network.
 if (BOOTSTRAP && Array.isArray(BOOTSTRAP.networks) && BOOTSTRAP.networks.length > 0) {
     switchToNetwork(BOOTSTRAP.networks[0]);
 } else {
+    buildGraph(null);  // shows the empty-state placeholder
     setStatus("⚠ no distributable networks on this origin.", true);
 }
