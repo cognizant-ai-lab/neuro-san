@@ -23,7 +23,6 @@ from typing import Type
 
 from datetime import datetime
 from socket import gethostname
-import traceback
 
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.runnables.base import Runnable
@@ -106,12 +105,8 @@ If you didn't mean to use langfuse for observability, you can do this:
         # ... say to use the with/ContextManager here, but pylint doesn't like it.
         # It works. :shrug:
         # According to langfuse docs, this should be safe for use in async code.
-        # pylint: disable=not-context-manager
-        print(f"using main_span as context manager: {self.main_span}")
         with self.main_span:
-            print("with main_span")
             with propagate_attributes(user_id=user_id, session_id=session_id):
-                print("with propagate_attributes")
                 await super().ainvoke(chain, inputs, runnable_config)
 
     def create_main_span(self, runnable_config: Dict[str, Any]):
@@ -132,21 +127,14 @@ If you didn't mean to use langfuse for observability, you can do this:
         # pylint: disable=import-outside-toplevel
         from langfuse import get_client
 
-        print(f"about to get main_span with run_name: {run_name}")
         if self.parent_context is not None:
             # Get the langfuse client
-            print("Parent context is not none")
-            parent_span: Any = self.parent_context.main_span
-            print(f"Using parent context main_span as basis {parent_span} type {parent_span.__class__.__name__}")
-            # self.main_span = parent_span.start_as_current_observation(run_name, as_type="span")
             langfuse_client: Any = get_client()
             self.main_span = langfuse_client.start_as_current_observation(as_type="span", name=run_name)
         else:
             # Get the langfuse client
-            print("parent context is none")
             langfuse_client: Any = get_client()
             self.main_span = langfuse_client.start_as_current_observation(as_type="agent", name=run_name)
-        print(f"main_span: {self.main_span}")
 
     def maybe_create_handler(self, runnable_config: Dict[str, Any]):
         """
@@ -158,9 +146,6 @@ If you didn't mean to use langfuse for observability, you can do this:
             self.callback_handler = self.parent_context.callback_handler
 
         if self.callback_handler is None:
-            _ = traceback
-            # traceback.print_stack()
-            print("\n\n")
 
             # See if we can create a new langfuse handler instance.
             callback_handler_type: Type[BaseCallbackHandler] = None
@@ -171,10 +156,7 @@ If you didn't mean to use langfuse for observability, you can do this:
                 self.callback_handler = None
                 return
 
-            print(f"about to create langfuse handler with main_span: {self.main_span}")
             self.callback_handler = callback_handler_type()
-
-        print(f"using langfuse handler: {self.callback_handler}")
 
     def augment_config(self, runnable_config: Dict[str, Any]) -> Dict[str, Any]:
         """
