@@ -1,0 +1,29 @@
+{
+  "name": "neuro-san-lite",
+  "version": "0.1.0",
+  "description": "Browser-portable runtime for the Agent Web protocol (TypeScript port of neuro-san-client).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "dist/neuro_san_lite.js",
+  "types": "dist/neuro_san_lite.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/neuro_san_lite.js",
+      "types": "./dist/neuro_san_lite.d.ts"
+    }
+  },
+  "files": ["dist/", "src/", "README.md"],
+  "scripts": {
+    "build": "tsc --noEmit && esbuild src/index.ts --bundle --format=esm --target=es2020 --outfile=dist/neuro_san_lite.js",
+    "build:types": "tsc --emitDeclarationOnly --declaration --outDir dist",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "esbuild": "^0.21.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.5.0"
+  }
+}

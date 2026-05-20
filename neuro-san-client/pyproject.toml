@@ -1,0 +1,34 @@
+# neuro-san-client: the browser-portable subset of the neuro-san runtime.
+#
+# Hard constraint: every dependency declared here must be either pure-Python
+# AND in the Pyodide package index, OR mirror-able to TypeScript. New
+# dependencies are gated by build_scripts/build_neuro_san_lite.py.
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neuro-san-client"
+version = "0.1.0"
+description = "Browser-portable runtime subset for the Agent Web protocol"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.10"
+dependencies = [
+    # Pure-Python only. The build lint enforces this.
+    "httpx>=0.27,<1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
