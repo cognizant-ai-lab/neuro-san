@@ -106,8 +106,8 @@ If you didn't mean to use langfuse for observability, you can do this:
         # It works. :shrug:
         # According to langfuse docs, this should be safe for use in async code.
         with self.main_span:
-            with propagate_attributes(user_id=user_id, session_id=session_id):
-                await super().ainvoke(chain, inputs, runnable_config)
+            propagate_attributes(user_id=user_id, session_id=session_id)
+            await super().ainvoke(chain, inputs, runnable_config)
 
     def create_main_span(self, runnable_config: Dict[str, Any]):
         """
