@@ -23,10 +23,12 @@ from typing import Dict
 from typing import List
 
 import json
+import os
 import random
 import threading
 
 import tornado
+from tornado.web import StaticFileHandler
 
 from leaf_common.serialization.util.text_file_reader import TextFileReader
 
@@ -41,6 +43,7 @@ from neuro_san.service.http.handlers.concierge_handler import ConciergeHandler
 from neuro_san.service.http.handlers.connectivity_handler import ConnectivityHandler
 from neuro_san.service.http.handlers.function_handler import FunctionHandler
 from neuro_san.service.http.handlers.health_check_handler import HealthCheckHandler
+from neuro_san.service.http.handlers.landing_handler import LandingHandler
 from neuro_san.service.http.handlers.network_handler import NetworkHandler
 from neuro_san.service.http.handlers.openapi_publish_handler import OpenApiPublishHandler
 from neuro_san.service.http.handlers.streaming_chat_handler import StreamingChatHandler
@@ -195,6 +198,12 @@ class HttpServer(AgentStateListener):
         tornado.ioloop.IOLoop.current().start()
         self.logger.info({}, "Http server stopped.")
 
+    @staticmethod
+    def _env_truthy(name: str) -> bool:
+        """Read an env var as a boolean, accepting common truthy strings."""
+        v = os.environ.get(name, "").strip().lower()
+        return v in ("1", "true", "yes", "on")
+
     def make_app(self, requests_limit: int, concurrent_requests_limit: int, logger: EventLoopLogger):
         """
         Construct tornado HTTP "application" to run.
@@ -216,11 +225,32 @@ class HttpServer(AgentStateListener):
             "logging_config": self.logging_config
         }
         handlers = []
-        # Health check handlers are enabled always
-        handlers.append(("/", HealthCheckHandler, ready_request_initialize_data))
+        # Health check handlers are enabled always. The root path / is the
+        # landing-page route by default *only* when AGENT_LANDING_ENABLE is
+        # truthy; otherwise it stays as the health check for backward
+        # compatibility with existing deployments.
+        landing_enabled = self._env_truthy("AGENT_LANDING_ENABLE")
+        if landing_enabled:
+            handlers.append(("/", LandingHandler, request_initialize_data))
+        else:
+            handlers.append(("/", HealthCheckHandler, ready_request_initialize_data))
         handlers.append(("/healthz", HealthCheckHandler, ready_request_initialize_data))
         handlers.append(("/readyz", HealthCheckHandler, ready_request_initialize_data))
         handlers.append(("/livez", HealthCheckHandler, live_request_initialize_data))
+
+        # Static assets (browser UI, CSS, JS) served from AGENT_STATIC_DIR.
+        # When this is set to a directory path, requests for any file in that
+        # directory are served verbatim — same semantics as `python -m
+        # http.server`. The landing page (above) is the dynamic index.html;
+        # everything else (style.css, app.js, neuro_san_lite.js, …) gets
+        # picked up here.
+        static_dir = os.environ.get("AGENT_STATIC_DIR")
+        if static_dir and os.path.isdir(static_dir):
+            handlers.append((
+                r"/(app\.js|style\.css|neuro_san_lite\.js|favicon\.ico)",
+                StaticFileHandler,
+                {"path": static_dir},
+            ))
 
         # Setup handler for profiler control
         handlers.append(("/profiler", ProfilerControlHandler))
