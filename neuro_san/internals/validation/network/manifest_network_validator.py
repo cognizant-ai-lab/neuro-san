@@ -38,7 +38,12 @@ class ManifestNetworkValidator(CompositeDictionaryValidator):
     stop_on_error=True so the second phase is skipped when the first phase fails.
     """
 
-    def __init__(self, external_network_names: List[str] = None, mcp_servers: List[str] = None):
+    def __init__(
+            self,
+            external_network_names: List[str] = None,
+            mcp_servers: List[str] = None,
+            stop_on_error: bool = False
+        ):
         """
         Constructor
 
@@ -64,4 +69,4 @@ class ManifestNetworkValidator(CompositeDictionaryValidator):
         ])
 
         phases: List[DictionaryValidator] = [tools_shape_phase, other_phase]
-        super().__init__(phases, stop_on_error=True)
+        super().__init__(phases, stop_on_error=stop_on_error)
