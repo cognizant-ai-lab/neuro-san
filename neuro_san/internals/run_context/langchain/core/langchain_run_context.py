@@ -42,6 +42,7 @@ from langchain_core.tools.base import BaseTool
 from neuro_san.internals.errors.error_detector import ErrorDetector
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
+from neuro_san.internals.interfaces.tracing_context import TracingContext
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.journals.intercepting_journal import InterceptingJournal
 from neuro_san.internals.journals.originating_journal import OriginatingJournal
@@ -73,7 +74,8 @@ class LangChainRunContext(RunContext):
                  tool_caller: ToolCaller,
                  invocation_context: InvocationContext,
                  chat_context: Dict[str, Any],
-                 middleware_config: List[Dict[str, Any]] = None):
+                 middleware_config: List[Dict[str, Any]] = None,
+                 tracing_context: TracingContext = None):
         """
         Constructor
 
@@ -86,6 +88,7 @@ class LangChainRunContext(RunContext):
         :param chat_context: A ChatContext dictionary that contains all the state necessary
                 to carry on a previous conversation, possibly from a different server.
         :param middleware_config: An ordered list of middleware configurations
+        :param tracing_context: A TracingContext for the request
         """
         self.chat_history: List[BaseMessage] = []
         self.middleware_config: List[Dict[str, Any]] = middleware_config
@@ -110,6 +113,9 @@ class LangChainRunContext(RunContext):
         # Default logger
         self.logger: Logger = getLogger(self.__class__.__name__)
 
+        # A Placeholder for observabilty-specific tracing objects
+        self.tracing_context: TracingContext = tracing_context
+
         parent_origin: List[Dict[str, Any]] = []
         if parent_run_context is not None:
 
@@ -118,6 +124,8 @@ class LangChainRunContext(RunContext):
                 self.invocation_context = parent_run_context.get_invocation_context()
             if self.chat_context is None:
                 self.chat_context = parent_run_context.get_chat_context()
+
+            self.tracing_context = parent_run_context.get_tracing_context().clone()
             parent_origin = parent_run_context.get_origin()
 
             # Initialize the origin.
@@ -214,10 +222,18 @@ class LangChainRunContext(RunContext):
         required_llm_config: Set[str] = set()
 
         # Go through the list of fallbacks in the config.
+        construction_errors: List[str] = []
         for fallback in fallbacks:
 
             # Create a model we might use.
-            one_llm_resources: LangChainLlmResources | Set[str] = llm_factory.create_llm(fallback, sly_data)
+            # If construction fails (e.g. missing API key in env), record the error and
+            # try the next fallback rather than aborting the whole loop.
+            try:
+                one_llm_resources: LangChainLlmResources | Set[str] = llm_factory.create_llm(fallback, sly_data)
+            except ValueError as exception:
+                construction_errors.append(str(exception))
+                continue
+
             if one_llm_resources is None:
                 # Nothing to use or report.
                 # Skip for now, a fallback might still be fulfilled.
@@ -248,6 +264,9 @@ class LangChainRunContext(RunContext):
                 error += "\nLLM operation for this agent requires at least one "
                 error += "of the following set in sly_data.llm_config:\n"
                 error += "\n".join(sorted(required_llm_config)) + "\n"
+            if len(construction_errors) > 0:
+                error += "\nThe following errors occurred while constructing LLMs:\n"
+                error += "\n".join(construction_errors) + "\n"
             raise ValueError(error)
 
         if len(chain_fallbacks) > 0:
@@ -343,8 +362,10 @@ class LangChainRunContext(RunContext):
                                       origin=self.origin,
                                       tool_caller=self.tool_caller,
                                       error_detector=self.error_detector,
-                                      session_id=session_id)
-        runnable_config: Dict[str, Any] = runnable.prepare_runnable_config(session_id=session_id, use_run_name=True)
+                                      session_id=session_id,
+                                      tracing_context=self.tracing_context)
+        runnable_config: Dict[str, Any] = runnable.prepare_runnable_config(session_id=session_id,
+                                                                           use_run_name=True)
 
         # This needs to be run as a chain otherwise LangSmith will pick up two
         # trace names for the same request.
@@ -594,3 +615,9 @@ class LangChainRunContext(RunContext):
         :return: The Journal associated with the instance
         """
         return self.journal
+
+    def get_tracing_context(self) -> TracingContext:
+        """
+        :return: The TracingContext associated with the instance
+        """
+        return self.tracing_context

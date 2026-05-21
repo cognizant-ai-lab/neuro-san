@@ -22,9 +22,9 @@ from os import getenv
 
 from neuro_san.internals.interfaces.context_type_tracing_context_factory import ContextTypeTracingContextFactory
 from neuro_san.internals.interfaces.run_target import RunTarget
+from neuro_san.internals.interfaces.tracing_context import TracingContext
 from neuro_san.internals.run_context.langchain.tracing.langchain_tracing_context import LangChainTracingContext
-from neuro_san.internals.run_context.langchain.tracing.langfuse_langchain_tracing_context \
-    import LangFuseLangChainTracingContext
+from neuro_san.internals.run_context.langchain.tracing.langfuse_tracing_context import LangfuseTracingContext
 
 
 class LangChainTracingContextFactory(ContextTypeTracingContextFactory):
@@ -32,20 +32,20 @@ class LangChainTracingContextFactory(ContextTypeTracingContextFactory):
     Interface for Factory classes creating tracing contexts for RunTargets.
     """
 
-    def create_tracing_context(self, config: Dict[str, Any], run_target: RunTarget) -> RunTarget:
+    def create_tracing_context(self, config: Dict[str, Any], run_target: RunTarget) -> TracingContext:
         """
         Creates a RunTarget based on another RunTarget
 
         :param config: The configuration for the tracing context
         :param run_target: The RunTarget instance to be traced
-        :return: Another RunTarget which will be the tracing context
+        :return: An appropriate TracingContext
         """
-        tracing_context: RunTarget = None
+        tracing_context: TracingContext = None
 
         test_for_langfuse: bool = getenv("LANGFUSE_ENABLED", "false").lower() == "true"
 
         if test_for_langfuse:
-            tracing_context = LangFuseLangChainTracingContext(run_target=run_target, config=config)
+            tracing_context = LangfuseTracingContext(run_target=run_target, config=config)
         else:
             tracing_context = LangChainTracingContext(run_target=run_target, config=config)
 
