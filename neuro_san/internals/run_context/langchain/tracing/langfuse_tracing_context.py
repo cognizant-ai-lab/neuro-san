@@ -81,7 +81,10 @@ class LangfuseTracingContext(LangChainTracingContext):
         """
         super().__init__(run_target=run_target, config=config)
 
+        # Keep a reference to the parent context
         self.parent_context: LangfuseTracingContext = parent_context
+
+        # Keep a session_id for any child TracingContext to use in its langfuse config for the run.
         self.session_id: str = None
 
         # See if we can get a langfuse handler instance.
@@ -97,6 +100,8 @@ If you really wanted to use langfuse for observability, you can install it with
 If you didn't mean to use langfuse for observability, you can do this:
     export LANGFUSE_ENABLED=false
 """)
+
+        # Keep track of some Langfuse state
 
         # No need to ResolverUtil absolutely everything, but we still need to locally import
         # for the rest of the system to behave without langfuse installed.
