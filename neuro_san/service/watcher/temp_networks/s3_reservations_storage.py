@@ -394,16 +394,31 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         """
         Lists ALL objects (under current S3 bucket prefix) using a paginator.
         Yields object keys.
+
+        boto3's paginator returns a *lazy* PageIterator: paginator.paginate(...)
+        itself performs no S3 call -- each HTTP request happens during next()
+        on the iterator. We therefore retry around the per-page fetch rather
+        than around the iterator construction, so transient
+        ClientError/BotoCoreError raised mid-iteration is recovered.
+        boto3 paginators are stateful: on a failed next() the ContinuationToken
+        is not advanced, so a retried next() re-issues the same request.
+
+        next() is called with a sentinel default to signal exhaustion without
+        raising StopIteration (which inside this generator function would be
+        converted to RuntimeError per PEP 479).
         """
         paginator = self.s3_client.get_paginator("list_objects_v2")
-        paginate_function = partial(paginator.paginate,
-                                    Bucket=self.bucket_name,
-                                    Prefix=self.prefix,
-                                    PaginationConfig={"PageSize": self.max_keys_per_page})
-        for page in self._do_with_retries(paginate_function):
-            # _do_with_retries here wraps the generator creation
-            contents = page.get("Contents", [])
-            for obj in contents:
+        page_iter = iter(paginator.paginate(
+            Bucket=self.bucket_name,
+            Prefix=self.prefix,
+            PaginationConfig={"PageSize": self.max_keys_per_page},
+        ))
+        end_of_pages = object()
+        while True:
+            page = self._do_with_retries(partial(next, page_iter, end_of_pages))
+            if page is end_of_pages:
+                break
+            for obj in page.get("Contents", []):
                 yield obj["Key"]
 
     def expire_reservations(self):
