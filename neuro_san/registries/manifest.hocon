@@ -29,6 +29,11 @@
 
     "esp_decision_assistant.hocon": true,
     "intranet_agents.hocon": true,
+    # Agents for testing load and concurrency
+    "math_guy_mock_llm_service.hocon": {
+        "serve": true,  # Whether or not this agent network should be served up
+        "public": false # Network should *not* be publicly listed via the Concierge service.
+    },
     "math_guy.hocon": true,
     "math_guy_passthrough.hocon": true,
     "music_nerd.hocon": true,
