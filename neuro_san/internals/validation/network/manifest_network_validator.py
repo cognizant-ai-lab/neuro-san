@@ -14,6 +14,8 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from typing import Any
+from typing import Dict
 from typing import List
 
 from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
@@ -29,6 +31,11 @@ class ManifestNetworkValidator(CompositeDictionaryValidator):
     """
     Implementation of CompositeDictionaryValidator interface that uses multiple specific validators
     to do some standard validation upon reading in an agent network description.
+
+    Validation runs in two phases. The keyword phase (KeywordNetworkValidator) checks field types
+    such as `tools` being a list. The structure phase (missing nodes, unreachable nodes, tool names,
+    URLs) only runs if the keyword phase produces no errors, because downstream validators assume
+    correct data types such as "tools" being a list and would otherwise crash.
     """
 
     def __init__(self, external_network_names: List[str] = None, mcp_servers: List[str] = None):
@@ -38,13 +45,35 @@ class ManifestNetworkValidator(CompositeDictionaryValidator):
         :param external_network_names: A list of external network names
         :param mcp_servers: A list of MCP servers, as read in from a mcp_info.hocon file
         """
-        validators: List[DictionaryValidator] = [
-            # Note we do use the CyclesNetworkValidator here because cycles are actually OK.
+        self._keyword_validators: List[DictionaryValidator] = [
             KeywordNetworkValidator(),
+        ]
+        structure_validators: List[DictionaryValidator] = [
+            # Note we do use the CyclesNetworkValidator here because cycles are actually OK.
             MissingNodesNetworkValidator(),
             UnreachableNodesNetworkValidator(),
             # No ToolBoxNetworkValidator yet.
             ToolNameNetworkValidator(),
             UrlNetworkValidator(external_network_names, mcp_servers),
         ]
-        super().__init__(validators)
+        super().__init__(structure_validators)
+
+    def validate(self, candidate: Dict[str, Any]) -> List[str]:
+        """
+        Validate the candidate in two phases: keyword first, then structure.
+
+        If any keyword validator reports errors, return those immediately without running
+        structure validators — they assume correct data types and would crash or report
+        misleading results on malformed input.
+
+        :param candidate: The dictionary to validate
+        :return: A list of error messages
+        """
+        errors: List[str] = []
+        for keyword_validator in self._keyword_validators:
+            errors.extend(keyword_validator.validate(candidate))
+        if errors:
+            return errors
+
+        errors.extend(super().validate(candidate))
+        return errors
