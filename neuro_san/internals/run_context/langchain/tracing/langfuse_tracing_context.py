@@ -21,7 +21,6 @@ from typing import Dict
 from typing import Type
 
 from contextvars import ContextVar
-from datetime import datetime
 from socket import gethostname
 
 from langchain_core.callbacks.base import BaseCallbackHandler
@@ -82,8 +81,8 @@ class LangfuseTracingContext(LangChainTracingContext):
         super().__init__(run_target=run_target, config=config)
 
         self.parent_context: LangfuseTracingContext = parent_context
-        self.langfuse_client: Any = None
-        self.main_span: Any = None
+        self.hostname: str = gethostname()
+        self.session_run_name: str = None
 
         # See if we can get a langfuse handler instance.
         # handler_type = ResolverUtil.create_type("langfuse.langchain.CallbackHandler", raise_if_not_found=False)
@@ -101,11 +100,13 @@ If you didn't mean to use langfuse for observability, you can do this:
 
         # No need to ResolverUtil absolutely everything, but we still need to locally import
         # for the rest of the system to behave without langfuse installed.
-
-        # Get the langfuse client
         # pylint: disable=import-outside-toplevel
+        from langfuse import Langfuse
         from langfuse import get_client
-        self.langfuse_client = get_client()
+        from opentelemetry.util._decorator import _AgnosticContextManager
+
+        self.langfuse_client: Langfuse = get_client()
+        self.main_span: _AgnosticContextManager = None
 
     def clone(self) -> TracingContext:
         """
@@ -124,6 +125,8 @@ If you didn't mean to use langfuse for observability, you can do this:
         :param runnable_config: The config for the runnable
         """
         if self.main_span is not None:
+            # We have a main span. Use it as the context.
+            # pylint: disable=not-context-manager
             with self.main_span:
                 await super().ainvoke(chain, inputs, runnable_config)
         else:
@@ -136,16 +139,15 @@ If you didn't mean to use langfuse for observability, you can do this:
         """
 
         if self.main_span is not None:
+            # Already done
             return
 
-        if self.parent_context is not None:
+        if self.langfuse_client is None:
             return
-
-        run_name: str = runnable_config.get("run_name")
 
         # According to langfuse docs, this should be safe for use in async code.
-        if self.langfuse_client is not None:
-            self.main_span = self.langfuse_client.start_as_current_observation(as_type="agent", name=run_name)
+        run_name: str = runnable_config.get("run_name")
+        self.main_span = self.langfuse_client.start_as_current_observation(as_type="agent", name=run_name)
 
     def augment_config(self, runnable_config: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -162,19 +164,33 @@ If you didn't mean to use langfuse for observability, you can do this:
         request_metadata: Dict[str, Any] = runnable_config.get("metadata", empty)
         user_id: str = request_metadata.get("user_id", "<Unknown>")
 
+        # Find the right run_name to use for the session components
+        self.session_run_name: str = self.get_parent_session_run_name()
+        if self.session_run_name is None:
+            self.session_run_name = runnable_config.get("run_name")
+
         # Create a session_id for the trace.
         # It's possible we should move the addition of hostname up to the services infra.
         request_id: str = request_metadata.get("request_id", "<Unknown>")
-        now: datetime = datetime.now()
-        session_id: str = f"{request_id}@{now.strftime('%Y-%m-%d-%H:%M:%S.%f')}"
-        hostname: str = gethostname()
-        session_id: str = f"{session_id}@{hostname}"
+        session_id: str = f"{self.session_run_name}@{request_id}@{self.hostname}"
 
         request_metadata["langfuse_user_id"] = user_id
         request_metadata["langfuse_session_id"] = session_id
         runnable_config["metadata"] = request_metadata
 
         return runnable_config
+
+    def get_parent_session_run_name(self):
+        """
+        Get the parent session run name.
+        We want the component of the session_id to be consistent for any depth of trace.
+
+        :return: The parent session run name
+        """
+        if self.parent_context is not None:
+            return self.parent_context.get_parent_session_run_name()
+
+        return self.session_run_name
 
     async def flush(self):
         """
