@@ -173,7 +173,9 @@ class RunContextRunnable(NeuroSanRunnable):
             try:
                 chain_result: Dict[str, Any] = await self.agent_chain.ainvoke(input=inputs, config=runnable_config)
             except RATE_LIMIT_ERROR_TYPES as rate_limit_error:
-                self.logger.warning("retrying from %s(%s)", rate_limit_error.__class__.__name__, str(rate_limit_error))
+                self.logger.warning("retrying from RateLimit error %s(%s)",
+                                    rate_limit_error.__class__.__name__,
+                                    str(rate_limit_error))
                 retries = retries - 1
                 exception = rate_limit_error
             except API_ERROR_TYPES as api_error:
