@@ -106,7 +106,7 @@ If you didn't mean to use langfuse for observability, you can do this:
         from opentelemetry.util._decorator import _AgnosticContextManager
 
         self.langfuse_client: Langfuse = get_client()
-        self.main_span: _AgnosticContextManager = None
+        self.main_span: _AgnosticContextManager[Any] = None
 
     def clone(self) -> TracingContext:
         """
@@ -143,6 +143,11 @@ If you didn't mean to use langfuse for observability, you can do this:
             return
 
         if self.langfuse_client is None:
+            # Langfuse is not enabled
+            return
+
+        if self.parent_context is not None:
+            # This is a child run
             return
 
         # According to langfuse docs, this should be safe for use in async code.
