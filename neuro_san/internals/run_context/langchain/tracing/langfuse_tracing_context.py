@@ -18,14 +18,15 @@ from __future__ import annotations
 
 from typing import Any
 from typing import Dict
-from typing import List
 from typing import Type
 
+from contextvars import ContextVar
 from datetime import datetime
 from socket import gethostname
 
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.runnables.base import Runnable
+from langchain_core.tracers.context import register_configure_hook
 
 from leaf_common.config.resolver_util import ResolverUtil
 
@@ -38,6 +39,31 @@ class LangfuseTracingContext(LangChainTracingContext):
     """
     TracingContext implementation for runs that use Langfuse.
     """
+
+    @staticmethod
+    def register():
+        """
+        Globally egister the Langfuse CallbackHandler, if available
+        """
+
+        context_var = ContextVar("langfuse_handler", default=None)
+
+        # See if we can create a new langfuse handler instance.
+        callback_handler_type: Type[BaseCallbackHandler] = None
+        callback_handler_type = ResolverUtil.create_type("langfuse.langchain.CallbackHandler",
+                                                         raise_if_not_found=False)
+        if callback_handler_type is not None:
+
+            callback_handler: BaseCallbackHandler = callback_handler_type()
+
+            context_var.set(callback_handler)
+            register_configure_hook(context_var, inheritable=True)
+
+        return context_var
+
+    # Global context variable for the langfuse callback handler.
+    # Do the register() once at class load time.
+    HANDLER_CONTEXT_VAR: ContextVar = register()
 
     def __init__(self, run_target: RunTarget,
                  config: Dict[str, Any],
@@ -52,7 +78,6 @@ class LangfuseTracingContext(LangChainTracingContext):
         super().__init__(run_target=run_target, config=config)
 
         self.parent_context: LangfuseTracingContext = parent_context
-        self.callback_handler: BaseCallbackHandler = None
         self.main_span: Any = None
 
         # See if we can get a langfuse handler instance.
@@ -84,6 +109,47 @@ If you didn't mean to use langfuse for observability, you can do this:
         :param inputs: The inputs to the chain
         :param runnable_config: The config for the runnable
         """
+        # According to langfuse docs, this should be safe for use in async code.
+        if self.main_span is not None:
+            with self.main_span:
+                await super().ainvoke(chain, inputs, runnable_config)
+        else:
+            await super().ainvoke(chain, inputs, runnable_config)
+
+    def create_main_span(self, runnable_config: Dict[str, Any]):
+        """
+        Create the main span for the run
+        :param runnable_config: The config for the runnable
+        """
+
+        if self.main_span is not None:
+            return
+
+        if self.parent_context is not None:
+            return
+
+        run_name: str = runnable_config.get("run_name")
+
+        # No need to ResolverUtil absolutely everything, but we still need to locally import
+        # for the rest of the system to behave without langfuse installed.
+
+        # pylint: disable=import-outside-toplevel
+        from langfuse import get_client
+
+        # Get the langfuse client
+        langfuse_client: Any = get_client()
+        self.main_span = langfuse_client.start_as_current_observation(as_type="agent", name=run_name)
+
+    def augment_config(self, runnable_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Augment the configuration however the implementation sees fit (if at all).
+        :param runnable_config: The config for the runnable
+        :return: The augmented config
+        """
+        self.create_main_span(runnable_config)
+
+        runnable_config["neuro_san_tracing_context"] = self
+
         # Get the user_id for the trace
         empty: Dict[str, Any] = {}
         request_metadata: Dict[str, Any] = runnable_config.get("metadata", empty)
@@ -97,81 +163,9 @@ If you didn't mean to use langfuse for observability, you can do this:
         hostname: str = gethostname()
         session_id: str = f"{session_id}@{hostname}"
 
-        # pylint: disable=import-outside-toplevel
-        from langfuse import propagate_attributes
-
-        # According to langfuse docs, this should be safe for use in async code.
-        with self.main_span:
-            propagate_attributes(user_id=user_id, session_id=session_id)
-            await super().ainvoke(chain, inputs, runnable_config)
-
-    def create_main_span(self, runnable_config: Dict[str, Any]):
-        """
-        Create the main span for the run
-        :param runnable_config: The config for the runnable
-        """
-
-        if self.main_span is not None:
-            return
-
-        run_name: str = runnable_config.get("run_name")
-
-        # We have a handler, therefore we have langfuse installed.
-        # No need to ResolverUtil absolutely everything, but we still need to locally import
-        # for the rest of the system to behave without langfuse installed.
-
-        # pylint: disable=import-outside-toplevel
-        from langfuse import get_client
-
-        if self.parent_context is not None:
-            # Get the langfuse client
-            langfuse_client: Any = get_client()
-            self.main_span = langfuse_client.start_as_current_observation(as_type="span", name=run_name)
-        else:
-            # Get the langfuse client
-            langfuse_client: Any = get_client()
-            self.main_span = langfuse_client.start_as_current_observation(as_type="agent", name=run_name)
-
-    def maybe_create_handler(self, runnable_config: Dict[str, Any]):
-        """
-        If the tracing config doesn't have a handler, create it.
-        """
-        self.create_main_span(runnable_config)
-
-        if self.callback_handler is None and self.parent_context is not None:
-            self.callback_handler = self.parent_context.callback_handler
-
-        if self.callback_handler is None:
-
-            # See if we can create a new langfuse handler instance.
-            callback_handler_type: Type[BaseCallbackHandler] = None
-            callback_handler_type = ResolverUtil.create_type("langfuse.langchain.CallbackHandler",
-                                                             raise_if_not_found=False)
-            if callback_handler_type is None:
-                # Nothing we can do. Skip.
-                self.callback_handler = None
-                return
-
-            self.callback_handler = callback_handler_type()
-
-    def augment_config(self, runnable_config: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Augment the configuration however the implementation sees fit (if at all).
-        :param runnable_config: The config for the runnable
-        :return: The augmented config
-        """
-        self.maybe_create_handler(runnable_config)
-        if self.callback_handler is None:
-            # Nothing we can do. Skip.
-            return runnable_config
-
-        # Set the callbacks per the langfuse docs
-        callbacks: List[BaseCallbackHandler] = runnable_config.get("callbacks", [])
-        if self.callback_handler not in callbacks:
-            callbacks.append(self.callback_handler)
-        runnable_config["callbacks"] = callbacks
-
-        runnable_config["neuro_san_tracing_context"] = self
+        request_metadata["langfuse_user_id"] = user_id
+        request_metadata["langfuse_session_id"] = session_id
+        runnable_config["metadata"] = request_metadata
 
         return runnable_config
 
