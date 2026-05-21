@@ -82,7 +82,7 @@ class LangfuseTracingContext(LangChainTracingContext):
 
         self.parent_context: LangfuseTracingContext = parent_context
         self.hostname: str = gethostname()
-        self.session_run_name: str = None
+        self.session_id: str = None
 
         # See if we can get a langfuse handler instance.
         # handler_type = ResolverUtil.create_type("langfuse.langchain.CallbackHandler", raise_if_not_found=False)
@@ -165,33 +165,33 @@ If you didn't mean to use langfuse for observability, you can do this:
         request_metadata: Dict[str, Any] = runnable_config.get("metadata", empty)
         user_id: str = request_metadata.get("user_id", "<Unknown>")
 
-        # Find the right run_name to use for the session components
-        self.session_run_name: str = self.get_parent_session_run_name()
-        if self.session_run_name is None:
-            self.session_run_name = runnable_config.get("run_name")
+        # Find the right session_id to use for the session components
+        self.session_id: str = self.get_parent_session_id()
+        if self.session_id is None:
+            run_name = runnable_config.get("run_name")
 
-        # Create a session_id for the trace.
-        # It's possible we should move the addition of hostname up to the services infra.
-        request_id: str = request_metadata.get("request_id", "<Unknown>")
-        session_id: str = f"{self.session_run_name}@{request_id}@{self.hostname}"
+            # Create a session_id for the trace.
+            # It's possible we should move the addition of hostname up to the services infra.
+            request_id: str = request_metadata.get("request_id", "<Unknown>")
+            self.session_id: str = f"{run_name}@{request_id}@{self.hostname}"
 
         request_metadata["langfuse_user_id"] = user_id
-        request_metadata["langfuse_session_id"] = session_id
+        request_metadata["langfuse_session_id"] = self.session_id
         runnable_config["metadata"] = request_metadata
 
         return runnable_config
 
-    def get_parent_session_run_name(self):
+    def get_parent_session_id(self):
         """
-        Get the parent session run name.
-        We want the component of the session_id to be consistent for any depth of trace.
+        Get the parent session id.
+        We want the to be consistent for any depth of trace in the request.
 
-        :return: The parent session run name
+        :return: The parent session id
         """
         if self.parent_context is not None:
-            return self.parent_context.get_parent_session_run_name()
+            return self.parent_context.get_parent_session_id()
 
-        return self.session_run_name
+        return self.session_id
 
     async def flush(self):
         """
