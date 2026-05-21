@@ -73,6 +73,11 @@ class ManifestNetworkValidator(CompositeDictionaryValidator):
         :param candidate: The dictionary to validate
         :return: A list of error messages
         """
+        # Delegate empty/None handling to the parent so its "Nothing to validate."
+        # message is preserved instead of being overridden by per-validator messages.
+        if not candidate:
+            return super().validate(candidate)
+
         errors: List[str] = []
         for shape_validator in self._tools_shape_validators:
             errors.extend(shape_validator.validate(candidate))
