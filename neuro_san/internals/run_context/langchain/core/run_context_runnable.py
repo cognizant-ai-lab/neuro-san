@@ -52,6 +52,7 @@ MINUTES: float = 60.0
 RATE_LIMIT_ERROR_TYPES: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
                                             "openai.RateLimitError",
                                             "anthropic.RateLimitError",
+                                            "google.genai._interactions.RateLimitError",
                                          ])
 
 # Lazily import specific errors from llm providers
@@ -156,7 +157,7 @@ class RunContextRunnable(NeuroSanRunnable):
 
         return inputs
 
-    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-locals,too-many-statements
     async def invoke_agent_chain(self, inputs: Dict[str, Any], runnable_config: Dict[str, Any]):
         """
         Set the agent in motion
