@@ -151,6 +151,10 @@ If you didn't mean to use langfuse for observability, you can do this:
             # Langfuse is not enabled
             return
 
+        if self.parent_context is not None and self.parent_context.main_span is not None:
+            # We have a parent context with a main_span. Dont do anything.
+            return
+
         run_name: str = runnable_config.get("run_name")
 
         # This "agent" type gets us the nice little icon in the langfuse UI
