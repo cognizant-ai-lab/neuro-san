@@ -43,9 +43,11 @@ class LangfuseTracingContext(LangChainTracingContext):
     @staticmethod
     def register():
         """
-        Globally egister the Langfuse CallbackHandler, if available
+        Globally register the Langfuse CallbackHandler, if available
+        This is really the only way we can do this with langchain managing span parentage.
         """
 
+        # Create a context variable for the langfuse handler
         context_var = ContextVar("langfuse_handler", default=None)
 
         # See if we can create a new langfuse handler instance.
@@ -54,8 +56,10 @@ class LangfuseTracingContext(LangChainTracingContext):
                                                          raise_if_not_found=False)
         if callback_handler_type is not None:
 
+            # Create the callback handler instance
             callback_handler: BaseCallbackHandler = callback_handler_type()
 
+            # Register the callback handler via the context variable
             context_var.set(callback_handler)
             register_configure_hook(context_var, inheritable=True)
 
@@ -78,11 +82,13 @@ class LangfuseTracingContext(LangChainTracingContext):
         super().__init__(run_target=run_target, config=config)
 
         self.parent_context: LangfuseTracingContext = parent_context
+        self.langfuse_client: Any = None
         self.main_span: Any = None
 
         # See if we can get a langfuse handler instance.
-        handler_type = ResolverUtil.create_type("langfuse.langchain.CallbackHandler", raise_if_not_found=False)
-        if handler_type is None:
+        # handler_type = ResolverUtil.create_type("langfuse.langchain.CallbackHandler", raise_if_not_found=False)
+        # if handler_type is None:
+        if self.HANDLER_CONTEXT_VAR.get() is None:
             raise ValueError("""
 Failed to create Langfuse CallbackHandler. Try one of the following:
 
@@ -92,6 +98,14 @@ If you really wanted to use langfuse for observability, you can install it with
 If you didn't mean to use langfuse for observability, you can do this:
     export LANGFUSE_ENABLED=false
 """)
+
+        # No need to ResolverUtil absolutely everything, but we still need to locally import
+        # for the rest of the system to behave without langfuse installed.
+
+        # Get the langfuse client
+        # pylint: disable=import-outside-toplevel
+        from langfuse import get_client
+        self.langfuse_client = get_client()
 
     def clone(self) -> TracingContext:
         """
@@ -109,7 +123,6 @@ If you didn't mean to use langfuse for observability, you can do this:
         :param inputs: The inputs to the chain
         :param runnable_config: The config for the runnable
         """
-        # According to langfuse docs, this should be safe for use in async code.
         if self.main_span is not None:
             with self.main_span:
                 await super().ainvoke(chain, inputs, runnable_config)
@@ -130,15 +143,9 @@ If you didn't mean to use langfuse for observability, you can do this:
 
         run_name: str = runnable_config.get("run_name")
 
-        # No need to ResolverUtil absolutely everything, but we still need to locally import
-        # for the rest of the system to behave without langfuse installed.
-
-        # pylint: disable=import-outside-toplevel
-        from langfuse import get_client
-
-        # Get the langfuse client
-        langfuse_client: Any = get_client()
-        self.main_span = langfuse_client.start_as_current_observation(as_type="agent", name=run_name)
+        # According to langfuse docs, this should be safe for use in async code.
+        if self.langfuse_client is not None:
+            self.main_span = self.langfuse_client.start_as_current_observation(as_type="agent", name=run_name)
 
     def augment_config(self, runnable_config: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -173,7 +180,5 @@ If you didn't mean to use langfuse for observability, you can do this:
         """
         Flush the tracing context.
         """
-        # pylint: disable=import-outside-toplevel
-        from langfuse import get_client
-        langfuse_client: Any = get_client()
-        langfuse_client.flush()
+        if self.langfuse_client is not None:
+            self.langfuse_client.flush()
