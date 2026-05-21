@@ -82,7 +82,6 @@ class LangfuseTracingContext(LangChainTracingContext):
         super().__init__(run_target=run_target, config=config)
 
         self.parent_context: LangfuseTracingContext = parent_context
-        self.hostname: str = gethostname()
         self.session_id: str = None
 
         # See if we can get a langfuse handler instance.
@@ -170,15 +169,18 @@ If you didn't mean to use langfuse for observability, you can do this:
         self.session_id: str = self.get_parent_session_id()
         if self.session_id is None:
 
+            # Get pieces of the session_id to construct
             run_name = runnable_config.get("run_name")
+            request_id: str = request_metadata.get("request_id", "<Unknown>")
+
+            # It's possible we should move the addition of hostname up to the services infra.
+            hostname: str = gethostname()
 
             # We use the time to distiguish sessions on a restarted server on the same host.
             now_str: str = datetime.now().strftime('%Y-%m-%d-%H:%M:%S.%f')
 
             # Create a session_id for the trace.
-            # It's possible we should move the addition of hostname up to the services infra.
-            request_id: str = request_metadata.get("request_id", "<Unknown>")
-            self.session_id: str = f"{run_name}@{request_id}@{self.hostname}@{now_str}"
+            self.session_id: str = f"{run_name}@{request_id}@{hostname}@{now_str}"
 
         request_metadata["langfuse_user_id"] = user_id
         request_metadata["langfuse_session_id"] = self.session_id
