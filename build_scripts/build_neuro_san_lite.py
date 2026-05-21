@@ -221,6 +221,26 @@ def check_module_pairing(verbose: bool = True) -> int:
     return 0
 
 
+def _ensure_node_modules(ts_dir: Path, verbose: bool) -> int:
+    """Make sure neuro-san-lite-js/node_modules/ is populated. Both the
+    test step and the build step depend on it, so we call this once up
+    front from each. Returns 0 on success, non-zero to abort the build."""
+    if not ts_dir.exists():
+        return 0
+    if (ts_dir / "node_modules").exists():
+        return 0
+    if verbose:
+        print("[ts] node_modules missing; running 'npm install'...")
+    result = subprocess.run(
+        ["npm", "install", "--no-audit", "--no-fund"],
+        cwd=ts_dir,
+        check=False,
+    )
+    if result.returncode != 0:
+        print("[ts] npm install failed", file=sys.stderr)
+    return result.returncode
+
+
 def build_typescript(verbose: bool = True) -> int:
     """Run `npm run build` in neuro-san-lite-js/ to typecheck and bundle."""
     ts_dir = REPO_ROOT / "neuro-san-lite-js"
@@ -229,17 +249,9 @@ def build_typescript(verbose: bool = True) -> int:
             print(f"[ts] skipping (no {ts_dir})")
         return 0
 
-    if not (ts_dir / "node_modules").exists():
-        if verbose:
-            print("[ts] node_modules missing; running 'npm install'...")
-        result = subprocess.run(
-            ["npm", "install", "--no-audit", "--no-fund"],
-            cwd=ts_dir,
-            check=False,
-        )
-        if result.returncode != 0:
-            print("[ts] npm install failed", file=sys.stderr)
-            return result.returncode
+    rc = _ensure_node_modules(ts_dir, verbose)
+    if rc != 0:
+        return rc
 
     if verbose:
         print("[ts] building...")
@@ -276,6 +288,11 @@ def test_typescript(verbose: bool = True) -> int:
         if verbose:
             print(f"[ts-test] skipping (no {ts_dir})")
         return 0
+    # Same install gate as the build step — vitest lives in node_modules and
+    # a fresh checkout won't have it yet.
+    rc = _ensure_node_modules(ts_dir, verbose)
+    if rc != 0:
+        return rc
     if verbose:
         print("[ts-test] running unit tests...")
     result = subprocess.run(["npm", "test"], cwd=ts_dir, check=False)
