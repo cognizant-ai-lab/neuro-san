@@ -111,11 +111,11 @@ First guess, confirm or ask the user for the values of the context
 attributes through a series of questions.
 Make sure the user is not overwhelmed and ask them for values of unknown
 context elements one at a time.
-Then, to help with the decision making, you will call a prescriptor function.
+Then, to help with the decision making, you will always call a prescriptor tool.
 As part of your query, you will declare the needed expertise, and the
 type and values of the context as well as defining the action and outcome
 attributes.
-The prescriptor function will return the list of action values for the given context.
+The prescriptor tool will return the list of action values for the given context.
 When communicating to tools, never use curly braces to describe choices.
 """,
             "tools": [
@@ -186,9 +186,9 @@ that would optimize the given outcome attributes.
 The system will deliver precise and straightforward responses,
 comprising only the prescribed action values.
 There will be no elaboration or additional commentary.
-You will consult a predictor expert by calling the predictor function in order to
+You will consult a predictor expert by calling the predictor tool in order to
 generate your answers.
-The predictor function takes context and action attributes and values, and predicts the outcomes.
+The predictor tool takes context and action attributes and values, and predicts the outcomes.
 For each outcome, a certainty value between 0 and 1 will also be returned.
 """,
             "command": "Suggest actions to optimize the outcomes given the context values.",
