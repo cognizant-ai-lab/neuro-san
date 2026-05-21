@@ -34,8 +34,7 @@ class ManifestNetworkValidator(CompositeDictionaryValidator):
     because structure validators iterate or concatenate it and would crash or
     report nonsense on a malformed value. The second phase runs the remaining
     keyword checks (empty instructions/description) together with all structure
-    checks so users see those errors in one pass. The outer composite uses
-    stop_on_error=True so the second phase is skipped when the first phase fails.
+    checks so users see those errors in one pass.
     """
 
     def __init__(
@@ -49,6 +48,7 @@ class ManifestNetworkValidator(CompositeDictionaryValidator):
 
         :param external_network_names: A list of external network names
         :param mcp_servers: A list of MCP servers, as read in from a mcp_info.hocon file
+        :param stop_on_error: When True, return after the first phase that produces
         """
         # Phase 1: only the `tools`-shape check, because it's the one that crashes
         # or silently corrupts results in downstream structure validators.
