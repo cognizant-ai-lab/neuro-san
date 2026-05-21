@@ -32,10 +32,11 @@ class ManifestNetworkValidator(CompositeDictionaryValidator):
     Implementation of CompositeDictionaryValidator interface that uses multiple specific validators
     to do some standard validation upon reading in an agent network description.
 
-    Validation runs in two phases. The keyword phase (KeywordNetworkValidator) checks field types
-    such as `tools` being a list. The structure phase (missing nodes, unreachable nodes, tool names,
-    URLs) only runs if the keyword phase produces no errors, because downstream validators assume
-    correct data types such as "tools" being a list and would otherwise crash.
+    Validation runs in two phases. The first phase checks that `tools` is a list,
+    because structure validators iterate or concatenate it and would crash or
+    report nonsense on a malformed value. The second phase runs the remaining
+    keyword checks (empty instructions/description) together with all structure
+    checks so users see those errors in one pass.
     """
 
     def __init__(self, external_network_names: List[str] = None, mcp_servers: List[str] = None):
@@ -45,10 +46,13 @@ class ManifestNetworkValidator(CompositeDictionaryValidator):
         :param external_network_names: A list of external network names
         :param mcp_servers: A list of MCP servers, as read in from a mcp_info.hocon file
         """
-        self._keyword_validators: List[DictionaryValidator] = [
-            KeywordNetworkValidator(),
+        # Gate: only the `tools`-shape check, because it's the one that crashes
+        # or silently corrupts results in downstream structure validators.
+        self._tools_shape_validators: List[DictionaryValidator] = [
+            KeywordNetworkValidator(keywords=["tools"]),
         ]
-        structure_validators: List[DictionaryValidator] = [
+        other_validators: List[DictionaryValidator] = [
+            KeywordNetworkValidator(keywords=["instructions", "description"]),
             # Note we do use the CyclesNetworkValidator here because cycles are actually OK.
             MissingNodesNetworkValidator(),
             UnreachableNodesNetworkValidator(),
@@ -56,22 +60,22 @@ class ManifestNetworkValidator(CompositeDictionaryValidator):
             ToolNameNetworkValidator(),
             UrlNetworkValidator(external_network_names, mcp_servers),
         ]
-        super().__init__(structure_validators)
+        super().__init__(other_validators)
 
     def validate(self, candidate: Dict[str, Any]) -> List[str]:
         """
-        Validate the candidate in two phases: keyword first, then structure.
+        Validate in two phases: `tools`-shape first, then everything else.
 
-        If any keyword validator reports errors, return those immediately without running
-        structure validators — they assume correct data types and would crash or report
-        misleading results on malformed input.
+        If `tools` is malformed (not a list), return the shape error immediately
+        without running the structure validators — they iterate or concatenate
+        `tools` and would crash or report nonsense.
 
         :param candidate: The dictionary to validate
         :return: A list of error messages
         """
         errors: List[str] = []
-        for keyword_validator in self._keyword_validators:
-            errors.extend(keyword_validator.validate(candidate))
+        for shape_validator in self._tools_shape_validators:
+            errors.extend(shape_validator.validate(candidate))
         if errors:
             return errors
 
