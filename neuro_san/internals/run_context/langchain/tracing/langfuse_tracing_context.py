@@ -21,6 +21,7 @@ from typing import Dict
 from typing import Type
 
 from contextvars import ContextVar
+from datetime import datetime
 from socket import gethostname
 
 from langchain_core.callbacks.base import BaseCallbackHandler
@@ -168,12 +169,16 @@ If you didn't mean to use langfuse for observability, you can do this:
         # Find the right session_id to use for the session components
         self.session_id: str = self.get_parent_session_id()
         if self.session_id is None:
+
             run_name = runnable_config.get("run_name")
+
+            # We use the time to distiguish sessions on a restarted server on the same host.
+            now_str: str = datetime.now().strftime('%Y-%m-%d-%H:%M:%S.%f')
 
             # Create a session_id for the trace.
             # It's possible we should move the addition of hostname up to the services infra.
             request_id: str = request_metadata.get("request_id", "<Unknown>")
-            self.session_id: str = f"{run_name}@{request_id}@{self.hostname}"
+            self.session_id: str = f"{run_name}@{request_id}@{self.hostname}@{now_str}"
 
         request_metadata["langfuse_user_id"] = user_id
         request_metadata["langfuse_session_id"] = self.session_id
