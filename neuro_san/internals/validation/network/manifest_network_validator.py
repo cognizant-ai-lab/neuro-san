@@ -43,7 +43,7 @@ class ManifestNetworkValidator(CompositeDictionaryValidator):
             external_network_names: List[str] = None,
             mcp_servers: List[str] = None,
             stop_on_error: bool = False
-        ):
+    ):
         """
         Constructor
 
