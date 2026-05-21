@@ -146,10 +146,6 @@ If you didn't mean to use langfuse for observability, you can do this:
             # Langfuse is not enabled
             return
 
-        if self.parent_context is not None:
-            # This is a child run
-            return
-
         # According to langfuse docs, this should be safe for use in async code.
         run_name: str = runnable_config.get("run_name")
         self.main_span = self.langfuse_client.start_as_current_observation(as_type="agent", name=run_name)
