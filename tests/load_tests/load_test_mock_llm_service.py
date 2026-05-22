@@ -140,9 +140,9 @@ def find_process(keyword):
     """Find a running process whose command line contains the given keyword."""
     for proc in psutil.process_iter(["pid", "cmdline"]):
         try:
-            cmdline = " ".join(proc.info["cmdline"] or [])
+            cmdline = " ".join(proc.info.get("cmdline") or [])
             if keyword in cmdline:
-                return psutil.Process(proc.info["pid"])
+                return psutil.Process(proc.info.get("pid"))
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
     return None
@@ -170,10 +170,10 @@ def print_snapshot(label, snap):
         print(f"  {label}: process not found")
         return
     print(
-        f"  {label}: RSS={snap['rss']:.1f} MB, "
-        f"FDs={snap['fds']}, Threads={snap['threads']}, "
-        f"Conns={snap['connections']}, CPU={snap['cpu']:.1f}%, "
-        f"Children={snap['children']}"
+        f"  {label}: RSS={snap.get('rss'):.1f} MB, "
+        f"FDs={snap.get('fds')}, Threads={snap.get('threads')}, "
+        f"Conns={snap.get('connections')}, CPU={snap.get('cpu'):.1f}%, "
+        f"Children={snap.get('children')}"
     )
 
 
@@ -230,7 +230,7 @@ def run_round(args, cmd):
         ]
         for f in futures:
             result = f.result()
-            if result["ok"]:
+            if result.get("ok"):
                 passed += 1
             else:
                 failed += 1
@@ -269,11 +269,11 @@ def apply_presets(args):
                 f"Known presets: {known}"
             )
             sys.exit(1)
-        args.prompt = preset["prompt"]
+        args.prompt = preset.get("prompt")
 
     if args.sly_data is None and not args.no_sly_data:
-        if preset is not None and preset["sly_data"] is not None:
-            args.sly_data = preset["sly_data"]
+        if preset is not None and preset.get("sly_data") is not None:
+            args.sly_data = preset.get("sly_data")
         else:
             args.no_sly_data = True
 
@@ -362,19 +362,19 @@ def find_local_processes():
 
 def build_snapshot_row(round_num, before, after):
     """Build a summary table row from before/after snapshots."""
-    rss_delta = after['rss'] - before['rss']
-    thread_delta = after['threads'] - before['threads']
+    rss_delta = after.get("rss") - before.get("rss")
+    thread_delta = after.get("threads") - before.get("threads")
     return (
         str(round_num),
-        f"{before['rss']:.1f}M",
-        f"{after['rss']:.1f}M",
+        f"{before.get('rss'):.1f}M",
+        f"{after.get('rss'):.1f}M",
         f"+{rss_delta:.1f}M",
-        str(after["fds"]),
-        f"{before['threads']} -> {after['threads']}",
+        str(after.get("fds")),
+        f"{before.get('threads')} -> {after.get('threads')}",
         f"+{thread_delta}",
-        str(after["connections"]),
-        f"{after['cpu']:.1f}%",
-        str(after["children"]),
+        str(after.get("connections")),
+        f"{after.get('cpu'):.1f}%",
+        str(after.get("children")),
     )
 
 
@@ -402,9 +402,9 @@ def run_rounds(args, cmd, server_proc, mock_proc):
         print(f"\nFiring {args.num_requests} concurrent requests "
               f"with {args.max_workers} workers...")
         passed, failed, elapsed = run_round(args, cmd)
-        totals["passed"] += passed
-        totals["failed"] += failed
-        totals["time"] += elapsed
+        totals["passed"] = totals.get("passed", 0) + passed
+        totals["failed"] = totals.get("failed", 0) + failed
+        totals["time"] = totals.get("time", 0.0) + elapsed
 
         print(f"\nWaiting {args.settle_time}s for server cleanup...")
         time.sleep(args.settle_time)
@@ -450,10 +450,10 @@ def print_results(args, totals, server_rows, mock_rows):
     print("  OVERALL RESULTS")
     print("=" * 60)
     print(f"  Total requests: {total_requests} "
-          f"({totals['passed']} passed, {totals['failed']} failed)")
-    print(f"  Total time:     {totals['time']:.2f}s")
+          f"({totals.get('passed')} passed, {totals.get('failed')} failed)")
+    print(f"  Total time:     {totals.get('time'):.2f}s")
     if total_requests > 0:
-        print(f"  Avg per request: {totals['time'] / total_requests:.2f}s")
+        print(f"  Avg per request: {totals.get('time') / total_requests:.2f}s")
 
     header = ["Round", "Before RSS", "Settled RSS", "RSS Delta",
               "FDs", "Threads", "Thread Delta",
