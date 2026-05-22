@@ -49,6 +49,13 @@ from neuro_san.internals.run_context.langchain.util.api_key_error_check import A
 MINUTES: float = 60.0
 
 # Lazily import specific errors from llm providers
+RATE_LIMIT_ERROR_TYPES: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
+                                            "openai.RateLimitError",
+                                            "anthropic.RateLimitError",
+                                            "google.genai._interactions.RateLimitError",
+                                         ])
+
+# Lazily import specific errors from llm providers
 API_ERROR_TYPES: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
                                             "openai.APIError",
                                             "anthropic.APIError",
@@ -150,7 +157,7 @@ class RunContextRunnable(NeuroSanRunnable):
 
         return inputs
 
-    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-locals,too-many-statements
     async def invoke_agent_chain(self, inputs: Dict[str, Any], runnable_config: Dict[str, Any]):
         """
         Set the agent in motion
@@ -165,6 +172,12 @@ class RunContextRunnable(NeuroSanRunnable):
         while chain_result is None and retries > 0:
             try:
                 chain_result: Dict[str, Any] = await self.agent_chain.ainvoke(input=inputs, config=runnable_config)
+            except RATE_LIMIT_ERROR_TYPES as rate_limit_error:
+                self.logger.warning("retrying from RateLimit error %s(%s)",
+                                    rate_limit_error.__class__.__name__,
+                                    str(rate_limit_error))
+                retries = retries - 1
+                exception = rate_limit_error
             except API_ERROR_TYPES as api_error:
                 backtrace = traceback.format_exc()
                 message: str = None
