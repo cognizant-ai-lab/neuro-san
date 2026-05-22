@@ -27,6 +27,7 @@ import asyncio
 import importlib
 import json
 import os
+import re
 from http import HTTPStatus
 from typing import Any
 from typing import Dict
@@ -45,6 +46,15 @@ from neuro_san.internals.network_providers.agent_network_storage import AgentNet
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
 
 
+# Mirror the pattern in network_handler.py — agent_name and tool_name come
+# from the URL path and must be tightly validated before being used in
+# response bodies, headers, or log lines.
+# NB: `\Z` not `$` — in Python, `$` matches just before a trailing newline,
+# so an attacker could pass "agent\n" through `.match()`. `\Z` matches only
+# end-of-string and closes that header-injection path.
+SAFE_NAME_RE = re.compile(r"\A[A-Za-z0-9_\-]{1,128}\Z")
+
+
 class ToolHandler(BaseRequestHandler):
     """
     Invoke a single CodedTool inside a distributable network on this server.
@@ -56,6 +66,19 @@ class ToolHandler(BaseRequestHandler):
         :param agent_name: The distributable network's name.
         :param tool_name: The CodedTool agent name inside that network.
         """
+        # Reject any agent_name or tool_name that doesn't match the safe
+        # identifier pattern BEFORE we use either in any response header,
+        # response body, or log line. Tornado decodes URL-encoded path
+        # parameters, so without this an attacker could otherwise smuggle
+        # CRLF, quotes, or HTML/JS payloads through here (CodeQL reflected
+        # XSS finding on PR #943).
+        if not SAFE_NAME_RE.match(agent_name) or not SAFE_NAME_RE.match(tool_name):
+            self.set_status(HTTPStatus.BAD_REQUEST)
+            self.set_header("Content-Type", "application/json")
+            self.write({"error": "Invalid agent or tool name."})
+            self.do_finish()
+            return
+
         metadata: Dict[str, Any] = self.get_metadata()
         status_code, err_message = self.application.try_start_client_request(
             metadata, f"{agent_name}/tool/{tool_name}"
@@ -71,9 +94,10 @@ class ToolHandler(BaseRequestHandler):
         try:
             agent_network: AgentNetwork = self._lookup_network(agent_name)
             if agent_network is None:
+                # Do not echo the user-supplied agent_name back in the body.
                 self.do_finish(
                     HTTPStatus.NOT_FOUND,
-                    f"Agent network {agent_name!r} is not distributable on this server.",
+                    "Agent network is not distributable on this server.",
                 )
                 return
 
@@ -81,7 +105,7 @@ class ToolHandler(BaseRequestHandler):
             if agent_spec is None:
                 self.do_finish(
                     HTTPStatus.NOT_FOUND,
-                    f"Tool {tool_name!r} not found in network {agent_name!r}.",
+                    "Tool not found in agent network.",
                 )
                 return
 
@@ -90,14 +114,14 @@ class ToolHandler(BaseRequestHandler):
             if agent_spec.get("client_side"):
                 self.do_finish(
                     HTTPStatus.BAD_REQUEST,
-                    f"Tool {tool_name!r} is client-side; it cannot be invoked via /tool/.",
+                    "Tool is client-side; it cannot be invoked via /tool/.",
                 )
                 return
             class_ref: Optional[str] = agent_spec.get("class")
             if class_ref is None or not isinstance(class_ref, str):
                 self.do_finish(
                     HTTPStatus.BAD_REQUEST,
-                    f"Tool {tool_name!r} is not a CodedTool (no 'class' field).",
+                    "Tool is not a CodedTool (no 'class' field).",
                 )
                 return
 

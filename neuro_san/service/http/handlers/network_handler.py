@@ -23,6 +23,7 @@ agent network so a runtime ("browser") can fetch and execute it locally.
 See docs/agent_web_design.md (§5.3).
 """
 import json
+import re
 from http import HTTPStatus
 from typing import Any
 from typing import Dict
@@ -37,6 +38,17 @@ from neuro_san.internals.network_providers.agent_network_storage import AgentNet
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
 
 
+# Agent network names must match this pattern. The URL route accepts any
+# non-slash characters, so an attacker could otherwise smuggle quotes, CRLF,
+# control bytes, or HTML/JS payloads into headers and response bodies. Names
+# in neuro-san manifests have always been simple identifiers (the typical
+# stem of a .hocon file), so this pattern matches every legitimate name.
+# NB: `\Z` not `$` — in Python, `$` matches just before a trailing newline,
+# so an attacker could pass "agent\n" through `.match()`. `\Z` matches only
+# end-of-string and closes that header-injection path.
+SAFE_AGENT_NAME_RE = re.compile(r"\A[A-Za-z0-9_\-]{1,128}\Z")
+
+
 class NetworkHandler(BaseRequestHandler):
     """
     Handler class for the Agent Web /network endpoint.
@@ -46,6 +58,17 @@ class NetworkHandler(BaseRequestHandler):
         """
         Serve the scrubbed agent network as a Jupyter notebook.
         """
+        # Reject any agent_name that doesn't match the safe identifier
+        # pattern BEFORE we use it in any response header, body, or log line.
+        # Tornado decodes URL-encoded path parameters, so an attacker can
+        # otherwise inject CRLF, quotes, or HTML/JS payloads through here.
+        if not SAFE_AGENT_NAME_RE.match(agent_name):
+            self.set_status(HTTPStatus.BAD_REQUEST)
+            self.set_header("Content-Type", "application/json")
+            self.write({"error": "Invalid agent name."})
+            self.do_finish()
+            return
+
         metadata: Dict[str, Any] = self.get_metadata()
 
         # We do the request-rate accounting like the other handlers so that
@@ -61,9 +84,12 @@ class NetworkHandler(BaseRequestHandler):
             agent_network = self._lookup_network(agent_name)
             if agent_network is None:
                 # Either the agent does not exist or it is not distributable.
+                # We intentionally do not echo the user-supplied agent_name
+                # back into the body; do_finish HTML-escapes it for us via
+                # safe_message, but generic messages are still safer.
                 self.do_finish(
                     HTTPStatus.NOT_FOUND,
-                    f"Agent network {agent_name!r} is not distributable on this server.",
+                    "Agent network is not distributable on this server.",
                 )
                 return
 
