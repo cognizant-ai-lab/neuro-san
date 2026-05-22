@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Load-test script for neuro-san server with resource leak detection.
+Load-test script for neuro-san server using the mock LLM service.
 
 Fires concurrent requests via agent_cli subprocesses, monitors the
 neuro-san server and mock LLM server processes for resource leaks
@@ -11,27 +11,28 @@ Prerequisites:
     1. Mock LLM server running (Terminal 1):
        python -m tests.mock_llm_server.mock_llm_server --port 8888
 
-    2. Neuro-san server running (Terminal 2):
+    2. Neuro-san server running with OPENAI_API_BASE (Terminal 2):
+       export OPENAI_API_BASE=http://localhost:8888/v1
        python -m neuro_san.service.main_loop.server_main_loop
 
 Usage examples:
     # Defaults: math_guy with preset prompt/sly-data, 5 rounds, 10 requests, 10 workers
-    python load_test.py
+    python tests/load_tests/load_test_mock_llm_service.py
 
     # 100 concurrent requests over 3 rounds
-    python load_test.py --num-requests 100 --max-workers 100 --num-rounds 3
+    python tests/load_tests/load_test_mock_llm_service.py --num-requests 100 --max-workers 100 --num-rounds 3
 
     # Different agent network (preset auto-fills prompt, no sly-data)
-    python load_test.py --agent hello_world
+    python tests/load_tests/load_test_mock_llm_service.py --agent hello_world
 
     # Override preset prompt for a known agent
-    python load_test.py --agent hello_world --prompt "Say hi to the moon"
+    python tests/load_tests/load_test_mock_llm_service.py --agent hello_world --prompt "Say hi to the moon"
 
     # Unknown agent requires explicit --prompt
-    python load_test.py --agent my_custom_agent --prompt "test input" --no-sly-data
+    python tests/load_tests/load_test_mock_llm_service.py --agent my_custom_agent --prompt "test input" --no-sly-data
 
     # Remote neuro-san server (psutil monitoring auto-disabled)
-    python load_test.py --host 172.31.11.243 --port 8080
+    python tests/load_tests/load_test_mock_llm_service.py --host 172.31.11.243 --port 8080
 """
 
 import argparse
@@ -277,10 +278,60 @@ def apply_presets(args):
             args.no_sly_data = True
 
 
+def get_mock_server_port(mock_proc):
+    """Extract the --port value from the mock LLM server's command line."""
+    try:
+        cmdline = mock_proc.cmdline()
+        for i, arg in enumerate(cmdline):
+            if arg == "--port" and i + 1 < len(cmdline):
+                return cmdline[i + 1]
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        pass
+    return "8888"
+
+
+def check_server_api_base(server_proc, mock_port):
+    """
+    Verify that the neuro-san server has OPENAI_API_BASE set and
+    that it points to the correct mock LLM server port.
+    Exits with an error if not set or mismatched.
+    """
+    expected_url = f"http://localhost:{mock_port}/v1"
+    try:
+        server_env = server_proc.environ()
+    except (psutil.NoSuchProcess, psutil.AccessDenied) as exc:
+        print(f"WARNING: Could not read server environment: {exc}")
+        return
+
+    api_base = server_env.get("OPENAI_API_BASE")
+    if api_base is None:
+        print(
+            "ERROR: neuro-san server does not have OPENAI_API_BASE set.\n"
+            f"  Mock LLM server is running on port {mock_port}.\n"
+            "  Restart the server with:\n"
+            f"    export OPENAI_API_BASE={expected_url}\n"
+            "    python -m neuro_san.service.main_loop.server_main_loop"
+        )
+        sys.exit(1)
+
+    print(f"  OPENAI_API_BASE={api_base}")
+    if mock_port not in api_base:
+        print(
+            f"ERROR: OPENAI_API_BASE does not reference port {mock_port}.\n"
+            f"  Mock LLM server is running on port {mock_port},\n"
+            f"  but OPENAI_API_BASE={api_base}\n"
+            "  Restart the server with:\n"
+            f"    export OPENAI_API_BASE={expected_url}\n"
+            "    python -m neuro_san.service.main_loop.server_main_loop"
+        )
+        sys.exit(1)
+
+
 def find_local_processes():
     """
     Locate neuro-san server and mock LLM server processes.
     Exits with an error if either is not found.
+    Also validates the server's OPENAI_API_BASE matches the mock port.
     """
     server_proc = find_process("server_main_loop")
     mock_proc = find_process("mock_llm_server")
@@ -302,6 +353,9 @@ def find_local_processes():
         )
         sys.exit(1)
     print(f"Found mock LLM server (PID {mock_proc.pid})")
+
+    mock_port = get_mock_server_port(mock_proc)
+    check_server_api_base(server_proc, mock_port)
 
     return server_proc, mock_proc
 
