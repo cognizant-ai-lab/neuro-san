@@ -29,44 +29,22 @@ class ManifestNetworkValidator(CompositeDictionaryValidator):
     """
     Implementation of CompositeDictionaryValidator interface that uses multiple specific validators
     to do some standard validation upon reading in an agent network description.
-
-    Validation runs in two phases. The first phase checks that `tools` is a list,
-    because structure validators iterate or concatenate it and would crash or
-    report nonsense on a malformed value. The second phase runs the remaining
-    keyword checks (empty instructions/description) together with all structure
-    checks so users see those errors in one pass.
     """
 
-    def __init__(
-            self,
-            external_network_names: List[str] = None,
-            mcp_servers: List[str] = None,
-            stop_on_error: bool = False
-    ):
+    def __init__(self, external_network_names: List[str] = None, mcp_servers: List[str] = None):
         """
         Constructor
 
         :param external_network_names: A list of external network names
         :param mcp_servers: A list of MCP servers, as read in from a mcp_info.hocon file
-        :param stop_on_error: When True, return after the first phase that produces
         """
-        # Phase 1: only the `tools`-shape check, because it's the one that crashes
-        # or silently corrupts results in downstream structure validators.
-        tools_shape_phase: CompositeDictionaryValidator = CompositeDictionaryValidator([
-            KeywordNetworkValidator(keywords=["tools"]),
-        ])
-
-        # Phase 2: remaining keyword checks and all structure checks. All errors are
-        # collected together so users see them in a single pass.
-        other_phase: CompositeDictionaryValidator = CompositeDictionaryValidator([
-            KeywordNetworkValidator(keywords=["instructions", "description"]),
+        validators: List[DictionaryValidator] = [
             # Note we do use the CyclesNetworkValidator here because cycles are actually OK.
+            KeywordNetworkValidator(),
             MissingNodesNetworkValidator(),
             UnreachableNodesNetworkValidator(),
             # No ToolBoxNetworkValidator yet.
             ToolNameNetworkValidator(),
             UrlNetworkValidator(external_network_names, mcp_servers),
-        ])
-
-        phases: List[DictionaryValidator] = [tools_shape_phase, other_phase]
-        super().__init__(phases, stop_on_error=stop_on_error)
+        ]
+        super().__init__(validators)
