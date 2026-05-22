@@ -33,10 +33,17 @@ Usage examples:
 
     # Remote neuro-san server (psutil monitoring auto-disabled)
     python tests/load_tests/load_test_mock_llm_service.py --host 172.31.11.243 --port 8080
+
+    # Auto-start servers (no manual setup needed)
+    python tests/load_tests/load_test_mock_llm_service.py --auto-start
+
+    # Auto-start with custom mock port
+    python tests/load_tests/load_test_mock_llm_service.py --auto-start --mock-port 9999
 """
 
 import argparse
 import logging
+import os
 import subprocess
 import sys
 import time
@@ -49,7 +56,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 
-class MockLlmLoadTest:
+class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
     """Load test runner for the neuro-san server using mock LLM service."""
 
     LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
@@ -69,6 +76,10 @@ class MockLlmLoadTest:
         },
     }
 
+    MOCK_LOG_PATH = "/tmp/mock_llm_server.log"
+    SERVER_LOG_PATH = "/tmp/neuro_san_server.log"
+    STARTUP_WAIT_SECONDS = 10
+
     def __init__(self, args):
         """Initialize the load test with parsed command-line arguments."""
         self.args = args
@@ -76,6 +87,13 @@ class MockLlmLoadTest:
         self.cmd = None
         self.server_proc = None
         self.mock_proc = None
+        self._auto_mock_popen = None
+        self._auto_server_popen = None
+        self._mock_log_fh = None
+        self._server_log_fh = None
+        self._test_log_path = None
+        self._test_log_handler = None
+        self._api_base = None
 
     @staticmethod
     def parse_args():
@@ -146,6 +164,18 @@ class MockLlmLoadTest:
             type=int,
             default=10,
             help="Seconds to wait after each round for cleanup (default: 10)",
+        )
+        parser.add_argument(
+            "--auto-start",
+            action="store_true",
+            default=False,
+            help="Auto-start mock LLM and neuro-san servers as subprocesses",
+        )
+        parser.add_argument(
+            "--mock-port",
+            type=int,
+            default=8888,
+            help="Mock LLM server port (default: 8888). Used with --auto-start.",
         )
         return parser.parse_args()
 
@@ -306,13 +336,14 @@ class MockLlmLoadTest:
         Verify that the neuro-san server has OPENAI_API_BASE set and
         that it points to the correct mock LLM server port.
         Exits with an error if not set or mismatched.
+        Returns the OPENAI_API_BASE value on success.
         """
         expected_url = f"http://localhost:{mock_port}/v1"
         try:
             server_env = server_proc.environ()
         except (psutil.NoSuchProcess, psutil.AccessDenied) as exc:
             logger.warning("Could not read server environment: %s", exc)
-            return
+            return None
 
         api_base = server_env.get("OPENAI_API_BASE")
         if api_base is None:
@@ -338,6 +369,7 @@ class MockLlmLoadTest:
                 mock_port, mock_port, api_base, expected_url,
             )
             sys.exit(1)
+        return api_base
 
     def _find_local_processes(self):
         """
@@ -351,7 +383,8 @@ class MockLlmLoadTest:
         if self.server_proc is None:
             logger.error(
                 "neuro-san server process not found.\n"
-                "Start it first:\n"
+                "Start it with OPENAI_API_BASE pointing to the mock LLM server:\n"
+                "  export OPENAI_API_BASE=http://localhost:8888/v1\n"
                 "  python -m neuro_san.service.main_loop.server_main_loop"
             )
             sys.exit(1)
@@ -360,14 +393,93 @@ class MockLlmLoadTest:
         if self.mock_proc is None:
             logger.error(
                 "mock LLM server process not found.\n"
-                "Start it first:\n"
-                "  python -m tests.mock_llm_server.mock_llm_server --port 8888"
+                "Start the mock LLM server first, then the neuro-san server:\n"
+                "  python -m tests.mock_llm_server.mock_llm_server --port 8888\n"
+                "Then:\n"
+                "  export OPENAI_API_BASE=http://localhost:8888/v1\n"
+                "  python -m neuro_san.service.main_loop.server_main_loop"
             )
             sys.exit(1)
         logger.info("Found mock LLM server (PID %s)", self.mock_proc.pid)
 
         mock_port = self._get_mock_server_port(self.mock_proc)
-        self._check_server_api_base(self.server_proc, mock_port)
+        self._api_base = self._check_server_api_base(self.server_proc, mock_port)
+
+    def _auto_start_servers(self):
+        """Start mock LLM and neuro-san servers as managed subprocesses."""
+        mock_port = str(self.args.mock_port)
+        api_base = f"http://localhost:{mock_port}/v1"
+
+        logger.info("Auto-starting mock LLM server (log: %s)", self.MOCK_LOG_PATH)
+        self._mock_log_fh = open(  # pylint: disable=consider-using-with
+            self.MOCK_LOG_PATH, "w", encoding="utf-8",
+        )
+        self._auto_mock_popen = subprocess.Popen(  # pylint: disable=consider-using-with
+            ["python", "-m", "tests.mock_llm_server.mock_llm_server",
+             "--port", mock_port],
+            stdout=self._mock_log_fh,
+            stderr=self._mock_log_fh,
+        )
+
+        server_env = {**os.environ, "OPENAI_API_BASE": api_base}
+        logger.info("Auto-starting neuro-san server (log: %s)", self.SERVER_LOG_PATH)
+        self._server_log_fh = open(  # pylint: disable=consider-using-with
+            self.SERVER_LOG_PATH, "w", encoding="utf-8",
+        )
+        self._auto_server_popen = subprocess.Popen(  # pylint: disable=consider-using-with
+            ["python", "-m", "neuro_san.service.main_loop.server_main_loop"],
+            stdout=self._server_log_fh,
+            stderr=self._server_log_fh,
+            env=server_env,
+        )
+
+        logger.info(
+            "Waiting %ss for servers to start...", self.STARTUP_WAIT_SECONDS,
+        )
+        time.sleep(self.STARTUP_WAIT_SECONDS)
+
+        if self._auto_mock_popen.poll() is not None:
+            logger.error(
+                "Mock LLM server exited unexpectedly. Check %s", self.MOCK_LOG_PATH,
+            )
+            sys.exit(1)
+
+        if self._auto_server_popen.poll() is not None:
+            logger.error(
+                "Neuro-san server exited unexpectedly. Check %s", self.SERVER_LOG_PATH,
+            )
+            self._auto_mock_popen.terminate()
+            sys.exit(1)
+
+        self.mock_proc = psutil.Process(self._auto_mock_popen.pid)
+        self.server_proc = psutil.Process(self._auto_server_popen.pid)
+
+        self._api_base = api_base
+        logger.info("Mock LLM server ready (PID %s)", self.mock_proc.pid)
+        logger.info("Neuro-san server ready (PID %s)", self.server_proc.pid)
+        logger.info("  OPENAI_API_BASE=%s", self._api_base)
+
+    def _stop_servers(self):
+        """Terminate auto-started servers and close log file handles."""
+        if self._auto_server_popen is not None:
+            logger.info(
+                "Stopping neuro-san server (PID %s)...",
+                self._auto_server_popen.pid,
+            )
+            self._auto_server_popen.terminate()
+            self._auto_server_popen.wait(timeout=10)
+        if self._auto_mock_popen is not None:
+            logger.info(
+                "Stopping mock LLM server (PID %s)...",
+                self._auto_mock_popen.pid,
+            )
+            self._auto_mock_popen.terminate()
+            self._auto_mock_popen.wait(timeout=10)
+        if self._server_log_fh is not None:
+            self._server_log_fh.close()
+        if self._mock_log_fh is not None:
+            self._mock_log_fh.close()
+        logger.info("Servers stopped.")
 
     @staticmethod
     def _build_snapshot_row(round_num, before, after):
@@ -509,9 +621,33 @@ class MockLlmLoadTest:
         if len(mock_rows) >= 2:
             self._log_overall_deltas("Mock", mock_rows, self.args.num_rounds)
 
+    def _setup_test_log(self):
+        """Add a file handler to capture all output to a timestamped log file."""
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        self._test_log_path = f"/tmp/load_test_{timestamp}.log"
+        self._test_log_handler = logging.FileHandler(
+            self._test_log_path, encoding="utf-8",
+        )
+        self._test_log_handler.setLevel(logging.INFO)
+        self._test_log_handler.setFormatter(logging.Formatter("%(message)s"))
+        logger.addHandler(self._test_log_handler)
+
+    def _finalize_test_log(self, totals):
+        """Keep the log file if there were failures, otherwise remove it."""
+        if self._test_log_handler is not None:
+            logger.removeHandler(self._test_log_handler)
+            self._test_log_handler.close()
+        if self._test_log_path is None:
+            return
+        if totals.get("failed", 0) > 0:
+            logger.info("\nTest log saved: %s", self._test_log_path)
+        elif os.path.exists(self._test_log_path):
+            os.remove(self._test_log_path)
+
     def run(self):
         """Execute the full load test workflow."""
         self._apply_presets()
+        self._setup_test_log()
 
         with open(self.prompt_file, "w", encoding="utf-8") as prompt_fh:
             prompt_fh.write(self.args.prompt)
@@ -520,7 +656,14 @@ class MockLlmLoadTest:
 
         is_local = self.args.host in self.LOCAL_HOSTS
 
-        if is_local:
+        if self.args.auto_start:
+            if not is_local:
+                logger.error(
+                    "--auto-start can only be used with local mode (localhost)."
+                )
+                sys.exit(1)
+            self._auto_start_servers()
+        elif is_local:
             self._find_local_processes()
         else:
             logger.info("Remote mode: targeting %s:%s", self.args.host, self.args.port)
@@ -536,9 +679,33 @@ class MockLlmLoadTest:
         logger.info("  prompt=\"%s\"", self.args.prompt)
         logger.info("  settle_time=%ss", self.args.settle_time)
 
-        server_rows, mock_rows, totals = self._run_rounds()
-
-        self._log_results(totals, server_rows, mock_rows)
+        totals = {"passed": 0, "failed": 0, "time": 0.0}
+        try:
+            server_rows, mock_rows, totals = self._run_rounds()
+            self._log_results(totals, server_rows, mock_rows)
+            if is_local and not self.args.auto_start:
+                logger.info("\n%s", "=" * 60)
+                logger.info(
+                    "  WARNING: ENVIRONMENT VARIABLE STILL ACTIVE "
+                    "ON NEURO-SAN SERVER"
+                )
+                logger.info("  Key:   OPENAI_API_BASE")
+                logger.info("  Value: %s", self._api_base)
+                logger.info(
+                    "  All agent requests are routed to the mock LLM server."
+                )
+                logger.info("  To restore normal operation:")
+                logger.info("    1. Stop the neuro-san server")
+                logger.info("    2. unset OPENAI_API_BASE")
+                logger.info(
+                    "    3. Restart: python -m neuro_san.service"
+                    ".main_loop.server_main_loop"
+                )
+                logger.info("=" * 60)
+        finally:
+            if self.args.auto_start:
+                self._stop_servers()
+            self._finalize_test_log(totals)
 
     @staticmethod
     def main():
