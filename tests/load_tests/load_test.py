@@ -38,9 +38,10 @@ import argparse
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Dict, List, Optional, Tuple
 
 import psutil
-from concurrent.futures import ThreadPoolExecutor
 
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
@@ -146,7 +147,7 @@ def find_process(keyword):
     return None
 
 
-def snapshot(proc):
+def snapshot(proc) -> Optional[Dict[str, Any]]:
     """Capture a point-in-time resource snapshot of a process."""
     try:
         mem = proc.memory_info()
@@ -203,6 +204,7 @@ def run_one(request_id, cmd):
         capture_output=True,
         text=True,
         timeout=120,
+        check=False,
     )
     elapsed = time.time() - start
     ok = result.returncode == 0
@@ -272,65 +274,65 @@ def apply_presets(args):
         if preset is not None and preset["sly_data"] is not None:
             args.sly_data = preset["sly_data"]
         else:
-            # No sly-data in preset or unknown agent — omit it
             args.no_sly_data = True
 
 
-def main():
-    args = parse_args()
-    apply_presets(args)
+def find_local_processes():
+    """
+    Locate neuro-san server and mock LLM server processes.
+    Exits with an error if either is not found.
+    """
+    server_proc = find_process("server_main_loop")
+    mock_proc = find_process("mock_llm_server")
 
-    # Write the prompt to a temp file for agent_cli --first_prompt_file
-    prompt_file = "/tmp/load_test_prompt.txt"
-    with open(prompt_file, "w") as f:
-        f.write(args.prompt)
+    if server_proc is None:
+        print(
+            "ERROR: neuro-san server process not found.\n"
+            "Start it first:\n"
+            "  python -m neuro_san.service.main_loop.server_main_loop"
+        )
+        sys.exit(1)
+    print(f"Found neuro-san server (PID {server_proc.pid})")
 
-    cmd = build_cli_command(args, prompt_file)
+    if mock_proc is None:
+        print(
+            "ERROR: mock LLM server process not found.\n"
+            "Start it first:\n"
+            "  python -m tests.mock_llm_server.mock_llm_server --port 8888"
+        )
+        sys.exit(1)
+    print(f"Found mock LLM server (PID {mock_proc.pid})")
 
-    # Determine if we can monitor processes locally
-    is_local = args.host in LOCAL_HOSTS
-    server_proc = None
-    mock_proc = None
+    return server_proc, mock_proc
 
-    if is_local:
-        server_proc = find_process("server_main_loop")
-        mock_proc = find_process("mock_llm_server")
 
-        if server_proc is None:
-            print(
-                "ERROR: neuro-san server process not found.\n"
-                "Start it first:\n"
-                "  python -m neuro_san.service.main_loop.server_main_loop"
-            )
-            sys.exit(1)
-        print(f"Found neuro-san server (PID {server_proc.pid})")
+def build_snapshot_row(round_num, before, after):
+    """Build a summary table row from before/after snapshots."""
+    rss_delta = after['rss'] - before['rss']
+    thread_delta = after['threads'] - before['threads']
+    return (
+        str(round_num),
+        f"{before['rss']:.1f}M",
+        f"{after['rss']:.1f}M",
+        f"+{rss_delta:.1f}M",
+        str(after["fds"]),
+        f"{before['threads']} -> {after['threads']}",
+        f"+{thread_delta}",
+        str(after["connections"]),
+        f"{after['cpu']:.1f}%",
+        str(after["children"]),
+    )
 
-        if mock_proc is None:
-            print(
-                "ERROR: mock LLM server process not found.\n"
-                "Start it first:\n"
-                "  python -m tests.mock_llm_server.mock_llm_server --port 8888"
-            )
-            sys.exit(1)
-        print(f"Found mock LLM server (PID {mock_proc.pid})")
-    else:
-        print(f"Remote mode: targeting {args.host}:{args.port}")
-        print("  Process monitoring disabled (server is not local)")
 
-    print(f"\nConfig: agent={args.agent}, requests={args.num_requests}, "
-          f"workers={args.max_workers}, rounds={args.num_rounds}, "
-          f"host={args.host}, port={args.port}")
-    if not args.no_sly_data:
-        print(f"  sly_data={args.sly_data}")
-    print(f"  prompt=\"{args.prompt}\"")
-    print(f"  settle_time={args.settle_time}s")
-
-    # Collect per-round snapshots and results for the final summary
-    server_rows = []
-    mock_rows = []
-    total_passed = 0
-    total_failed = 0
-    total_time = 0.0
+# pylint: disable=too-many-locals
+def run_rounds(args, cmd, server_proc, mock_proc):
+    """
+    Execute all rounds of the load test, collecting snapshots
+    and results per round.
+    """
+    server_rows: List[Tuple] = []
+    mock_rows: List[Tuple] = []
+    totals = {"passed": 0, "failed": 0, "time": 0.0}
 
     for round_num in range(1, args.num_rounds + 1):
         print(f"\n{'=' * 60}")
@@ -338,74 +340,67 @@ def main():
               f"({args.num_requests} requests, {args.max_workers} workers)")
         print("=" * 60)
 
-        # Snapshot before the round (local mode only)
         before_server = snapshot(server_proc) if server_proc else None
         before_mock = snapshot(mock_proc) if mock_proc else None
         if before_server:
             print_snapshot("Server BEFORE", before_server)
 
-        # Fire the requests
         print(f"\nFiring {args.num_requests} concurrent requests "
               f"with {args.max_workers} workers...")
         passed, failed, elapsed = run_round(args, cmd)
-        total_passed += passed
-        total_failed += failed
-        total_time += elapsed
+        totals["passed"] += passed
+        totals["failed"] += failed
+        totals["time"] += elapsed
 
-        # Wait for cleanup
         print(f"\nWaiting {args.settle_time}s for server cleanup...")
         time.sleep(args.settle_time)
 
-        # Snapshot after settling (local mode only)
         after_server = snapshot(server_proc) if server_proc else None
         after_mock = snapshot(mock_proc) if mock_proc else None
         if after_server:
             print_snapshot("Server SETTLED", after_server)
 
-        # Record rows for the summary table
         if before_server and after_server:
-            rss_delta = after_server['rss'] - before_server['rss']
-            thread_delta = after_server['threads'] - before_server['threads']
-            server_rows.append((
-                str(round_num),
-                f"{before_server['rss']:.1f}M",
-                f"{after_server['rss']:.1f}M",
-                f"+{rss_delta:.1f}M",
-                str(after_server["fds"]),
-                f"{before_server['threads']} -> {after_server['threads']}",
-                f"+{thread_delta}",
-                str(after_server["connections"]),
-                f"{after_server['cpu']:.1f}%",
-                str(after_server["children"]),
-            ))
+            server_rows.append(
+                build_snapshot_row(round_num, before_server, after_server))
         if before_mock and after_mock:
-            rss_delta = after_mock['rss'] - before_mock['rss']
-            thread_delta = after_mock['threads'] - before_mock['threads']
-            mock_rows.append((
-                str(round_num),
-                f"{before_mock['rss']:.1f}M",
-                f"{after_mock['rss']:.1f}M",
-                f"+{rss_delta:.1f}M",
-                str(after_mock["fds"]),
-                f"{before_mock['threads']} -> {after_mock['threads']}",
-                f"+{thread_delta}",
-                str(after_mock["connections"]),
-                f"{after_mock['cpu']:.1f}%",
-                str(after_mock["children"]),
-            ))
+            mock_rows.append(
+                build_snapshot_row(round_num, before_mock, after_mock))
 
-    # Overall results summary
+    return server_rows, mock_rows, totals
+
+
+def print_overall_deltas(label, rows, num_rounds):
+    """Print overall resource deltas between the first and last rounds."""
+    first = rows[0]
+    last = rows[-1]
+    print(f"\n{label} overall deltas "
+          f"(round 1 before vs round {num_rounds} settled):")
+    print(f"  RSS:         "
+          f"+{float(last[2].rstrip('M')) - float(first[1].rstrip('M')):.1f} MB")
+    print(f"  FDs:         "
+          f"+{int(last[4]) - int(first[4])}")
+    print(f"  Threads:     "
+          f"+{int(last[5].split(' -> ')[1]) - int(first[5].split(' -> ')[0])}")
+    print(f"  Connections: "
+          f"+{int(last[7]) - int(first[7])}")
+    print(f"  Children:    "
+          f"+{int(last[9]) - int(first[9])}")
+
+
+def print_results(args, totals, server_rows, mock_rows):
+    """Print the overall results summary and leak analysis tables."""
     total_requests = args.num_requests * args.num_rounds
+
     print(f"\n{'=' * 60}")
-    print(f"  OVERALL RESULTS")
+    print("  OVERALL RESULTS")
     print("=" * 60)
     print(f"  Total requests: {total_requests} "
-          f"({total_passed} passed, {total_failed} failed)")
-    print(f"  Total time:     {total_time:.2f}s")
+          f"({totals['passed']} passed, {totals['failed']} failed)")
+    print(f"  Total time:     {totals['time']:.2f}s")
     if total_requests > 0:
-        print(f"  Avg per request: {total_time / total_requests:.2f}s")
+        print(f"  Avg per request: {totals['time'] / total_requests:.2f}s")
 
-    # Leak analysis (local mode only)
     header = ["Round", "Before RSS", "Settled RSS", "RSS Delta",
               "FDs", "Threads", "Thread Delta",
               "Conns", "CPU%", "Children"]
@@ -423,38 +418,46 @@ def main():
         print("\nMOCK LLM SERVER:")
         print_table(header, mock_rows)
 
-    # Compute and print overall deltas (round 1 before vs last round settled)
     if len(server_rows) >= 2:
-        first = server_rows[0]
-        last = server_rows[-1]
-        print(f"\nServer overall deltas "
-              f"(round 1 before vs round {args.num_rounds} settled):")
-        print(f"  RSS:         "
-              f"+{float(last[2].rstrip('M')) - float(first[1].rstrip('M')):.1f} MB")
-        print(f"  FDs:         "
-              f"+{int(last[4]) - int(first[4])}")
-        print(f"  Threads:     "
-              f"+{int(last[5].split(' -> ')[1]) - int(first[5].split(' -> ')[0])}")
-        print(f"  Connections: "
-              f"+{int(last[7]) - int(first[7])}")
-        print(f"  Children:    "
-              f"+{int(last[9]) - int(first[9])}")
+        print_overall_deltas("Server", server_rows, args.num_rounds)
 
     if len(mock_rows) >= 2:
-        first = mock_rows[0]
-        last = mock_rows[-1]
-        print(f"\nMock overall deltas "
-              f"(round 1 before vs round {args.num_rounds} settled):")
-        print(f"  RSS:         "
-              f"+{float(last[2].rstrip('M')) - float(first[1].rstrip('M')):.1f} MB")
-        print(f"  FDs:         "
-              f"+{int(last[4]) - int(first[4])}")
-        print(f"  Threads:     "
-              f"+{int(last[5].split(' -> ')[1]) - int(first[5].split(' -> ')[0])}")
-        print(f"  Connections: "
-              f"+{int(last[7]) - int(first[7])}")
-        print(f"  Children:    "
-              f"+{int(last[9]) - int(first[9])}")
+        print_overall_deltas("Mock", mock_rows, args.num_rounds)
+
+
+def main():
+    """Entry point for the load test script."""
+    args = parse_args()
+    apply_presets(args)
+
+    prompt_file = "/tmp/load_test_prompt.txt"
+    with open(prompt_file, "w", encoding="utf-8") as prompt_fh:
+        prompt_fh.write(args.prompt)
+
+    cmd = build_cli_command(args, prompt_file)
+
+    is_local = args.host in LOCAL_HOSTS
+    server_proc = None
+    mock_proc = None
+
+    if is_local:
+        server_proc, mock_proc = find_local_processes()
+    else:
+        print(f"Remote mode: targeting {args.host}:{args.port}")
+        print("  Process monitoring disabled (server is not local)")
+
+    print(f"\nConfig: agent={args.agent}, requests={args.num_requests}, "
+          f"workers={args.max_workers}, rounds={args.num_rounds}, "
+          f"host={args.host}, port={args.port}")
+    if not args.no_sly_data:
+        print(f"  sly_data={args.sly_data}")
+    print(f"  prompt=\"{args.prompt}\"")
+    print(f"  settle_time={args.settle_time}s")
+
+    server_rows, mock_rows, totals = run_rounds(
+        args, cmd, server_proc, mock_proc)
+
+    print_results(args, totals, server_rows, mock_rows)
 
 
 if __name__ == "__main__":
