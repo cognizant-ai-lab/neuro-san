@@ -36,6 +36,7 @@ Usage examples:
 """
 
 import argparse
+import logging
 import subprocess
 import sys
 import time
@@ -43,6 +44,9 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
 
 import psutil
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger(__name__)
 
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
@@ -167,13 +171,12 @@ def snapshot(proc) -> Optional[Dict[str, Any]]:
 def print_snapshot(label, snap):
     """Pretty-print a single resource snapshot."""
     if snap is None:
-        print(f"  {label}: process not found")
+        logger.info("  %s: process not found", label)
         return
-    print(
-        f"  {label}: RSS={snap.get('rss'):.1f} MB, "
-        f"FDs={snap.get('fds')}, Threads={snap.get('threads')}, "
-        f"Conns={snap.get('connections')}, CPU={snap.get('cpu'):.1f}%, "
-        f"Children={snap.get('children')}"
+    logger.info(
+        "  %s: RSS=%.1f MB, FDs=%s, Threads=%s, Conns=%s, CPU=%.1f%%, Children=%s",
+        label, snap.get("rss"), snap.get("fds"), snap.get("threads"),
+        snap.get("connections"), snap.get("cpu"), snap.get("children"),
     )
 
 
@@ -210,11 +213,11 @@ def run_one(request_id, cmd):
     elapsed = time.time() - start
     ok = result.returncode == 0
     status = "OK" if ok else "FAIL"
-    print(f"Request {request_id}: {status} ({elapsed:.2f}s)")
+    logger.info("Request %s: %s (%.2fs)", request_id, status, elapsed)
     if not ok:
         # Show last line of stderr for quick diagnosis
         stderr_line = (result.stderr or "").strip().split("\n")[-1]
-        print(f"  stderr: {stderr_line}")
+        logger.info("  stderr: %s", stderr_line)
     return {"ok": ok, "elapsed": elapsed}
 
 
@@ -235,7 +238,7 @@ def run_round(args, cmd):
             else:
                 failed += 1
     total_time = time.time() - start
-    print(f"\nResult: {passed} passed, {failed} failed in {total_time:.2f}s")
+    logger.info("\nResult: %s passed, %s failed in %.2fs", passed, failed, total_time)
     return passed, failed, total_time
 
 
@@ -246,10 +249,10 @@ def print_table(header, rows):
         for i, val in enumerate(row):
             col_widths[i] = max(col_widths[i], len(str(val)))
     fmt = "  ".join(f"{{:>{w}}}" for w in col_widths)
-    print(fmt.format(*header))
-    print("-" * (sum(col_widths) + 2 * (len(header) - 1)))
+    logger.info("%s", fmt.format(*header))
+    logger.info("%s", "-" * (sum(col_widths) + 2 * (len(header) - 1)))
     for row in rows:
-        print(fmt.format(*row))
+        logger.info("%s", fmt.format(*row))
 
 
 def apply_presets(args):
@@ -263,10 +266,11 @@ def apply_presets(args):
     if args.prompt is None:
         if preset is None:
             known = ", ".join(sorted(AGENT_PRESETS.keys()))
-            print(
-                f"ERROR: No preset for agent '{args.agent}'. "
-                f"Please provide --prompt explicitly.\n"
-                f"Known presets: {known}"
+            logger.error(
+                "No preset for agent '%s'. "
+                "Please provide --prompt explicitly.\n"
+                "Known presets: %s",
+                args.agent, known,
             )
             sys.exit(1)
         args.prompt = preset.get("prompt")
@@ -300,29 +304,31 @@ def check_server_api_base(server_proc, mock_port):
     try:
         server_env = server_proc.environ()
     except (psutil.NoSuchProcess, psutil.AccessDenied) as exc:
-        print(f"WARNING: Could not read server environment: {exc}")
+        logger.warning("Could not read server environment: %s", exc)
         return
 
     api_base = server_env.get("OPENAI_API_BASE")
     if api_base is None:
-        print(
-            "ERROR: neuro-san server does not have OPENAI_API_BASE set.\n"
-            f"  Mock LLM server is running on port {mock_port}.\n"
+        logger.error(
+            "neuro-san server does not have OPENAI_API_BASE set.\n"
+            "  Mock LLM server is running on port %s.\n"
             "  Restart the server with:\n"
-            f"    export OPENAI_API_BASE={expected_url}\n"
-            "    python -m neuro_san.service.main_loop.server_main_loop"
+            "    export OPENAI_API_BASE=%s\n"
+            "    python -m neuro_san.service.main_loop.server_main_loop",
+            mock_port, expected_url,
         )
         sys.exit(1)
 
-    print(f"  OPENAI_API_BASE={api_base}")
+    logger.info("  OPENAI_API_BASE=%s", api_base)
     if mock_port not in api_base:
-        print(
-            f"ERROR: OPENAI_API_BASE does not reference port {mock_port}.\n"
-            f"  Mock LLM server is running on port {mock_port},\n"
-            f"  but OPENAI_API_BASE={api_base}\n"
+        logger.error(
+            "OPENAI_API_BASE does not reference port %s.\n"
+            "  Mock LLM server is running on port %s,\n"
+            "  but OPENAI_API_BASE=%s\n"
             "  Restart the server with:\n"
-            f"    export OPENAI_API_BASE={expected_url}\n"
-            "    python -m neuro_san.service.main_loop.server_main_loop"
+            "    export OPENAI_API_BASE=%s\n"
+            "    python -m neuro_san.service.main_loop.server_main_loop",
+            mock_port, mock_port, api_base, expected_url,
         )
         sys.exit(1)
 
@@ -337,22 +343,22 @@ def find_local_processes():
     mock_proc = find_process("mock_llm_server")
 
     if server_proc is None:
-        print(
-            "ERROR: neuro-san server process not found.\n"
+        logger.error(
+            "neuro-san server process not found.\n"
             "Start it first:\n"
             "  python -m neuro_san.service.main_loop.server_main_loop"
         )
         sys.exit(1)
-    print(f"Found neuro-san server (PID {server_proc.pid})")
+    logger.info("Found neuro-san server (PID %s)", server_proc.pid)
 
     if mock_proc is None:
-        print(
-            "ERROR: mock LLM server process not found.\n"
+        logger.error(
+            "mock LLM server process not found.\n"
             "Start it first:\n"
             "  python -m tests.mock_llm_server.mock_llm_server --port 8888"
         )
         sys.exit(1)
-    print(f"Found mock LLM server (PID {mock_proc.pid})")
+    logger.info("Found mock LLM server (PID %s)", mock_proc.pid)
 
     mock_port = get_mock_server_port(mock_proc)
     check_server_api_base(server_proc, mock_port)
@@ -389,24 +395,28 @@ def run_rounds(args, cmd, server_proc, mock_proc):
     totals = {"passed": 0, "failed": 0, "time": 0.0}
 
     for round_num in range(1, args.num_rounds + 1):
-        print(f"\n{'=' * 60}")
-        print(f"  ROUND {round_num} of {args.num_rounds} "
-              f"({args.num_requests} requests, {args.max_workers} workers)")
-        print("=" * 60)
+        logger.info("\n%s", "=" * 60)
+        logger.info(
+            "  ROUND %s of %s (%s requests, %s workers)",
+            round_num, args.num_rounds, args.num_requests, args.max_workers,
+        )
+        logger.info("=" * 60)
 
         before_server = snapshot(server_proc) if server_proc else None
         before_mock = snapshot(mock_proc) if mock_proc else None
         if before_server:
             print_snapshot("Server BEFORE", before_server)
 
-        print(f"\nFiring {args.num_requests} concurrent requests "
-              f"with {args.max_workers} workers...")
+        logger.info(
+            "\nFiring %s concurrent requests with %s workers...",
+            args.num_requests, args.max_workers,
+        )
         passed, failed, elapsed = run_round(args, cmd)
         totals["passed"] = totals.get("passed", 0) + passed
         totals["failed"] = totals.get("failed", 0) + failed
         totals["time"] = totals.get("time", 0.0) + elapsed
 
-        print(f"\nWaiting {args.settle_time}s for server cleanup...")
+        logger.info("\nWaiting %ss for server cleanup...", args.settle_time)
         time.sleep(args.settle_time)
 
         after_server = snapshot(server_proc) if server_proc else None
@@ -428,48 +438,66 @@ def print_overall_deltas(label, rows, num_rounds):
     """Print overall resource deltas between the first and last rounds."""
     first = rows[0]
     last = rows[-1]
-    print(f"\n{label} overall deltas "
-          f"(round 1 before vs round {num_rounds} settled):")
-    print(f"  RSS:         "
-          f"+{float(last[2].rstrip('M')) - float(first[1].rstrip('M')):.1f} MB")
-    print(f"  FDs:         "
-          f"+{int(last[4]) - int(first[4])}")
-    print(f"  Threads:     "
-          f"+{int(last[5].split(' -> ')[1]) - int(first[5].split(' -> ')[0])}")
-    print(f"  Connections: "
-          f"+{int(last[7]) - int(first[7])}")
-    print(f"  Children:    "
-          f"+{int(last[9]) - int(first[9])}")
+    logger.info(
+        "\n%s overall deltas (round 1 before vs round %s settled):",
+        label, num_rounds,
+    )
+    logger.info(
+        "  RSS:         +%.1f MB",
+        float(last[2].rstrip("M")) - float(first[1].rstrip("M")),
+    )
+    logger.info(
+        "  FDs:         +%s",
+        int(last[4]) - int(first[4]),
+    )
+    logger.info(
+        "  Threads:     +%s",
+        int(last[5].split(" -> ")[1]) - int(first[5].split(" -> ")[0]),
+    )
+    logger.info(
+        "  Connections: +%s",
+        int(last[7]) - int(first[7]),
+    )
+    logger.info(
+        "  Children:    +%s",
+        int(last[9]) - int(first[9]),
+    )
 
 
 def print_results(args, totals, server_rows, mock_rows):
     """Print the overall results summary and leak analysis tables."""
     total_requests = args.num_requests * args.num_rounds
 
-    print(f"\n{'=' * 60}")
-    print("  OVERALL RESULTS")
-    print("=" * 60)
-    print(f"  Total requests: {total_requests} "
-          f"({totals.get('passed')} passed, {totals.get('failed')} failed)")
-    print(f"  Total time:     {totals.get('time'):.2f}s")
+    logger.info("\n%s", "=" * 60)
+    logger.info("  OVERALL RESULTS")
+    logger.info("=" * 60)
+    logger.info(
+        "  Total requests: %s (%s passed, %s failed)",
+        total_requests, totals.get("passed"), totals.get("failed"),
+    )
+    logger.info("  Total time:     %.2fs", totals.get("time"))
     if total_requests > 0:
-        print(f"  Avg per request: {totals.get('time') / total_requests:.2f}s")
+        logger.info(
+            "  Avg per request: %.2fs", totals.get("time") / total_requests,
+        )
 
     header = ["Round", "Before RSS", "Settled RSS", "RSS Delta",
               "FDs", "Threads", "Thread Delta",
               "Conns", "CPU%", "Children"]
 
-    print(f"\n{'=' * 60}")
-    print(f"  LEAK ANALYSIS ACROSS {args.num_rounds} ROUNDS "
-          f"({total_requests} total requests)")
-    print("=" * 60)
+    logger.info("\n%s", "=" * 60)
+    logger.info(
+        "  LEAK ANALYSIS ACROSS %s ROUNDS (%s total requests)",
+        args.num_rounds, total_requests,
+    )
+    logger.info("=" * 60)
 
     if server_rows:
-        print("\nNEURO-SAN SERVER:")
+        logger.info("\nNEURO-SAN SERVER:")
         print_table(header, server_rows)
 
     if mock_rows:
-        print("\nMOCK LLM SERVER:")
+        logger.info("\nMOCK LLM SERVER:")
         print_table(header, mock_rows)
 
     if len(server_rows) >= 2:
@@ -497,16 +525,18 @@ def main():
     if is_local:
         server_proc, mock_proc = find_local_processes()
     else:
-        print(f"Remote mode: targeting {args.host}:{args.port}")
-        print("  Process monitoring disabled (server is not local)")
+        logger.info("Remote mode: targeting %s:%s", args.host, args.port)
+        logger.info("  Process monitoring disabled (server is not local)")
 
-    print(f"\nConfig: agent={args.agent}, requests={args.num_requests}, "
-          f"workers={args.max_workers}, rounds={args.num_rounds}, "
-          f"host={args.host}, port={args.port}")
+    logger.info(
+        "\nConfig: agent=%s, requests=%s, workers=%s, rounds=%s, host=%s, port=%s",
+        args.agent, args.num_requests, args.max_workers,
+        args.num_rounds, args.host, args.port,
+    )
     if not args.no_sly_data:
-        print(f"  sly_data={args.sly_data}")
-    print(f"  prompt=\"{args.prompt}\"")
-    print(f"  settle_time={args.settle_time}s")
+        logger.info("  sly_data=%s", args.sly_data)
+    logger.info("  prompt=\"%s\"", args.prompt)
+    logger.info("  settle_time=%ss", args.settle_time)
 
     server_rows, mock_rows, totals = run_rounds(
         args, cmd, server_proc, mock_proc)
