@@ -30,6 +30,13 @@ class AuthorizerFactory:
     Factory class for getting the appropriate Authorizer instance
     """
 
+    ALLOWED_AUTHORIZERS = {
+        "neuro_san.internals.authorization.jwt.jwt_authorizer.JwtAuthorizer",
+        "neuro_san.internals.authorization.jwt.jwt_issuer.JwtIssuer",
+        "neuro_san.internals.authorization.null.always_no_authorizer.AlwaysNoAuthorizer",
+        "neuro_san.internals.authorization.null.always_yes_authorizer.AlwaysYesAuthorizer",
+    }
+
     @staticmethod
     def create_authorizer() -> Authorizer:
         """
@@ -39,6 +46,8 @@ class AuthorizerFactory:
 
         auth_classname: str = environ.get("AGENT_AUTHORIZER")
         if auth_classname is not None and len(auth_classname) > 0:
+            if auth_classname not in AuthorizerFactory.ALLOWED_AUTHORIZERS:
+                raise ValueError(f"Unauthorized authorizer class: {auth_classname}")
             # Note that this will raise an exception if the class is not found
             authorizer = ResolverUtil.create_instance(auth_classname, "AGENT_AUTHORIZER env var", Authorizer)
         else:
