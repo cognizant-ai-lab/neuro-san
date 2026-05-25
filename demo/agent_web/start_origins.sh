@@ -18,11 +18,24 @@ REPO_ROOT="$(cd "${DEMO_ROOT}/../.." && pwd)"
 BROWSER_SITE_DIR="${REPO_ROOT}/demo/agent_web_browser_site"
 
 # Pick the Python that has neuro-san installed.
-PYTHON="${PYTHON:-${REPO_ROOT}/.venv/bin/python}"
-if [[ ! -x "${PYTHON}" ]]; then
-    PYTHON="$(command -v python3 || true)"
+#
+# Order of preference (so an activated venv beats stale leftovers in the
+# repo):
+#   1. explicit $PYTHON env override
+#   2. the currently-activated venv ($VIRTUAL_ENV)
+#   3. ${REPO_ROOT}/.venv/bin/python (legacy; must be a real venv with
+#      pyvenv.cfg — symlinks straight to Homebrew Python trigger PEP 668)
+#   4. plain python3 on $PATH
+if [[ -z "${PYTHON:-}" ]]; then
+    if [[ -n "${VIRTUAL_ENV:-}" && -x "${VIRTUAL_ENV}/bin/python" ]]; then
+        PYTHON="${VIRTUAL_ENV}/bin/python"
+    elif [[ -x "${REPO_ROOT}/.venv/bin/python" && -f "${REPO_ROOT}/.venv/pyvenv.cfg" ]]; then
+        PYTHON="${REPO_ROOT}/.venv/bin/python"
+    else
+        PYTHON="$(command -v python3 || true)"
+    fi
 fi
-if [[ -z "${PYTHON}" ]]; then
+if [[ -z "${PYTHON}" || ! -x "${PYTHON}" ]]; then
     echo "error: no python interpreter found" >&2
     exit 1
 fi
