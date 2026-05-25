@@ -47,8 +47,8 @@ class TestRenderDefault:
 
     def test_no_networks_message(self):
         html = LandingHandler._render_default("http://flights.example", [])
-        assert "no distributable networks" in html.lower()
-        assert "distributable: true" in html
+        assert "no published networks" in html.lower()
+        assert "publish: true" in html
 
     def test_lists_networks(self):
         networks = [
@@ -343,7 +343,7 @@ class TestSummarizeToolGraph:
         assert nodes[0]["tools"] == ["calc"]
 
 
-# ---------- branding pickup in _collect_distributable_networks ----------
+# ---------- branding pickup in _collect_published_networks ----------
 
 
 class TestBrandingPickup:

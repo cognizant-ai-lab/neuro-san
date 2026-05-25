@@ -29,8 +29,8 @@ from typing import Any
 from typing import Dict
 
 from neuro_san.internals.distribution.agent_web_notebook import build_agent_web_notebook
-from neuro_san.internals.distribution.distributable_network_scrubber import DistributableNetworkScrubber
-from neuro_san.internals.distribution.distributable_network_scrubber import DistributableScrubberError
+from neuro_san.internals.distribution.published_network_scrubber import PublishedNetworkScrubber
+from neuro_san.internals.distribution.published_network_scrubber import PublishedScrubberError
 from neuro_san.internals.graph.registry.activation_factory import ActivationFactory
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.storage_class import StorageClass
@@ -83,24 +83,24 @@ class NetworkHandler(BaseRequestHandler):
         try:
             agent_network = self._lookup_network(agent_name)
             if agent_network is None:
-                # Either the agent does not exist or it is not distributable.
+                # Either the agent does not exist or it is not published.
                 # We intentionally do not echo the user-supplied agent_name
                 # back into the body; do_finish HTML-escapes it for us via
                 # safe_message, but generic messages are still safer.
                 self.do_finish(
                     HTTPStatus.NOT_FOUND,
-                    "Agent network is not distributable on this server.",
+                    "Agent network is not published on this server.",
                 )
                 return
 
             origin: str = self._derive_origin()
             factory = ActivationFactory(agent_network)
-            scrubber = DistributableNetworkScrubber(
+            scrubber = PublishedNetworkScrubber(
                 agent_tool_path=factory.get_agent_tool_path()
             )
             try:
                 wire = scrubber.scrub(agent_network, origin)
-            except DistributableScrubberError as exc:
+            except PublishedScrubberError as exc:
                 self.logger.error(metadata, "Scrubber refused to publish %s: %s", agent_name, exc)
                 self.do_finish(
                     HTTPStatus.INTERNAL_SERVER_ERROR,
@@ -136,7 +136,7 @@ class NetworkHandler(BaseRequestHandler):
         self.do_finish()
 
     def _lookup_network(self, agent_name: str) -> AgentNetwork:
-        """Return the AgentNetwork iff it exists and is distributable."""
+        """Return the AgentNetwork iff it exists and is published."""
         network_storage_dict: Dict[str, AgentNetworkStorage] = (
             self.server_context.get_network_storage_dict()
         )
@@ -150,7 +150,7 @@ class NetworkHandler(BaseRequestHandler):
         agent_network: AgentNetwork = public_storage.agents_table.get(agent_name)
         if agent_network is None:
             return None
-        if not agent_network.is_distributable():
+        if not agent_network.is_published():
             return None
         return agent_network
 

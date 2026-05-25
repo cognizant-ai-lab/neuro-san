@@ -51,7 +51,7 @@ with that one — same UI, different agent.
 1. You visit `http://localhost:8801/` (a real Tornado-served URL on the
    flights origin).
 2. The origin's `LandingHandler` builds the page by:
-   - Listing the distributable networks it publishes (from its
+   - Listing the published networks it publishes (from its
      `AgentNetworkStorage`),
    - Reading `${AGENT_STATIC_DIR}/index.html` (this file's `index.html`),
    - Injecting `<script>window.AGENT_WEB_BOOTSTRAP = {...}</script>` into

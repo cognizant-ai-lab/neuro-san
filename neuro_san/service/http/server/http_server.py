@@ -265,11 +265,11 @@ class HttpServer(AgentStateListener):
 
             # Register templated request paths for agent API methods:
             # regexp format used here is that of Python Re standard library.
-            # Agent Web endpoints (distributable networks only).
+            # Agent Web endpoints (published networks only).
             # Register BEFORE the greedy `(.+)/function|connectivity|streaming_chat`
             # routes so the more specific patterns match first. Note: /network
             # and /tool/{tool_name} are gated by the per-network
-            # `distributable: true` manifest flag inside the handlers themselves
+            # `publish: true` manifest flag inside the handlers themselves
             # (not via the agent_policy authorizer).
             handlers.append((r"/api/v1/([^/]+)/network", NetworkHandler, request_initialize_data))
             handlers.append(

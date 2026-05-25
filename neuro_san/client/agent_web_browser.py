@@ -61,7 +61,7 @@ from neuro_san.client.direct_agent_storage_util import DirectAgentStorageUtil  #
 from neuro_san.internals.distribution.agent_web_notebook import (
     extract_wire_config_from_notebook,
 )
-from neuro_san.internals.distribution.distributable_network_scrubber import (
+from neuro_san.internals.distribution.published_network_scrubber import (
     AGENT_WEB_PROTOCOL_VERSION,
 )
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer

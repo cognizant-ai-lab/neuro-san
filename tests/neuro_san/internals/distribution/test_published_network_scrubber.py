@@ -15,7 +15,7 @@
 #
 # END COPYRIGHT
 """
-Unit tests for DistributableNetworkScrubber.
+Unit tests for PublishedNetworkScrubber.
 
 Pure-function tests; do not require any servers running.  The scrubber is
 security-critical, so the assertions here are the closest thing the MVP has
@@ -24,15 +24,15 @@ to a "do not regress this" gate.
 import base64
 import unittest
 
-from neuro_san.internals.distribution.distributable_network_scrubber import (
+from neuro_san.internals.distribution.published_network_scrubber import (
     AGENT_WEB_PROTOCOL_VERSION,
-    DistributableNetworkScrubber,
-    DistributableScrubberError,
+    PublishedNetworkScrubber,
+    PublishedScrubberError,
 )
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 
 
-class TestDistributableNetworkScrubber(unittest.TestCase):
+class TestPublishedNetworkScrubber(unittest.TestCase):
     """Pure scrubber tests using a coded tool that already exists in-tree."""
 
     # We use the existing math_guy.calculator.Calculator so the scrubber can
@@ -51,7 +51,7 @@ class TestDistributableNetworkScrubber(unittest.TestCase):
         return AgentNetwork(cfg, "test_net")
 
     def _scrub(self, network):
-        scrubber = DistributableNetworkScrubber(
+        scrubber = PublishedNetworkScrubber(
             agent_tool_path="neuro_san.coded_tools.test_net"
         )
         return scrubber.scrub(network, "http://origin.example:9000")
@@ -158,7 +158,7 @@ class TestDistributableNetworkScrubber(unittest.TestCase):
              "client_side": True,
              "class": "nonexistent.module.GhostTool"},
         ])
-        with self.assertRaises(DistributableScrubberError):
+        with self.assertRaises(PublishedScrubberError):
             self._scrub(net)
 
     def test_value_that_looks_like_credential_is_refused(self):
@@ -170,7 +170,7 @@ class TestDistributableNetworkScrubber(unittest.TestCase):
              "llm_config": {"model_name": "x",
                              "endpoint": "sk-ABCDEFGHIJKLMNOPQRSTUVWX1234567890"}},
         ])
-        with self.assertRaises(DistributableScrubberError):
+        with self.assertRaises(PublishedScrubberError):
             self._scrub(net)
 
 

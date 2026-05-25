@@ -2,6 +2,6 @@
     "trip_planner.hocon": {
         "serve": true,
         "public": true,
-        "distributable": true,
+        "publish": true,
     },
 }

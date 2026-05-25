@@ -65,7 +65,7 @@ if REPO_ROOT not in sys.path:
 from neuro_san.internals.distribution.agent_web_notebook import (  # noqa: E402
     extract_wire_config_from_notebook,
 )
-from neuro_san.internals.distribution.distributable_network_scrubber import (  # noqa: E402
+from neuro_san.internals.distribution.published_network_scrubber import (  # noqa: E402
     AGENT_WEB_PROTOCOL_VERSION,
 )
 from neuro_san.client.agent_web_browser import (  # noqa: E402

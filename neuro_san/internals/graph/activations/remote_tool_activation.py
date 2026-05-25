@@ -18,7 +18,7 @@
 RemoteToolActivation - invoke a server-side coded tool over HTTP at its origin.
 
 This is the "fetch() back to the server" piece of the Agent Web model. The
-DistributableNetworkScrubber rewrites server-side `class:` references in the
+PublishedNetworkScrubber rewrites server-side `class:` references in the
 wire form into `coded_tool_url`s pointing at the origin's per-tool RPC
 endpoint; when a runtime ("browser") loads that network and the LLM calls
 this tool, RemoteToolActivation handles the round trip.

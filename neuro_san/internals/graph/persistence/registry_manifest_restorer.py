@@ -260,8 +260,8 @@ class RegistryManifestRestorer(Restorer):
             agent_network.set_as_mcp_tool()
 
         # Check if this agent network is published to the Agent Web:
-        if usable_network and manifest_dict.get("distributable", False):
-            agent_network.set_as_distributable()
+        if usable_network and manifest_dict.get("publish", False):
+            agent_network.set_as_published()
 
         # Figure out where we want to put the network per the network's manifest dictionary
         storage: str = StorageClass.PUBLIC

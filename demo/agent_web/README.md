@@ -10,7 +10,7 @@ It is the working demonstration of the
 
 ## The story
 
-| Publisher | Port | Brand | Distributable network | Server-side tools | Client-side tools |
+| Publisher | Port | Brand | Published network | Server-side tools | Client-side tools |
 |---|---|---|---|---|---|
 | `flights.example` | 8801 | ✈ SkyHop Airways | `flight_finder` | `search_flights`, `book_hold` | — |
 | `hotels.example` | 8802 | 🏨 Nest Hotels | `hotel_finder` | `search_hotels` | `score_hotel` |
@@ -305,7 +305,7 @@ asserts every piece works end-to-end. 65 checks spanning:
 demo/agent_web/
 ├── flights/
 │   ├── registries/
-│   │   ├── manifest.hocon              # distributable: true
+│   │   ├── manifest.hocon              # publish: true
 │   │   └── flight_finder.hocon         # branding: SkyHop Airways
 │   └── coded_tools/flight_finder/
 │       ├── search_flights.py           # private inventory

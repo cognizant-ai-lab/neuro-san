@@ -15,7 +15,7 @@
 #
 # END COPYRIGHT
 """
-LandingHandler — serves an HTML index of the origin's distributable networks
+LandingHandler — serves an HTML index of the origin's published networks
 at GET /.
 
 Opt-in via the AGENT_LANDING_ENABLE env var (or set in HttpServerConfig). When
@@ -176,7 +176,7 @@ _DEFAULT_TEMPLATE = """<!DOCTYPE html>
 <body>
     <h1>Agent Web</h1>
     <p>You are at origin <span class="origin">{origin}</span>.</p>
-    <p>This origin publishes the following distributable agent networks:</p>
+    <p>This origin publishes the following agent networks:</p>
     {networks_html}
     <p class="muted">No chat UI is hosted at this origin. To browse these
        networks interactively, point an Agent Web browser runtime
@@ -188,12 +188,12 @@ _DEFAULT_TEMPLATE = """<!DOCTYPE html>
 
 
 class LandingHandler(BaseRequestHandler):
-    """HTML index page at GET / for this origin's distributable networks."""
+    """HTML index page at GET / for this origin's published networks."""
 
     async def get(self):
         try:
             origin = self._derive_origin()
-            networks = self._collect_distributable_networks(origin)
+            networks = self._collect_published_networks(origin)
             html = self._render(origin, networks)
             self.set_header("Content-Type", "text/html; charset=utf-8")
             self.write(html)
@@ -215,9 +215,9 @@ class LandingHandler(BaseRequestHandler):
         host = self.request.headers.get("X-Forwarded-Host") or self.request.host
         return f"{scheme}://{host}"
 
-    def _collect_distributable_networks(self, origin: str) -> List[Dict[str, Any]]:
+    def _collect_published_networks(self, origin: str) -> List[Dict[str, Any]]:
         """Return [{name, description, url, tools, branding?}, ...] for each
-        distributable network this origin publishes."""
+        published network this origin publishes."""
         network_storage_dict: Dict[str, AgentNetworkStorage] = (
             self.server_context.get_network_storage_dict()
         )
@@ -230,7 +230,7 @@ class LandingHandler(BaseRequestHandler):
         for name, agent_network in public_storage.agents_table.items():
             if not isinstance(agent_network, AgentNetwork):
                 continue
-            if not agent_network.is_distributable():
+            if not agent_network.is_published():
                 continue
             config = agent_network.get_config() or {}
             meta = config.get("metadata") or {}
@@ -253,7 +253,7 @@ class LandingHandler(BaseRequestHandler):
 
     def _pick_branding(self, networks: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Pick the first network's branding block (if any) for the page's
-        chrome. Multi-network origins use the first distributable network as
+        chrome. Multi-network origins use the first published network as
         the face."""
         for n in networks:
             b = n.get("branding")
@@ -322,8 +322,8 @@ class LandingHandler(BaseRequestHandler):
     def _render_default(origin: str, networks: List[Dict[str, Any]]) -> str:
         if not networks:
             networks_html = (
-                "<p class=\"muted\">This origin has no distributable networks "
-                "configured (set <code>distributable: true</code> on a "
+                "<p class=\"muted\">This origin has no published networks "
+                "configured (set <code>publish: true</code> on a "
                 "manifest entry).</p>"
             )
         else:

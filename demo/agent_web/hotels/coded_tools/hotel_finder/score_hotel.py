@@ -17,7 +17,7 @@
 """
 hotels.example: score_hotel coded tool — CLIENT SIDE.
 
-This tool's source is shipped to the runtime as part of the distributable
+This tool's source is shipped to the runtime as part of the published
 network bundle.  It runs in the runtime ("browser") with no round-trip to
 hotels.example.  Pure computation; no network, no I/O.
 """

@@ -35,7 +35,7 @@ def build_agent_web_notebook(wire_config: Dict[str, Any]) -> Dict[str, Any]:
     """
     Build a notebook document around a scrubbed wire config.
 
-    :param wire_config: The output of DistributableNetworkScrubber.scrub().
+    :param wire_config: The output of PublishedNetworkScrubber.scrub().
     :return: A dict in nbformat 4.5 layout, suitable for json.dumps().
     """
     meta = wire_config.get("agent_web", {}) or {}
@@ -58,7 +58,7 @@ def build_agent_web_notebook(wire_config: Dict[str, Any]) -> Dict[str, Any]:
         _markdown_cell(
             f"# {network_name}\n\n"
             f"Served from `{origin}`.\n\n"
-            f"This is an **Agent Web** distributable network. The cell below "
+            f"This is an **Agent Web** published network. The cell below "
             f"will fetch the agent spec from this notebook, build the agent "
             f"locally in your runtime, and start a chat. Your LLM API key is "
             f"used for all model calls — the origin server never sees it."

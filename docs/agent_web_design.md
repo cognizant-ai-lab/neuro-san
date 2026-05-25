@@ -20,7 +20,7 @@ The neuro-san project already has most of the machinery to make this work. This 
 |---|---|
 | HTML document | An agent network spec |
 | `.html` file as a published artifact | A `.ipynb` notebook with the agent spec in a raw JSON cell |
-| Web server | A neuro-san server with `distributable: true` agent networks |
+| Web server | A neuro-san server with `publish: true` agent networks |
 | Browser | A neuro-san client runtime; first reference is a JupyterLite extension |
 | JavaScript executed in the browser sandbox | Python coded tools shipped as source, executed in Pyodide's wasm sandbox |
 | Server endpoints / XHR / `fetch()` | `POST /api/v1/{agent}/tool/{tool_name}` against the origin |
@@ -63,7 +63,7 @@ We also explicitly accept what Jupyter does **not** give us:
                 |  POST /api/v1/{name}/tool/{tn}   |  <-- server-side tool RPC
                 |  POST /api/v1/{name}/streaming   |  <-- existing chat (unchanged)
                 |                                  |
-                |  manifest.hocon: distributable   |
+                |  manifest.hocon: publish         |
                 |  HOCON scrubber                  |
                 +----------------------------------+
                             ^         ^
@@ -105,27 +105,27 @@ Cross-origin agent calls go through the existing `ExternalActivation` flow — r
 
 All additions are additive. Existing behavior (`serve`, `public`, `mcp`) is unchanged.
 
-### 5.1 New manifest flag: `distributable`
+### 5.1 New manifest flag: `publish`
 
-The manifest entry for an agent network can now declare `distributable: true`. When set, the server exposes the network over the two new endpoints below.
+The manifest entry for an agent network can now declare `publish: true`. When set, the server exposes the network over the two new endpoints below.
 
 ```hocon
 {
   "math_guy.hocon": {
     "serve": true,
     "public": true,
-    "distributable": true
+    "publish": true
   }
 }
 ```
 
-`distributable` is independent of `serve`. A network can be both server-executed (existing model) and distributable (new model) at the same time.
+`publish` is independent of `serve`. A network can be both server-executed (existing model) and published (new model) at the same time.
 
-`ManifestNetworkValidator` is extended to accept the new key. `AgentNetworkStorage` exposes a `is_distributable(name)` predicate.
+`ManifestNetworkValidator` is extended to accept the new key. `AgentNetworkStorage` exposes a `is_published(name)` predicate.
 
 ### 5.2 HOCON scrubber
 
-A new component, `DistributableNetworkScrubber`, transforms an `AgentNetwork`'s config dict into a **wire form** safe to publish. Logic:
+A new component, `PublishedNetworkScrubber`, transforms an `AgentNetwork`'s config dict into a **wire form** safe to publish. Logic:
 
 1. **Strip server secrets** from `llm_config` and from any nested `llm_config` overrides:
    - Drop keys whose name matches a configurable secret pattern (default: `api_key`, `api_secret`, `aws_*`, `azure_*_key`, `*_token`).
@@ -153,7 +153,7 @@ Returns a Jupyter notebook (`application/x-ipynb+json`) containing the scrubbed 
    On execution, this reads the raw cell from the current notebook context, instantiates the agent, and starts a chat widget.
 4. **Markdown cell** — short "what runs where" footer: which tools are client-side, which are server-side, version stamp.
 
-The handler is gated by `is_distributable(name)`. It honors the existing `agent_policy` authorizer (operators can require auth to read the notebook). CORS headers are set so that JupyterLite (running from a different origin) can `fetch()` the notebook.
+The handler is gated by `is_published(name)`. It honors the existing `agent_policy` authorizer (operators can require auth to read the notebook). CORS headers are set so that JupyterLite (running from a different origin) can `fetch()` the notebook.
 
 ### 5.4 Endpoint: `POST /api/v1/{name}/tool/{tool_name}`
 
@@ -168,7 +168,7 @@ Invokes a single server-side coded tool. Request body:
 
 Behavior:
 
-1. Look up `name` in `AgentNetworkStorage`; reject if `distributable` is false or the agent name does not exist.
+1. Look up `name` in `AgentNetworkStorage`; reject if `publish` is false or the agent name does not exist.
 2. Find the agent named `tool_name` inside that network; reject if not found, or if it has `client_side: true` (those are not callable via this endpoint).
 3. Reject if the agent has no `class` / `toolbox` reference (this endpoint is only for coded tools, not LLM agents).
 4. Apply the network's `allow.to_downstream.sly_data` rule (treat the caller as the "downstream" direction): incoming `sly_data` is filtered through `SlyDataRedactor` before the tool sees it.
@@ -185,7 +185,7 @@ Behavior:
 
 The endpoint is **the single point of trust** between the runtime and the origin server. Server secrets (API keys to paid services, database credentials, etc.) only live behind it. The tool's Python source is never sent over the wire.
 
-CORS: tightly configured. Default policy is to accept any origin (the network is distributable, after all), but the operator can narrow it via server config. Preflight `OPTIONS` is handled.
+CORS: tightly configured. Default policy is to accept any origin (the network is published, after all), but the operator can narrow it via server config. Preflight `OPTIONS` is handled.
 
 ### 5.5 New activation: `RemoteToolActivation`
 
@@ -379,7 +379,7 @@ This is the same distinction the web makes between "browse a URL" (safe) and "do
 - **`sly_data` redaction at every boundary.** Authors declare what crosses; both sides enforce.
 - **Server never sees client LLM keys.** Direct runtime → provider; no proxy through origin.
 - **No filesystem in Pyodide except its in-memory VFS.** Pyodide cannot escape the wasm boundary. The host page (JupyterLite) decides what slices of `localStorage` to expose.
-- **Authorizer hook on `/network` and `/tool/`.** Operators can still require auth to read distributable networks or to call their tools — the existing `agent_policy` chain applies to the new endpoints.
+- **Authorizer hook on `/network` and `/tool/`.** Operators can still require auth to read published networks or to call their tools — the existing `agent_policy` chain applies to the new endpoints.
 
 ### 9.3 Known limitations (accepted for MVP)
 
@@ -398,7 +398,7 @@ One agent network: `math_guy_web.hocon` (a variant of the existing `math_guy.hoc
 - `calculator` — `client_side: true` Python coded tool, ships its source.
 - `ledger` — server-side coded tool that pretends to look up a value in a private alice.example ledger.
 
-Manifest declares `math_guy_web.hocon` as `distributable: true`.
+Manifest declares `math_guy_web.hocon` as `publish: true`.
 
 The user story:
 
@@ -411,12 +411,12 @@ The user story:
 7. The runtime's `front_man` agent runs in Pyodide. It calls `calculator` — runs inside the same Pyodide kernel, no round-trip. It calls `ledger` — `RemoteToolActivation` POSTs to `https://alice.example/api/v1/math_guy_web/tool/ledger` with the args. Alice's server executes the Python `Ledger` tool against her private dataset, returns the value. Bob's runtime combines the two and answers.
 8. Throughout, every LLM call goes directly from Bob's browser to OpenAI using Bob's API key. Alice never sees it.
 
-This single demo exercises: distributable manifest flag, scrubber, both new endpoints, `RemoteToolActivation`, client-side tool execution under Pyodide, same-origin enforcement, integrity hash check, `sly_data` redaction, LLM-key injection from local storage, and end-to-end streaming.
+This single demo exercises: publish manifest flag, scrubber, both new endpoints, `RemoteToolActivation`, client-side tool execution under Pyodide, same-origin enforcement, integrity hash check, `sly_data` redaction, LLM-key injection from local storage, and end-to-end streaming.
 
 ### 10.2 What is in scope
 
-- `distributable` manifest flag.
-- `DistributableNetworkScrubber`.
+- `publish` manifest flag.
+- `PublishedNetworkScrubber`.
 - `GET /api/v1/{name}/network` returning notebook.
 - `POST /api/v1/{name}/tool/{tool_name}`.
 - `RemoteToolActivation`.
@@ -434,12 +434,12 @@ This single demo exercises: distributable manifest flag, scrubber, both new endp
 - Cross-origin `/tool/` calls *initiated by client-side coded tools*. Client-side tools in MVP cannot themselves call origin tools; they are leaf computations. (They can still receive `sly_data`.)
 - Notebook caching, ETag, conditional GET. Plain `fetch()` every time.
 - Multi-version protocol negotiation. `protocol_version` must match exactly between scrubber and runtime in MVP; mismatch refuses to load.
-- Authoring tools / a developer kit for building distributable networks. The existing HOCON authoring loop is sufficient; we just add the flag.
+- Authoring tools / a developer kit for building published networks. The existing HOCON authoring loop is sufficient; we just add the flag.
 - Per-user rate limits or billing on `/tool/`.
-- A search/discovery service for distributable networks.
+- A search/discovery service for published networks.
 - TypeScript runtime; we deliberately avoid this by using Pyodide.
 - Human-readable wire format. JSON in a raw cell is sufficient per agreement.
-- MCP-as-server-side-tool from a distributable network. (MCP-as-tool reachable directly from the runtime works automatically because the runtime calls MCP servers over HTTP just like the existing code does.)
+- MCP-as-server-side-tool from a published network. (MCP-as-tool reachable directly from the runtime works automatically because the runtime calls MCP servers over HTTP just like the existing code does.)
 
 ## 11. Implementation plan
 
@@ -451,7 +451,7 @@ Move the runtime-relevant modules into a new subpackage with no server or gRPC d
 
 ### Step 2 — Manifest flag and scrubber
 
-Add `distributable` to `ManifestNetworkValidator`. Implement `DistributableNetworkScrubber` with full unit tests covering: secret stripping, `commondefs` resolution, `class` → `coded_tool_url` rewrite, `client_side: true` source embedding with hash, refusal-on-leftover-class assertion, refusal-on-leftover-secret assertion.
+Add `publish` to `ManifestNetworkValidator`. Implement `PublishedNetworkScrubber` with full unit tests covering: secret stripping, `commondefs` resolution, `class` → `coded_tool_url` rewrite, `client_side: true` source embedding with hash, refusal-on-leftover-class assertion, refusal-on-leftover-secret assertion.
 
 ### Step 3 — `RemoteToolActivation`
 
@@ -495,10 +495,10 @@ We will land the in-tree changes (steps 1–5, 7, 8) in this repository. The Jup
 
 ## 13. Open questions to resolve during implementation
 
-1. **`coded_tool_url` shape under cross-origin agent calls.** When a distributable network at origin A is loaded into a runtime, and that network references `/http://origin-b/some_agent` via `ExternalActivation`, do server-side tools on origin B get called by the runtime or by origin A? In MVP: by the runtime (preserves "client API keys, client identity"). Tests need to confirm this works as expected through redaction layers.
+1. **`coded_tool_url` shape under cross-origin agent calls.** When a published network at origin A is loaded into a runtime, and that network references `/http://origin-b/some_agent` via `ExternalActivation`, do server-side tools on origin B get called by the runtime or by origin A? In MVP: by the runtime (preserves "client API keys, client identity"). Tests need to confirm this works as expected through redaction layers.
 2. **Pyodide compatibility of the full neuro-san dependency tree.** Specifically `aiohttp`. We expect to either swap to `httpx` with the Pyodide transport or use Pyodide's `aiohttp` port; this is decided during step 1 (the carve-out is the right time to fix it).
 3. **Notebook discovery within JupyterLite when there is no "current notebook" context.** `open_agent_from_notebook()` needs a portable way to find its raw cell. We will likely have the JupyterLite extension pass the parsed JSON into the kernel via a `comm` rather than re-parsing the on-disk file. To resolve in step 5.
-4. **What to do with networks that have both `serve: true` and `distributable: true` plus secret-bearing `llm_config`.** The scrubber strips secrets for the wire form, but the same network executed server-side still needs them. Confirm the scrubber does not mutate the in-memory `AgentNetwork` used for server-side execution; it should always produce a fresh dict.
+4. **What to do with networks that have both `serve: true` and `publish: true` plus secret-bearing `llm_config`.** The scrubber strips secrets for the wire form, but the same network executed server-side still needs them. Confirm the scrubber does not mutate the in-memory `AgentNetwork` used for server-side execution; it should always produce a fresh dict.
 5. **Default CORS policy for `/tool/`.** MVP default: `Access-Control-Allow-Origin: *`. We will document the knob for operators to restrict. Decision review point before step 4 lands.
 
 ## 14. Naming
@@ -506,7 +506,7 @@ We will land the in-tree changes (steps 1–5, 7, 8) in this repository. The Jup
 Working names used in this document:
 
 - **Agent Web** — the protocol / vision name.
-- **`distributable`** — manifest flag.
+- **`publish`** — manifest flag.
 - **`coded_tool_url`** — wire-config field on a rewritten server-side tool.
 - **`client_side`** — wire-config flag for client-shipped tools.
 - **`neuro_san_client`** — carved-out subpackage.

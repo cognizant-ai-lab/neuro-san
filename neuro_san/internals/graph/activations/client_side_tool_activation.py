@@ -16,7 +16,7 @@
 # END COPYRIGHT
 """
 ClientSideToolActivation - execute a CodedTool whose Python source was
-shipped to the runtime as part of an Agent Web distributable network.
+shipped to the runtime as part of an Agent Web published network.
 
 This activation only fires on the runtime ("browser") side, where a scrubbed
 wire config has been loaded. The original server-side neuro-san process

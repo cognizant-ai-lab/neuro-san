@@ -15,7 +15,7 @@
 #
 # END COPYRIGHT
 """
-DistributableNetworkScrubber - transform an in-memory AgentNetwork's config
+PublishedNetworkScrubber - transform an in-memory AgentNetwork's config
 into the wire form that is safe to publish to runtimes ("browsers") that fetch
 the network's notebook and execute it locally.
 
@@ -70,12 +70,12 @@ DEFAULT_SECRET_KEY_PATTERNS: Tuple[str, ...] = (
 )
 
 
-class DistributableScrubberError(ValueError):
+class PublishedScrubberError(ValueError):
     """Raised when a scrubbed wire form fails post-conditions
     (e.g. a `class:` slipped through).  Operators must fix the network."""
 
 
-class DistributableNetworkScrubber:
+class PublishedNetworkScrubber:
     """
     Pure-ish transform: AgentNetwork + origin -> wire-form dict.
 
@@ -109,7 +109,7 @@ class DistributableNetworkScrubber:
                 rewritten `coded_tool_url` values.
         :return: A wire-form dict ready to be embedded in a notebook raw cell.
                 Caller may json.dumps() it directly.
-        :raises DistributableScrubberError: if post-conditions fail.
+        :raises PublishedScrubberError: if post-conditions fail.
         """
         # Defensive: deep-copy so we never mutate the live config.
         wire: Dict[str, Any] = copy.deepcopy(agent_network.get_config())
@@ -217,7 +217,7 @@ class DistributableNetworkScrubber:
         name = agent_spec.get("name")
         if isinstance(name, str) and name:
             return name
-        raise DistributableScrubberError(
+        raise PublishedScrubberError(
             f"Agent spec is missing a name: {agent_spec!r}"
         )
 
@@ -251,11 +251,11 @@ class DistributableNetworkScrubber:
         try:
             source_file = inspect.getsourcefile(cls)
         except TypeError as exc:
-            raise DistributableScrubberError(
+            raise PublishedScrubberError(
                 f"Cannot locate source file for client_side tool {class_ref}: {exc}"
             ) from exc
         if not source_file:
-            raise DistributableScrubberError(
+            raise PublishedScrubberError(
                 f"Cannot locate source file for client_side tool {class_ref}"
             )
         with open(source_file, "rb") as fh:
@@ -294,7 +294,7 @@ class DistributableNetworkScrubber:
             except (ValueError, AttributeError, ImportError):
                 continue
 
-        raise DistributableScrubberError(
+        raise PublishedScrubberError(
             f"Cannot resolve class {class_ref} from agent_tool_path={self.agent_tool_path}"
         )
 
@@ -302,18 +302,18 @@ class DistributableNetworkScrubber:
         """Verify nothing dangerous is leaking in the wire form."""
         # No commondefs.
         if "commondefs" in wire:
-            raise DistributableScrubberError(
+            raise PublishedScrubberError(
                 "Scrubbed wire form still contains 'commondefs' — bug in scrubber."
             )
 
         # No class / toolbox remaining on any tool.
         for agent_spec in wire.get("tools", []) or []:
             if "class" in agent_spec:
-                raise DistributableScrubberError(
+                raise PublishedScrubberError(
                     f"Agent {agent_spec.get('name')!r} still has 'class' in wire form."
                 )
             if "toolbox" in agent_spec:
-                raise DistributableScrubberError(
+                raise PublishedScrubberError(
                     f"Agent {agent_spec.get('name')!r} still has 'toolbox' in wire form."
                 )
 
@@ -331,7 +331,7 @@ class DistributableNetworkScrubber:
         for key, value in llm_config.items():
             lower = key.lower()
             if any(pat in lower for pat in self.secret_patterns):
-                raise DistributableScrubberError(
+                raise PublishedScrubberError(
                     f"Secret-looking key {key!r} survived scrubbing in {where}."
                 )
             if isinstance(value, dict):
@@ -339,6 +339,6 @@ class DistributableNetworkScrubber:
             elif isinstance(value, str):
                 # Heuristic: very long hex-ish or sk-/AKIA-prefixed strings might be keys.
                 if re.match(r"^(sk-[A-Za-z0-9_-]{20,}|AKIA[A-Z0-9]{16}|[A-Fa-f0-9]{40,})$", value):
-                    raise DistributableScrubberError(
+                    raise PublishedScrubberError(
                         f"Value of {key!r} in {where} looks like a credential."
                     )

@@ -269,7 +269,7 @@ function renderNetworksList() {
     }
     if (BOOTSTRAP.networks.length === 0) {
         $networksList.innerHTML =
-            "<li class=\"muted\">(this origin has no distributable networks)</li>";
+            "<li class=\"muted\">(this origin has no published networks)</li>";
         return;
     }
     $networksList.innerHTML = "";
@@ -445,11 +445,11 @@ loadSettings();
 applyBranding();
 renderNetworksList();
 
-// Auto-load the first distributable network so the user doesn't have to click.
+// Auto-load the first published network so the user doesn't have to click.
 // switchToNetwork() also builds the graph for that network.
 if (BOOTSTRAP && Array.isArray(BOOTSTRAP.networks) && BOOTSTRAP.networks.length > 0) {
     switchToNetwork(BOOTSTRAP.networks[0]);
 } else {
     buildGraph(null);  // shows the empty-state placeholder
-    setStatus("⚠ no distributable networks on this origin.", true);
+    setStatus("⚠ no published networks on this origin.", true);
 }

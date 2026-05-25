@@ -57,13 +57,13 @@ SAFE_NAME_RE = re.compile(r"\A[A-Za-z0-9_\-]{1,128}\Z")
 
 class ToolHandler(BaseRequestHandler):
     """
-    Invoke a single CodedTool inside a distributable network on this server.
+    Invoke a single CodedTool inside a published network on this server.
     """
 
     # pylint: disable=arguments-differ
     async def post(self, agent_name: str, tool_name: str):
         """
-        :param agent_name: The distributable network's name.
+        :param agent_name: The published network's name.
         :param tool_name: The CodedTool agent name inside that network.
         """
         # Reject any agent_name or tool_name that doesn't match the safe
@@ -97,7 +97,7 @@ class ToolHandler(BaseRequestHandler):
                 # Do not echo the user-supplied agent_name back in the body.
                 self.do_finish(
                     HTTPStatus.NOT_FOUND,
-                    "Agent network is not distributable on this server.",
+                    "Agent network is not published on this server.",
                 )
                 return
 
@@ -216,7 +216,7 @@ class ToolHandler(BaseRequestHandler):
         agent_network: AgentNetwork = public_storage.agents_table.get(agent_name)
         if agent_network is None:
             return None
-        if not agent_network.is_distributable():
+        if not agent_network.is_published():
             return None
         return agent_network
 
