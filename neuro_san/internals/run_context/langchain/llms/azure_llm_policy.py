@@ -111,12 +111,6 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         :param client: The web client to use (if any)
         :return: A BaseLanguageModel (can be Chat or LLM)
         """
-        model_kwargs: Dict[str, Any] = {
-            "stream_options": {
-                "include_usage": True
-            }
-        }
-
         # AzureChatOpenAI just happens to come with langchain_openai
         # pylint: disable=invalid-name
         AzureChatOpenAI = self.resolver.resolve_class_in_module("AzureChatOpenAI",
@@ -149,7 +143,14 @@ class AzureLlmPolicy(OpenAILlmPolicy):
             logprobs=config.get("logprobs"),
             top_logprobs=config.get("top_logprobs"),
             logit_bias=config.get("logit_bias"),
-            streaming=True,  # streaming is always on. Without it token counting will not work.
+            # Disable streaming: neuro-san does not consume per-token chunks from the model,
+            # and disabling streaming reduces per-request LangChain pipeline overhead. Token
+            # usage is still available from the final AIMessage.usage_metadata consumed by
+            # LlmTokenCallbackHandler, so we do not need per-token streaming chunks for usage
+            # accounting. We pass streaming explicitly so langchain_core._should_stream()
+            # recognizes it as opted-out even when a streaming-aware callback is attached to
+            # the run manager.
+            streaming=False,
             n=1,  # n is always 1.  neuro-san will only ever consider one chat completion.
             top_p=config.get("top_p"),
             max_tokens=config.get("max_tokens"),  # This is always for output
@@ -184,10 +185,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
             openai_api_type=self.get_value_or_env(config, "openai_api_type",
                                                   "OPENAI_API_TYPE", client),
 
-            model_version=config.get("model_version"),
-
-            # Needed for token counting
-            model_kwargs=model_kwargs,
+            model_version=config.get("model_version")
         )
 
         return llm
