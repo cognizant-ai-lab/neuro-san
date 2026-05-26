@@ -346,6 +346,8 @@ ENV AGENT_MCP_ONLY="false"
 #   neuro_san.internals.authorization.openfga.open_fga_authorizer.OpenFgaAuthorizer
 # Feel free to make your own as long as it derives from this interface:
 #   neuro_san.internals.authorization.interfaces.authorizer.Authorizer
+# Note that authorization (the ability to anwer the question "Does Actor X have Permission Y on Resource Z?")
+# is not to be confused with authentication (the ability to answer the question "Is Actor X who they say they are?")
 ENV AGENT_AUTHORIZER=""
 
 # The request metadata field to use as the actor id for authorization
