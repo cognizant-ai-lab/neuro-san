@@ -56,6 +56,8 @@ from typing import Tuple
 
 import psutil
 
+from neuro_san.service.utils.service_resources import ServiceResources
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
@@ -197,16 +199,24 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
 
     @staticmethod
     def _snapshot(proc) -> Optional[Dict[str, Any]]:
-        """Capture a point-in-time resource snapshot of a process."""
+        """
+        Capture a point-in-time resource snapshot of a process.
+        Uses ServiceResources to centralize all psutil resource monitoring.
+        """
         try:
-            mem = proc.memory_info()
+            pid = proc.pid
+            # Memory: returns (current_mb, max_mb); we only need current
+            mem_current, _ = ServiceResources.get_memory_used_mbytes(pid=pid)
+            # FD count: returns dict with "total" key on Unix
+            fd_counts = ServiceResources.classify_fds(pid=pid)
+            fd_total = fd_counts.get("total", fd_counts.get("total_handles", 0))
             return {
-                "rss": mem.rss / 1024 / 1024,
-                "fds": proc.num_fds(),
-                "threads": proc.num_threads(),
-                "connections": len(proc.net_connections()),
-                "children": len(proc.children()),
-                "cpu": proc.cpu_percent(interval=0.1),
+                "rss": mem_current,
+                "fds": fd_total,
+                "threads": ServiceResources.get_thread_count(pid=pid),
+                "connections": ServiceResources.get_connection_count(pid=pid),
+                "children": ServiceResources.get_child_count(pid=pid),
+                "cpu": ServiceResources.get_cpu_load(pid=pid),
             }
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             return None
