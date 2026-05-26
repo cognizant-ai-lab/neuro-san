@@ -195,7 +195,7 @@ If you didn't mean to use langfuse for observability, you can do this:
 
         elif run_name is not None:
             # Add .agent to the end to get langfuse to display the agent icon
-            new_name: str = f"{run_name}.agent"
+            new_name: str = f"{run_name} (agent)"
             runnable_config["run_name"] = new_name
 
         request_metadata["langfuse_user_id"] = user_id
