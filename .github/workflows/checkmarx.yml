@@ -8,10 +8,9 @@ permissions:
   pull-requests: write
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    branches:
-      - main
+  schedule:
+    # M-F at 2 am UTC
+    - cron: '0 2 * * 1-5'
 
 jobs:
   checkmarx-scan:
