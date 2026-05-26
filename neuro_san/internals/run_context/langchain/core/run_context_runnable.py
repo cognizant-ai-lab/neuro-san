@@ -32,6 +32,8 @@ from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 from langchain_core.runnables.base import Runnable
+from langchain_core.runnables.config import ensure_config
+from langchain_core.runnables.config import merge_configs
 from langchain_core.runnables.utils import Input
 from langchain_core.runnables.utils import Output
 
@@ -148,8 +150,13 @@ class RunContextRunnable(NeuroSanRunnable):
             # to the logs.  Add this because some people are interested in it.
             callbacks.append(LoggingCallbackHandler(self.logger))
 
-        runnable_config: Dict[str, Any] = self.prepare_runnable_config(callbacks=callbacks,
-                                                                       recursion_limit=max_steps)
+        # Merge with the inherited config from var_child_runnable_config so the parent
+        # RunContextRunnable's AsyncCallbackManager (and its parent_run_id) is preserved.
+        # Without this, our local callbacks list would clobber the inherited manager in
+        # ensure_config(), detaching the agent_chain's spans from the parent trace.
+        local_config: Dict[str, Any] = self.prepare_runnable_config(callbacks=callbacks,
+                                                                    recursion_limit=max_steps)
+        runnable_config: Dict[str, Any] = merge_configs(ensure_config(), local_config)
 
         # Attempt to count tokens/costs while invoking the agent.
         token_counter = LangChainTokenCounter(self.primary_llm, self.invocation_context, self.journal, self.origin)
