@@ -350,6 +350,36 @@ class ServiceResources:
         return cpu_load
 
     @classmethod
+    def get_thread_count(cls, pid: Optional[int] = None) -> int:
+        """
+        Get the number of threads for the process.
+        :param pid: target process ID, or None for the current process.
+        :return: number of threads
+        """
+        p = cls._get_process(pid)
+        return p.num_threads()
+
+    @classmethod
+    def get_connection_count(cls, pid: Optional[int] = None) -> int:
+        """
+        Get the number of network connections for the process.
+        :param pid: target process ID, or None for the current process.
+        :return: number of network connections
+        """
+        p = cls._get_process(pid)
+        return len(p.net_connections())
+
+    @classmethod
+    def get_child_count(cls, pid: Optional[int] = None) -> int:
+        """
+        Get the number of child processes.
+        :param pid: target process ID, or None for the current process.
+        :return: number of child processes
+        """
+        p = cls._get_process(pid)
+        return len(p.children())
+
+    @classmethod
     def get_snapshot_dict(cls, server_port: int, pid: Optional[int] = None) -> Dict[str, Any]:
         """
         Get a snapshot of current resource usage for logging or metrics.
