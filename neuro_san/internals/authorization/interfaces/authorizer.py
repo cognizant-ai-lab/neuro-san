@@ -29,7 +29,7 @@ class Authorizer:
     Note that _authorization_ - the ability to determine permission to access a resource (in
     Neuro SAN's case an agent network) - is not to be confused with _authentication_ -
     the ability to determine a user's identity.  Normally, authentication is done by
-    a system outside the scope of a Neuro SAN server, like a load-balancer for a cluster.
+    a system outside the scope of a Neuro SAN server, like by a load-balancer for a cluster.
 
     The methods here are based on what we need from what packages like OpenFGA or Oso provide,
     that is to assist in answering the question: "Does Actor X have Persmission Y on Resource Z?"
