@@ -162,6 +162,11 @@ class ServiceResources:
     # ---------------------------
     # Public API (cross-platform)
     # ---------------------------
+    @staticmethod
+    def _get_process(pid: Optional[int] = None) -> psutil.Process:
+        """Return a psutil.Process for the given PID, or the current process."""
+        return psutil.Process(pid) if pid is not None else psutil.Process()
+    
     @classmethod
     def classify_fds(cls) -> Dict[str, int]:
         """
