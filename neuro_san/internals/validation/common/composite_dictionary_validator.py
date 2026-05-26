@@ -26,13 +26,19 @@ class CompositeDictionaryValidator(DictionaryValidator):
     Implementation of the DictionaryValidator interface that uses multiple validators
     """
 
-    def __init__(self, validators: List[DictionaryValidator]):
+    def __init__(self, validators: List[DictionaryValidator], stop_on_error: bool = False):
         """
         Constructor
 
         :param validators: A list of validators to use
+        :param stop_on_error: When True, return after the first validator that produces
+                errors instead of running every validator. Useful for ordering phases
+                where later validators assume earlier validators passed (e.g., shape
+                checks before semantic checks that would crash on malformed input).
+                Default False preserves the "collect all errors" behavior.
         """
         self.validators: List[DictionaryValidator] = validators
+        self.stop_on_error: bool = stop_on_error
 
     def validate(self, candidate: Dict[str, Any]) -> List[str]:
         """
@@ -52,6 +58,9 @@ class CompositeDictionaryValidator(DictionaryValidator):
             return errors
 
         for validator in self.validators:
-            errors.extend(validator.validate(candidate))
+            new_errors: List[str] = validator.validate(candidate)
+            errors.extend(new_errors)
+            if new_errors and self.stop_on_error:
+                break
 
         return errors
