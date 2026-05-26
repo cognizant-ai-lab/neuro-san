@@ -55,11 +55,18 @@ class ServiceResources:
     # POSIX helpers (Linux/macOS)
     # ---------------------------
     @classmethod
-    def _iter_fds_posix(cls):
+    def _iter_fds_posix(cls, pid: Optional[int] = None):
         """
-        Iterator over numeric FDs for the current process (Unix/macOS).
+        Iterator over numeric FDs for a process (Unix/macOS).
+        :param pid: target process ID, or None for the current process.
         """
-        fd_dir = "/proc/self/fd" if cls.on_unix else "/dev/fd"
+        # When monitoring an external process, read its /proc/<pid>/fd
+        if pid is not None:
+            fd_dir = f"/proc/{pid}/fd"
+        elif cls.on_unix:
+            fd_dir = "/proc/self/fd"
+        else:
+            fd_dir = "/dev/fd"
         try:
             names = os.listdir(fd_dir)
         except Exception:  # pylint: disable=broad-exception-caught
@@ -73,12 +80,13 @@ class ServiceResources:
             yield fd
 
     @classmethod
-    def _classify_fds_posix(cls) -> Dict[str, int]:
+    def _classify_fds_posix(cls, pid: Optional[int] = None) -> Dict[str, int]:
         """
         Returns counts by FD kind on Unix/macOS:
           regular_file, socket_inet, socket_unix, fifo_pipe, other, total
+        :param pid: target process ID, or None for the current process.
         """
-        p = psutil.Process()
+        p = cls._get_process(pid)
 
         # Maps of socket FDs to distinguish AF_INET vs AF_UNIX
         inet_fds = {c.fd for c in p.connections(kind="inet")}  # tcp/udp
@@ -87,7 +95,7 @@ class ServiceResources:
         fd_dict: Dict[str, int] = {}
         total_fds = 0
 
-        for fd in cls._iter_fds_posix() or ():
+        for fd in cls._iter_fds_posix(pid=pid) or ():
             try:
                 st = os.fstat(fd)
             except OSError:
@@ -121,7 +129,7 @@ class ServiceResources:
     # Windows helpers
     # ---------------------------
     @classmethod
-    def _classify_handles_windows(cls) -> Dict[str, int]:
+    def _classify_handles_windows(cls, pid: Optional[int] = None) -> Dict[str, int]:
         """
         Returns a simplified breakdown on Windows using psutil:
 
@@ -133,8 +141,9 @@ class ServiceResources:
         Notes:
           * Windows does not expose POSIX FDs; we count OS handles instead.
           * We cannot reliably enumerate every handle type without native WinAPI.
+        :param pid: target process ID, or None for the current process.
         """
-        p = psutil.Process()
+        p = cls._get_process(pid)
 
         try:
             total_handles = p.num_handles()  # all handles owned by this process
@@ -164,36 +173,41 @@ class ServiceResources:
     # ---------------------------
     @staticmethod
     def _get_process(pid: Optional[int] = None) -> psutil.Process:
-        """Return a psutil.Process for the given PID, or the current process."""
+        """
+        Return a psutil.Process for the given PID, or the current process.
+        :param pid: target process ID, or None for the current process.
+        """
         return psutil.Process(pid) if pid is not None else psutil.Process()
-    
+
     @classmethod
-    def classify_fds(cls) -> Dict[str, int]:
+    def classify_fds(cls, pid: Optional[int] = None) -> Dict[str, int]:
         """
         Cross-platform classification:
           * Unix/macOS: returns per-FD kinds + "total"
           * Windows:    returns per-handle kinds + "total_handles"
+        :param pid: target process ID, or None for the current process.
         """
         if cls.on_unix or cls.on_macos:
-            return cls._classify_fds_posix()
+            return cls._classify_fds_posix(pid=pid)
         if cls.on_windows:
-            return cls._classify_handles_windows()
+            return cls._classify_handles_windows(pid=pid)
         # Fallback: try POSIX path; if not, return minimal info
         try:
-            return cls._classify_fds_posix()
+            return cls._classify_fds_posix(pid=pid)
         except Exception:  # pylint: disable=broad-exception-caught
-            p = psutil.Process()
+            p = cls._get_process(pid)
             return {"total_unknown": getattr(p, "num_fds", lambda: 0)()}
 
     @classmethod
-    def get_fd_usage(cls) -> Tuple[Dict[str, int], Optional[int], Optional[int]]:
+    def get_fd_usage(cls, pid: Optional[int] = None) -> Tuple[Dict[str, int], Optional[int], Optional[int]]:
         """
         Returns (counts_dict, soft_limit, hard_limit).
 
         * Unix/macOS: soft/hard are RLIMIT_NOFILE integers.
         * Windows:    returns (counts_dict, None, None) since RLIMIT_NOFILE does not apply.
+        :param pid: target process ID, or None for the current process.
         """
-        counts = cls.classify_fds()
+        counts = cls.classify_fds(pid=pid)
 
         if (cls.on_unix or cls.on_macos) and resource is not None:
             soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
@@ -202,14 +216,15 @@ class ServiceResources:
         # Windows / unknown
         return counts, None, None
 
-    # --- internal helper: get this process's TCP connections, psutil-6-safe ---
+    # --- internal helper: get a process's TCP connections, psutil-6-safe ---
     @classmethod
-    def _proc_tcp_conns(cls) -> List[Any]:
+    def _proc_tcp_conns(cls, pid: Optional[int] = None) -> List[Any]:
         """
-        Return TCP connections for the current process, with a fallback that
+        Return TCP connections for a process, with a fallback that
         is compatible with psutil 6.x where Process.connections may be deprecated.
+        :param pid: target process ID, or None for the current process.
         """
-        p = psutil.Process()
+        p = cls._get_process(pid)
         try:
             # Works on psutil <= 5.x and (for now) also on many 6.x installs
             return p.connections(kind="tcp")
@@ -258,10 +273,11 @@ class ServiceResources:
         return result
 
     @classmethod
-    def classify_sockets(cls, server_port: int) -> Dict[str, Any]:
+    def classify_sockets(cls, server_port: int, pid: Optional[int] = None) -> Dict[str, Any]:
         """
         Classify active sockets bound to the given server port.
         :param server_port: server port
+        :param pid: target process ID, or None for the current process.
         :return: dictionary with keys:
            "inbound_listen": number of inbound listening sockets;
            "inbound_accepted": number of accepted inbound connections;
@@ -272,7 +288,7 @@ class ServiceResources:
           * Dual-stack listeners typically appear as separate IPv4/IPv6 LISTEN sockets.
           * Multi-process servers (Tornado server.start(N)) must call this in each worker PID.
         """
-        tcp = cls._proc_tcp_conns()
+        tcp = cls._proc_tcp_conns(pid=pid)
 
         inbound_listen = 0
         inbound_accepted_list: list = []
@@ -302,22 +318,24 @@ class ServiceResources:
         }
 
     @classmethod
-    def get_memory_used_mbytes(cls) -> Tuple[float, float]:
+    def get_memory_used_mbytes(cls, pid: Optional[int] = None) -> Tuple[float, float]:
         """
         Get the current memory usage of the process in megabytes
         and maximum memory used since process start, and update the maximum if current usage is higher.
+        :param pid: target process ID, or None for the current process.
         :return: tuple of (current_memory_used_mbytes, max_memory_used_mbytes)
         """
-        p = psutil.Process()
+        p = cls._get_process(pid)
         mem_info = p.memory_info()
         cls.max_memory_used_bytes = max(cls.max_memory_used_bytes, mem_info.rss)
         # Return memory sizes in megabytes
         return mem_info.rss / (1024 * 1024), cls.max_memory_used_bytes / (1024 * 1024)
 
     @classmethod
-    def get_cpu_load(cls) -> float:
+    def get_cpu_load(cls, pid: Optional[int] = None) -> float:
         """
         Get the current CPU load percentage of the process.
+        :param pid: target process ID, or None for the current process.
         :return: CPU load percentage over a short interval (e.g., 0.1 seconds)
                  in the range [0.0, 100.0]
         """
@@ -327,21 +345,22 @@ class ServiceResources:
             denom = len(os.sched_getaffinity(0))
         else:
             denom = max(psutil.cpu_count(), 1)
-        cpu_load = psutil.Process().cpu_percent(interval=0.1)
+        cpu_load = cls._get_process(pid).cpu_percent(interval=0.1)
         cpu_load = min(cpu_load / denom, 100.0)
         return cpu_load
 
     @classmethod
-    def get_snapshot_dict(cls, server_port: int) -> Dict[str, Any]:
+    def get_snapshot_dict(cls, server_port: int, pid: Optional[int] = None) -> Dict[str, Any]:
         """
         Get a snapshot of current resource usage for logging or metrics.
         :param server_port: server port to classify sockets
+        :param pid: target process ID, or None for the current process.
         :return: dictionary with resource usage information
         """
         # Get used file descriptors:
-        fd_usage, soft_limit, hard_limit = cls.get_fd_usage()
-        mem_used, mem_max = cls.get_memory_used_mbytes()
-        cpu_load: float = cls.get_cpu_load()
+        fd_usage, soft_limit, hard_limit = cls.get_fd_usage(pid=pid)
+        mem_used, mem_max = cls.get_memory_used_mbytes(pid=pid)
+        cpu_load: float = cls.get_cpu_load(pid=pid)
         snapshot: Dict[str, Any] = {
             "fd_usage": fd_usage,
             "fd_limits": {
@@ -354,6 +373,6 @@ class ServiceResources:
             },
             # Round CPU load to 3 decimal places for more compact output
             "cpu_load": round(cpu_load, 3),
-            "socket_usage": cls.classify_sockets(server_port)
+            "socket_usage": cls.classify_sockets(server_port, pid=pid)
         }
         return snapshot
