@@ -31,7 +31,10 @@ class Authorizer:
     the ability to determine a user's identity.  Normally, authentication is done by
     a system outside the scope of a Neuro SAN server, like a load-balancer for a cluster.
 
-    The methods here are based on what we need from what packages like OpenFGA or Oso provide.
+    The methods here are based on what we need from what packages like OpenFGA or Oso provide,
+    that is to assist in answering the question: "Does Actor X have Persmission Y on Resource Z?"
+    It is assumed at this level that the identity of Actor X has already been authenticated
+    outside the scope of a Neuro SAN server, if that is desired and necessary.
     """
 
     async def __aenter__(self) -> Authorizer:
