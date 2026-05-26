@@ -5,7 +5,6 @@ name: Checkmarx One
 permissions:
   contents: read
   security-events: write
-  pull-requests: write
 
 on:
   schedule:
