@@ -600,6 +600,9 @@
         # https://platform.claude.com/docs/en/about-claude/pricing
         "price_per_1k_input_tokens": 0.005,
         "price_per_1k_output_tokens": 0.025,
+        # The Anthropic API returns a 400 error when temperature, top_k, or top_p is sent
+        # for this model.
+        "deprecated_params": ["temperature", "top_k", "top_p"],
     }
 
 
