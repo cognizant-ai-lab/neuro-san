@@ -16,7 +16,7 @@ jobs:
     if: >
       (github.event_name == 'push' && github.ref != 'refs/heads/main') ||
       (github.event_name == 'pull_request' && github.base_ref == 'main')
-    # pinned to build-common main for hadolint test
+    # 1.0.5
     uses: cognizant-ai-lab/build-common/.github/workflows/_python-quality-gate.yml@550f3d7338e598c813b9580a238141328f7baaaa
     with:
       python-version: '3.12'

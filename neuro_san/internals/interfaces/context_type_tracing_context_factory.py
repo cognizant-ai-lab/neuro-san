@@ -19,19 +19,20 @@ from typing import Any
 from typing import Dict
 
 from neuro_san.internals.interfaces.run_target import RunTarget
+from neuro_san.internals.interfaces.tracing_context import TracingContext
 
 
 class ContextTypeTracingContextFactory:
     """
-    Interface for Factory classes creating tracing contexts for RunTargets.
+    Interface for Factory classes creating TracingContexts for RunTargets.
     """
 
-    def create_tracing_context(self, config: Dict[str, Any], run_target: RunTarget) -> RunTarget:
+    def create_tracing_context(self, config: Dict[str, Any], run_target: RunTarget) -> TracingContext:
         """
         Creates a RunTarget based on another RunTarget
 
         :param config: The configuration for the tracing context
         :param run_target: The RunTarget instance to be traced
-        :return: Another RunTarget which will be the tracing context
+        :return: An appropriate TracingContext
         """
         raise NotImplementedError
