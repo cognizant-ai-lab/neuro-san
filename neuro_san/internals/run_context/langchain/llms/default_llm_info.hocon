@@ -601,7 +601,8 @@
         "price_per_1k_input_tokens": 0.005,
         "price_per_1k_output_tokens": 0.025,
         # The Anthropic API returns a 400 error when temperature, top_k, or top_p is sent
-        # for this model.
+        # for this model. temperature is actively injected by default_config (0.7); top_k
+        # and top_p are already null but included here as a safety measure.
         "deprecated_params": ["temperature", "top_k", "top_p"],
     }
 
