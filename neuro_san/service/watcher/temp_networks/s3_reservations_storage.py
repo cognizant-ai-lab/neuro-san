@@ -392,34 +392,35 @@ class S3ReservationsStorage(AbstractReservationsStorage):
 
     def iter_reservation_keys(self) -> Iterable[str]:
         """
-        Lists ALL objects (under current S3 bucket prefix) using a paginator.
-        Yields object keys.
+        Lists ALL objects under the current S3 bucket prefix and yields their
+        object keys.
 
-        boto3's paginator returns a *lazy* PageIterator: paginator.paginate(...)
-        itself performs no S3 call -- each HTTP request happens during next()
-        on the iterator. We therefore retry around the per-page fetch rather
-        than around the iterator construction, so transient
-        ClientError/BotoCoreError raised mid-iteration is recovered.
-        boto3 paginators are stateful: on a failed next() the ContinuationToken
-        is not advanced, so a retried next() re-issues the same request.
-
-        next() is called with a sentinel default to signal exhaustion without
-        raising StopIteration (which inside this generator function would be
-        converted to RuntimeError per PEP 479).
+        Pages through results by calling list_objects_v2 directly with
+        ContinuationToken rather than using a boto3 Paginator. Each
+        list_objects_v2 call is a single, eager HTTP request, so wrapping it
+        in _do_with_retries gives correct per-page retry semantics for
+        transient ClientError/BotoCoreError: each page fetch is retried in
+        isolation, and the ContinuationToken from the previous successful
+        response is only consulted after that response has actually arrived.
         """
-        paginator = self.s3_client.get_paginator("list_objects_v2")
-        page_iter = iter(paginator.paginate(
-            Bucket=self.bucket_name,
-            Prefix=self.prefix,
-            PaginationConfig={"PageSize": self.max_keys_per_page},
-        ))
-        end_of_pages = object()
+        continuation_token = None
         while True:
-            page = self._do_with_retries(partial(next, page_iter, end_of_pages))
-            if page is end_of_pages:
-                break
-            for obj in page.get("Contents", []):
+            kwargs = {
+                "Bucket": self.bucket_name,
+                "Prefix": self.prefix,
+                "MaxKeys": self.max_keys_per_page,
+            }
+            if continuation_token:
+                kwargs["ContinuationToken"] = continuation_token
+            response = self._do_with_retries(
+                partial(self.s3_client.list_objects_v2, **kwargs)
+            )
+            for obj in response.get("Contents", []):
                 yield obj["Key"]
+            if not response.get("IsTruncated"):
+                # This was the last page - exit loop
+                break
+            continuation_token = response["NextContinuationToken"]
 
     def expire_reservations(self):
         """

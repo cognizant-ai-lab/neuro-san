@@ -15,79 +15,80 @@
 #
 # END COPYRIGHT
 """
-S3ReservationsStorage.iter_reservation_keys() lists S3 objects via a
-boto3 paginator. boto3 paginators are *lazy*: paginator.paginate(...)
-returns a PageIterator that performs no S3 call at construction time;
-the actual ListObjectsV2 HTTP requests happen during iteration.
-
-The original implementation wrapped only the paginator-creation call in
-_do_with_retries, which never hit a retryable error because it never
-made a network call. Transient ClientError/BotoCoreError raised
-mid-iteration therefore bypassed the retry wrapper entirely.
-
-This module exercises the fixed implementation: the per-page next()
-call is what _do_with_retries wraps, so a one-shot ThrottlingException
-on the first page fetch is retried and the listing recovers.
+S3ReservationsStorage.iter_reservation_keys() pages through S3 by
+calling list_objects_v2 directly with ContinuationToken, with each
+call wrapped in _do_with_retries. This module exercises that retry
+behavior: a transient ThrottlingException on the first page-fetch
+attempt is retried, the retry succeeds, pagination continues, and the
+listing yields every key in order.
 """
+from unittest.mock import MagicMock
 from unittest.mock import patch
 
-from tests.neuro_san.service.watcher.temp_networks._fake_page_iterator \
-    import FakePageIterator
-from tests.neuro_san.service.watcher.temp_networks._fake_paginator \
-    import FakePaginator
-from tests.neuro_san.service.watcher.temp_networks._test_base \
+from botocore.exceptions import ClientError
+
+from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
 
 
 class TestRetryOnListingPagination(S3ReservationsStorageTestBase):
     """
     Verifies that iter_reservation_keys() recovers from a transient
-    ClientError raised by the boto3 paginator mid-iteration. The fix
-    moved _do_with_retries from around paginator construction (a
-    constant-time call that does no S3 work) to around each per-page
-    next() call (where the ListObjectsV2 HTTP request actually
-    happens).
+    ClientError raised by list_objects_v2 and correctly threads the
+    ContinuationToken across multiple pages.
     """
 
-    def test_iter_reservation_keys_retries_on_throttling_mid_iteration(self):
+    def test_iter_reservation_keys_retries_on_throttling_mid_listing(self):
         """
-        On a transient ThrottlingException raised by the first page
-        fetch, iter_reservation_keys() should retry the next() call.
-        The retry should succeed and the listing should yield every
-        key from every configured page in order, with no keys lost
-        from the failed first attempt.
+        On a transient ThrottlingException raised by the first
+        list_objects_v2 call, iter_reservation_keys() should retry. The
+        retry should succeed and pagination should continue using the
+        NextContinuationToken returned by the page-1 response. All
+        configured keys should be yielded in page order, with no keys
+        lost from the failed first attempt.
         """
-        # Two pages, three keys total. The first __next__ on the page
-        # iterator raises a throttle; the retry returns page 1; the
-        # call after that returns page 2; the call after that raises
-        # StopIteration (caught by next(it, sentinel) in the production
-        # code, signaling end-of-iteration without an exception).
-        pages = [
-            {"Contents": [
+        # Two-page listing. Page 1 reports IsTruncated=True with a
+        # NextContinuationToken; page 2 reports IsTruncated=False and so
+        # ends the loop.
+        page_one_response = {
+            "Contents": [
                 {"Key": "reservations/copy_cat-test-UUID-0001.json"},
                 {"Key": "reservations/copy_cat-test-UUID-0002.json"},
-            ]},
-            {"Contents": [
+            ],
+            "IsTruncated": True,
+            "NextContinuationToken": "page-2-token",
+        }
+        page_two_response = {
+            "Contents": [
                 {"Key": "reservations/copy_cat-test-UUID-0003.json"},
-            ]},
-        ]
-        page_iter = FakePageIterator(pages, fail_on_calls={1})
-        paginator = FakePaginator(page_iter)
+            ],
+            "IsTruncated": False,
+        }
+        throttle_error = ClientError(
+            {
+                "Error": {"Code": "ThrottlingException"},
+                "ResponseMetadata": {"HTTPStatusCode": 503},
+            },
+            "ListObjectsV2",
+        )
 
-        # Inject a paginator factory onto the in-memory FakeS3Client for
-        # the duration of this test only. The base-class fake does not
-        # ship with get_paginator because no earlier test needed
-        # pagination.
-        # pylint: disable=unused-argument
-        def get_paginator(name):
-            """Stand-in for boto3 Client.get_paginator; ignores its operation-name arg."""
-            return paginator
+        # The side_effect sequence drives the in-order call semantics:
+        # call 1 raises (the throttle), call 2 returns page 1 (the retry),
+        # call 3 returns page 2. MagicMock raises StopIteration if the
+        # production code calls more times than expected, which surfaces
+        # over-retry regressions as a hard test failure.
+        list_objects_v2 = MagicMock(
+            side_effect=[throttle_error, page_one_response, page_two_response]
+        )
 
-        self.fake_s3.get_paginator = get_paginator
+        # Inject onto the in-memory FakeS3Client for the duration of this
+        # test only; the base-class fake does not ship with list_objects_v2
+        # because no earlier test needed it.
+        self.fake_s3.list_objects_v2 = list_objects_v2
 
-        # Skip the real exponential-backoff sleep so the test stays
-        # fast. Patches the module-local time.sleep symbol that
-        # _do_with_retries uses.
+        # Skip the real exponential-backoff sleep so the test stays fast.
+        # Patches the module-local time.sleep symbol that _do_with_retries
+        # uses.
         with patch(
             "neuro_san.service.watcher.temp_networks."
             "s3_reservations_storage.time.sleep"
@@ -95,8 +96,9 @@ class TestRetryOnListingPagination(S3ReservationsStorageTestBase):
             keys = list(self.storage.iter_reservation_keys())
 
         # Every configured key is yielded exactly once, in page order.
-        # This would have failed under the original implementation: the
-        # mid-iteration throttle would have aborted the whole listing.
+        # Under the original (paginator-based) implementation a mid-listing
+        # throttle aborted the whole listing; the rewrite isolates the
+        # retry to one page fetch at a time.
         self.assertEqual(
             [
                 "reservations/copy_cat-test-UUID-0001.json",
@@ -107,14 +109,29 @@ class TestRetryOnListingPagination(S3ReservationsStorageTestBase):
             f"Expected all configured page keys to be yielded after retry; got {keys}.",
         )
 
-        # __next__ was invoked exactly four times: 1 throttled, then
-        # 1 retry that returned page 1, 1 that returned page 2, 1 that
-        # signaled end-of-iteration. Catches "no retry happened"
-        # (count == 3 with the throttle propagating out) and
-        # "over-retried beyond what we expect" (count > 4).
+        # list_objects_v2 was invoked exactly three times: 1 throttled,
+        # 1 retry that returned page 1, 1 that returned page 2. Catches
+        # "no retry happened" (count == 1, throttle propagated out) and
+        # "over-retried beyond what we expect" (count > 3).
         self.assertEqual(
-            4,
-            page_iter.call_count,
-            f"Expected exactly 4 paginator __next__ calls (1 throttled + "
-            f"2 successful + 1 end-of-iteration); got {page_iter.call_count}.",
+            3,
+            list_objects_v2.call_count,
+            f"Expected exactly 3 list_objects_v2 calls (1 throttled + 1 retry + "
+            f"1 second page); got {list_objects_v2.call_count}.",
+        )
+
+        # The first two calls (page 1 attempt + its retry) carry no
+        # ContinuationToken; the third call carries the token returned in
+        # page 1's response. Verifies that the production code (a) does
+        # not advance the token until the page fetch actually succeeds,
+        # and (b) threads the token from one response into the next request.
+        actual_tokens = [
+            call.kwargs.get("ContinuationToken")
+            for call in list_objects_v2.call_args_list
+        ]
+        self.assertEqual(
+            [None, None, "page-2-token"],
+            actual_tokens,
+            f"Expected ContinuationToken sequence [None, None, 'page-2-token']; "
+            f"got {actual_tokens}.",
         )
