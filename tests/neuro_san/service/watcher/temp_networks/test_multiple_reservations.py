@@ -19,7 +19,7 @@ S3ReservationsStorage.add_reservations accepts a dict of multiple
 {Reservation: agent_spec} pairs. This module exercises the for-loop
 that iterates over those pairs.
 """
-from tests.neuro_san.service.watcher.temp_networks._test_base \
+from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
 
 

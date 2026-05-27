@@ -18,7 +18,7 @@
 S3ReservationsStorage.add_reservations writes each reservation to a
 specific S3 object key. This module pins that key format as a contract.
 """
-from tests.neuro_san.service.watcher.temp_networks._test_base \
+from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
 
 
@@ -52,7 +52,7 @@ class TestObjectKeyFormat(S3ReservationsStorageTestBase):
         # the storage's own helper would defeat the purpose of pinning
         # the format - a refactored helper would silently match a
         # refactored writer. The prefix "reservations/" is configured in
-        # _test_base.setUp; the per-reservation suffix "{id}.json" is
+        # S3ReservationsStorageTestBase.setUp; the per-reservation suffix "{id}.json" is
         # the documented layout.
         expected_key = f"reservations/{reservation_id}.json"
 
