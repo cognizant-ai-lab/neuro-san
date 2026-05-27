@@ -346,7 +346,7 @@ used for the agent.  Default is set for 2 minutes.
 ### max_attempts
 
 A positive integer (i.e. >= 1) indicating the maximum number of times to attempt an agent run given any failures.
-This is different from [max_steps](#max_steps) in that it specifically relates to errors encounted
+This is different from [max_steps](#max_steps) in that it specifically relates to errors encountered
 during agent execution as opposed to limiting the number of super-steps.
 The default setting is to use 3 attempts.
 
