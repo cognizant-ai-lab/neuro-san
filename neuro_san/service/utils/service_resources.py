@@ -48,8 +48,9 @@ class ServiceResources:
     on_macos: bool = sys.platform.startswith("darwin")
     on_windows: bool = sys.platform.startswith("win")
 
-    # High watermark for memory usage in bytes since process start (for logging purposes)
-    max_memory_used_bytes: float = 0.0
+    # High watermark for memory usage in bytes since process start (for logging purposes).
+    # Keyed by PID; None key represents the current process.
+    _max_memory_used_bytes: Dict[Optional[int], float] = {}
 
     # ---------------------------
     # POSIX helpers (Linux/macOS)
@@ -60,15 +61,20 @@ class ServiceResources:
         Iterator over numeric FDs for a process (Unix/macOS).
         :param pid: target process ID, or None for the current process.
         """
-        # When monitoring an external process, read its /proc/<pid>/fd
-        if pid is not None:
+        if pid is not None and cls.on_unix:
+            # Linux: external process FDs are visible via /proc/<pid>/fd
             fd_dir = f"/proc/{pid}/fd"
+        elif pid is not None:
+            # macOS: /dev/fd only lists the current process's FDs;
+            # there is no /proc/<pid>/fd equivalent.
+            # Callers should fall back to psutil.Process(pid).num_fds().
+            return
         elif cls.on_unix:
-            # /proc/self/fd is a Linux procfs directory listing all open FDs
-            # for the calling process. See: https://man7.org/linux/man-pages/man5/proc.5.html
+            # Linux: /proc/self/fd is a procfs symlink to the current process's FDs.
+            # See: https://man7.org/linux/man-pages/man5/proc.5.html
             fd_dir = "/proc/self/fd"
         else:
-            # /dev/fd is the macOS equivalent of /proc/self/fd.
+            # macOS: /dev/fd lists the current process's open file descriptors.
             # See: https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man4/fd.4.html
             fd_dir = "/dev/fd"
         try:
@@ -89,8 +95,25 @@ class ServiceResources:
         Returns counts by FD kind on Unix/macOS:
           regular_file, socket_inet, socket_unix, fifo_pipe, other, total
         :param pid: target process ID, or None for the current process.
+
+        For external PIDs on macOS, per-FD classification is not possible
+        (no /proc filesystem). Falls back to psutil.Process(pid).num_fds()
+        for a total count only.
         """
         p = cls._get_process(pid)
+
+        # On macOS with an external PID, we cannot enumerate individual FDs.
+        # Fall back to psutil for a simple total count.
+        if pid is not None and not cls.on_unix:
+            fd_dict: Dict[str, int] = {
+                "regular_file": 0,
+                "socket_inet": 0,
+                "socket_unix": 0,
+                "fifo_pipe": 0,
+                "other": 0,
+                "total": p.num_fds(),
+            }
+            return fd_dict
 
         # Maps of socket FDs to distinguish AF_INET vs AF_UNIX
         inet_fds = {c.fd for c in p.connections(kind="inet")}  # tcp/udp
@@ -101,7 +124,12 @@ class ServiceResources:
 
         for fd in cls._iter_fds_posix(pid=pid) or ():
             try:
-                st = os.fstat(fd)
+                if pid is not None:
+                    # For external processes, stat via /proc/<pid>/fd/<fd> path
+                    # because os.fstat(fd) would stat this process's own FD table.
+                    st = os.stat(f"/proc/{pid}/fd/{fd}")
+                else:
+                    st = os.fstat(fd)
             except OSError:
                 continue  # fd may have just closed
             mode = st.st_mode
@@ -207,11 +235,18 @@ class ServiceResources:
         """
         Returns (counts_dict, soft_limit, hard_limit).
 
-        * Unix/macOS: soft/hard are RLIMIT_NOFILE integers.
+        * Unix/macOS: soft/hard are RLIMIT_NOFILE integers for the current process.
         * Windows:    returns (counts_dict, None, None) since RLIMIT_NOFILE does not apply.
+        * External PID: returns (counts_dict, None, None) because resource.getrlimit
+          only reads the current process's limits, not the target's.
         :param pid: target process ID, or None for the current process.
         """
         counts = cls.classify_fds(pid=pid)
+
+        # resource.getrlimit returns limits for the current process only.
+        # For external PIDs, return None to avoid reporting misleading values.
+        if pid is not None:
+            return counts, None, None
 
         if (cls.on_unix or cls.on_macos) and resource is not None:
             soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
@@ -326,14 +361,18 @@ class ServiceResources:
         """
         Get the current memory usage of the process in megabytes
         and maximum memory used since process start, and update the maximum if current usage is higher.
+        High-water mark is tracked per PID to avoid cross-contamination
+        when monitoring multiple processes.
         :param pid: target process ID, or None for the current process.
         :return: tuple of (current_memory_used_mbytes, max_memory_used_mbytes)
         """
         p = cls._get_process(pid)
         mem_info = p.memory_info()
-        cls.max_memory_used_bytes = max(cls.max_memory_used_bytes, mem_info.rss)
+        prev_max = cls._max_memory_used_bytes.get(pid, 0.0)
+        new_max = max(prev_max, mem_info.rss)
+        cls._max_memory_used_bytes[pid] = new_max
         # Return memory sizes in megabytes
-        return mem_info.rss / (1024 * 1024), cls.max_memory_used_bytes / (1024 * 1024)
+        return mem_info.rss / (1024 * 1024), new_max / (1024 * 1024)
 
     @classmethod
     def get_cpu_load(cls, pid: Optional[int] = None) -> float:
