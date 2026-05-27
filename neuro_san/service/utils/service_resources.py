@@ -28,6 +28,8 @@ from typing import Optional
 from typing import Tuple
 import psutil
 
+from neuro_san.service.utils.server_context import ServerContext
+
 # Unix-only
 try:
     # pylint: disable=invalid-name
@@ -50,6 +52,16 @@ class ServiceResources:
 
     # High watermark for memory usage in bytes since process start (for logging purposes)
     max_memory_used_bytes: float = 0.0
+
+    server_context: Optional[ServerContext] = None  # service ServerContext object for obtaining run-time metrics
+
+    @classmethod
+    def set_server_context(cls, context: ServerContext):
+        """
+        Set the ServerContext for this class, which can be used to obtain run-time metrics.
+        :param context: ServerContext instance
+        """
+        cls.server_context = context
 
     # ---------------------------
     # POSIX helpers (Linux/macOS)
@@ -338,17 +350,20 @@ class ServiceResources:
         mem_used, mem_max = cls.get_memory_used_mbytes()
         cpu_load: float = cls.get_cpu_load()
         snapshot: Dict[str, Any] = {
-            "fd_usage": fd_usage,
-            "fd_limits": {
-                "soft": soft_limit,
-                "hard": hard_limit
-            },
+            # "fd_usage": fd_usage,
+            # "fd_limits": {
+            #     "soft": soft_limit,
+            #     "hard": hard_limit
+            # },
             "memory_usage_mbytes": {
                 "current": mem_used,
                 "max_since_start": mem_max
             },
             # Round CPU load to 3 decimal places for more compact output
-            "cpu_load": round(cpu_load, 3),
-            "socket_usage": cls.classify_sockets(server_port)
+            # "cpu_load": round(cpu_load, 3),
+            # "socket_usage": cls.classify_sockets(server_port)
         }
+        if cls.server_context is not None:
+            snapshot["executor_threads"] = cls.server_context.get_executor_pool().get_threads_metrics()
+        snapshot["total_threads"] = psutil.Process().num_threads()
         return snapshot
