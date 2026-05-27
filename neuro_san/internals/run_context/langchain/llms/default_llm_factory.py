@@ -257,11 +257,6 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         full_config["class"] = chat_class_name
         full_config["model_name"] = llm_entry.get("use_model_name", use_model_name)
 
-        # Null out any parameters that the model's provider has deprecated.
-        deprecated_params: List[str] = llm_entry.get("deprecated_params", [])
-        for param in deprecated_params:
-            full_config[param] = None
-
         # Get any required api keys into the full config.
         full_config = self.replace_any_required_api_keys(full_config, sly_data)
         if full_config is not None and not isinstance(full_config, set):
