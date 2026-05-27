@@ -38,7 +38,7 @@ class TestRetryOnListingPagination(S3ReservationsStorageTestBase):
     ContinuationToken across multiple pages.
     """
 
-    def test_iter_reservation_keys_retries_on_throttling_mid_listing(self):
+    def test_iter_reservation_keys_retries_on_throttling_first_page(self):
         """
         On a transient ThrottlingException raised by the first
         list_objects_v2 call, iter_reservation_keys() should retry. The
