@@ -389,15 +389,19 @@ class ServiceResources:
         """
         target_pid = pid if pid is not None else 0
         if hasattr(os, "sched_getaffinity"):
-            # sched_getaffinity(pid) returns the set of CPUs the process is allowed
-            # to run on. Passing 0 means the current process.
-            denom = len(os.sched_getaffinity(target_pid))
+            try:
+                # sched_getaffinity(pid) returns the set of CPUs the process is allowed
+                # to run on. Passing 0 means the current process.
+                denom = len(os.sched_getaffinity(target_pid))
+            except (ProcessLookupError, PermissionError, OSError):
+                # Target process may have exited or be inaccessible.
+                # Fall back to system-wide CPU count.
+                denom = max(psutil.cpu_count(), 1)
         else:
             denom = max(psutil.cpu_count(), 1)
         cpu_load = cls._get_process(pid).cpu_percent(interval=0.1)
         cpu_load = min(cpu_load / denom, 100.0)
         return cpu_load
-
     @classmethod
     def get_thread_count(cls, pid: Optional[int] = None) -> int:
         """
