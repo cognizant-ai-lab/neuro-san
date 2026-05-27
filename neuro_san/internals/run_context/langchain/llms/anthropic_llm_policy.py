@@ -53,6 +53,9 @@ class AnthropicLlmPolicy(LlmPolicy):
         llm = ChatAnthropic(
             model_name=model_name,
             max_tokens=config.get("max_tokens"),  # This is always for output
+            temperature=config.get("temperature"),
+            top_k=config.get("top_k"),
+            top_p=config.get("top_p"),
             default_request_timeout=config.get("default_request_timeout"),
             max_retries=config.get("max_retries"),
             stop_sequences=config.get("stop_sequences"),

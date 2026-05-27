@@ -1076,8 +1076,9 @@
                 # Note that we can only supply arguments that are "Just Data" in nature.
                 # See https://python.langchain.com/api_reference/anthropic/chat_models/langchain_anthropic.chat_models.ChatAnthropic.html#langchain_anthropic.chat_models.ChatAnthropic
                 "max_tokens": null,
-                # temperature, top_k, and top_p are not passed to ChatAnthropic;
-                # newer models (Opus 4.7+) reject them outright with a 400 error.
+                "temperature": null,
+                "top_k": null,
+                "top_p": null,
                 "default_request_timeout": null,
                 "max_retries": 2,
                 "stop_sequences": null,
@@ -1258,9 +1259,10 @@
 
         "model_name": "gpt-5.2",           # The string name of the default model to use.
 
-        "temperature": 0.7,                 # The default LLM temperature (randomness) to use.
+        "temperature": null,                 # The default LLM temperature (randomness) to use.
                                             # Values are floats between 0.0 (least random) to
                                             # 1.0 (most random).
+                                            # null means use the provider's default.
 
         "prompt_token_fraction": 1.0,       # The fraction of total tokens (not necessarily words
                                             # or letters) to use for a prompt. Each model_name

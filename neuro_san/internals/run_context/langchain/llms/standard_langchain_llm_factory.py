@@ -45,7 +45,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         "temperature"               A float "temperature" value with which to
                                     initialize the chat model.  In general,
                                     higher temperatures yield more random results.
-                                    Default if not specified is 0.7
+                                    Default if not specified is the provider's default.
 
         "max_tokens"                The maximum number of tokens to use in
                                     get_max_prompt_tokens(). By default, this comes from
