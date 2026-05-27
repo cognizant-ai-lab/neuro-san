@@ -402,6 +402,7 @@ class ServiceResources:
         cpu_load = cls._get_process(pid).cpu_percent(interval=0.1)
         cpu_load = min(cpu_load / denom, 100.0)
         return cpu_load
+
     @classmethod
     def get_thread_count(cls, pid: Optional[int] = None) -> int:
         """
