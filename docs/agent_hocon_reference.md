@@ -36,7 +36,7 @@ Items in ***bold*** are essentials. Try to understand these first.
     - [max_steps](#max_steps)
     - [max_iterations](#max_iterations)
     - [max_execution_seconds](#max_execution_seconds)
-    - [max_retries](#max_retries)
+    - [max_attempts](#max_attempts)
     - [metadata](#metadata)
         - [description](#description)
         - [tags](#tags)
@@ -80,7 +80,7 @@ Items in ***bold*** are essentials. Try to understand these first.
     - [max_steps](#max_steps-1)
     - [max_iterations](#max_iterations-1)
     - [max_execution_seconds](#max_execution_seconds-1)
-    - [max_retries](#max_retries-1)
+    - [max_attempts](#max_attempts-1)
     - [error_formatter](#error_formatter-1)
     - [error_fragments](#error_fragments-1)
     - [structure_formats](#structure_formats)
@@ -343,12 +343,12 @@ An integer controlling the maximum amount of wall clock time (in seconds) to spe
 [AgentExecutor](https://api.python.langchain.com/en/latest/agents/langchain.agents.agent.AgentExecutor.html)
 used for the agent.  Default is set for 2 minutes.
 
-### max_retries
+### max_attempts
 
-A positive integer (i.e. >= 1) indicating the maximum number of times to retry a failed agent run.
-This is different from [max_steps](#max_steps) in that it specifically relates to retrying on errors encounted
+A positive integer (i.e. >= 1) indicating the maximum number of times to attempt an agent run given any failures.
+This is different from [max_steps](#max_steps) in that it specifically relates to errors encounted
 during agent execution as opposed to limiting the number of super-steps.
-The default setting is to use 3 retry attempts.
+The default setting is to use 3 attempts.
 
 ### request_timeout_seconds
 
@@ -920,9 +920,9 @@ Deprecated. Use [max_steps](#max_steps-1) instead.
 Same as top-level [max_execution_seconds](#max_execution_seconds), except at single-agent scope.
 
 <!--- pyml disable-next-line no-duplicate-heading -->
-### max_retries
+### max_attempts
 
-Same as top-level [max_retries](#max_retries), except at single-agent scope.
+Same as top-level [max_attempts](#max_attempts), except at single-agent scope.
 
 <!--- pyml disable-next-line no-duplicate-heading -->
 ### error_formatter
