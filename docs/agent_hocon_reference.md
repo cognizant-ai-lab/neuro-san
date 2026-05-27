@@ -345,7 +345,7 @@ used for the agent.  Default is set for 2 minutes.
 
 ### max_retries
 
-A positive integer indicating the maximum number of times to retry a failed agent run.
+A positive integer (i.e. >= 1) indicating the maximum number of times to retry a failed agent run.
 This is different from [max_steps](#max_steps) in that it specfically relates to retrying on errors encounted
 during agent execution as opposed to limiting the number of super-steps.
 The default setting is to use 3 retry attempts.
