@@ -43,6 +43,8 @@ from neuro_san.service.http.handlers.function_handler import FunctionHandler
 from neuro_san.service.http.handlers.health_check_handler import HealthCheckHandler
 from neuro_san.service.http.handlers.openapi_publish_handler import OpenApiPublishHandler
 from neuro_san.service.http.handlers.streaming_chat_handler import StreamingChatHandler
+from neuro_san.service.http.handlers.profiler_control_handler import ProfilerControlHandler
+from neuro_san.service.http.handlers.snapshot_handler import SnapshotHandler
 from neuro_san.service.http.logging.http_logger import HttpLogger
 from neuro_san.service.http.server.agent_authorization_policy import AgentAuthorizationPolicy
 from neuro_san.service.http.server.http_server_app import HttpServerApp
@@ -126,6 +128,8 @@ class HttpServer(AgentStateListener):
         network_storage_dict: Dict[str, AgentNetworkStorage] = self.server_context.get_network_storage_dict()
         for network_storage in network_storage_dict.values():
             network_storage.add_listener(self)
+
+        self.server_context.set_agent_authorizer(self.authorization_policy)
 
     def start(self, startables: List[Startable]):
         """
@@ -217,6 +221,12 @@ class HttpServer(AgentStateListener):
         handlers.append(("/readyz", HealthCheckHandler, ready_request_initialize_data))
         handlers.append(("/livez", HealthCheckHandler, live_request_initialize_data))
 
+        # Setup handler for profiler control
+        handlers.append(("/profiler", ProfilerControlHandler))
+
+        # Setup handler for system snapshot query:
+        handlers.append(("/resources_utilization", SnapshotHandler, {"http_port": self.http_port}))
+
         if enable_http_handlers:
             handlers.append(("/api/v1/list", ConciergeHandler, request_initialize_data))
             handlers.append(("/api/v1/docs", OpenApiPublishHandler, request_initialize_data))
@@ -303,7 +313,7 @@ class HttpServer(AgentStateListener):
             raise ValueError(f"Failed to load '{self.openapi_service_spec_path}'") from exc
 
         return {
-            "agent_policy": self.authorization_policy,
+            "agent_policy": self.authorization_policy,  # now redundant cuz server_context has it
             "forwarded_request_metadata": self.forwarded_request_metadata,
             "openapi_service_spec": open_api_dict,
             "server_context": self.server_context,

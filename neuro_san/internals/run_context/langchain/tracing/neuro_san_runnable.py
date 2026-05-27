@@ -38,6 +38,7 @@ from langchain_core.runnables.utils import Output
 
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.run_target import RunTarget
+from neuro_san.internals.interfaces.tracing_context import TracingContext
 from neuro_san.internals.journals.intercepting_journal import InterceptingJournal
 from neuro_san.internals.messages.origination import Origination
 from neuro_san.internals.utils.metadata_util import MetadataUtil
@@ -64,6 +65,8 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
     logger: Optional[Logger] = None
 
     run_target: Optional[RunTarget] = None
+
+    tracing_context: Optional[TracingContext] = None
 
     # This guy needs to be a pydantic class and in order to have
     # any non-pydantic non-serializable members, we need to do this.
@@ -169,6 +172,10 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
         runnable_metadata: Dict[str, Any] = self.prepare_tracing_metadata()
         if runnable_metadata:
             runnable_config["metadata"] = runnable_metadata
+
+        # Augment the config per the TracingContext
+        if self.tracing_context:
+            runnable_config = self.tracing_context.augment_config(runnable_config)
 
         return runnable_config
 

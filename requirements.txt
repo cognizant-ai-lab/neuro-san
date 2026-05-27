@@ -36,7 +36,6 @@ langchain>=1.2.0,<2.0
 langchain-core>=1.2.5,<2.0
 langchain-classic>=1.0.0,<2.0
 langchain-community>=0.4,<1.0
-openai>=1.54.1,<2.0
 bs4>=0.0.2,<0.1
 pydantic>=2.9.2,<3.0
 
@@ -73,6 +72,9 @@ timedinput>=0.1.1
 
 # Structure parsing
 json-repair>=0.47.3,<1.0
+
+# For cron-string parsing
+croniter>=6.2.2
 
 # MCP tools
 langchain-mcp-adapters>=0.1.7,<1.0

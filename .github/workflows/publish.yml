@@ -22,9 +22,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
-      # 1.0.0
       - name: Setup Python environment
-        uses: cognizant-ai-lab/build-common/actions/setup-python-env@455db3cc40e9ed6a0fb9bbaf8188888c1ae315c2
+        # 1.0.5
+        uses: cognizant-ai-lab/build-common/actions/setup-python-env@550f3d7338e598c813b9580a238141328f7baaaa
         with:
           python-version: '3.10'
           requirements-file: ''
@@ -38,10 +38,10 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b
 
-      # 1.0.0
       - name: Notify Slack
         if: ${{ !cancelled() }}
-        uses: cognizant-ai-lab/build-common/actions/slack-notify@455db3cc40e9ed6a0fb9bbaf8188888c1ae315c2
+        # 1.0.5
+        uses: cognizant-ai-lab/build-common/actions/slack-notify@550f3d7338e598c813b9580a238141328f7baaaa
         with:
           status: ${{ job.status }}
           webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}

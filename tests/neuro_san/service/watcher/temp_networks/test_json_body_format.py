@@ -39,7 +39,7 @@ from json import loads
 
 from jsonschema import validate
 
-from tests.neuro_san.service.watcher.temp_networks._test_base \
+from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
 
 

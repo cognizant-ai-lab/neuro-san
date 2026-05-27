@@ -1,0 +1,30 @@
+---
+name: Checkmarx One
+
+permissions:
+  contents: read
+  security-events: write
+
+on:
+  schedule:
+    # M-F at 2 am UTC
+    - cron: '0 2 * * 1-5'
+
+jobs:
+  checkmarx-scan:
+    runs-on: ubuntu-latest
+    steps:
+      # v6.0.2
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+
+      - name: Run Checkmarx One scan
+        # build-common 1.0.5
+        uses: cognizant-ai-lab/build-common/actions/checkmarx-one@550f3d7338e598c813b9580a238141328f7baaaa
+        with:
+          base-uri: ${{ vars.CX_BASE_URI }}
+          cx-tenant: ${{ vars.CX_TENANT }}
+          cx-client-id: ${{ vars.CX_CLIENT_ID }}
+          cx-client-secret: ${{ secrets.CX_CLIENT_SECRET }}

@@ -43,9 +43,11 @@ class TestSmokeTestHocons(TestCase):
     # resolved.
     DISABLED_HOCONS = {
         "music_nerd_pro_llm_azure/combination_responses_with_history_direct.hocon":
-            "Issue #910: disabled until #909 (Anthropic API key) is resolved.",
+            "Issue #910: disabled until #909 is resolved.",
         "music_nerd_pro_llm_bedrock_claude/combination_responses_with_history_direct.hocon":
-            "Issue #910: disabled until #909 (Anthropic API key) is resolved.",
+            "Issue #910: disabled until #909 is resolved.",
+        "music_nerd_pro_llm_anthropic/combination_responses_with_history_direct.hocon":
+            "Issue #936: disabled until #909 is resolved.",
     }
 
     def _skip_if_disabled(self, test_hocon: str) -> None:

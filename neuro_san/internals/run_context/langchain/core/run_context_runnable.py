@@ -32,6 +32,8 @@ from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 from langchain_core.runnables.base import Runnable
+from langchain_core.runnables.config import ensure_config
+from langchain_core.runnables.config import merge_configs
 from langchain_core.runnables.utils import Input
 from langchain_core.runnables.utils import Output
 
@@ -47,6 +49,13 @@ from neuro_san.internals.run_context.langchain.tracing.neuro_san_runnable import
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
 
 MINUTES: float = 60.0
+
+# Lazily import specific errors from llm providers
+RATE_LIMIT_ERROR_TYPES: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
+                                            "openai.RateLimitError",
+                                            "anthropic.RateLimitError",
+                                            "google.genai._interactions.RateLimitError",
+                                         ])
 
 # Lazily import specific errors from llm providers
 API_ERROR_TYPES: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
@@ -141,30 +150,46 @@ class RunContextRunnable(NeuroSanRunnable):
             # to the logs.  Add this because some people are interested in it.
             callbacks.append(LoggingCallbackHandler(self.logger))
 
+        # Get the number of attempts from the spec.
+        max_attempts: int = agent_spec.get("max_attempts", 3)
+        max_attempts = max(max_attempts, 1)
+
+        # Prepare our own runnable config
         runnable_config: Dict[str, Any] = self.prepare_runnable_config(callbacks=callbacks,
                                                                        recursion_limit=max_steps)
+        # Need to merge in the existing config with the one that we just created so the notion
+        # of "parent_run_id" gets preserved.
+        runnable_config = merge_configs(ensure_config(), runnable_config)
 
         # Attempt to count tokens/costs while invoking the agent.
         token_counter = LangChainTokenCounter(self.primary_llm, self.invocation_context, self.journal, self.origin)
-        await token_counter.count_tokens(self.invoke_agent_chain(inputs, runnable_config), max_execution_seconds)
+        await token_counter.count_tokens(self.invoke_agent_chain(inputs, runnable_config, max_attempts),
+                                         max_execution_seconds)
 
         return inputs
 
-    # pylint: disable=too-many-locals
-    async def invoke_agent_chain(self, inputs: Dict[str, Any], runnable_config: Dict[str, Any]):
+    # pylint: disable=too-many-locals,too-many-statements
+    async def invoke_agent_chain(self, inputs: Dict[str, Any], runnable_config: Dict[str, Any], max_attempts: int):
         """
         Set the agent in motion
 
         :param inputs: The inputs to the agent_executor
         :param runnable_config: The runnable_config to send to the agent_executor
+        :param max_attempts: The maximum number of attempts to make allowing for errors of any kind.
         """
         chain_result: Union[Dict[str, Any], AgentFinish, AIMessage] = None
-        retries: int = 3
+        attempts: int = max_attempts
         exception: Exception = None
         backtrace: str = None
-        while chain_result is None and retries > 0:
+        while chain_result is None and attempts > 0:
             try:
                 chain_result: Dict[str, Any] = await self.agent_chain.ainvoke(input=inputs, config=runnable_config)
+            except RATE_LIMIT_ERROR_TYPES as rate_limit_error:
+                self.logger.warning("retrying from RateLimit error %s(%s)",
+                                    rate_limit_error.__class__.__name__,
+                                    str(rate_limit_error))
+                attempts = attempts - 1
+                exception = rate_limit_error
             except API_ERROR_TYPES as api_error:
                 backtrace = traceback.format_exc()
                 message: str = None
@@ -186,11 +211,11 @@ class RunContextRunnable(NeuroSanRunnable):
                     break
                 # Continue with regular retry logic:
                 self.logger.warning("retrying from %s", api_error.__class__.__name__)
-                retries = retries - 1
+                attempts = attempts - 1
                 exception = api_error
             except KeyError as key_error:
                 self.logger.warning("retrying from KeyError")
-                retries = retries - 1
+                attempts = attempts - 1
                 exception = key_error
                 backtrace = traceback.format_exc()
             except ValueError as value_error:
@@ -209,7 +234,7 @@ class RunContextRunnable(NeuroSanRunnable):
                     }
                 else:
                     self.logger.warning("retrying from ValueError")
-                    retries = retries - 1
+                    attempts = attempts - 1
                     exception = value_error
                     backtrace = traceback.format_exc()
             # pylint: disable=broad-exception-caught
@@ -220,7 +245,7 @@ class RunContextRunnable(NeuroSanRunnable):
                                   exception_error,
                                   )
                 # These are likely real issues and non-retryable.
-                retries = 0
+                attempts = 0
                 exception = exception_error
                 backtrace = traceback.format_exc()
 
