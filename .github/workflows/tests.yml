@@ -25,6 +25,8 @@ jobs:
       shellcheck-command: 'build_scripts/run_shellcheck.sh'
       run-markdownlint: true
       markdownlint-command: 'build_scripts/run_markdownlint.sh'
+      run-hadolint: true
+      dockerfile-path: 'neuro_san/deploy/Dockerfile'
       check-readme-pypi: true
       test-command-override: >-
         export AGENT_TOOL_PATH="./neuro_san/coded_tools" &&
