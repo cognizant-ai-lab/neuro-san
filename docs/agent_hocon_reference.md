@@ -346,8 +346,14 @@ used for the agent.  Default is set for 2 minutes.
 ### max_attempts
 
 A positive integer (i.e. >= 1) indicating the maximum number of times to attempt an agent run given any failures.
-This is different from [max_steps](#max_steps) in that it specifically relates to errors encountered
+This is different from [max_steps](#max_steps) in that it specifically relates to retryable errors encountered
 during agent execution as opposed to limiting the number of super-steps.
+
+A "retryable" error here includes LLM provider API errors pertaining to rate limits, timeouts,
+and other temporary failures.  Failures which are known to be non-retryable are not re-attempted.
+These include API_KEY errors, ValueErrors from tools, and other unexpected exceptions; the idea
+being: these errors would just happen again anyway so why waste the tokens?
+
 The default setting is to use 3 attempts.
 
 ### request_timeout_seconds
