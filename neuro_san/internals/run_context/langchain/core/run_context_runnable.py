@@ -150,6 +150,11 @@ class RunContextRunnable(NeuroSanRunnable):
             # to the logs.  Add this because some people are interested in it.
             callbacks.append(LoggingCallbackHandler(self.logger))
 
+        # Get the number of retries from the spec.
+        max_retries: int = agent_spec.get("max_retries", 3)
+        if max_retries < 1:
+            max_retries = 1
+
         # Prepare our own runnable config
         runnable_config: Dict[str, Any] = self.prepare_runnable_config(callbacks=callbacks,
                                                                        recursion_limit=max_steps)
@@ -159,20 +164,22 @@ class RunContextRunnable(NeuroSanRunnable):
 
         # Attempt to count tokens/costs while invoking the agent.
         token_counter = LangChainTokenCounter(self.primary_llm, self.invocation_context, self.journal, self.origin)
-        await token_counter.count_tokens(self.invoke_agent_chain(inputs, runnable_config), max_execution_seconds)
+        await token_counter.count_tokens(self.invoke_agent_chain(inputs, runnable_config, max_retries),
+                                         max_execution_seconds)
 
         return inputs
 
     # pylint: disable=too-many-locals,too-many-statements
-    async def invoke_agent_chain(self, inputs: Dict[str, Any], runnable_config: Dict[str, Any]):
+    async def invoke_agent_chain(self, inputs: Dict[str, Any], runnable_config: Dict[str, Any], max_retries: int):
         """
         Set the agent in motion
 
         :param inputs: The inputs to the agent_executor
         :param runnable_config: The runnable_config to send to the agent_executor
+        :param max_retries: The maximum number of retries to attempt if there is an error of any kind.
         """
         chain_result: Union[Dict[str, Any], AgentFinish, AIMessage] = None
-        retries: int = 3
+        retries: int = max_retries
         exception: Exception = None
         backtrace: str = None
         while chain_result is None and retries > 0:
