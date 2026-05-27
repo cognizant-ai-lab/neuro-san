@@ -75,7 +75,8 @@ class ServiceResources:
             fd_dir = "/proc/self/fd"
         else:
             # macOS: /dev/fd lists the current process's open file descriptors.
-            # See: https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man4/fd.4.html
+            # See: https://developer.apple.com/library/archive/documentation/
+            #   System/Conceptual/ManPages_iPhoneOS/man4/fd.4.html
             fd_dir = "/dev/fd"
         try:
             names = os.listdir(fd_dir)
@@ -90,7 +91,7 @@ class ServiceResources:
             yield fd
 
     @classmethod
-    def _classify_fds_posix(cls, pid: Optional[int] = None) -> Dict[str, int]:
+    def _classify_fds_posix(cls, pid: Optional[int] = None) -> Dict[str, int]:  # pylint: disable=too-many-branches
         """
         Returns counts by FD kind on Unix/macOS:
           regular_file, socket_inet, socket_unix, fifo_pipe, other, total
