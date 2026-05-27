@@ -350,18 +350,18 @@ class ServiceResources:
         mem_used, mem_max = cls.get_memory_used_mbytes()
         cpu_load: float = cls.get_cpu_load()
         snapshot: Dict[str, Any] = {
-            # "fd_usage": fd_usage,
-            # "fd_limits": {
-            #     "soft": soft_limit,
-            #     "hard": hard_limit
-            # },
+            "fd_usage": fd_usage,
+            "fd_limits": {
+                "soft": soft_limit,
+                "hard": hard_limit
+            },
             "memory_usage_mbytes": {
                 "current": mem_used,
                 "max_since_start": mem_max
             },
             # Round CPU load to 3 decimal places for more compact output
-            # "cpu_load": round(cpu_load, 3),
-            # "socket_usage": cls.classify_sockets(server_port)
+            "cpu_load": round(cpu_load, 3),
+            "socket_usage": cls.classify_sockets(server_port)
         }
         if cls.server_context is not None:
             snapshot["executor_threads"] = cls.server_context.get_executor_pool().get_threads_metrics()
