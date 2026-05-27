@@ -31,7 +31,7 @@ class ContextTypeLlmFactory:
         "temperature"               A float "temperature" value with which to
                                     initialize the chat model.  In general,
                                     higher temperatures yield more random results.
-                                    Default if not specified is 0.7
+                                    Default if not specified is the provider's default.
 
         "prompt_token_fraction"     The fraction of total tokens (not necessarily words
                                     or letters) to use for a prompt. Each model_name
