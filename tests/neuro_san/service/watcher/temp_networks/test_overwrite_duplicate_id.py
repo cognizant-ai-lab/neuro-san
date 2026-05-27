@@ -19,7 +19,7 @@ S3ReservationsStorage.add_reservations is last-writer-wins for a given
 reservation id: a second call writes a new JSON blob to the same S3 key,
 replacing the first one.
 """
-from tests.neuro_san.service.watcher.temp_networks._test_base \
+from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
 
 
