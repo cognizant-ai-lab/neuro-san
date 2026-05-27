@@ -49,8 +49,9 @@ class ServiceResources:
     on_windows: bool = sys.platform.startswith("win")
 
     # High watermark for memory usage in bytes since process start (for logging purposes).
-    # Keyed by PID; None key represents the current process.
-    _max_memory_used_bytes: Dict[Optional[int], float] = {}
+    # Keyed by (PID, create_time) to handle PID reuse correctly.
+    # None key represents the current process.
+    _max_memory_used_bytes: Dict[Optional[Tuple[int, float]], float] = {}
 
     # ---------------------------
     # POSIX helpers (Linux/macOS)
@@ -362,16 +363,18 @@ class ServiceResources:
         """
         Get the current memory usage of the process in megabytes
         and maximum memory used since process start, and update the maximum if current usage is higher.
-        High-water mark is tracked per PID to avoid cross-contamination
-        when monitoring multiple processes.
+        High-water mark is tracked per (PID, create_time) to handle PID reuse
+        and avoid cross-contamination when monitoring multiple processes.
         :param pid: target process ID, or None for the current process.
         :return: tuple of (current_memory_used_mbytes, max_memory_used_mbytes)
         """
         p = cls._get_process(pid)
         mem_info = p.memory_info()
-        prev_max = cls._max_memory_used_bytes.get(pid, 0.0)
+        # Key by (pid, create_time) so a recycled PID starts fresh.
+        key = (p.pid, p.create_time()) if pid is not None else None
+        prev_max = cls._max_memory_used_bytes.get(key, 0.0)
         new_max = max(prev_max, mem_info.rss)
-        cls._max_memory_used_bytes[pid] = new_max
+        cls._max_memory_used_bytes[key] = new_max
         # Return memory sizes in megabytes
         return mem_info.rss / (1024 * 1024), new_max / (1024 * 1024)
 
