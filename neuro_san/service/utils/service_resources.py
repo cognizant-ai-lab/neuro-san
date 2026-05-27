@@ -379,14 +379,16 @@ class ServiceResources:
     def get_cpu_load(cls, pid: Optional[int] = None) -> float:
         """
         Get the current CPU load percentage of the process.
+        Uses the target process's CPU affinity for normalization when available.
         :param pid: target process ID, or None for the current process.
         :return: CPU load percentage over a short interval (e.g., 0.1 seconds)
                  in the range [0.0, 100.0]
         """
+        target_pid = pid if pid is not None else 0
         if hasattr(os, "sched_getaffinity"):
-            # sched_getaffinity returns the set of CPUs the process is allowed to run on,
-            # which is more accurate for containerized environments.
-            denom = len(os.sched_getaffinity(0))
+            # sched_getaffinity(pid) returns the set of CPUs the process is allowed
+            # to run on. Passing 0 means the current process.
+            denom = len(os.sched_getaffinity(target_pid))
         else:
             denom = max(psutil.cpu_count(), 1)
         cpu_load = cls._get_process(pid).cpu_percent(interval=0.1)
