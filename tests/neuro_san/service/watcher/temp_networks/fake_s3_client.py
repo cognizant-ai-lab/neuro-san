@@ -22,9 +22,9 @@ keyed by S3 object key. Method signatures use boto3's
 PascalCase keyword arguments so the storage's call sites work
 unchanged.
 
-This module is intentionally named with a leading underscore
-so pytest's default test-file pattern (test_*.py) skips it
-during collection.
+Pytest's default test-file pattern is test_*.py, so this file
+(which does not start with "test_") is not collected as a test
+module.
 """
 import io
 

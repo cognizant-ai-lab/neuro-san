@@ -21,7 +21,7 @@ pass {} when pre-filtering yields no new reservations; the storage
 must handle that without crashing, without writing placeholder
 objects, and without making any S3 calls.
 """
-from tests.neuro_san.service.watcher.temp_networks._test_base \
+from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
 
 
