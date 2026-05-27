@@ -64,8 +64,12 @@ class ServiceResources:
         if pid is not None:
             fd_dir = f"/proc/{pid}/fd"
         elif cls.on_unix:
+            # /proc/self/fd is a Linux procfs directory listing all open FDs
+            # for the calling process. See: https://man7.org/linux/man-pages/man5/proc.5.html
             fd_dir = "/proc/self/fd"
         else:
+            # /dev/fd is the macOS equivalent of /proc/self/fd.
+            # See: https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man4/fd.4.html
             fd_dir = "/dev/fd"
         try:
             names = os.listdir(fd_dir)
