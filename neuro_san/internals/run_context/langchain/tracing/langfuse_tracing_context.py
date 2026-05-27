@@ -175,13 +175,13 @@ If you didn't mean to use langfuse for observability, you can do this:
         empty: Dict[str, Any] = {}
         request_metadata: Dict[str, Any] = runnable_config.get("metadata", empty)
         user_id: str = request_metadata.get("user_id", "<Unknown>")
+        run_name = runnable_config.get("run_name")
 
         # Find the right session_id to use for the session components
         self.session_id: str = self.get_parent_session_id()
         if self.session_id is None:
 
             # Get pieces of the session_id to construct
-            run_name = runnable_config.get("run_name")
             request_id: str = request_metadata.get("request_id", "<Unknown>")
 
             # It's possible we should move the addition of hostname up to the services infra.
@@ -192,6 +192,11 @@ If you didn't mean to use langfuse for observability, you can do this:
 
             # Create a session_id for the trace.
             self.session_id: str = f"{run_name}@{request_id}@{hostname}@{now_str}"
+
+        elif run_name is not None:
+            # Add .agent to the end to get langfuse to display the agent icon
+            new_name: str = f"{run_name} (agent)"
+            runnable_config["run_name"] = new_name
 
         request_metadata["langfuse_user_id"] = user_id
         request_metadata["langfuse_session_id"] = self.session_id
