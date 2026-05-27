@@ -48,6 +48,7 @@ class DefaultsConfigFilter(ConfigFilter):
         # It should be removed in the future.
         "max_iterations": None,
         "max_execution_seconds": None,
+        "max_attempts": None,
         "error_formatter": None,
         "error_fragments": None,
     }
