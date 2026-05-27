@@ -152,8 +152,7 @@ class RunContextRunnable(NeuroSanRunnable):
 
         # Get the number of retries from the spec.
         max_retries: int = agent_spec.get("max_retries", 3)
-        if max_retries < 1:
-            max_retries = 1
+        max_retries = max(max_retries, 1)
 
         # Prepare our own runnable config
         runnable_config: Dict[str, Any] = self.prepare_runnable_config(callbacks=callbacks,
