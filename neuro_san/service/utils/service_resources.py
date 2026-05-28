@@ -124,8 +124,14 @@ class ServiceResources:
             return fd_dict
 
         # Maps of socket FDs to distinguish AF_INET vs AF_UNIX
-        inet_fds = {c.fd for c in p.connections(kind="inet")}  # tcp/udp
-        unix_fds = {c.fd for c in p.connections(kind="unix")}  # unix sockets
+        try:
+            inet_fds = {c.fd for c in p.net_connections(kind="inet")}
+        except (AttributeError, Exception):  # pylint: disable=broad-exception-caught
+            inet_fds = {c.fd for c in p.connections(kind="inet")}
+        try:
+            unix_fds = {c.fd for c in p.net_connections(kind="unix")}
+        except (AttributeError, Exception):  # pylint: disable=broad-exception-caught
+            unix_fds = {c.fd for c in p.connections(kind="unix")}
 
         fd_dict: Dict[str, int] = {}
         total_fds = 0
