@@ -237,8 +237,8 @@ class RegistryManifestRestorer(Restorer):
         if agent_network is not None:
             validation_errors: List[str] = validator.validate(agent_network.get_config())
             if len(validation_errors) > 0:
-                joined_errors: str = "; ".join(str(err) for err in validation_errors)
-                self.logger.error("Validation error in manifest registry %s: %s. Skipping.",
+                joined_errors: str = "\n".join(str(err) for err in validation_errors)
+                self.logger.error("Validation error in manifest registry %s:\n%s\nSkipping.",
                                   agent_filepath, joined_errors)
                 return
 
@@ -309,19 +309,18 @@ class RegistryManifestRestorer(Restorer):
 
     def _log_parse_error(self, manifest_key: str, exception: Exception):
         """
-        Log a single-line ERROR for a parse failure.
+        Log an ERROR for a parse failure.
 
         Prefers the underlying parser exception (line/column info) over the
-        wrapper raised in AbstractAsyncConfigRestorer. The raw __str__ on a
-        pyparsing exception can include newlines; collapse to one line so the
-        message stays greppable.
+        wrapper raised in AbstractAsyncConfigRestorer.  Newlines are preserved
+        so that stack trace structure remains readable.
         """
         use_exception: Exception = exception
         if exception.__cause__ is not None:
             use_exception = exception.__cause__
 
-        detail: str = " ".join(str(use_exception).split())
-        self.logger.error("Parse error in registry item %s. Skipping. - %s", manifest_key, detail)
+        detail: str = "\n".join(str(use_exception).splitlines())
+        self.logger.error("Parse error in registry item %s. Skipping. -\n%s", manifest_key, detail)
 
     def restore(self, file_reference: str = None) -> Dict[str, Dict[str, AgentNetwork]]:
         """
