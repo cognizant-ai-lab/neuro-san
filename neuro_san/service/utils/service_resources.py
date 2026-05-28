@@ -174,7 +174,7 @@ class ServiceResources:
         Returns a simplified breakdown on Windows using psutil:
 
           regular_file   -> len(Process.open_files())
-          socket_inet    -> len(Process.connections(kind="inet"))
+          socket_inet    -> len(Process.net_connections(kind="inet"))
           other_handles  -> num_handles - above_known
           total_handles  -> Process.num_handles()
 
@@ -191,7 +191,12 @@ class ServiceResources:
             total_handles = 0
         files = len(p.open_files())
         # TCP/UDP INET sockets for this process
-        inet_conns = p.connections(kind="inet")
+        # Use net_connections() for psutil>=7.0.0 compatibility;
+        # fall back to deprecated connections() for older versions.
+        try:
+            inet_conns = p.net_connections(kind="inet")
+        except (AttributeError, Exception):  # pylint: disable=broad-exception-caught
+            inet_conns = p.connections(kind="inet")
         socket_inet = len(inet_conns)
 
         # We can't see AF_UNIX on Windows (not applicable), FIFO pipes classification requires WinAPI.
