@@ -96,7 +96,8 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
         traditional_down_chains: List[Any] = extractor.get("tools", no_tools)
         if not isinstance(traditional_down_chains, list):
             self.logger.warning(
-                "Agent '%s' has 'tools' that is not a list. Skipping traversal of its down-chains.",
+                "Agent '%s' has 'tools' that is not a list. Ignoring that field for traditional "
+                "down-chains and treating it as empty; `args.tools` references may still be traversed.",
                 agent_name,
             )
             traditional_down_chains = no_tools
