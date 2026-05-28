@@ -62,6 +62,10 @@ class ServiceResources:
         Iterator over numeric FDs for a process (Unix/macOS).
         :param pid: target process ID, or None for the current process.
         """
+        if cls.on_windows:
+            # Windows does not have /dev/fd or /proc; FD enumeration is
+            # handled by _classify_handles_windows via the classify_fds router.
+            return
         if pid is not None and cls.on_unix:
             # Linux: external process FDs are visible via /proc/<pid>/fd
             fd_dir = f"/proc/{pid}/fd"
