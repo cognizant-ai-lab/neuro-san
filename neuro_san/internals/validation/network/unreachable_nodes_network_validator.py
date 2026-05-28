@@ -51,19 +51,19 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
 
         self.logger.info("Validating agent network structure...")
 
-        # Find top agents
-        top_agents: Set[str] = self.find_all_top_agents(name_to_spec)
+        # Find front man agents
+        front_man_agents: Set[str] = self.find_all_front_man_agents(name_to_spec)
 
-        if len(top_agents) == 0:
-            errors.append("No top agent found in network")
-        elif len(top_agents) > 1:
-            errors.append(f"Multiple top agents found: {sorted(top_agents)}. Expected exactly one.")
+        if len(front_man_agents) == 0:
+            errors.append("No front man agent found in network")
+        elif len(front_man_agents) > 1:
+            errors.append(f"Multiple front man agents found: {sorted(front_man_agents)}. Expected exactly one.")
 
-        # Find unreachable agents (only meaningful if we have exactly one top agent)
+        # Find unreachable agents (only meaningful if we have exactly one front man agent)
         unreachable_agents: Set[str] = set()
-        if len(top_agents) == 1:
-            top_agent: str = next(iter(top_agents))
-            unreachable_agents = self.find_unreachable_agents(name_to_spec, top_agent)
+        if len(front_man_agents) == 1:
+            front_man_agent: str = next(iter(front_man_agents))
+            unreachable_agents = self.find_unreachable_agents(name_to_spec, front_man_agent)
             if unreachable_agents:
                 errors.append(f"Unreachable agents found: {sorted(unreachable_agents)}")
 
@@ -73,18 +73,47 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
 
         return errors
 
-    def find_all_top_agents(self, name_to_spec: Dict[str, Any]) -> Set[str]:
+    def get_agent_down_chains(self, agent_spec: Dict[str, Any], agent_name: str) -> List[Any]:
         """
-        Find all top agents - agents that have down-chains but are not down-chains of others.
+        Build the combined list of down-chain references for an agent spec.
+
+        Down-chains come from two sources: the traditional `tools` field (a list of agent
+        names and/or inline dicts), and the values of `args.tools` (the convention for
+        coded tools that accept a dict of label -> agent name). If `tools` is malformed
+        (not a list), it is coerced to empty with a warning so this validator does not
+        crash on `str + list`; the shape error is reported separately by KeywordNetworkValidator.
+
+        :param agent_spec: The agent specification dictionary
+        :param agent_name: The name of the agent, used in the warning message
+        :return: List of down-chain references; may include dict entries — call
+                remove_dictionary_tools on the result if only string names are needed.
+        """
+        empty: Dict[str, Any] = {}
+        no_tools: List[str] = []
+
+        extractor = DictionaryExtractor(agent_spec)
+        traditional_down_chains: List[str] = extractor.get("tools", no_tools)
+        if not isinstance(traditional_down_chains, list):
+            self.logger.warning(
+                "Agent '%s' has 'tools' that is not a list. Skipping traversal of its down-chains.",
+                agent_name,
+            )
+            traditional_down_chains = no_tools
+        coded_tool_down_chains: List[str] = list(extractor.get("args.tools", empty).values())
+        return traditional_down_chains + coded_tool_down_chains
+
+    def find_all_front_man_agents(self, name_to_spec: Dict[str, Any]) -> Set[str]:
+        """
+        Find all front man agents - agents that have down-chains but are not down-chains of others.
 
         :param name_to_spec: The agent network to validate
-        :return: Set of top agent names
+        :return: Set of front man agent names
         """
         all_down_chains: Set[str] = set()
         has_down_chains: Set[str] = set()
 
         for agent_name, agent_config in name_to_spec.items():
-            down_chains: List[str] = agent_config.get("tools", [])
+            down_chains: List[Any] = self.get_agent_down_chains(agent_config, agent_name)
             if down_chains:
 
                 has_down_chains.add(agent_name)
@@ -92,33 +121,33 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
                 safe_down_chains: List[str] = self.remove_dictionary_tools(down_chains)
                 all_down_chains.update(safe_down_chains)
 
-        # Potential top agents are agents that have down-chains but are not down-chains of others
-        top_agents: Set[str] = has_down_chains - all_down_chains
+        # Potential front man agents are agents that have down-chains but are not down-chains of others
+        front_man_agents: Set[str] = has_down_chains - all_down_chains
 
-        # Special case: If there's only one agent in the network, it's always a top agent
-        if len(top_agents) == 0 and len(name_to_spec) == 1:
-            # It's OK to have a single top agent with no down-chains
-            one_top: str = list(name_to_spec.keys())[0]
-            top_agents.add(one_top)
+        # Special case: If there's only one agent in the network, it's always a front man agent
+        if len(front_man_agents) == 0 and len(name_to_spec) == 1:
+            # It's OK to have a single front man agent with no down-chains
+            one_front_man: str = list(name_to_spec.keys())[0]
+            front_man_agents.add(one_front_man)
 
-        return top_agents
+        return front_man_agents
 
-    def find_unreachable_agents(self, name_to_spec: Dict[str, Any], top_agent: str) -> Set[str]:
+    def find_unreachable_agents(self, name_to_spec: Dict[str, Any], front_man_agent: str) -> Set[str]:
         """
-        Find agents that are unreachable from the top agent using Depth-First Search (DFS) traversal.
+        Find agents that are unreachable from the front man agent using Depth-First Search (DFS) traversal.
 
         :param name_to_spec: The agent network to validate
-        :param top_agent: The single top agent to start from
+        :param front_man_agent: The single front man agent to start from
         :return: Set of unreachable agent names
         """
-        # Step 1: Initialize set to track all agents we can reach from top agent
+        # Step 1: Initialize set to track all agents we can reach from front man agent
         reachable_agents: Set[str] = set()
 
         # Step 2: Initialize visited set to track DFS traversal (prevents infinite loops in cycles)
         visited: Set[str] = set()
 
-        # Step 3: Start DFS traversal from the top agent to find all reachable agents
-        self.dfs_reachability_traversal(name_to_spec, top_agent, visited, reachable_agents)
+        # Step 3: Start DFS traversal from the front man agent to find all reachable agents
+        self.dfs_reachability_traversal(name_to_spec, front_man_agent, visited, reachable_agents)
 
         # Step 4: Get complete set of all agents in the network
         all_agents: Set[str] = set(name_to_spec.keys())
@@ -126,7 +155,7 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
         # Step 5: Calculate unreachable agents by subtracting reachable from all agents
         unreachable_agents: Set[str] = all_agents - reachable_agents
 
-        # Step 6: Return the set of agents that cannot be reached from top agent
+        # Step 6: Return the set of agents that cannot be reached from front man agent
         return unreachable_agents
 
     def dfs_reachability_traversal(self, name_to_spec: Dict[str, Any], agent: str,
@@ -151,14 +180,8 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
 
         # Step 4: Get all child agents (down_chains) of current agent
         empty: Dict[str, Any] = {}
-        no_tools: List[str] = []
-
         agent_spec: Dict[str, Any] = name_to_spec.get(agent, empty)
-        extractor = DictionaryExtractor(agent_spec)
-
-        traditional_down_chains: List[str] = extractor.get("tools", no_tools)
-        coded_tool_down_chains: List[str] = list(extractor.get("args.tools", empty).values())
-        down_chains: List[str] = traditional_down_chains + coded_tool_down_chains
+        down_chains: List[Any] = self.get_agent_down_chains(agent_spec, agent)
         safe_down_chains: List[str] = self.remove_dictionary_tools(down_chains)
 
         # Step 5: Recursively visit each child agent to continue the traversal
