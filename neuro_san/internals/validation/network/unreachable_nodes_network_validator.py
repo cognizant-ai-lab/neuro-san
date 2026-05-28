@@ -78,28 +78,42 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
         Build the combined list of down-chain references for an agent spec.
 
         Down-chains come from two sources: the traditional `tools` field (a list of agent
-        names and/or inline dicts), and the values of `args.tools` (the convention for
-        coded tools that accept a dict of label -> agent name). If `tools` is malformed
-        (not a list), it is coerced to empty with a warning so this validator does not
-        crash on `str + list`; the shape error is reported separately by KeywordNetworkValidator.
+        names and/or inline dicts), and `args.tools` (the convention for coded tools).
+        `args.tools` may be a dict of label -> agent name (use values) or a list of agent
+        names; any other shape is treated as empty with a warning. If `tools` is not a
+        list, it is also coerced to empty with a warning so this validator does not crash
+        on `str + list`; the shape error is reported separately by KeywordNetworkValidator.
 
         :param agent_spec: The agent specification dictionary
-        :param agent_name: The name of the agent, used in the warning message
+        :param agent_name: The name of the agent, used in warning messages
         :return: List of down-chain references; may include dict entries — call
                 remove_dictionary_tools on the result if only string names are needed.
         """
-        empty: Dict[str, Any] = {}
-        no_tools: List[str] = []
+        no_tools: List[Any] = []
 
         extractor = DictionaryExtractor(agent_spec)
-        traditional_down_chains: List[str] = extractor.get("tools", no_tools)
+
+        traditional_down_chains: List[Any] = extractor.get("tools", no_tools)
         if not isinstance(traditional_down_chains, list):
             self.logger.warning(
                 "Agent '%s' has 'tools' that is not a list. Skipping traversal of its down-chains.",
                 agent_name,
             )
             traditional_down_chains = no_tools
-        coded_tool_down_chains: List[str] = list(extractor.get("args.tools", empty).values())
+
+        args_tools: Any = extractor.get("args.tools", no_tools)
+        coded_tool_down_chains: List[Any] = no_tools
+        if isinstance(args_tools, dict):
+            coded_tool_down_chains = list(args_tools.values())
+        elif isinstance(args_tools, list):
+            coded_tool_down_chains = args_tools
+        else:
+            self.logger.warning(
+                "Agent '%s' has 'args.tools' that is neither a dict nor a list. "
+                "Skipping coded-tool down-chains.",
+                agent_name,
+            )
+
         return traditional_down_chains + coded_tool_down_chains
 
     def find_all_front_man_agents(self, name_to_spec: Dict[str, Any]) -> Set[str]:
