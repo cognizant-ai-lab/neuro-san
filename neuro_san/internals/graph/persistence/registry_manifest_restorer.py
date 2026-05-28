@@ -21,7 +21,6 @@ from typing import Sequence
 from typing import Union
 
 import os
-import json
 import logging
 
 from json.decoder import JSONDecodeError
@@ -176,8 +175,7 @@ class RegistryManifestRestorer(Restorer):
                 agent_network = self.restore_one_agent_network(manifest_dir, agent_filepath, manifest_key)
 
             self.process_one_agent_network(agent_network, usable_network, agent_filepath,
-                                           manifest_file, manifest_key, manifest_dict,
-                                           validator, agent_networks)
+                                           manifest_dict, validator, agent_networks)
 
         return agent_networks
 
@@ -219,38 +217,34 @@ class RegistryManifestRestorer(Restorer):
                 agent_network = await self.async_restore_one_agent_network(manifest_dir, agent_filepath, manifest_key)
 
             self.process_one_agent_network(agent_network, usable_network, agent_filepath,
-                                           manifest_file, manifest_key, manifest_dict,
-                                           validator, agent_networks)
+                                           manifest_dict, validator, agent_networks)
 
         return agent_networks
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def process_one_agent_network(self, agent_network: AgentNetwork, usable_network: bool, agent_filepath: str,
-                                  manifest_file: str, manifest_key: str, manifest_dict: Dict[str, Any],
+                                  manifest_dict: Dict[str, Any],
                                   validator: ManifestNetworkValidator,
                                   agent_networks: Dict[str, Dict[str, AgentNetwork]]):
         """
         :param agent_network: The agent network to process.
         :param usable_network: Is this agent network usable?
         :param agent_filepath: The filepath to the agent definition file.
-        :param manifest_file: The manifest file.
-        :param manifest_key: The manifest key.
         :param manifest_dict: The manifest dictionary.
         :param validator: The validator.
         :param agent_networks: The accumulated agent networks
         """
         if agent_network is not None:
-
             validation_errors: List[str] = validator.validate(agent_network.get_config())
             if len(validation_errors) > 0:
-                self.logger.error("manifest registry %s has validation errors. Skipping. Errors: %s",
-                                  agent_filepath,
-                                  json.dumps(validation_errors, indent=4, sort_keys=True))
-                agent_network = None
+                joined_errors: str = "; ".join(str(err) for err in validation_errors)
+                self.logger.error("Validation error in manifest registry %s: %s. Skipping.",
+                                  agent_filepath, joined_errors)
                 return
 
         if usable_network and agent_network is None:
-            self.logger.error("manifest registry %s not found in %s", manifest_key, manifest_file)
+            # restore_one_agent_network caught a FileNotFoundError or parse
+            # exception and already logged the failure; nothing more to do.
             return
 
         network_name: str = self.agent_mapper.filepath_to_agent_network_name(agent_filepath)
@@ -281,20 +275,11 @@ class RegistryManifestRestorer(Restorer):
         try:
             agent_network = registry_restorer.restore(file_reference=agent_filepath)
         except FileNotFoundError as exception:
-            message: str = f"Failed to restore registry item {manifest_key}. Skipping. - {str(exception)}"
-            self.logger.error(message)
+            self.logger.error("Failed to restore registry item %s. Skipping. - %s",
+                              manifest_key, str(exception))
             agent_network = None
         except (ParseException, ParseSyntaxException, JSONDecodeError) as exception:
-
-            # Be sure we spit out the right exception message with relevant parsing
-            # information as the error.  If not, we don't get enough good information
-            # to act on when there is a problem.
-            use_exception: Exception = exception
-            if exception.__cause__ is not None:
-                use_exception = exception.__cause__
-
-            message: str = f"Parse error in registry item {manifest_key}. Skipping. - {str(use_exception)}"
-            self.logger.error(message)
+            self._log_parse_error(manifest_key, exception)
             agent_network = None
 
         return agent_network
@@ -313,23 +298,30 @@ class RegistryManifestRestorer(Restorer):
         try:
             agent_network = await registry_restorer.async_restore(file_reference=agent_filepath)
         except FileNotFoundError as exception:
-            message: str = f"Failed to restore registry item {manifest_key}. Skipping. - {str(exception)}"
-            self.logger.error(message)
+            self.logger.error("Failed to restore registry item %s. Skipping. - %s",
+                              manifest_key, str(exception))
             agent_network = None
         except (ParseException, ParseSyntaxException, JSONDecodeError) as exception:
-
-            # Be sure we spit out the right exception message with relevant parsing
-            # information as the error.  If not, we don't get enough good information
-            # to act on when there is a problem.
-            use_exception: Exception = exception
-            if exception.__cause__ is not None:
-                use_exception = exception.__cause__
-
-            message: str = f"Parse error in registry item {manifest_key}. Skipping. - {str(use_exception)}"
-            self.logger.error(message)
+            self._log_parse_error(manifest_key, exception)
             agent_network = None
 
         return agent_network
+
+    def _log_parse_error(self, manifest_key: str, exception: Exception):
+        """
+        Log a single-line ERROR for a parse failure.
+
+        Prefers the underlying parser exception (line/column info) over the
+        wrapper raised in AbstractAsyncConfigRestorer. The raw __str__ on a
+        pyparsing exception can include newlines; collapse to one line so the
+        message stays greppable.
+        """
+        use_exception: Exception = exception
+        if exception.__cause__ is not None:
+            use_exception = exception.__cause__
+
+        detail: str = " ".join(str(use_exception).split())
+        self.logger.error("Parse error in registry item %s. Skipping. - %s", manifest_key, detail)
 
     def restore(self, file_reference: str = None) -> Dict[str, Dict[str, AgentNetwork]]:
         """
