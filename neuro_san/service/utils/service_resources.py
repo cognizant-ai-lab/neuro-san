@@ -402,9 +402,9 @@ class ServiceResources:
             except (ProcessLookupError, PermissionError, OSError):
                 # Target process may have exited or be inaccessible.
                 # Fall back to system-wide CPU count.
-                denom = max(psutil.cpu_count(), 1)
+                denom = max(psutil.cpu_count() or 1, 1)
         else:
-            denom = max(psutil.cpu_count(), 1)
+            denom = max(psutil.cpu_count() or 1, 1)
         cpu_load = cls._get_process(pid).cpu_percent(interval=0.1)
         cpu_load = min(cpu_load / denom, 100.0)
         return cpu_load
