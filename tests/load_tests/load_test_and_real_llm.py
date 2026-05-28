@@ -4,8 +4,8 @@ Load-test script for the Agent Network Designer (AND) using real LLM calls.
 
 Fires concurrent requests via agent_cli subprocesses to generate new agent
 networks through AND, monitors the neuro-san server for resource usage and
-max_attempts retry behavior, and prints a per-round summary with an overall
-analysis.
+max_attempts retry behavior, and prints a per-stage summary with an overall
+ramp-up analysis.
 
 Phase 1 only: generate agent networks via AND and confirm successful creation.
 
@@ -18,29 +18,33 @@ Prerequisites:
     2. OPENAI_API_KEY must be set (real LLM calls = real API costs).
 
 Usage examples:
-    # Defaults: 3 requests, 3 workers, 1 round
-    python tests/load_tests/load_test_and_real_llm.py
+    # Flat mode: 3 requests, 3 workers, 1 round
+    python tests/load_tests/load_test_and_real_llm.py --yes
 
-    # 10 concurrent requests over 2 rounds
-    python tests/load_tests/load_test_and_real_llm.py --num-requests 10 --max-workers 10 --num-rounds 2
+    # Flat mode: 10 concurrent requests over 2 rounds
+    python tests/load_tests/load_test_and_real_llm.py --num-requests 10 --max-workers 10 --num-rounds 2 --yes
 
-    # Cap total requests for cost control
-    python tests/load_tests/load_test_and_real_llm.py --max-requests 20 --num-requests 10 --num-rounds 5
+    # Ramp-up mode: default stages 10 -> 30 -> 50 -> 100
+    python tests/load_tests/load_test_and_real_llm.py --ramp --yes
+
+    # Ramp-up mode: custom stages
+    python tests/load_tests/load_test_and_real_llm.py --ramp --stages 5,10,25,50 --yes
 
     # Same prompt for all requests (collision stress test)
-    python tests/load_tests/load_test_and_real_llm.py --same-prompt
+    python tests/load_tests/load_test_and_real_llm.py --ramp --same-prompt --yes
 
     # Remote neuro-san server
-    python tests/load_tests/load_test_and_real_llm.py --host 172.31.11.243 --port 8080
+    python tests/load_tests/load_test_and_real_llm.py --ramp --host 172.31.11.243 --port 8080 --yes
 
-    # Skip cost confirmation prompt
-    python tests/load_tests/load_test_and_real_llm.py --yes
+    # With server log for max_attempts retry monitoring
+    python tests/load_tests/load_test_and_real_llm.py --ramp --server-log /tmp/neuro_san_server.log --yes
 """
 
 import argparse
 import logging
 import os
 import re
+import select
 import subprocess
 import sys
 import time
@@ -57,10 +61,27 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 
+# Result status constants
+STATUS_CREATED = "CREATED"
+STATUS_FAILED = "FAILED"
+STATUS_TIMEOUT = "TIMEOUT"
+STATUS_KILLED = "KILLED"
+
+# Tracked retry error types
+RETRY_ERROR_TYPES = [
+    "RateLimitError",
+    "APIError",
+    "KeyError",
+    "ValueError",
+]
+
+
 class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
     """Load test runner for the AND agent network using real LLM calls (Phase 1)."""
 
     LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+    DEFAULT_STAGES = [10, 30, 50, 100]
 
     PROMPT_POOL = [
         "Create an agent network for a pet grooming salon",
@@ -85,7 +106,8 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         "Design a multi-agent system for a wedding planning company",
     ]
 
-    DEFAULT_TIMEOUT_SECONDS = 600
+    DEFAULT_TIMEOUT_SECONDS = 1200
+    DEFAULT_IDLE_TIMEOUT_SECONDS = 300
 
     RETRY_LOG_PATTERN = re.compile(
         r"retrying from (RateLimit error |)(\w+)"
@@ -106,30 +128,54 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             formatter_class=argparse.RawDescriptionHelpFormatter,
             epilog=__doc__,
         )
+
+        # Flat mode arguments
         parser.add_argument(
             "--num-requests",
             type=int,
             default=3,
-            help="Number of requests per round (default: 3)",
+            help="Number of requests per round in flat mode (default: 3). "
+                 "Ignored when --ramp is used.",
         )
         parser.add_argument(
             "--max-workers",
             type=int,
             default=3,
-            help="Max concurrent workers (default: 3)",
+            help="Max concurrent workers in flat mode (default: 3). "
+                 "Ignored when --ramp is used.",
         )
         parser.add_argument(
             "--num-rounds",
             type=int,
             default=1,
-            help="Number of rounds to run (default: 1)",
+            help="Number of rounds in flat mode, or number of times to "
+                 "repeat the full ramp sequence (default: 1).",
         )
+
+        # Ramp mode arguments
+        parser.add_argument(
+            "--ramp",
+            action="store_true",
+            default=False,
+            help="Enable staged ramp-up mode. Runs escalating concurrency "
+                 "stages instead of flat requests.",
+        )
+        parser.add_argument(
+            "--stages",
+            type=str,
+            default=None,
+            help="Comma-separated concurrency levels for ramp-up mode "
+                 "(default: 10,30,50,100). Only used with --ramp.",
+        )
+
+        # Common arguments
         parser.add_argument(
             "--max-requests",
             type=int,
-            default=100,
-            help="Hard cap on total requests across all rounds (default: 100). "
-                 "Cost safeguard for real LLM calls.",
+            default=None,
+            help="Hard cap on total requests across all stages/rounds. "
+                 "Cost safeguard for real LLM calls. "
+                 "Default: 100 for flat mode, sum of stages for ramp mode.",
         )
         parser.add_argument(
             "--host",
@@ -147,21 +193,28 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             "--timeout",
             type=int,
             default=AndRealLlmLoadTest.DEFAULT_TIMEOUT_SECONDS,
-            help="Timeout per request in seconds (default: 600). "
-                 "AND is recursive so requests take much longer than simple agents.",
+            help="Hard timeout per request in seconds (default: 1200). "
+                 "Safety net to prevent requests from running forever.",
+        )
+        parser.add_argument(
+            "--idle-timeout",
+            type=int,
+            default=AndRealLlmLoadTest.DEFAULT_IDLE_TIMEOUT_SECONDS,
+            help="Kill a request if no output for this many seconds "
+                 "(default: 300). Detects hanging requests.",
         )
         parser.add_argument(
             "--settle-time",
             type=int,
             default=15,
-            help="Seconds to wait after each round for cleanup (default: 15)",
+            help="Seconds to wait after each stage for cleanup (default: 15)",
         )
         parser.add_argument(
             "--same-prompt",
             action="store_true",
             default=False,
             help="Use the same prompt for all requests (collision stress test). "
-                 "Default is varied prompts from a pool.",
+                 "Default is varied prompts from a pool of 20.",
         )
         parser.add_argument(
             "--yes",
@@ -173,10 +226,30 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             "--server-log",
             type=str,
             default=None,
-            help="Path to neuro-san server log file for max_attempts retry monitoring. "
-                 "If not provided, retry monitoring is skipped.",
+            help="Path to neuro-san server log file for max_attempts retry "
+                 "monitoring. If not provided, retry monitoring is skipped.",
         )
         return parser.parse_args()
+
+    def _resolve_stages(self):
+        """
+        Return the list of concurrency stages to run.
+        In ramp mode, returns parsed --stages or defaults.
+        In flat mode, returns a single-element list from --num-requests.
+        """
+        if self.args.ramp:
+            if self.args.stages is not None:
+                return [int(s.strip()) for s in self.args.stages.split(",")]
+            return list(self.DEFAULT_STAGES)
+        return [self.args.num_requests]
+
+    def _resolve_max_requests(self, stages):
+        """Return the effective max-requests cap."""
+        if self.args.max_requests is not None:
+            return self.args.max_requests
+        if self.args.ramp:
+            return sum(stages) * self.args.num_rounds
+        return 100
 
     @staticmethod
     def _find_process(keyword):
@@ -234,7 +307,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         Build the agent_cli subprocess command list.
         Includes --no_thinking_file to avoid race conditions under concurrency.
         """
-        cmd = [
+        return [
             "python", "-m", "neuro_san.client.agent_cli",
             "--http",
             "--host", self.args.host,
@@ -244,10 +317,12 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             "--one_shot",
             "--no_thinking_file",
         ]
-        return cmd
 
     def _run_one(self, request_id, global_request_id):  # pylint: disable=too-many-locals
-        """Execute a single AND request and return timing, status, and output details."""
+        """
+        Execute a single AND request with idle-timeout detection.
+        Uses Popen for incremental output monitoring instead of subprocess.run.
+        """
         prompt = self._get_prompt_for_request(global_request_id)
         prompt_file = f"/tmp/and_load_test_prompt_{global_request_id}.txt"
         with open(prompt_file, "w", encoding="utf-8") as prompt_fh:
@@ -255,63 +330,130 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
 
         cmd = self._build_cli_command(prompt_file)
         start = time.time()
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=self.args.timeout,
-                check=False,
-            )
-        except subprocess.TimeoutExpired:
-            elapsed = time.time() - start
-            logger.info(
-                "Request %s: TIMEOUT after %.2fs", request_id, elapsed,
-            )
-            return {
-                "ok": False,
-                "elapsed": elapsed,
-                "prompt": prompt,
-                "reservation_id": None,
-                "network_name": None,
-                "error": "TIMEOUT",
-            }
-
+        status, stdout, stderr, returncode = self._execute_with_idle_detection(cmd)
         elapsed = time.time() - start
-        ok = result.returncode == 0
 
-        reservation_id = None
-        network_name = None
-        stdout = result.stdout or ""
+        reservation_id = self._parse_reservation_id(stdout)
+        network_name = self._parse_network_name(stdout)
 
-        if ok:
-            reservation_id = self._parse_reservation_id(stdout)
-            network_name = self._parse_network_name(stdout)
+        if status not in (STATUS_TIMEOUT, STATUS_KILLED):
+            if returncode == 0 and reservation_id and network_name:
+                status = STATUS_CREATED
+            else:
+                status = STATUS_FAILED
 
-        status = "OK" if ok else "FAIL"
-        logger.info("Request %s: %s (%.2fs)", request_id, status, elapsed)
-        if reservation_id:
-            logger.info("  reservation_id: %s", reservation_id)
-        if network_name:
-            logger.info("  network_name: %s", network_name)
-        if not ok:
-            stderr_line = (result.stderr or "").strip().split("\n")[-1]
-            logger.info("  stderr: %s", stderr_line)
-
-        # Clean up prompt file
-        try:
-            os.remove(prompt_file)
-        except OSError:
-            pass
+        self._log_request_result(request_id, status, elapsed, {
+            "reservation_id": reservation_id,
+            "network_name": network_name,
+            "stderr": stderr,
+        })
+        self._cleanup_prompt_file(prompt_file)
+        error_line = self._last_stderr_line(stderr) if status != STATUS_CREATED else None
 
         return {
-            "ok": ok,
+            "status": status,
             "elapsed": elapsed,
             "prompt": prompt,
             "reservation_id": reservation_id,
             "network_name": network_name,
-            "error": None if ok else stderr_line,
+            "error": error_line,
         }
+
+    def _execute_with_idle_detection(self, cmd):  # pylint: disable=too-many-locals
+        """
+        Run a subprocess with idle-timeout and hard-timeout detection.
+        Returns (status, stdout, stderr, returncode).
+        """
+        stdout_chunks: List[str] = []
+        stderr_chunks: List[str] = []
+        status = STATUS_FAILED
+        last_activity = time.time()
+
+        # pylint: disable=consider-using-with
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        try:
+            status = self._monitor_process(proc, stdout_chunks, stderr_chunks,
+                                           last_activity)
+        except Exception:  # pylint: disable=broad-exception-caught
+            proc.kill()
+            proc.wait()
+            status = STATUS_FAILED
+
+        remaining_out, remaining_err = proc.communicate(timeout=10)
+        if remaining_out:
+            stdout_chunks.append(remaining_out)
+        if remaining_err:
+            stderr_chunks.append(remaining_err)
+
+        return status, "".join(stdout_chunks), "".join(stderr_chunks), proc.returncode
+
+    def _monitor_process(self, proc, stdout_chunks, stderr_chunks, last_activity):
+        """Monitor a running process for output, idle timeout, and hard timeout."""
+        start = time.time()
+        while proc.poll() is None:
+            elapsed = time.time() - start
+            idle_elapsed = time.time() - last_activity
+
+            if elapsed >= self.args.timeout:
+                proc.kill()
+                proc.wait()
+                return STATUS_TIMEOUT
+
+            if idle_elapsed >= self.args.idle_timeout:
+                proc.kill()
+                proc.wait()
+                return STATUS_KILLED
+
+            readable, _, _ = select.select(
+                [proc.stdout, proc.stderr], [], [], 5.0,
+            )
+            for stream in readable:
+                chunk = stream.read1(4096) if hasattr(stream, "read1") else ""
+                if not chunk:
+                    chunk = stream.readline()
+                if chunk:
+                    last_activity = time.time()
+                    if stream == proc.stdout:
+                        stdout_chunks.append(chunk)
+                    else:
+                        stderr_chunks.append(chunk)
+        return STATUS_FAILED
+
+    @staticmethod
+    def _log_request_result(request_id, status, elapsed, result_info):
+        """Log the result of a single request."""
+        logger.info("Request %s: %s (%.2fs)", request_id, status, elapsed)
+        if result_info.get("reservation_id"):
+            logger.info("  reservation_id: %s", result_info.get("reservation_id"))
+        if result_info.get("network_name"):
+            logger.info("  network_name: %s", result_info.get("network_name"))
+        if status in (STATUS_FAILED, STATUS_TIMEOUT, STATUS_KILLED):
+            stderr_line = AndRealLlmLoadTest._last_stderr_line(
+                result_info.get("stderr", ""),
+            )
+            logger.info("  stderr: %s", stderr_line)
+
+    @staticmethod
+    def _last_stderr_line(stderr):
+        """Extract the last line of stderr for error reporting."""
+        stripped = stderr.strip() if stderr else ""
+        if not stripped:
+            return ""
+        return stripped.rsplit("\n", maxsplit=1)[-1]
+
+    @staticmethod
+    def _cleanup_prompt_file(prompt_file):
+        """Remove the temporary prompt file."""
+        try:
+            os.remove(prompt_file)
+        except OSError:
+            pass
 
     @staticmethod
     def _parse_reservation_id(stdout):
@@ -329,30 +471,33 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             return match.group(1)
         return None
 
-    def _run_round(self, round_num, global_offset):
+    def _run_stage(self, num_requests, max_workers, global_offset):
         """Fire num_requests concurrent AND requests using a thread pool."""
-        passed = 0
-        failed = 0
-        results_list = []
+        results_list: List[Dict[str, Any]] = []
         start = time.time()
-        with ThreadPoolExecutor(max_workers=self.args.max_workers) as pool:
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures = [
                 pool.submit(self._run_one, i + 1, global_offset + i)
-                for i in range(self.args.num_requests)
+                for i in range(num_requests)
             ]
             for future in futures:
-                result = future.result()
-                results_list.append(result)
-                if result.get("ok"):
-                    passed += 1
-                else:
-                    failed += 1
+                results_list.append(future.result())
         total_time = time.time() - start
-        logger.info(
-            "\nRound %s result: %s passed, %s failed in %.2fs",
-            round_num, passed, failed, total_time,
-        )
-        return passed, failed, total_time, results_list
+        return total_time, results_list
+
+    @staticmethod
+    def _count_results(results):
+        """Count results by status type."""
+        counts = {
+            STATUS_CREATED: 0,
+            STATUS_FAILED: 0,
+            STATUS_TIMEOUT: 0,
+            STATUS_KILLED: 0,
+        }
+        for result in results:
+            status = result.get("status", STATUS_FAILED)
+            counts[status] = counts.get(status, 0) + 1
+        return counts
 
     def _validate_environment(self):
         """Validate that OPENAI_API_KEY is set before running."""
@@ -366,18 +511,19 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             sys.exit(1)
         logger.info("OPENAI_API_KEY is set.")
 
-    def _confirm_cost(self):
+    def _confirm_cost(self, stages, total_cap):
         """Display cost warning and ask for confirmation unless --yes is passed."""
-        total_requests = self.args.num_requests * self.args.num_rounds
-        capped = min(total_requests, self.args.max_requests)
+        total_planned = sum(stages) * self.args.num_rounds
+        capped = min(total_planned, total_cap)
         logger.info("\n%s", "=" * 60)
         logger.info("  COST WARNING: REAL LLM CALLS")
         logger.info("=" * 60)
-        logger.info("  Total planned requests: %s", total_requests)
-        if capped < total_requests:
-            logger.info(
-                "  Capped by --max-requests: %s", capped,
-            )
+        if self.args.ramp:
+            logger.info("  Ramp-up stages: %s", stages)
+            logger.info("  Rounds: %s", self.args.num_rounds)
+        logger.info("  Total planned requests: %s", total_planned)
+        if capped < total_planned:
+            logger.info("  Capped by --max-requests: %s", capped)
         logger.info(
             "  Each AND request involves multiple recursive LLM calls."
         )
@@ -408,7 +554,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
     def _read_server_log_position(self):
         """
         Return the current end position of the server log file.
-        Used to read only new log entries after a round.
+        Used to read only new log entries after a stage.
         """
         if self.args.server_log is None:
             return None
@@ -422,7 +568,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
     def _count_retries_since(self, position):
         """
         Count max_attempts retry log entries in the server log since the given position.
-        Returns a dict of error_type -> count.
+        Returns a dict of error_type -> count for each tracked error type.
         """
         if self.args.server_log is None or position is None:
             return {}
@@ -453,12 +599,12 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             logger.info("%s", fmt.format(*row))
 
     @staticmethod
-    def _build_snapshot_row(round_num, before, after):
-        """Build a summary table row from before/after snapshots."""
+    def _build_resource_row(stage_label, before, after):
+        """Build a resource summary row from before/after snapshots."""
         rss_delta = after.get("rss") - before.get("rss")
         thread_delta = after.get("threads") - before.get("threads")
         return (
-            str(round_num),
+            str(stage_label),
             f"{before.get('rss'):.1f}M",
             f"{after.get('rss'):.1f}M",
             f"+{rss_delta:.1f}M",
@@ -470,103 +616,221 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             str(after.get("children")),
         )
 
-    # pylint: disable=too-many-locals
-    def _run_rounds(self):
-        """Execute all rounds of the load test, collecting snapshots and results."""
-        server_rows: List[Tuple] = []
-        totals = {"passed": 0, "failed": 0, "time": 0.0}
-        all_results: List[Dict[str, Any]] = []
-        all_retries: Dict[str, int] = {}
+    # pylint: disable=too-many-locals,too-many-statements
+    def _run_all_stages(self, stages, total_cap):
+        """Execute all stages of the load test, collecting data per stage."""
+        stage_summaries: List[Dict[str, Any]] = []
+        resource_rows: List[Tuple] = []
         global_offset = 0
-        total_cap = self.args.max_requests
+        total_sent = 0
 
         for round_num in range(1, self.args.num_rounds + 1):
-            if totals.get("passed", 0) + totals.get("failed", 0) >= total_cap:
+            if self.args.num_rounds > 1:
+                logger.info("\n%s", "#" * 60)
+                logger.info("  ROUND %s of %s", round_num, self.args.num_rounds)
+                logger.info("#" * 60)
+
+            for stage_idx, num_concurrent in enumerate(stages):
+                if total_sent >= total_cap:
+                    logger.info(
+                        "\nReached --max-requests cap (%s). Stopping.",
+                        total_cap,
+                    )
+                    return stage_summaries, resource_rows
+
+                remaining = total_cap - total_sent
+                actual_requests = min(num_concurrent, remaining)
+                stage_num = stage_idx + 1
+
+                logger.info("\n%s", "=" * 60)
+                stage_label = f"STAGE {stage_num}: {actual_requests} concurrent connections"
+                if self.args.num_rounds > 1:
+                    stage_label += f" (round {round_num})"
+                logger.info("  %s", stage_label)
+                logger.info("=" * 60)
+
+                if actual_requests < num_concurrent:
+                    logger.info(
+                        "  (Capped from %s to %s by --max-requests)",
+                        num_concurrent, actual_requests,
+                    )
+
+                log_pos = self._read_server_log_position()
+
+                before_server = (
+                    self._snapshot(self.server_proc) if self.server_proc else None
+                )
+                if before_server:
+                    self._log_snapshot("Server BEFORE", before_server)
+
                 logger.info(
-                    "\nReached --max-requests cap (%s). Stopping.", total_cap,
+                    "\nFiring %s concurrent AND requests...",
+                    actual_requests,
                 )
-                break
+                elapsed, results = self._run_stage(
+                    actual_requests, actual_requests, global_offset,
+                )
+                global_offset += actual_requests
+                total_sent += actual_requests
 
-            remaining = total_cap - (totals.get("passed", 0) + totals.get("failed", 0))
-            actual_requests = min(self.args.num_requests, remaining)
-            if actual_requests < self.args.num_requests:
+                counts = self._count_results(results)
+                retries = self._count_retries_since(log_pos)
+                total_retries = sum(retries.values())
+                amplification = (
+                    (actual_requests + total_retries) / actual_requests
+                    if actual_requests > 0 else 1.0
+                )
+
+                # Log per-stage summary
+                logger.info("\n  Requests: %s", actual_requests)
                 logger.info(
-                    "\nCapping round %s to %s requests (--max-requests limit)",
-                    round_num, actual_requests,
+                    "    Created: %s  (reservation_id + network_name confirmed)",
+                    counts.get(STATUS_CREATED, 0),
                 )
-                self.args.num_requests = actual_requests
-
-            logger.info("\n%s", "=" * 60)
-            logger.info(
-                "  ROUND %s of %s (%s requests, %s workers)",
-                round_num, self.args.num_rounds,
-                self.args.num_requests, self.args.max_workers,
-            )
-            logger.info("=" * 60)
-
-            log_pos = self._read_server_log_position()
-
-            before_server = self._snapshot(self.server_proc) if self.server_proc else None
-            if before_server:
-                self._log_snapshot("Server BEFORE", before_server)
-
-            logger.info(
-                "\nFiring %s concurrent AND requests with %s workers...",
-                self.args.num_requests, self.args.max_workers,
-            )
-            passed, failed, elapsed, round_results = self._run_round(
-                round_num, global_offset,
-            )
-            global_offset += self.args.num_requests
-            totals["passed"] = totals.get("passed", 0) + passed
-            totals["failed"] = totals.get("failed", 0) + failed
-            totals["time"] = totals.get("time", 0.0) + elapsed
-            all_results.extend(round_results)
-
-            round_retries = self._count_retries_since(log_pos)
-            if round_retries:
-                logger.info("\n  max_attempts retries this round:")
-                for error_type, count in sorted(round_retries.items()):
-                    logger.info("    %s: %s", error_type, count)
-                    all_retries[error_type] = all_retries.get(error_type, 0) + count
-
-            logger.info(
-                "\nWaiting %ss for server cleanup...", self.args.settle_time,
-            )
-            time.sleep(self.args.settle_time)
-
-            after_server = self._snapshot(self.server_proc) if self.server_proc else None
-            if after_server:
-                self._log_snapshot("Server SETTLED", after_server)
-
-            if before_server and after_server:
-                server_rows.append(
-                    self._build_snapshot_row(round_num, before_server, after_server),
+                logger.info(
+                    "    Failed:  %s  (error or crash)",
+                    counts.get(STATUS_FAILED, 0),
                 )
+                logger.info(
+                    "    Timed out: %s  (hit %ss hard cap)",
+                    counts.get(STATUS_TIMEOUT, 0), self.args.timeout,
+                )
+                logger.info(
+                    "    Killed:  %s  (no output for %ss, presumed hanging)",
+                    counts.get(STATUS_KILLED, 0), self.args.idle_timeout,
+                )
+                logger.info("  Duration: %.2fs | Avg: %.2fs per request",
+                            elapsed,
+                            elapsed / actual_requests if actual_requests else 0)
 
-        return server_rows, totals, all_results, all_retries
+                # Log retry activity
+                if self.args.server_log:
+                    logger.info("\n  max_attempts retry activity (from server log):")
+                    for error_type in RETRY_ERROR_TYPES:
+                        count = retries.get(error_type, 0)
+                        logger.info("    %s retries: %s", error_type, count)
+                    logger.info("    Total retries:  %s", total_retries)
+                    logger.info(
+                        "    Amplification:  %.2fx (%s total LLM attempts for %s requests)",
+                        amplification,
+                        actual_requests + total_retries,
+                        actual_requests,
+                    )
 
-    def _log_results(self, totals, server_rows, all_results, all_retries):
-        """Log the overall results summary and analysis tables."""
-        total_sent = totals.get("passed", 0) + totals.get("failed", 0)
+                # Settle and snapshot
+                logger.info(
+                    "\n  Waiting %ss for server cleanup...",
+                    self.args.settle_time,
+                )
+                time.sleep(self.args.settle_time)
+
+                after_server = (
+                    self._snapshot(self.server_proc) if self.server_proc else None
+                )
+                if after_server:
+                    self._log_snapshot("Server SETTLED", after_server)
+
+                if before_server and after_server:
+                    resource_rows.append(
+                        self._build_resource_row(
+                            f"{actual_requests}",
+                            before_server, after_server,
+                        ),
+                    )
+
+                stage_summaries.append({
+                    "stage": stage_num,
+                    "round": round_num,
+                    "concurrent": actual_requests,
+                    "counts": counts,
+                    "elapsed": elapsed,
+                    "retries": retries,
+                    "total_retries": total_retries,
+                    "amplification": amplification,
+                    "results": results,
+                })
+
+        return stage_summaries, resource_rows
+
+    def _log_ramp_summary(self, stage_summaries):
+        """Log the ramp-up summary table across all stages."""
+        logger.info("\n%s", "=" * 60)
+        logger.info("  RAMP-UP SUMMARY")
+        logger.info("=" * 60)
+
+        header = [
+            "Stage", "Concurrent", "Created", "Failed",
+            "Timeout", "Killed", "Retries", "Amplification",
+            "Duration",
+        ]
+        rows = []
+        for summary in stage_summaries:
+            counts = summary.get("counts", {})
+            rows.append((
+                str(summary.get("stage")),
+                str(summary.get("concurrent")),
+                str(counts.get(STATUS_CREATED, 0)),
+                str(counts.get(STATUS_FAILED, 0)),
+                str(counts.get(STATUS_TIMEOUT, 0)),
+                str(counts.get(STATUS_KILLED, 0)),
+                str(summary.get("total_retries", 0)),
+                f"{summary.get('amplification', 1.0):.2f}x",
+                f"{summary.get('elapsed', 0):.1f}s",
+            ))
+        self._log_table(header, rows)
+
+    def _log_overall_results(self, stage_summaries):
+        """Log overall results across all stages."""
+        total_created = 0
+        total_failed = 0
+        total_timeout = 0
+        total_killed = 0
+        total_time = 0.0
+        total_retries = 0
+        total_requests = 0
+        all_results: List[Dict[str, Any]] = []
+
+        for summary in stage_summaries:
+            counts = summary.get("counts", {})
+            total_created += counts.get(STATUS_CREATED, 0)
+            total_failed += counts.get(STATUS_FAILED, 0)
+            total_timeout += counts.get(STATUS_TIMEOUT, 0)
+            total_killed += counts.get(STATUS_KILLED, 0)
+            total_time += summary.get("elapsed", 0)
+            total_retries += summary.get("total_retries", 0)
+            total_requests += summary.get("concurrent", 0)
+            all_results.extend(summary.get("results", []))
+
+        total_sent = total_created + total_failed + total_timeout + total_killed
 
         logger.info("\n%s", "=" * 60)
         logger.info("  OVERALL RESULTS")
         logger.info("=" * 60)
-        logger.info(
-            "  Total requests: %s (%s passed, %s failed)",
-            total_sent, totals.get("passed"), totals.get("failed"),
-        )
-        logger.info("  Total time:     %.2fs", totals.get("time"))
+        logger.info("  Total requests: %s", total_sent)
+        logger.info("    Created:   %s", total_created)
+        logger.info("    Failed:    %s", total_failed)
+        logger.info("    Timed out: %s", total_timeout)
+        logger.info("    Killed:    %s", total_killed)
+        logger.info("  Total time:  %.2fs", total_time)
         if total_sent > 0:
             logger.info(
-                "  Avg per request: %.2fs", totals.get("time") / total_sent,
+                "  Avg per request: %.2fs", total_time / total_sent,
             )
 
+        # Overall retry summary
+        if total_retries > 0:
+            amplification = (
+                (total_requests + total_retries) / total_requests
+                if total_requests > 0 else 1.0
+            )
+            logger.info("\n  Overall max_attempts retry totals:")
+            logger.info("    Total retries:   %s", total_retries)
+            logger.info("    Amplification:   %.2fx", amplification)
+
         # Networks created
-        created = [r for r in all_results if r.get("ok")]
+        created = [r for r in all_results if r.get("status") == STATUS_CREATED]
         if created:
-            logger.info("\n  Networks successfully created: %s", len(created))
+            logger.info("\n  Networks successfully created:")
             for result in created:
                 logger.info(
                     "    %s (reservation: %s, %.2fs)",
@@ -575,70 +839,32 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                     result.get("elapsed"),
                 )
 
-        # Failures
-        failures = [r for r in all_results if not r.get("ok")]
-        if failures:
-            logger.info("\n  Failed requests: %s", len(failures))
-            for result in failures:
-                logger.info(
-                    "    prompt=%s, error=%s, %.2fs",
-                    result.get("prompt", "")[:50],
-                    result.get("error", "unknown"),
-                    result.get("elapsed"),
-                )
-
-        # Retry analysis
-        if all_retries:
-            logger.info("\n  max_attempts retry totals:")
-            for error_type, count in sorted(all_retries.items()):
-                logger.info("    %s: %s", error_type, count)
-        else:
-            logger.info("\n  max_attempts retries: none detected")
-
-        # Server resource table
-        if server_rows:
-            header = [
-                "Round", "Before RSS", "Settled RSS", "RSS Delta",
-                "FDs", "Threads", "Thread Delta",
-                "Conns", "CPU%", "Children",
-            ]
-            logger.info("\n%s", "=" * 60)
-            logger.info("  SERVER RESOURCE ANALYSIS")
-            logger.info("=" * 60)
-            logger.info("\nNEURO-SAN SERVER:")
-            self._log_table(header, server_rows)
-
-            if len(server_rows) >= 2:
-                self._log_overall_deltas("Server", server_rows)
-
     @staticmethod
-    def _log_overall_deltas(label, rows):
-        """Log overall resource deltas between the first and last rounds."""
-        first = rows[0]
-        last = rows[-1]
-        num_rounds = len(rows)
+    def _log_resource_deltas(resource_rows):
+        """Log overall resource deltas if enough data points."""
+        if len(resource_rows) < 2:
+            return
+        first = resource_rows[0]
+        last = resource_rows[-1]
+        logger.info("\n  Server overall deltas (first stage vs last stage):")
         logger.info(
-            "\n%s overall deltas (round 1 before vs round %s settled):",
-            label, num_rounds,
-        )
-        logger.info(
-            "  RSS:         +%.1f MB",
+            "    RSS:         +%.1f MB",
             float(last[2].rstrip("M")) - float(first[1].rstrip("M")),
         )
         logger.info(
-            "  FDs:         +%s",
+            "    FDs:         +%s",
             int(last[4]) - int(first[4]),
         )
         logger.info(
-            "  Threads:     +%s",
+            "    Threads:     +%s",
             int(last[5].split(" -> ")[1]) - int(first[5].split(" -> ")[0]),
         )
         logger.info(
-            "  Connections: +%s",
+            "    Connections: +%s",
             int(last[7]) - int(first[7]),
         )
         logger.info(
-            "  Children:    +%s",
+            "    Children:    +%s",
             int(last[9]) - int(first[9]),
         )
 
@@ -653,14 +879,20 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         self._test_log_handler.setFormatter(logging.Formatter("%(message)s"))
         logger.addHandler(self._test_log_handler)
 
-    def _finalize_test_log(self, totals):
+    def _finalize_test_log(self, stage_summaries):
         """Keep the log file if there were failures, otherwise remove it."""
         if self._test_log_handler is not None:
             logger.removeHandler(self._test_log_handler)
             self._test_log_handler.close()
         if self._test_log_path is None:
             return
-        if totals.get("failed", 0) > 0:
+        has_failures = any(
+            summary.get("counts", {}).get(STATUS_FAILED, 0) > 0
+            or summary.get("counts", {}).get(STATUS_TIMEOUT, 0) > 0
+            or summary.get("counts", {}).get(STATUS_KILLED, 0) > 0
+            for summary in stage_summaries
+        )
+        if has_failures:
             logger.info("\nTest log saved: %s", self._test_log_path)
         elif os.path.exists(self._test_log_path):
             os.remove(self._test_log_path)
@@ -668,7 +900,11 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
     def run(self):
         """Execute the full AND load test workflow (Phase 1)."""
         self._validate_environment()
-        self._confirm_cost()
+
+        stages = self._resolve_stages()
+        total_cap = self._resolve_max_requests(stages)
+
+        self._confirm_cost(stages, total_cap)
         self._setup_test_log()
 
         is_local = self.args.host in self.LOCAL_HOSTS
@@ -683,25 +919,43 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             logger.info("  Process monitoring disabled (server is not local)")
 
         prompt_mode = "same" if self.args.same_prompt else "varied"
+        mode = "ramp" if self.args.ramp else "flat"
         logger.info(
-            "\nConfig: agent=agent_network_designer, requests=%s, workers=%s, "
-            "rounds=%s, max_requests=%s, host=%s, port=%s, timeout=%ss, "
-            "prompt_mode=%s",
-            self.args.num_requests, self.args.max_workers,
-            self.args.num_rounds, self.args.max_requests,
+            "\nConfig: agent=agent_network_designer, mode=%s, "
+            "stages=%s, rounds=%s, max_requests=%s, host=%s, port=%s, "
+            "timeout=%ss, idle_timeout=%ss, prompt_mode=%s",
+            mode, stages, self.args.num_rounds, total_cap,
             self.args.host, self.args.port, self.args.timeout,
-            prompt_mode,
+            self.args.idle_timeout, prompt_mode,
         )
         logger.info("  settle_time=%ss", self.args.settle_time)
         if self.args.server_log:
             logger.info("  server_log=%s", self.args.server_log)
 
-        totals = {"passed": 0, "failed": 0, "time": 0.0}
+        stage_summaries: List[Dict[str, Any]] = []
         try:
-            server_rows, totals, all_results, all_retries = self._run_rounds()
-            self._log_results(totals, server_rows, all_results, all_retries)
+            stage_summaries, resource_rows = self._run_all_stages(
+                stages, total_cap,
+            )
+
+            if len(stage_summaries) > 1:
+                self._log_ramp_summary(stage_summaries)
+
+            self._log_overall_results(stage_summaries)
+
+            if resource_rows:
+                resource_header = [
+                    "Concurrent", "Before RSS", "Settled RSS", "RSS Delta",
+                    "FDs", "Threads", "Thread Delta",
+                    "Conns", "CPU%", "Children",
+                ]
+                logger.info("\n%s", "=" * 60)
+                logger.info("  SERVER RESOURCE ANALYSIS")
+                logger.info("=" * 60)
+                self._log_table(resource_header, resource_rows)
+                self._log_resource_deltas(resource_rows)
         finally:
-            self._finalize_test_log(totals)
+            self._finalize_test_log(stage_summaries)
 
     @staticmethod
     def main():
