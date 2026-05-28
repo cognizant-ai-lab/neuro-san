@@ -66,8 +66,8 @@ class ServiceResources:
             # Linux: external process FDs are visible via /proc/<pid>/fd
             fd_dir = f"/proc/{pid}/fd"
         elif pid is not None:
-            # macOS: /dev/fd only lists the current process's FDs;
-            # there is no /proc/<pid>/fd equivalent.
+            # Non-Linux (macOS, BSD, etc.): /dev/fd only lists the current
+            # process's FDs; there is no /proc/<pid>/fd equivalent.
             # Callers should fall back to psutil.Process(pid).num_fds().
             return
         elif cls.on_unix:
@@ -75,7 +75,9 @@ class ServiceResources:
             # See: https://man7.org/linux/man-pages/man5/proc.5.html
             fd_dir = "/proc/self/fd"
         else:
-            # macOS: /dev/fd lists the current process's open file descriptors.
+            # Non-Linux POSIX (macOS, BSD, etc.): /dev/fd lists the current
+            # process's open file descriptors. On unsupported platforms, the
+            # os.listdir below will fail and the except clause returns gracefully.
             # See: https://developer.apple.com/library/archive/documentation/
             #   System/Conceptual/ManPages_iPhoneOS/man4/fd.4.html
             fd_dir = "/dev/fd"
