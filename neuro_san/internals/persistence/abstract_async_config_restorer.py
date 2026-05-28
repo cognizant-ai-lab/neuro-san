@@ -168,8 +168,10 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
         try:
             config = serialization.to_object(bytes_file)
         except (ParseException, ParseSyntaxException, JSONDecodeError, ConfigException) as exception:
-            detail: str = "\n".join(str(exception).splitlines())
-            message: str = f"Syntax/parse error in {self.file_purpose} file '{file_path}':\n{detail}"
+            detail: str = " ".join(str(exception).split())
+            message: str = (
+                f'Error parsing {self.file_purpose} file "{file_path}": {detail}'
+            )
             raise ParseException(message) from exception
 
         return config
