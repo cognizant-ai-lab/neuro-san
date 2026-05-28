@@ -236,7 +236,9 @@ class ServiceResources:
             return cls._classify_fds_posix(pid=pid)
         except Exception:  # pylint: disable=broad-exception-caught
             p = cls._get_process(pid)
-            return {"total_unknown": getattr(p, "num_fds", lambda: 0)()}
+            if hasattr(p, "num_fds"):
+                return {"total_unknown": p.num_fds()}
+            return {"total_unknown": 0}
 
     @classmethod
     def get_fd_usage(cls, pid: Optional[int] = None) -> Tuple[Dict[str, int], Optional[int], Optional[int]]:
