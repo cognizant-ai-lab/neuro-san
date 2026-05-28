@@ -58,7 +58,7 @@ class UrlNetworkValidator(AbstractNetworkValidator):
         if self.mcp_servers:
             urls.extend(self.mcp_servers)
 
-        self.logger.info("Validating URLs for MCP tools and subnetwork...")
+        self.logger.debug("Validating %s URLs for MCP tools and subnetwork...", self.network_name)
 
         for agent_name, agent in name_to_spec.items():
             if agent.get("tools"):

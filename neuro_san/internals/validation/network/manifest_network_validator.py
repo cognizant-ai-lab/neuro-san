@@ -18,6 +18,7 @@ from typing import List
 
 from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
 from neuro_san.internals.validation.common.composite_dictionary_validator import CompositeDictionaryValidator
+from neuro_san.internals.validation.network.abstract_network_validator import AbstractNetworkValidator
 from neuro_san.internals.validation.network.keyword_network_validator import KeywordNetworkValidator
 from neuro_san.internals.validation.network.missing_nodes_network_validator import MissingNodesNetworkValidator
 from neuro_san.internals.validation.network.tool_name_network_validator import ToolNameNetworkValidator
@@ -48,3 +49,14 @@ class ManifestNetworkValidator(CompositeDictionaryValidator):
             UrlNetworkValidator(external_network_names, mcp_servers),
         ]
         super().__init__(validators)
+
+    def set_network_name(self, network_name: str):
+        """
+        Propagate the agent network name to any child validators that
+        qualify their log output with it.
+
+        :param network_name: The agent network name
+        """
+        for validator in self.validators:
+            if isinstance(validator, AbstractNetworkValidator):
+                validator.set_network_name(network_name)

@@ -234,7 +234,11 @@ class RegistryManifestRestorer(Restorer):
         :param validator: The validator.
         :param agent_networks: The accumulated agent networks
         """
+        network_name: str = self.agent_mapper.filepath_to_agent_network_name(agent_filepath)
+
         if agent_network is not None:
+            self.logger.info("Validating %s agent network...", network_name)
+            validator.set_network_name(network_name)
             validation_errors: List[str] = validator.validate(agent_network.get_config())
             if len(validation_errors) > 0:
                 joined_errors: str = "; ".join(str(err) for err in validation_errors)
@@ -246,8 +250,6 @@ class RegistryManifestRestorer(Restorer):
             # restore_one_agent_network caught a FileNotFoundError or parse
             # exception and already logged the failure; nothing more to do.
             return
-
-        network_name: str = self.agent_mapper.filepath_to_agent_network_name(agent_filepath)
 
         # Check if this agent network has been declared as MCP tool:
         if usable_network and manifest_dict.get("mcp", False):

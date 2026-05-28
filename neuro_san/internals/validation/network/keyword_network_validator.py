@@ -53,7 +53,7 @@ class KeywordNetworkValidator(AbstractNetworkValidator):
         """
         errors: List[str] = []
 
-        self.logger.info("Validating agent network keywords...")
+        self.logger.debug("Validating %s agent network keywords...", self.network_name)
 
         for agent_name, agent in name_to_spec.items():
             if "description" in self.keywords:

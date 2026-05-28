@@ -49,7 +49,7 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
         """
         errors: List[str] = []
 
-        self.logger.info("Validating agent network structure...")
+        self.logger.debug("Validating %s agent network structure...", self.network_name)
 
         # Find top agents
         top_agents: Set[str] = self.find_all_top_agents(name_to_spec)
