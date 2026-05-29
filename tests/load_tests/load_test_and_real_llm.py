@@ -229,15 +229,16 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             "--server-log",
             type=str,
             default=None,
-            help="Path to neuro-san server log file for max_attempts retry "
-                 "monitoring. If not provided, retry monitoring is skipped.",
+            help="Explicit path to neuro-san server log file for retry "
+                 "monitoring. Overrides auto-detection from --debug.",
         )
         parser.add_argument(
             "--debug",
             action="store_true",
             default=False,
-            help="Save raw CLI stdout/stderr for each request to a temp "
-                 "directory for debugging.",
+            help="Enable debug mode: saves raw CLI stdout/stderr per "
+                 "request to a temp directory, and auto-detects the "
+                 "server log for retry monitoring.",
         )
         parser.add_argument(
             "--skip-reservation-check",
@@ -644,6 +645,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 "Found neuro-san server (PID %s) via neuro_san_studio",
                 self.server_proc.pid,
             )
+            self._auto_detect_server_log()
             return
         self.server_proc = self._find_process("server_main_loop")
         if self.server_proc is not None:
@@ -651,6 +653,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 "Found neuro-san server (PID %s) via server_main_loop",
                 self.server_proc.pid,
             )
+            self._auto_detect_server_log()
             return
         self.server_proc = self._find_process_by_port(self.args.port)
         if self.server_proc is not None:
@@ -658,11 +661,27 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 "Found neuro-san server (PID %s) via port %s",
                 self.server_proc.pid, self.args.port,
             )
+            self._auto_detect_server_log()
             return
         logger.info(
             "neuro-san server process not found locally. "
             "Resource monitoring disabled."
         )
+
+    def _auto_detect_server_log(self):
+        """Auto-detect server log when --debug is on and --server-log not set."""
+        if not self.args.debug:
+            return
+        if self.args.server_log:
+            return
+        try:
+            cwd = self.server_proc.cwd()
+            candidate = os.path.join(cwd, "logs", "server.log")
+            if os.path.isfile(candidate):
+                self.args.server_log = candidate
+                logger.info("  Auto-detected server log: %s", candidate)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
 
     def _read_server_log_position(self):
         """
@@ -1045,10 +1064,10 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             self.args.idle_timeout, prompt_mode,
         )
         logger.info("  settle_time=%ss", self.args.settle_time)
+        if self.args.debug:
+            logger.info("  debug=enabled (CLI output + server log monitoring)")
         if self.args.server_log:
             logger.info("  server_log=%s", self.args.server_log)
-        if self.args.debug:
-            logger.info("  debug=enabled (CLI output saved to /tmp)")
 
         stage_summaries: List[Dict[str, Any]] = []
         try:
