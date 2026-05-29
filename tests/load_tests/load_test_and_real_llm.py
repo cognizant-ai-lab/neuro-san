@@ -376,8 +376,12 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 passed = returncode == 0 and reservation_id and network_name
             status = STATUS_CREATED if passed else STATUS_FAILED
 
+        display_reservation = (
+            "skipped" if self.args.skip_reservation_check
+            else reservation_id
+        )
         self._log_request_result(request_id, status, elapsed, {
-            "reservation_id": reservation_id,
+            "reservation_id": display_reservation,
             "network_name": network_name,
             "stderr": stderr,
         })
@@ -465,8 +469,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
     def _log_request_result(request_id, status, elapsed, result_info):
         """Log the result of a single request."""
         logger.info("Request %s: %s (%.2fs)", request_id, status, elapsed)
-        if result_info.get("reservation_id"):
-            logger.info("  reservation_id: %s", result_info.get("reservation_id"))
+        logger.info("  reservation_id: %s", result_info.get("reservation_id") or "")
         if result_info.get("network_name"):
             logger.info("  network_name: %s", result_info.get("network_name"))
         if status in (STATUS_FAILED, STATUS_TIMEOUT, STATUS_KILLED):
