@@ -239,6 +239,15 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             help="Save raw CLI stdout/stderr for each request to a temp "
                  "directory for debugging.",
         )
+        parser.add_argument(
+            "--skip-reservation-check",
+            action="store_true",
+            default=False,
+            help="Skip reservation_id validation. A request is marked "
+                 "CREATED if network_name is present, even without a "
+                 "reservation_id. Useful when running without "
+                 "AGENT_NETWORK_DESIGNER_USE_RESERVATIONS=true.",
+        )
         return parser.parse_args()
 
     def _resolve_stages(self):
@@ -361,10 +370,11 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         self._save_debug_output(request_id, stdout, stderr)
 
         if status not in (STATUS_TIMEOUT, STATUS_KILLED):
-            if returncode == 0 and reservation_id and network_name:
-                status = STATUS_CREATED
+            if self.args.skip_reservation_check:
+                passed = returncode == 0 and network_name
             else:
-                status = STATUS_FAILED
+                passed = returncode == 0 and reservation_id and network_name
+            status = STATUS_CREATED if passed else STATUS_FAILED
 
         self._log_request_result(request_id, status, elapsed, {
             "reservation_id": reservation_id,
@@ -784,8 +794,11 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 # Log per-stage summary
                 logger.info("\n  Requests: %s", actual_requests)
                 logger.info(
-                    "    Created: %s  (reservation_id + network_name confirmed)",
+                    "    Created: %s  (%s)",
                     counts.get(STATUS_CREATED, 0),
+                    "network_name confirmed"
+                    if self.args.skip_reservation_check
+                    else "reservation_id + network_name confirmed",
                 )
                 logger.info(
                     "    Failed:  %s  (error or crash)",
