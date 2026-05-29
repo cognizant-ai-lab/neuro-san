@@ -680,8 +680,17 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             if os.path.isfile(candidate):
                 self.args.server_log = candidate
                 logger.info("  Auto-detected server log: %s", candidate)
+            else:
+                logger.warning(
+                    "  Server log not found at %s. "
+                    "Retry monitoring unavailable.",
+                    candidate,
+                )
         except (psutil.NoSuchProcess, psutil.AccessDenied):
-            pass
+            logger.warning(
+                "  Could not determine server working directory. "
+                "Retry monitoring unavailable.",
+            )
 
     def _read_server_log_position(self):
         """
