@@ -132,6 +132,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         """Initialize the load test with parsed command-line arguments."""
         self.args = args
         self.server_proc = None
+        self._output_dir = None
         self._test_log_path = None
         self._test_log_handler = None
         self._debug_dir = None
@@ -504,8 +505,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         if not self.args.debug:
             return
         if self._debug_dir is None:
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            self._debug_dir = f"/tmp/and_load_test_debug_{timestamp}"
+            self._debug_dir = os.path.join(self._output_dir, "debug")
             os.makedirs(self._debug_dir, exist_ok=True)
             logger.info("Debug output directory: %s", self._debug_dir)
         stdout_path = os.path.join(self._debug_dir, f"request_{request_id}_stdout.txt")
@@ -1235,9 +1235,11 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         )
 
     def _setup_test_log(self):
-        """Add a file handler to capture all output to a timestamped log file."""
+        """Create output directory and add a file handler for logging."""
         timestamp = time.strftime("%Y%m%d_%H%M%S")
-        self._test_log_path = f"/tmp/and_load_test_{timestamp}.log"
+        self._output_dir = f"/tmp/and_load_test/{timestamp}"
+        os.makedirs(self._output_dir, exist_ok=True)
+        self._test_log_path = os.path.join(self._output_dir, "load_test.log")
         self._test_log_handler = logging.FileHandler(
             self._test_log_path, encoding="utf-8",
         )
@@ -1246,11 +1248,11 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         logger.addHandler(self._test_log_handler)
 
     def _finalize_test_log(self, stage_summaries):
-        """Keep the log file if there were failures, otherwise remove it."""
+        """Close the log handler and report the output directory."""
         if self._test_log_handler is not None:
             logger.removeHandler(self._test_log_handler)
             self._test_log_handler.close()
-        if self._test_log_path is None:
+        if self._output_dir is None:
             return
         has_failures = any(
             summary.get("counts", {}).get(STATUS_FAILED, 0) > 0
@@ -1259,9 +1261,9 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             for summary in stage_summaries
         )
         if has_failures:
-            logger.info("\nTest log saved: %s", self._test_log_path)
-        elif os.path.exists(self._test_log_path):
-            os.remove(self._test_log_path)
+            logger.info("\nOutput (with failures): %s", self._output_dir)
+        else:
+            logger.info("\nOutput: %s", self._output_dir)
 
     def run(self):
         """Execute the full AND load test workflow (Phase 1)."""
