@@ -542,7 +542,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         return counts
 
     def _validate_environment(self):
-        """Validate that OPENAI_API_KEY is set before running."""
+        """Validate that OPENAI_API_KEY is set and no mock LLM is active."""
         api_key = os.environ.get("OPENAI_API_KEY")
         if api_key is None or len(api_key) == 0:
             logger.error(
@@ -552,6 +552,31 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             )
             sys.exit(1)
         logger.info("OPENAI_API_KEY is set.")
+        self._check_no_mock_environment()
+
+    def _check_no_mock_environment(self):
+        """Exit if a mock LLM environment is detected."""
+        issues = []
+        api_base = os.environ.get("OPENAI_API_BASE")
+        if api_base:
+            issues.append(f"  OPENAI_API_BASE={api_base}")
+        mock_proc = self._find_process("mock_llm_server")
+        if mock_proc is not None:
+            issues.append(
+                f"  mock_llm_server process running (PID {mock_proc.pid})"
+            )
+        if issues:
+            logger.error(
+                "Mock LLM environment detected — this test requires "
+                "real LLM calls.\n%s\n\n"
+                "Unset OPENAI_API_BASE and stop the mock server before "
+                "running this test.\n"
+                "For mock-based load testing, use load_test_mock_llm_service.py "
+                "instead.",
+                "\n".join(issues),
+            )
+            sys.exit(1)
+        logger.info("No mock LLM environment detected.")
 
     def _confirm_cost(self, stages, total_cap):
         """Display cost warning and ask for confirmation unless --yes is passed."""
