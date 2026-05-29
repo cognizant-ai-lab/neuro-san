@@ -114,6 +114,12 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
     RETRY_LOG_PATTERN = re.compile(
         r"retrying from (RateLimit error |)(\w+)"
     )
+    REQUEST_START_PATTERN = re.compile(
+        r"Start .*/streaming_chat"
+    )
+    REQUEST_FINISH_PATTERN = re.compile(
+        r"Finish .*/streaming_chat"
+    )
 
     def __init__(self, args):
         """Initialize the load test with parsed command-line arguments."""
@@ -723,6 +729,27 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             pass
         return retry_counts
 
+    def _count_requests_since(self, position):
+        """
+        Count request Start/Finish entries in the server log since the given position.
+        Returns a dict with 'started' and 'finished' counts.
+        """
+        if self.args.server_log is None or position is None:
+            return {"started": None, "finished": None}
+        started = 0
+        finished = 0
+        try:
+            with open(self.args.server_log, "r", encoding="utf-8") as log_fh:
+                log_fh.seek(position)
+                for line in log_fh:
+                    if self.REQUEST_START_PATTERN.search(line):
+                        started += 1
+                    if self.REQUEST_FINISH_PATTERN.search(line):
+                        finished += 1
+        except (OSError, IOError):
+            pass
+        return {"started": started, "finished": finished}
+
     @staticmethod
     def _log_table(header, rows):
         """Log an aligned table given a header list and list-of-lists rows."""
@@ -754,7 +781,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             str(after.get("children")),
         )
 
-    # pylint: disable=too-many-locals,too-many-statements
+    # pylint: disable=too-many-locals,too-many-statements,too-many-branches
     def _run_all_stages(self, stages, total_cap):
         """Execute all stages of the load test, collecting data per stage."""
         stage_summaries: List[Dict[str, Any]] = []
@@ -813,6 +840,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
 
                 counts = self._count_results(results)
                 retries = self._count_retries_since(log_pos)
+                server_counts = self._count_requests_since(log_pos)
                 total_retries = sum(retries.values())
                 amplification = (
                     (actual_requests + total_retries) / actual_requests
@@ -843,6 +871,32 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 logger.info("  Duration: %.2fs | Avg: %.2fs per request",
                             elapsed,
                             elapsed / actual_requests if actual_requests else 0)
+
+                # Log server-side request validation
+                if server_counts.get("started") is not None:
+                    srv_started = server_counts.get("started")
+                    srv_finished = server_counts.get("finished")
+                    match_label = (
+                        "OK" if srv_started == actual_requests
+                        else "MISMATCH"
+                    )
+                    logger.info(
+                        "\n  Server-side validation (from server log):"
+                    )
+                    logger.info(
+                        "    Received:  %s/%s  (%s)",
+                        srv_started, actual_requests, match_label,
+                    )
+                    logger.info(
+                        "    Completed: %s/%s",
+                        srv_finished, actual_requests,
+                    )
+                    if srv_started != actual_requests:
+                        logger.warning(
+                            "    WARNING: Server received %s requests "
+                            "but %s were sent",
+                            srv_started, actual_requests,
+                        )
 
                 # Log retry activity
                 if self.args.server_log:
@@ -889,6 +943,8 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                     "total_retries": total_retries,
                     "amplification": amplification,
                     "results": results,
+                    "server_started": server_counts.get("started"),
+                    "server_finished": server_counts.get("finished"),
                 })
 
         return stage_summaries, resource_rows
@@ -899,15 +955,21 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         logger.info("  RAMP-UP SUMMARY")
         logger.info("=" * 60)
 
+        has_server_counts = any(
+            summary.get("server_started") is not None
+            for summary in stage_summaries
+        )
         header = [
             "Stage", "Concurrent", "Created", "Failed",
             "Timeout", "Killed", "Retries", "Amplification",
             "Duration",
         ]
+        if has_server_counts:
+            header.extend(["Srv Recv", "Srv Done"])
         rows = []
         for summary in stage_summaries:
             counts = summary.get("counts", {})
-            rows.append((
+            row = (
                 str(summary.get("stage")),
                 str(summary.get("concurrent")),
                 str(counts.get(STATUS_CREATED, 0)),
@@ -917,7 +979,15 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 str(summary.get("total_retries", 0)),
                 f"{summary.get('amplification', 1.0):.2f}x",
                 f"{summary.get('elapsed', 0):.1f}s",
-            ))
+            )
+            if has_server_counts:
+                srv_started = summary.get("server_started")
+                srv_finished = summary.get("server_finished")
+                row += (
+                    str(srv_started) if srv_started is not None else "-",
+                    str(srv_finished) if srv_finished is not None else "-",
+                )
+            rows.append(row)
         self._log_table(header, rows)
 
     def _log_overall_results(self, stage_summaries):
