@@ -776,23 +776,26 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         """
         Start a background thread to monitor server log for initial request arrivals.
         Reports each primary AND request as soon as it appears in the log.
-        Returns (stop_event, thread) or (None, None) if monitoring is not available.
+        Returns (stop_event, thread, peak_result) where peak_result is a dict
+        that will be populated with the client snapshot at peak load.
+        Returns (None, None, None) if monitoring is not available.
         """
         if self.args.server_log is None or position is None:
-            return None, None
+            return None, None, None
         stop_event = threading.Event()
+        peak_result = {}
         monitor = threading.Thread(
             target=self._log_monitor_worker,
             args=(position, expected_count, stop_event, fire_time,
-                  client_proc),
+                  client_proc, peak_result),
             daemon=True,
         )
         monitor.start()
-        return stop_event, monitor
+        return stop_event, monitor, peak_result
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _log_monitor_worker(self, position, expected_count, stop_event,
-                            fire_time, client_proc):
+                            fire_time, client_proc, peak_result):
         """Background worker that tails server log and reports AND request arrivals."""
         count = 0
         try:
@@ -821,6 +824,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                                         "RSS %.1fM, CPU %.1f%%",
                                         snap["rss"], snap["cpu"],
                                     )
+                                    peak_result.update(snap)
                     else:
                         stop_event.wait(0.5)
         except (OSError, IOError):
@@ -919,7 +923,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                     "\nFiring %s concurrent AND requests... [%s]",
                     actual_requests, fire_ts,
                 )
-                stop_event, monitor = self._start_log_monitor(
+                stop_event, monitor, peak_result = self._start_log_monitor(
                     log_pos, actual_requests, fire_time, client_proc,
                 )
                 elapsed, results = self._run_stage(
@@ -929,6 +933,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                     stop_event.set()
                 if monitor:
                     monitor.join(timeout=2)
+                peak_client = peak_result if peak_result else None
 
                 settled_client = self._snapshot(client_proc)
                 if before_client and settled_client:
@@ -1055,7 +1060,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                     client_resource_rows.append(
                         self._build_client_row(
                             f"{actual_requests}",
-                            before_client, settled_client,
+                            before_client, peak_client, settled_client,
                         ),
                     )
 
@@ -1078,17 +1083,19 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         return stage_summaries, resource_rows, client_resource_rows
 
     @staticmethod
-    def _build_client_row(stage_label, before, after):
-        """Build a client resource row from before/after snapshots."""
-        rss_delta = after.get("rss") - before.get("rss")
+    def _build_client_row(stage_label, before, peak, settled):
+        """Build a client resource row from before/peak/settled snapshots."""
+        rss_delta = settled.get("rss") - before.get("rss")
+        peak_rss = f"{peak.get('rss'):.1f}M" if peak else "-"
         return (
             str(stage_label),
             f"{before.get('rss'):.1f}M",
-            f"{after.get('rss'):.1f}M",
+            peak_rss,
+            f"{settled.get('rss'):.1f}M",
             f"{rss_delta:+.1f}M",
-            f"{after.get('cpu'):.1f}%",
-            str(after.get("fds")),
-            str(after.get("threads")),
+            f"{settled.get('cpu'):.1f}%",
+            str(settled.get("fds")),
+            str(settled.get("threads")),
         )
 
     @staticmethod
@@ -1101,15 +1108,15 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         logger.info("\n  Client overall deltas (first stage vs last stage):")
         logger.info(
             "    RSS:     +%.1f MB",
-            float(last[2].rstrip("M")) - float(first[1].rstrip("M")),
+            float(last[3].rstrip("M")) - float(first[1].rstrip("M")),
         )
         logger.info(
             "    FDs:     +%s",
-            int(last[5]) - int(first[5]),
+            int(last[6]) - int(first[6]),
         )
         logger.info(
             "    Threads: +%s",
-            int(last[6]) - int(first[6]),
+            int(last[7]) - int(first[7]),
         )
 
     def _log_ramp_summary(self, stage_summaries):
@@ -1342,7 +1349,8 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
 
             if client_rows:
                 client_header = [
-                    "Concurrent", "Before RSS", "Settled RSS", "RSS Delta",
+                    "Concurrent", "Before RSS", "Peak RSS",
+                    "Settled RSS", "RSS Delta",
                     "CPU%", "FDs", "Threads",
                 ]
                 logger.info("\n%s", "=" * 60)
