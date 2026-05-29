@@ -771,7 +771,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             "total_finished": total_finished,
         }
 
-    def _start_log_monitor(self, position, expected_count):
+    def _start_log_monitor(self, position, expected_count, fire_time):
         """
         Start a background thread to monitor server log for initial request arrivals.
         Reports each primary AND request as soon as it appears in the log.
@@ -782,13 +782,14 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         stop_event = threading.Event()
         monitor = threading.Thread(
             target=self._log_monitor_worker,
-            args=(position, expected_count, stop_event),
+            args=(position, expected_count, stop_event, fire_time),
             daemon=True,
         )
         monitor.start()
         return stop_event, monitor
 
-    def _log_monitor_worker(self, position, expected_count, stop_event):
+    def _log_monitor_worker(self, position, expected_count, stop_event,
+                            fire_time):
         """Background worker that tails server log and reports AND request arrivals."""
         count = 0
         try:
@@ -799,9 +800,15 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                     if line:
                         if self.PRIMARY_START_PATTERN.search(line):
                             count += 1
+                            now = time.time()
+                            ts = time.strftime(
+                                "%H:%M:%S", time.localtime(now),
+                            )
+                            delta = now - fire_time
                             logger.info(
-                                "  [server] AND request %s/%s received",
-                                count, expected_count,
+                                "  [server] AND request %s/%s "
+                                "received [%s] (+%.1fs)",
+                                count, expected_count, ts, delta,
                             )
                     else:
                         stop_event.wait(0.5)
@@ -886,12 +893,14 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 if before_server:
                     self._log_snapshot("Server BEFORE", before_server)
 
+                fire_time = time.time()
+                fire_ts = time.strftime("%H:%M:%S", time.localtime(fire_time))
                 logger.info(
-                    "\nFiring %s concurrent AND requests...",
-                    actual_requests,
+                    "\nFiring %s concurrent AND requests... [%s]",
+                    actual_requests, fire_ts,
                 )
                 stop_event, monitor = self._start_log_monitor(
-                    log_pos, actual_requests,
+                    log_pos, actual_requests, fire_time,
                 )
                 elapsed, results = self._run_stage(
                     actual_requests, actual_requests, global_offset,
