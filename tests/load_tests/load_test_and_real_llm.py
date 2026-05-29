@@ -1342,7 +1342,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
 
             if client_rows:
                 client_header = [
-                    "Concurrent", "Before RSS", "After RSS", "RSS Delta",
+                    "Concurrent", "Before RSS", "Settled RSS", "RSS Delta",
                     "CPU%", "FDs", "Threads",
                 ]
                 logger.info("\n%s", "=" * 60)
