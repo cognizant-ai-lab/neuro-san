@@ -17,6 +17,9 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Tuple
+from typing import Type
+from typing import Union
 
 from logging import Logger
 from logging import getLogger
@@ -76,39 +79,74 @@ class ToolsShapeValidator(AbstractNetworkValidator):
         :param agent: The agent spec dictionary
         :return: A list of error messages
         """
-        errors: List[str] = []
         tools: Any = agent.get("tools")
-        if tools is not None and not isinstance(tools, list):
-            errors.append(
-                f"{agent_name} 'tools' must be a list, got {type(tools).__name__}."
-            )
-        elif isinstance(tools, list):
-            for i, tool in enumerate(tools):
-                if not isinstance(tool, (str, dict)):
-                    errors.append(
-                        f"{agent_name} 'tools[{i}]' must be a str or dict,"
-                        f" got {type(tool).__name__}."
-                    )
-        return errors
+        if tools is None:
+            return []
+        if not isinstance(tools, list):
+            return [f"{agent_name} 'tools' must be a list, got {type(tools).__name__}."]
+        # Each element of tools must be a str (agent name) or dict (MCP server).
+        return self.check_element_types(tools, (str, dict), "str or dict", agent_name, "tools")
 
     def validate_args_tools(self, agent_name: str, agent: Dict[str, Any]) -> List[str]:
         """
-        Validate that 'args.tools', if present, is either a dict or a list.
+        Validate that 'args.tools', if present, is either a dict of str values or a
+        list of str values. This is the coded-tool convention for declaring
+        downstream agents: a dict of label -> agent name, or a list of agent names.
 
         :param agent_name: The name of the agent being validated
         :param agent: The agent spec dictionary
         :return: A list of error messages
         """
-        errors: List[str] = []
         args: Any = agent.get("args")
-        if not isinstance(args, dict):
-            return errors
-        if "tools" not in args:
-            return errors
+        if not isinstance(args, dict) or "tools" not in args:
+            return []
         args_tools: Any = args.get("tools")
         if not isinstance(args_tools, (dict, list)):
-            errors.append(
+            return [
                 f"{agent_name} 'args.tools' must be a dict or list,"
                 f" got {type(args_tools).__name__}."
-            )
+            ]
+        # Tools in args.tools must be agent names (str).
+        return self.check_element_types(
+            args_tools, str, "str (agent name)", agent_name, "args.tools",
+        )
+
+    @staticmethod
+    def check_element_types(items: Union[Dict[Any, Any], List[Any]],
+                            allowed_types: Union[Type, Tuple[Type, ...]],
+                            type_label: str,
+                            agent_name: str,
+                            field_prefix: str) -> List[str]:
+        """
+        Validate that each value in `items` is an instance of `allowed_types`.
+
+        `items` can be a list (indexed by position, error label uses [i]) or a
+        dict (keyed by label, error label uses [key!r]). Used by both
+        `validate_tools` (tools list) and `validate_args_tools` (args.tools as
+        dict or list) to keep the iteration + error format consistent.
+
+        :param items: The list or dict whose entries to check
+        :param allowed_types: A type or tuple of types each value must match
+        :param type_label: Human-readable description of allowed types for the
+                error message (e.g., "str or dict", "str (agent name)")
+        :param agent_name: The name of the agent being validated
+        :param field_prefix: The field path prefix used in error messages
+                (e.g., "tools" or "args.tools")
+        :return: A list of error messages, one per element that fails the check
+        """
+        errors: List[str] = []
+        if isinstance(items, dict):
+            for key, value in items.items():
+                if not isinstance(value, allowed_types):
+                    errors.append(
+                        f"{agent_name} '{field_prefix}[{key!r}]' must be a {type_label},"
+                        f" got {type(value).__name__}."
+                    )
+        elif isinstance(items, list):
+            for i, value in enumerate(items):
+                if not isinstance(value, allowed_types):
+                    errors.append(
+                        f"{agent_name} '{field_prefix}[{i}]' must be a {type_label},"
+                        f" got {type(value).__name__}."
+                    )
         return errors

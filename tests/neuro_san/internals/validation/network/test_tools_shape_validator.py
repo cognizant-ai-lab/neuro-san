@@ -112,6 +112,32 @@ class TestToolsShapeValidator(TestCase, AbstractNetworkValidatorTest):
         self.assertEqual(1, len(errors))
         self.assertIn("'args.tools' must be a dict or list", errors[0])
 
+    def test_args_tools_dict_non_string_value(self):
+        """
+        Tests that args.tools as a dict with a non-string value is flagged.
+        """
+        validator: DictionaryValidator = self.create_validator()
+
+        config: Dict[str, Any] = self.restore("hello_world.hocon")
+        config["tools"][0]["args"] = {"tools": {"x": 123}}
+
+        errors: List[str] = validator.validate(config)
+        self.assertEqual(1, len(errors))
+        self.assertIn("must be a str (agent name)", errors[0])
+
+    def test_args_tools_list_non_string_element(self):
+        """
+        Tests that args.tools as a list with a non-string element is flagged.
+        """
+        validator: DictionaryValidator = self.create_validator()
+
+        config: Dict[str, Any] = self.restore("hello_world.hocon")
+        config["tools"][0]["args"] = {"tools": [123]}
+
+        errors: List[str] = validator.validate(config)
+        self.assertEqual(1, len(errors))
+        self.assertIn("must be a str (agent name)", errors[0])
+
     def test_args_tools_missing_is_valid(self):
         """
         Tests that absence of args.tools is fine — it's optional.
