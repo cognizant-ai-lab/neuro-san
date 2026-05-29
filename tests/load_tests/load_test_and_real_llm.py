@@ -49,6 +49,7 @@ import select
 import socket
 import subprocess
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -119,6 +120,12 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
     )
     REQUEST_FINISH_PATTERN = re.compile(
         r"Finish .*/streaming_chat"
+    )
+    PRIMARY_START_PATTERN = re.compile(
+        r"Start agent_network_designer/streaming_chat"
+    )
+    PRIMARY_FINISH_PATTERN = re.compile(
+        r"Finish agent_network_designer/streaming_chat"
     )
 
     def __init__(self, args):
@@ -732,23 +739,74 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
     def _count_requests_since(self, position):
         """
         Count request Start/Finish entries in the server log since the given position.
-        Returns a dict with 'started' and 'finished' counts.
+        Separates primary (agent_network_designer) vs total (all agents) counts.
         """
         if self.args.server_log is None or position is None:
-            return {"started": None, "finished": None}
-        started = 0
-        finished = 0
+            return {
+                "primary_started": None, "primary_finished": None,
+                "total_started": None, "total_finished": None,
+            }
+        primary_started = 0
+        primary_finished = 0
+        total_started = 0
+        total_finished = 0
         try:
             with open(self.args.server_log, "r", encoding="utf-8") as log_fh:
                 log_fh.seek(position)
                 for line in log_fh:
                     if self.REQUEST_START_PATTERN.search(line):
-                        started += 1
+                        total_started += 1
                     if self.REQUEST_FINISH_PATTERN.search(line):
-                        finished += 1
+                        total_finished += 1
+                    if self.PRIMARY_START_PATTERN.search(line):
+                        primary_started += 1
+                    if self.PRIMARY_FINISH_PATTERN.search(line):
+                        primary_finished += 1
         except (OSError, IOError):
             pass
-        return {"started": started, "finished": finished}
+        return {
+            "primary_started": primary_started,
+            "primary_finished": primary_finished,
+            "total_started": total_started,
+            "total_finished": total_finished,
+        }
+
+    def _start_log_monitor(self, position, expected_count):
+        """
+        Start a background thread to monitor server log for initial request arrivals.
+        Reports each primary AND request as soon as it appears in the log.
+        Returns (stop_event, thread) or (None, None) if monitoring is not available.
+        """
+        if self.args.server_log is None or position is None:
+            return None, None
+        stop_event = threading.Event()
+        monitor = threading.Thread(
+            target=self._log_monitor_worker,
+            args=(position, expected_count, stop_event),
+            daemon=True,
+        )
+        monitor.start()
+        return stop_event, monitor
+
+    def _log_monitor_worker(self, position, expected_count, stop_event):
+        """Background worker that tails server log and reports AND request arrivals."""
+        count = 0
+        try:
+            with open(self.args.server_log, "r", encoding="utf-8") as log_fh:
+                log_fh.seek(position)
+                while not stop_event.is_set() and count < expected_count:
+                    line = log_fh.readline()
+                    if line:
+                        if self.PRIMARY_START_PATTERN.search(line):
+                            count += 1
+                            logger.info(
+                                "  [server] AND request %s/%s received",
+                                count, expected_count,
+                            )
+                    else:
+                        stop_event.wait(0.5)
+        except (OSError, IOError):
+            pass
 
     @staticmethod
     def _log_table(header, rows):
@@ -832,9 +890,16 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                     "\nFiring %s concurrent AND requests...",
                     actual_requests,
                 )
+                stop_event, monitor = self._start_log_monitor(
+                    log_pos, actual_requests,
+                )
                 elapsed, results = self._run_stage(
                     actual_requests, actual_requests, global_offset,
                 )
+                if stop_event:
+                    stop_event.set()
+                if monitor:
+                    monitor.join(timeout=2)
                 global_offset += actual_requests
                 total_sent += actual_requests
 
@@ -873,29 +938,42 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                             elapsed / actual_requests if actual_requests else 0)
 
                 # Log server-side request validation
-                if server_counts.get("started") is not None:
-                    srv_started = server_counts.get("started")
-                    srv_finished = server_counts.get("finished")
+                if server_counts.get("primary_started") is not None:
+                    pri_started = server_counts["primary_started"]
+                    pri_finished = server_counts["primary_finished"]
+                    total_started = server_counts["total_started"]
+                    total_finished = server_counts["total_finished"]
+                    internal_calls = total_started - pri_started
                     match_label = (
-                        "OK" if srv_started == actual_requests
+                        "OK" if pri_started >= actual_requests
                         else "MISMATCH"
                     )
                     logger.info(
                         "\n  Server-side validation (from server log):"
                     )
                     logger.info(
-                        "    Received:  %s/%s  (%s)",
-                        srv_started, actual_requests, match_label,
+                        "    AND received:  %s/%s  (%s)",
+                        pri_started, actual_requests, match_label,
                     )
                     logger.info(
-                        "    Completed: %s/%s",
-                        srv_finished, actual_requests,
+                        "    AND completed: %s/%s",
+                        pri_finished, actual_requests,
                     )
-                    if srv_started != actual_requests:
+                    if internal_calls > 0:
+                        logger.info(
+                            "    Internal calls: %s additional "
+                            "streaming_chat calls (recursive)",
+                            internal_calls,
+                        )
+                    logger.info(
+                        "    Total server calls: %s started, %s finished",
+                        total_started, total_finished,
+                    )
+                    if pri_started < actual_requests:
                         logger.warning(
-                            "    WARNING: Server received %s requests "
+                            "    WARNING: Server received %s AND requests "
                             "but %s were sent",
-                            srv_started, actual_requests,
+                            pri_started, actual_requests,
                         )
 
                 # Log retry activity
@@ -943,8 +1021,10 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                     "total_retries": total_retries,
                     "amplification": amplification,
                     "results": results,
-                    "server_started": server_counts.get("started"),
-                    "server_finished": server_counts.get("finished"),
+                    "primary_started": server_counts.get("primary_started"),
+                    "primary_finished": server_counts.get("primary_finished"),
+                    "total_started": server_counts.get("total_started"),
+                    "total_finished": server_counts.get("total_finished"),
                 })
 
         return stage_summaries, resource_rows
@@ -956,7 +1036,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         logger.info("=" * 60)
 
         has_server_counts = any(
-            summary.get("server_started") is not None
+            summary.get("primary_started") is not None
             for summary in stage_summaries
         )
         header = [
@@ -965,7 +1045,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             "Duration",
         ]
         if has_server_counts:
-            header.extend(["Srv Recv", "Srv Done"])
+            header.extend(["AND Recv", "AND Done", "Internal"])
         rows = []
         for summary in stage_summaries:
             counts = summary.get("counts", {})
@@ -981,11 +1061,18 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 f"{summary.get('elapsed', 0):.1f}s",
             )
             if has_server_counts:
-                srv_started = summary.get("server_started")
-                srv_finished = summary.get("server_finished")
+                pri_started = summary.get("primary_started")
+                pri_finished = summary.get("primary_finished")
+                total_started = summary.get("total_started")
+                internal = (
+                    str(total_started - pri_started)
+                    if pri_started is not None and total_started is not None
+                    else "-"
+                )
                 row += (
-                    str(srv_started) if srv_started is not None else "-",
-                    str(srv_finished) if srv_finished is not None else "-",
+                    str(pri_started) if pri_started is not None else "-",
+                    str(pri_finished) if pri_finished is not None else "-",
+                    internal,
                 )
             rows.append(row)
         self._log_table(header, rows)
