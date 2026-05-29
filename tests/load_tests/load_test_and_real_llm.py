@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# pylint: disable=too-many-lines
 """
 Load-test script for the Agent Network Designer (AND) using real LLM calls.
 
@@ -267,6 +268,18 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 cmdline = " ".join(proc.info.get("cmdline") or [])
                 if keyword in cmdline:
                     return psutil.Process(proc.info.get("pid"))
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        return None
+
+    @staticmethod
+    def _find_process_by_port(port):
+        """Find a process listening on the given port."""
+        for proc in psutil.process_iter(["pid"]):
+            try:
+                for conn in proc.net_connections():
+                    if conn.status == "LISTEN" and conn.laddr.port == port:
+                        return psutil.Process(proc.info.get("pid"))
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
         return None
@@ -570,15 +583,24 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
     def _find_local_server(self):
         """Locate the neuro-san server process for resource monitoring."""
         self.server_proc = self._find_process("server_main_loop")
-        if self.server_proc is None:
+        if self.server_proc is not None:
             logger.info(
-                "neuro-san server process not found locally. "
-                "Resource monitoring disabled."
+                "Found neuro-san server (PID %s) via server_main_loop",
+                self.server_proc.pid,
             )
-        else:
+            return
+        self.server_proc = self._find_process_by_port(self.args.port)
+        if self.server_proc is not None:
             logger.info(
-                "Found neuro-san server (PID %s)", self.server_proc.pid,
+                "Found neuro-san server (PID %s) via port %s"
+                " (neuro_san_studio or other)",
+                self.server_proc.pid, self.args.port,
             )
+            return
+        logger.info(
+            "neuro-san server process not found locally. "
+            "Resource monitoring disabled."
+        )
 
     def _read_server_log_position(self):
         """
