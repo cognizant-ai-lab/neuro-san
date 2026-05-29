@@ -851,6 +851,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         """Execute all stages of the load test, collecting data per stage."""
         stage_summaries: List[Dict[str, Any]] = []
         resource_rows: List[Tuple] = []
+        client_resource_rows: List[Tuple] = []
         global_offset = 0
         total_sent = 0
 
@@ -866,7 +867,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                         "\nReached --max-requests cap (%s). Stopping.",
                         total_cap,
                     )
-                    return stage_summaries, resource_rows
+                    return stage_summaries, resource_rows, client_resource_rows
 
                 remaining = total_cap - total_sent
                 actual_requests = min(num_concurrent, remaining)
@@ -1035,6 +1036,14 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                         ),
                     )
 
+                if before_client and after_client:
+                    client_resource_rows.append(
+                        self._build_client_row(
+                            f"{actual_requests}",
+                            before_client, after_client,
+                        ),
+                    )
+
                 stage_summaries.append({
                     "stage": stage_num,
                     "round": round_num,
@@ -1051,7 +1060,42 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                     "total_finished": server_counts.get("total_finished"),
                 })
 
-        return stage_summaries, resource_rows
+        return stage_summaries, resource_rows, client_resource_rows
+
+    @staticmethod
+    def _build_client_row(stage_label, before, after):
+        """Build a client resource row from before/after snapshots."""
+        rss_delta = after.get("rss") - before.get("rss")
+        return (
+            str(stage_label),
+            f"{before.get('rss'):.1f}M",
+            f"{after.get('rss'):.1f}M",
+            f"{rss_delta:+.1f}M",
+            f"{after.get('cpu'):.1f}%",
+            str(after.get("fds")),
+            str(after.get("threads")),
+        )
+
+    @staticmethod
+    def _log_client_deltas(client_rows):
+        """Log overall client resource deltas if enough data points."""
+        if len(client_rows) < 2:
+            return
+        first = client_rows[0]
+        last = client_rows[-1]
+        logger.info("\n  Client overall deltas (first stage vs last stage):")
+        logger.info(
+            "    RSS:     +%.1f MB",
+            float(last[2].rstrip("M")) - float(first[1].rstrip("M")),
+        )
+        logger.info(
+            "    FDs:     +%s",
+            int(last[5]) - int(first[5]),
+        )
+        logger.info(
+            "    Threads: +%s",
+            int(last[6]) - int(first[6]),
+        )
 
     def _log_ramp_summary(self, stage_summaries):
         """Log the ramp-up summary table across all stages."""
@@ -1258,7 +1302,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
 
         stage_summaries: List[Dict[str, Any]] = []
         try:
-            stage_summaries, resource_rows = self._run_all_stages(
+            stage_summaries, resource_rows, client_rows = self._run_all_stages(
                 stages, total_cap,
             )
 
@@ -1278,6 +1322,17 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 logger.info("=" * 60)
                 self._log_table(resource_header, resource_rows)
                 self._log_resource_deltas(resource_rows)
+
+            if client_rows:
+                client_header = [
+                    "Concurrent", "Before RSS", "After RSS", "RSS Delta",
+                    "CPU%", "FDs", "Threads",
+                ]
+                logger.info("\n%s", "=" * 60)
+                logger.info("  CLIENT RESOURCE ANALYSIS")
+                logger.info("=" * 60)
+                self._log_table(client_header, client_rows)
+                self._log_client_deltas(client_rows)
         finally:
             self._finalize_test_log(stage_summaries)
 
