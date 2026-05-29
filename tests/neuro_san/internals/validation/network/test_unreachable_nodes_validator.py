@@ -72,7 +72,7 @@ class TestUnreachableNodesNetworkValidator(TestCase, AbstractNetworkValidatorTes
         """
         Tests that the validator does not raise TypeError when an agent's `tools`
         field is a string instead of a list (issue #852). The shape error is
-        reported by KeywordNetworkValidator separately; this validator coerces
+        reported by ToolsShapeValidator separately; this validator coerces
         the malformed value to empty and continues, so reachability checks
         produce a regular error rather than crashing.
         """
