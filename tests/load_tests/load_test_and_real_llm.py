@@ -119,6 +119,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         self.server_proc = None
         self._test_log_path = None
         self._test_log_handler = None
+        self._debug_dir = None
 
     @staticmethod
     def parse_args():
@@ -229,6 +230,13 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             help="Path to neuro-san server log file for max_attempts retry "
                  "monitoring. If not provided, retry monitoring is skipped.",
         )
+        parser.add_argument(
+            "--debug",
+            action="store_true",
+            default=False,
+            help="Save raw CLI stdout/stderr for each request to a temp "
+                 "directory for debugging.",
+        )
         return parser.parse_args()
 
     def _resolve_stages(self):
@@ -335,6 +343,8 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
 
         reservation_id = self._parse_reservation_id(stdout)
         network_name = self._parse_network_name(stdout)
+
+        self._save_debug_output(request_id, stdout, stderr)
 
         if status not in (STATUS_TIMEOUT, STATUS_KILLED):
             if returncode == 0 and reservation_id and network_name:
@@ -448,6 +458,23 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         if not stripped:
             return ""
         return stripped.rsplit("\n", maxsplit=1)[-1]
+
+    def _save_debug_output(self, request_id, stdout, stderr):
+        """Save raw CLI output to debug directory when --debug is enabled."""
+        if not self.args.debug:
+            return
+        if self._debug_dir is None:
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            self._debug_dir = f"/tmp/and_load_test_debug_{timestamp}"
+            os.makedirs(self._debug_dir, exist_ok=True)
+            logger.info("Debug output directory: %s", self._debug_dir)
+        stdout_path = os.path.join(self._debug_dir, f"request_{request_id}_stdout.txt")
+        stderr_path = os.path.join(self._debug_dir, f"request_{request_id}_stderr.txt")
+        with open(stdout_path, "w", encoding="utf-8") as fh:
+            fh.write(stdout)
+        if stderr and stderr.strip():
+            with open(stderr_path, "w", encoding="utf-8") as fh:
+                fh.write(stderr)
 
     @staticmethod
     def _cleanup_prompt_file(prompt_file):
@@ -933,6 +960,8 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         logger.info("  settle_time=%ss", self.args.settle_time)
         if self.args.server_log:
             logger.info("  server_log=%s", self.args.server_log)
+        if self.args.debug:
+            logger.info("  debug=enabled (CLI output saved to /tmp)")
 
         stage_summaries: List[Dict[str, Any]] = []
         try:
