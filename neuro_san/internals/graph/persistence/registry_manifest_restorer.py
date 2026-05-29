@@ -239,7 +239,7 @@ class RegistryManifestRestorer(Restorer):
         network_name: str = self.agent_mapper.filepath_to_agent_network_name(agent_filepath)
 
         if agent_network is not None:
-            self.logger.debug("Validating %s agent network...", network_name)
+            self.logger.info("Validating %s agent network...", network_name)
             validation_errors: List[str] = validator.validate(agent_network.get_config())
             if len(validation_errors) > 0:
                 joined_errors: str = "; ".join(str(err) for err in validation_errors)
