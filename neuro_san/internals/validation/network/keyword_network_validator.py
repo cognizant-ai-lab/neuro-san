@@ -120,4 +120,3 @@ class KeywordNetworkValidator(AbstractNetworkValidator):
             elif instructions.strip() == "":
                 errors.append(f"{agent_name} 'instructions' cannot be empty.")
         return errors
-
