@@ -30,16 +30,19 @@ class UrlNetworkValidator(AbstractNetworkValidator):
     AbstractNetworkValidator that looks for correct URLs in an agent network
     """
 
-    def __init__(self, external_agents: List[str] = None, mcp_servers: List[str] = None):
+    def __init__(self, external_agents: List[str] = None, mcp_servers: List[str] = None,
+                 network_name: str = None):
         """
         Constructor
 
         :param external_agents: A list of valid /external_agent referencess
         :param mcp_servers: A list of MCP servers, as read in from a mcp_info.hocon file
+        :param network_name: The agent network name for diagnostic log lines
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.external_agents: List[str] = external_agents
         self.mcp_servers: List[str] = mcp_servers
+        self.network_name: str = network_name
 
     def validate_name_to_spec_dict(self, name_to_spec: Dict[str, Any]) -> List[str]:
         """

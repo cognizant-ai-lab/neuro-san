@@ -34,11 +34,14 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
     Specifically, unreachable nodes or issues with number of front men.
     """
 
-    def __init__(self):
+    def __init__(self, network_name: str = None):
         """
         Constructor
+
+        :param network_name: The agent network name for diagnostic log lines
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
+        self.network_name: str = network_name
 
     def validate_name_to_spec_dict(self, name_to_spec: Dict[str, Any]) -> List[str]:
         """

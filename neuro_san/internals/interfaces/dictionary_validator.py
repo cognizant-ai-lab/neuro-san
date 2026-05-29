@@ -24,17 +24,6 @@ class DictionaryValidator:
     An interface for validating dictionaries of various meanings.
     """
 
-    network_name: str = None
-
-    def set_network_name(self, network_name: str):
-        """
-        Set the name of the agent network this validator is about to validate.
-        Used to qualify diagnostic log lines.
-
-        :param network_name: The agent network name
-        """
-        self.network_name = network_name
-
     def validate(self, candidate: Dict[str, Any]) -> List[str]:
         """
         Validate the given dictionary
