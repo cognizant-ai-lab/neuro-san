@@ -17,10 +17,9 @@
 """
 Shared scaffolding for S3ReservationsStorage tests.
 
-This module is intentionally named with a leading underscore so pytest's
-default test-file pattern (test_*.py) skips it during collection.
-Concrete test classes live in sibling test_*.py files and inherit from
-S3ReservationsStorageTestBase.
+Pytest's default test-file pattern is test_*.py, so this file (which
+does not start with "test_") is not collected as a test module. The
+class defined here is imported by sibling test_*.py modules.
 """
 import os
 import time
@@ -34,7 +33,7 @@ from unittest.mock import patch
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
 from neuro_san.service.watcher.temp_networks.s3_reservations_storage \
     import S3ReservationsStorage
-from tests.neuro_san.service.watcher.temp_networks._fake_s3_client \
+from tests.neuro_san.service.watcher.temp_networks.fake_s3_client \
     import FakeS3Client
 
 
