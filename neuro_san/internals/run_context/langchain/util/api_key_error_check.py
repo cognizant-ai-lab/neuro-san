@@ -17,6 +17,7 @@
 
 from typing import Dict
 from typing import List
+from typing import Optional
 
 # Dictionary with provider key env var -> strings to look for
 API_KEY_EXCEPTIONS: Dict[str, List] = {
@@ -52,7 +53,7 @@ class ApiKeyErrorCheck:
     """
 
     @staticmethod
-    def check_for_api_key_exception(exception: Exception) -> str:
+    def check_for_api_key_exception(exception: Exception) -> Optional[str]:
         """
         :param exception: An exception to check
         :return: A more helpful exception message if it relates to an API key or None
@@ -124,7 +125,7 @@ Some things to try:
     def _format_redacted_pydantic_error(exception: Exception) -> str:
         """
         Build a message from a pydantic ValidationError using its structured
-        .errors() data, omitting the 'input' field entirely so user-supplied
+        .errors() data, redacting the 'input' field entirely so user-supplied
         values can't leak.
         """
         parts: List[str] = []
