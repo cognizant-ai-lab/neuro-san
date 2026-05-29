@@ -620,25 +620,25 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         if not self._is_port_open(self.args.host, self.args.port):
             logger.error(
                 "No service listening on %s:%s.\n"
-                "Start the neuro-san server before running this test:\n"
-                "  python -m neuro_san_studio run --server-only\n"
-                "  OR\n"
-                "  python -m neuro_san.service.main_loop.server_main_loop",
+                "Start the server via neuro-san-studio:\n"
+                "  python -m neuro_san_studio run --server-only",
                 self.args.host, self.args.port,
             )
             sys.exit(1)
-        self.server_proc = self._find_process("server_main_loop")
+        self.server_proc = self._find_process("neuro_san_studio")
         if self.server_proc is not None:
             logger.info(
-                "Found neuro-san server (PID %s) via server_main_loop",
+                "Found neuro-san server (PID %s) via neuro_san_studio",
                 self.server_proc.pid,
             )
             return
         self.server_proc = self._find_process_by_port(self.args.port)
         if self.server_proc is not None:
-            logger.info(
-                "Found neuro-san server (PID %s) via port %s"
-                " (neuro_san_studio or other)",
+            logger.warning(
+                "Found process (PID %s) on port %s but not started via "
+                "neuro_san_studio. AND requires studio registries for "
+                "reservations.\n"
+                "Recommended: python -m neuro_san_studio run --server-only",
                 self.server_proc.pid, self.args.port,
             )
             return
