@@ -893,6 +893,9 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 if before_server:
                     self._log_snapshot("Server BEFORE", before_server)
 
+                client_proc = psutil.Process()
+                before_client = self._snapshot(client_proc)
+
                 fire_time = time.time()
                 fire_ts = time.strftime("%H:%M:%S", time.localtime(fire_time))
                 logger.info(
@@ -909,6 +912,18 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                     stop_event.set()
                 if monitor:
                     monitor.join(timeout=2)
+
+                after_client = self._snapshot(client_proc)
+                if before_client and after_client:
+                    rss_before = before_client["rss"]
+                    rss_after = after_client["rss"]
+                    rss_delta = rss_after - rss_before
+                    logger.info(
+                        "  Client: RSS %.1fM -> %.1fM (%+.1fM), CPU %.1f%%",
+                        rss_before, rss_after, rss_delta,
+                        after_client["cpu"],
+                    )
+
                 global_offset += actual_requests
                 total_sent += actual_requests
 
