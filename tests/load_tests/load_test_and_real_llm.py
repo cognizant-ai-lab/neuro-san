@@ -771,7 +771,8 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             "total_finished": total_finished,
         }
 
-    def _start_log_monitor(self, position, expected_count, fire_time):
+    def _start_log_monitor(self, position, expected_count,
+                           fire_time, client_proc):
         """
         Start a background thread to monitor server log for initial request arrivals.
         Reports each primary AND request as soon as it appears in the log.
@@ -782,14 +783,16 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         stop_event = threading.Event()
         monitor = threading.Thread(
             target=self._log_monitor_worker,
-            args=(position, expected_count, stop_event, fire_time),
+            args=(position, expected_count, stop_event, fire_time,
+                  client_proc),
             daemon=True,
         )
         monitor.start()
         return stop_event, monitor
 
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _log_monitor_worker(self, position, expected_count, stop_event,
-                            fire_time):
+                            fire_time, client_proc):
         """Background worker that tails server log and reports AND request arrivals."""
         count = 0
         try:
@@ -810,6 +813,14 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                                 "received [%s] (+%.1fs)",
                                 count, expected_count, ts, delta,
                             )
+                            if count >= expected_count:
+                                snap = self._snapshot(client_proc)
+                                if snap:
+                                    logger.info(
+                                        "  Client AFTER: "
+                                        "RSS %.1fM, CPU %.1f%%",
+                                        snap["rss"], snap["cpu"],
+                                    )
                     else:
                         stop_event.wait(0.5)
         except (OSError, IOError):
@@ -896,6 +907,11 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
 
                 client_proc = psutil.Process()
                 before_client = self._snapshot(client_proc)
+                if before_client:
+                    logger.info(
+                        "  Client BEFORE: RSS %.1fM, CPU %.1f%%",
+                        before_client["rss"], before_client["cpu"],
+                    )
 
                 fire_time = time.time()
                 fire_ts = time.strftime("%H:%M:%S", time.localtime(fire_time))
@@ -904,7 +920,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                     actual_requests, fire_ts,
                 )
                 stop_event, monitor = self._start_log_monitor(
-                    log_pos, actual_requests, fire_time,
+                    log_pos, actual_requests, fire_time, client_proc,
                 )
                 elapsed, results = self._run_stage(
                     actual_requests, actual_requests, global_offset,
@@ -914,15 +930,14 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 if monitor:
                     monitor.join(timeout=2)
 
-                after_client = self._snapshot(client_proc)
-                if before_client and after_client:
+                settled_client = self._snapshot(client_proc)
+                if before_client and settled_client:
                     rss_before = before_client["rss"]
-                    rss_after = after_client["rss"]
-                    rss_delta = rss_after - rss_before
+                    rss_settled = settled_client["rss"]
+                    rss_delta = rss_settled - rss_before
                     logger.info(
-                        "  Client: RSS %.1fM -> %.1fM (%+.1fM), CPU %.1f%%",
-                        rss_before, rss_after, rss_delta,
-                        after_client["cpu"],
+                        "  Client SETTLED: RSS %.1fM (%+.1fM from before)",
+                        rss_settled, rss_delta,
                     )
 
                 global_offset += actual_requests
@@ -1036,11 +1051,11 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                         ),
                     )
 
-                if before_client and after_client:
+                if before_client and settled_client:
                     client_resource_rows.append(
                         self._build_client_row(
                             f"{actual_requests}",
-                            before_client, after_client,
+                            before_client, settled_client,
                         ),
                     )
 
