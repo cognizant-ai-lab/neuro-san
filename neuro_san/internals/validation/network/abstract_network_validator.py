@@ -93,7 +93,7 @@ class AbstractNetworkValidator(DictionaryValidator):
                 tool.startswith("https://"))
 
     @staticmethod
-    def remove_dictionary_tools(down_chains: List[str]) -> List[str]:
+    def remove_dictionary_tools(down_chains: List[Any]) -> List[str]:
         """
         Sometimes tool lists have dictionary entries to support servers-based tools
         that need more than just a string.  For instance MCP servers.
