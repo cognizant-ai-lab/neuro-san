@@ -632,13 +632,17 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 self.server_proc.pid,
             )
             return
+        self.server_proc = self._find_process("server_main_loop")
+        if self.server_proc is not None:
+            logger.info(
+                "Found neuro-san server (PID %s) via server_main_loop",
+                self.server_proc.pid,
+            )
+            return
         self.server_proc = self._find_process_by_port(self.args.port)
         if self.server_proc is not None:
-            logger.warning(
-                "Found process (PID %s) on port %s but not started via "
-                "neuro_san_studio. AND requires studio registries for "
-                "reservations.\n"
-                "Recommended: python -m neuro_san_studio run --server-only",
+            logger.info(
+                "Found neuro-san server (PID %s) via port %s",
                 self.server_proc.pid, self.args.port,
             )
             return
