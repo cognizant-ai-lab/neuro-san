@@ -18,6 +18,8 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
+
 from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
 
 
@@ -103,3 +105,49 @@ class AbstractNetworkValidator(DictionaryValidator):
             if isinstance(tool, str):
                 safe_list.append(tool)
         return safe_list
+
+    @staticmethod
+    def coerce_tools(agent_spec: Dict[str, Any]) -> List[Any]:
+        """
+        Return the agent's `tools` as a list, coercing malformed values to empty.
+
+        Callers that traverse the connectivity graph (front-man detection,
+        reachability, missing nodes, cycles) should use this rather than reading
+        `tools` directly so they do not crash on `str + list` or iterate the
+        characters of a string. The shape contract this enforces matches
+        ToolsShapeValidator.validate_tools, which is the place that reports the
+        shape error to the user.
+
+        :param agent_spec: The agent specification dictionary
+        :return: The agent's `tools` list, or an empty list if the value is malformed.
+        """
+        no_tools: List[Any] = []
+        extractor = DictionaryExtractor(agent_spec)
+        tools: Any = extractor.get("tools", no_tools)
+        if isinstance(tools, list):
+            return tools
+        return no_tools
+
+    @staticmethod
+    def coerce_args_tools(agent_spec: Dict[str, Any]) -> List[Any]:
+        """
+        Return `args.tools` as a list of values, coercing malformed shapes to empty.
+
+        `args.tools` is the convention coded tools use to declare downstream agents.
+        It may be a dict of label -> agent name (the values are the agent names)
+        or a list of agent names; anything else is coerced to empty. The shape
+        contract this enforces matches ToolsShapeValidator.validate_args_tools,
+        which is the place that reports the shape error to the user.
+
+        :param agent_spec: The agent specification dictionary
+        :return: The combined list of agent names referenced by `args.tools`, or
+                empty if the value is missing or malformed.
+        """
+        no_tools: List[Any] = []
+        extractor = DictionaryExtractor(agent_spec)
+        args_tools: Any = extractor.get("args.tools", no_tools)
+        if isinstance(args_tools, dict):
+            return list(args_tools.values())
+        if isinstance(args_tools, list):
+            return args_tools
+        return no_tools

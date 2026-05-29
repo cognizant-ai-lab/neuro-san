@@ -24,7 +24,6 @@ from logging import getLogger
 from logging import Logger
 
 from neuro_san.internals.validation.network.abstract_network_validator import AbstractNetworkValidator
-from neuro_san.internals.validation.network.tools_shape_validator import ToolsShapeValidator
 
 
 class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
@@ -72,30 +71,23 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
 
         return errors
 
-    def get_agent_down_chains(self, agent_spec: Dict[str, Any], agent_name: str) -> List[Any]:
+    def get_agent_down_chains(self, agent_spec: Dict[str, Any]) -> List[Any]:
         """
         Build the combined list of down-chain references for an agent spec.
 
         Down-chains come from two sources: the traditional `tools` field (a list of agent
         names and/or inline dicts), and `args.tools` (the convention for coded tools, which
         may be a dict of label -> agent name or a list of names). Both are read through
-        ToolsShapeValidator's coerce helpers so a malformed value (the #852 case where
-        `tools` is a string) is treated as empty with a warning instead of crashing
-        this validator on `str + list`. The shape error itself is surfaced by
-        ToolsShapeValidator running in the validation chain.
+        the inherited coerce helpers so a malformed value (the #852 case where `tools`
+        is a string) is treated as empty instead of crashing this validator on
+        `str + list`. The shape error itself is surfaced by ToolsShapeValidator running
+        in the validation chain.
 
         :param agent_spec: The agent specification dictionary
-        :param agent_name: The name of the agent, used in warning messages
         :return: List of down-chain references; may include dict entries — call
                 remove_dictionary_tools on the result if only string names are needed.
         """
-        traditional_down_chains: List[Any] = ToolsShapeValidator.coerce_tools(
-            agent_spec, agent_name, self.logger
-        )
-        coded_tool_down_chains: List[Any] = ToolsShapeValidator.coerce_args_tools(
-            agent_spec, agent_name, self.logger
-        )
-        return traditional_down_chains + coded_tool_down_chains
+        return self.coerce_tools(agent_spec) + self.coerce_args_tools(agent_spec)
 
     def find_all_front_man_agents(self, name_to_spec: Dict[str, Any]) -> Set[str]:
         """
@@ -108,7 +100,7 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
         has_down_chains: Set[str] = set()
 
         for agent_name, agent_config in name_to_spec.items():
-            down_chains: List[Any] = self.get_agent_down_chains(agent_config, agent_name)
+            down_chains: List[Any] = self.get_agent_down_chains(agent_config)
             if down_chains:
 
                 has_down_chains.add(agent_name)
@@ -176,7 +168,7 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
         # Step 4: Get all child agents (down_chains) of current agent
         empty: Dict[str, Any] = {}
         agent_spec: Dict[str, Any] = name_to_spec.get(agent, empty)
-        down_chains: List[Any] = self.get_agent_down_chains(agent_spec, agent)
+        down_chains: List[Any] = self.get_agent_down_chains(agent_spec)
         safe_down_chains: List[str] = self.remove_dictionary_tools(down_chains)
 
         # Step 5: Recursively visit each child agent to continue the traversal
