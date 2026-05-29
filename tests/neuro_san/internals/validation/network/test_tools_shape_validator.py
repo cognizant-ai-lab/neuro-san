@@ -123,4 +123,3 @@ class TestToolsShapeValidator(TestCase, AbstractNetworkValidatorTest):
 
         errors: List[str] = validator.validate(config)
         self.assertEqual(0, len(errors))
-
