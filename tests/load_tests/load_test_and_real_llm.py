@@ -46,6 +46,7 @@ import logging
 import os
 import re
 import select
+import socket
 import subprocess
 import sys
 import time
@@ -605,8 +606,27 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 logger.info("Aborted by user.")
                 sys.exit(0)
 
+    @staticmethod
+    def _is_port_open(host, port):
+        """Check if a TCP port is accepting connections."""
+        try:
+            with socket.create_connection((host, port), timeout=2):
+                return True
+        except (ConnectionRefusedError, OSError):
+            return False
+
     def _find_local_server(self):
         """Locate the neuro-san server process for resource monitoring."""
+        if not self._is_port_open(self.args.host, self.args.port):
+            logger.error(
+                "No service listening on %s:%s.\n"
+                "Start the neuro-san server before running this test:\n"
+                "  python -m neuro_san_studio run --server-only\n"
+                "  OR\n"
+                "  python -m neuro_san.service.main_loop.server_main_loop",
+                self.args.host, self.args.port,
+            )
+            sys.exit(1)
         self.server_proc = self._find_process("server_main_loop")
         if self.server_proc is not None:
             logger.info(
