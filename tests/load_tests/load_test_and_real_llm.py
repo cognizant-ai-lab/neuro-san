@@ -385,11 +385,13 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             proc.wait()
             status = STATUS_FAILED
 
-        remaining_out, remaining_err = proc.communicate(timeout=10)
+        remaining_out = proc.stdout.read()
+        remaining_err = proc.stderr.read()
         if remaining_out:
             stdout_chunks.append(remaining_out)
         if remaining_err:
             stderr_chunks.append(remaining_err)
+        proc.wait(timeout=10)
 
         return status, "".join(stdout_chunks), "".join(stderr_chunks), proc.returncode
 
