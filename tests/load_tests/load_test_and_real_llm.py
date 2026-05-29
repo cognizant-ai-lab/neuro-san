@@ -230,15 +230,14 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             type=str,
             default=None,
             help="Explicit path to neuro-san server log file for retry "
-                 "monitoring. Overrides auto-detection from --debug.",
+                 "monitoring. Overrides auto-detection.",
         )
         parser.add_argument(
             "--debug",
             action="store_true",
             default=False,
-            help="Enable debug mode: saves raw CLI stdout/stderr per "
-                 "request to a temp directory, and auto-detects the "
-                 "server log for retry monitoring.",
+            help="Save raw CLI stdout/stderr for each request to a temp "
+                 "directory for debugging.",
         )
         parser.add_argument(
             "--skip-reservation-check",
@@ -669,9 +668,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         )
 
     def _auto_detect_server_log(self):
-        """Auto-detect server log when --debug is on and --server-log not set."""
-        if not self.args.debug:
-            return
+        """Auto-detect server log from server process CWD when not set."""
         if self.args.server_log:
             return
         try:
@@ -1073,10 +1070,10 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             self.args.idle_timeout, prompt_mode,
         )
         logger.info("  settle_time=%ss", self.args.settle_time)
-        if self.args.debug:
-            logger.info("  debug=enabled (CLI output + server log monitoring)")
         if self.args.server_log:
             logger.info("  server_log=%s", self.args.server_log)
+        if self.args.debug:
+            logger.info("  debug=enabled (CLI output saved to /tmp)")
 
         stage_summaries: List[Dict[str, Any]] = []
         try:
