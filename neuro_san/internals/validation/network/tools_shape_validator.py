@@ -71,7 +71,8 @@ class ToolsShapeValidator(AbstractNetworkValidator):
 
         return errors
 
-    def validate_tools(self, agent_name: str, agent: Dict[str, Any]) -> List[str]:
+    @staticmethod
+    def validate_tools(agent_name: str, agent: Dict[str, Any]) -> List[str]:
         """
         Validate that 'tools' is a list where each element is a str or dict.
 
@@ -85,9 +86,12 @@ class ToolsShapeValidator(AbstractNetworkValidator):
         if not isinstance(tools, list):
             return [f"{agent_name} 'tools' must be a list, got {type(tools).__name__}."]
         # Each element of tools must be a str (agent name) or dict (MCP server).
-        return self.check_element_types(tools, (str, dict), "str or dict", agent_name, "tools")
+        return ToolsShapeValidator.check_element_types(
+            tools, (str, dict), "str or dict", agent_name, "tools",
+        )
 
-    def validate_args_tools(self, agent_name: str, agent: Dict[str, Any]) -> List[str]:
+    @staticmethod
+    def validate_args_tools(agent_name: str, agent: Dict[str, Any]) -> List[str]:
         """
         Validate that 'args.tools', if present, is either a dict of str values or a
         list of str values. This is the coded-tool convention for declaring
@@ -107,7 +111,7 @@ class ToolsShapeValidator(AbstractNetworkValidator):
                 f" got {type(args_tools).__name__}."
             ]
         # Tools in args.tools must be agent names (str).
-        return self.check_element_types(
+        return ToolsShapeValidator.check_element_types(
             args_tools, str, "str (agent name)", agent_name, "args.tools",
         )
 
