@@ -23,9 +23,8 @@ from typing import Set
 from logging import getLogger
 from logging import Logger
 
-from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
-
 from neuro_san.internals.validation.network.abstract_network_validator import AbstractNetworkValidator
+from neuro_san.internals.validation.network.tools_shape_validator import ToolsShapeValidator
 
 
 class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
@@ -78,43 +77,24 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
         Build the combined list of down-chain references for an agent spec.
 
         Down-chains come from two sources: the traditional `tools` field (a list of agent
-        names and/or inline dicts), and `args.tools` (the convention for coded tools).
-        `args.tools` may be a dict of label -> agent name (use values) or a list of agent
-        names; any other shape is treated as empty with a warning. If `tools` is not a
-        list, it is also coerced to empty with a warning so this validator does not crash
-        on `str + list`; the shape error is reported separately by KeywordNetworkValidator.
+        names and/or inline dicts), and `args.tools` (the convention for coded tools, which
+        may be a dict of label -> agent name or a list of names). Both are read through
+        ToolsShapeValidator's coerce helpers so a malformed value (the #852 case where
+        `tools` is a string) is treated as empty with a warning instead of crashing
+        this validator on `str + list`. The shape error itself is surfaced by
+        ToolsShapeValidator running in the validation chain.
 
         :param agent_spec: The agent specification dictionary
         :param agent_name: The name of the agent, used in warning messages
         :return: List of down-chain references; may include dict entries — call
                 remove_dictionary_tools on the result if only string names are needed.
         """
-        no_tools: List[Any] = []
-
-        extractor = DictionaryExtractor(agent_spec)
-
-        traditional_down_chains: List[Any] = extractor.get("tools", no_tools)
-        if not isinstance(traditional_down_chains, list):
-            self.logger.warning(
-                "Agent '%s' has 'tools' that is not a list. Ignoring that field for traditional "
-                "down-chains and treating it as empty; `args.tools` references may still be traversed.",
-                agent_name,
-            )
-            traditional_down_chains = no_tools
-
-        args_tools: Any = extractor.get("args.tools", no_tools)
-        coded_tool_down_chains: List[Any] = no_tools
-        if isinstance(args_tools, dict):
-            coded_tool_down_chains = list(args_tools.values())
-        elif isinstance(args_tools, list):
-            coded_tool_down_chains = args_tools
-        else:
-            self.logger.warning(
-                "Agent '%s' has 'args.tools' that is neither a dict nor a list. "
-                "Skipping coded-tool down-chains.",
-                agent_name,
-            )
-
+        traditional_down_chains: List[Any] = ToolsShapeValidator.coerce_tools(
+            agent_spec, agent_name, self.logger
+        )
+        coded_tool_down_chains: List[Any] = ToolsShapeValidator.coerce_args_tools(
+            agent_spec, agent_name, self.logger
+        )
         return traditional_down_chains + coded_tool_down_chains
 
     def find_all_front_man_agents(self, name_to_spec: Dict[str, Any]) -> Set[str]:
