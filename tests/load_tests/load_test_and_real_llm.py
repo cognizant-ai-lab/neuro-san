@@ -889,7 +889,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 stage_num = stage_idx + 1
 
                 logger.info("\n%s", "=" * 60)
-                stage_label = f"STAGE {stage_num}: {actual_requests} concurrent connections"
+                stage_label = f"[STAGE {stage_num}] {actual_requests} concurrent connections"
                 if self.args.num_rounds > 1:
                     stage_label += f" (round {round_num})"
                 logger.info("  %s", stage_label)
