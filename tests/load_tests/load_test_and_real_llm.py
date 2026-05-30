@@ -42,6 +42,7 @@ Usage examples:
 """
 
 import argparse
+import csv
 import logging
 import os
 import re
@@ -1126,6 +1127,52 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             int(last[7]) - int(first[7]),
         )
 
+    def _append_resource_history(
+            self, stage_summaries, resource_rows, client_rows):
+        """Append resource data to a persistent CSV history file.
+
+        Only writes data from successful runs (all requests created).
+        The file accumulates across runs for trend analysis.
+        """
+        all_created = all(
+            s["counts"].get(STATUS_CREATED, 0) == s["concurrent"]
+            for s in stage_summaries
+        )
+        if not all_created:
+            return
+
+        history_path = "/tmp/and_load_test/resource_history.csv"
+        os.makedirs(os.path.dirname(history_path), exist_ok=True)
+        write_header = not os.path.exists(history_path)
+
+        now = time.strftime("%Y-%m-%d %H:%M:%S")
+        server_fields = [
+            "datetime", "concurrent", "before_rss", "settled_rss",
+            "rss_delta", "fds", "threads", "conns", "cpu",
+            "children", "side",
+        ]
+
+        with open(history_path, "a", encoding="utf-8") as csvfile:
+            writer = csv.writer(csvfile)
+            if write_header:
+                writer.writerow(server_fields)
+
+            for row in resource_rows:
+                writer.writerow([
+                    now, row[0], row[1], row[2], row[3],
+                    row[4], row[5], row[7], row[8], row[9],
+                    "server",
+                ])
+
+            for row in client_rows:
+                writer.writerow([
+                    now, row[0], row[1], row[3], row[4],
+                    row[6], row[7], "0", row[5], "0",
+                    "client",
+                ])
+
+        logger.info("\nResource history appended: %s", history_path)
+
     def _log_ramp_summary(self, stage_summaries):
         """Log the ramp-up summary table across all stages."""
         logger.info("\n%s", "=" * 60)
@@ -1342,6 +1389,13 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
 
             self._log_overall_results(stage_summaries)
 
+            total_client_reqs = sum(
+                s["concurrent"] for s in stage_summaries
+            )
+            total_server_calls = sum(
+                s.get("total_started") or 0 for s in stage_summaries
+            )
+
             if resource_rows:
                 resource_header = [
                     "Concurrent", "Before RSS", "Settled RSS", "RSS Delta",
@@ -1349,7 +1403,18 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                     "Conns", "CPU%", "Children",
                 ]
                 logger.info("\n%s", "=" * 60)
-                logger.info("  SERVER RESOURCE ANALYSIS")
+                if total_server_calls > 0:
+                    logger.info(
+                        "  SERVER RESOURCE ANALYSIS"
+                        " (%s client requests, %s server calls)",
+                        total_client_reqs, total_server_calls,
+                    )
+                else:
+                    logger.info(
+                        "  SERVER RESOURCE ANALYSIS"
+                        " (%s total requests)",
+                        total_client_reqs,
+                    )
                 logger.info("=" * 60)
                 self._log_table(resource_header, resource_rows)
                 self._log_resource_deltas(resource_rows)
@@ -1361,10 +1426,18 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                     "CPU%", "FDs", "Threads",
                 ]
                 logger.info("\n%s", "=" * 60)
-                logger.info("  CLIENT RESOURCE ANALYSIS")
+                logger.info(
+                    "  CLIENT RESOURCE ANALYSIS"
+                    " (%s total requests)",
+                    total_client_reqs,
+                )
                 logger.info("=" * 60)
                 self._log_table(client_header, client_rows)
                 self._log_client_deltas(client_rows)
+
+            self._append_resource_history(
+                stage_summaries, resource_rows, client_rows,
+            )
         finally:
             self._finalize_test_log(stage_summaries)
 
