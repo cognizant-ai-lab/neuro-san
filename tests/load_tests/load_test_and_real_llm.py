@@ -950,7 +950,6 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
 
                 counts = self._count_results(results)
                 retries = self._count_retries_since(log_pos)
-                server_counts = self._count_requests_since(log_pos)
                 total_retries = sum(retries.values())
                 amplification = (
                     (actual_requests + total_retries) / actual_requests
@@ -981,6 +980,36 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 logger.info("  Duration: %.2fs | Avg: %.2fs per request",
                             elapsed,
                             elapsed / actual_requests if actual_requests else 0)
+
+                # Log retry activity
+                if self.args.server_log:
+                    logger.info("\n  max_attempts retry activity (from server log):")
+                    for error_type in RETRY_ERROR_TYPES:
+                        count = retries.get(error_type, 0)
+                        logger.info("    %s retries: %s", error_type, count)
+                    logger.info("    Total retries:  %s", total_retries)
+                    logger.info(
+                        "    Amplification:  %.2fx (%s total LLM attempts for %s requests)",
+                        amplification,
+                        actual_requests + total_retries,
+                        actual_requests,
+                    )
+
+                # Settle and snapshot
+                logger.info(
+                    "\n  Waiting %ss for server cleanup...",
+                    self.args.settle_time,
+                )
+                time.sleep(self.args.settle_time)
+
+                after_server = (
+                    self._snapshot(self.server_proc) if self.server_proc else None
+                )
+                if after_server:
+                    self._log_snapshot("Server SETTLED", after_server)
+
+                # Count server log entries after settle for accurate finish counts
+                server_counts = self._count_requests_since(log_pos)
 
                 # Log server-side request validation
                 if server_counts.get("primary_started") is not None:
@@ -1020,33 +1049,6 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                             "but %s were sent",
                             pri_started, actual_requests,
                         )
-
-                # Log retry activity
-                if self.args.server_log:
-                    logger.info("\n  max_attempts retry activity (from server log):")
-                    for error_type in RETRY_ERROR_TYPES:
-                        count = retries.get(error_type, 0)
-                        logger.info("    %s retries: %s", error_type, count)
-                    logger.info("    Total retries:  %s", total_retries)
-                    logger.info(
-                        "    Amplification:  %.2fx (%s total LLM attempts for %s requests)",
-                        amplification,
-                        actual_requests + total_retries,
-                        actual_requests,
-                    )
-
-                # Settle and snapshot
-                logger.info(
-                    "\n  Waiting %ss for server cleanup...",
-                    self.args.settle_time,
-                )
-                time.sleep(self.args.settle_time)
-
-                after_server = (
-                    self._snapshot(self.server_proc) if self.server_proc else None
-                )
-                if after_server:
-                    self._log_snapshot("Server SETTLED", after_server)
 
                 if before_server and after_server:
                     resource_rows.append(
