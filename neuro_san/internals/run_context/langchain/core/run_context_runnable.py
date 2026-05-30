@@ -207,7 +207,10 @@ class RunContextRunnable(NeuroSanRunnable):
                     }
                     # Log the error with technical details for debugging purposes,
                     # but we are returning a more user-friendly message to the client.
-                    self.logger.error("API KEY error detected: %s", str(api_error))
+                    # get_safe_log_message() redacts pydantic ValidationError input values
+                    # so user-supplied API key material can't leak into server logs.
+                    self.logger.error("API KEY error detected: %s",
+                                      ApiKeyErrorCheck.get_safe_log_message(api_error))
                     break
                 # Continue with regular retry logic:
                 self.logger.warning("retrying from %s", api_error.__class__.__name__)

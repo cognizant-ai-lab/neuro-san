@@ -20,6 +20,7 @@ from neuro_san.internals.interfaces.dictionary_validator import DictionaryValida
 from neuro_san.internals.validation.common.composite_dictionary_validator import CompositeDictionaryValidator
 from neuro_san.internals.validation.network.cycles_network_validator import CyclesNetworkValidator
 from neuro_san.internals.validation.network.missing_nodes_network_validator import MissingNodesNetworkValidator
+from neuro_san.internals.validation.network.tools_shape_validator import ToolsShapeValidator
 from neuro_san.internals.validation.network.unreachable_nodes_network_validator import UnreachableNodesNetworkValidator
 
 
@@ -35,6 +36,7 @@ class StructureNetworkValidator(CompositeDictionaryValidator):
         Constructor
         """
         validators: List[DictionaryValidator] = [
+            ToolsShapeValidator(),
             CyclesNetworkValidator(),
             MissingNodesNetworkValidator(),
             UnreachableNodesNetworkValidator(),
