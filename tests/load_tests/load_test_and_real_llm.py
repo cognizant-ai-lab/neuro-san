@@ -878,9 +878,14 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
 
             for stage_idx, num_concurrent in enumerate(stages):
                 if total_sent >= total_cap:
-                    logger.info(
-                        "\nReached --max-requests cap (%s). Stopping.",
-                        total_cap,
+                    total_planned = sum(stages) * self.args.num_rounds
+                    logger.warning(
+                        "\nWARNING: Reached --max-requests cap (%s). "
+                        "Only %s of %s total planned requests completed.\n"
+                        "         Use --max-requests %s to run all "
+                        "planned requests.",
+                        total_cap, total_sent, total_planned,
+                        total_planned,
                     )
                     return stage_summaries, resource_rows, client_resource_rows
 
