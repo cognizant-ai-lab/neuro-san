@@ -46,18 +46,21 @@ class LangChainMcpAdapter:
         self.client_allowed_tools: List[str] = []
         self.logger: Logger = getLogger(self.__class__.__name__)
 
-    @staticmethod
-    def _load_mcp_servers_info():
+    def _load_mcp_servers_info(self):
         """
         Loads MCP servers information from a configuration file if not already loaded.
         """
-        with LangChainMcpAdapter._mcp_info_lock:
-            if LangChainMcpAdapter._mcp_servers_info is None:
-                LangChainMcpAdapter._mcp_servers_info = McpServersInfoRestorer().restore()
-                if LangChainMcpAdapter._mcp_servers_info is None:
+        with self._mcp_info_lock:
+            if self._mcp_servers_info is None:
+                try:
+                    self._mcp_servers_info = McpServersInfoRestorer().restore()
+                except ValueError as value_error:
+                    self.logger.warning("Error occurred while loading MCP servers info: %s", value_error)
+                    self.logger.info("Proceeding with empty MCP servers info.")
+                if self._mcp_servers_info is None:
                     # Something went wrong reading the file.
                     # Prevent further attempts to load info.
-                    LangChainMcpAdapter._mcp_servers_info = {}
+                    self._mcp_servers_info = {}
 
     async def get_mcp_tools(
             self,
