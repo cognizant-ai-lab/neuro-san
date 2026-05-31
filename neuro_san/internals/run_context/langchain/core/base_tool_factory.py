@@ -273,6 +273,18 @@ class BaseToolFactory:
         # Also, most internal agents do not have a name identifier on their functional
         # JSON, which is required.  Use the agent name we are using for look-up for that
         # regardless of intent.
-        function_json["name"] = name
+        try:
+            function_json["name"] = name
+        except TypeError as exception:
+            # The function_json of external agent cannot be found.
+            # Assign "name" will trigger a TypeError since function_json is None.
+            message: str = f"""
+Could not create tool to call extenal agent {name}.
+It's function_json is described thusly:
+{function_json}
+"""
+            # ValueError is more appropriate here since the problem is with the value of function_json.
+            # This error will be caught in create_external_tool() and a message will be sent to the client.
+            raise ValueError(message) from exception
 
         return LangChainOpenAIFunctionTool.from_function_json(function_json, self.tool_caller)
