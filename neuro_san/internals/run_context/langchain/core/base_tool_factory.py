@@ -279,8 +279,8 @@ class BaseToolFactory:
             # The function_json of external agent cannot be found.
             # Assign "name" will trigger a TypeError since function_json is None.
             message: str = f"""
-Could not create tool to call extenal agent {name}.
-It's function_json is described thusly:
+Could not create tool to call external agent {name}.
+Its function_json is described thusly:
 {function_json}
 """
             # ValueError is more appropriate here since the problem is with the value of function_json.
