@@ -142,10 +142,12 @@ class BaseToolFactory:
         Create MCP tools from the provided MCP configuration.
 
         The configuration can be one of:
-        - **String**: A URL to an MCP server.
-        Valid values start with "https://mcp" or end with "/mcp" or "/mcp/".
+        - **String**: A canonical MCP server URI (see
+          https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#canonical-server-uri).
+          Must use http(s), no fragment, with "mcp" appearing either as a host label
+          (e.g. "mcp.example.com") or as a path segment (e.g. "/mcp", "/mcp/free", "/server/mcp").
         - **Dictionary**:
-            - "server" (str): MCP server URL.
+            - "url" (str): MCP server URL.
             - "tools" (List[str], optional): List of tool names to allow from the server.
 
         :param mcp_info: MCP server URL (string) or a configuration dictionary

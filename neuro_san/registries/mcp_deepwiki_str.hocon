@@ -41,10 +41,13 @@
             "function": {
                 "description": "Assist user with answer from deepwiki."
             },
-            # Only support streamable http protocal
+            # Only support streamable HTTP(S) protocol
             # For other modes of transport, use coded tool implementation
-            # Moreover, if the URL does not start with "https://mcp" or end with "/mcp" or "/mcp/",
-            # use dictionary format: {"url": "https://example.com"} instead.
+            # The URL must be a canonical MCP server URI (see
+            # https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#canonical-server-uri):
+            # http(s) scheme, no fragment, with "mcp" as a host label (e.g. "mcp.example.com")
+            # or as a path segment (e.g. "/mcp", "/mcp/free", "/server/mcp").
+            # Otherwise, use dictionary format: {"url": "https://example.com"} instead.
             "tools": ["https://mcp.deepwiki.com/mcp"]
             
             # For authentication, see https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#authentication
