@@ -116,7 +116,8 @@ class ExternalAgentParsing:
         :return: True if this is an MCP tool reference
         """
         # Support both str and dict format;
-        # str format: "https://mcp.deepwiki.com/mcp" or "http://localhost:8000/mcp/"
+        # str format: a canonical MCP server URI, e.g. "https://mcp.deepwiki.com/mcp",
+        #             "http://localhost:8000/mcp/", or "https://deepwiki.com/mcp/free"
         # dict format:
         # {
         #       "url": "https://mcp.deepwiki.com/mcp",
@@ -128,10 +129,33 @@ class ExternalAgentParsing:
         if isinstance(tool_ref, dict):
             return True
 
-        if isinstance(tool_ref, str):
-            return (tool_ref.startswith("https://mcp") or tool_ref.endswith(("/mcp", "/mcp/")))
+        if not isinstance(tool_ref, str):
+            return False
 
-        return False
+        # Validate against the MCP canonical server URI rules:
+        # https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#canonical-server-uri
+        # - MUST have an http/https scheme (accepted case-insensitively for robustness)
+        # - MUST have a host
+        # - MUST NOT contain a fragment
+        try:
+            parsed: ParseResult = urlparse(tool_ref)
+        except ValueError:
+            return False
+
+        if parsed.scheme.lower() not in ("http", "https"):
+            return False
+        if not parsed.netloc or parsed.fragment:
+            return False
+
+        # Heuristic to distinguish an MCP server URI from a Neuro SAN external agent URL:
+        # require "mcp" to appear either as a label in the hostname (e.g. "mcp.example.com")
+        # or as any path segment (e.g. "/mcp", "/mcp/free", "/server/mcp").
+        host_labels = (parsed.hostname or "").lower().split(".")
+        path_segments: List[str] = []
+        for seg in parsed.path.split("/"):
+            if seg:
+                path_segments.append(seg.lower())
+        return "mcp" in host_labels or "mcp" in path_segments
 
     @staticmethod
     def get_safe_agent_name(agent_url: str) -> str:
