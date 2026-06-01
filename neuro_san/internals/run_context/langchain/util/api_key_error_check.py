@@ -134,7 +134,7 @@ Some things to try:
             msg: str = err.get("msg", "")
             err_type: str = err.get("type", "")
             parts.append(f"{loc}: {msg} [type={err_type}, input=<redacted>]")
-        return f"{len(parts)} validation error(s): " + "; ".join(parts)
+        return f"{len(parts)} validation error(s): " + ";\n".join(parts)
 
     @staticmethod
     def check_for_internal_error(exception_traceback: str) -> bool:
