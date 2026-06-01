@@ -64,7 +64,7 @@ class ParametersShapeNetworkValidator(AbstractNetworkValidator):
         """
         errors: List[str] = []
 
-        self.logger.debug("Validating parameters shape...")
+        self.logger.info("Validating parameters shape...")
 
         for agent_name, agent_spec in name_to_spec.items():
             display_name: str = self._resolve_agent_name(agent_name, agent_spec)
@@ -98,7 +98,7 @@ class ParametersShapeNetworkValidator(AbstractNetworkValidator):
             errors.extend(self._check_required_refs(display_name, params))
 
         if len(errors) > 0:
-            self.logger.error(str(errors))
+            self.logger.warning(str(errors))
 
         return errors
 
