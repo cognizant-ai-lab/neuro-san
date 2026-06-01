@@ -21,6 +21,7 @@ from neuro_san.internals.validation.common.composite_dictionary_validator import
 from neuro_san.internals.validation.network.keyword_network_validator import KeywordNetworkValidator
 from neuro_san.internals.validation.network.missing_nodes_network_validator import MissingNodesNetworkValidator
 from neuro_san.internals.validation.network.tool_name_network_validator import ToolNameNetworkValidator
+from neuro_san.internals.validation.network.tools_shape_validator import ToolsShapeValidator
 from neuro_san.internals.validation.network.unreachable_nodes_network_validator import UnreachableNodesNetworkValidator
 from neuro_san.internals.validation.network.url_network_validator import UrlNetworkValidator
 
@@ -42,6 +43,7 @@ class ManifestNetworkValidator(CompositeDictionaryValidator):
         """
         validators: List[DictionaryValidator] = [
             # Note we do use the CyclesNetworkValidator here because cycles are actually OK.
+            ToolsShapeValidator(),
             KeywordNetworkValidator(network_name=network_name),
             MissingNodesNetworkValidator(),
             UnreachableNodesNetworkValidator(network_name=network_name),

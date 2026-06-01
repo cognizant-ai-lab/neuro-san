@@ -57,3 +57,22 @@ class TestUrlNetworkValidator(TestCase, AbstractNetworkValidatorTest):
 
         errors: List[str] = validator.validate(config)
         self.assertEqual(1, len(errors))
+
+    def test_tools_as_string_does_not_iterate_chars(self):
+        """
+        Tests that a malformed `tools` field (string instead of list) does
+        not silently iterate the string character-by-character through
+        check_safe_urls. coerce_tools treats it as empty; the shape error
+        is reported separately by ToolsShapeValidator.
+        """
+        validator: DictionaryValidator = self.create_validator()
+
+        config: Dict[str, Any] = self.restore("math_guy_passthrough.hocon")
+        # Replace a list with a bare string URL.
+        config["tools"][0]["tools"] = "/math_guy"
+
+        errors: List[str] = validator.validate(config)
+        # With char-iteration each char would be checked against the URL list.
+        # With defensive coercion, the field is treated as empty and no URL
+        # check runs for this agent.
+        self.assertEqual(0, len(errors), errors)

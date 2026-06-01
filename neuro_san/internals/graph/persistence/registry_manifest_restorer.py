@@ -281,7 +281,7 @@ class RegistryManifestRestorer(Restorer):
             self.logger.error("Failed to restore registry item %s. Skipping. - %s",
                               manifest_key, str(exception))
             agent_network = None
-        except (ParseException, ParseSyntaxException, JSONDecodeError) as exception:
+        except (ParseException, ParseSyntaxException, JSONDecodeError, ValueError) as exception:
             self._log_parse_error(manifest_key, exception)
             agent_network = None
 
@@ -304,7 +304,7 @@ class RegistryManifestRestorer(Restorer):
             self.logger.error("Failed to restore registry item %s. Skipping. - %s",
                               manifest_key, str(exception))
             agent_network = None
-        except (ParseException, ParseSyntaxException, JSONDecodeError) as exception:
+        except (ParseException, ParseSyntaxException, JSONDecodeError, ValueError) as exception:
             self._log_parse_error(manifest_key, exception)
             agent_network = None
 

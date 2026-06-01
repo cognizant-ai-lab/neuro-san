@@ -170,9 +170,9 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
         except (ParseException, ParseSyntaxException, JSONDecodeError, ConfigException) as exception:
             detail: str = " ".join(str(exception).split())
             message: str = (
-                f'Error parsing {self.file_purpose} file "{file_path}": {detail}'
+                f'Error loading {self.file_purpose} file "{file_path}": {detail}'
             )
-            raise ParseException(message) from exception
+            raise ValueError(message) from exception
 
         return config
 

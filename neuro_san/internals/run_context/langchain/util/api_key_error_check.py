@@ -17,6 +17,7 @@
 
 from typing import Dict
 from typing import List
+from typing import Optional
 
 # Dictionary with provider key env var -> strings to look for
 API_KEY_EXCEPTIONS: Dict[str, List] = {
@@ -52,7 +53,7 @@ class ApiKeyErrorCheck:
     """
 
     @staticmethod
-    def check_for_api_key_exception(exception: Exception) -> str:
+    def check_for_api_key_exception(exception: Exception) -> Optional[str]:
         """
         :param exception: An exception to check
         :return: A more helpful exception message if it relates to an API key or None
@@ -89,7 +90,51 @@ Some things to try:
    on the same machine making this request.
 """
 
+        # No catalogue hit. If this is a pydantic ValidationError, the raw
+        # str(exception) can include `input_value=<the user's input>` — which
+        # would leak any user-supplied API key value. Rebuild the message from
+        # the structured .errors() data instead, omitting the raw input entirely.
+        if ApiKeyErrorCheck._is_pydantic_validation_error(exception):
+            return ApiKeyErrorCheck._format_redacted_pydantic_error(exception)
+
         return None
+
+    @staticmethod
+    def get_safe_log_message(exception: Exception) -> str:
+        """
+        Return a log-safe representation of the exception. For pydantic
+        ValidationErrors, returns the structured-error-derived message
+        (with `input` redacted) so user-supplied values can't leak into
+        server logs. For all other exception types, returns str(exception),
+        which preserves useful debug detail (status codes, request IDs).
+        """
+        if ApiKeyErrorCheck._is_pydantic_validation_error(exception):
+            return ApiKeyErrorCheck._format_redacted_pydantic_error(exception)
+        return str(exception)
+
+    @staticmethod
+    def _is_pydantic_validation_error(exception: Exception) -> bool:
+        """
+        Duck-typed check for pydantic_core.ValidationError to avoid a hard import
+        on pydantic_core from this util module.
+        """
+        cls = type(exception)
+        return cls.__name__ == "ValidationError" and cls.__module__.startswith("pydantic")
+
+    @staticmethod
+    def _format_redacted_pydantic_error(exception: Exception) -> str:
+        """
+        Build a message from a pydantic ValidationError using its structured
+        .errors() data, redacting the 'input' field entirely so user-supplied
+        values can't leak.
+        """
+        parts: List[str] = []
+        for err in exception.errors():
+            loc: str = ".".join(str(x) for x in err.get("loc", ()))
+            msg: str = err.get("msg", "")
+            err_type: str = err.get("type", "")
+            parts.append(f"{loc}: {msg} [type={err_type}, input=<redacted>]")
+        return f"{len(parts)} validation error(s): " + ";\n".join(parts)
 
     @staticmethod
     def check_for_internal_error(exception_traceback: str) -> bool:

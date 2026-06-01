@@ -64,11 +64,13 @@ class UrlNetworkValidator(AbstractNetworkValidator):
         self.logger.debug("Validating %s URLs for MCP tools and subnetwork...", self.network_name)
 
         for agent_name, agent in name_to_spec.items():
-            if agent.get("tools"):
-                tools: List[str] = agent.get("tools")
-                if tools:
-                    safe_tools: List[str] = self.remove_dictionary_tools(tools)
-                    self.check_safe_urls(agent_name, safe_tools, urls, errors)
+            # coerce_tools treats a malformed `tools` (non-list) as empty so this
+            # validator does not iterate the characters of a string. The shape
+            # error itself is reported separately by ToolsShapeValidator.
+            tools: List[Any] = self.coerce_tools(agent)
+            if tools:
+                safe_tools: List[str] = self.remove_dictionary_tools(tools)
+                self.check_safe_urls(agent_name, safe_tools, urls, errors)
 
         return errors
 
