@@ -41,7 +41,7 @@
             "function": {
                 "description": "Assist user with answer from deepwiki."
             },
-            # Only support streamable http protocal
+            # Only support streamable HTTP(S) protocol
             # For other modes of transport, use coded tool implementation
             # The URL must be a canonical MCP server URI (see
             # https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#canonical-server-uri):
