@@ -117,8 +117,11 @@ class CyclesNetworkValidator(AbstractNetworkValidator):
         path.append(agent)
 
         # Step 5: Get all child agents (down_chains) of current agent
+        # coerce_tools treats a malformed `tools` (non-list) as empty so this
+        # validator does not iterate the characters of a string. The shape
+        # error itself is reported separately by ToolsShapeValidator.
         agent_spec: Dict[str, Any] = name_to_spec.get(agent, {})
-        down_chains: List[str] = agent_spec.get("tools", [])
+        down_chains: List[Any] = self.coerce_tools(agent_spec)
         safe_down_chains: List[str] = self.remove_dictionary_tools(down_chains)
 
         # Step 6: Recursively visit each child agent
