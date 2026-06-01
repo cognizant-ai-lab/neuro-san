@@ -147,7 +147,7 @@ class BaseToolFactory:
           Must use http(s), no fragment, with "mcp" appearing either as a host label
           (e.g. "mcp.example.com") or as a path segment (e.g. "/mcp", "/mcp/free", "/server/mcp").
         - **Dictionary**:
-            - "server" (str): MCP server URL.
+            - "url" (str): MCP server URL.
             - "tools" (List[str], optional): List of tool names to allow from the server.
 
         :param mcp_info: MCP server URL (string) or a configuration dictionary
