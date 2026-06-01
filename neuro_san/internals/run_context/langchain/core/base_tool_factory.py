@@ -262,7 +262,7 @@ class BaseToolFactory:
             message: str = f"Failed to create Agent/tool '{name}': {tool_creation_exception}"
             agent_message = AgentMessage(content=message)
             await self.journal.write_message(agent_message)
-            self.logger.info(message)
+            self.logger.warning(message)
             return None
 
     def create_function_tool(self, function_json: Dict[str, Any], name: str) -> BaseTool:
@@ -273,6 +273,13 @@ class BaseToolFactory:
         # Also, most internal agents do not have a name identifier on their functional
         # JSON, which is required.  Use the agent name we are using for look-up for that
         # regardless of intent.
-        function_json["name"] = name
+        if function_json is None:
+            # An external agent that couldn't be reached has no function_json.
+            # Raise ValueError so create_external_tool's existing handler turns this
+            # into a user-facing "Agent/tool X was unreachable" message instead of
+            # the TypeError that the assignment below would otherwise raise.
+            message: str = f"Could not create tool to call external agent '{name}'. Its function_json is None."
+            raise ValueError(message)
 
+        function_json["name"] = name
         return LangChainOpenAIFunctionTool.from_function_json(function_json, self.tool_caller)

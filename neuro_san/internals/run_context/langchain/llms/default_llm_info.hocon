@@ -430,7 +430,7 @@
         "use_model_name": "claude-sonnet-4-6"
     },
     "claude-opus": {
-        "use_model_name": "claude-opus-4-7"
+        "use_model_name": "claude-opus-4-8"
     },
 
     "claude-sonnet-4-0": {
@@ -600,7 +600,23 @@
         # https://platform.claude.com/docs/en/about-claude/pricing
         "price_per_1k_input_tokens": 0.005,
         "price_per_1k_output_tokens": 0.025,
-    }
+    },
+    "claude-opus-4-8": {
+        "class": "anthropic",
+        "model_info_url": "https://platform.claude.com/docs/en/about-claude/models/overview",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "01/2026",
+        # https://platform.claude.com/docs/en/about-claude/pricing
+        "price_per_1k_input_tokens": 0.005,
+        "price_per_1k_output_tokens": 0.025,
+    },
 
 
     # Ollama models
