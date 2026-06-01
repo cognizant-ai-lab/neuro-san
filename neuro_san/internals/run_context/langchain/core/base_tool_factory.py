@@ -262,7 +262,7 @@ class BaseToolFactory:
             message: str = f"Failed to create Agent/tool '{name}': {tool_creation_exception}"
             agent_message = AgentMessage(content=message)
             await self.journal.write_message(agent_message)
-            self.logger.info(message)
+            self.logger.warning(message)
             return None
 
     def create_function_tool(self, function_json: Dict[str, Any], name: str) -> BaseTool:

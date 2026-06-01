@@ -46,14 +46,21 @@ class LangChainMcpAdapter:
         self.client_allowed_tools: List[str] = []
         self.logger: Logger = getLogger(self.__class__.__name__)
 
-    @staticmethod
-    def _load_mcp_servers_info():
+    def _load_mcp_servers_info(self):
         """
         Loads MCP servers information from a configuration file if not already loaded.
         """
+        # Write through the class so the cache stays shared across instances.
+        # `self._mcp_servers_info = ...` would create an instance attribute that shadows
+        # the class attribute, leaving the class-level cache stuck at None and causing
+        # every new LangChainMcpAdapter to reload (and re-log) the config.
         with LangChainMcpAdapter._mcp_info_lock:
             if LangChainMcpAdapter._mcp_servers_info is None:
-                LangChainMcpAdapter._mcp_servers_info = McpServersInfoRestorer().restore()
+                try:
+                    LangChainMcpAdapter._mcp_servers_info = McpServersInfoRestorer().restore()
+                except ValueError as value_error:
+                    self.logger.warning("Error occurred while loading MCP servers info: %s", value_error)
+                    self.logger.info("Proceeding with empty MCP servers info.")
                 if LangChainMcpAdapter._mcp_servers_info is None:
                     # Something went wrong reading the file.
                     # Prevent further attempts to load info.
