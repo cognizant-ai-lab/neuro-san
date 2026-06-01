@@ -61,22 +61,22 @@ class LangChainMcpAdapter:
         self.client_allowed_tools: List[str] = []
         self.logger: Logger = getLogger(self.__class__.__name__)
 
-    def _load_mcp_servers_info(self):
+    def _load_mcp_info(self):
         """
         Loads MCP clients and servers information from a configuration file if not already loaded.
         """
         # Write through the class so the cache stays shared across instances.
-        # `self._mcp_servers_info = ...` would create an instance attribute that shadows
+        # `self._mcp_info = ...` would create an instance attribute that shadows
         # the class attribute, leaving the class-level cache stuck at None and causing
         # every new LangChainMcpAdapter to reload (and re-log) the config.
         with LangChainMcpAdapter._mcp_info_lock:
-            if LangChainMcpAdapter._mcp_servers_info is None:
+            if LangChainMcpAdapter._mcp_info is None:
                 try:
-                    LangChainMcpAdapter._mcp_servers_info = McpServersInfoRestorer().restore()
+                    LangChainMcpAdapter._mcp_info = McpInfoRestorer().restore()
                 except ValueError as value_error:
-                    self.logger.warning("Error occurred while loading MCP servers info: %s", value_error)
-                    self.logger.info("Proceeding with empty MCP servers info.")
-                if LangChainMcpAdapter._mcp_servers_info is None:
+                    self.logger.warning("Error occurred while loading MCP info: %s", value_error)
+                    self.logger.info("Proceeding with empty MCP info.")
+                if LangChainMcpAdapter._mcp_info is None:
                     # Something went wrong reading the file.
                     # Prevent further attempts to load info.
                     LangChainMcpAdapter._mcp_info = {}
@@ -90,7 +90,7 @@ class LangChainMcpAdapter:
         :return: Server configuration dictionary (empty dict if not found).
         """
         if self._mcp_info is None:
-            await self._load_mcp_info()
+            self._load_mcp_info()
         return self._mcp_info.get(server_url, {})
 
     async def _prepare_headers(

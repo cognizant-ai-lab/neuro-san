@@ -581,30 +581,38 @@ class TestLangChainMcpAdapter:
         # Verify timeout was passed to OauthProviderFactory
         call_kwargs = mock_oauth_factory_class.call_args[1]
         assert call_kwargs["timeout"] == 600.0
-    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpServersInfoRestorer')
+
+    @pytest.mark.asyncio
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.OauthProviderFactory')
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpInfoRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
     async def test_get_mcp_tools_proceeds_when_restore_raises_value_error(
-        self, mock_client_class, mock_restorer_class, adapter, mock_mcp_tool, caplog
+        self, mock_client_class, mock_info_restorer_class,
+        mock_oauth_factory_class, adapter, mock_mcp_tool, caplog
     ):
         """A malformed mcp_info config (restore() raising ValueError) must not hang or
-        propagate; get_mcp_tools should log a warning and proceed with an empty servers
-        info dict."""
+        propagate; get_mcp_tools should log a warning and proceed with an empty MCP info dict."""
         # pylint: disable=protected-access
-        mock_restorer = mock_restorer_class.return_value
-        mock_restorer.restore.side_effect = ValueError(
-            'There was an error loading MCP servers info file "mcp_info.hocon".\n'
+        mock_info_restorer_class.return_value.restore.side_effect = ValueError(
+            'There was an error loading MCP info file "mcp_info.hocon".\n'
             "Underlying error (ConfigSubstitutionException): "
             "Cannot resolve variable ${YDC_API_KEY} (line: 68, col: 39)"
         )
 
+        # Setup oauth mock to return None (no auth needed)
+        mock_oauth_factory = mock_oauth_factory_class.return_value
+        mock_oauth_factory.get_auth = AsyncMock(return_value=None)
+
         mock_client = mock_client_class.return_value
         mock_client.get_tools = AsyncMock(return_value=[mock_mcp_tool])
 
-        tools = await adapter.get_mcp_tools("https://mcp.example.com/mcp")
+        tools = await adapter.get_mcp_tools(
+            "https://mcp.example.com/mcp", allowed_tools=None, sly_data={}
+        )
 
         # The tool fetch still completes — the load failure does not propagate.
         assert len(tools) == 1
         # Fallback to the empty dict so subsequent lookups don't blow up.
-        assert LangChainMcpAdapter._mcp_servers_info == {}
+        assert LangChainMcpAdapter._mcp_info == {}
         # The real underlying cause is surfaced in the log so users can diagnose.
         assert "Cannot resolve variable ${YDC_API_KEY}" in caplog.text
