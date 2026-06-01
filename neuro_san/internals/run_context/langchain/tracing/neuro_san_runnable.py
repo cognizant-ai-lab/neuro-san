@@ -96,10 +96,13 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
         **kwargs: Any | None,
     ) -> Other:
 
-        # Called by langchain infrastruture when a chain is invoked.
-        # Calling the super here means that run_it() below will be called
-        # as part of the RunnablePassthrough infrastructure.
-        _: Other = await super().ainvoke(input, config, **kwargs)
+        # Run afunc (run_it) inside _acall_with_config so it gets a real run_manager.
+        # RunnablePassthrough.ainvoke invokes afunc raw and only wraps a no-op identity
+        # in _acall_with_config, which leaves child ainvoke calls inside run_it() (the
+        # agent_chain, etc.) without a parent_run_id pointing at this runnable. Wrapping
+        # afunc directly collapses the empty wrapper span and lets children nest under
+        # this runnable in the trace.
+        await self._acall_with_config(self.afunc, input, config, **kwargs)
 
         # Collect intercepted outputs to report back to the tracing infrastructure.
         outputs: Dict[str, Any] = self.get_intercepted_outputs()
