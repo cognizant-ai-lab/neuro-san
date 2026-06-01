@@ -16,6 +16,8 @@
 # END COPYRIGHT
 
 from copy import deepcopy
+from logging import getLogger
+from logging import Logger
 from typing import Any
 from typing import Dict
 from typing import List
@@ -51,18 +53,18 @@ class ParametersShapeNetworkValidator(AbstractNetworkValidator):
     # object() is identity-safe — cannot collide with any real config value.
     _EXPLICIT_NULL: Any = object()
 
+    def __init__(self):
+        self.logger: Logger = getLogger(self.__class__.__name__)
+
     # Overrides AbstractNetworkValidator.validate_name_to_spec_dict
     def validate_name_to_spec_dict(self, name_to_spec: Dict[str, Any]) -> List[str]:
         """
         :param name_to_spec: The name -> agent spec dictionary to validate
         :return: A list of error messages describing parameters-shape problems.
-
-        Note: deliberately no warning log here. The caller
-        (RegistryManifestRestorer.process_one_agent_network) logs a single
-        ERROR line joining all returned errors, so logging here would just
-        duplicate the message.
         """
         errors: List[str] = []
+
+        self.logger.debug("Validating parameters shape...")
 
         for agent_name, agent_spec in name_to_spec.items():
             display_name: str = self._resolve_agent_name(agent_name, agent_spec)
@@ -94,6 +96,9 @@ class ParametersShapeNetworkValidator(AbstractNetworkValidator):
                     f"and 'required' up one level"
                 )
             errors.extend(self._check_required_refs(display_name, params))
+
+        if len(errors) > 0:
+            self.logger.error(str(errors))
 
         return errors
 
@@ -138,10 +143,6 @@ class ParametersShapeNetworkValidator(AbstractNetworkValidator):
             value = agent_spec.get("parameters")
             return cls._EXPLICIT_NULL if value is None else value
         return None
-
-    # ------------------------------------------------------------------
-    # Phase 1: Pydantic conversion
-    # ------------------------------------------------------------------
 
     @classmethod
     def _try_pydantic_conversion(cls, agent_name: str,
@@ -197,10 +198,6 @@ class ParametersShapeNetworkValidator(AbstractNetworkValidator):
         if isinstance(properties, dict):
             for prop_schema in properties.values():
                 cls._replace_string_items(prop_schema)
-
-    # ------------------------------------------------------------------
-    # Phase 2: Custom semantic checks
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _iter_subschemas(schema: Any, path: str):

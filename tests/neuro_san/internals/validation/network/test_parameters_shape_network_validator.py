@@ -65,10 +65,6 @@ class TestParametersShapeNetworkValidator(TestCase, AbstractNetworkValidatorTest
         config: Dict[str, Any] = agent_network.get_config()
         return config
 
-    # ------------------------------------------------------------------
-    # Valid schemas — expect 0 errors
-    # ------------------------------------------------------------------
-
     def test_clean_openai_shape_returns_no_errors(self):
         """A standard OpenAI-style parameters block passes."""
         config: Dict[str, Any] = self._restore_fixture("clean_openai_shape.hocon")
@@ -114,10 +110,6 @@ class TestParametersShapeNetworkValidator(TestCase, AbstractNetworkValidatorTest
             "valid_nested_object_and_array.hocon",
         )
         self.assertEqual(self.validator.validate(config), [])
-
-    # ------------------------------------------------------------------
-    # Error schemas — expect specific errors
-    # ------------------------------------------------------------------
 
     def test_nested_parameters_is_flagged(self):
         """The headline bug: 'parameters' key inside a parameters block."""
@@ -214,11 +206,6 @@ class TestParametersShapeNetworkValidator(TestCase, AbstractNetworkValidatorTest
         self.assertEqual(len(errors), 1)
         self.assertIn("agent_e", errors[0])
         self.assertIn("pydantic model conversion failed", errors[0])
-
-    # ------------------------------------------------------------------
-    # Mutation-based test — loads a known-good production HOCON then
-    # injects a structural error so the validator can catch it.
-    # ------------------------------------------------------------------
 
     def test_bad_parameters(self):
         """
