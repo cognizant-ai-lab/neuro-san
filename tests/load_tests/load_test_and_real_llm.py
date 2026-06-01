@@ -550,10 +550,54 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 pool.submit(self._run_one, i + 1, global_offset + i)
                 for i in range(num_requests)
             ]
+            heartbeat_stop = threading.Event()
+            heartbeat = threading.Thread(
+                target=self._progress_heartbeat,
+                args=(futures, num_requests, start,
+                      heartbeat_stop),
+                daemon=True,
+            )
+            heartbeat.start()
             for future in futures:
                 results_list.append(future.result())
+            heartbeat_stop.set()
+            heartbeat.join(timeout=2)
         total_time = time.time() - start
         return total_time, results_list
+
+    @staticmethod
+    def _progress_heartbeat(
+            futures, total, start_time, stop_event,
+    ):
+        """Log periodic progress while requests are in-flight."""
+        interval = 30
+        last_done = 0
+        last_change = start_time
+        while not stop_event.wait(timeout=interval):
+            done = sum(1 for f in futures if f.done())
+            elapsed = int(time.time() - start_time)
+            ts = time.strftime(
+                "%H:%M:%S", time.localtime(),
+            )
+            pct = (
+                done * 100 // total if total > 0
+                else 0
+            )
+            if done > last_done:
+                last_change = time.time()
+                last_done = done
+            suffix = ""
+            if done == last_done and done < total:
+                stall = int(time.time() - last_change)
+                suffix = (
+                    f"  !! no new completions in {stall}s"
+                )
+            logger.info(
+                "  [progress] %s of %s completed"
+                " (%s%%) -- %ss elapsed [%s]%s",
+                done, total, pct, elapsed, ts,
+                suffix,
+            )
 
     @staticmethod
     def _count_results(results):
