@@ -284,7 +284,10 @@ class RegistryManifestRestorer(Restorer):
             message: str = f"Failed to restore registry item {manifest_key}. Skipping. - {str(exception)}"
             self.logger.error(message)
             agent_network = None
-        except (ParseException, ParseSyntaxException, JSONDecodeError) as exception:
+        except (ParseException, ParseSyntaxException, JSONDecodeError, ValueError) as exception:
+            # ValueError is the wrapper type raised by AbstractAsyncConfigRestorer for any
+            # parse / substitution / config-load failure; the other types are kept for
+            # belt-and-suspenders in case a future code path raises one directly.
 
             # Be sure we spit out the right exception message with relevant parsing
             # information as the error.  If not, we don't get enough good information
@@ -316,7 +319,10 @@ class RegistryManifestRestorer(Restorer):
             message: str = f"Failed to restore registry item {manifest_key}. Skipping. - {str(exception)}"
             self.logger.error(message)
             agent_network = None
-        except (ParseException, ParseSyntaxException, JSONDecodeError) as exception:
+        except (ParseException, ParseSyntaxException, JSONDecodeError, ValueError) as exception:
+            # ValueError is the wrapper type raised by AbstractAsyncConfigRestorer for any
+            # parse / substitution / config-load failure; the other types are kept for
+            # belt-and-suspenders in case a future code path raises one directly.
 
             # Be sure we spit out the right exception message with relevant parsing
             # information as the error.  If not, we don't get enough good information
