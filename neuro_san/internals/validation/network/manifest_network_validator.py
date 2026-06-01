@@ -43,7 +43,7 @@ class ManifestNetworkValidator(CompositeDictionaryValidator):
         """
         validators: List[DictionaryValidator] = [
             # Note we do use the CyclesNetworkValidator here because cycles are actually OK.
-            ToolsShapeValidator(),
+            ToolsShapeValidator(network_name=network_name),
             KeywordNetworkValidator(network_name=network_name),
             MissingNodesNetworkValidator(),
             UnreachableNodesNetworkValidator(network_name=network_name),

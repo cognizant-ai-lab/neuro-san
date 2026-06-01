@@ -46,11 +46,14 @@ class ToolsShapeValidator(AbstractNetworkValidator):
     that traverse the connectivity graph.
     """
 
-    def __init__(self):
+    def __init__(self, network_name: str = None):
         """
         Constructor
+
+        :param network_name: The agent network name for diagnostic log lines
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
+        self.network_name: str = network_name
 
     def validate_name_to_spec_dict(self, name_to_spec: Dict[str, Any]) -> List[str]:
         """
@@ -60,6 +63,8 @@ class ToolsShapeValidator(AbstractNetworkValidator):
         :return: A list of error messages
         """
         errors: List[str] = []
+
+        self.logger.debug("Validating %s tools shape...", self.network_name)
 
         for agent_name, agent in name_to_spec.items():
             errors.extend(self.validate_tools(agent_name, agent))
