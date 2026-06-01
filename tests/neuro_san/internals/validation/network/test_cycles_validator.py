@@ -53,3 +53,22 @@ class TestCyclesNetworkValidator(TestCase, AbstractNetworkValidatorTest):
         errors: List[str] = validator.validate(config)
 
         self.assertEqual(1, len(errors), errors[-1])
+
+    def test_tools_as_string_does_not_iterate_chars(self):
+        """
+        Tests that a malformed `tools` field (string instead of list) does
+        not silently iterate the string character-by-character. coerce_tools
+        treats it as empty; the shape error is reported separately by
+        ToolsShapeValidator.
+        """
+        validator: DictionaryValidator = self.create_validator()
+
+        config: Dict[str, Any] = self.restore("hello_world.hocon")
+        # announcer's tools as a string instead of a list
+        config["tools"][0]["tools"] = "synonymizer"
+
+        errors: List[str] = validator.validate(config)
+        # With char-iteration we'd traverse chars and possibly hit cycles by accident.
+        # With defensive coercion, the cycle detection runs on empty down-chains
+        # for this agent and finds no cycle.
+        self.assertEqual(0, len(errors), errors)
