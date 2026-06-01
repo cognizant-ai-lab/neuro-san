@@ -384,12 +384,19 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
 
         self._save_debug_output(request_id, stdout, stderr)
 
+        failure_reason = None
         if status not in (STATUS_TIMEOUT, STATUS_KILLED):
             if self.args.skip_reservation_check:
                 passed = returncode == 0 and network_name
             else:
                 passed = returncode == 0 and reservation_id and network_name
             status = STATUS_CREATED if passed else STATUS_FAILED
+            if status == STATUS_FAILED:
+                failure_reason = self._diagnose_failure(
+                    returncode, reservation_id,
+                    network_name,
+                    self.args.skip_reservation_check,
+                )
 
         display_reservation = (
             "skipped" if self.args.skip_reservation_check
@@ -399,6 +406,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             "reservation_id": display_reservation,
             "network_name": network_name,
             "stderr": stderr,
+            "failure_reason": failure_reason,
         })
         self._cleanup_prompt_file(prompt_file)
         error_line = self._last_stderr_line(stderr) if status != STATUS_CREATED else None
@@ -481,12 +489,31 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         return STATUS_FAILED
 
     @staticmethod
+    def _diagnose_failure(
+            returncode, reservation_id, network_name,
+            skip_reservation_check,
+    ):
+        """Return a human-readable reason why a request was marked FAILED."""
+        reasons = []
+        if returncode != 0:
+            reasons.append(
+                f"non-zero exit code ({returncode})",
+            )
+        if not network_name:
+            reasons.append("missing network_name")
+        if not skip_reservation_check and not reservation_id:
+            reasons.append("missing reservation_id")
+        return "; ".join(reasons) if reasons else "unknown"
+
+    @staticmethod
     def _log_request_result(request_id, status, elapsed, result_info):
         """Log the result of a single request."""
         logger.info("Request %s: %s (%.2fs)", request_id, status, elapsed)
         logger.info("  reservation_id: %s", result_info.get("reservation_id") or "")
         if result_info.get("network_name"):
             logger.info("  network_name: %s", result_info.get("network_name"))
+        if result_info.get("failure_reason"):
+            logger.info("  reason: %s", result_info["failure_reason"])
         if status in (STATUS_FAILED, STATUS_TIMEOUT, STATUS_KILLED):
             stderr_line = AndRealLlmLoadTest._last_stderr_line(
                 result_info.get("stderr", ""),
