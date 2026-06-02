@@ -28,6 +28,11 @@ from neuro_san.internals.graph.registry.activation_capsule import ActivationCaps
 class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
     """
     LLMToolSelectorMiddleware implementation that understands neuro-san LLM Configs.
+
+    This can significantly reduce token and time costs for agent trees that were deep
+    and which can be flattened. But note that these improvements come at a cost of flexibility
+    in federation and less complete answers.  Completeness in answers will depend much more on
+    the descriptions of the leaf agents.
     """
 
     # pylint: disable=too-many-arguments
