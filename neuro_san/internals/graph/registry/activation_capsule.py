@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 from typing import Dict
+from typing import List
 
 from aiohttp.client_exceptions import ClientConnectionError
 
@@ -32,7 +33,7 @@ from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 
 
-class ActivationCapsule:
+class ActivationCapsule(LingeringResource):
     """
     A helper class that encapsulates bits needed for creating agent Activations.
     """
@@ -48,6 +49,27 @@ class ActivationCapsule:
         self.parent_run_context: RunContext = parent_run_context
         self.parent_agent_spec: Dict[str, Any] = parent_agent_spec
         self.factory: AgentToolFactory = agent_tool_factory
+        self.lingerers: List[LingeringResource] = []
+
+    async def close_of_request(self, parent_resource: LingeringResource = None):
+        """
+        Release resources owned by this context when the request is complete.
+        This can happen earlier than when the work is complete.
+
+        :param parent_resource: parent resource, if any
+        """
+        for lingering_resource in self.lingerers:
+            await lingering_resource.close_of_request(self)
+
+    async def close_of_work(self, parent_resource: LingeringResource = None):
+        """
+        Release resources owned by this context when the work is all done.
+        This can happen later than when the request is complete.
+
+        :param parent_resource: parent resource, if any
+        """
+        for lingering_resource in self.lingerers:
+            await lingering_resource.close_of_work(self)
 
     async def use_tool(self, tool_name: str, tool_args: Dict[str, Any], sly_data: Dict[str, Any]) -> str:
         """
@@ -92,14 +114,17 @@ flag to your invocation.
 
     def create_chat_model(self, llm_config: Dict[str, Any], sly_data: Dict[str, Any]) -> Any:
         """
-        :param llm_config:
-        :return:
+        :param llm_config: The llm config dictionary
+        :param sly_data: The private sly_data dictionary. This is needed for bring-your-own-key scenarios.
+        :return: The llm model to use given the context type (usually langchain)
         """
 
         invocation_context: InvocationContext = self.parent_run_context.get_invocation_context()
         llm_factory: ContextTypeLlmFactory = invocation_context.get_llm_factory()
+
         llm_resources: LingeringResource = llm_factory.create_llm(llm_config, sly_data)
+        self.lingerers.append(llm_resources)
+
         model: Any = llm_resources.get_model()
 
-        # DEF: policy and close_of_work()?
         return model
