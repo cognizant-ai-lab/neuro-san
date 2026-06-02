@@ -111,7 +111,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
     ]
 
     DEFAULT_TIMEOUT_SECONDS = 1200
-    DEFAULT_IDLE_TIMEOUT_SECONDS = 300
+    DEFAULT_IDLE_TIMEOUT_SECONDS = 900
 
     RETRY_LOG_PATTERN = re.compile(
         r"retrying from (RateLimit error |)(\w+)"
@@ -127,6 +127,15 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
     )
     PRIMARY_FINISH_PATTERN = re.compile(
         r"Finish agent_network_designer/streaming_chat"
+    )
+    CLIENT_DISCONNECT_PATTERN = re.compile(
+        r"Request handler stream closed"
+    )
+    STREAM_CLOSED_REQUEST_PATTERN = re.compile(
+        r'"request_id":\s*"(request-\d+)"'
+    )
+    TASK_CANCELLED_PATTERN = re.compile(
+        r"Task from ([^:]+):.*was cancelled"
     )
 
     def __init__(self, args):
@@ -219,7 +228,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             type=int,
             default=AndRealLlmLoadTest.DEFAULT_IDLE_TIMEOUT_SECONDS,
             help="Kill a request if no output for this many seconds "
-                 "(default: 300). Detects hanging requests.",
+                 "(default: 900). Detects hanging requests.",
         )
         parser.add_argument(
             "--settle-time",
@@ -860,6 +869,45 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             "total_finished": total_finished,
         }
 
+    def _scan_disconnections_since(self, position):
+        """
+        Scan server log for client disconnections since the given position.
+        Returns a list of dicts with request_id and the agent that was
+        still running when the client disconnected.
+        """
+        if self.args.server_log is None or position is None:
+            return []
+        disconnections = {}
+        try:
+            with open(
+                self.args.server_log, "r", encoding="utf-8",
+            ) as log_fh:
+                log_fh.seek(position)
+                context_request_id = None
+                for line in log_fh:
+                    req_match = self.STREAM_CLOSED_REQUEST_PATTERN.search(
+                        line,
+                    )
+                    if req_match:
+                        context_request_id = req_match.group(1)
+                    if self.CLIENT_DISCONNECT_PATTERN.search(line):
+                        req_id = context_request_id or "unknown"
+                        if req_id not in disconnections:
+                            disconnections[req_id] = {
+                                "request_id": req_id,
+                                "agent": "unknown",
+                            }
+                    cancel_match = self.TASK_CANCELLED_PATTERN.search(line)
+                    if cancel_match and context_request_id:
+                        agent = cancel_match.group(1)
+                        if context_request_id in disconnections:
+                            disconnections[context_request_id][
+                                "agent"
+                            ] = agent
+        except (OSError, IOError):
+            pass
+        return list(disconnections.values())
+
     def _start_log_monitor(self, position, expected_count,
                            fire_time, client_proc):
         """
@@ -1112,6 +1160,21 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
 
                 # Count server log entries after settle for accurate finish counts
                 server_counts = self._count_requests_since(log_pos)
+                disconnections = self._scan_disconnections_since(log_pos)
+
+                # Log client disconnections if any
+                if disconnections:
+                    logger.warning(
+                        "\n  Client disconnections detected: %s",
+                        len(disconnections),
+                    )
+                    for disc in disconnections:
+                        agent = disc.get("agent", "unknown")
+                        req_id = disc.get("request_id", "unknown")
+                        logger.warning(
+                            "    %s: %s still running at disconnect",
+                            req_id, agent,
+                        )
 
                 # Log server-side request validation
                 if server_counts.get("primary_started") is not None:
@@ -1182,6 +1245,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                     "primary_finished": server_counts.get("primary_finished"),
                     "total_started": server_counts.get("total_started"),
                     "total_finished": server_counts.get("total_finished"),
+                    "disconnections": disconnections,
                 }
                 if before_server:
                     summary_entry["before_threads"] = before_server.get("threads")
@@ -1534,6 +1598,37 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 )
 
     @staticmethod
+    def _log_disconnection_summary(stage_summaries):
+        """Log aggregate client disconnection report across all batches."""
+        all_disconnections = []
+        for idx, stage in enumerate(stage_summaries):
+            for disc in stage.get("disconnections") or []:
+                disc_copy = dict(disc)
+                disc_copy["batch"] = idx + 1
+                all_disconnections.append(disc_copy)
+        if not all_disconnections:
+            return
+        logger.info("\n%s", "=" * 60)
+        logger.info(
+            "  CLIENT DISCONNECTIONS (%s detected in server log)",
+            len(all_disconnections),
+        )
+        logger.info("=" * 60)
+        for disc in all_disconnections:
+            logger.info(
+                "  Batch %s: %s — %s still processing at disconnect",
+                disc.get("batch", "?"),
+                disc.get("request_id", "unknown"),
+                disc.get("agent", "unknown"),
+            )
+        logger.info(
+            "\n  These requests had their client (agent_cli) disconnect"
+            "\n  before the server finished. The server detected the"
+            "\n  disconnection and cancelled in-flight tasks."
+            "\n  If unexpected, consider increasing --idle-timeout.",
+        )
+
+    @staticmethod
     def _log_recommendations(stage_summaries):
         """Log actionable recommendations based on pool reuse data."""
         stages_with_data = [
@@ -1727,6 +1822,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 self._log_resource_deltas(resource_rows)
 
             self._log_pool_reuse_analysis(stage_summaries)
+            self._log_disconnection_summary(stage_summaries)
 
             if client_rows:
                 client_header = [
