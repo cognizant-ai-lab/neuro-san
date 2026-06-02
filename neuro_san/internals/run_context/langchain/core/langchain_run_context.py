@@ -39,6 +39,7 @@ from langchain_core.runnables.base import Runnable
 from langchain_core.runnables.passthrough import RunnablePassthrough
 from langchain_core.tools.base import BaseTool
 
+from neuro_san.internals.graph.registry.activation_capsule import ActivationCapsule
 from neuro_san.internals.errors.error_detector import ErrorDetector
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
@@ -284,9 +285,14 @@ class LangChainRunContext(RunContext):
         :return: An Agent (Runnable)
         """
 
+        agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
+        # DEF: This is perhaps too brave a usage/cast, but it is indeed an AgentToolFactory
+        factory = self.tool_caller.get_inspector()
+        capsule = ActivationCapsule(self, agent_spec, factory)
+
         # Create any middleware instances that were specified, in the order they were specified.
         # This will be None for most simple situations.
-        middleware_factory = MiddlewareFactory(self.invocation_context, self.origin, self.chat_history)
+        middleware_factory = MiddlewareFactory(self.invocation_context, self.origin, self.chat_history, capsule)
         sly_data: Dict[str, Any] = self.tool_caller.get_sly_data()
 
         middleware: List[AgentMiddleware] = None
