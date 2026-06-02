@@ -168,9 +168,29 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
         try:
             config = serialization.to_object(bytes_file)
         except (ParseException, ParseSyntaxException, JSONDecodeError, ConfigException) as exception:
-            detail: str = " ".join(str(exception).split())
+            # Re-raise as ValueError, not pyparsing.ParseException, for two reasons:
+            #
+            # 1. Not all caught errors are parse errors. ConfigException covers post-parse
+            #    failures like ConfigSubstitutionException (unresolved ${VAR} references)
+            #    and ConfigMissingException — re-raising those as a "parse exception" is
+            #    semantically misleading.
+            #
+            # 2. pyparsing.ParseBaseException.__str__ unconditionally appends
+            #    "  (at char {loc}), (line:{lineno}, col:{col})" to its string form.
+            #    For a wrapper exception that has no real source location, this prints
+            #    "(at char 0), (line:1, col:1)" regardless of where the actual error is,
+            #    which actively misleads anyone reading the log. There is no way to
+            #    suppress that suffix without subclassing ParseException and overriding
+            #    __str__; using ValueError sidesteps the problem entirely.
+            #
+            # We embed the underlying exception's type and message directly in the wrapper
+            # text so the real cause surfaces via str(e). Without this, callers that log
+            # "%s" % e see only the wrapper and lose the root cause — `from exception`
+            # only attaches the original via __cause__, which is rendered in tracebacks
+            # but not in str().
             message: str = (
-                f'Error loading {self.file_purpose} file "{file_path}": {detail}'
+                f'There was an error loading {self.file_purpose} file "{file_path}".\n'
+                f"Underlying error ({type(exception).__name__}): {exception}"
             )
             raise ValueError(message) from exception
 
