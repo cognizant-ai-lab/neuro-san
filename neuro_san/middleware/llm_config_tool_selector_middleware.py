@@ -56,7 +56,7 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
                                    from a given LLM Config.
         :param llm_config: The LLM Config to use to create model instances.
         :param sly_data: A dictionary of private data that can be passed to the model factory creating the LLMs.
-                        Not strictly necessary for all cases, but definitiely needed for bring-your-own-key scenarios.
+                        Not strictly necessary for all cases, but definitely needed for bring-your-own-key scenarios.
 
         ... the rest of the args come from the langchain superclass.
 
