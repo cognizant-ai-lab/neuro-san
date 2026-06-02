@@ -571,6 +571,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
     def _run_stage(self, num_requests, max_workers, global_offset):
         """Fire num_requests concurrent AND requests using a thread pool."""
         results_list: List[Dict[str, Any]] = []
+        peak_threads_result: Dict[str, int] = {}
         start = time.time()
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures = [
@@ -581,7 +582,8 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             heartbeat = threading.Thread(
                 target=self._progress_heartbeat,
                 args=(futures, num_requests, start,
-                      heartbeat_stop),
+                      heartbeat_stop, self.server_proc,
+                      peak_threads_result),
                 daemon=True,
             )
             heartbeat.start()
@@ -590,16 +592,19 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             heartbeat_stop.set()
             heartbeat.join(timeout=2)
         total_time = time.time() - start
-        return total_time, results_list
+        return total_time, results_list, peak_threads_result
 
     @staticmethod
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     def _progress_heartbeat(
             futures, total, start_time, stop_event,
+            server_proc, peak_threads_result,
     ):
         """Log periodic progress while requests are in-flight."""
         interval = 30
         last_done = 0
         last_change = start_time
+        peak_threads = 0
         while not stop_event.wait(timeout=interval):
             done = sum(1 for f in futures if f.done())
             elapsed = int(time.time() - start_time)
@@ -619,11 +624,23 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 suffix = (
                     f"  !! no new completions in {stall}s"
                 )
+            thread_info = ""
+            if server_proc is not None:
+                try:
+                    threads = server_proc.num_threads()
+                    if threads > peak_threads:
+                        peak_threads = threads
+                        peak_threads_result["peak"] = threads
+                        thread_info = f"  threads: {threads} (peak)"
+                    else:
+                        thread_info = f"  threads: {threads}"
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
             logger.info(
                 "  [progress] %s of %s completed"
-                " (%s%%) -- %ss elapsed [%s]%s",
+                " (%s%%) -- %ss elapsed [%s]%s%s",
                 done, total, pct, elapsed, ts,
-                suffix,
+                suffix, thread_info,
             )
 
     @staticmethod
@@ -1003,7 +1020,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 stop_event, monitor, peak_result = self._start_log_monitor(
                     log_pos, actual_requests, fire_time, client_proc,
                 )
-                elapsed, results = self._run_stage(
+                elapsed, results, peak_threads = self._run_stage(
                     actual_requests, actual_requests, global_offset,
                 )
                 if stop_event:
@@ -1143,7 +1160,7 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                         ),
                     )
 
-                stage_summaries.append({
+                summary_entry = {
                     "stage": stage_num,
                     "round": round_num,
                     "concurrent": actual_requests,
@@ -1157,7 +1174,14 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                     "primary_finished": server_counts.get("primary_finished"),
                     "total_started": server_counts.get("total_started"),
                     "total_finished": server_counts.get("total_finished"),
-                })
+                }
+                if before_server:
+                    summary_entry["before_threads"] = before_server.get("threads")
+                if after_server:
+                    summary_entry["after_threads"] = after_server.get("threads")
+                if peak_threads.get("peak") is not None:
+                    summary_entry["peak_threads"] = peak_threads["peak"]
+                stage_summaries.append(summary_entry)
 
         return stage_summaries, resource_rows, client_resource_rows
 
@@ -1381,6 +1405,210 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             int(last[9]) - int(first[9]),
         )
 
+    @staticmethod
+    def _log_pool_reuse_analysis(stage_summaries):
+        """Log executor pool reuse analysis across stages.
+
+        Each streaming_chat server call allocates one AsyncioExecutor via
+        get_executor().  New executors spawn a thread; reused ones do not.
+        By comparing thread deltas to total server calls we can estimate
+        how effectively the pool is reusing executors between batches.
+        """
+        # Need thread data and server call counts
+        stages_with_data = [
+            s for s in stage_summaries
+            if s.get("before_threads") is not None
+            and s.get("after_threads") is not None
+            and s.get("total_started") is not None
+            and s.get("total_started") > 0
+        ]
+        if not stages_with_data:
+            return
+
+        base_threads = stages_with_data[0].get("before_threads")
+
+        logger.info("\n%s", "=" * 60)
+        logger.info("  EXECUTOR POOL REUSE ANALYSIS")
+        logger.info("=" * 60)
+
+        header = [
+            "Batch", "Server Calls", "New Threads",
+            "Peak Threads", "Reused", "Reuse%",
+            "Pool Avail", "Exec/AND",
+        ]
+        rows = []
+        total_new_threads = 0
+
+        for idx, stage in enumerate(stages_with_data):
+            batch_num = idx + 1
+            server_calls = stage["total_started"]
+            before_threads = stage["before_threads"]
+            after_threads = stage["after_threads"]
+            new_threads = max(after_threads - before_threads, 0)
+            total_new_threads += new_threads
+            reused = max(server_calls - new_threads, 0)
+            reuse_pct = (
+                (reused / server_calls * 100.0)
+                if server_calls > 0 else 0.0
+            )
+            pool_avail = max(before_threads - base_threads, 0)
+
+            primary = stage.get("primary_started") or stage["concurrent"]
+            exec_per_and = (
+                server_calls / primary if primary > 0 else 0.0
+            )
+
+            peak_t = stage.get("peak_threads")
+            peak_str = str(peak_t) if peak_t is not None else "-"
+
+            rows.append((
+                str(batch_num),
+                str(server_calls),
+                f"+{new_threads}",
+                peak_str,
+                str(reused),
+                f"{reuse_pct:.1f}%",
+                str(pool_avail),
+                f"{exec_per_and:.1f}",
+            ))
+
+        col_widths = [len(h) for h in header]
+        for row in rows:
+            for i, val in enumerate(row):
+                col_widths[i] = max(col_widths[i], len(str(val)))
+        fmt = "  ".join(f"{{:>{w}}}" for w in col_widths)
+        logger.info("%s", fmt.format(*header))
+        logger.info("%s", "-" * (sum(col_widths) + 2 * (len(header) - 1)))
+        for row in rows:
+            logger.info("%s", fmt.format(*row))
+
+        # Summary diagnostics
+        if len(stages_with_data) >= 2:
+            first_reuse = 0.0
+            last_reuse = 0.0
+            for idx, stage in enumerate(stages_with_data):
+                server_calls = stage["total_started"]
+                new_t = max(
+                    stage["after_threads"] - stage["before_threads"], 0,
+                )
+                reused = max(server_calls - new_t, 0)
+                pct = (
+                    (reused / server_calls * 100.0)
+                    if server_calls > 0 else 0.0
+                )
+                if idx == 0:
+                    first_reuse = pct
+                last_reuse = pct
+
+            first_demand = max(
+                stages_with_data[0]["after_threads"]
+                - stages_with_data[0]["before_threads"], 0,
+            )
+            logger.info(
+                "\n  Pool reuse: %.1f%% (batch 1) -> %.1f%% (batch %d)",
+                first_reuse, last_reuse, len(stages_with_data),
+            )
+            if total_new_threads > first_demand > 0:
+                excess = total_new_threads - first_demand
+                logger.info(
+                    "  WARNING: %d new threads created across all batches, "
+                    "but batch 1 demand was only %d.",
+                    total_new_threads, first_demand,
+                )
+                logger.info(
+                    "           %d excess threads indicate pool lock "
+                    "contention in return_executor().",
+                    excess,
+                )
+                logger.info(
+                    "           cancel_current_tasks() holds the pool lock "
+                    "for up to 5s, blocking reuse.",
+                )
+
+    @staticmethod
+    def _log_recommendations(stage_summaries):
+        """Log actionable recommendations based on pool reuse data."""
+        stages_with_data = [
+            s for s in stage_summaries
+            if s.get("before_threads") is not None
+            and s.get("after_threads") is not None
+            and s.get("total_started") is not None
+            and s.get("total_started") > 0
+        ]
+        if len(stages_with_data) < 2:
+            return
+
+        recommendations = []
+
+        # Check batch 2 reuse rate for lock contention signal
+        stage2 = stages_with_data[1]
+        server_calls_2 = stage2["total_started"]
+        new_threads_2 = max(
+            stage2["after_threads"] - stage2["before_threads"], 0,
+        )
+        reused_2 = max(server_calls_2 - new_threads_2, 0)
+        reuse_pct_2 = (
+            (reused_2 / server_calls_2 * 100.0)
+            if server_calls_2 > 0 else 0.0
+        )
+        base_threads = stages_with_data[0].get("before_threads")
+        pool_avail_2 = max(
+            stage2["before_threads"] - base_threads, 0,
+        )
+        if reuse_pct_2 < 50.0 and pool_avail_2 > 0:
+            recommendations.append(
+                f"POOL LOCK CONTENTION: Batch 2 reuse was "
+                f"{reuse_pct_2:.1f}% despite {pool_avail_2} executors "
+                f"available.\n"
+                f"     return_executor() calls cancel_current_tasks() "
+                f"while holding the pool lock\n"
+                f"     (up to 5s per executor), starving get_executor(). "
+                f"Fix: move cancellation\n"
+                f"     outside the lock."
+            )
+
+        # Check executor multiplier
+        first_stage = stages_with_data[0]
+        primary_1 = (
+            first_stage.get("primary_started")
+            or first_stage["concurrent"]
+        )
+        calls_1 = first_stage["total_started"]
+        if primary_1 > 0:
+            multiplier = calls_1 / primary_1
+            if multiplier > 2.0:
+                recommendations.append(
+                    f"HIGH EXECUTOR MULTIPLIER: {multiplier:.1f} server "
+                    f"calls per AND request.\n"
+                    f"     Each sub-agent call makes an HTTP loopback "
+                    f"that allocates a separate\n"
+                    f"     executor+thread "
+                    f"(use_direct=False in ExternalAgentSessionFactory)."
+                )
+
+        # Check unbounded growth
+        last_stage = stages_with_data[-1]
+        final_threads = last_stage["after_threads"]
+        total_new = final_threads - base_threads
+        if total_new > 500:
+            recommendations.append(
+                f"UNBOUNDED POOL GROWTH: {final_threads} threads "
+                f"after test with no cap.\n"
+                f"     {total_new} executor threads created and "
+                f"never shut down (reuse_mode=True).\n"
+                f"     Consider adding max_pool_size with executor "
+                f"shutdown for excess."
+            )
+
+        if not recommendations:
+            return
+
+        logger.info("\n%s", "=" * 60)
+        logger.info("  RECOMMENDATIONS")
+        logger.info("=" * 60)
+        for idx, rec in enumerate(recommendations, 1):
+            logger.info("  %d. %s\n", idx, rec)
+
     def _setup_test_log(self):
         """Create output directory and add a file handler for logging."""
         timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -1490,6 +1718,8 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 self._log_table(resource_header, resource_rows)
                 self._log_resource_deltas(resource_rows)
 
+            self._log_pool_reuse_analysis(stage_summaries)
+
             if client_rows:
                 client_header = [
                     "Concurrent", "Before RSS", "Peak RSS",
@@ -1505,6 +1735,8 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 logger.info("=" * 60)
                 self._log_table(client_header, client_rows)
                 self._log_client_deltas(client_rows)
+
+            self._log_recommendations(stage_summaries)
 
             self._append_resource_history(
                 stage_summaries, resource_rows, client_rows,
