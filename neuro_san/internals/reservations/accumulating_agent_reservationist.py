@@ -129,8 +129,6 @@ class AccumulatingAgentReservationist(Reservationist):
             return None
 
         # Do some validation here
-        validator = ManifestNetworkValidator(external_network_names=self._external_networks,
-                                             mcp_servers=self._mcp_servers)
         errors: Dict[str, List[str]] = {}
         for reservation, agent_network_spec in deployment_dict.items():
 
@@ -140,6 +138,10 @@ class AccumulatingAgentReservationist(Reservationist):
 
             # Validate what is being reserved.
             # Currently, we are assuming everything is an agent network
+            validator = ManifestNetworkValidator(
+                external_network_names=self._external_networks,
+                mcp_servers=self._mcp_servers,
+                network_name=key)
             new_errors: List[str] = validator.validate(agent_network_spec)
             if new_errors is not None and len(new_errors) > 0:
                 # There were errors. Report all at once
