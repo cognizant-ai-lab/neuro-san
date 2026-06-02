@@ -124,6 +124,10 @@ class LangChainRunContext(RunContext):
             factory = self.tool_caller.get_inspector()
             self.capsule = ActivationCapsule(self, agent_spec, factory)
         else:
+            # DEF: It's likely that this current arrangement might impede middleware on the front-man
+            # to not be able to dynamically call out to other agents in the graph.
+            # Need a good example here. Also ConnectifiyReporter would need to be enhanced
+            # to look for tools specified in the middleware.
             self.capsule = ActivationCapsule(self)
 
         parent_origin: List[Dict[str, Any]] = []
