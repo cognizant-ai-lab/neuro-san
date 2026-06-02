@@ -40,8 +40,8 @@ class ActivationCapsule(LingeringResource):
     """
 
     def __init__(self, parent_run_context: RunContext,
-                 parent_agent_spec: Dict[str, Any],
-                 agent_tool_factory: AgentToolFactory):
+                 parent_agent_spec: Dict[str, Any] = None,
+                 agent_tool_factory: AgentToolFactory = None):
         """
         :param parent_run_context: The RunContext of the agent calling this method
         :param parent_agent_spec: The spec of the agent calling this method.

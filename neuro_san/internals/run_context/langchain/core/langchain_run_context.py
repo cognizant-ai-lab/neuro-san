@@ -123,6 +123,8 @@ class LangChainRunContext(RunContext):
             # DEF: This is perhaps too brave a usage/cast, but it is indeed an AgentToolFactory
             factory = self.tool_caller.get_inspector()
             self.capsule = ActivationCapsule(self, agent_spec, factory)
+        else:
+            self.capsule = ActivationCapsule(self)
 
         parent_origin: List[Dict[str, Any]] = []
         if parent_run_context is not None:
