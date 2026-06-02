@@ -74,13 +74,18 @@ class ActivationCapsule(LingeringResource):
         :return: A string representing the last received content text of the last message.
         """
 
+        if self.factory is None or self.parent_agent_spec is None:
+            raise ValueError(
+                "ActivationCapsule.use_tool() requires an AgentToolFactory and parent_agent_spec; "
+                "this capsule was created without them."
+            )
+
         invocation_context: InvocationContext = self.parent_run_context.get_invocation_context()
         invocation: str = invocation_context.get_effective_invocation()
         callable_activation: CallableActivation = self.factory.create_agent_activation(
                                                     self.parent_run_context, self.parent_agent_spec,
                                                     tool_name, sly_data, tool_args,
                                                     self.factory, invocation)
-
         message: BaseMessage = None
         try:
             message = await callable_activation.build()
