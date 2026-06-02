@@ -26,7 +26,9 @@ from langchain_core.messages.base import BaseMessage
 from neuro_san.internals.graph.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.graph.interfaces.callable_activation import CallableActivation
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
+from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
+from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 
 
@@ -47,25 +49,6 @@ class ActivationCapsule:
         self.parent_agent_spec: Dict[str, Any] = parent_agent_spec
         self.factory: AgentToolFactory = agent_tool_factory
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
-    def create_agent_activation(self,
-                                name: str,
-                                arguments: Dict[str, Any],
-                                sly_data: Dict[str, Any]) -> CallableActivation:
-        """
-        Create an active node for an agent from its spec.
-
-        :param name: The name of the agent to get out of the registry
-        :param sly_data: A mapping whose keys might be referenceable by agents, but whose
-                 values should not appear in agent chat text. Can be an empty dictionary.
-        :param arguments: A dictionary of arguments for the newly constructed agent
-        :return: The CallableActivation agent referred to by the name.
-        """
-        invocation_context: InvocationContext = self.parent_run_context.get_invocation_context()
-        invocation: str = invocation_context.get_effective_invocation()
-        return self.factory.create_agent_activation(self.parent_run_context, self.parent_agent_spec,
-                                                    name, sly_data, arguments, self.factory, invocation)
-
     async def use_tool(self, tool_name: str, tool_args: Dict[str, Any], sly_data: Dict[str, Any]) -> str:
         """
         Experimental method to call a tool more directly from a subclass.
@@ -78,7 +61,12 @@ class ActivationCapsule:
         :return: A string representing the last received content text of the last message.
         """
 
-        callable_activation: CallableActivation = self.create_agent_activation(tool_name, tool_args, sly_data)
+        invocation_context: InvocationContext = self.parent_run_context.get_invocation_context()
+        invocation: str = invocation_context.get_effective_invocation()
+        callable_activation: CallableActivation = self.factory.create_agent_activation(
+                                                    self.parent_run_context, self.parent_agent_spec,
+                                                    tool_name, sly_data, tool_args,
+                                                    self.factory, invocation)
 
         message: BaseMessage = None
         try:
@@ -101,3 +89,17 @@ flag to your invocation.
 
         # We got a message back, take the content as the return string
         return message.content
+
+    def create_chat_model(self, llm_config: Dict[str, Any], sly_data: Dict[str, Any]) -> Any:
+        """
+        :param llm_config:
+        :return:
+        """
+
+        invocation_context: InvocationContext = self.parent_run_context.get_invocation_context()
+        llm_factory: ContextTypeLlmFactory = invocation_context.get_llm_factory()
+        llm_resources: LingeringResource = llm_factory.create_llm(llm_config, sly_data)
+        model: Any = llm_resources.get_model()
+
+        # DEF: policy and close_of_work()?
+        return model
