@@ -597,7 +597,25 @@ This enables entire ecosystems of agent webs.
 #### MCP Servers
 
 Agents can call tools exposed by external Model Context Protocol (MCP) servers.
-MCP server URLs must either start with `https://mcp` or end with `/mcp`.
+
+MCP server URLs are recognized when they conform to the
+[MCP canonical server URI specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#canonical-server-uri):
+they must use the `http` or `https` scheme, must include a host, and must not contain a fragment.
+To distinguish MCP server URLs from other external agent URLs, the literal `mcp` must appear either
+as a label in the hostname (e.g. `mcp.example.com`) or as any segment of the URL path
+(e.g. `/mcp`, `/mcp/free`, `/server/mcp`, `/v1/mcp/server`).
+
+Examples of URLs that are recognized as MCP servers:
+
+- `https://mcp.example.com/mcp`
+- `https://mcp.example.com`
+- `https://mcp.example.com:8443`
+- `https://example.com/mcp/free`
+- `https://example.com/v1/mcp/server`
+- `http://localhost:8000/mcp/`
+
+If a URL you want to use does not satisfy these rules, fall back to the dictionary form below,
+which is always treated as an MCP reference regardless of URL shape.
 
 MCP servers can be configured in two formats:
 
