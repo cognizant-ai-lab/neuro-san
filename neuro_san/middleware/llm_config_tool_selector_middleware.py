@@ -43,6 +43,20 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
             ) -> None:
         """
         Constructor
+
+        :param activation_capsule: A helper class that encapsulates bits needed for creating model instances
+                                   from a given LLM Config.
+        :param llm_config: The LLM Config to use to create model instances.
+        :param sly_data: A dictionary of private data that can be passed to the model factory creating the LLMs.
+                        Not strictly necessary for all cases, but definitiely needed for bring-your-own-key scenarios.
+
+        ... the rest of the args come from the langchain superclass.
+
+        :param system_prompt: The system prompt to use for selecting the tools to use.
+        :param max_tools: The maximum number of tools to use.  Defaults to None, implying no limit,
+                            but practically speaking most tool-using LLMs have a limit of 7-10.
+        :param always_include: A list of tool names to always include. These are not subject to the max_tools limit,
+                            and if you include any, you should also further limit max_tools.
         """
 
         if activation_capsule is None:
