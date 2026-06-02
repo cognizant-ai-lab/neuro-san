@@ -52,5 +52,4 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
             raise ValueError("llm_config is required")
 
         model: BaseChatModel = activation_capsule.create_chat_model(llm_config, sly_data)
-        print(f"Created model: {model}")
         super().__init__(model=model, system_prompt=system_prompt, max_tools=max_tools, always_include=always_include)
