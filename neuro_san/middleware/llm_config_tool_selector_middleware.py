@@ -33,6 +33,8 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
     and which can be flattened. But note that these improvements come at a cost of flexibility
     in federation and less complete answers.  Completeness in answers will depend much more on
     the descriptions of the leaf agents.
+
+    Note that the basis class from langchain does not support fallbacks.
     """
 
     # pylint: disable=too-many-arguments
