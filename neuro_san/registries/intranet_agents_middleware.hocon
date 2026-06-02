@@ -24,7 +24,7 @@
         "description": """
 Complex agent network consisting of several LLM-based agents using AAOSA prompting federation
 with middleware optimization.
-""""
+""",
         "tags": ["example", "aaosa", "middleware"],
         "sample_queries": [
             "I just got married. What do I need to update in the system?",
@@ -118,11 +118,11 @@ If there are any requirements that need user input, ask them one at a time, with
                 {
                     "class": "neuro_san.middleware.llm_config_tool_selector_middleware.LlmConfigToolSelectorMiddleware",
                     "args": {
-                        "activation_capsule": True,
+                        "activation_capsule": true,
                         "llm_config": {
                             "model_name": "gpt-5.2"
                         },
-                        "sly_data": True,
+                        "sly_data": true,
                         # "system_prompt": "<your_system_prompt_here>",
                         "max_tools": 7,
                         "always_include": []
