@@ -36,6 +36,7 @@ Items in ***bold*** are essentials. Try to understand these first.
     - [max_steps](#max_steps)
     - [max_iterations](#max_iterations)
     - [max_execution_seconds](#max_execution_seconds)
+    - [max_attempts](#max_attempts)
     - [metadata](#metadata)
         - [description](#description)
         - [tags](#tags)
@@ -79,6 +80,7 @@ Items in ***bold*** are essentials. Try to understand these first.
     - [max_steps](#max_steps-1)
     - [max_iterations](#max_iterations-1)
     - [max_execution_seconds](#max_execution_seconds-1)
+    - [max_attempts](#max_attempts-1)
     - [error_formatter](#error_formatter-1)
     - [error_fragments](#error_fragments-1)
     - [structure_formats](#structure_formats)
@@ -341,6 +343,19 @@ An integer controlling the maximum amount of wall clock time (in seconds) to spe
 [AgentExecutor](https://api.python.langchain.com/en/latest/agents/langchain.agents.agent.AgentExecutor.html)
 used for the agent.  Default is set for 2 minutes.
 
+### max_attempts
+
+A positive integer (i.e. >= 1) indicating the maximum number of times to attempt an agent run given any failures.
+This is different from [max_steps](#max_steps) in that it specifically relates to retryable errors encountered
+during agent execution as opposed to limiting the number of super-steps.
+
+A "retryable" error here includes LLM provider API errors pertaining to rate limits, timeouts,
+and other temporary failures.  Failures which are known to be non-retryable are not re-attempted.
+These include API_KEY errors, ValueErrors from tools, and other unexpected exceptions; the idea
+being: these errors would just happen again anyway so why waste the tokens?
+
+The default setting is to use 3 attempts.
+
 ### request_timeout_seconds
 
 An integer controlling the maximum amount of wall clock time (in seconds) to wait for any single
@@ -582,7 +597,25 @@ This enables entire ecosystems of agent webs.
 #### MCP Servers
 
 Agents can call tools exposed by external Model Context Protocol (MCP) servers.
-MCP server URLs must either start with `https://mcp` or end with `/mcp`.
+
+MCP server URLs are recognized when they conform to the
+[MCP canonical server URI specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#canonical-server-uri):
+they must use the `http` or `https` scheme, must include a host, and must not contain a fragment.
+To distinguish MCP server URLs from other external agent URLs, the literal `mcp` must appear either
+as a label in the hostname (e.g. `mcp.example.com`) or as any segment of the URL path
+(e.g. `/mcp`, `/mcp/free`, `/server/mcp`, `/v1/mcp/server`).
+
+Examples of URLs that are recognized as MCP servers:
+
+- `https://mcp.example.com/mcp`
+- `https://mcp.example.com`
+- `https://mcp.example.com:8443`
+- `https://example.com/mcp/free`
+- `https://example.com/v1/mcp/server`
+- `http://localhost:8000/mcp/`
+
+If a URL you want to use does not satisfy these rules, fall back to the dictionary form below,
+which is always treated as an MCP reference regardless of URL shape.
 
 MCP servers can be configured in two formats:
 
@@ -909,6 +942,11 @@ Deprecated. Use [max_steps](#max_steps-1) instead.
 ### max_execution_seconds
 
 Same as top-level [max_execution_seconds](#max_execution_seconds), except at single-agent scope.
+
+<!--- pyml disable-next-line no-duplicate-heading -->
+### max_attempts
+
+Same as top-level [max_attempts](#max_attempts), except at single-agent scope.
 
 <!--- pyml disable-next-line no-duplicate-heading -->
 ### error_formatter

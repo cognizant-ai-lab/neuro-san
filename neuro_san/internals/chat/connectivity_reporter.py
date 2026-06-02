@@ -25,6 +25,7 @@ from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextT
 from neuro_san.internals.run_context.factory.master_toolbox_factory import MasterToolboxFactory
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.utils.external_agent_parsing import ExternalAgentParsing
+from neuro_san.internals.validation.network.abstract_network_validator import AbstractNetworkValidator
 
 
 class ConnectivityReporter:
@@ -182,36 +183,22 @@ class ConnectivityReporter:
             # Nothing to report
             return tool_list
 
-        extractor = DictionaryExtractor(agent_spec)
+        # Combine the traditional `tools` field with `args.tools` (the coded-tool
+        # convention). coerce_* keep the result tolerant to malformed shapes;
+        # remove_dictionary_tools drops non-string entries (e.g., inline MCP
+        # configs) so the dedup set sees only agent-name strings.
+        combined: List[Any] = (
+            AbstractNetworkValidator.coerce_tools(agent_spec) +
+            AbstractNetworkValidator.coerce_args_tools(agent_spec)
+        )
 
         # Keep a set of the combined sources of tools,
         # so connectivity only gets reported once.
         tool_set: Set[str] = set()
-
-        # First check the tools of the run-of-the-mill agent spec
-        empty_list: List[str] = []
-        spec_tools: List[str] = extractor.get("tools", empty_list)
-
-        # Add to our list in order, but without repeats
-        for tool in spec_tools:
+        for tool in AbstractNetworkValidator.remove_dictionary_tools(combined):
             if tool not in tool_set:
                 tool_set.add(tool)
                 tool_list.append(tool)
-
-        # Next check a special case convention where a coded tool takes a dictionary of
-        # key/value pairs mapping function -> tool name.
-        empty_dict: Dict[str, Any] = {}
-        args_tools = extractor.get("args.tools", empty_dict)
-
-        if isinstance(args_tools, Dict):
-            args_tools = args_tools.values()
-
-        if isinstance(args_tools, List):
-            # Add to our list in order, but without repeats
-            for tool in args_tools:
-                if tool not in tool_set:
-                    tool_set.add(tool)
-                    tool_list.append(tool)
 
         return tool_list
 

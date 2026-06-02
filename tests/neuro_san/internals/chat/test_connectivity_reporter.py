@@ -76,3 +76,40 @@ class TestConnectivityReporter(TestCase):
         tools: List[str] = connectivity.get("tools")
         self.assertIsNotNone(tools)
         self.assertEqual(len(tools), 0)
+
+    def test_assemble_tool_list_args_tools_dict(self):
+        """
+        Tests that an agent referencing downstream agents via `args.tools`
+        as a dict (the coded-tool convention) has those references included
+        in the assembled tool list. Previously the dict.values() result was
+        a dict_values view that failed the isinstance(args_tools, List)
+        check, silently dropping all coded-tool down-chains.
+        """
+        agent_spec: Dict[str, Any] = {
+            "args": {"tools": {"helper": "agent_a", "fallback": "agent_b"}},
+        }
+        tools: List[str] = ConnectivityReporter.assemble_tool_list(agent_spec)
+        self.assertEqual(sorted(tools), ["agent_a", "agent_b"])
+
+    def test_assemble_tool_list_tools_as_string_does_not_iterate_chars(self):
+        """
+        Tests that a malformed `tools` field (string instead of list) does
+        not silently iterate the string character-by-character. coerce_tools
+        treats it as empty.
+        """
+        agent_spec: Dict[str, Any] = {"tools": "agent_a"}
+        tools: List[str] = ConnectivityReporter.assemble_tool_list(agent_spec)
+        self.assertEqual([], tools)
+
+    def test_assemble_tool_list_dict_element_does_not_crash(self):
+        """
+        Tests that a dict element in `tools` (e.g., an inline MCP server
+        config) is filtered out instead of raising TypeError: unhashable
+        type: 'dict' when added to the dedup set. Other string entries are
+        retained.
+        """
+        agent_spec: Dict[str, Any] = {
+            "tools": ["agent_a", {"server": "mcp_server"}, "agent_b"],
+        }
+        tools: List[str] = ConnectivityReporter.assemble_tool_list(agent_spec)
+        self.assertEqual(tools, ["agent_a", "agent_b"])

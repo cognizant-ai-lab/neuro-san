@@ -223,7 +223,9 @@ Examples:
         if self.args.mcp_servers:
             mcp_servers = [server.strip() for server in self.args.mcp_servers.split(",")]
 
-        return ManifestNetworkValidator(external_agents, mcp_servers)
+        network_name: str = os.path.basename(self.args.hocon_file)
+        return ManifestNetworkValidator(external_agents, mcp_servers,
+                                        network_name=network_name)
 
     def print_network_summary(self, config: Dict[str, Any]):
         """

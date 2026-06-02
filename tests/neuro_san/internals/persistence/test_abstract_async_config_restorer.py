@@ -19,11 +19,13 @@ import json
 import logging
 import shutil
 from pathlib import Path
-from typing import Any, Awaitable, Dict, TypeVar
+from typing import Any
+from typing import Awaitable
+from typing import Dict
+from typing import TypeVar
 from unittest.mock import patch
 
 import pytest
-from pyparsing.exceptions import ParseException
 
 from neuro_san.internals.persistence.abstract_async_config_restorer import AbstractAsyncConfigRestorer
 
@@ -222,28 +224,28 @@ class TestAbstractAsyncConfigRestorer:
         with pytest.raises(ValueError, match="must be a .json or .hocon file"):
             r.deserialize_file_contents("config.yaml", b'{}')
 
-    def test_deserialize_raises_parse_exception_on_invalid_json(self) -> None:
-        """A ParseException is raised when JSON content is syntactically invalid."""
+    def test_deserialize_raises_value_error_on_invalid_json(self) -> None:
+        """A ValueError is raised when JSON content is syntactically invalid."""
         r: ConcreteRestorer = self.make_restorer()
-        with pytest.raises(ParseException):
+        with pytest.raises(ValueError):
             r.deserialize_file_contents(
                 str(FIXTURES_DIR / "invalid.json"),
                 (FIXTURES_DIR / "invalid.json").read_bytes(),
             )
 
-    def test_deserialize_raises_parse_exception_on_invalid_hocon(self) -> None:
-        """A ParseException is raised when HOCON content is syntactically invalid."""
+    def test_deserialize_raises_value_error_on_invalid_hocon(self) -> None:
+        """A ValueError is raised when HOCON content is syntactically invalid."""
         r: ConcreteRestorer = self.make_restorer()
-        with pytest.raises(ParseException):
+        with pytest.raises(ValueError):
             r.deserialize_file_contents(
                 str(FIXTURES_DIR / "invalid.hocon"),
                 (FIXTURES_DIR / "invalid.hocon").read_bytes(),
             )
 
-    def test_deserialize_parse_exception_wraps_original(self) -> None:
-        """The raised ParseException chains the original parsing error as its cause."""
+    def test_deserialize_value_error_wraps_original(self) -> None:
+        """The raised ValueError chains the original parsing error as its cause."""
         r: ConcreteRestorer = self.make_restorer()
-        with pytest.raises(ParseException) as exc_info:
+        with pytest.raises(ValueError) as exc_info:
             r.deserialize_file_contents(
                 str(FIXTURES_DIR / "invalid.json"),
                 (FIXTURES_DIR / "invalid.json").read_bytes(),
@@ -345,18 +347,18 @@ class TestAbstractAsyncConfigRestorer:
             r.restore(path)
         mock_filter.assert_called_once()
 
-    def test_restore_raises_parse_exception_on_malformed_json(self, tmp_path: Path) -> None:
-        """A ParseException is raised when a .json file contains invalid content."""
+    def test_restore_raises_value_error_on_malformed_json(self, tmp_path: Path) -> None:
+        """A ValueError is raised when a .json file contains invalid content."""
         path: str = self.copy_fixture(tmp_path, "invalid.json")
         r: ConcreteRestorer = self.make_restorer()
-        with pytest.raises(ParseException):
+        with pytest.raises(ValueError):
             r.restore(path)
 
-    def test_restore_raises_parse_exception_on_malformed_hocon(self, tmp_path: Path) -> None:
-        """A ParseException is raised when a .hocon file contains invalid content."""
+    def test_restore_raises_value_error_on_malformed_hocon(self, tmp_path: Path) -> None:
+        """A ValueError is raised when a .hocon file contains invalid content."""
         path: str = self.copy_fixture(tmp_path, "invalid.hocon")
         r: ConcreteRestorer = self.make_restorer()
-        with pytest.raises(ParseException):
+        with pytest.raises(ValueError):
             r.restore(path)
 
     def test_restore_raises_value_error_on_unsupported_extension(self, tmp_path: Path) -> None:
@@ -414,16 +416,16 @@ class TestAbstractAsyncConfigRestorer:
         r: ConcreteRestorer = self.make_restorer(env_var="MY_CFG")
         assert self.run(r.async_restore())["key"] == "value"
 
-    def test_async_restore_raises_parse_exception_on_malformed_json(self, tmp_path: Path) -> None:
-        """A ParseException is raised when an async-read .json file is invalid."""
+    def test_async_restore_raises_value_error_on_malformed_json(self, tmp_path: Path) -> None:
+        """A ValueError is raised when an async-read .json file is invalid."""
         path: str = self.copy_fixture(tmp_path, "invalid.json")
         r: ConcreteRestorer = self.make_restorer()
-        with pytest.raises(ParseException):
+        with pytest.raises(ValueError):
             self.run(r.async_restore(path))
 
-    def test_async_restore_raises_parse_exception_on_malformed_hocon(self, tmp_path: Path) -> None:
-        """A ParseException is raised when an async-read .hocon file is invalid."""
+    def test_async_restore_raises_value_error_on_malformed_hocon(self, tmp_path: Path) -> None:
+        """A ValueError is raised when an async-read .hocon file is invalid."""
         path: str = self.copy_fixture(tmp_path, "invalid.hocon")
         r: ConcreteRestorer = self.make_restorer()
-        with pytest.raises(ParseException):
+        with pytest.raises(ValueError):
             self.run(r.async_restore(path))

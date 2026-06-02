@@ -75,7 +75,10 @@ class MissingNodesNetworkValidator(AbstractNetworkValidator):
         # Iterate through all agents in the network
         for agent_name, agent_data in name_to_spec.items():
 
-            tools: List[str] = agent_data.get("tools", [])
+            # coerce_tools treats a malformed `tools` (non-list) as empty so this
+            # validator does not iterate the characters of a string. The shape
+            # error itself is reported separately by ToolsShapeValidator.
+            tools: List[Any] = self.coerce_tools(agent_data)
             safe_tools: List[str] = self.remove_dictionary_tools(tools)
 
             # Check each tool in the agent's tools list
