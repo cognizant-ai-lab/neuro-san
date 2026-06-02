@@ -117,10 +117,12 @@ class LangChainRunContext(RunContext):
         # A Placeholder for observabilty-specific tracing objects
         self.tracing_context: TracingContext = tracing_context
 
-        agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
-        # DEF: This is perhaps too brave a usage/cast, but it is indeed an AgentToolFactory
-        factory = self.tool_caller.get_inspector()
-        self.capsule = ActivationCapsule(self, agent_spec, factory)
+        self.capsule: ActivationCapsule = None
+        if self.tool_caller is not None:
+            agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
+            # DEF: This is perhaps too brave a usage/cast, but it is indeed an AgentToolFactory
+            factory = self.tool_caller.get_inspector()
+            self.capsule = ActivationCapsule(self, agent_spec, factory)
 
         parent_origin: List[Dict[str, Any]] = []
         if parent_run_context is not None:
