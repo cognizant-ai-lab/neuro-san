@@ -35,7 +35,8 @@ from neuro_san.internals.run_context.interfaces.run_context import RunContext
 
 class ActivationCapsule(LingeringResource):
     """
-    A helper class that encapsulates bits needed for creating agent Activations.
+    A helper class that encapsulates bits needed for creating agent Activations,
+    LLM model instances and other neuro-san-y resources.
     """
 
     def __init__(self, parent_run_context: RunContext,
