@@ -117,6 +117,11 @@ class LangChainRunContext(RunContext):
         # A Placeholder for observabilty-specific tracing objects
         self.tracing_context: TracingContext = tracing_context
 
+        agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
+        # DEF: This is perhaps too brave a usage/cast, but it is indeed an AgentToolFactory
+        factory = self.tool_caller.get_inspector()
+        self.capsule = ActivationCapsule(self, agent_spec, factory)
+
         parent_origin: List[Dict[str, Any]] = []
         if parent_run_context is not None:
 
@@ -285,14 +290,9 @@ class LangChainRunContext(RunContext):
         :return: An Agent (Runnable)
         """
 
-        agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
-        # DEF: This is perhaps too brave a usage/cast, but it is indeed an AgentToolFactory
-        factory = self.tool_caller.get_inspector()
-        capsule = ActivationCapsule(self, agent_spec, factory)
-
         # Create any middleware instances that were specified, in the order they were specified.
         # This will be None for most simple situations.
-        middleware_factory = MiddlewareFactory(self.invocation_context, self.origin, self.chat_history, capsule)
+        middleware_factory = MiddlewareFactory(self.invocation_context, self.origin, self.chat_history, self.capsule)
         sly_data: Dict[str, Any] = self.tool_caller.get_sly_data()
 
         middleware: List[AgentMiddleware] = None
@@ -516,11 +516,15 @@ class LangChainRunContext(RunContext):
         if self.llm_resources:
             await self.llm_resources.close_of_work()
 
+        if self.capsule:
+            await self.capsule.close_of_work()
+
         self.tools = []
         self.chat_history = []
         self.agent_chain = None
         self.recent_human_message = None
         self.llm_resources = None
+        self.capsule = None
         self.journal = None
         self.interceptor = None
 

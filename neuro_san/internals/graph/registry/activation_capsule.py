@@ -51,16 +51,6 @@ class ActivationCapsule(LingeringResource):
         self.factory: AgentToolFactory = agent_tool_factory
         self.lingerers: List[LingeringResource] = []
 
-    async def close_of_request(self, parent_resource: LingeringResource = None):
-        """
-        Release resources owned by this context when the request is complete.
-        This can happen earlier than when the work is complete.
-
-        :param parent_resource: parent resource, if any
-        """
-        for lingering_resource in self.lingerers:
-            await lingering_resource.close_of_request(self)
-
     async def close_of_work(self, parent_resource: LingeringResource = None):
         """
         Release resources owned by this context when the work is all done.
