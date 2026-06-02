@@ -1013,9 +1013,17 @@ class AndRealLlmLoadTest:  # pylint: disable=too-many-instance-attributes
 
                 fire_time = time.time()
                 fire_ts = time.strftime("%H:%M:%S", time.localtime(fire_time))
+                fire_threads = ""
+                if self.server_proc:
+                    try:
+                        fire_threads = (
+                            f"  threads: {self.server_proc.num_threads()}"
+                        )
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass
                 logger.info(
-                    "\nFiring %s concurrent AND requests... [%s]",
-                    actual_requests, fire_ts,
+                    "\nFiring %s concurrent AND requests... [%s]%s",
+                    actual_requests, fire_ts, fire_threads,
                 )
                 stop_event, monitor, peak_result = self._start_log_monitor(
                     log_pos, actual_requests, fire_time, client_proc,
