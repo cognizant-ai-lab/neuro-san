@@ -161,9 +161,6 @@ class RegistryManifestRestorer(Restorer):
 
         external_network_names: List[str] = self.find_external_network_names(one_manifest)
 
-        # DEF - need mcp servers as well at some point
-        validator = ManifestNetworkValidator(external_network_names)
-
         # At this point only hocon files we are going to serve up are in the one_manifest.
         for manifest_key, manifest_dict in one_manifest.items():
 
@@ -171,6 +168,10 @@ class RegistryManifestRestorer(Restorer):
 
             # We'll need to use an agent mapper to get to this agent definition file.
             agent_filepath: str = self.agent_mapper.agent_name_to_filepath(manifest_key)
+            network_name: str = self.agent_mapper.filepath_to_agent_network_name(agent_filepath)
+            validator = ManifestNetworkValidator(
+                external_network_names,
+                network_name=network_name)
             agent_network: AgentNetwork = None
             if usable_network:
                 agent_network = self.restore_one_agent_network(manifest_dir, agent_filepath, manifest_key)
@@ -204,9 +205,6 @@ class RegistryManifestRestorer(Restorer):
 
         external_network_names: List[str] = self.find_external_network_names(one_manifest)
 
-        # DEF - need mcp servers as well at some point
-        validator = ManifestNetworkValidator(external_network_names)
-
         # At this point only hocon files we are going to serve up are in the one_manifest.
         for manifest_key, manifest_dict in one_manifest.items():
 
@@ -214,6 +212,10 @@ class RegistryManifestRestorer(Restorer):
 
             # We'll need to use an agent mapper to get to this agent definition file.
             agent_filepath: str = self.agent_mapper.agent_name_to_filepath(manifest_key)
+            network_name: str = self.agent_mapper.filepath_to_agent_network_name(agent_filepath)
+            validator = ManifestNetworkValidator(
+                external_network_names,
+                network_name=network_name)
             agent_network: AgentNetwork = None
             if usable_network:
                 agent_network = await self.async_restore_one_agent_network(manifest_dir, agent_filepath, manifest_key)
@@ -239,8 +241,10 @@ class RegistryManifestRestorer(Restorer):
         :param validator: The validator.
         :param agent_networks: The accumulated agent networks
         """
-        if agent_network is not None:
+        network_name: str = self.agent_mapper.filepath_to_agent_network_name(agent_filepath)
 
+        if agent_network is not None:
+            self.logger.info("Validating %s agent network...", network_name)
             validation_errors: List[str] = validator.validate(agent_network.get_config())
             if len(validation_errors) > 0:
                 self.logger.error("manifest registry %s has validation errors. Skipping. Errors: %s",
@@ -252,8 +256,6 @@ class RegistryManifestRestorer(Restorer):
         if usable_network and agent_network is None:
             self.logger.error("manifest registry %s not found in %s", manifest_key, manifest_file)
             return
-
-        network_name: str = self.agent_mapper.filepath_to_agent_network_name(agent_filepath)
 
         # Check if this agent network has been declared as MCP tool:
         if usable_network and manifest_dict.get("mcp", False):

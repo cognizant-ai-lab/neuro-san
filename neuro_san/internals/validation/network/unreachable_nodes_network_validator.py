@@ -32,11 +32,14 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
     Specifically, unreachable nodes or issues with number of front men.
     """
 
-    def __init__(self):
+    def __init__(self, network_name: str = None):
         """
         Constructor
+
+        :param network_name: The agent network name for diagnostic log lines
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
+        self.network_name: str = network_name
 
     def validate_name_to_spec_dict(self, name_to_spec: Dict[str, Any]) -> List[str]:
         """
@@ -47,7 +50,7 @@ class UnreachableNodesNetworkValidator(AbstractNetworkValidator):
         """
         errors: List[str] = []
 
-        self.logger.info("Validating agent network structure...")
+        self.logger.debug("Validating %s agent network structure...", self.network_name)
 
         # Find front man agents
         front_man_agents: Set[str] = self.find_all_front_man_agents(name_to_spec)

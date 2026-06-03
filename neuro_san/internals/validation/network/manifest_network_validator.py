@@ -32,21 +32,24 @@ class ManifestNetworkValidator(CompositeDictionaryValidator):
     to do some standard validation upon reading in an agent network description.
     """
 
-    def __init__(self, external_network_names: List[str] = None, mcp_servers: List[str] = None):
+    def __init__(self, external_network_names: List[str] = None, mcp_servers: List[str] = None,
+                 network_name: str = None):
         """
         Constructor
 
         :param external_network_names: A list of external network names
         :param mcp_servers: A list of MCP servers, as read in from a mcp_info.hocon file
+        :param network_name: The agent network name for diagnostic log lines
         """
         validators: List[DictionaryValidator] = [
             # Note we do use the CyclesNetworkValidator here because cycles are actually OK.
-            ToolsShapeValidator(),
-            KeywordNetworkValidator(),
+            ToolsShapeValidator(network_name=network_name),
+            KeywordNetworkValidator(network_name=network_name),
             MissingNodesNetworkValidator(),
-            UnreachableNodesNetworkValidator(),
+            UnreachableNodesNetworkValidator(network_name=network_name),
             # No ToolBoxNetworkValidator yet.
             ToolNameNetworkValidator(),
-            UrlNetworkValidator(external_network_names, mcp_servers),
+            UrlNetworkValidator(external_network_names, mcp_servers,
+                                network_name=network_name),
         ]
         super().__init__(validators)
