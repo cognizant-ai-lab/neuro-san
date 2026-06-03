@@ -39,7 +39,6 @@ from langchain_core.runnables.base import Runnable
 from langchain_core.runnables.passthrough import RunnablePassthrough
 from langchain_core.tools.base import BaseTool
 
-from neuro_san.internals.graph.registry.activation_capsule import ActivationCapsule
 from neuro_san.internals.errors.error_detector import ErrorDetector
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
@@ -58,6 +57,7 @@ from neuro_san.internals.run_context.langchain.core.langchain_run import LangCha
 from neuro_san.internals.run_context.langchain.core.run_context_runnable import RunContextRunnable
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
 from neuro_san.internals.run_context.langchain.middleware.middleware_factory import MiddlewareFactory
+from neuro_san.internals.run_context.utils.activation_capsule import ActivationCapsule
 
 
 # pylint: disable=too-many-instance-attributes,too-many-public-methods

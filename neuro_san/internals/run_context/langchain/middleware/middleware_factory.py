@@ -31,12 +31,12 @@ from leaf_common.config.resolver_util import ResolverUtil
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.interfaces.reservationist import Reservationist
-from neuro_san.internals.graph.registry.activation_capsule import ActivationCapsule
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.originating_journal import OriginatingJournal
 from neuro_san.internals.journals.progress_journal import ProgressJournal
 from neuro_san.internals.messages.origination import Origination
 from neuro_san.internals.reservations.accumulating_agent_reservationist import AccumulatingAgentReservationist
+from neuro_san.internals.run_context.utils.activation_capsule import ActivationCapsule
 
 # We don't want to drag in langgraph as a dependency, but we will allow Checkpointers from there.
 Checkpointer: Type = Any
