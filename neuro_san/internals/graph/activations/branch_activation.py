@@ -28,7 +28,7 @@ from leaf_common.parsers.field_extractor import FieldExtractor
 
 from neuro_san.internals.graph.activations.argument_assigner import ArgumentAssigner
 from neuro_san.internals.graph.activations.calling_activation import CallingActivation
-from neuro_san.internals.graph.interfaces.agent_tool_factory import AgentToolFactory
+from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
 from neuro_san.internals.interfaces.callable_activation import CallableActivation
 from neuro_san.internals.interfaces.invocation_context import InvocationContext

@@ -24,7 +24,7 @@ from aiohttp.client_exceptions import ClientConnectionError
 
 from langchain_core.messages.base import BaseMessage
 
-from neuro_san.internals.graph.interfaces.agent_tool_factory import AgentToolFactory
+from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
 from neuro_san.internals.interfaces.callable_activation import CallableActivation
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
@@ -86,6 +86,8 @@ class ActivationCapsule(LingeringResource):
                                                     self.parent_run_context, self.parent_agent_spec,
                                                     tool_name, sly_data, tool_args,
                                                     self.factory, invocation)
+        self.lingerers.append(callable_activation)
+
         message: BaseMessage = None
         try:
             message = await callable_activation.build()
