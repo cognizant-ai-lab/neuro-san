@@ -25,8 +25,8 @@ from aiohttp.client_exceptions import ClientConnectionError
 from langchain_core.messages.base import BaseMessage
 
 from neuro_san.internals.graph.interfaces.agent_tool_factory import AgentToolFactory
-from neuro_san.internals.graph.interfaces.callable_activation import CallableActivation
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
+from neuro_san.internals.interfaces.callable_activation import CallableActivation
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource

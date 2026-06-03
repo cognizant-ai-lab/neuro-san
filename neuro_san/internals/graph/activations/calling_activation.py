@@ -24,7 +24,7 @@ from leaf_common.config.dictionary_overlay import DictionaryOverlay
 
 from neuro_san.internals.graph.activations.abstract_callable_activation import AbstractCallableActivation
 from neuro_san.internals.graph.interfaces.agent_tool_factory import AgentToolFactory
-from neuro_san.internals.graph.interfaces.callable_activation import CallableActivation
+from neuro_san.internals.interfaces.callable_activation import CallableActivation
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.run_context.factory.run_context_factory import RunContextFactory
 from neuro_san.internals.run_context.interfaces.run import Run

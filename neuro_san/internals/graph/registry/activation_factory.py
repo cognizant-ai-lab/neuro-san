@@ -32,8 +32,8 @@ from neuro_san.internals.graph.activations.front_man_activation import FrontManA
 from neuro_san.internals.graph.activations.sly_data_redactor import SlyDataRedactor
 from neuro_san.internals.graph.activations.toolbox_activation import ToolboxActivation
 from neuro_san.internals.graph.interfaces.agent_tool_factory import AgentToolFactory
-from neuro_san.internals.graph.interfaces.callable_activation import CallableActivation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.interfaces.callable_activation import CallableActivation
 from neuro_san.internals.interfaces.front_man import FrontMan
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.internals.run_context.utils.external_agent_parsing import ExternalAgentParsing
