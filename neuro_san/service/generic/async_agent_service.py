@@ -268,7 +268,7 @@ class AsyncAgentService:
             self.queues.sync_q.put(reservationist.get_queue())
 
         # Prepare
-        factory = ExternalAgentSessionFactory(use_direct=True)
+        factory = ExternalAgentSessionFactory(use_direct=False)
         invocation_context = SessionInvocationContext(
             self.agent_name,
             factory,
