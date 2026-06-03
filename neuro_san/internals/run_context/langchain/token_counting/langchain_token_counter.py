@@ -32,6 +32,7 @@ from time import time
 from langchain_core.callbacks import AsyncCallbackHandler
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.language_models.base import BaseLanguageModel
+from langchain_core.messages.ai import AIMessage
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
@@ -124,6 +125,7 @@ class LangChainTokenCounter:
         #   are now limited to the calling agent only, and no longer include those
         #   from downstream (chained) agents. However, `models_token_dict` is added
         #   to the `LlmTokenCallbackHandler` to collect token stats of each model call.
+        timed_out: bool = False
         with get_llm_token_callback(llm_infos) as callback:
             # Create a new context for different ContextVar values
             # and use the create_task() to run within that context.
@@ -132,14 +134,31 @@ class LangChainTokenCounter:
             try:
                 retval = await wait_for(task, max_execution_seconds)
             except AsyncTimeout:
-                # Per docs for wait_for(), the task is already cancelled.
+                # Per docs for wait_for(), the task is already cancelled, so the
+                # task's own final journal.write_message(AIMessage(...)) never ran.
+                # Synthesize that final AIMessage here — before report() below — so
+                # the journal order matches the normal-completion path:
+                #   streamed events -> final AIMessage -> token accounting.
+                timeout_output: str = (
+                    f"Agent stopped: max_execution_seconds={max_execution_seconds}s exceeded."
+                )
+                if self.journal is not None:
+                    await self.journal.write_message(AIMessage(timeout_output))
                 retval = None
+                timed_out = True
 
         # Figure out how much time our agent took.
         end_time: float = time()
         time_taken_in_seconds: float = end_time - start_time
 
         await self.report(callback, time_taken_in_seconds)
+
+        if timed_out:
+            # Re-raise so the caller can synthesize a final AIMessage and update chat history.
+            # Partial token accounting was already reported above.
+            raise AsyncTimeout(
+                f"Agent '{origin_str}' exceeded max_execution_seconds={max_execution_seconds}s"
+            )
 
         return retval
 
