@@ -15,9 +15,18 @@
 #
 # END COPYRIGHT
 
+import asyncio
+from contextlib import contextmanager
+from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
 from unittest.mock import Mock
+from unittest.mock import patch
+
 import pytest
 
+from langchain_core.messages.ai import AIMessage
+
+from neuro_san.internals.messages.agent_message import AgentMessage
 from neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter import LangChainTokenCounter
 
 
@@ -377,6 +386,88 @@ class TestLangChainTokenCounter:
         # Result should be different from originals
         assert result != dict_1
         assert result != dict_2
+
+    @pytest.mark.asyncio
+    async def test_count_tokens_timeout_writes_aimessage_before_token_accounting_and_raises(self):
+        """
+        On AsyncTimeout, count_tokens should:
+        1. Write a final AIMessage to the journal BEFORE report() writes its
+           token-accounting AgentMessages, so the journal stream order matches
+           the normal-completion path.
+        2. Re-raise AsyncTimeout so the caller (RunContextRunnable.run_it) can
+           log/handle it.
+        """
+        # Capture journal.write_message arguments in call order.
+        written_messages = []
+
+        async def record(msg, *_args, **_kwargs):
+            written_messages.append(msg)
+
+        mock_journal = MagicMock()
+        mock_journal.write_message = AsyncMock(side_effect=record)
+
+        # Mock the invocation_context dependencies that count_tokens / report touch.
+        mock_invocation_context = MagicMock()
+        mock_invocation_context.get_llm_factory.return_value.llm_infos = {}
+        mock_invocation_context.get_request_reporting.return_value = {}
+
+        # The executor wraps the awaitable in a real asyncio.Task so
+        # asyncio.wait_for() actually times out and cancels it.
+        mock_executor = MagicMock()
+        mock_executor.create_task.side_effect = (
+            lambda awaitable, _origin_str: asyncio.create_task(awaitable)
+        )
+        mock_invocation_context.get_asyncio_executor.return_value = mock_executor
+
+        counter = LangChainTokenCounter(
+            llm=MagicMock(),
+            invocation_context=mock_invocation_context,
+            journal=mock_journal,
+            # Single-element origin -> no "." in the full name, so report()
+            # exercises both the per-agent and network token-message branches.
+            origin=[{"tool": "test_agent", "instantiation_index": 0}],
+        )
+
+        async def slow_awaitable():
+            await asyncio.sleep(10)
+
+        @contextmanager
+        def fake_callback_cm(_llm_infos):
+            cb = MagicMock()
+            cb.models_token_dict = {}
+            cb.total_tokens = 0
+            cb.prompt_tokens = 0
+            cb.completion_tokens = 0
+            cb.successful_requests = 0
+            cb.total_cost = 0.0
+            yield cb
+
+        callback_path = (
+            "neuro_san.internals.run_context.langchain.token_counting."
+            "langchain_token_counter.get_llm_token_callback"
+        )
+
+        with patch(callback_path, fake_callback_cm):
+            with pytest.raises(asyncio.TimeoutError):
+                await counter.count_tokens(slow_awaitable(), max_execution_seconds=0.05)
+
+        # 1) First journal write must be the synthesized timeout AIMessage.
+        assert written_messages, "Expected at least the timeout AIMessage on the journal"
+        first = written_messages[0]
+        assert isinstance(first, AIMessage), (
+            f"First journal message should be AIMessage, got {type(first).__name__}"
+        )
+        assert "max_execution_seconds" in first.content
+
+        # 2) Any subsequent messages should be token-accounting AgentMessages
+        #    (report() writes per-agent and, for the frontman, network token messages).
+        assert len(written_messages) >= 2, (
+            "Expected token-accounting AgentMessage(s) after the timeout AIMessage"
+        )
+        for msg in written_messages[1:]:
+            assert isinstance(msg, AgentMessage), (
+                f"Expected AgentMessage after AIMessage, got {type(msg).__name__}"
+            )
 
     def test_merge_dicts_complex_token_scenario(self, token_counter):
         """Test merging with a realistic token counting scenario."""

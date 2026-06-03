@@ -155,7 +155,6 @@ class LangChainTokenCounter:
 
         if timed_out:
             # Re-raise so the caller can handle/log the timeout.
-            # Partial token accounting was already reported above.
             raise AsyncTimeout(
                 f"Agent '{origin_str}' exceeded max_execution_seconds={max_execution_seconds}s"
             )
