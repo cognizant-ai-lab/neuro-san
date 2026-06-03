@@ -22,7 +22,7 @@ from langchain.agents.middleware import LLMToolSelectorMiddleware
 from langchain.agents.middleware.tool_selection import DEFAULT_SYSTEM_PROMPT
 from langchain_core.language_models.chat_models import BaseChatModel
 
-from neuro_san.internals.graph.registry.activation_capsule import ActivationCapsule
+from neuro_san.internals.run_context.utils.activation_capsule import ActivationCapsule
 
 
 class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
