@@ -172,7 +172,7 @@ class RunContextRunnable(NeuroSanRunnable):
             # (before its token-accounting messages, to preserve message order).
             # Here we only need to surface the timeout in server logs.
             self.logger.warning(
-                "Agent '%s' exceeded max_execution_seconds=%ss and was cancelled.",
+                "Agent '%s' timed out: exceeded max_execution_seconds=%ss and was cancelled.",
                 Origination.get_full_name_from_origin(self.origin),
                 max_execution_seconds,
             )

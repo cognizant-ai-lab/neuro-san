@@ -140,7 +140,7 @@ class LangChainTokenCounter:
                 # the journal order matches the normal-completion path:
                 #   streamed events -> final AIMessage -> token accounting.
                 timeout_output: str = (
-                    f"Agent stopped: max_execution_seconds={max_execution_seconds}s exceeded."
+                    f"Agent timed out: max_execution_seconds={max_execution_seconds}s exceeded."
                 )
                 if self.journal is not None:
                     await self.journal.write_message(AIMessage(timeout_output))
