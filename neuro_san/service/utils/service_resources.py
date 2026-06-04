@@ -20,8 +20,6 @@ See class definition for comments.
 import os
 import sys
 import stat
-import threading
-import traceback
 from typing import Any
 from typing import Dict
 from typing import Iterable
@@ -341,22 +339,6 @@ class ServiceResources:
         return cpu_load
 
     @classmethod
-    def dump_pool_threads(cls, prefix=""):
-        pool_threads = {
-            t.ident: t for t in threading.enumerate()
-            if t.name.startswith(prefix)
-        }
-        frames = sys._current_frames()
-        for tid, t in pool_threads.items():
-            frame = frames.get(tid)
-            if frame is None:
-                continue
-            print(f"\n>>>>>> {t.name} (tid={tid}, daemon={t.daemon}) ---")
-            traceback.print_stack(frame)
-            print(f"<<<<<< end of {t.name} stack ---\n")
-
-
-    @classmethod
     def get_snapshot_dict(cls, server_port: int) -> Dict[str, Any]:
         """
         Get a snapshot of current resource usage for logging or metrics.
@@ -383,8 +365,6 @@ class ServiceResources:
         }
         if cls.server_context is not None:
             snapshot["executor_threads"] = cls.server_context.get_executor_pool().get_threads_metrics()
-
-        #cls.dump_pool_threads(prefix="aaa")  # dump threads in executors for debugging
 
         snapshot["total_threads"] = psutil.Process().num_threads()
         return snapshot
