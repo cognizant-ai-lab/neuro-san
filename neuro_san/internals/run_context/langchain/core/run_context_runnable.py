@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from asyncio import TimeoutError as AsyncTimeout
 from typing import Any
 from typing import Dict
 from typing import List
@@ -163,8 +164,18 @@ class RunContextRunnable(NeuroSanRunnable):
 
         # Attempt to count tokens/costs while invoking the agent.
         token_counter = LangChainTokenCounter(self.primary_llm, self.invocation_context, self.journal, self.origin)
-        await token_counter.count_tokens(self.invoke_agent_chain(inputs, runnable_config, max_attempts),
-                                         max_execution_seconds)
+        try:
+            await token_counter.count_tokens(self.invoke_agent_chain(inputs, runnable_config, max_attempts),
+                                             max_execution_seconds)
+        except AsyncTimeout:
+            # The token counter already wrote the final AIMessage to the journal
+            # (before its token-accounting messages, to preserve message order).
+            # Here we only need to surface the timeout in server logs.
+            self.logger.warning(
+                "Agent '%s' timed out: exceeded max_execution_seconds=%ss and was cancelled.",
+                Origination.get_full_name_from_origin(self.origin),
+                max_execution_seconds,
+            )
 
         return inputs
 
