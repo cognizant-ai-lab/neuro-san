@@ -34,18 +34,20 @@ class KeywordNetworkValidator(AbstractNetworkValidator):
 
     ALL_KEYWORDS: Set[str] = {"description", "instructions"}
 
-    def __init__(self, keywords: Iterable[str] = None):
+    def __init__(self, keywords: Iterable[str] = None, network_name: str = None):
         """
         Constructor
 
         :param keywords: Iterable of keyword names to validate.
                          If None, all keywords are validated.
+        :param network_name: The agent network name for diagnostic log lines
 
         Note: `tools` shape validation lives in ToolsShapeValidator (a structure
         concern, not a keyword concern), and is not handled by this class.
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.keywords: Set[str] = set(keywords) if keywords is not None else self.ALL_KEYWORDS
+        self.network_name: str = network_name
 
     def validate_name_to_spec_dict(self, name_to_spec: Dict[str, Any]) -> List[str]:
         """
@@ -56,7 +58,7 @@ class KeywordNetworkValidator(AbstractNetworkValidator):
         """
         errors: List[str] = []
 
-        self.logger.info("Validating agent network keywords...")
+        self.logger.debug("Validating %s agent network keywords...", self.network_name)
 
         for agent_name, agent in name_to_spec.items():
             if "description" in self.keywords:
