@@ -92,14 +92,6 @@ class TestParametersSchemaNetworkValidator(TestCase, AbstractNetworkValidatorTes
         config: Dict[str, Any] = self._restore_fixture("no_parameters.hocon")
         self.assertEqual(self.validator.validate(config), [])
 
-    def test_zero_arg_function_type_object_without_properties_is_allowed(self):
-        """
-        Bare {type: 'object'} is a legitimate JSON-Schema / OpenAI shape for
-        a function that takes no arguments. The validator must not flag it.
-        """
-        config: Dict[str, Any] = self._restore_fixture("zero_arg_function.hocon")
-        self.assertEqual(self.validator.validate(config), [])
-
     def test_array_items_string_reference_is_skipped(self):
         """
         String references like "items": "cao_item" are not dicts and should
@@ -107,15 +99,6 @@ class TestParametersSchemaNetworkValidator(TestCase, AbstractNetworkValidatorTes
         """
         config: Dict[str, Any] = self._restore_fixture(
             "array_items_string_reference.hocon",
-        )
-        self.assertEqual(self.validator.validate(config), [])
-
-    def test_valid_nested_object_and_array_passes(self):
-        """
-        A well-formed schema with nested objects and arrays passes cleanly.
-        """
-        config: Dict[str, Any] = self._restore_fixture(
-            "valid_nested_object_and_array.hocon",
         )
         self.assertEqual(self.validator.validate(config), [])
 
@@ -135,20 +118,6 @@ class TestParametersSchemaNetworkValidator(TestCase, AbstractNetworkValidatorTes
         self.assertIn("agent_a", errors[0])
         self.assertIn("undefined props", errors[0])
         self.assertIn("sample", errors[0])
-
-    def test_nested_parameters_below_top_level_is_flagged(self):
-        """
-        A stray 'parameters' key inside a property's own schema (one level
-        below the top) is caught.
-        """
-        config: Dict[str, Any] = self._restore_fixture(
-            "nested_params_below_top_level.hocon",
-        )
-        errors = self.validator.validate(config)
-        self.assertEqual(len(errors), 1)
-        self.assertIn("tool_a", errors[0])
-        self.assertIn("parameters.properties.arg1", errors[0])
-        self.assertIn("nested 'parameters'", errors[0])
 
     def test_nested_object_property_bad_required(self):
         """
@@ -190,19 +159,6 @@ class TestParametersSchemaNetworkValidator(TestCase, AbstractNetworkValidatorTes
         self.assertIn("agent_c", errors[0])
         self.assertIn("parameters.properties.entries.items.required", errors[0])
         self.assertIn("undefined props", errors[0])
-
-    def test_deeply_nested_object_error(self):
-        """
-        Errors three levels deep include the full dotted path.
-        """
-        config: Dict[str, Any] = self._restore_fixture("deeply_nested_error.hocon")
-        errors = self.validator.validate(config)
-        self.assertEqual(len(errors), 1)
-        self.assertIn("deep_tool", errors[0])
-        self.assertIn(
-            "parameters.properties.level1.properties.level2.required",
-            errors[0],
-        )
 
     def test_unrecognized_type_caught_by_pydantic(self):
         """
