@@ -116,6 +116,27 @@ If there are any requirements that need user input, ask them one at a time, with
             ],
             "middleware": [
                 {
+                    # The LLMConfigToolSelectorMiddleware is no performance panacea.
+                    # Know the tradeoffs:
+                    #
+                    # * On the one hand, it can be a lot more token and time (latency) efficient to use
+                    #   this middleware, as it allows you to flatten the depth of an agent network
+                    #   and extend the tool list specs beyond the normal limit of 7 tools per agent w/rt
+                    #   the way the network can branch. (The use limit of 7 still applies in terms
+                    #   of what tools are picked - this is not magically changing the way models are trained.)
+                    #
+                    # * On the other hand, there are other benefical aspects that can suffer:
+                    #
+                    #   * The down-chain agents' function descriptions and parameter descriptions
+                    #     should be more carefully written to reflect the nuances of what they actually do.
+                    #     (FWIW Refinement here is a good idea anyway). In the end, robustness of responses
+                    #     from down-chain agents can suffer because they are skipped over for consideration
+                    #     due to overly terse function descriptions.
+                    #
+                    #   * AAOSA networks can lose the modularity that the federated approach of AAOSA provides.
+                    #     That is, overdoing it with centralization can overtax the single middleware llm
+                    #     deciding about the tool usage and you can lose the freedom of (for example) different
+                    #     departments managing their own sets of tools they wish to contribute to the overall network.
                     "class": "neuro_san.middleware.llm_config_tool_selector_middleware.LlmConfigToolSelectorMiddleware",
                     "args": {
                         "activation_capsule": true,
