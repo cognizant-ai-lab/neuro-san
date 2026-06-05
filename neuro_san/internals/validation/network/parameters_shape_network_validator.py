@@ -53,8 +53,14 @@ class ParametersShapeNetworkValidator(AbstractNetworkValidator):
     # object() is identity-safe — cannot collide with any real config value.
     _EXPLICIT_NULL: Any = object()
 
-    def __init__(self):
+    def __init__(self, network_name: str = None):
+        """
+        Constructor
+
+        :param network_name: The agent network name for diagnostic log lines
+        """
         self.logger: Logger = getLogger(self.__class__.__name__)
+        self.network_name: str = network_name
 
     # Overrides AbstractNetworkValidator.validate_name_to_spec_dict
     def validate_name_to_spec_dict(self, name_to_spec: Dict[str, Any]) -> List[str]:
@@ -64,7 +70,7 @@ class ParametersShapeNetworkValidator(AbstractNetworkValidator):
         """
         errors: List[str] = []
 
-        self.logger.info("Validating parameters shape...")
+        self.logger.debug("Validating %s agent network parameters shape...", self.network_name)
 
         for agent_name, agent_spec in name_to_spec.items():
             display_name: str = self._resolve_agent_name(agent_name, agent_spec)
