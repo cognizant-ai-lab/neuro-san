@@ -169,7 +169,7 @@ class ParametersSchemaNetworkValidator(AbstractNetworkValidator):
         try:
             converter = BaseModelDictionaryConverter("parameters")
             converter.from_dict(sanitized)
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             # Broad catch: from_dict() delegates to pydantic's create_model()
             # and recursive type resolution, which can raise varied exceptions
             # on malformed input. Report as a validation error rather than
