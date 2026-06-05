@@ -21,8 +21,8 @@ jobs:
           fetch-depth: 0
 
       - name: Run Checkmarx One scan
-        # build-common 1.0.6
-        uses: cognizant-ai-lab/build-common/actions/checkmarx-one@e5f749a7ba5de8bb8106cb172e89f21ca581a697
+        # build-common 1.0.7
+        uses: cognizant-ai-lab/build-common/actions/checkmarx-one@3ead7f681f92044709ffc3a533f41c3f48230cfd
         with:
           base-uri: ${{ vars.CX_BASE_URI }}
           cx-tenant: ${{ vars.CX_TENANT }}
