@@ -20,10 +20,8 @@ from neuro_san.internals.interfaces.dictionary_validator import DictionaryValida
 from neuro_san.internals.validation.common.composite_dictionary_validator import CompositeDictionaryValidator
 from neuro_san.internals.validation.network.keyword_network_validator import KeywordNetworkValidator
 from neuro_san.internals.validation.network.missing_nodes_network_validator import MissingNodesNetworkValidator
-from neuro_san.internals.validation.network.pydantic_parameters_network_validator import \
-    PydanticParametersNetworkValidator
-from neuro_san.internals.validation.network.semantic_parameters_network_validator import \
-    SemanticParametersNetworkValidator
+from neuro_san.internals.validation.network.parameters_schema_network_validator import \
+    ParametersSchemaNetworkValidator
 from neuro_san.internals.validation.network.tool_name_network_validator import ToolNameNetworkValidator
 from neuro_san.internals.validation.network.tools_shape_validator import ToolsShapeValidator
 from neuro_san.internals.validation.network.unreachable_nodes_network_validator import UnreachableNodesNetworkValidator
@@ -53,8 +51,7 @@ class ManifestNetworkValidator(CompositeDictionaryValidator):
             UnreachableNodesNetworkValidator(network_name=network_name),
             # No ToolBoxNetworkValidator yet.
             ToolNameNetworkValidator(),
-            PydanticParametersNetworkValidator(network_name=network_name),
-            SemanticParametersNetworkValidator(network_name=network_name),
+            ParametersSchemaNetworkValidator(network_name=network_name),
             UrlNetworkValidator(external_network_names, mcp_servers,
                                 network_name=network_name),
         ]
