@@ -17,6 +17,8 @@
 from typing import List
 
 from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
+from neuro_san.internals.run_context.langchain.core.pydantic_schema_conversion_validator import \
+    PydanticSchemaConversionValidator
 from neuro_san.internals.validation.common.composite_dictionary_validator import CompositeDictionaryValidator
 from neuro_san.internals.validation.network.keyword_network_validator import KeywordNetworkValidator
 from neuro_san.internals.validation.network.missing_nodes_network_validator import MissingNodesNetworkValidator
@@ -51,7 +53,10 @@ class ManifestNetworkValidator(CompositeDictionaryValidator):
             UnreachableNodesNetworkValidator(network_name=network_name),
             # No ToolBoxNetworkValidator yet.
             ToolNameNetworkValidator(),
-            ParametersSchemaNetworkValidator(network_name=network_name),
+            ParametersSchemaNetworkValidator(
+                network_name=network_name,
+                schema_validator=PydanticSchemaConversionValidator(),
+            ),
             UrlNetworkValidator(external_network_names, mcp_servers,
                                 network_name=network_name),
         ]

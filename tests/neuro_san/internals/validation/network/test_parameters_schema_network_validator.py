@@ -25,6 +25,8 @@ from unittest import TestCase
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
+from neuro_san.internals.run_context.langchain.core.pydantic_schema_conversion_validator import \
+    PydanticSchemaConversionValidator
 from neuro_san.internals.validation.network.parameters_schema_network_validator import \
     ParametersSchemaNetworkValidator
 
@@ -43,13 +45,19 @@ class TestParametersSchemaNetworkValidator(TestCase, AbstractNetworkValidatorTes
     _FIXTURE_DIR: Path = Path(__file__).resolve().parents[4] / "fixtures" / "parameters_shape"
 
     def setUp(self):
-        self.validator = ParametersSchemaNetworkValidator(network_name="test_network")
+        self.validator = ParametersSchemaNetworkValidator(
+            network_name="test_network",
+            schema_validator=PydanticSchemaConversionValidator(),
+        )
 
     def create_validator(self) -> DictionaryValidator:
         """
         Creates an instance of the validator
         """
-        return ParametersSchemaNetworkValidator(network_name="test_network")
+        return ParametersSchemaNetworkValidator(
+            network_name="test_network",
+            schema_validator=PydanticSchemaConversionValidator(),
+        )
 
     @staticmethod
     def _restore_fixture(filename: str) -> Dict[str, Any]:
@@ -213,22 +221,6 @@ class TestParametersSchemaNetworkValidator(TestCase, AbstractNetworkValidatorTes
         parameters block.
         """
         validator: DictionaryValidator = self.create_validator()
-
-        # Open a known good network file
-        config: Dict[str, Any] = self.restore("hello_world.hocon")
-
-        # Invalidate per the test: inject a nested 'parameters' key
-        tools: List = config.get("tools", [])
-        first_tool: Dict[str, Any] = tools[0] if tools else {}
-        first_tool["function"] = {
-            "parameters": {
-                "type": "object",
-                "parameters": {
-                    "type": "object",
-                    "properties": {"x": {"type": "string"}},
-                },
-            },
-        }
-
+        config: Dict[str, Any] = self._restore_fixture("injected_nested_parameters.hocon")
         errors: List[str] = validator.validate(config)
         self.assertGreater(len(errors), 0)

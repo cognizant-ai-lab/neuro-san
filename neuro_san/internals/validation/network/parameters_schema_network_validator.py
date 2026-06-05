@@ -15,7 +15,6 @@
 #
 # END COPYRIGHT
 
-from copy import deepcopy
 from logging import getLogger
 from logging import Logger
 from typing import Any
@@ -23,8 +22,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from neuro_san.internals.run_context.langchain.core.base_model_dictionary_converter import \
-    BaseModelDictionaryConverter
+from neuro_san.internals.interfaces.schema_conversion_validator import SchemaConversionValidator
 from neuro_san.internals.validation.network.abstract_network_validator import AbstractNetworkValidator
 
 
@@ -35,12 +33,12 @@ class ParametersSchemaNetworkValidator(AbstractNetworkValidator):
 
     Validation is split into two phases:
 
-    Phase 1 — **Pydantic conversion**: attempts the same
-    BaseModelDictionaryConverter pipeline that runs at tool-creation time.
-    Any type string, structural issue, or recursion problem that would
-    crash the runtime is caught here.
+    Phase 1 — **Schema conversion** (optional): delegates to an injected
+    SchemaConversionValidator (e.g. pydantic) to catch type strings,
+    structural issues, or recursion problems that would crash at runtime.
+    Skipped when no SchemaConversionValidator is provided.
 
-    Phase 2 — **Custom semantic checks** that pydantic cannot detect:
+    Phase 2 — **Custom semantic checks** that schema conversion cannot detect:
       * A nested 'parameters' key (the headline bug from studio#690).
       * ``required`` entries that reference undefined properties.
 
@@ -53,14 +51,21 @@ class ParametersSchemaNetworkValidator(AbstractNetworkValidator):
     # object() is identity-safe — cannot collide with any real config value.
     _EXPLICIT_NULL: Any = object()
 
-    def __init__(self, network_name: str = None):
+    def __init__(self, network_name: str = None,
+                 schema_validator: SchemaConversionValidator = None):
         """
         Constructor
 
         :param network_name: The agent network name for diagnostic log lines
+        :param schema_validator: Optional SchemaConversionValidator for
+            Phase 1 structural validation.  Injected by ManifestNetworkValidator
+            so the validation layer does not depend on the run_context layer.
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.network_name: str = network_name
+        self.schema_validator: SchemaConversionValidator = schema_validator
+
+    # --- Override ---
 
     # Overrides AbstractNetworkValidator.validate_name_to_spec_dict
     def validate_name_to_spec_dict(self, name_to_spec: Dict[str, Any]) -> List[str]:
@@ -91,8 +96,10 @@ class ParametersSchemaNetworkValidator(AbstractNetworkValidator):
                 )
                 continue
 
-            # Phase 1: Pydantic structural validation (types, recursion)
-            errors.extend(self._try_pydantic_conversion(display_name, params))
+            # Phase 1: Structural validation via injected converter
+            if self.schema_validator is not None:
+                for msg in self.schema_validator.try_convert(params):
+                    errors.append(f"{display_name}: {msg}")
 
             # Phase 2: Custom neuro-san-specific checks
             for nested_path in self._find_nested_parameters_keys(params):
@@ -104,6 +111,8 @@ class ParametersSchemaNetworkValidator(AbstractNetworkValidator):
             errors.extend(self._check_required_refs(display_name, params))
 
         return errors
+
+    # --- Private helpers (not overrides) ---
 
     @staticmethod
     def _resolve_agent_name(agent_name: Optional[str], agent_spec: Any) -> str:
@@ -146,64 +155,6 @@ class ParametersSchemaNetworkValidator(AbstractNetworkValidator):
             value = agent_spec.get("parameters")
             return cls._EXPLICIT_NULL if value is None else value
         return None
-
-    @classmethod
-    def _try_pydantic_conversion(cls, agent_name: str,
-                                 params: Dict[str, Any]) -> List[str]:
-        """
-        Attempt the same pydantic conversion that runs at tool-creation
-        time (BaseModelDictionaryConverter.from_dict). If it crashes, the
-        schema would crash at runtime too.
-
-        :param agent_name: Display name for error messages
-        :param params: The parameters dict to validate
-        :return: A list of error messages (empty when conversion succeeds)
-        """
-        properties: Any = params.get("properties")
-        if not isinstance(properties, dict) or not properties:
-            # No properties to convert — valid for zero-arg functions and
-            # flat param maps. Pydantic expects properties.items(), so skip.
-            return []
-
-        sanitized: Dict[str, Any] = cls._sanitize_for_pydantic(params)
-        try:
-            converter = BaseModelDictionaryConverter("parameters")
-            converter.from_dict(sanitized)
-        except Exception as exc:  # pylint: disable=broad-exception-caught
-            # Broad catch: from_dict() delegates to pydantic's create_model()
-            # and recursive type resolution, which can raise varied exceptions
-            # on malformed input. Report as a validation error rather than
-            # letting the validator crash.
-            detail: str = " ".join(str(exc).split())
-            return [f"{agent_name}: pydantic model conversion failed — {detail}"]
-        return []
-
-    @classmethod
-    def _sanitize_for_pydantic(cls, schema: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Return a deep copy of *schema* with string ``items`` references
-        replaced by a permissive dict.  The runtime pipeline resolves
-        these via DictionaryCommonDefsConfigFilter before pydantic ever
-        sees them, but the validator may run on raw unit-test dicts.
-        """
-        result: Dict[str, Any] = deepcopy(schema)
-        cls._replace_string_items(result)
-        return result
-
-    @classmethod
-    def _replace_string_items(cls, schema: Any) -> None:
-        """Recursively replace string ``items`` values with ``{type: string}``."""
-        if not isinstance(schema, dict):
-            return
-        items: Any = schema.get("items")
-        if isinstance(items, str):
-            schema["items"] = {"type": "string"}
-        elif isinstance(items, dict):
-            cls._replace_string_items(items)
-        properties: Any = schema.get("properties")
-        if isinstance(properties, dict):
-            for prop_schema in properties.values():
-                cls._replace_string_items(prop_schema)
 
     @staticmethod
     def _iter_subschemas(schema: Any, path: str):
