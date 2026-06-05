@@ -570,3 +570,65 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         :return: A new dictionary with the same values, but with sanitized keys.
         """
         return {self.strip_outer_quotes(k): v for k, v in d.items()}
+
+    def create_llm_with_fallbacks(self, config: Dict[str, Any],
+                                  sly_data: Dict[str, Any] = None) -> LangChainLlmResources | Set[str]:
+        """
+        :param config: A dictionary which describes which LLM to use, perhaps with fallbacks specified.
+        :param sly_data: A user-provided dictionary of private data,
+                from which we might extract API keys to use for user billing.
+                Can be None indicating no API keys are provided at all and the system defaults will be used.
+        :return: A LangChainLlmResources instance or a set or error strings if no valid
+                llm was found.  If there were valid and useable fallbacks specified,
+                those will be set up as fallbacks for the model.
+        """
+        # Prepare a list of fallbacks.  By default, the llm_config itself is a single-entry fallback list.
+        fallbacks: List[Dict[str, Any]] = [config]
+        fallbacks = config.get("fallbacks", fallbacks)
+
+        # Initialize a list of chain fallbacks. This may or may not get filled.
+        main_llm_resources: LangChainLlmResources = None
+        fallback_llm_resources: List[LangChainLlmResources] = []
+        required_llm_config: Set[str] = set()
+
+        # Go through the list of fallbacks in the config.
+        construction_errors: List[str] = []
+        for fallback in fallbacks:
+
+            # Create a model we might use.
+            # If construction fails (e.g. missing API key in env), record the error and
+            # try the next fallback rather than aborting the whole loop.
+            one_llm_resources: LangChainLlmResources | Set[str] = None
+            try:
+                one_llm_resources = self.create_llm(fallback, sly_data)
+            except ValueError as exception:
+                construction_errors.append(str(exception))
+                continue
+
+            if one_llm_resources is None:
+                # Nothing to use or report.
+                # Skip for now, a fallback might still be fulfilled.
+                continue
+
+            if isinstance(one_llm_resources, set):
+                # Report later on which required llm_config are missing
+                # Skip for now, a fallback might still be fulfilled.
+                required_llm_config.update(one_llm_resources)
+                continue
+
+            if main_llm_resources is None:
+                # The first fully-specified llm is the one we want to be our main guy.
+                main_llm_resources = one_llm_resources
+            else:
+                # Anything later than the first guy is considered a fallback. Add it to the list.
+                fallback_llm_resources.append(one_llm_resources)
+
+        if main_llm_resources is None:
+            return required_llm_config.update(construction_errors)
+
+        if len(fallback_llm_resources) > 0:
+            # Set up fallbacks.
+            # See https://python.langchain.com/docs/how_to/tools_error/#tryexcept-tool-call
+            main_llm_resources.add_fallback_resources(fallback_llm_resources)
+
+        return main_llm_resources

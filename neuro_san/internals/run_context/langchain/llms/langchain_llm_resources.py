@@ -14,6 +14,9 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from __future__ import annotations
+
+from typing import List
 
 from langchain_core.language_models.base import BaseLanguageModel
 
@@ -35,6 +38,7 @@ class LangChainLlmResources(LingeringResource):
         """
         self.model: BaseLanguageModel = model
         self.llm_policy: LlmPolicy = llm_policy
+        self.child_resources: List[LingeringResource] = []
 
     def get_model(self) -> BaseLanguageModel:
         """
@@ -48,6 +52,27 @@ class LangChainLlmResources(LingeringResource):
         """
         return self.llm_policy
 
+    def add_fallback_resources(self, llm_resources: List[LangChainLlmResources]):
+        """
+        Add a child resource to this one.
+        :param llm_resources: a list of child LlmResources to use as fallbacks (in order)
+        """
+        if llm_resources is None or not isinstance(llm_resources, List):
+            return
+
+        if len(llm_resources) == 0:
+            return
+
+        # Add the child resources we need to clean up
+        self.child_resources.append(llm_resources)
+
+        # Add the fallback models
+        if self.model:
+            fallback_models: List[BaseLanguageModel] = []
+            for one_resource in llm_resources:
+                fallback_models.append(one_resource.get_model())
+            self.model = self.model.with_fallbacks(fallback_models)
+
     async def close_of_work(self, parent_resource: LingeringResource = None):
         """
         Release resources owned by this context when the work is all done.
@@ -60,3 +85,7 @@ class LangChainLlmResources(LingeringResource):
         # so we are not going there to preserve backwards compatibility.
         if self.llm_policy is not None:
             await self.llm_policy.delete_resources()
+
+        # Close any child resources
+        for child_resource in self.child_resources:
+            await child_resource.close_of_work(self)
