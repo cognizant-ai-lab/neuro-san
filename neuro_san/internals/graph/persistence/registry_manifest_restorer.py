@@ -46,6 +46,8 @@ from neuro_san.internals.run_context.langchain.core.pydantic_schema_conversion_v
     PydanticSchemaConversionValidator
 from neuro_san.internals.validation.network.manifest_network_validator import ManifestNetworkValidator
 
+_SCHEMA_VALIDATOR = PydanticSchemaConversionValidator()
+
 
 class RegistryManifestRestorer(Restorer):
     """
@@ -174,7 +176,7 @@ class RegistryManifestRestorer(Restorer):
             validator = ManifestNetworkValidator(
                 external_network_names,
                 network_name=network_name,
-                schema_validator=PydanticSchemaConversionValidator())
+                schema_validator=_SCHEMA_VALIDATOR)
             agent_network: AgentNetwork = None
             if usable_network:
                 agent_network = self.restore_one_agent_network(manifest_dir, agent_filepath, manifest_key)
@@ -219,7 +221,7 @@ class RegistryManifestRestorer(Restorer):
             validator = ManifestNetworkValidator(
                 external_network_names,
                 network_name=network_name,
-                schema_validator=PydanticSchemaConversionValidator())
+                schema_validator=_SCHEMA_VALIDATOR)
             agent_network: AgentNetwork = None
             if usable_network:
                 agent_network = await self.async_restore_one_agent_network(manifest_dir, agent_filepath, manifest_key)
