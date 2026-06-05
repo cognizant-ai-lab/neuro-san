@@ -120,7 +120,7 @@ flag to your invocation.
         invocation_context: InvocationContext = self.parent_run_context.get_invocation_context()
         llm_factory: ContextTypeLlmFactory = invocation_context.get_llm_factory()
 
-        llm_resources = llm_factory.create_llm(llm_config, sly_data)
+        llm_resources = llm_factory.create_llm_with_fallbacks(llm_config, sly_data)
         if llm_resources is None:
             raise ValueError("Unable to create LLM from llm_config (missing required configuration and/or sly_data).")
         if isinstance(llm_resources, set):

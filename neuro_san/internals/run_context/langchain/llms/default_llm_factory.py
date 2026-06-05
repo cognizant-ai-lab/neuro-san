@@ -624,6 +624,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 fallback_llm_resources.append(one_llm_resources)
 
         if main_llm_resources is None:
+            # Return all errors
             return required_llm_config.update(construction_errors)
 
         if len(fallback_llm_resources) > 0:

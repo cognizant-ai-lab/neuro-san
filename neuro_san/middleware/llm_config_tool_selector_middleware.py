@@ -73,13 +73,5 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
         if llm_config is None:
             raise ValueError("llm_config is required")
 
-        use_llm_config: Dict[str, Any] = llm_config
-
-        # The basis class does not support fallbacks, but allow for the spec to have them.
-        # Just take the first one.
-        fallbacks: List[Dict[str, Any]] = llm_config.get("fallbacks")
-        if isinstance(fallbacks, list) and len(fallbacks) > 0:
-            use_llm_config = fallbacks[0]
-
-        model: BaseChatModel = activation_capsule.create_chat_model(use_llm_config, sly_data)
+        model: BaseChatModel = activation_capsule.create_chat_model(llm_config, sly_data)
         super().__init__(model=model, system_prompt=system_prompt, max_tools=max_tools, always_include=always_include)
