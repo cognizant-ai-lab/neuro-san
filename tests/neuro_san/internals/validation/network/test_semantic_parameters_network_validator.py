@@ -57,7 +57,7 @@ class TestSemanticParametersNetworkValidator(TestCase, AbstractNetworkValidatorT
     @staticmethod
     def _restore_fixture(filename: str) -> Dict[str, Any]:
         """
-        Load a HOCON fixture from tests/fixtures/parameters_shape/.
+        Load a HOCON fixture from tests/fixtures/semantic_parameters/.
         Runs through the same AgentNetworkRestorer filter chain
         (commondefs, defaults, name-correction) that production
         configs see, so test data mirrors real behaviour.
