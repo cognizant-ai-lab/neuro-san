@@ -636,8 +636,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         if main_llm_resources is None:
             # Return all errors
-            return required_llm_config.update(construction_errors)
-
+            return required_llm_config.union(construction_errors)
         if len(fallback_llm_resources) > 0:
             # Set up fallbacks.
             # See https://python.langchain.com/docs/how_to/tools_error/#tryexcept-tool-call

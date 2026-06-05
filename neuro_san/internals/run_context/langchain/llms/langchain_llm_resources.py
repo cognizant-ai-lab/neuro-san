@@ -62,15 +62,14 @@ class LangChainLlmResources(LingeringResource):
         Add a child resource to this one.
         :param llm_resources: a list of child LlmResources to use as fallbacks (in order)
         """
-        if llm_resources is None or not isinstance(llm_resources, List):
+        if llm_resources is None or not isinstance(llm_resources, list):
             return
 
         if len(llm_resources) == 0:
             return
 
         # Add the child resources we need to clean up
-        self.child_resources.append(llm_resources)
-
+        self.child_resources.extend(llm_resources)
         # Add the fallback models
         if self.model:
             fallback_models: List[BaseLanguageModel] = []
