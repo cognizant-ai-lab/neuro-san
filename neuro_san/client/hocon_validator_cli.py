@@ -34,8 +34,6 @@ from neuro_san.internals.run_context.langchain.core.pydantic_schema_conversion_v
     PydanticSchemaConversionValidator
 from neuro_san.internals.validation.network.manifest_network_validator import ManifestNetworkValidator
 
-_SCHEMA_VALIDATOR = PydanticSchemaConversionValidator()
-
 
 class HoconValidatorCli:
     """
@@ -230,7 +228,7 @@ Examples:
         network_name: str = os.path.basename(self.args.hocon_file)
         return ManifestNetworkValidator(external_agents, mcp_servers,
                                         network_name=network_name,
-                                        schema_validator=_SCHEMA_VALIDATOR)
+                                        schema_validator=PydanticSchemaConversionValidator())
 
     def print_network_summary(self, config: Dict[str, Any]):
         """

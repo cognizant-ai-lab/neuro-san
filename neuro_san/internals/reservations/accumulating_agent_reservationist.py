@@ -29,8 +29,6 @@ from neuro_san.internals.run_context.langchain.core.pydantic_schema_conversion_v
     PydanticSchemaConversionValidator
 from neuro_san.internals.validation.network.manifest_network_validator import ManifestNetworkValidator
 
-_SCHEMA_VALIDATOR = PydanticSchemaConversionValidator()
-
 
 class AccumulatingAgentReservationist(Reservationist):
     """
@@ -146,7 +144,7 @@ class AccumulatingAgentReservationist(Reservationist):
                 external_network_names=self._external_networks,
                 mcp_servers=self._mcp_servers,
                 network_name=key,
-                schema_validator=_SCHEMA_VALIDATOR)
+                schema_validator=PydanticSchemaConversionValidator())
             new_errors: List[str] = validator.validate(agent_network_spec)
             if new_errors is not None and len(new_errors) > 0:
                 # There were errors. Report all at once
