@@ -121,6 +121,7 @@ If there are any requirements that need user input, ask them one at a time, with
                         "activation_capsule": true,
                         "llm_config": {
                             "fallbacks": [
+                                # Add more here to test fallbacks
                                 { "model_name": "gpt-5.2" },
                             ]
                         },

@@ -21,7 +21,7 @@ from typing import List
 from langchain.agents.middleware import LLMToolSelectorMiddleware
 from langchain.agents.middleware.tool_selection import DEFAULT_SYSTEM_PROMPT
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.runnables.base import Runnable
+from langchain_core.runnables.base import RunnableSerializable
 from langchain_core.runnables.fallbacks import RunnableWithFallbacks
 
 from neuro_san.internals.run_context.utils.activation_capsule import ActivationCapsule
@@ -72,7 +72,7 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
         if llm_config is None:
             raise ValueError("llm_config is required")
 
-        my_model: Runnable = activation_capsule.create_chat_model(llm_config, sly_data)
+        my_model: RunnableSerializable = activation_capsule.create_chat_model(llm_config, sly_data)
 
         # The basis for this class is the langchain implementation of LLMToolSelectorMiddleware
         # and it does not take Runnables as args, but it really does seem to function with

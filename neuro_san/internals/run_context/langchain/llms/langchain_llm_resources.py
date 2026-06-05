@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import List
 
 from langchain_core.language_models.base import BaseLanguageModel
+from langchain_core.runnables.base import RunnableSerializable
 
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
@@ -40,9 +41,13 @@ class LangChainLlmResources(LingeringResource):
         self.llm_policy: LlmPolicy = llm_policy
         self.child_resources: List[LingeringResource] = []
 
-    def get_model(self) -> BaseLanguageModel:
+    def get_model(self) -> RunnableSerializable:
         """
-        :return: the BaseLanguageModel
+        :return: Effectively this is the BaseLanguageModel to use.
+                 Most of the time this is the model that was passed into the constructor,
+                 however if add_fallback_resources() is employed, this can become a
+                 a composite RunnableWithFallbacks.  The common ancestor of both
+                 BaseLanguageModel and RunnableWithFallbacks is RunnableSerializable.
         """
         return self.model
 
