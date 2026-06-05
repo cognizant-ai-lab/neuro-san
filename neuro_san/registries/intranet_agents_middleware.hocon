@@ -120,7 +120,11 @@ If there are any requirements that need user input, ask them one at a time, with
                     "args": {
                         "activation_capsule": true,
                         "llm_config": {
-                            "model_name": "gpt-5.2"
+                            "fallbacks": [
+                                # Add the line below to test fallbacks
+                                # { "model_name": "gpt-4" },
+                                { "model_name": "gpt-5.2" }
+                            ]
                         },
                         "sly_data": true,
                         # "system_prompt": "<your_system_prompt_here>",
