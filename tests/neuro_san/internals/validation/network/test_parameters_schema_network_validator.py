@@ -217,26 +217,15 @@ class TestParametersSchemaNetworkValidator(TestCase, AbstractNetworkValidatorTes
 
     def test_unresolved_string_items_sanitized_before_pydantic(self):
         """
-        When a commondef is missing or the validator is called directly
-        (outside the AgentNetworkRestorer pipeline), array ``items`` may
-        be an unresolved string reference like ``"cao_item"`` instead of
-        a dict.  PydanticSchemaConversionValidator._sanitize_for_pydantic
-        replaces these with a permissive dict so pydantic does not crash.
+        When a commondef is missing, the string ``items`` reference stays
+        unresolved after the restorer pipeline.  The sanitizer must replace
+        it with a permissive dict before pydantic sees it, or from_dict()
+        would crash.
         """
-        schema: Dict[str, Any] = {
-            "type": "object",
-            "properties": {
-                "entries": {
-                    "type": "array",
-                    "items": "cao_item",
-                    "description": "unresolved commondef reference",
-                },
-            },
-            "required": ["entries"],
-        }
-        converter = PydanticSchemaConversionValidator()
-        errors: List[str] = converter.try_convert(schema)
-        self.assertEqual(errors, [])
+        config: Dict[str, Any] = self._restore_fixture(
+            "unresolved_string_items.hocon",
+        )
+        self.assertEqual(self.validator.validate(config), [])
 
     def test_bad_parameters(self):
         """
