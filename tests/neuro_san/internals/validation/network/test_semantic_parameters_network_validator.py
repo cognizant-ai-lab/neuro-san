@@ -39,7 +39,7 @@ class TestSemanticParametersNetworkValidator(TestCase, AbstractNetworkValidatorT
     about: nested 'parameters' keys and undefined required references.
     """
 
-    _FIXTURE_DIR: Path = Path(__file__).resolve().parents[4] / "fixtures" / "parameters_shape"
+    _FIXTURE_DIR: Path = Path(__file__).resolve().parents[4] / "fixtures" / "semantic_parameters"
 
     def setUp(self):
         self.validator = SemanticParametersNetworkValidator(

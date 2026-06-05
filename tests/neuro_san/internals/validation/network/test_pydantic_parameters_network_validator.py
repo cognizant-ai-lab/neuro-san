@@ -38,7 +38,7 @@ class TestPydanticParametersNetworkValidator(TestCase, AbstractNetworkValidatorT
     structures, and structural issues in parameters blocks.
     """
 
-    _FIXTURE_DIR: Path = Path(__file__).resolve().parents[4] / "fixtures" / "parameters_shape"
+    _FIXTURE_DIR: Path = Path(__file__).resolve().parents[4] / "fixtures" / "pydantic_parameters"
 
     def setUp(self):
         self.validator = PydanticParametersNetworkValidator(
