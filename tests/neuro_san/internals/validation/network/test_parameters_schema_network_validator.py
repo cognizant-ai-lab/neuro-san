@@ -25,15 +25,15 @@ from unittest import TestCase
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
-from neuro_san.internals.validation.network.parameters_shape_network_validator import \
-    ParametersShapeNetworkValidator
+from neuro_san.internals.validation.network.parameters_schema_network_validator import \
+    ParametersSchemaNetworkValidator
 
 from tests.neuro_san.internals.validation.network.abstract_network_validator_test import AbstractNetworkValidatorTest
 
 
-class TestParametersShapeNetworkValidator(TestCase, AbstractNetworkValidatorTest):
+class TestParametersSchemaNetworkValidator(TestCase, AbstractNetworkValidatorTest):
     """
-    Unit tests for ParametersShapeNetworkValidator.
+    Unit tests for ParametersSchemaNetworkValidator.
 
     Most test cases live in HOCON fixture files under
     tests/fixtures/parameters_shape/ so that test data is easy to read,
@@ -43,13 +43,13 @@ class TestParametersShapeNetworkValidator(TestCase, AbstractNetworkValidatorTest
     _FIXTURE_DIR: Path = Path(__file__).resolve().parents[4] / "fixtures" / "parameters_shape"
 
     def setUp(self):
-        self.validator = ParametersShapeNetworkValidator()
+        self.validator = ParametersSchemaNetworkValidator(network_name="test_network")
 
     def create_validator(self) -> DictionaryValidator:
         """
         Creates an instance of the validator
         """
-        return ParametersShapeNetworkValidator()
+        return ParametersSchemaNetworkValidator(network_name="test_network")
 
     @staticmethod
     def _restore_fixture(filename: str) -> Dict[str, Any]:
@@ -59,7 +59,7 @@ class TestParametersShapeNetworkValidator(TestCase, AbstractNetworkValidatorTest
         (commondefs, defaults, name-correction) that production
         configs see, so test data mirrors real behaviour.
         """
-        hocon_file: str = str(TestParametersShapeNetworkValidator._FIXTURE_DIR / filename)
+        hocon_file: str = str(TestParametersSchemaNetworkValidator._FIXTURE_DIR / filename)
         restorer = AgentNetworkRestorer()
         agent_network: AgentNetwork = restorer.restore(file_reference=hocon_file)
         config: Dict[str, Any] = agent_network.get_config()

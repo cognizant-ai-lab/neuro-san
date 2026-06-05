@@ -28,7 +28,7 @@ from neuro_san.internals.run_context.langchain.core.base_model_dictionary_conver
 from neuro_san.internals.validation.network.abstract_network_validator import AbstractNetworkValidator
 
 
-class ParametersShapeNetworkValidator(AbstractNetworkValidator):
+class ParametersSchemaNetworkValidator(AbstractNetworkValidator):
     """
     AbstractNetworkValidator that checks the shape of each tool's
     function.parameters (or top-level parameters) block.
@@ -103,9 +103,6 @@ class ParametersShapeNetworkValidator(AbstractNetworkValidator):
                 )
             errors.extend(self._check_required_refs(display_name, params))
 
-        if len(errors) > 0:
-            self.logger.warning(str(errors))
-
         return errors
 
     @staticmethod
@@ -172,8 +169,11 @@ class ParametersShapeNetworkValidator(AbstractNetworkValidator):
         try:
             converter = BaseModelDictionaryConverter("parameters")
             converter.from_dict(sanitized)
-        except (AttributeError, KeyError, TypeError, ValueError,
-                RuntimeError) as exc:
+        except Exception as exc:
+            # Broad catch: from_dict() delegates to pydantic's create_model()
+            # and recursive type resolution, which can raise varied exceptions
+            # on malformed input. Report as a validation error rather than
+            # letting the validator crash.
             detail: str = " ".join(str(exc).split())
             return [f"{agent_name}: pydantic model conversion failed — {detail}"]
         return []
