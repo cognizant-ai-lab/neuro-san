@@ -15,6 +15,8 @@
 #
 # END COPYRIGHT
 
+from typing import List
+
 from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
 from neuro_san.internals.validation.common.composite_dictionary_validator import CompositeDictionaryValidator
 from neuro_san.internals.validation.network.pydantic_parameters_network_validator import \
@@ -42,7 +44,7 @@ class ParametersSchemaNetworkValidator(CompositeDictionaryValidator):
 
         :param network_name: The agent network name for diagnostic log lines
         """
-        validators: list[DictionaryValidator] = [
+        validators: List[DictionaryValidator] = [
             PydanticParametersNetworkValidator(network_name=network_name),
             SemanticParametersNetworkValidator(network_name=network_name),
         ]
