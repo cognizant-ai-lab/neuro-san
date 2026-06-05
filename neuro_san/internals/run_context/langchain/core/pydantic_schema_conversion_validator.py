@@ -54,12 +54,14 @@ class PydanticSchemaConversionValidator(SchemaConversionValidator):
         try:
             converter = BaseModelDictionaryConverter("parameters")
             converter.from_dict(sanitized)
-        except Exception as exc:  # pylint: disable=broad-exception-caught
-            # Broad catch: from_dict() delegates to pydantic's create_model()
-            # and recursive type resolution, which can raise varied exceptions
-            # on malformed input. Report as a validation error rather than
-            # letting the validator crash.
+        except (AttributeError, KeyError, TypeError, ValueError) as exc:
             detail: str = " ".join(str(exc).split())
+            return [f"pydantic model conversion failed — {detail}"]
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            # from_dict() delegates to pydantic's create_model() and
+            # recursive type resolution, which can raise unexpected
+            # exception types on severely malformed input.
+            detail = " ".join(str(exc).split())
             return [f"pydantic model conversion failed — {detail}"]
         return []
 

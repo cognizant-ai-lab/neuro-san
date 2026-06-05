@@ -17,8 +17,7 @@
 from typing import List
 
 from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
-from neuro_san.internals.run_context.langchain.core.pydantic_schema_conversion_validator import \
-    PydanticSchemaConversionValidator
+from neuro_san.internals.interfaces.schema_conversion_validator import SchemaConversionValidator
 from neuro_san.internals.validation.common.composite_dictionary_validator import CompositeDictionaryValidator
 from neuro_san.internals.validation.network.keyword_network_validator import KeywordNetworkValidator
 from neuro_san.internals.validation.network.missing_nodes_network_validator import MissingNodesNetworkValidator
@@ -37,13 +36,17 @@ class ManifestNetworkValidator(CompositeDictionaryValidator):
     """
 
     def __init__(self, external_network_names: List[str] = None, mcp_servers: List[str] = None,
-                 network_name: str = None):
+                 network_name: str = None,
+                 schema_validator: SchemaConversionValidator = None):
         """
         Constructor
 
         :param external_network_names: A list of external network names
         :param mcp_servers: A list of MCP servers, as read in from a mcp_info.hocon file
         :param network_name: The agent network name for diagnostic log lines
+        :param schema_validator: Optional SchemaConversionValidator for
+            structural validation of parameters schemas.  Injected by
+            callers so the validation package stays runtime-agnostic.
         """
         validators: List[DictionaryValidator] = [
             # Note we do use the CyclesNetworkValidator here because cycles are actually OK.
@@ -55,7 +58,7 @@ class ManifestNetworkValidator(CompositeDictionaryValidator):
             ToolNameNetworkValidator(),
             ParametersSchemaNetworkValidator(
                 network_name=network_name,
-                schema_validator=PydanticSchemaConversionValidator(),
+                schema_validator=schema_validator,
             ),
             UrlNetworkValidator(external_network_names, mcp_servers,
                                 network_name=network_name),
