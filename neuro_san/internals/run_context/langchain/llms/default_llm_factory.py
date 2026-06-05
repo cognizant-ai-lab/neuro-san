@@ -572,12 +572,14 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         return {self.strip_outer_quotes(k): v for k, v in d.items()}
 
     def create_llm_with_fallbacks(self, config: Dict[str, Any],
-                                  sly_data: Dict[str, Any] = None) -> LangChainLlmResources | Set[str]:
+                                  sly_data: Dict[str, Any] = None,
+                                  num_fallbacks: int = None) -> LangChainLlmResources | Set[str]:
         """
         :param config: A dictionary which describes which LLM to use, perhaps with fallbacks specified.
         :param sly_data: A user-provided dictionary of private data,
                 from which we might extract API keys to use for user billing.
                 Can be None indicating no API keys are provided at all and the system defaults will be used.
+        :param num_fallbacks: The number of fallbacks to try. Default value of None implies all.
         :return: A LangChainLlmResources instance or a set or error strings if no valid
                 llm was found.  If there were valid and useable fallbacks specified,
                 those will be set up as fallbacks for the model.
@@ -590,6 +592,15 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         main_llm_resources: LangChainLlmResources = None
         fallback_llm_resources: List[LangChainLlmResources] = []
         required_llm_config: Set[str] = set()
+
+        # Trim the list of fallbacks.
+        if num_fallbacks is not None:
+            if num_fallbacks < 0:
+                # Take it from the end
+                fallbacks = fallbacks[num_fallbacks:]
+            else:
+                # Take it from the beginning
+                fallbacks = fallbacks[:num_fallbacks]
 
         # Go through the list of fallbacks in the config.
         construction_errors: List[str] = []

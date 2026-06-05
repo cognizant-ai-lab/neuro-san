@@ -110,17 +110,18 @@ flag to your invocation.
         # We got a message back, take the content as the return string
         return message.content
 
-    def create_chat_model(self, llm_config: Dict[str, Any], sly_data: Dict[str, Any]) -> Any:
+    def create_chat_model(self, llm_config: Dict[str, Any], sly_data: Dict[str, Any], num_fallbacks: int = None) -> Any:
         """
         :param llm_config: The llm config dictionary
         :param sly_data: The private sly_data dictionary. This is needed for bring-your-own-key scenarios.
+        :param num_fallbacks: The number of fallbacks to try. Default value of None implies all.
         :return: The llm model to use given the context type (usually langchain)
         """
 
         invocation_context: InvocationContext = self.parent_run_context.get_invocation_context()
         llm_factory: ContextTypeLlmFactory = invocation_context.get_llm_factory()
 
-        llm_resources = llm_factory.create_llm_with_fallbacks(llm_config, sly_data)
+        llm_resources = llm_factory.create_llm_with_fallbacks(llm_config, sly_data, num_fallbacks)
         if llm_resources is None:
             raise ValueError("Unable to create LLM from llm_config (missing required configuration and/or sly_data).")
         if isinstance(llm_resources, set):

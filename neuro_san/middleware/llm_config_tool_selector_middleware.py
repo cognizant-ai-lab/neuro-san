@@ -33,6 +33,10 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
     and which can be flattened. But note that these improvements come at a cost of flexibility
     in federation and less complete answers.  Completeness in answers will depend much more on
     the descriptions of the leaf agents.
+
+    Note: The basis for this class is the langchain implementation of LLMToolSelectorMiddleware
+          and it does not take fallbacks, so we only use the first fallback in the list if
+          more than one is specified.
     """
 
     # pylint: disable=too-many-arguments
@@ -70,5 +74,5 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
         if llm_config is None:
             raise ValueError("llm_config is required")
 
-        model: BaseChatModel = activation_capsule.create_chat_model(llm_config, sly_data)
+        model: BaseChatModel = activation_capsule.create_chat_model(llm_config, sly_data, num_fallbacks=1)
         super().__init__(model=model, system_prompt=system_prompt, max_tools=max_tools, always_include=always_include)
