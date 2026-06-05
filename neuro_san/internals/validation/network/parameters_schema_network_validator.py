@@ -33,12 +33,12 @@ class ParametersSchemaNetworkValidator(AbstractNetworkValidator):
 
     Validation is split into two phases:
 
-    Phase 1 — **Schema conversion** (optional): delegates to an injected
+    Phase 1 - **Schema conversion** (optional): delegates to an injected
     SchemaConversionValidator (e.g. pydantic) to catch type strings,
     structural issues, or recursion problems that would crash at runtime.
     Skipped when no SchemaConversionValidator is provided.
 
-    Phase 2 — **Custom semantic checks** that schema conversion cannot detect:
+    Phase 2 - **Custom semantic checks** that schema conversion cannot detect:
       * A nested 'parameters' key (the headline bug from studio#690).
       * ``required`` entries that reference undefined properties.
 
@@ -48,7 +48,7 @@ class ParametersSchemaNetworkValidator(AbstractNetworkValidator):
 
     # Sentinel returned by _locate_parameters meaning "the key is present but
     # explicitly null". The caller flags this rather than silently skipping.
-    # object() is identity-safe — cannot collide with any real config value.
+    # object() is identity-safe - cannot collide with any real config value.
     _EXPLICIT_NULL: Any = object()
 
     def __init__(self, network_name: str = None,
@@ -82,11 +82,11 @@ class ParametersSchemaNetworkValidator(AbstractNetworkValidator):
             params: Any = self._locate_parameters(agent_spec)
 
             if params is None:
-                # No parameters block at all — nothing to validate.
+                # No parameters block at all - nothing to validate.
                 continue
             if params is self._EXPLICIT_NULL:
                 errors.append(
-                    f"{display_name}: 'parameters' is null — use {{}} or remove the key"
+                    f"{display_name}: 'parameters' is null - use {{}} or remove the key"
                 )
                 continue
             if not isinstance(params, dict):
@@ -105,7 +105,7 @@ class ParametersSchemaNetworkValidator(AbstractNetworkValidator):
             for nested_path in self._find_nested_parameters_keys(params):
                 errors.append(
                     f"{display_name}: '{nested_path}' contains a nested "
-                    f"'parameters' key — move the inner 'properties' "
+                    f"'parameters' key - move the inner 'properties' "
                     f"and 'required' up one level"
                 )
             errors.extend(self._check_required_refs(display_name, params))
@@ -120,7 +120,7 @@ class ParametersSchemaNetworkValidator(AbstractNetworkValidator):
         AbstractNetworkValidator.get_name_to_spec keys agents by
         agent_spec.get("name"), which yields None when an agent only sets
         function.name. Fall back to function.name so the error message
-        identifies the right tool — otherwise the user sees "None: ..." in
+        identifies the right tool - otherwise the user sees "None: ..." in
         the welcome-replacement message and cannot tell which agent broke.
         """
         if agent_name:
@@ -213,7 +213,7 @@ class ParametersSchemaNetworkValidator(AbstractNetworkValidator):
         """
         Walk a JSON-schema-like tree, returning every dotted path whose dict
         contains a 'parameters' key. Does not recurse into the 'parameters'
-        value itself — once we've flagged a site as malformed, we leave the
+        value itself - once we've flagged a site as malformed, we leave the
         inner contents alone (fixing the outer occurrence likely fixes the
         inner ones, and reporting both would be noisy).
         """

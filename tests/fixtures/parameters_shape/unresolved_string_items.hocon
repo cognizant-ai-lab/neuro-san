@@ -15,11 +15,10 @@
 #
 # END COPYRIGHT
 
-# Exercises PydanticSchemaConversionValidator._sanitize_for_pydantic:
-# "items" is a string commondef reference with no commondefs section,
-# so DictionaryCommonDefsConfigFilter leaves it unresolved.
-# The sanitizer must replace the string with a permissive dict
-# before pydantic sees it, or from_dict() would crash.
+# Valid: String "items" commondef reference with no commondefs section.
+# DictionaryCommonDefsConfigFilter leaves the reference unresolved.
+# The sanitizer replaces the string with a permissive dict before
+# pydantic sees it, so from_dict() does not crash.
 # Expected result: 0 errors.
 {
     "tools": [

@@ -46,7 +46,7 @@ class PydanticSchemaConversionValidator(SchemaConversionValidator):
         """
         properties: Any = params.get("properties")
         if not isinstance(properties, dict) or not properties:
-            # No properties to convert — valid for zero-arg functions and
+            # No properties to convert - valid for zero-arg functions and
             # flat param maps. Pydantic expects properties.items(), so skip.
             return []
 
@@ -56,13 +56,13 @@ class PydanticSchemaConversionValidator(SchemaConversionValidator):
             converter.from_dict(sanitized)
         except (AttributeError, KeyError, TypeError, ValueError) as exc:
             detail: str = " ".join(str(exc).split())
-            return [f"pydantic model conversion failed — {detail}"]
+            return [f"pydantic model conversion failed - {detail}"]
         except Exception as exc:  # pylint: disable=broad-exception-caught
             # from_dict() delegates to pydantic's create_model() and
             # recursive type resolution, which can raise unexpected
             # exception types on severely malformed input.
             detail = " ".join(str(exc).split())
-            return [f"pydantic model conversion failed — {detail}"]
+            return [f"pydantic model conversion failed - {detail}"]
         return []
 
     # --- Private helpers ---
