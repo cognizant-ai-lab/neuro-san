@@ -21,6 +21,8 @@ from typing import List
 from langchain.agents.middleware import LLMToolSelectorMiddleware
 from langchain.agents.middleware.tool_selection import DEFAULT_SYSTEM_PROMPT
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.runnables.base import Runnable
+from langchain_core.runnables.fallbacks import RunnableWithFallbacks
 
 from neuro_san.internals.run_context.utils.activation_capsule import ActivationCapsule
 
@@ -33,10 +35,6 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
     and which can be flattened. But note that these improvements come at a cost of flexibility
     in federation and less complete answers.  Completeness in answers will depend much more on
     the descriptions of the leaf agents.
-
-    Note: The basis for this class is the langchain implementation of LLMToolSelectorMiddleware
-          and it does not take fallbacks, so we only use the first fallback in the list if
-          more than one is specified.
     """
 
     # pylint: disable=too-many-arguments
@@ -74,5 +72,23 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
         if llm_config is None:
             raise ValueError("llm_config is required")
 
-        model: BaseChatModel = activation_capsule.create_chat_model(llm_config, sly_data, num_fallbacks=1)
-        super().__init__(model=model, system_prompt=system_prompt, max_tools=max_tools, always_include=always_include)
+        my_model: Runnable = activation_capsule.create_chat_model(llm_config, sly_data)
+
+        # The basis for this class is the langchain implementation of LLMToolSelectorMiddleware
+        # and it does not take Runnables as args, but it really does seem to function with
+        # fallbacks, so we do some trickery.
+
+        # The langchain superclass expects a BaseChatModel instance
+        init_model: BaseChatModel = None
+        if isinstance(my_model, BaseChatModel):
+            init_model = my_model
+        elif isinstance(my_model, RunnableWithFallbacks):
+            # If we have a RunnableWithFallbacks, we need to get the underlying first model for init
+            init_model = my_model.runnable
+
+        # Go through superclass init
+        super().__init__(model=init_model, system_prompt=system_prompt, max_tools=max_tools,
+                         always_include=always_include)
+
+        # Now subvert the superclass model with our RunnableWithFallbacks.
+        self.model = my_model
