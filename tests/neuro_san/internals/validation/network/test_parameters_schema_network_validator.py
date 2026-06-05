@@ -215,6 +215,29 @@ class TestParametersSchemaNetworkValidator(TestCase, AbstractNetworkValidatorTes
         self.assertIn("agent_e", errors[0])
         self.assertIn("pydantic model conversion failed", errors[0])
 
+    def test_unresolved_string_items_sanitized_before_pydantic(self):
+        """
+        When a commondef is missing or the validator is called directly
+        (outside the AgentNetworkRestorer pipeline), array ``items`` may
+        be an unresolved string reference like ``"cao_item"`` instead of
+        a dict.  PydanticSchemaConversionValidator._sanitize_for_pydantic
+        replaces these with a permissive dict so pydantic does not crash.
+        """
+        schema: Dict[str, Any] = {
+            "type": "object",
+            "properties": {
+                "entries": {
+                    "type": "array",
+                    "items": "cao_item",
+                    "description": "unresolved commondef reference",
+                },
+            },
+            "required": ["entries"],
+        }
+        converter = PydanticSchemaConversionValidator()
+        errors: List[str] = converter.try_convert(schema)
+        self.assertEqual(errors, [])
+
     def test_bad_parameters(self):
         """
         Tests a network where at least one of the tools has a malformed
