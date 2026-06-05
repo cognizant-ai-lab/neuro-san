@@ -49,6 +49,7 @@ from neuro_san.service.watcher.main_loop.storage_watcher import StorageWatcher
 from neuro_san.service.watcher.temp_networks.temp_network_storage_updater import TempNetworkStorageUpdater
 from neuro_san.service.utils.server_status import ServerStatus
 from neuro_san.service.utils.server_context import ServerContext
+from neuro_san.service.utils.service_resources import ServiceResources
 
 
 # pylint: disable=too-many-instance-attributes
@@ -74,6 +75,8 @@ class ServerMainLoop:
         self.service_openapi_spec_file: str = self._get_default_openapi_spec_path()
         self.http_server: HttpServer = None
         self.server_context = ServerContext()
+        ServiceResources.set_server_context(self.server_context)
+
         self.http_server_config = HttpServerConfig()
         self.watcher_config: Dict[str, Any] = {}
         self.logging_config: Dict[str, Any] = {}
