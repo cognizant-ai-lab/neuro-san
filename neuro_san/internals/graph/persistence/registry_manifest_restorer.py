@@ -42,8 +42,6 @@ from neuro_san.internals.graph.persistence.served_manifest_config_filter import 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_name_mapper import AgentNameMapper
 from neuro_san.internals.interfaces.storage_class import StorageClass
-from neuro_san.internals.run_context.langchain.core.pydantic_schema_conversion_validator import \
-    PydanticSchemaConversionValidator
 from neuro_san.internals.validation.network.manifest_network_validator import ManifestNetworkValidator
 
 
@@ -173,8 +171,7 @@ class RegistryManifestRestorer(Restorer):
             network_name: str = self.agent_mapper.filepath_to_agent_network_name(agent_filepath)
             validator = ManifestNetworkValidator(
                 external_network_names,
-                network_name=network_name,
-                schema_validator=PydanticSchemaConversionValidator())
+                network_name=network_name)
             agent_network: AgentNetwork = None
             if usable_network:
                 agent_network = self.restore_one_agent_network(manifest_dir, agent_filepath, manifest_key)
@@ -218,8 +215,7 @@ class RegistryManifestRestorer(Restorer):
             network_name: str = self.agent_mapper.filepath_to_agent_network_name(agent_filepath)
             validator = ManifestNetworkValidator(
                 external_network_names,
-                network_name=network_name,
-                schema_validator=PydanticSchemaConversionValidator())
+                network_name=network_name)
             agent_network: AgentNetwork = None
             if usable_network:
                 agent_network = await self.async_restore_one_agent_network(manifest_dir, agent_filepath, manifest_key)

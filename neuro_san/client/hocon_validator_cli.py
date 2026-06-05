@@ -30,8 +30,6 @@ from pyparsing.exceptions import ParseSyntaxException
 
 from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
-from neuro_san.internals.run_context.langchain.core.pydantic_schema_conversion_validator import \
-    PydanticSchemaConversionValidator
 from neuro_san.internals.validation.network.manifest_network_validator import ManifestNetworkValidator
 
 
@@ -227,8 +225,7 @@ Examples:
 
         network_name: str = os.path.basename(self.args.hocon_file)
         return ManifestNetworkValidator(external_agents, mcp_servers,
-                                        network_name=network_name,
-                                        schema_validator=PydanticSchemaConversionValidator())
+                                        network_name=network_name)
 
     def print_network_summary(self, config: Dict[str, Any]):
         """

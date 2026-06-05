@@ -25,38 +25,33 @@ from unittest import TestCase
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
-from neuro_san.internals.run_context.langchain.core.pydantic_schema_conversion_validator import \
-    PydanticSchemaConversionValidator
-from neuro_san.internals.validation.network.parameters_schema_network_validator import \
-    ParametersSchemaNetworkValidator
+from neuro_san.internals.validation.network.semantic_parameters_network_validator import \
+    SemanticParametersNetworkValidator
 
 from tests.neuro_san.internals.validation.network.abstract_network_validator_test import AbstractNetworkValidatorTest
 
 
-class TestParametersSchemaNetworkValidator(TestCase, AbstractNetworkValidatorTest):
+class TestSemanticParametersNetworkValidator(TestCase, AbstractNetworkValidatorTest):
     """
-    Unit tests for ParametersSchemaNetworkValidator.
+    Unit tests for SemanticParametersNetworkValidator (Phase 2).
 
-    Most test cases live in HOCON fixture files under
-    tests/fixtures/parameters_shape/ so that test data is easy to read,
-    comment, and extend without touching Python code.
+    Tests that the validator catches semantic issues pydantic is silent
+    about: nested 'parameters' keys and undefined required references.
     """
 
     _FIXTURE_DIR: Path = Path(__file__).resolve().parents[4] / "fixtures" / "parameters_shape"
 
     def setUp(self):
-        self.validator = ParametersSchemaNetworkValidator(
+        self.validator = SemanticParametersNetworkValidator(
             network_name="test_network",
-            schema_validator=PydanticSchemaConversionValidator(),
         )
 
     def create_validator(self) -> DictionaryValidator:
         """
         Creates an instance of the validator
         """
-        return ParametersSchemaNetworkValidator(
+        return SemanticParametersNetworkValidator(
             network_name="test_network",
-            schema_validator=PydanticSchemaConversionValidator(),
         )
 
     @staticmethod
@@ -67,7 +62,7 @@ class TestParametersSchemaNetworkValidator(TestCase, AbstractNetworkValidatorTes
         (commondefs, defaults, name-correction) that production
         configs see, so test data mirrors real behaviour.
         """
-        hocon_file: str = str(TestParametersSchemaNetworkValidator._FIXTURE_DIR / filename)
+        hocon_file: str = str(TestSemanticParametersNetworkValidator._FIXTURE_DIR / filename)
         restorer = AgentNetworkRestorer()
         agent_network: AgentNetwork = restorer.restore(file_reference=hocon_file)
         config: Dict[str, Any] = agent_network.get_config()
@@ -78,28 +73,9 @@ class TestParametersSchemaNetworkValidator(TestCase, AbstractNetworkValidatorTes
         config: Dict[str, Any] = self._restore_fixture("clean_openai_shape.hocon")
         self.assertEqual(self.validator.validate(config), [])
 
-    def test_flat_param_map_shape_is_allowed(self):
-        """
-        Some agents use a flat 'parameters' map (param_name -> spec) instead of
-        the OpenAI {type, properties, required} shape. The validator should
-        not flag that as 'unknown keys'.
-        """
-        config: Dict[str, Any] = self._restore_fixture("flat_param_map.hocon")
-        self.assertEqual(self.validator.validate(config), [])
-
     def test_agent_with_no_parameters_block_is_ignored(self):
         """Agents that don't declare a parameters block are not flagged."""
         config: Dict[str, Any] = self._restore_fixture("no_parameters.hocon")
-        self.assertEqual(self.validator.validate(config), [])
-
-    def test_array_items_string_reference_is_skipped(self):
-        """
-        String references like "items": "cao_item" are not dicts and should
-        be silently skipped (no false positives).
-        """
-        config: Dict[str, Any] = self._restore_fixture(
-            "array_items_string_reference.hocon",
-        )
         self.assertEqual(self.validator.validate(config), [])
 
     def test_nested_parameters_is_flagged(self):
@@ -134,19 +110,6 @@ class TestParametersSchemaNetworkValidator(TestCase, AbstractNetworkValidatorTes
         self.assertIn("undefined props", errors[0])
         self.assertIn("city", errors[0])
 
-    def test_nested_object_property_bad_properties_type(self):
-        """
-        A nested object with properties that is not a dict is flagged
-        by the pydantic conversion phase.
-        """
-        config: Dict[str, Any] = self._restore_fixture(
-            "nested_object_bad_properties.hocon",
-        )
-        errors = self.validator.validate(config)
-        self.assertEqual(len(errors), 1)
-        self.assertIn("agent_b", errors[0])
-        self.assertIn("pydantic model conversion failed", errors[0])
-
     def test_array_items_object_bad_required(self):
         """
         An array whose items schema is an object with bad required is flagged.
@@ -160,33 +123,10 @@ class TestParametersSchemaNetworkValidator(TestCase, AbstractNetworkValidatorTes
         self.assertIn("parameters.properties.entries.items.required", errors[0])
         self.assertIn("undefined props", errors[0])
 
-    def test_unrecognized_type_caught_by_pydantic(self):
-        """
-        A type string not in BaseModelDictionaryConverter.TYPE_LOOKUP is
-        caught by the pydantic conversion phase.
-        """
-        config: Dict[str, Any] = self._restore_fixture("unrecognized_type.hocon")
-        errors = self.validator.validate(config)
-        self.assertEqual(len(errors), 1)
-        self.assertIn("agent_e", errors[0])
-        self.assertIn("pydantic model conversion failed", errors[0])
-
-    def test_unresolved_string_items_sanitized_before_pydantic(self):
-        """
-        When a commondef is missing, the string ``items`` reference stays
-        unresolved after the restorer pipeline.  The sanitizer must replace
-        it with a permissive dict before pydantic sees it, or from_dict()
-        would crash.
-        """
-        config: Dict[str, Any] = self._restore_fixture(
-            "unresolved_string_items.hocon",
-        )
-        self.assertEqual(self.validator.validate(config), [])
-
     def test_bad_parameters(self):
         """
         Tests a network where at least one of the tools has a malformed
-        parameters block.
+        parameters block with a nested 'parameters' key.
         """
         validator: DictionaryValidator = self.create_validator()
         config: Dict[str, Any] = self._restore_fixture("injected_nested_parameters.hocon")

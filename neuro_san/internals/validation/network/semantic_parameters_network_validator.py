@@ -22,48 +22,31 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from neuro_san.internals.interfaces.schema_conversion_validator import SchemaConversionValidator
 from neuro_san.internals.validation.network.abstract_network_validator import AbstractNetworkValidator
 
 
-class ParametersSchemaNetworkValidator(AbstractNetworkValidator):
+class SemanticParametersNetworkValidator(AbstractNetworkValidator):
     """
-    AbstractNetworkValidator that checks the shape of each tool's
-    function.parameters (or top-level parameters) block.
+    AbstractNetworkValidator performing custom semantic checks on each
+    tool's function.parameters block that pydantic conversion cannot detect:
 
-    Validation is split into two phases:
-
-    Phase 1 - **Schema conversion** (optional): delegates to an injected
-    SchemaConversionValidator (e.g. pydantic) to catch type strings,
-    structural issues, or recursion problems that would crash at runtime.
-    Skipped when no SchemaConversionValidator is provided.
-
-    Phase 2 - **Custom semantic checks** that schema conversion cannot detect:
       * A nested 'parameters' key (the headline bug from studio#690).
+        Pydantic treats this as just another property.
       * ``required`` entries that reference undefined properties.
+        Pydantic silently ignores these.
 
-    Both phases recurse into nested object properties and array items so
-    mistakes at any depth are caught.
+    Both checks recurse into nested object properties and array items
+    via ``_iter_subschemas()`` so mistakes at any depth are caught.
     """
 
-    # Sentinel returned by _locate_parameters meaning "the key is present but
-    # explicitly null". The caller flags this rather than silently skipping.
-    # object() is identity-safe - cannot collide with any real config value.
-    _EXPLICIT_NULL: Any = object()
-
-    def __init__(self, network_name: str = None,
-                 schema_validator: SchemaConversionValidator = None):
+    def __init__(self, network_name: str = None):
         """
         Constructor
 
         :param network_name: The agent network name for diagnostic log lines
-        :param schema_validator: Optional SchemaConversionValidator for
-            Phase 1 structural validation.  Injected by ManifestNetworkValidator
-            so the validation layer does not depend on the run_context layer.
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.network_name: str = network_name
-        self.schema_validator: SchemaConversionValidator = schema_validator
 
     # --- Override ---
 
@@ -71,37 +54,21 @@ class ParametersSchemaNetworkValidator(AbstractNetworkValidator):
     def validate_name_to_spec_dict(self, name_to_spec: Dict[str, Any]) -> List[str]:
         """
         :param name_to_spec: The name -> agent spec dictionary to validate
-        :return: A list of error messages describing parameters-shape problems.
+        :return: A list of error messages describing semantic parameter problems.
         """
         errors: List[str] = []
 
-        self.logger.debug("Validating %s agent network parameters shape...", self.network_name)
+        self.logger.debug("Validating %s parameters semantics...", self.network_name)
 
         for agent_name, agent_spec in name_to_spec.items():
             display_name: str = self._resolve_agent_name(agent_name, agent_spec)
             params: Any = self._locate_parameters(agent_spec)
 
-            if params is None:
-                # No parameters block at all - nothing to validate.
-                continue
-            if params is self._EXPLICIT_NULL:
-                errors.append(
-                    f"{display_name}: 'parameters' is null - use {{}} or remove the key"
-                )
-                continue
             if not isinstance(params, dict):
-                errors.append(
-                    f"{display_name}: 'parameters' must be object, "
-                    f"got {type(params).__name__}"
-                )
+                # Null, missing, or non-dict parameters are reported by
+                # PydanticParametersNetworkValidator.  Skip silently here.
                 continue
 
-            # Phase 1: Structural validation via injected converter
-            if self.schema_validator is not None:
-                for msg in self.schema_validator.try_convert(params):
-                    errors.append(f"{display_name}: {msg}")
-
-            # Phase 2: Custom neuro-san-specific checks
             for nested_path in self._find_nested_parameters_keys(params):
                 errors.append(
                     f"{display_name}: '{nested_path}' contains a nested "
@@ -117,11 +84,8 @@ class ParametersSchemaNetworkValidator(AbstractNetworkValidator):
     @staticmethod
     def _resolve_agent_name(agent_name: Optional[str], agent_spec: Any) -> str:
         """
-        AbstractNetworkValidator.get_name_to_spec keys agents by
-        agent_spec.get("name"), which yields None when an agent only sets
-        function.name. Fall back to function.name so the error message
-        identifies the right tool - otherwise the user sees "None: ..." in
-        the welcome-replacement message and cannot tell which agent broke.
+        Fall back to function.name when the name_to_spec key is None so that
+        error messages identify the right tool.
         """
         if agent_name:
             return agent_name
@@ -133,36 +97,28 @@ class ParametersSchemaNetworkValidator(AbstractNetworkValidator):
                     return fn_name
         return "<unnamed>"
 
-    @classmethod
-    def _locate_parameters(cls, agent_spec: Any) -> Any:
+    @staticmethod
+    def _locate_parameters(agent_spec: Any) -> Any:
         """
         Pull the parameters block off an agent spec, whether it lives at
         function.parameters (OpenAI-style) or at the top level.
 
-        Returns:
-          - dict: the parameters block to validate
-          - None: no parameters block present (validator skips silently)
-          - cls._EXPLICIT_NULL: the key is present but explicitly null;
-                the caller flags this rather than silently skipping
+        Returns the parameters dict or None when absent/null.
         """
         if not isinstance(agent_spec, dict):
             return None
         function_block: Any = agent_spec.get("function")
         if isinstance(function_block, dict) and "parameters" in function_block:
-            value: Any = function_block.get("parameters")
-            return cls._EXPLICIT_NULL if value is None else value
+            return function_block.get("parameters")
         if "parameters" in agent_spec:
-            value = agent_spec.get("parameters")
-            return cls._EXPLICIT_NULL if value is None else value
+            return agent_spec.get("parameters")
         return None
 
     @staticmethod
     def _iter_subschemas(schema: Any, path: str):
         """
         Yield ``(child_schema, child_path)`` for every nested object
-        property and array ``items`` entry inside *schema*.  Both
-        ``_check_required_refs`` and ``_find_nested_parameters_keys``
-        share this traversal.
+        property and array ``items`` entry inside *schema*.
         """
         properties: Any = schema.get("properties")
         if isinstance(properties, dict):
@@ -212,7 +168,7 @@ class ParametersSchemaNetworkValidator(AbstractNetworkValidator):
                                      path: str = "parameters") -> List[str]:
         """
         Walk a JSON-schema-like tree, returning every dotted path whose dict
-        contains a 'parameters' key. Does not recurse into the 'parameters'
+        contains a 'parameters' key.  Does not recurse into the 'parameters'
         value itself - once we've flagged a site as malformed, we leave the
         inner contents alone (fixing the outer occurrence likely fixes the
         inner ones, and reporting both would be noisy).

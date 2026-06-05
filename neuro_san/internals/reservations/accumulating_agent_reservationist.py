@@ -25,8 +25,6 @@ from json import dumps
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
-from neuro_san.internals.run_context.langchain.core.pydantic_schema_conversion_validator import \
-    PydanticSchemaConversionValidator
 from neuro_san.internals.validation.network.manifest_network_validator import ManifestNetworkValidator
 
 
@@ -143,8 +141,7 @@ class AccumulatingAgentReservationist(Reservationist):
             validator = ManifestNetworkValidator(
                 external_network_names=self._external_networks,
                 mcp_servers=self._mcp_servers,
-                network_name=key,
-                schema_validator=PydanticSchemaConversionValidator())
+                network_name=key)
             new_errors: List[str] = validator.validate(agent_network_spec)
             if new_errors is not None and len(new_errors) > 0:
                 # There were errors. Report all at once
