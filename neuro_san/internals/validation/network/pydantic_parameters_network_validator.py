@@ -124,11 +124,10 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
             return
         items: Any = schema.get("items")
         if isinstance(items, str):
-            # String items are commondef references (e.g. "cao_item") that
-            # DictionaryCommonDefsConfigFilter resolves at runtime.  During
-            # standalone validation the commondefs may be absent, so we
-            # substitute a permissive dict to avoid a false-positive crash
-            # from pydantic's from_dict().
+            # String items values (e.g. "cao_item") are commondef references
+            # resolved by DictionaryCommonDefsConfigFilter before runtime.
+            # Substitute a permissive dict so pydantic does not reject the
+            # unresolved reference.
             schema["items"] = {"type": "string"}
         elif isinstance(items, dict):
             cls._replace_string_items(items)
