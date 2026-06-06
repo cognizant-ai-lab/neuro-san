@@ -21,7 +21,6 @@ from logging import Logger
 from typing import Any
 from typing import Dict
 from typing import List
-from typing import Optional
 
 from neuro_san.internals.run_context.langchain.core.base_model_dictionary_converter import \
     BaseModelDictionaryConverter
@@ -41,11 +40,6 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
     Unresolved string ``items`` references (from missing commondefs)
     are sanitized to a permissive dict before pydantic sees them.
     """
-
-    # Sentinel returned by _locate_parameters meaning "the key is present but
-    # explicitly null". The caller flags this rather than silently skipping.
-    # object() is identity-safe - cannot collide with any real config value.
-    _EXPLICIT_NULL: Any = object()
 
     def __init__(self, network_name: str = None):
         """
@@ -69,20 +63,19 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
         self.logger.debug("Validating %s parameters via pydantic...", self.network_name)
 
         for agent_name, agent_spec in name_to_spec.items():
-            display_name: str = self._resolve_agent_name(agent_name, agent_spec)
             params: Any = self._locate_parameters(agent_spec)
 
-            if params is None:
+            if params is self._PARAMS_NOT_FOUND:
                 # No parameters block at all - nothing to validate.
                 continue
-            if params is self._EXPLICIT_NULL:
+            if params is None:
                 errors.append(
-                    f"{display_name}: 'parameters' is null - use {{}} or remove the key"
+                    f"{agent_name}: 'parameters' is null - use {{}} or remove the key"
                 )
                 continue
             if not isinstance(params, dict):
                 errors.append(
-                    f"{display_name}: 'parameters' must be object, "
+                    f"{agent_name}: 'parameters' must be object, "
                     f"got {type(params).__name__}"
                 )
                 continue
@@ -99,55 +92,17 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
                 converter.from_dict(sanitized)
             except (AttributeError, KeyError, TypeError, ValueError) as exc:
                 detail: str = " ".join(str(exc).split())
-                errors.append(f"{display_name}: pydantic model conversion failed - {detail}")
+                errors.append(f"{agent_name}: pydantic model conversion failed - {detail}")
             except Exception as exc:  # pylint: disable=broad-exception-caught
                 # from_dict() delegates to pydantic's create_model() and
                 # recursive type resolution, which can raise unexpected
                 # exception types on severely malformed input.
                 detail = " ".join(str(exc).split())
-                errors.append(f"{display_name}: pydantic model conversion failed - {detail}")
+                errors.append(f"{agent_name}: pydantic model conversion failed - {detail}")
 
         return errors
 
     # --- Private helpers (not overrides) ---
-
-    @staticmethod
-    def _resolve_agent_name(agent_name: Optional[str], agent_spec: Any) -> str:
-        """
-        Fall back to function.name when the name_to_spec key is None so that
-        error messages identify the right tool.
-        """
-        if agent_name:
-            return agent_name
-        if isinstance(agent_spec, dict):
-            function_block: Any = agent_spec.get("function")
-            if isinstance(function_block, dict):
-                fn_name: Any = function_block.get("name")
-                if fn_name:
-                    return fn_name
-        return "<unnamed>"
-
-    @classmethod
-    def _locate_parameters(cls, agent_spec: Any) -> Any:
-        """
-        Pull the parameters block off an agent spec, whether it lives at
-        function.parameters (OpenAI-style) or at the top level.
-
-        Returns:
-          - dict: the parameters block to validate
-          - None: no parameters block present (validator skips silently)
-          - cls._EXPLICIT_NULL: the key is present but explicitly null
-        """
-        if not isinstance(agent_spec, dict):
-            return None
-        function_block: Any = agent_spec.get("function")
-        if isinstance(function_block, dict) and "parameters" in function_block:
-            value: Any = function_block.get("parameters")
-            return cls._EXPLICIT_NULL if value is None else value
-        if "parameters" in agent_spec:
-            value = agent_spec.get("parameters")
-            return cls._EXPLICIT_NULL if value is None else value
-        return None
 
     @classmethod
     def _sanitize_for_pydantic(cls, schema: Dict[str, Any]) -> Dict[str, Any]:
@@ -169,6 +124,11 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
             return
         items: Any = schema.get("items")
         if isinstance(items, str):
+            # String items are commondef references (e.g. "cao_item") that
+            # DictionaryCommonDefsConfigFilter resolves at runtime.  During
+            # standalone validation the commondefs may be absent, so we
+            # substitute a permissive dict to avoid a false-positive crash
+            # from pydantic's from_dict().
             schema["items"] = {"type": "string"}
         elif isinstance(items, dict):
             cls._replace_string_items(items)

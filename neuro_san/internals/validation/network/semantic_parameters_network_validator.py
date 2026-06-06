@@ -20,7 +20,6 @@ from logging import Logger
 from typing import Any
 from typing import Dict
 from typing import List
-from typing import Optional
 
 from neuro_san.internals.validation.network.abstract_network_validator import AbstractNetworkValidator
 
@@ -61,7 +60,6 @@ class SemanticParametersNetworkValidator(AbstractNetworkValidator):
         self.logger.debug("Validating %s parameters semantics...", self.network_name)
 
         for agent_name, agent_spec in name_to_spec.items():
-            display_name: str = self._resolve_agent_name(agent_name, agent_spec)
             params: Any = self._locate_parameters(agent_spec)
 
             if not isinstance(params, dict):
@@ -71,48 +69,15 @@ class SemanticParametersNetworkValidator(AbstractNetworkValidator):
 
             for nested_path in self._find_nested_parameters_keys(params):
                 errors.append(
-                    f"{display_name}: '{nested_path}' contains a nested "
+                    f"{agent_name}: '{nested_path}' contains a nested "
                     f"'parameters' key - move the inner 'properties' "
                     f"and 'required' up one level"
                 )
-            errors.extend(self._check_required_refs(display_name, params))
+            errors.extend(self._check_required_refs(agent_name, params))
 
         return errors
 
     # --- Private helpers (not overrides) ---
-
-    @staticmethod
-    def _resolve_agent_name(agent_name: Optional[str], agent_spec: Any) -> str:
-        """
-        Fall back to function.name when the name_to_spec key is None so that
-        error messages identify the right tool.
-        """
-        if agent_name:
-            return agent_name
-        if isinstance(agent_spec, dict):
-            function_block: Any = agent_spec.get("function")
-            if isinstance(function_block, dict):
-                fn_name: Any = function_block.get("name")
-                if fn_name:
-                    return fn_name
-        return "<unnamed>"
-
-    @staticmethod
-    def _locate_parameters(agent_spec: Any) -> Any:
-        """
-        Pull the parameters block off an agent spec, whether it lives at
-        function.parameters (OpenAI-style) or at the top level.
-
-        Returns the parameters dict or None when absent/null.
-        """
-        if not isinstance(agent_spec, dict):
-            return None
-        function_block: Any = agent_spec.get("function")
-        if isinstance(function_block, dict) and "parameters" in function_block:
-            return function_block.get("parameters")
-        if "parameters" in agent_spec:
-            return agent_spec.get("parameters")
-        return None
 
     @staticmethod
     def _iter_subschemas(schema: Any, path: str):
