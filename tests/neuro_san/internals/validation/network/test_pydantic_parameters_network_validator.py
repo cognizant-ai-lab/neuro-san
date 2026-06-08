@@ -21,8 +21,6 @@ from typing import Dict
 
 from unittest import TestCase
 
-from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
-from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
 from neuro_san.internals.validation.network.pydantic_parameters_network_validator import \
     PydanticParametersNetworkValidator
@@ -52,20 +50,6 @@ class TestPydanticParametersNetworkValidator(TestCase, AbstractNetworkValidatorT
         return PydanticParametersNetworkValidator(
             network_name="test_network",
         )
-
-    @staticmethod
-    def _restore_fixture(filename: str) -> Dict[str, Any]:
-        """
-        Load a HOCON fixture from tests/fixtures/pydantic_parameters/.
-        Runs through the same AgentNetworkRestorer filter chain
-        (commondefs, defaults, name-correction) that production
-        configs see, so test data mirrors real behaviour.
-        """
-        hocon_file: str = str(TestPydanticParametersNetworkValidator._FIXTURE_DIR / filename)
-        restorer = AgentNetworkRestorer()
-        agent_network: AgentNetwork = restorer.restore(file_reference=hocon_file)
-        config: Dict[str, Any] = agent_network.get_config()
-        return config
 
     def test_clean_openai_shape_returns_no_errors(self):
         """A standard OpenAI-style parameters block passes."""
