@@ -106,7 +106,7 @@ class RunContextRunnable(NeuroSanRunnable):
         # as input.
         agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
 
-        max_execution_seconds: float = agent_spec.get("max_execution_seconds", 2.0 * MINUTES)
+        max_execution_seconds: float = agent_spec.get("max_execution_seconds", 5.0 * MINUTES)
 
         # Langchain `create_agent` uses LangGraph under the hood, which has a default recursion limit of 10,000.
         # Even though it is called "recursion limit", it is actually more of a step ("super-step") limit for
