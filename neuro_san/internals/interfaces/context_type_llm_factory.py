@@ -67,3 +67,16 @@ class ContextTypeLlmFactory:
                 Can return None if required llm_config keys are not provided.
         """
         raise NotImplementedError
+
+    def create_llm_with_fallbacks(self, config: Dict[str, Any],
+                                  sly_data: Dict[str, Any] = None,
+                                  num_fallbacks: int = None) -> Any:
+        """
+        :param config: A dictionary which describes which LLM to use, perhaps with fallbacks specified.
+        :param sly_data: A user-provided dictionary of private data,
+                from which we might extract API keys to use for user billing.
+                Can be None indicating no API keys are provided at all and the system defaults will be used.
+        :param num_fallbacks: The number of fallbacks to try. Default value of None implies all.
+        :return: An LLM instance native to the context type that deals with fallback specifications.
+        """
+        raise NotImplementedError

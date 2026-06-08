@@ -120,6 +120,7 @@ class OpenAILlmPolicy(LlmPolicy):
         # Now construct LLM chat model we will be using:
         llm = ChatOpenAI(
             async_client=client,
+            root_async_client=self.async_openai_client,
             model_name=model_name,
             temperature=config.get("temperature"),
 
