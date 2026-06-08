@@ -36,9 +36,9 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
     that would crash at runtime.  Also reports null and non-dict
     parameters blocks as structural errors.
 
-    Configs are expected to have been through the standard
-    NetworkConfigFilterChain (commondefs, defaults, name-correction)
-    before reaching this validator.
+    The base class ``validate()`` applies NetworkConfigFilterChain
+    (commondefs, defaults, name-correction) so this validator always
+    sees fully-resolved configs.
     """
 
     def __init__(self, network_name: str = None):
