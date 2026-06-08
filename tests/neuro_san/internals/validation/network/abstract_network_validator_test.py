@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from pathlib import Path
 from typing import Any
 from typing import Dict
 from typing import List
@@ -33,6 +34,10 @@ class AbstractNetworkValidatorTest(AssertForwarder):
     and also derive from unittest.TestCase.
     """
 
+    # Subclasses that load HOCON fixtures via _restore_fixture() set this to
+    # the directory their fixtures live in (e.g. tests/fixtures/<name>).
+    _FIXTURE_DIR: Path = None
+
     def create_validator(self) -> DictionaryValidator:
         """
         Creates an instance of the validator
@@ -45,6 +50,24 @@ class AbstractNetworkValidatorTest(AssertForwarder):
         restorer = AgentNetworkRestorer()
         hocon_file: str = REGISTRIES_DIR.get_file_in_basis(file_reference)
         agent_network: AgentNetwork = restorer.restore(file_reference=hocon_file)
+        config: Dict[str, Any] = agent_network.get_config()
+        return config
+
+    @classmethod
+    def _restore_fixture(cls, filename: str) -> Dict[str, Any]:
+        """
+        Load a HOCON fixture from the subclass's _FIXTURE_DIR.
+
+        Runs through the same AgentNetworkRestorer filter chain
+        (commondefs, defaults, name-correction) that production configs
+        see, so test data mirrors real behaviour.
+        """
+        if cls._FIXTURE_DIR is None:
+            raise NotImplementedError(
+                f"{cls.__name__} must set _FIXTURE_DIR to use _restore_fixture()"
+            )
+        hocon_file: str = str(cls._FIXTURE_DIR / filename)
+        agent_network: AgentNetwork = AgentNetworkRestorer().restore(file_reference=hocon_file)
         config: Dict[str, Any] = agent_network.get_config()
         return config
 
