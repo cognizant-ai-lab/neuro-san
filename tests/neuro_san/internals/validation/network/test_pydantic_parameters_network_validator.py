@@ -86,10 +86,11 @@ class TestPydanticParametersNetworkValidator(TestCase, AbstractNetworkValidatorT
         config: Dict[str, Any] = self._restore_fixture("no_parameters.hocon")
         self.assertEqual(self.validator.validate(config), [])
 
-    def test_array_items_string_reference_is_skipped(self):
+    def test_array_items_commondef_resolved_by_filter_chain(self):
         """
-        String references like "items": "cao_item" are not dicts and should
-        be silently skipped (no false positives).
+        String references like "items": "cao_item" are resolved to their
+        actual schema dict by DictionaryCommonDefsConfigFilter during the
+        restorer pipeline.  Pydantic sees the resolved dict and passes.
         """
         config: Dict[str, Any] = self._restore_fixture(
             "array_items_string_reference.hocon",
@@ -120,12 +121,11 @@ class TestPydanticParametersNetworkValidator(TestCase, AbstractNetworkValidatorT
         self.assertIn("agent_e", errors[0])
         self.assertIn("pydantic model conversion failed", errors[0])
 
-    def test_unresolved_string_items_sanitized_before_pydantic(self):
+    def test_string_items_commondef_resolved_before_pydantic(self):
         """
-        When a commondef is missing, the string ``items`` reference stays
-        unresolved after the restorer pipeline.  The sanitizer must replace
-        it with a permissive dict before pydantic sees it, or from_dict()
-        would crash.
+        String ``items`` commondef references are resolved to their actual
+        schema dict by the restorer filter chain before validation.  Pydantic
+        sees the resolved dict and from_dict() succeeds.
         """
         config: Dict[str, Any] = self._restore_fixture(
             "unresolved_string_items.hocon",

@@ -15,12 +15,25 @@
 #
 # END COPYRIGHT
 
-# Valid: String references like "items": "cao_item" are resolved by
-# DictionaryCommonDefsConfigFilter before the validator runs in production.
-# Without a commondefs section, the string stays as-is and the validator
-# should silently skip it (no false positives).
+# Valid: String reference "items": "cao_item" is resolved by
+# DictionaryCommonDefsConfigFilter via the commondefs section below.
+# After filtering, the string becomes the actual schema dict and
+# pydantic validation passes without any ad-hoc workarounds.
 # Expected result: 0 errors.
 {
+    "commondefs": {
+        "replacement_values": {
+            "cao_item": {
+                "type": "object",
+                "properties": {
+                    "attribute_name": {
+                        "type": "string"
+                    }
+                },
+                "required": ["attribute_name"]
+            }
+        }
+    },
     "tools": [
         {
             "name": "esp_tool",

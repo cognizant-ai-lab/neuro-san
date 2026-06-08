@@ -15,7 +15,6 @@
 #
 # END COPYRIGHT
 
-from copy import deepcopy
 from logging import getLogger
 from logging import Logger
 from typing import Any
@@ -37,8 +36,9 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
     that would crash at runtime.  Also reports null and non-dict
     parameters blocks as structural errors.
 
-    Unresolved string ``items`` references (from missing commondefs)
-    are sanitized to a permissive dict before pydantic sees them.
+    Configs are expected to have been through the standard
+    NetworkConfigFilterChain (commondefs, defaults, name-correction)
+    before reaching this validator.
     """
 
     def __init__(self, network_name: str = None):
@@ -86,10 +86,9 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
                 # flat param maps. Pydantic expects properties.items(), so skip.
                 continue
 
-            sanitized: Dict[str, Any] = self._sanitize_for_pydantic(params)
             try:
                 converter = BaseModelDictionaryConverter("parameters")
-                converter.from_dict(sanitized)
+                converter.from_dict(params)
             except (AttributeError, KeyError, TypeError, ValueError) as exc:
                 detail: str = " ".join(str(exc).split())
                 errors.append(f"{agent_name}: pydantic model conversion failed - {detail}")
@@ -101,37 +100,3 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
                 errors.append(f"{agent_name}: pydantic model conversion failed - {detail}")
 
         return errors
-
-    # --- Private helpers (not overrides) ---
-
-    @classmethod
-    def _sanitize_for_pydantic(cls, schema: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Return a deep copy of *schema* with string ``items`` references
-        replaced by a permissive dict.  The runtime pipeline resolves
-        these via DictionaryCommonDefsConfigFilter before pydantic ever
-        sees them, but unresolved references can appear if a commondef
-        is missing or during direct validation calls.
-        """
-        result: Dict[str, Any] = deepcopy(schema)
-        cls._replace_string_items(result)
-        return result
-
-    @classmethod
-    def _replace_string_items(cls, schema: Any) -> None:
-        """Recursively replace string ``items`` values with ``{type: string}``."""
-        if not isinstance(schema, dict):
-            return
-        items: Any = schema.get("items")
-        if isinstance(items, str):
-            # String items values (e.g. "cao_item") are commondef references
-            # resolved by DictionaryCommonDefsConfigFilter before runtime.
-            # Substitute a permissive dict so pydantic does not reject the
-            # unresolved reference.
-            schema["items"] = {"type": "string"}
-        elif isinstance(items, dict):
-            cls._replace_string_items(items)
-        properties: Any = schema.get("properties")
-        if isinstance(properties, dict):
-            for prop_schema in properties.values():
-                cls._replace_string_items(prop_schema)

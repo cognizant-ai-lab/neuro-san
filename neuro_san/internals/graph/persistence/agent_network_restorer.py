@@ -20,16 +20,10 @@ from typing import Dict
 
 from pathlib import Path
 
-from leaf_common.config.config_filter_chain import ConfigFilterChain
-
 from neuro_san.internals.interfaces.agent_name_mapper import AgentNameMapper
 from neuro_san.internals.graph.persistence.agent_filetree_mapper import AgentFileTreeMapper
 from neuro_san.internals.graph.persistence.agent_standalone_mapper import AgentStandaloneMapper
-from neuro_san.internals.graph.filters.defaults_config_filter import DefaultsConfigFilter
-from neuro_san.internals.graph.filters.dictionary_common_defs_config_filter \
-    import DictionaryCommonDefsConfigFilter
-from neuro_san.internals.graph.filters.name_correction_config_filter import NameCorrectionConfigFilter
-from neuro_san.internals.graph.filters.string_common_defs_config_filter import StringCommonDefsConfigFilter
+from neuro_san.internals.graph.filters.network_config_filter_chain import NetworkConfigFilterChain
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.persistence.abstract_async_config_restorer import AbstractAsyncConfigRestorer
 
@@ -126,12 +120,4 @@ class AgentNetworkRestorer(AbstractAsyncConfigRestorer):
         :param basis_config: agent configuration dictionary, built or parsed from external sources
         :return: An agent network dictionary that has gone through the standard filter chain.
         """
-        # Perform a filter chain on the config that was read in
-        filter_chain = ConfigFilterChain()
-        filter_chain.register(DictionaryCommonDefsConfigFilter())
-        filter_chain.register(StringCommonDefsConfigFilter())
-        filter_chain.register(DefaultsConfigFilter())
-        filter_chain.register(NameCorrectionConfigFilter())
-
-        config: Dict[str, Any] = filter_chain.filter_config(basis_config)
-        return config
+        return NetworkConfigFilterChain().filter_config(basis_config)

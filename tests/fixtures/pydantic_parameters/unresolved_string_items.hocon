@@ -15,12 +15,25 @@
 #
 # END COPYRIGHT
 
-# Valid: String "items" commondef reference with no commondefs section.
-# DictionaryCommonDefsConfigFilter leaves the reference unresolved.
-# The sanitizer replaces the string with a permissive dict before
-# pydantic sees it, so from_dict() does not crash.
+# Valid: String "items" commondef reference with a commondefs section.
+# DictionaryCommonDefsConfigFilter resolves "cao_item" to its actual
+# schema dict before validation runs.  from_dict() sees a proper dict
+# and does not crash.
 # Expected result: 0 errors.
 {
+    "commondefs": {
+        "replacement_values": {
+            "cao_item": {
+                "type": "object",
+                "properties": {
+                    "attribute_name": {
+                        "type": "string"
+                    }
+                },
+                "required": ["attribute_name"]
+            }
+        }
+    },
     "tools": [
         {
             "name": "collector_tool",
@@ -31,7 +44,7 @@
                         "entries": {
                             "type": "array",
                             "items": "cao_item",
-                            "description": "unresolved commondef reference"
+                            "description": "commondef reference resolved by filter chain"
                         }
                     },
                     "required": ["entries"]
