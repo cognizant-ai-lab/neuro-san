@@ -37,9 +37,9 @@ class SemanticParametersNetworkValidator(AbstractNetworkValidator):
     Both checks recurse into nested object properties and array items
     via ``_iter_subschemas()`` so mistakes at any depth are caught.
 
-    The base class ``validate()`` applies NetworkConfigFilterChain
-    (commondefs, defaults, name-correction) so this validator always
-    sees fully-resolved configs.
+    Expects a fully-resolved config: ParametersSchemaNetworkValidator,
+    the composite that owns this validator, applies NetworkConfigFilterChain
+    (commondefs, defaults, name-correction) once before running both phases.
     """
 
     def __init__(self, network_name: str = None):

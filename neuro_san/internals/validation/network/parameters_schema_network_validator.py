@@ -15,8 +15,11 @@
 #
 # END COPYRIGHT
 
+from typing import Any
+from typing import Dict
 from typing import List
 
+from neuro_san.internals.graph.filters.network_config_filter_chain import NetworkConfigFilterChain
 from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
 from neuro_san.internals.validation.common.composite_dictionary_validator import CompositeDictionaryValidator
 from neuro_san.internals.validation.network.pydantic_parameters_network_validator import \
@@ -49,3 +52,24 @@ class ParametersSchemaNetworkValidator(CompositeDictionaryValidator):
             SemanticParametersNetworkValidator(network_name=network_name),
         ]
         super().__init__(validators)
+
+    # Overrides CompositeDictionaryValidator.validate
+    def validate(self, candidate: Dict[str, Any]) -> List[str]:
+        """
+        Resolve the config once, then run both parameter phases on it.
+
+        The parameter validators need fully-resolved configs (commondefs
+        substitution, defaults injection, name correction). Filtering here -
+        rather than inside each leaf validator - means the filter chain runs
+        a single time for both phases instead of once per validator, which
+        matters when this composite is itself nested inside the larger
+        ManifestNetworkValidator.
+
+        :param candidate: The agent network or name -> spec dictionary to validate
+        :return: A list of error messages
+        """
+        if not candidate:
+            return super().validate(candidate)
+
+        filtered: Dict[str, Any] = NetworkConfigFilterChain().filter_config(candidate)
+        return super().validate(filtered)

@@ -115,9 +115,11 @@ class AgentNetworkRestorer(AbstractAsyncConfigRestorer):
         agent_network = AgentNetwork(config, name)
         return agent_network
 
-    def filter_config(self, basis_config: Dict[str, Any]) -> Dict[str, Any]:
+    def filter_config(self, basis_config: Dict[str, Any], file_path: str = None) -> Dict[str, Any]:
         """
         :param basis_config: agent configuration dictionary, built or parsed from external sources
+        :param file_path: The file path the config was read from, supplied by the
+                base class restore() for diagnostic context. Unused here.
         :return: An agent network dictionary that has gone through the standard filter chain.
         """
         return NetworkConfigFilterChain().filter_config(basis_config)

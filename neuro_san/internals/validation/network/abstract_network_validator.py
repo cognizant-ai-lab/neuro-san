@@ -20,7 +20,6 @@ from typing import List
 
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
-from neuro_san.internals.graph.filters.network_config_filter_chain import NetworkConfigFilterChain
 from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
 
 
@@ -59,10 +58,11 @@ class AbstractNetworkValidator(DictionaryValidator):
         """
         Validate the agent network.
 
-        Applies the standard NetworkConfigFilterChain (commondefs
-        substitution, defaults injection, name correction) before
-        validation so that validators always see fully-resolved configs
-        regardless of whether the caller pre-filtered.
+        Expects a fully-resolved config (commondefs substitution, defaults
+        injection, and name correction already applied). Production callers
+        get this from the restorer's filter chain; the parameter validators
+        get it from ParametersSchemaNetworkValidator, which filters once for
+        both of its phases rather than once per validator.
 
         :param candidate: The agent network or name -> spec dictionary to validate
         :return: A list of error messages
@@ -73,11 +73,9 @@ class AbstractNetworkValidator(DictionaryValidator):
             errors.append("Agent network is empty.")
             return errors
 
-        filtered: Dict[str, Any] = NetworkConfigFilterChain().filter_config(candidate)
-
         # We can validate either from a top-level agent network,
         # or from the list of tools from the agent spec.
-        name_to_spec: Dict[str, Any] = self.get_name_to_spec(filtered)
+        name_to_spec: Dict[str, Any] = self.get_name_to_spec(candidate)
 
         name_to_spec_errors: List[str] = self.validate_name_to_spec_dict(name_to_spec)
         errors.extend(name_to_spec_errors)
