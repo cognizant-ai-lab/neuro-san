@@ -37,7 +37,7 @@ from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.internals.graph.activations.abstract_callable_activation import AbstractCallableActivation
 from neuro_san.internals.graph.activations.external_message_processor import ExternalMessageProcessor
 from neuro_san.internals.graph.activations.sly_data_redactor import SlyDataRedactor
-from neuro_san.internals.graph.interfaces.agent_tool_factory import AgentToolFactory
+from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.journal import Journal
