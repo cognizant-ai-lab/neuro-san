@@ -29,9 +29,40 @@ class AbstractNetworkValidator(DictionaryValidator):
     common policy thrown in.
     """
 
+    # Sentinel returned by _locate_parameters when the parameters key is
+    # absent entirely.  Callers that need to distinguish "key missing" from
+    # "key present but null" can compare against this with ``is``.
+    _PARAMS_NOT_FOUND: Any = object()
+
+    @staticmethod
+    def _locate_parameters(agent_spec: Any) -> Any:
+        """
+        Locate the parameters block on an agent spec, checking
+        ``function.parameters`` (OpenAI-style) first, then a top-level
+        ``parameters`` key.
+
+        :return: The raw value if the key exists (may be ``None`` for
+                 explicitly null entries), or ``_PARAMS_NOT_FOUND`` when
+                 no parameters key is present at all.
+        """
+        if not isinstance(agent_spec, dict):
+            return AbstractNetworkValidator._PARAMS_NOT_FOUND
+        function_block: Any = agent_spec.get("function")
+        if isinstance(function_block, dict) and "parameters" in function_block:
+            return function_block.get("parameters")
+        if "parameters" in agent_spec:
+            return agent_spec.get("parameters")
+        return AbstractNetworkValidator._PARAMS_NOT_FOUND
+
     def validate(self, candidate: Dict[str, Any]) -> List[str]:
         """
-        Validate the agent network
+        Validate the agent network.
+
+        Expects a fully-resolved config (commondefs substitution, defaults
+        injection, and name correction already applied). Production callers
+        get this from the restorer's filter chain; the parameter validators
+        get it from ParametersSchemaNetworkValidator, which filters once for
+        both of its phases rather than once per validator.
 
         :param candidate: The agent network or name -> spec dictionary to validate
         :return: A list of error messages
