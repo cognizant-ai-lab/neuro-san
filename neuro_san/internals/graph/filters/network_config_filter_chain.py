@@ -51,4 +51,5 @@ class NetworkConfigFilterChain(ConfigFilter):
         filter_chain.register(DefaultsConfigFilter())
         filter_chain.register(NameCorrectionConfigFilter())
 
-        return filter_chain.filter_config(basis_config)
+        config: Dict[str, Any] = filter_chain.filter_config(basis_config)
+        return config

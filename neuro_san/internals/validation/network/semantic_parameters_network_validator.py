@@ -95,6 +95,10 @@ class SemanticParametersNetworkValidator(AbstractNetworkValidator):
                 if isinstance(prop_schema, dict):
                     yield prop_schema, f"{path}.properties.{prop_name}"
 
+        # "items" is a standard JSON Schema keyword defining the element
+        # schema of an "array" type.  We recurse into it the same way we
+        # recurse into "properties" so nested validation errors inside
+        # array elements are caught.
         items: Any = schema.get("items")
         if isinstance(items, dict):
             yield items, f"{path}.items"
