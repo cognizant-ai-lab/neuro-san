@@ -28,3 +28,11 @@ jobs:
           cx-tenant: ${{ vars.CX_TENANT }}
           cx-client-id: ${{ vars.CX_CLIENT_ID }}
           cx-client-secret: ${{ secrets.CX_CLIENT_SECRET }}
+
+      - name: Notify Slack
+        if: ${{ !cancelled() }}
+        # build-common 1.0.6
+        uses: cognizant-ai-lab/build-common/actions/slack-notify@e5f749a7ba5de8bb8106cb172e89f21ca581a697
+        with:
+          status: ${{ job.status }}
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
