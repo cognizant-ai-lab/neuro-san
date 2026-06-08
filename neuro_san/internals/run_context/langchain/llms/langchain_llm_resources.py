@@ -14,8 +14,12 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from __future__ import annotations
+
+from typing import List
 
 from langchain_core.language_models.base import BaseLanguageModel
+from langchain_core.runnables.base import RunnableSerializable
 
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
@@ -35,10 +39,15 @@ class LangChainLlmResources(LingeringResource):
         """
         self.model: BaseLanguageModel = model
         self.llm_policy: LlmPolicy = llm_policy
+        self.child_resources: List[LingeringResource] = []
 
-    def get_model(self) -> BaseLanguageModel:
+    def get_model(self) -> RunnableSerializable:
         """
-        :return: the BaseLanguageModel
+        :return: Effectively this is the BaseLanguageModel to use.
+                 Most of the time this is the model that was passed into the constructor,
+                 however if add_fallback_resources() is employed, this can become a
+                 a composite RunnableWithFallbacks.  The common ancestor of both
+                 BaseLanguageModel and RunnableWithFallbacks is RunnableSerializable.
         """
         return self.model
 
@@ -47,6 +56,26 @@ class LangChainLlmResources(LingeringResource):
         :return: the LlmPolicy used by the model
         """
         return self.llm_policy
+
+    def add_fallback_resources(self, llm_resources: List[LangChainLlmResources]):
+        """
+        Add a child resource to this one.
+        :param llm_resources: a list of child LlmResources to use as fallbacks (in order)
+        """
+        if llm_resources is None or not isinstance(llm_resources, list):
+            return
+
+        if len(llm_resources) == 0:
+            return
+
+        # Add the child resources we need to clean up
+        self.child_resources.extend(llm_resources)
+        # Add the fallback models
+        if self.model:
+            fallback_models: List[BaseLanguageModel] = []
+            for one_resource in llm_resources:
+                fallback_models.append(one_resource.get_model())
+            self.model = self.model.with_fallbacks(fallback_models)
 
     async def close_of_work(self, parent_resource: LingeringResource = None):
         """
@@ -60,3 +89,7 @@ class LangChainLlmResources(LingeringResource):
         # so we are not going there to preserve backwards compatibility.
         if self.llm_policy is not None:
             await self.llm_policy.delete_resources()
+
+        # Close any child resources
+        for child_resource in self.child_resources:
+            await child_resource.close_of_work(self)

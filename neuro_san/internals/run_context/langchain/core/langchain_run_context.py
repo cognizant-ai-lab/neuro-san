@@ -57,6 +57,7 @@ from neuro_san.internals.run_context.langchain.core.langchain_run import LangCha
 from neuro_san.internals.run_context.langchain.core.run_context_runnable import RunContextRunnable
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
 from neuro_san.internals.run_context.langchain.middleware.middleware_factory import MiddlewareFactory
+from neuro_san.internals.run_context.utils.activation_capsule import ActivationCapsule
 
 
 # pylint: disable=too-many-instance-attributes,too-many-public-methods
@@ -115,6 +116,19 @@ class LangChainRunContext(RunContext):
 
         # A Placeholder for observabilty-specific tracing objects
         self.tracing_context: TracingContext = tracing_context
+
+        self.capsule: ActivationCapsule = None
+        if self.tool_caller is not None:
+            agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
+            # DEF: This is perhaps too brave a usage/cast, but it is indeed an AgentToolFactory
+            factory = self.tool_caller.get_inspector()
+            self.capsule = ActivationCapsule(self, agent_spec, factory)
+        else:
+            # DEF: It's likely that this current arrangement might impede middleware on the front-man
+            # to not be able to dynamically call out to other agents in the graph.
+            # Need a good example here. Also ConnectifiyReporter would need to be enhanced
+            # to look for tools specified in the middleware.
+            self.capsule = ActivationCapsule(self)
 
         parent_origin: List[Dict[str, Any]] = []
         if parent_run_context is not None:
@@ -286,7 +300,7 @@ class LangChainRunContext(RunContext):
 
         # Create any middleware instances that were specified, in the order they were specified.
         # This will be None for most simple situations.
-        middleware_factory = MiddlewareFactory(self.invocation_context, self.origin, self.chat_history)
+        middleware_factory = MiddlewareFactory(self.invocation_context, self.origin, self.chat_history, self.capsule)
         sly_data: Dict[str, Any] = self.tool_caller.get_sly_data()
 
         middleware: List[AgentMiddleware] = None
@@ -510,11 +524,15 @@ class LangChainRunContext(RunContext):
         if self.llm_resources:
             await self.llm_resources.close_of_work()
 
+        if self.capsule:
+            await self.capsule.close_of_work()
+
         self.tools = []
         self.chat_history = []
         self.agent_chain = None
         self.recent_human_message = None
         self.llm_resources = None
+        self.capsule = None
         self.journal = None
         self.interceptor = None
 

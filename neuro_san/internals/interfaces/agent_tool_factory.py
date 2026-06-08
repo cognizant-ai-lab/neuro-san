@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import Any
 from typing import Dict
 
-from neuro_san.internals.graph.interfaces.callable_activation import CallableActivation
+from neuro_san.internals.interfaces.callable_activation import CallableActivation
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 
 
