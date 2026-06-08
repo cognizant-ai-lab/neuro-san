@@ -107,6 +107,22 @@ class TestSemanticParametersNetworkValidator(TestCase, AbstractNetworkValidatorT
         self.assertIn("parameters.properties.entries.items.required", errors[0])
         self.assertIn("undefined props", errors[0])
 
+    def test_commondefs_items_bad_required(self):
+        """
+        An array whose items are defined via a commondefs string reference.
+        After the filter chain resolves "items": "cao_item" into the actual
+        schema dict, the semantic validator recurses into it and finds
+        that required references an undefined property.
+        """
+        config: Dict[str, Any] = self._restore_fixture(
+            "commondefs_items_bad_required.hocon",
+        )
+        errors = self.validator.validate(config)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("agent_d", errors[0])
+        self.assertIn("parameters.properties.entries.items.required", errors[0])
+        self.assertIn("undefined props", errors[0])
+
     def test_bad_parameters(self):
         """
         Tests a network where at least one of the tools has a malformed
