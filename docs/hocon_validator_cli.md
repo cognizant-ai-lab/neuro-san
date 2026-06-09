@@ -11,6 +11,7 @@ checking for issues such as:
 - Invalid tool names
 - Empty instructions
 - Invalid URL references
+- Malformed function.parameters blocks (nested keys, bad required refs, unrecognized types)
 
 Usage:
 
