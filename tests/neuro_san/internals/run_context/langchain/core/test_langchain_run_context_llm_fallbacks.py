@@ -23,6 +23,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from neuro_san.internals.run_context.langchain.core.langchain_run_context import LangChainRunContext
+from neuro_san.internals.run_context.langchain.llms.default_llm_factory import DefaultLlmFactory
 
 
 # Both markers needed so conftest.py skips the OPENAI_API_KEY requirement:
@@ -38,8 +39,7 @@ class TestLangChainContextLlmFallbacks:
     and aggregates a final ValueError when no fallback succeeds.
     """
 
-    @staticmethod
-    def _make_run_context(llm_config: Dict[str, Any], create_llm_side_effect) -> LangChainRunContext:
+    def _make_run_context(self, llm_config: Dict[str, Any], create_llm_side_effect) -> LangChainRunContext:
         """
         Build a LangChainRunContext with the bare minimum wiring needed to exercise
         create_agent_with_fallbacks(), bypassing __init__ to avoid pulling in the
@@ -53,7 +53,7 @@ class TestLangChainContextLlmFallbacks:
         run_context.llm_config = llm_config
         run_context.llm_resources = None
 
-        llm_factory = MagicMock()
+        llm_factory = DefaultLlmFactory()
         llm_factory.create_llm = MagicMock(side_effect=create_llm_side_effect)
 
         invocation_context = MagicMock()
@@ -71,8 +71,7 @@ class TestLangChainContextLlmFallbacks:
 
         return run_context
 
-    @staticmethod
-    def _llm_resources_mock() -> MagicMock:
+    def _llm_resources_mock(self) -> MagicMock:
         """A stand-in for a successful LangChainLlmResources return value."""
         resources = MagicMock()
         resources.get_model.return_value = MagicMock(name="llm_model")
