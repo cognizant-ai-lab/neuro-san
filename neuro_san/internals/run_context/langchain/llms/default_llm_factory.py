@@ -194,7 +194,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         :return: The fully specified config with defaults filled in.
                 Can also return a set of strings describing any required sly_data API keys that are not provided.
         """
-        full_config: Dict[str, Any] = None
+        full_config: Dict[str, Any] | Set[str] = None
 
         class_from_llm_config: str = config.get("class")
         if class_from_llm_config:
