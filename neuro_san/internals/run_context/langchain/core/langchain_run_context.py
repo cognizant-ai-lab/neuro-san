@@ -222,9 +222,10 @@ class LangChainRunContext(RunContext):
 
         # Get the factory we will use
         llm_factory: ContextTypeLlmFactory = self.invocation_context.get_llm_factory()
+        sly_data: Dict[str, Any] = self.tool_caller.get_sly_data()
 
         main_llm_resources: LangChainLlmResources | List[Set[str]] = \
-            llm_factory.create_llm_with_fallbacks(self.llm_config, self.sly_data)
+            llm_factory.create_llm_with_fallbacks(self.llm_config, sly_data)
 
         if isinstance(main_llm_resources, list):
             error: str = "No fully-specified LLM found in llm_config or fallbacks."
