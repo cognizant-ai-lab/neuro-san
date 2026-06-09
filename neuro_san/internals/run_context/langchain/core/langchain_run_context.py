@@ -243,7 +243,8 @@ class LangChainRunContext(RunContext):
 
             api_key_errors: List[str] = error_dict.get("api_key_errors", [])
             if len(api_key_errors) > 0:
-                error += "\nThe following errors occurred while using API keys:\n"
+                error += "\nLLM operation for this agent requires certain API keys to be set as environment variables."
+                error += "\nThe following errors occurred while looking for LLM API keys:\n"
                 error += "\n    ".join(api_key_errors)
 
             raise ValueError(error)
