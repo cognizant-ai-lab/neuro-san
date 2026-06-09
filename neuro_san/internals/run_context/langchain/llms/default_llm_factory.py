@@ -592,8 +592,11 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         # Initialize a list of chain fallbacks. This may or may not get filled.
         main_llm_resources: LangChainLlmResources = None
         fallback_llm_resources: List[LangChainLlmResources] = []
+
+        # Different kinds of errors we might encounter and report separately
         required_sly_data: Set[str] = set()
         api_key_errors: Set[str] = set()
+        construction_errors: Set[str] = set()
 
         # Trim the list of fallbacks.
         if num_fallbacks is not None:
@@ -605,7 +608,6 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 fallbacks = fallbacks[:num_fallbacks]
 
         # Go through the list of fallbacks in the config.
-        construction_errors: Set[str] = []
         for fallback in fallbacks:
 
             # Create a model we might use.
