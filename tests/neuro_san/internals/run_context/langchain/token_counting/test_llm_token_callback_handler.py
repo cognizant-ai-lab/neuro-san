@@ -218,6 +218,10 @@ class TestEmptyResponseTracking:
         (AIMessage(content="   "), True),
         (AIMessage(content="here is the answer"), False),
         (AIMessage(content=[]), True),
+        (AIMessage(content=[" "]), True),
+        (AIMessage(content=[{"type": "text", "text": ""}]), True),
+        (AIMessage(content=[{"type": "text", "text": "   "}]), True),
+        (AIMessage(content=[{"type": "text", "text": "real text"}]), False),
         (
             AIMessage(
                 content="",
@@ -228,6 +232,7 @@ class TestEmptyResponseTracking:
     ])
     def test_is_empty_response(self, message, expected):
         """A response is empty only when it carries neither content nor a tool call."""
+        # pylint: disable=protected-access
         assert LlmTokenCallbackHandler._is_empty_response(message) is expected
 
     def _make_result(self, content, tool_calls=None) -> LLMResult:

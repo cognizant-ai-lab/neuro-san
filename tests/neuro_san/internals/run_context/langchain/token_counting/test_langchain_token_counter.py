@@ -30,6 +30,7 @@ from neuro_san.internals.messages.agent_message import AgentMessage
 from neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter import LangChainTokenCounter
 
 
+# pylint: disable=too-many-public-methods
 class TestLangChainTokenCounter:
     """Test cases for sum_all_tokens and merge_dicts methods."""
 
@@ -439,6 +440,7 @@ class TestLangChainTokenCounter:
             cb.prompt_tokens = 0
             cb.completion_tokens = 0
             cb.successful_requests = 0
+            cb.empty_responses = 0
             cb.total_cost = 0.0
             yield cb
 
@@ -542,3 +544,66 @@ class TestLangChainTokenCounter:
         }
 
         assert result == expected
+
+    def test_sum_all_tokens_aggregates_empty_responses(self, token_counter):
+        """empty_responses sums across providers and models into the network-wide dict."""
+        token_dict = {
+            "ollama": {
+                "gpt-oss:20B": {
+                    "total_tokens": 10,
+                    "prompt_tokens": 10,
+                    "completion_tokens": 0,
+                    "successful_requests": 2,
+                    "empty_responses": 1,
+                    "total_cost": 0.0,
+                    "time_taken_in_seconds": 1.0
+                }
+            },
+            "openai": {
+                "gpt-4": {
+                    "total_tokens": 100,
+                    "prompt_tokens": 80,
+                    "completion_tokens": 20,
+                    "successful_requests": 3,
+                    "empty_responses": 2,
+                    "total_cost": 0.05,
+                    "time_taken_in_seconds": 2.5
+                }
+            }
+        }
+
+        result = token_counter.sum_all_tokens(token_dict, 3.0)
+
+        assert result["empty_responses"] == 3
+        assert result["successful_requests"] == 5
+
+    def test_merge_dicts_empty_responses_backward_compat(self, token_counter):
+        """merge_dicts carries empty_responses even when one operand predates the key."""
+        # Older serialized accumulator written before empty_responses existed.
+        existing = {
+            "openai": {
+                "gpt-4": {
+                    "total_tokens": 100,
+                    "successful_requests": 1,
+                    "total_cost": 0.05
+                }
+            }
+        }
+        # Newer per-callback dict that tracks empty_responses.
+        new = {
+            "openai": {
+                "gpt-4": {
+                    "total_tokens": 50,
+                    "successful_requests": 1,
+                    "empty_responses": 2,
+                    "total_cost": 0.02
+                }
+            }
+        }
+
+        result = token_counter.merge_dicts(existing, new)
+
+        gpt4 = result["openai"]["gpt-4"]
+        assert gpt4["empty_responses"] == 2
+        assert gpt4["successful_requests"] == 2
+        assert gpt4["total_tokens"] == 150

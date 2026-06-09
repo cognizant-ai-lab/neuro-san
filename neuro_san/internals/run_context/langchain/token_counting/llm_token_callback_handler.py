@@ -294,6 +294,20 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         }
 
     @staticmethod
+    def _is_blank_content_block(item: Any) -> bool:
+        """
+        Determine whether a single list-content item carries no visible text.
+        :param item: One element of an AIMessage's list content
+        :return: True for a whitespace-only string or an empty/whitespace text
+                 block ({"type": "text"}); any other block type counts as content
+        """
+        if isinstance(item, str):
+            return item.strip() == EMPTY
+        if isinstance(item, dict) and item.get("type") == "text":
+            return str(item.get("text", EMPTY)).strip() == EMPTY
+        return False
+
+    @staticmethod
     def _is_empty_response(message: AIMessage) -> bool:
         """
         Determine whether an AIMessage carried no actionable output, i.e. neither
@@ -303,8 +317,15 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         :return: True if the message has no content and no tool calls
         """
         content: Any = message.content
-        has_content: bool = content.strip() != EMPTY if isinstance(content, str) else bool(content)
-        return not has_content and not message.tool_calls
+        if isinstance(content, str):
+            has_content: bool = content.strip() != EMPTY
+        elif isinstance(content, list):
+            has_content = not all(
+                LlmTokenCallbackHandler._is_blank_content_block(item) for item in content
+            )
+        else:
+            has_content = bool(content)
+        return not has_content and not getattr(message, "tool_calls", None)
 
     def _get_anthropic_bedrock_token_cost(
             self,
