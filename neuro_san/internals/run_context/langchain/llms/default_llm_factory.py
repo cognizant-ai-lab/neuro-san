@@ -618,6 +618,9 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             try:
                 one_llm_resources = self.create_llm(fallback, sly_data)
             except ValueError as exception:
+                # API Key errors get thrown as ValueErrors but have their
+                # "from" __cause__ set as the original exception.
+                # Examine that so we can report those separately.
                 if exception.__cause__ is not None:
                     cause: Exception = exception.__cause__
                     message: str = ApiKeyErrorCheck.check_for_api_key_exception(cause)
