@@ -17,7 +17,6 @@
 from typing import Any
 from typing import Dict
 from typing import List
-from typing import Set
 from typing import Union
 
 import json
@@ -224,17 +223,18 @@ class LangChainRunContext(RunContext):
         llm_factory: ContextTypeLlmFactory = self.invocation_context.get_llm_factory()
         sly_data: Dict[str, Any] = self.tool_caller.get_sly_data()
 
-        main_llm_resources: LangChainLlmResources | List[Set[str]] = \
+        main_llm_resources: LangChainLlmResources | Dict[str, Any] = \
             llm_factory.create_llm_with_fallbacks(self.llm_config, sly_data)
 
-        if isinstance(main_llm_resources, list):
+        if isinstance(main_llm_resources, dict):
             error: str = "No fully-specified LLM found in llm_config or fallbacks."
-            required_llm_config: Set[str] = main_llm_resources.pop(0)
+            error_dict: Dict[str, Any] = main_llm_resources
+            required_llm_config: List[str] = error_dict.get("required_llm_config_errors", [])
             if len(required_llm_config) > 0:
                 error += "\nLLM operation for this agent requires at least one "
                 error += "of the following set in sly_data.llm_config:\n"
                 error += "\n".join(sorted(required_llm_config)) + "\n"
-            construction_errors: Set[str] = main_llm_resources.pop(0)
+            construction_errors: List[str] = error_dict.get("construction_errors", [])
             if len(construction_errors) > 0:
                 error += "\nThe following errors occurred while constructing LLMs:\n"
                 error += "\n".join(construction_errors) + "\n"

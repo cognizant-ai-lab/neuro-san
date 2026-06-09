@@ -573,16 +573,17 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
     def create_llm_with_fallbacks(self, config: Dict[str, Any],
                                   sly_data: Dict[str, Any] = None,
-                                  num_fallbacks: int = None) -> LangChainLlmResources | List[Set[str]]:
+                                  num_fallbacks: int = None) -> LangChainLlmResources | Dict[str, Any]:
         """
         :param config: A dictionary which describes which LLM to use, perhaps with fallbacks specified.
         :param sly_data: A user-provided dictionary of private data,
                 from which we might extract API keys to use for user billing.
                 Can be None indicating no API keys are provided at all and the system defaults will be used.
         :param num_fallbacks: The number of fallbacks to try. Default value of None implies all.
-        :return: A LangChainLlmResources instance or a set or error strings if no valid
-                llm was found.  If there were valid and useable fallbacks specified,
-                those will be set up as fallbacks for the model.
+        :return: A LangChainLlmResources instance or if no valid llm was found or
+                a dictionary whose keys are error types and whose values are lists of error strings
+                for that type.  If there were valid and useable fallbacks specified,
+                those will be set up as fallbacks for the model on the LlmResources object.
         """
         # Prepare a list of fallbacks.  By default, the llm_config itself is a single-entry fallback list.
         fallbacks: List[Dict[str, Any]] = [config]
@@ -636,7 +637,10 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         if main_llm_resources is None:
             # Return all errors
-            return [required_llm_config, construction_errors]
+            return {
+                "required_llm_config_errors": list(required_llm_config),
+                "construction_errors": construction_errors
+            }
 
         if len(fallback_llm_resources) > 0:
             # Set up fallbacks.
