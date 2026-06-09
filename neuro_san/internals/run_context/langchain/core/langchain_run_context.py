@@ -248,6 +248,11 @@ class LangChainRunContext(RunContext):
                 error += "\nThe following errors occurred while looking for LLM API keys:\n"
                 error += "\n    ".join(api_key_errors)
 
+                for api_key_error in api_key_errors:
+                    # Note: We are assuming the errors have already been filtered for
+                    # not dispensing secrets with ApiKeyErrorCheck.get_safe_log_message()
+                    self.logger.error("API KEY error detected: %s", api_key_error)
+
             raise ValueError(error)
 
         self.llm_resources = main_llm_resources

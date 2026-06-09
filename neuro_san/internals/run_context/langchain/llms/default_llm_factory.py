@@ -443,8 +443,6 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                     #          following set in sly_data.llm_config:
                     #          anthropic_api_key
                     #
-                    self.logger.error("API KEY error detected: %s",
-                                      ApiKeyErrorCheck.get_safe_log_message(exception))
                     raise ValueError(message) from exception
                 found_exception = exception
 
