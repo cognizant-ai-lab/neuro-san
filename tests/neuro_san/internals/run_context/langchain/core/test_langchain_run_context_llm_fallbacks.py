@@ -39,7 +39,8 @@ class TestLangChainContextLlmFallbacks:
     and aggregates a final ValueError when no fallback succeeds.
     """
 
-    def _make_run_context(self, llm_config: Dict[str, Any], create_llm_side_effect) -> LangChainRunContext:
+    @staticmethod
+    def _make_run_context(llm_config: Dict[str, Any], create_llm_side_effect) -> LangChainRunContext:
         """
         Build a LangChainRunContext with the bare minimum wiring needed to exercise
         create_agent_with_fallbacks(), bypassing __init__ to avoid pulling in the
@@ -71,7 +72,8 @@ class TestLangChainContextLlmFallbacks:
 
         return run_context
 
-    def _llm_resources_mock(self) -> MagicMock:
+    @staticmethod
+    def _llm_resources_mock() -> MagicMock:
         """A stand-in for a successful LangChainLlmResources return value."""
         resources = MagicMock()
         resources.get_model.return_value = MagicMock(name="llm_model")
