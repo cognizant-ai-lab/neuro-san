@@ -653,9 +653,9 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         if main_llm_resources is None:
             # Return all errors
             return {
-                "api_key_errors": list(api_key_errors),
-                "construction_errors": list(construction_errors),
-                "required_sly_data_errors": list(required_sly_data),
+                "api_key_errors": sorted(api_key_errors),
+                "construction_errors": sorted(construction_errors),
+                "required_sly_data_errors": sorted(required_sly_data),
             }
 
         if len(fallback_llm_resources) > 0:
