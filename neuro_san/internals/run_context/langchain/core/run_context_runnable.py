@@ -76,7 +76,7 @@ class RunContextRunnable(NeuroSanRunnable):
     # is able to use JSON schema definitions to validate fields.
     agent_chain: Runnable
 
-    primary_llm: BaseLanguageModel
+    primary_llm: Runnable
 
     journal: Journal
 
