@@ -223,70 +223,23 @@ class LangChainRunContext(RunContext):
         # Get the factory we will use
         llm_factory: ContextTypeLlmFactory = self.invocation_context.get_llm_factory()
 
-        # Prepare a list of fallbacks.  By default, the llm_config itself is a single-entry fallback list.
-        fallbacks: List[Dict[str, Any]] = [self.llm_config]
-        fallbacks = self.llm_config.get("fallbacks", fallbacks)
+        main_llm_resources: LangChainLlmResources | List[Set[str]] = \
+            llm_factory.create_llm_with_fallbacks(self.llm_config, self.sly_data)
 
-        # Get the sly data to see if there are any optional user llm_config (like API keys) to use
-        sly_data: Dict[str, Any] = self.tool_caller.get_sly_data()
-
-        # Initialize a list of chain fallbacks. This may or may not get filled.
-        chain_fallbacks: List[Runnable] = []
-        first_llm: bool = True
-        required_llm_config: Set[str] = set()
-
-        # Go through the list of fallbacks in the config.
-        construction_errors: List[str] = []
-        for fallback in fallbacks:
-
-            # Create a model we might use.
-            # If construction fails (e.g. missing API key in env), record the error and
-            # try the next fallback rather than aborting the whole loop.
-            try:
-                one_llm_resources: LangChainLlmResources | Set[str] = llm_factory.create_llm(fallback, sly_data)
-            except ValueError as exception:
-                construction_errors.append(str(exception))
-                continue
-
-            if one_llm_resources is None:
-                # Nothing to use or report.
-                # Skip for now, a fallback might still be fulfilled.
-                continue
-
-            if isinstance(one_llm_resources, set):
-                # Report later on which required llm_config are missing
-                # Skip for now, a fallback might still be fulfilled.
-                required_llm_config.update(one_llm_resources)
-                continue
-
-            one_agent: Runnable = self.create_agent(instructions, one_llm_resources.get_model())
-
-            if first_llm:
-                # The first fully-specified agent is the one we want to be our main guy.
-                agent = one_agent
-                # For now. Could be problems with different providers w/ token counting.
-                self.llm_resources = one_llm_resources
-                # Anything that comes later will not be the first
-                first_llm = False
-            else:
-                # Anything later than the first guy is considered a fallback. Add it to the list.
-                chain_fallbacks.append(one_agent)
-
-        if agent is None:
+        if isinstance(main_llm_resources, list):
             error: str = "No fully-specified LLM found in llm_config or fallbacks."
+            required_llm_config: Set[str] = main_llm_resources.pop(0)
             if len(required_llm_config) > 0:
                 error += "\nLLM operation for this agent requires at least one "
                 error += "of the following set in sly_data.llm_config:\n"
                 error += "\n".join(sorted(required_llm_config)) + "\n"
+            construction_errors: Set[str] = main_llm_resources.pop(0)
             if len(construction_errors) > 0:
                 error += "\nThe following errors occurred while constructing LLMs:\n"
                 error += "\n".join(construction_errors) + "\n"
             raise ValueError(error)
 
-        if len(chain_fallbacks) > 0:
-            # Set up fallbacks.
-            # See https://python.langchain.com/docs/how_to/tools_error/#tryexcept-tool-call
-            agent = agent.with_fallbacks(chain_fallbacks)
+        agent: Runnable = self.create_agent(instructions, main_llm_resources.get_model())
 
         return agent
 

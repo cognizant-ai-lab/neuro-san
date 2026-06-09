@@ -124,8 +124,8 @@ flag to your invocation.
         llm_resources = llm_factory.create_llm_with_fallbacks(llm_config, sly_data, num_fallbacks)
         if llm_resources is None:
             raise ValueError("Unable to create LLM from llm_config (missing required configuration and/or sly_data).")
-        if isinstance(llm_resources, set):
-            required = "\n".join(sorted(llm_resources))
+        if isinstance(llm_resources, list):
+            required = "\n".join(sorted(llm_resources[0]))
             raise ValueError(
                 "LLM operation for this agent requires at least one of the following set in sly_data.llm_config:\n"
                 f"{required}\n"

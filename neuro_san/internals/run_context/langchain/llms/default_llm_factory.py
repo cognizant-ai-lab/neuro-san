@@ -573,7 +573,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
     def create_llm_with_fallbacks(self, config: Dict[str, Any],
                                   sly_data: Dict[str, Any] = None,
-                                  num_fallbacks: int = None) -> LangChainLlmResources | Set[str]:
+                                  num_fallbacks: int = None) -> LangChainLlmResources | List[Set[str]]:
         """
         :param config: A dictionary which describes which LLM to use, perhaps with fallbacks specified.
         :param sly_data: A user-provided dictionary of private data,
@@ -636,7 +636,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         if main_llm_resources is None:
             # Return all errors
-            return required_llm_config.union(construction_errors)
+            return [required_llm_config, construction_errors]
+
         if len(fallback_llm_resources) > 0:
             # Set up fallbacks.
             # See https://python.langchain.com/docs/how_to/tools_error/#tryexcept-tool-call
