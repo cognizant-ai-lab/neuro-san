@@ -592,7 +592,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         # Initialize a list of chain fallbacks. This may or may not get filled.
         main_llm_resources: LangChainLlmResources = None
         fallback_llm_resources: List[LangChainLlmResources] = []
-        required_llm_config: Set[str] = set()
+        required_sly_data: Set[str] = set()
+        api_key_errors: Set[str] = set()
 
         # Trim the list of fallbacks.
         if num_fallbacks is not None:
@@ -604,7 +605,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 fallbacks = fallbacks[:num_fallbacks]
 
         # Go through the list of fallbacks in the config.
-        construction_errors: List[str] = []
+        construction_errors: Set[str] = []
         for fallback in fallbacks:
 
             # Create a model we might use.
@@ -614,7 +615,17 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             try:
                 one_llm_resources = self.create_llm(fallback, sly_data)
             except ValueError as exception:
-                construction_errors.append(str(exception))
+                if exception.__cause__ is not None:
+                    cause: Exception = exception.__cause__
+                    message: str = ApiKeyErrorCheck.check_for_api_key_exception(cause)
+                    if message is not None:
+                        # Make sure the message is fit for public consumption with no
+                        # explicit secrets in the text.
+                        message = ApiKeyErrorCheck.get_safe_log_message(exception)
+                        api_key_errors.add(message)
+                        continue
+
+                construction_errors.add(str(exception))
                 continue
 
             if one_llm_resources is None:
@@ -625,7 +636,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             if isinstance(one_llm_resources, set):
                 # Report later on which required llm_config are missing
                 # Skip for now, a fallback might still be fulfilled.
-                required_llm_config.update(one_llm_resources)
+                required_sly_data.update(one_llm_resources)
                 continue
 
             if main_llm_resources is None:
@@ -638,8 +649,9 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         if main_llm_resources is None:
             # Return all errors
             return {
-                "required_llm_config_errors": list(required_llm_config),
-                "construction_errors": construction_errors
+                "api_key_errors": list(api_key_errors),
+                "construction_errors": list(construction_errors),
+                "required_sly_data_errors": list(required_sly_data),
             }
 
         if len(fallback_llm_resources) > 0:

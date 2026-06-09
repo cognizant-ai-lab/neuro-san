@@ -229,15 +229,23 @@ class LangChainRunContext(RunContext):
         if isinstance(main_llm_resources, dict):
             error: str = "No fully-specified LLM found in llm_config or fallbacks."
             error_dict: Dict[str, Any] = main_llm_resources
-            required_llm_config: List[str] = error_dict.get("required_llm_config_errors", [])
-            if len(required_llm_config) > 0:
+
+            required_sly_data: List[str] = error_dict.get("required_sly_data_errors", [])
+            if len(required_sly_data) > 0:
                 error += "\nLLM operation for this agent requires at least one "
                 error += "of the following set in sly_data.llm_config:\n"
-                error += "\n".join(sorted(required_llm_config)) + "\n"
+                error += "\n    ".join(sorted(required_sly_data)) + "\n"
+
             construction_errors: List[str] = error_dict.get("construction_errors", [])
             if len(construction_errors) > 0:
                 error += "\nThe following errors occurred while constructing LLMs:\n"
-                error += "\n".join(construction_errors) + "\n"
+                error += "\n    ".join(construction_errors) + "\n"
+
+            api_key_errors: List[str] = error_dict.get("api_key_errors", [])
+            if len(api_key_errors) > 0:
+                error += "\nThe following errors occurred while using API keys:\n"
+                error += "\n    ".join(api_key_errors)
+
             raise ValueError(error)
 
         self.llm_resources = main_llm_resources

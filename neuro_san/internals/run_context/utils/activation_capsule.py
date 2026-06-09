@@ -125,10 +125,10 @@ flag to your invocation.
         if llm_resources is None:
             raise ValueError("Unable to create LLM from llm_config (missing required configuration and/or sly_data).")
         if isinstance(llm_resources, dict):
-            # For now, do not worry about the "construction_errors" key.
+            # For now, do not worry about the "construction_errors" or "api_key_errors" keys.
             # These are very likely to already be handled by the front man.
-            llm_config_errors: List[str] = llm_resources.get("required_llm_config_errors", [])
-            required = "\n".join(sorted(llm_config_errors))
+            required_sly_data: List[str] = llm_resources.get("required_sly_data_errors", [])
+            required = "\n".join(sorted(required_sly_data))
             raise ValueError(
                 "LLM operation for this agent requires at least one of the following set in sly_data.llm_config:\n"
                 f"{required}\n"
