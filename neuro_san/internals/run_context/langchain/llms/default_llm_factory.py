@@ -571,6 +571,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         """
         return {self.strip_outer_quotes(k): v for k, v in d.items()}
 
+    # pylint: disable=too-many-branches
     def create_llm_with_fallbacks(self, config: Dict[str, Any],
                                   sly_data: Dict[str, Any] = None,
                                   num_fallbacks: int = None) -> LangChainLlmResources | Dict[str, Any]:
