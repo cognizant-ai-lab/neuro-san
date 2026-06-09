@@ -341,7 +341,7 @@ Deprecated. Use [max_steps](#max_steps) instead.
 
 An integer controlling the maximum amount of wall clock time (in seconds) to spend in the langchain
 [AgentExecutor](https://api.python.langchain.com/en/latest/agents/langchain.agents.agent.AgentExecutor.html)
-used for the agent.  Default is set for 2 minutes.
+used for the agent.  Default is set for 5 minutes.
 
 ### max_attempts
 
