@@ -329,9 +329,9 @@ class RunContextRunnable(NeuroSanRunnable):
                 # We generally want the content of any single AIMessage we found from above
                 output = ai_message.content
 
-        # In general, output is a string. but output can also be a list of content blocks if there are multiple
-        # messages types, such as "thinking", "reasoning", etc.
-        # If it is a list, "text" is a key of a dictionary which contains the actual string output we want to return.
+        # In general, output is a string, but it can also be a list of content blocks when there are multiple
+        # message types, such as "thinking", "reasoning", etc.
+        # If it is a list, "text" is a key in the dict containing the actual string output we want to return.
         # For more details: https://docs.langchain.com/oss/python/langchain/messages#standard-content-blocks
         if isinstance(output, list):
             text_output: str = ""
