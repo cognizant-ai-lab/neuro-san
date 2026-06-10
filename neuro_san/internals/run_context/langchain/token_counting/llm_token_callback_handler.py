@@ -83,6 +83,7 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
     prompt_tokens: int = 0
     completion_tokens: int = 0
     successful_requests: int = 0
+    empty_responses: int = 0
     total_cost: float = 0.0
 
     def __init__(self, llm_infos: Dict[str, Any]):
@@ -105,6 +106,7 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
             f"\tPrompt Tokens: {self.prompt_tokens}\n"
             f"\tCompletion Tokens: {self.completion_tokens}\n"
             f"Successful Requests: {self.successful_requests}\n"
+            f"Empty Responses: {self.empty_responses}\n"
             f"Total Cost (USD): ${self.total_cost}\n"
             f"Model Info: {self.models_token_dict}"
         )
@@ -152,12 +154,14 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         usage_metadata: UsageMetadata = None
         response_metadata: Dict[str, Any] = None
         model_name: str = EMPTY
+        is_empty_response: bool = False
         if isinstance(generation, ChatGeneration):
             try:
                 message = generation.message
                 if isinstance(message, AIMessage):
                     # Token info is in an attribute of AIMessage called "usage_metadata".
                     usage_metadata = message.usage_metadata
+                    is_empty_response = self._is_empty_response(message)
                     # Get model name so that cost can be determined if needed.
                     response_metadata = message.response_metadata
                     if response_metadata:
@@ -190,6 +194,8 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
                 self.models_token_dict[self.provider_class][model_name]["completion_tokens"] += \
                     completion_tokens
                 self.models_token_dict[self.provider_class][model_name]["successful_requests"] += 1
+                self.models_token_dict[self.provider_class][model_name]["empty_responses"] += \
+                    int(is_empty_response)
                 self.models_token_dict[self.provider_class][model_name]["total_cost"] += total_cost
                 self.models_token_dict[self.provider_class][model_name]["time_taken_in_seconds"] += \
                     time_taken_in_seconds
@@ -199,6 +205,7 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
                 self.prompt_tokens += prompt_tokens
                 self.completion_tokens += completion_tokens
                 self.successful_requests += 1
+                self.empty_responses += int(is_empty_response)
                 self.total_cost += total_cost
 
     def calculate_token_costs(self, model_name: str, completion_tokens: int, prompt_tokens: int) -> float:
@@ -281,9 +288,44 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
             "prompt_tokens": 0,
             "completion_tokens": 0,
             "successful_requests": 0,
+            "empty_responses": 0,
             "total_cost": 0.0,
             "time_taken_in_seconds": 0.0
         }
+
+    @staticmethod
+    def _is_blank_content_block(item: Any) -> bool:
+        """
+        Determine whether a single list-content item carries no visible text.
+        :param item: One element of an AIMessage's list content
+        :return: True for a whitespace-only string or an empty/whitespace text
+                 block ({"type": "text"}); any other block type counts as content
+        """
+        if isinstance(item, str):
+            return item.strip() == EMPTY
+        if isinstance(item, dict) and item.get("type") == "text":
+            return str(item.get("text", EMPTY)).strip() == EMPTY
+        return False
+
+    @staticmethod
+    def _is_empty_response(message: AIMessage) -> bool:
+        """
+        Determine whether an AIMessage carried no actionable output, i.e. neither
+        text content nor a tool call. Such a response still counts as a successful
+        request, so it is tracked separately as "empty_responses".
+        :param message: The AIMessage returned by the chat model
+        :return: True if the message has no content and no tool calls
+        """
+        content: Any = message.content
+        if isinstance(content, str):
+            has_content: bool = content.strip() != EMPTY
+        elif isinstance(content, list):
+            has_content = not all(
+                LlmTokenCallbackHandler._is_blank_content_block(item) for item in content
+            )
+        else:
+            has_content = bool(content)
+        return not has_content and not getattr(message, "tool_calls", None)
 
     def _get_anthropic_bedrock_token_cost(
             self,
