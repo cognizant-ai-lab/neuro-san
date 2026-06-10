@@ -116,6 +116,13 @@ class NeuroSanSummarizationMiddleware(SummarizationMiddleware):
         :param trim_tokens_to_summarize: Maximum tokens to keep when preparing messages for
                 the summarization call. (default: _DEFAULT_TRIM_TOKEN_LIMIT)
         """
+        # HOCON has no tuple type, so callers configure trigger/keep as JSON arrays.
+        # langchain>=1.3 rejects list items in `trigger`, requiring tuples or dicts.
+        # Coerce list shapes back to tuples so both old and new langchain accept them.
+        if isinstance(trigger, list):
+            trigger = [tuple(item) if isinstance(item, list) else item for item in trigger]
+        if isinstance(keep, list):
+            keep = tuple(keep)
         super().__init__(
             model=model, trigger=trigger, keep=keep, token_counter=token_counter, summary_prompt=summary_prompt,
             trim_tokens_to_summarize=trim_tokens_to_summarize, **deprecated_kwargs
