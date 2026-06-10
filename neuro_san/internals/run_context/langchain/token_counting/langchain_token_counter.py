@@ -247,6 +247,7 @@ class LangChainTokenCounter:
             "prompt_tokens": callback.prompt_tokens,
             "completion_tokens": callback.completion_tokens,
             "successful_requests": callback.successful_requests,
+            "empty_responses": getattr(callback, "empty_responses", 0),
             "total_cost": callback.total_cost,
             "time_taken_in_seconds": time_taken_in_seconds,
             "caveats": [
