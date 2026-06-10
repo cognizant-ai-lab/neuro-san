@@ -119,6 +119,25 @@ class LlmPolicy(EnvironmentConfiguration):
         """
         raise NotImplementedError
 
+    @staticmethod
+    def is_streaming(config: Dict[str, Any]) -> bool:
+        """
+        Determine whether the underlying chat model should be constructed
+        with streaming enabled, based on the fully-specified llm config.
+
+        Subclasses pass the result through to their provider's chat-model
+        constructor (typically as the ``streaming`` kwarg, and in some cases
+        also ``stream_usage``). The default is False, which preserves the
+        long-standing neuro-san behavior of using non-streaming HTTP requests
+        even when a streaming-aware callback handler is attached to the run
+        manager.
+
+        :param config: The fully specified llm config
+        :return: True if the config sets a truthy value for the "streaming"
+                 key; False otherwise (including when the key is absent).
+        """
+        return bool(config.get("streaming", False))
+
     def create_llm_resources_components(self, config: Dict[str, Any]) -> Tuple[BaseLanguageModel, LlmPolicy]:
         """
         Basic policy framework method.

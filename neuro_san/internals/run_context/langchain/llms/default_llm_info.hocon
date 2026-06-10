@@ -1192,7 +1192,7 @@
                 "logprobs": null,
                 "top_logprobs": null,
                 "logit_bias": null,
-                # streaming is always on. Without it token counting will not work.
+                # streaming defaults to off; set "streaming": true in llm_config to enable.
                 # n is always 1.  neuro-san will only ever consider a single chat completion.
                 "top_p": null,
                 "max_tokens": null,         # This is always for output
@@ -1220,7 +1220,7 @@
                 # AD here means "ActiveDirectory"
                 "azure_ad_token": null,
                 "model_version": "",
-                # streaming is always on. Without it token counting will not work.
+                # streaming defaults to off; set "streaming": true in llm_config to enable.
                 # n is always 1.  neuro-san will only ever consider a single chat completion.
 
                 # If you really need more parameters, you will likely have to create your own LlmFactory.
@@ -1239,8 +1239,8 @@
                 "stop_sequences": null,
                 "anthropic_api_url": "https://api.anthropic.com",
                 "anthropic_api_key": null,
-                # streaming is always set to True so that ...
-                # stream_usage is always set to True so that token counting can work correctly
+                # streaming defaults to off; set "streaming": true in llm_config to enable.
+                # stream_usage tracks streaming, so it is enabled iff streaming is enabled.
 
                 # Reasoning / thinking parameters
                 #
@@ -1426,7 +1426,7 @@
                 "rate_limiter": null,
                 "region_name": null,
                 "stop_sequences": null,
-                # streaming is always on. Without it token counting will not work.
+                # streaming defaults to off; set "streaming": true in llm_config to enable.
                 "system_prompt_with_tools": "",
                 "tags": null,
                 "temperature": null,

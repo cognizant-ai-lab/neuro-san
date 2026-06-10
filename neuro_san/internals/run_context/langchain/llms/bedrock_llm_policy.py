@@ -67,13 +67,14 @@ class BedrockLlmPolicy(LlmPolicy):
             rate_limiter=config.get("rate_limiter"),
             region_name=config.get("region_name"),
             stop_sequences=config.get("stop_sequences"),
-            # Disable streaming: neuro-san does not consume per-token chunks from the model,
-            # and disabling streaming reduces per-request LangChain pipeline overhead.
-            # Token usage is collected from AIMessage.usage_metadata in LlmTokenCallbackHandler.
-            # We set streaming explicitly (rather than relying on the False default) so that
-            # langchain_core._should_stream() recognizes it as opted-out
-            # even when a streaming-aware callback is attached.
-            streaming=False,
+            # Streaming is configurable via the "streaming" key in llm_config; defaults
+            # to False so existing agents keep their long-standing non-streaming behavior.
+            # We pass streaming explicitly (rather than relying on LangChain's default) so
+            # that langchain_core._should_stream() picks up the configured value even when
+            # a streaming-aware callback is attached. Token usage is collected from
+            # AIMessage.usage_metadata in LlmTokenCallbackHandler regardless of streaming
+            # mode.
+            streaming=self.is_streaming(config),
             system_prompt_with_tools=config.get("system_prompt_with_tools"),
             tags=config.get("tags"),
             temperature=config.get("temperature"),

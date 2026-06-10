@@ -60,12 +60,12 @@ class GeminiLlmPolicy(LlmPolicy):
             thinking_level=config.get("thinking_level"),
             thinking_budget=config.get("thinking_budget"),
 
-            # Disable streaming: neuro-san does not consume per-token chunks from the model,
-            # and disabling streaming reduces per-request LangChain pipeline overhead.
-            # We pass streaming explicitly (rather than relying on the False default) so that
-            # langchain_core._should_stream() recognizes it as opted-out even when a
-            # streaming-aware callback handler is attached to the run manager.
-            streaming=False,
+            # Streaming is configurable via the "streaming" key in llm_config; defaults
+            # to False so existing agents keep their long-standing non-streaming behavior.
+            # We pass streaming explicitly (rather than relying on LangChain's default) so
+            # that langchain_core._should_stream() picks up the configured value even when
+            # a streaming-aware callback handler is attached to the run manager.
+            streaming=self.is_streaming(config),
 
             # If omitted, this defaults to the global verbose value,
             # accessible via langchain_core.globals.get_verbose():

@@ -143,14 +143,14 @@ class AzureLlmPolicy(OpenAILlmPolicy):
             logprobs=config.get("logprobs"),
             top_logprobs=config.get("top_logprobs"),
             logit_bias=config.get("logit_bias"),
-            # Disable streaming: neuro-san does not consume per-token chunks from the model,
-            # and disabling streaming reduces per-request LangChain pipeline overhead. Token
-            # usage is still available from the final AIMessage.usage_metadata consumed by
-            # LlmTokenCallbackHandler, so we do not need per-token streaming chunks for usage
-            # accounting. We pass streaming explicitly so langchain_core._should_stream()
-            # recognizes it as opted-out even when a streaming-aware callback is attached to
-            # the run manager.
-            streaming=False,
+            # Streaming is configurable via the "streaming" key in llm_config; defaults
+            # to False so existing agents keep their long-standing non-streaming behavior.
+            # We pass streaming explicitly (rather than relying on LangChain's default) so
+            # that langchain_core._should_stream() picks up the configured value even when
+            # a streaming-aware callback is attached to the run manager. Token usage is
+            # collected from AIMessage.usage_metadata in LlmTokenCallbackHandler regardless
+            # of streaming mode.
+            streaming=self.is_streaming(config),
             n=1,  # n is always 1.  neuro-san will only ever consider one chat completion.
             top_p=config.get("top_p"),
             max_tokens=config.get("max_tokens"),  # This is always for output
