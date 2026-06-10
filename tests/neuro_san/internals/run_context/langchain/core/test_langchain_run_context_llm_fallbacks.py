@@ -23,6 +23,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from neuro_san.internals.run_context.langchain.core.langchain_run_context import LangChainRunContext
+from neuro_san.internals.run_context.langchain.llms.default_llm_factory import DefaultLlmFactory
 
 
 # Both markers needed so conftest.py skips the OPENAI_API_KEY requirement:
@@ -53,7 +54,7 @@ class TestLangChainContextLlmFallbacks:
         run_context.llm_config = llm_config
         run_context.llm_resources = None
 
-        llm_factory = MagicMock()
+        llm_factory = DefaultLlmFactory()
         llm_factory.create_llm = MagicMock(side_effect=create_llm_side_effect)
 
         invocation_context = MagicMock()

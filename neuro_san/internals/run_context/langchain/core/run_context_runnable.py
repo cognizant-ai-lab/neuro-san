@@ -29,7 +29,6 @@ from pydantic import ConfigDict
 from langchain_classic.callbacks.tracers.logging import LoggingCallbackHandler
 from langchain_core.agents import AgentFinish
 from langchain_core.callbacks.base import BaseCallbackHandler
-from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 from langchain_core.runnables.base import Runnable
@@ -76,7 +75,10 @@ class RunContextRunnable(NeuroSanRunnable):
     # is able to use JSON schema definitions to validate fields.
     agent_chain: Runnable
 
-    primary_llm: BaseLanguageModel
+    # This needs to be a Runnable because nowadays the primary LLM could be
+    # be a BaseLanguageModel with fallbacks attached to it, which ends up
+    # being a Runnable.
+    primary_llm: Runnable
 
     journal: Journal
 
