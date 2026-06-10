@@ -418,11 +418,10 @@
 
     # Anthropic models
 
-    # These 3 models, claude-haiku, claude-sonnet, and claude-opus, are references to the latest versions of their respective model lines.
+    # These 4 models, claude-haiku, claude-sonnet, claude-opus, and claude-fable are references to the latest versions of their respective model lines.
     # When a new version is released, we will update the "use_model_name" field to point to the new version, and the old version will still be accessible via its own entry.
     # Status of model lines and versions can be found here:
     # https://platform.claude.com/docs/en/about-claude/model-deprecations
-    # Note that most of the retired Anthropic models can still be accessed via Amazon Bedrock.
     "claude-haiku": {
         "use_model_name": "claude-haiku-4-5-20251001"
     },
@@ -431,6 +430,9 @@
     },
     "claude-opus": {
         "use_model_name": "claude-opus-4-8"
+    },
+    "claude-fable": {
+        "use_model_name": "claude-fable-5"
     },
 
     "claude-sonnet-4-0": {
@@ -617,6 +619,27 @@
         "price_per_1k_input_tokens": 0.005,
         "price_per_1k_output_tokens": 0.025,
     },
+    "claude-fable-5": {
+        "class": "anthropic",
+        "model_info_url": "https://platform.claude.com/docs/en/about-claude/models/overview",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        # https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-fable-5.html
+        "knowledge_cutoff": "01/2026",
+        # https://platform.claude.com/docs/en/about-claude/pricing
+        "price_per_1k_input_tokens": 0.010,
+        "price_per_1k_output_tokens": 0.050,
+        "model_launch_date": "2026-06-09",
+    },
+    # Note on claude-mythos-5: As of 2026-06-10, this model is only available via the Project Glasswing,
+    # which is invitation-only. Thus, we are not including it in the default LLM info at this time.
+    # If it becomes generally available, we will add it to the registry with the appropriate details.
 
 
     # Ollama models
