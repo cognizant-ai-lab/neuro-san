@@ -17,7 +17,6 @@
 from typing import Any
 from typing import Dict
 from typing import List
-from typing import Set
 from typing import Union
 
 import json
@@ -57,6 +56,7 @@ from neuro_san.internals.run_context.langchain.core.langchain_run import LangCha
 from neuro_san.internals.run_context.langchain.core.run_context_runnable import RunContextRunnable
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
 from neuro_san.internals.run_context.langchain.middleware.middleware_factory import MiddlewareFactory
+from neuro_san.internals.run_context.utils.activation_capsule import ActivationCapsule
 
 
 # pylint: disable=too-many-instance-attributes,too-many-public-methods
@@ -115,6 +115,19 @@ class LangChainRunContext(RunContext):
 
         # A Placeholder for observabilty-specific tracing objects
         self.tracing_context: TracingContext = tracing_context
+
+        self.capsule: ActivationCapsule = None
+        if self.tool_caller is not None:
+            agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
+            # DEF: This is perhaps too brave a usage/cast, but it is indeed an AgentToolFactory
+            factory = self.tool_caller.get_inspector()
+            self.capsule = ActivationCapsule(self, agent_spec, factory)
+        else:
+            # DEF: It's likely that this current arrangement might impede middleware on the front-man
+            # to not be able to dynamically call out to other agents in the graph.
+            # Need a good example here. Also ConnectifiyReporter would need to be enhanced
+            # to look for tools specified in the middleware.
+            self.capsule = ActivationCapsule(self)
 
         parent_origin: List[Dict[str, Any]] = []
         if parent_run_context is not None:
@@ -208,71 +221,42 @@ class LangChainRunContext(RunContext):
 
         # Get the factory we will use
         llm_factory: ContextTypeLlmFactory = self.invocation_context.get_llm_factory()
-
-        # Prepare a list of fallbacks.  By default, the llm_config itself is a single-entry fallback list.
-        fallbacks: List[Dict[str, Any]] = [self.llm_config]
-        fallbacks = self.llm_config.get("fallbacks", fallbacks)
-
-        # Get the sly data to see if there are any optional user llm_config (like API keys) to use
         sly_data: Dict[str, Any] = self.tool_caller.get_sly_data()
 
-        # Initialize a list of chain fallbacks. This may or may not get filled.
-        chain_fallbacks: List[Runnable] = []
-        first_llm: bool = True
-        required_llm_config: Set[str] = set()
+        main_llm_resources: LangChainLlmResources | Dict[str, Any] = \
+            llm_factory.create_llm_with_fallbacks(self.llm_config, sly_data)
 
-        # Go through the list of fallbacks in the config.
-        construction_errors: List[str] = []
-        for fallback in fallbacks:
-
-            # Create a model we might use.
-            # If construction fails (e.g. missing API key in env), record the error and
-            # try the next fallback rather than aborting the whole loop.
-            try:
-                one_llm_resources: LangChainLlmResources | Set[str] = llm_factory.create_llm(fallback, sly_data)
-            except ValueError as exception:
-                construction_errors.append(str(exception))
-                continue
-
-            if one_llm_resources is None:
-                # Nothing to use or report.
-                # Skip for now, a fallback might still be fulfilled.
-                continue
-
-            if isinstance(one_llm_resources, set):
-                # Report later on which required llm_config are missing
-                # Skip for now, a fallback might still be fulfilled.
-                required_llm_config.update(one_llm_resources)
-                continue
-
-            one_agent: Runnable = self.create_agent(instructions, one_llm_resources.get_model())
-
-            if first_llm:
-                # The first fully-specified agent is the one we want to be our main guy.
-                agent = one_agent
-                # For now. Could be problems with different providers w/ token counting.
-                self.llm_resources = one_llm_resources
-                # Anything that comes later will not be the first
-                first_llm = False
-            else:
-                # Anything later than the first guy is considered a fallback. Add it to the list.
-                chain_fallbacks.append(one_agent)
-
-        if agent is None:
+        if isinstance(main_llm_resources, dict):
             error: str = "No fully-specified LLM found in llm_config or fallbacks."
-            if len(required_llm_config) > 0:
+            error_dict: Dict[str, Any] = main_llm_resources
+
+            required_sly_data: List[str] = error_dict.get("required_sly_data_errors", [])
+            if len(required_sly_data) > 0:
                 error += "\nLLM operation for this agent requires at least one "
                 error += "of the following set in sly_data.llm_config:\n"
-                error += "\n".join(sorted(required_llm_config)) + "\n"
+                error += "\n    ".join(sorted(required_sly_data)) + "\n"
+
+            construction_errors: List[str] = error_dict.get("construction_errors", [])
             if len(construction_errors) > 0:
                 error += "\nThe following errors occurred while constructing LLMs:\n"
-                error += "\n".join(construction_errors) + "\n"
+                error += "\n    ".join(construction_errors) + "\n"
+
+            api_key_errors: List[str] = error_dict.get("api_key_errors", [])
+            if len(api_key_errors) > 0:
+                error += "\n\nLLM operation for this agent requires at least one LLM provider API key"
+                error += " to be set as an environment variable."
+                error += "\nThe following errors occurred while looking for LLM API keys:\n"
+                error += "\n    ".join(api_key_errors)
+
+                for api_key_error in api_key_errors:
+                    # Note: We are assuming the errors have already been filtered for
+                    # not dispensing secrets with ApiKeyErrorCheck.get_safe_log_message()
+                    self.logger.error("API KEY error detected: %s", api_key_error)
+
             raise ValueError(error)
 
-        if len(chain_fallbacks) > 0:
-            # Set up fallbacks.
-            # See https://python.langchain.com/docs/how_to/tools_error/#tryexcept-tool-call
-            agent = agent.with_fallbacks(chain_fallbacks)
+        self.llm_resources = main_llm_resources
+        agent: Runnable = self.create_agent(instructions, main_llm_resources.get_model())
 
         return agent
 
@@ -286,7 +270,7 @@ class LangChainRunContext(RunContext):
 
         # Create any middleware instances that were specified, in the order they were specified.
         # This will be None for most simple situations.
-        middleware_factory = MiddlewareFactory(self.invocation_context, self.origin, self.chat_history)
+        middleware_factory = MiddlewareFactory(self.invocation_context, self.origin, self.chat_history, self.capsule)
         sly_data: Dict[str, Any] = self.tool_caller.get_sly_data()
 
         middleware: List[AgentMiddleware] = None
@@ -510,11 +494,15 @@ class LangChainRunContext(RunContext):
         if self.llm_resources:
             await self.llm_resources.close_of_work()
 
+        if self.capsule:
+            await self.capsule.close_of_work()
+
         self.tools = []
         self.chat_history = []
         self.agent_chain = None
         self.recent_human_message = None
         self.llm_resources = None
+        self.capsule = None
         self.journal = None
         self.interceptor = None
 

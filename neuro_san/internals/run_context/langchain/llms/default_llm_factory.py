@@ -194,7 +194,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         :return: The fully specified config with defaults filled in.
                 Can also return a set of strings describing any required sly_data API keys that are not provided.
         """
-        full_config: Dict[str, Any] = None
+        full_config: Dict[str, Any] | Set[str] = None
 
         class_from_llm_config: str = config.get("class")
         if class_from_llm_config:
@@ -443,8 +443,6 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                     #          following set in sly_data.llm_config:
                     #          anthropic_api_key
                     #
-                    self.logger.error("API KEY error detected: %s",
-                                      ApiKeyErrorCheck.get_safe_log_message(exception))
                     raise ValueError(message) from exception
                 found_exception = exception
 
@@ -570,3 +568,99 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         :return: A new dictionary with the same values, but with sanitized keys.
         """
         return {self.strip_outer_quotes(k): v for k, v in d.items()}
+
+    # pylint: disable=too-many-branches
+    def create_llm_with_fallbacks(self, config: Dict[str, Any],
+                                  sly_data: Dict[str, Any] = None,
+                                  num_fallbacks: int = None) -> LangChainLlmResources | Dict[str, Any]:
+        """
+        :param config: A dictionary which describes which LLM to use, perhaps with fallbacks specified.
+        :param sly_data: A user-provided dictionary of private data,
+                from which we might extract API keys to use for user billing.
+                Can be None indicating no API keys are provided at all and the system defaults will be used.
+        :param num_fallbacks: The number of fallbacks to try. Default value of None implies all.
+        :return: A LangChainLlmResources instance or if no valid llm was found or
+                a dictionary whose keys are error types and whose values are lists of error strings
+                for that type.  If there were valid and useable fallbacks specified,
+                those will be set up as fallbacks for the model on the LlmResources object.
+        """
+        # Prepare a list of fallbacks.  By default, the llm_config itself is a single-entry fallback list.
+        fallbacks: List[Dict[str, Any]] = [config]
+        fallbacks = config.get("fallbacks", fallbacks)
+
+        # Initialize a list of chain fallbacks. This may or may not get filled.
+        main_llm_resources: LangChainLlmResources = None
+        fallback_llm_resources: List[LangChainLlmResources] = []
+
+        # Different kinds of errors we might encounter and report separately
+        required_sly_data: Set[str] = set()
+        api_key_errors: Set[str] = set()
+        construction_errors: Set[str] = set()
+
+        # Trim the list of fallbacks.
+        if num_fallbacks is not None:
+            if num_fallbacks < 0:
+                # Take it from the end
+                fallbacks = fallbacks[num_fallbacks:]
+            else:
+                # Take it from the beginning
+                fallbacks = fallbacks[:num_fallbacks]
+
+        # Go through the list of fallbacks in the config.
+        for fallback in fallbacks:
+
+            # Create a model we might use.
+            # If construction fails (e.g. missing API key in env), record the error and
+            # try the next fallback rather than aborting the whole loop.
+            one_llm_resources: LangChainLlmResources | Set[str] = None
+            try:
+                one_llm_resources = self.create_llm(fallback, sly_data)
+            except ValueError as exception:
+                # API Key errors get thrown as ValueErrors but have their
+                # "from" __cause__ set as the original exception.
+                # Examine that so we can report those separately.
+                if exception.__cause__ is not None:
+                    cause: Exception = exception.__cause__
+                    message: str = ApiKeyErrorCheck.check_for_api_key_exception(cause)
+                    if message is not None:
+                        # Make sure the message is fit for public consumption with no
+                        # explicit secrets in the text.
+                        message = ApiKeyErrorCheck.get_safe_log_message(exception)
+                        api_key_errors.add(message)
+                        continue
+
+                construction_errors.add(str(exception))
+                continue
+
+            if one_llm_resources is None:
+                # Nothing to use or report.
+                # Skip for now, a fallback might still be fulfilled.
+                continue
+
+            if isinstance(one_llm_resources, set):
+                # Report later on which required llm_config are missing
+                # Skip for now, a fallback might still be fulfilled.
+                required_sly_data.update(one_llm_resources)
+                continue
+
+            if main_llm_resources is None:
+                # The first fully-specified llm is the one we want to be our main guy.
+                main_llm_resources = one_llm_resources
+            else:
+                # Anything later than the first guy is considered a fallback. Add it to the list.
+                fallback_llm_resources.append(one_llm_resources)
+
+        if main_llm_resources is None:
+            # Return all errors
+            return {
+                "api_key_errors": sorted(api_key_errors),
+                "construction_errors": sorted(construction_errors),
+                "required_sly_data_errors": sorted(required_sly_data),
+            }
+
+        if len(fallback_llm_resources) > 0:
+            # Set up fallbacks.
+            # See https://python.langchain.com/docs/how_to/tools_error/#tryexcept-tool-call
+            main_llm_resources.add_fallback_resources(fallback_llm_resources)
+
+        return main_llm_resources

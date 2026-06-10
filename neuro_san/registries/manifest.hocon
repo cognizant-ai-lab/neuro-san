@@ -29,6 +29,7 @@
 
     "esp_decision_assistant.hocon": true,
     "intranet_agents.hocon": true,
+    "intranet_agents_middleware.hocon": true,
     "math_guy.hocon": true,
     "math_guy_passthrough.hocon": true,
     "music_nerd.hocon": true,

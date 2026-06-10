@@ -162,8 +162,13 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
             "params": tool_start_dict.get("tool_args")
         }
 
+        # Fall back to a placeholder label when the serialized tool has no name,
+        # so the journaled event stays diagnostic rather than an empty "Invoking: ``".
+        # The real value (or None) is still carried in invoked_agent_name above.
+        display_name: str = agent_name if agent_name else "<unnamed tool>"
+
         # Report that we are about to invoke a tool.
-        message: BaseMessage = AgentMessage(content=f"Invoking: `{agent_name}` with:",
+        message: BaseMessage = AgentMessage(content=f"Invoking: `{display_name}` with:",
                                             structure=caller_structure)
         await self.calling_agent_journal.write_message(message)
 
