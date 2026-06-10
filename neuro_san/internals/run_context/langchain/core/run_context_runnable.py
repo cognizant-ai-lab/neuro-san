@@ -327,12 +327,17 @@ class RunContextRunnable(NeuroSanRunnable):
                 # We generally want the content of any single AIMessage we found from above
                 output = ai_message.content
 
-        # In general, output is a string. but output from Anthropic can either be
-        # a single string or a list of content blocks.
-        # If it is a list, "text" is a key of a dictionary which is the first element of
-        # the list. For more details: https://python.langchain.com/docs/integrations/chat/anthropic/#content-blocks
+        # In general, output is a string. but output can also be a list of content blocks if there are multiple
+        # messages types, such as "thinking", "reasoning", etc.
+        # If it is a list, "text" is a key of a dictionary which contains the actual string output we want to return.
+        # For more details: https://docs.langchain.com/oss/python/langchain/messages#standard-content-blocks
         if isinstance(output, list):
-            output = output[0].get("text", "")
+            text_output: str = ""
+            for block in output:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    text_output = block.get("text", "")
+                    break
+            output = text_output
 
         # See if we had some kind of error and format accordingly, if asked for.
         output = self.error_detector.handle_error(output, backtrace)
