@@ -23,6 +23,11 @@
 
     # Model context and output tokens: https://platform.openai.com/docs/models
     # Model compatibility: https://platform.openai.com/docs/models#model-endpoint-compatibility
+    # Model launch dates come from OpenAI's model release notes:
+    # https://help.openai.com/en/articles/9624314-model-release-notes
+    # Retirement dates come from OpenAI's deprecations page:
+    # https://platform.openai.com/docs/deprecations
+    # For models with no announced retirement, "model_retirement_date" is null.
     "o3-mini": {
         "use_model_name": "o3-mini-2025-01-31",
     },
@@ -37,6 +42,8 @@
         "context_window_size": 200000,
         "max_output_tokens": 100000,
         "knowledge_cutoff": "09/30/2023",
+        "model_launch_date": "2025-01-31",
+        "model_retirement_date": "2026-10-23",
     },
 
     "o1": {
@@ -53,6 +60,8 @@
         "context_window_size": 200000,
         "max_output_tokens": 100000,
         "knowledge_cutoff": "09/30/2023",
+        "model_launch_date": "2024-12-17",
+        "model_retirement_date": "2026-10-23",
     },
 
     "gpt-5.5-pro": {
@@ -71,6 +80,8 @@
         "knowledge_cutoff": "12/01/2025",
         "price_per_1k_input_tokens": 0.030,
         "price_per_1k_output_tokens": 0.180,
+        "model_launch_date": "2026-04-23",
+        "model_retirement_date": null,
     },
     "gpt-5.5": {
         "use_model_name": "gpt-5.5-2026-04-23",
@@ -88,6 +99,8 @@
         "knowledge_cutoff": "12/01/2025",
         "price_per_1k_input_tokens": 0.005,
         "price_per_1k_output_tokens": 0.030,
+        "model_launch_date": "2026-04-23",
+        "model_retirement_date": null,
     },
     "gpt-5.4-pro": {
         "use_model_name": "gpt-5.4-pro-2026-03-05",
@@ -105,6 +118,8 @@
         "knowledge_cutoff": "08/31/2025",
         "price_per_1k_input_tokens": 0.03,
         "price_per_1k_output_tokens": 0.18,
+        "model_launch_date": "2026-03-05",
+        "model_retirement_date": null,
     },
     "gpt-5.4": {
         "use_model_name": "gpt-5.4-2026-03-05",
@@ -122,6 +137,8 @@
         "knowledge_cutoff": "08/31/2025",
         "price_per_1k_input_tokens": 0.0025,
         "price_per_1k_output_tokens": 0.015,
+        "model_launch_date": "2026-03-05",
+        "model_retirement_date": null,
     },
     "gpt-5.4-mini": {
         "use_model_name": "gpt-5.4-mini-2026-03-17",
@@ -137,6 +154,8 @@
         "context_window_size": 400000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "08/31/2025",
+        "model_launch_date": "2026-03-17",
+        "model_retirement_date": null,
     },
     "gpt-5.4-nano": {
         "use_model_name": "gpt-5.4-nano-2026-03-17",
@@ -152,6 +171,8 @@
         "context_window_size": 400000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "08/31/2025",
+        "model_launch_date": "2026-03-17",
+        "model_retirement_date": null,
     },
     "gpt-5.2": {
         "use_model_name": "gpt-5.2-2025-12-11",
@@ -170,6 +191,8 @@
         # https://developers.openai.com/api/docs/pricing/
         "price_per_1k_input_tokens": 0.00175,
         "price_per_1k_output_tokens": 0.014,
+        "model_launch_date": "2025-12-11",
+        "model_retirement_date": null,
     },
     "gpt-5.1": {
         "use_model_name": "gpt-5.1-2025-11-13",
@@ -185,6 +208,8 @@
         "context_window_size": 400000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "09/30/2024",
+        "model_launch_date": "2025-11-13",
+        "model_retirement_date": null,
     },
     "gpt-5": {
         "use_model_name": "gpt-5-2025-08-07",
@@ -200,6 +225,8 @@
         "context_window_size": 400000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "09/30/2024",
+        "model_launch_date": "2025-08-07",
+        "model_retirement_date": null,
     },
     "gpt-5-mini": {
         "use_model_name": "gpt-5-mini-2025-08-07",
@@ -215,6 +242,8 @@
         "context_window_size": 400000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "05/30/2024",
+        "model_launch_date": "2025-08-07",
+        "model_retirement_date": null,
     },
     "gpt-4.1": {
         "use_model_name": "gpt-4.1-2025-04-14",
@@ -230,6 +259,8 @@
         "context_window_size": 1047576,
         "max_output_tokens": 32768,
         "knowledge_cutoff": "05/31/2024",
+        "model_launch_date": "2025-04-14",
+        "model_retirement_date": null,
     },
     "gpt-4o": {
         "use_model_name": "gpt-4o-2024-08-06",
@@ -245,6 +276,8 @@
         "context_window_size": 128000,
         "max_output_tokens": 4096,
         "knowledge_cutoff": "09/30/2023",
+        "model_launch_date": "2024-05-13",
+        "model_retirement_date": "2026-10-23",
     },
     "gpt-4o-2024-08-06": {
         "class": "openai",
@@ -257,6 +290,8 @@
         "context_window_size": 128000,
         "max_output_tokens": 16384,
         "knowledge_cutoff": "09/30/2023",
+        "model_launch_date": "2024-08-06",
+        "model_retirement_date": null,
     },
     "gpt-4o-2024-11-20": {
         "class": "openai",
@@ -269,6 +304,8 @@
         "context_window_size": 128000,
         "max_output_tokens": 16384,
         "knowledge_cutoff": "09/30/2023",
+        "model_launch_date": "2024-11-20",
+        "model_retirement_date": null,
     },
 
     "gpt-4o-mini": {
@@ -285,6 +322,8 @@
         "context_window_size": 128000,
         "max_output_tokens": 16384,
         "knowledge_cutoff": "09/30/2023",
+        "model_launch_date": "2024-07-18",
+        "model_retirement_date": null,
     },
 
     "gpt-4-turbo": {
@@ -301,6 +340,8 @@
         "context_window_size": 128000,
         "max_output_tokens": 4096,
         "knowledge_cutoff": "11/30/2023",
+        "model_launch_date": "2024-04-09",
+        "model_retirement_date": "2026-10-23",
     },
 
     "gpt-4": {
@@ -319,6 +360,8 @@
         "context_window_size": 8192,
         "max_output_tokens": 8192,
         "knowledge_cutoff": "11/30/2023",
+        "model_launch_date": "2023-06-13",
+        "model_retirement_date": "2026-10-23",
     },
 
     "gpt-3.5-turbo": {
@@ -341,10 +384,11 @@
         "context_window_size": 16384,
         "max_output_tokens": 4096,
         "knowledge_cutoff": "08/31/2021",
+        "model_launch_date": "2024-01-25",
+        "model_retirement_date": "2026-10-23",
     },
     "gpt-3.5-turbo-1106": {
         # FYI: LLMs that do not support tools cannot be used as front-men or branch nodes
-        # Per OpenAI, marked for shutdown on 09/28/2026.
         "class": "openai",
         "model_info_url": "https://platform.openai.com/docs/models/gpt-3.5-turbo",
         "modalities": {
@@ -355,6 +399,8 @@
         "context_window_size": 16384,
         "max_output_tokens": 4096,
         "knowledge_cutoff": "08/31/2021",
+        "model_launch_date": "2023-11-06",
+        "model_retirement_date": "2026-09-28",
     },
 
     # Azure models
@@ -420,8 +466,12 @@
 
     # These 4 models, claude-haiku, claude-sonnet, claude-opus, and claude-fable are references to the latest versions of their respective model lines.
     # When a new version is released, we will update the "use_model_name" field to point to the new version, and the old version will still be accessible via its own entry.
-    # Status of model lines and versions can be found here:
+    # Status of model lines and versions, including retirement dates, can be found here:
     # https://platform.claude.com/docs/en/about-claude/model-deprecations
+    # Model launch dates come from the AWS Bedrock model cards:
+    # https://docs.aws.amazon.com/bedrock/latest/userguide/model-cards-anthropic.html
+    # For deprecated models, "model_retirement_date" is the actual retirement date.
+    # For active models, it is the "not sooner than" tentative retirement date and may be pushed out.
     "claude-haiku": {
         "use_model_name": "claude-haiku-4-5-20251001"
     },
@@ -453,6 +503,8 @@
         # https://platform.claude.com/docs/en/about-claude/pricing
         "price_per_1k_input_tokens": 0.003,
         "price_per_1k_output_tokens": 0.015,
+        "model_launch_date": "2025-05-23",
+        "model_retirement_date": "2026-06-15",
     },
 
     "claude-opus-4-0": {
@@ -473,6 +525,9 @@
         # https://platform.claude.com/docs/en/about-claude/pricing
         "price_per_1k_input_tokens": 0.015,
         "price_per_1k_output_tokens": 0.075,
+        # AWS removed the Claude Opus 4 model card; launch date matches Claude Sonnet 4 (released as a pair).
+        "model_launch_date": "2025-05-23",
+        "model_retirement_date": "2026-06-15",
     },
 
     "claude-opus-4-1": {
@@ -493,6 +548,8 @@
         # https://platform.claude.com/docs/en/about-claude/pricing
         "price_per_1k_input_tokens": 0.015,
         "price_per_1k_output_tokens": 0.075,
+        "model_launch_date": "2025-08-05",
+        "model_retirement_date": "2026-08-05",
     },
 
     "claude-haiku-4-5": {
@@ -513,6 +570,8 @@
         # https://platform.claude.com/docs/en/about-claude/pricing
         "price_per_1k_input_tokens": 0.001,
         "price_per_1k_output_tokens": 0.005,
+        "model_launch_date": "2025-10-16",
+        "model_retirement_date": "2026-10-15",
     },
 
     "claude-sonnet-4-5": {
@@ -533,6 +592,8 @@
         # https://platform.claude.com/docs/en/about-claude/pricing
         "price_per_1k_input_tokens": 0.003,
         "price_per_1k_output_tokens": 0.015,
+        "model_launch_date": "2025-09-30",
+        "model_retirement_date": "2026-09-29",
     },
 
     "claude-sonnet-4-6": {
@@ -550,6 +611,8 @@
         # https://platform.claude.com/docs/en/about-claude/pricing
         "price_per_1k_input_tokens": 0.003,
         "price_per_1k_output_tokens": 0.015,
+        "model_launch_date": "2026-02-17",
+        "model_retirement_date": "2027-02-17",
     },
 
     "claude-opus-4-5": {
@@ -570,6 +633,8 @@
         # https://platform.claude.com/docs/en/about-claude/pricing
         "price_per_1k_input_tokens": 0.005,
         "price_per_1k_output_tokens": 0.025,
+        "model_launch_date": "2025-11-24",
+        "model_retirement_date": "2026-11-24",
     },
     "claude-opus-4-6": {
         "class": "anthropic",
@@ -586,6 +651,8 @@
         # https://platform.claude.com/docs/en/about-claude/pricing
         "price_per_1k_input_tokens": 0.005,
         "price_per_1k_output_tokens": 0.025,
+        "model_launch_date": "2026-02-05",
+        "model_retirement_date": "2027-02-05",
     },
     "claude-opus-4-7": {
         "class": "anthropic",
@@ -602,6 +669,8 @@
         # https://platform.claude.com/docs/en/about-claude/pricing
         "price_per_1k_input_tokens": 0.005,
         "price_per_1k_output_tokens": 0.025,
+        "model_launch_date": "2026-04-16",
+        "model_retirement_date": "2027-04-16",
     },
     "claude-opus-4-8": {
         "class": "anthropic",
@@ -618,6 +687,8 @@
         # https://platform.claude.com/docs/en/about-claude/pricing
         "price_per_1k_input_tokens": 0.005,
         "price_per_1k_output_tokens": 0.025,
+        "model_launch_date": "2026-05-28",
+        "model_retirement_date": "2027-05-28",
     },
     "claude-fable-5": {
         "class": "anthropic",
@@ -636,6 +707,7 @@
         "price_per_1k_input_tokens": 0.010,
         "price_per_1k_output_tokens": 0.050,
         "model_launch_date": "2026-06-09",
+        "model_retirement_date": null,
     },
     # Note on claude-mythos-5: As of 2026-06-10, this model is only available via the Project Glasswing,
     # which is invitation-only. Thus, we are not including it in the default LLM info at this time.
@@ -842,6 +914,11 @@
     },
 
     # Google Gemini
+    # Model launch dates and retirement dates come from the Gemini API deprecations page:
+    # https://ai.google.dev/gemini-api/docs/deprecations
+    # Per Google, the listed shutdown dates are the "earliest possible dates" — exact
+    # retirement is communicated with advance notice. For models with no announced
+    # retirement, "model_retirement_date" is null.
     "gemini-3.5-flash": {
         "class": "gemini",
         "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash",
@@ -856,6 +933,8 @@
         # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
         "price_per_1k_input_tokens": 0.0015,
         "price_per_1k_output_tokens": 0.009,
+        "model_launch_date": "2026-05-19",
+        "model_retirement_date": null,
     },
     "gemini-3.1-pro": {
         "use_model_name": "gemini-3.1-pro-preview"
@@ -874,6 +953,8 @@
         # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
         "price_per_1k_input_tokens": 0.002,
         "price_per_1k_output_tokens": 0.012,
+        "model_launch_date": "2026-02-19",
+        "model_retirement_date": null,
     },
     "gemini-3.1-flash-lite": {
         "class": "gemini",
@@ -889,6 +970,8 @@
         # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
         "price_per_1k_input_tokens": 0.00025,
         "price_per_1k_output_tokens": 0.0015,
+        "model_launch_date": "2026-05-07",
+        "model_retirement_date": "2027-05-07",
     },
     # This model is optimized for agentic workflows that use custom tools and bash
     "gemini-3.1-pro-customtools": {
@@ -908,6 +991,9 @@
         # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
         "price_per_1k_input_tokens": 0.002,
         "price_per_1k_output_tokens": 0.012,
+        # Same underlying model as gemini-3.1-pro-preview, configured for custom tools/bash.
+        "model_launch_date": "2026-02-19",
+        "model_retirement_date": null,
     },
     "gemini-3-flash": {
         "use_model_name": "gemini-3-flash-preview"
@@ -926,6 +1012,8 @@
         # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
         "price_per_1k_input_tokens": 0.0005,
         "price_per_1k_output_tokens": 0.003,
+        "model_launch_date": "2025-12-17",
+        "model_retirement_date": null,
     },
     "gemini-2.5-pro": {
         "class": "gemini",
@@ -941,6 +1029,8 @@
         # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
         "price_per_1k_input_tokens": 0.00125,
         "price_per_1k_output_tokens": 0.01,
+        "model_launch_date": "2025-06-17",
+        "model_retirement_date": "2026-10-16",
     },
     "gemini-2.5-flash": {
         "class": "gemini",
@@ -956,6 +1046,8 @@
         # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
         "price_per_1k_input_tokens": 0.0003,
         "price_per_1k_output_tokens": 0.0025,
+        "model_launch_date": "2025-06-17",
+        "model_retirement_date": "2026-10-16",
     },
     "gemini-2.5-flash-lite": {
         "class": "gemini",
@@ -971,38 +1063,9 @@
         # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
         "price_per_1k_input_tokens": 0.0001,
         "price_per_1k_output_tokens": 0.0004,
+        "model_launch_date": "2025-07-22",
+        "model_retirement_date": "2026-10-16",
     },
-    "gemini-2.0-flash": {
-        "class": "gemini",
-        "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-2.0-flash",
-        "modalities": {
-            "input": [ "text", "images", "video", "audio" ],
-            "output": [ "text", "images" ],
-        },
-        "capabilities": [ "tools" ],
-        "context_window_size": 1048576,
-        "max_output_tokens": 8192,
-        "knowledge_cutoff": "08/2024",
-        # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
-        "price_per_1k_input_tokens": 0.00015,
-        "price_per_1k_output_tokens": 0.0006,
-    },
-    "gemini-2.0-flash-lite": {
-        "class": "gemini",
-        "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-2.0-flash-lite",
-        "modalities": {
-            "input": [ "text", "images", "video", "audio" ],
-            "output": [ "text" ],
-        },
-        "capabilities": [ "tools" ],
-        "context_window_size": 1048576,
-        "max_output_tokens": 8192,
-        "knowledge_cutoff": "08/2024",
-        # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
-        "price_per_1k_input_tokens": 0.000075,
-        "price_per_1k_output_tokens": 0.0003,
-    },
-
     # Bedrock
 
     # These models require access to AWS endpoints in either us-east-1, us-east-2, or us-west-2
