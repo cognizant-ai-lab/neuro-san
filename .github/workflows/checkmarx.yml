@@ -86,26 +86,16 @@ jobs:
             echo "Project ID: ${PROJECT_ID}"
           fi
 
-          # Build report request body
+          # Build report request body using jq to avoid shell interpolation injection
           if [[ -n "$PROJECT_ID" ]]; then
-            REPORT_BODY="{
-              \"reportType\": \"cli\",
-              \"reportName\": \"improved-scan-report\",
-              \"fileFormat\": \"pdf\",
-              \"data\": {
-                \"scanId\": \"${SCAN_ID}\",
-                \"projectId\": \"${PROJECT_ID}\"
-              }
-            }"
+            REPORT_BODY="$(jq --null-input \
+              --arg scanId "$SCAN_ID" \
+              --arg projectId "$PROJECT_ID" \
+              '{reportType: "cli", reportName: "improved-scan-report", fileFormat: "pdf", data: {scanId: $scanId, projectId: $projectId}}')"
           else
-            REPORT_BODY="{
-              \"reportType\": \"cli\",
-              \"reportName\": \"improved-scan-report\",
-              \"fileFormat\": \"pdf\",
-              \"data\": {
-                \"scanId\": \"${SCAN_ID}\"
-              }
-            }"
+            REPORT_BODY="$(jq --null-input \
+              --arg scanId "$SCAN_ID" \
+              '{reportType: "cli", reportName: "improved-scan-report", fileFormat: "pdf", data: {scanId: $scanId}}')"
           fi
 
           echo "Requesting report for scan ${SCAN_ID}"
