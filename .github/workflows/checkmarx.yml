@@ -33,6 +33,7 @@ jobs:
           cx-tenant: ${{ vars.CX_TENANT }}
           cx-client-id: ${{ vars.CX_CLIENT_ID }}
           cx-client-secret: ${{ secrets.CX_CLIENT_SECRET }}
+          scan-params: '--preset-name "Checkmarx Default"'
 
       - name: Generate and download Checkmarx report
         id: report
