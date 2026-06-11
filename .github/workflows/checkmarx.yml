@@ -9,18 +9,23 @@ on:
   schedule:
     # M-F at 2 am UTC
     - cron: '0 2 * * 1-5'
+  workflow_dispatch:
+  push:
+    branches:
+      - devin/1781196868-checkmarx-report
 
 jobs:
   checkmarx-scan:
     runs-on: ubuntu-latest
     steps:
-      # v6.0.2
       - name: Checkout repository
+        # v6.0.2
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 0
 
       - name: Run Checkmarx One scan
+        id: scan
         # build-common 1.0.7
         uses: cognizant-ai-lab/build-common/actions/checkmarx-one@3ead7f681f92044709ffc3a533f41c3f48230cfd
         with:
@@ -28,3 +33,102 @@ jobs:
           cx-tenant: ${{ vars.CX_TENANT }}
           cx-client-id: ${{ vars.CX_CLIENT_ID }}
           cx-client-secret: ${{ secrets.CX_CLIENT_SECRET }}
+
+      - name: Generate and download Checkmarx report
+        id: report
+        if: steps.scan.outputs.scan-id != ''
+        env:
+          CX_BASE_URI: ${{ vars.CX_BASE_URI }}
+          CX_IAM_URI: ${{ vars.CX_IAM_URI }}
+          CX_TENANT: ${{ vars.CX_TENANT }}
+          CX_CLIENT_ID: ${{ vars.CX_CLIENT_ID }}
+          CX_CLIENT_SECRET: ${{ secrets.CX_CLIENT_SECRET }}
+          SCAN_ID: ${{ steps.scan.outputs.scan-id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Use CX_IAM_URI if set, otherwise derive from CX_BASE_URI
+          # (e.g., https://ast.checkmarx.net -> https://iam.checkmarx.net)
+          if [[ -n "${CX_IAM_URI:-}" ]]; then
+            IAM_URI="$CX_IAM_URI"
+          else
+            IAM_URI="$(echo "$CX_BASE_URI" | sed 's|ast\.checkmarx|iam.checkmarx|')"
+          fi
+
+          echo "Authenticating with Checkmarx One at ${IAM_URI}"
+          TOKEN="$(curl --silent --fail-with-body \
+            --request POST \
+            --header "Content-Type: application/x-www-form-urlencoded" \
+            --data-urlencode "grant_type=client_credentials" \
+            --data-urlencode "client_id=${CX_CLIENT_ID}" \
+            --data-urlencode "client_secret=${CX_CLIENT_SECRET}" \
+            "${IAM_URI}/auth/realms/${CX_TENANT}/protocol/openid-connect/token" \
+            | jq --raw-output '.access_token')"
+
+          if [[ -z "$TOKEN" || "$TOKEN" == "null" ]]; then
+            echo "::error::Failed to authenticate with Checkmarx One"
+            exit 1
+          fi
+
+          echo "Requesting report for scan ${SCAN_ID}"
+          REPORT_RESPONSE="$(curl --silent --fail-with-body \
+            --request POST \
+            --header "Authorization: Bearer ${TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data "{
+              \"reportType\": \"cli\",
+              \"reportName\": \"checkmarx-scan-report\",
+              \"fileFormat\": \"pdf\",
+              \"data\": {
+                \"scanId\": \"${SCAN_ID}\"
+              }
+            }" \
+            "${CX_BASE_URI}/api/reports")"
+
+          REPORT_ID="$(echo "$REPORT_RESPONSE" | jq --raw-output '.reportId')"
+          if [[ -z "$REPORT_ID" || "$REPORT_ID" == "null" ]]; then
+            echo "::error::Failed to create report. Response: ${REPORT_RESPONSE}"
+            exit 1
+          fi
+
+          echo "Report ID: ${REPORT_ID} — polling for completion"
+          for i in $(seq 1 30); do
+            STATUS="$(curl --silent --fail-with-body \
+              --header "Authorization: Bearer ${TOKEN}" \
+              "${CX_BASE_URI}/api/reports/${REPORT_ID}/status" \
+              | jq --raw-output '.status')"
+
+            echo "  Attempt ${i}/30: status=${STATUS}"
+
+            if [[ "$STATUS" == "completed" ]]; then
+              break
+            elif [[ "$STATUS" == "failed" ]]; then
+              echo "::error::Report generation failed"
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          if [[ "$STATUS" != "completed" ]]; then
+            echo "::error::Report generation timed out after 5 minutes"
+            exit 1
+          fi
+
+          curl --silent --fail-with-body \
+            --header "Authorization: Bearer ${TOKEN}" \
+            --output "checkmarx-report.pdf" \
+            "${CX_BASE_URI}/api/reports/${REPORT_ID}/download"
+
+          echo "Report downloaded successfully"
+          ls -la checkmarx-report.pdf
+
+      - name: Upload Checkmarx report
+        if: steps.report.outcome == 'success'
+        # v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: checkmarx-report-${{ github.run_id }}
+          path: checkmarx-report.pdf
+          retention-days: 90
