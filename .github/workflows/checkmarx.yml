@@ -1,10 +1,6 @@
 ---
 name: Checkmarx One
 
-permissions:
-  contents: write
-  security-events: write
-
 on:
   schedule:
     # M-F at 2 am UTC
@@ -17,6 +13,9 @@ on:
 jobs:
   checkmarx-scan:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - name: Checkout repository
         # v6.0.2
@@ -187,12 +186,25 @@ jobs:
           path: checkmarx-report.pdf
           retention-days: 90
 
+  attach-to-release:
+    if: github.event_name == 'release'
+    needs: checkmarx-scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download report artifact
+        # v4.3.0
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: checkmarx-report-${{ github.run_id }}
+
       - name: Attach report to release
-        if: github.event_name == 'release' && steps.report.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
         shell: bash
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" \
+          gh release upload "$TAG_NAME" \
             checkmarx-report.pdf#checkmarx-sast-report.pdf \
             --clobber
