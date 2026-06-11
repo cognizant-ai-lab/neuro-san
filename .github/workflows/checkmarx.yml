@@ -48,63 +48,105 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Strip trailing slash from base URI
+          API_BASE="${CX_BASE_URI%/}"
+
           # Use CX_IAM_URI if set, otherwise derive from CX_BASE_URI
-          # (e.g., https://ast.checkmarx.net -> https://iam.checkmarx.net)
+          # (e.g., https://us.ast.checkmarx.net -> https://us.iam.checkmarx.net)
           if [[ -n "${CX_IAM_URI:-}" ]]; then
-            IAM_URI="$CX_IAM_URI"
+            IAM_URI="${CX_IAM_URI%/}"
           else
-            IAM_URI="$(echo "$CX_BASE_URI" | sed 's|ast\.checkmarx|iam.checkmarx|')"
+            IAM_URI="$(echo "$API_BASE" | sed 's|ast\.checkmarx|iam.checkmarx|')"
           fi
 
           echo "Authenticating with Checkmarx One at ${IAM_URI}"
-          TOKEN="$(curl --silent --fail-with-body \
+          AUTH_RESPONSE="$(curl --silent --show-error \
             --request POST \
             --header "Content-Type: application/x-www-form-urlencoded" \
             --data-urlencode "grant_type=client_credentials" \
             --data-urlencode "client_id=${CX_CLIENT_ID}" \
             --data-urlencode "client_secret=${CX_CLIENT_SECRET}" \
-            "${IAM_URI}/auth/realms/${CX_TENANT}/protocol/openid-connect/token" \
-            | jq --raw-output '.access_token')"
+            "${IAM_URI}/auth/realms/${CX_TENANT}/protocol/openid-connect/token")"
 
+          TOKEN="$(echo "$AUTH_RESPONSE" | jq --raw-output '.access_token')"
           if [[ -z "$TOKEN" || "$TOKEN" == "null" ]]; then
-            echo "::error::Failed to authenticate with Checkmarx One"
+            echo "::error::Failed to authenticate. Response: ${AUTH_RESPONSE}"
             exit 1
           fi
 
-          echo "Requesting report for scan ${SCAN_ID}"
-          REPORT_RESPONSE="$(curl --silent --fail-with-body \
-            --request POST \
+          # Get project ID from scan details
+          echo "Fetching scan details for ${SCAN_ID}"
+          SCAN_RESPONSE="$(curl --silent --show-error \
             --header "Authorization: Bearer ${TOKEN}" \
-            --header "Content-Type: application/json" \
-            --data "{
+            "${API_BASE}/api/scans/${SCAN_ID}")"
+          echo "Scan response: ${SCAN_RESPONSE}" | head -c 500
+
+          PROJECT_ID="$(echo "$SCAN_RESPONSE" | jq --raw-output '.projectId // .projectID // empty')"
+          if [[ -z "$PROJECT_ID" ]]; then
+            echo "::warning::Could not extract projectId from scan details"
+          else
+            echo "Project ID: ${PROJECT_ID}"
+          fi
+
+          # Build report request body
+          if [[ -n "$PROJECT_ID" ]]; then
+            REPORT_BODY="{
+              \"reportType\": \"cli\",
+              \"reportName\": \"checkmarx-scan-report\",
+              \"fileFormat\": \"pdf\",
+              \"data\": {
+                \"scanId\": \"${SCAN_ID}\",
+                \"projectId\": \"${PROJECT_ID}\"
+              }
+            }"
+          else
+            REPORT_BODY="{
               \"reportType\": \"cli\",
               \"reportName\": \"checkmarx-scan-report\",
               \"fileFormat\": \"pdf\",
               \"data\": {
                 \"scanId\": \"${SCAN_ID}\"
               }
-            }" \
-            "${CX_BASE_URI}/api/reports")"
+            }"
+          fi
 
-          REPORT_ID="$(echo "$REPORT_RESPONSE" | jq --raw-output '.reportId')"
+          echo "Requesting report for scan ${SCAN_ID}"
+          REPORT_RESPONSE="$(curl --silent --show-error \
+            --write-out "\n%{http_code}" \
+            --request POST \
+            --header "Authorization: Bearer ${TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data "$REPORT_BODY" \
+            "${API_BASE}/api/reports")"
+
+          HTTP_CODE="$(echo "$REPORT_RESPONSE" | tail -n1)"
+          REPORT_BODY_RESP="$(echo "$REPORT_RESPONSE" | sed '$d')"
+          echo "Report API response (HTTP ${HTTP_CODE}): ${REPORT_BODY_RESP}"
+
+          if [[ "$HTTP_CODE" -ge 400 ]]; then
+            echo "::error::Report creation failed (HTTP ${HTTP_CODE}): ${REPORT_BODY_RESP}"
+            exit 1
+          fi
+
+          REPORT_ID="$(echo "$REPORT_BODY_RESP" | jq --raw-output '.reportId')"
           if [[ -z "$REPORT_ID" || "$REPORT_ID" == "null" ]]; then
-            echo "::error::Failed to create report. Response: ${REPORT_RESPONSE}"
+            echo "::error::No reportId in response: ${REPORT_BODY_RESP}"
             exit 1
           fi
 
           echo "Report ID: ${REPORT_ID} — polling for completion"
           for i in $(seq 1 30); do
-            STATUS="$(curl --silent --fail-with-body \
+            STATUS_RESP="$(curl --silent --show-error \
               --header "Authorization: Bearer ${TOKEN}" \
-              "${CX_BASE_URI}/api/reports/${REPORT_ID}/status" \
-              | jq --raw-output '.status')"
+              "${API_BASE}/api/reports/${REPORT_ID}/status")"
+            STATUS="$(echo "$STATUS_RESP" | jq --raw-output '.status')"
 
             echo "  Attempt ${i}/30: status=${STATUS}"
 
             if [[ "$STATUS" == "completed" ]]; then
               break
             elif [[ "$STATUS" == "failed" ]]; then
-              echo "::error::Report generation failed"
+              echo "::error::Report generation failed: ${STATUS_RESP}"
               exit 1
             fi
 
@@ -116,10 +158,10 @@ jobs:
             exit 1
           fi
 
-          curl --silent --fail-with-body \
+          curl --silent --show-error --fail \
             --header "Authorization: Bearer ${TOKEN}" \
             --output "checkmarx-report.pdf" \
-            "${CX_BASE_URI}/api/reports/${REPORT_ID}/download"
+            "${API_BASE}/api/reports/${REPORT_ID}/download"
 
           echo "Report downloaded successfully"
           ls -la checkmarx-report.pdf
