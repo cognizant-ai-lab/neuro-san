@@ -30,7 +30,7 @@ jobs:
           cx-tenant: ${{ vars.CX_TENANT }}
           cx-client-id: ${{ vars.CX_CLIENT_ID }}
           cx-client-secret: ${{ secrets.CX_CLIENT_SECRET }}
-          scan-params: '--sast-preset-name "Checkmarx Default" --threshold "sast-critical=0;sast-high=0"'
+          scan-params: '--sast-preset-name "Checkmarx Default" --threshold "sast-critical=1;sast-high=1"'
 
       - name: Generate and download Checkmarx report
         id: report
