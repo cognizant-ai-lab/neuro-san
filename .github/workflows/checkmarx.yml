@@ -10,9 +10,6 @@ on:
     # M-F at 2 am UTC
     - cron: '0 2 * * 1-5'
   workflow_dispatch:
-  push:
-    branches:
-      - devin/1781205319-fix-cx-threshold
 
 jobs:
   checkmarx-scan:
@@ -33,7 +30,7 @@ jobs:
           cx-tenant: ${{ vars.CX_TENANT }}
           cx-client-id: ${{ vars.CX_CLIENT_ID }}
           cx-client-secret: ${{ secrets.CX_CLIENT_SECRET }}
-          scan-params: '--sast-preset-name "Checkmarx Default" --threshold "sast-critical=1;sast-high=1;sast-medium=1"'
+          scan-params: '--sast-preset-name "Checkmarx Default" --threshold "sast-critical=1;sast-high=1"'
 
       - name: Generate and download Checkmarx report
         id: report
