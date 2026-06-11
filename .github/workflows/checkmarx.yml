@@ -10,9 +10,6 @@ on:
     # M-F at 2 am UTC
     - cron: '0 2 * * 1-5'
   workflow_dispatch:
-  push:
-    branches:
-      - devin/1781205319-fix-cx-threshold
 
 jobs:
   checkmarx-scan:
