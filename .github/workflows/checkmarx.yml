@@ -30,11 +30,11 @@ jobs:
           cx-tenant: ${{ vars.CX_TENANT }}
           cx-client-id: ${{ vars.CX_CLIENT_ID }}
           cx-client-secret: ${{ secrets.CX_CLIENT_SECRET }}
-          scan-params: '--sast-preset-name "Checkmarx Default"'
+          scan-params: '--sast-preset-name "Checkmarx Default" --threshold "sast-critical=0;sast-high=0"'
 
       - name: Generate and download Checkmarx report
         id: report
-        if: steps.scan.outputs.scan-id != ''
+        if: always() && steps.scan.outputs.scan-id != ''
         env:
           CX_BASE_URI: ${{ vars.CX_BASE_URI }}
           CX_IAM_URI: ${{ vars.CX_IAM_URI }}
@@ -176,7 +176,7 @@ jobs:
           ls -la checkmarx-report.pdf
 
       - name: Upload Checkmarx report
-        if: steps.report.outcome == 'success'
+        if: always() && steps.report.outcome == 'success'
         # v4.6.2
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
