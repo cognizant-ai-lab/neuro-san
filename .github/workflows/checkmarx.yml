@@ -135,17 +135,31 @@ jobs:
           fi
 
           echo "Report ID: ${REPORT_ID} — polling for completion"
+          STATUS="unknown"
           for i in $(seq 1 30); do
             STATUS_RESP="$(curl --silent --show-error \
               --header "Authorization: Bearer ${TOKEN}" \
-              "${API_BASE}/api/reports/${REPORT_ID}/status")"
-            STATUS="$(echo "$STATUS_RESP" | jq --raw-output '.status')"
+              "${API_BASE}/api/reports/${REPORT_ID}")"
 
-            echo "  Attempt ${i}/30: status=${STATUS}"
+            echo "  Attempt ${i}/30 raw response: ${STATUS_RESP}"
 
-            if [[ "$STATUS" == "completed" ]]; then
+            # Try common field names for status
+            STATUS="$(echo "$STATUS_RESP" \
+              | jq --raw-output '
+                  if type == "object" then
+                    (.status // .reportStatus // "unknown")
+                  else
+                    tostring
+                  end
+                ' 2>/dev/null || echo "parse-error")"
+
+            # Normalize to lowercase for comparison
+            STATUS_LOWER="$(echo "$STATUS" | tr '[:upper:]' '[:lower:]')"
+            echo "  Parsed status: ${STATUS_LOWER}"
+
+            if [[ "$STATUS_LOWER" == "completed" ]]; then
               break
-            elif [[ "$STATUS" == "failed" ]]; then
+            elif [[ "$STATUS_LOWER" == "failed" ]]; then
               echo "::error::Report generation failed: ${STATUS_RESP}"
               exit 1
             fi
@@ -153,15 +167,22 @@ jobs:
             sleep 10
           done
 
-          if [[ "$STATUS" != "completed" ]]; then
+          if [[ "$STATUS_LOWER" != "completed" ]]; then
             echo "::error::Report generation timed out after 5 minutes"
             exit 1
           fi
 
+          # Try the download URL from the status response first, fall back to convention
+          DOWNLOAD_URL="$(echo "$STATUS_RESP" | jq --raw-output '.url // empty' 2>/dev/null || true)"
+          if [[ -z "$DOWNLOAD_URL" ]]; then
+            DOWNLOAD_URL="${API_BASE}/api/reports/${REPORT_ID}/download"
+          fi
+
+          echo "Downloading report from ${DOWNLOAD_URL}"
           curl --silent --show-error --fail \
             --header "Authorization: Bearer ${TOKEN}" \
             --output "checkmarx-report.pdf" \
-            "${API_BASE}/api/reports/${REPORT_ID}/download"
+            "$DOWNLOAD_URL"
 
           echo "Report downloaded successfully"
           ls -la checkmarx-report.pdf
