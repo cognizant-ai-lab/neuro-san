@@ -187,7 +187,7 @@ jobs:
           retention-days: 90
 
   attach-to-release:
-    if: github.event_name == 'release'
+    if: always() && github.event_name == 'release'
     needs: checkmarx-scan
     runs-on: ubuntu-latest
     permissions:
