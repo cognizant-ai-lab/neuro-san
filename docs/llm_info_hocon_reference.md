@@ -162,8 +162,8 @@ the price fields in the default file for the relevant URL). Providers change pri
 periodically, so this number should be treated as a snapshot at the time the entry was
 authored.
 
-This key is optional. If a model has tiered or context-dependent pricing, the value here
-should be the standard published rate.
+This key is optional. If present, neuro-san will use it for token-cost estimation in the token callback handler.
+If a model has tiered or context-dependent pricing, the value here should be the standard published rate.
 
 #### `price_per_1k_output_tokens`
 
