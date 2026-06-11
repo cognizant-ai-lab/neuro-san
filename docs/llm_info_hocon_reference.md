@@ -173,7 +173,8 @@ from the model. Output tokens are the tokens the model produces in its response.
 For most providers, output tokens are billed at a higher rate than input tokens.
 
 This key is optional and follows the same caveats as
-[`price_per_1k_input_tokens`](#price_per_1k_input_tokens).
+[`price_per_1k_input_tokens`](#price_per_1k_input_tokens). If present, neuro-san will use it
+for token-cost estimation in the token callback handler.
 
 #### `model_launch_date`
 
