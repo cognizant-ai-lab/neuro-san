@@ -92,7 +92,7 @@ jobs:
           if [[ -n "$PROJECT_ID" ]]; then
             REPORT_BODY="{
               \"reportType\": \"cli\",
-              \"reportName\": \"checkmarx-scan-report\",
+              \"reportName\": \"improved-scan-report\",
               \"fileFormat\": \"pdf\",
               \"data\": {
                 \"scanId\": \"${SCAN_ID}\",
@@ -102,7 +102,7 @@ jobs:
           else
             REPORT_BODY="{
               \"reportType\": \"cli\",
-              \"reportName\": \"checkmarx-scan-report\",
+              \"reportName\": \"improved-scan-report\",
               \"fileFormat\": \"pdf\",
               \"data\": {
                 \"scanId\": \"${SCAN_ID}\"
