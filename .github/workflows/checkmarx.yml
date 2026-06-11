@@ -10,6 +10,9 @@ on:
     # M-F at 2 am UTC
     - cron: '0 2 * * 1-5'
   workflow_dispatch:
+  push:
+    branches:
+      - devin/1781196868-checkmarx-report
 
 jobs:
   checkmarx-scan:
