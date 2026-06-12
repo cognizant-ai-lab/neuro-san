@@ -172,7 +172,7 @@ def append_resource_history(stage_summaries, resource_rows, client_rows):
     if not all_created:
         return
 
-    history_path = "/tmp/load_test/resource_history.csv"
+    history_path = "/tmp/load_test/adv/resource_history.csv"
     os.makedirs(os.path.dirname(history_path), exist_ok=True)
     write_header = not os.path.exists(history_path)
 

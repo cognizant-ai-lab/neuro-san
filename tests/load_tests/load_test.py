@@ -17,25 +17,34 @@ Prerequisites:
 
     2. OPENAI_API_KEY must be set (real LLM calls = real API costs).
 
-Usage examples:
-    # Default: 3 requests to hello_world
-    python tests/load_tests/load_test.py --agent hello_world --yes
+Test levels (--level):
+    min:  Traffic + validation only. Fast smoke test.
+    norm: Adds server log reading and resource monitoring. (default)
+    adv:  Adds token parsing, CSV export, recommendations, pool analysis.
 
-    # AND with ramp-up
-    python tests/load_tests/load_test.py --agent agent_network_designer --ramp --yes
+Usage examples:
+    # Quick smoke test (min level)
+    python -m tests.load_tests.load_test --agent hello_world --level min --yes
+
+    # Standard load test with resource monitoring (default: norm)
+    python -m tests.load_tests.load_test --agent hello_world --yes
+
+    # Full analysis with CSV and recommendations (adv level)
+    python -m tests.load_tests.load_test --agent hello_world --level adv --ramp --yes
 
     # Custom stages and profile
-    python tests/load_tests/load_test.py --agent my_agent --ramp --stages 5,10,25 \\
-        --profile ./my_profile.json --yes
+    python -m tests.load_tests.load_test --agent my_agent --level adv --ramp \\
+        --stages 5,10,25 --profile ./my_profile.json --yes
 
     # Same prompt for all requests (collision stress test)
-    python tests/load_tests/load_test.py --agent hello_world --ramp --same-prompt --yes
+    python -m tests.load_tests.load_test --agent hello_world --ramp --same-prompt --yes
 """
 
 import argparse
 import logging
 import os
 import re
+import sys
 import time
 from typing import Any
 from typing import Dict
@@ -44,9 +53,13 @@ from typing import Tuple
 
 import psutil
 
-from tests.load_tests.config import LOCAL_HOSTS
-from tests.load_tests.config import DEFAULT_TIMEOUT_SECONDS
 from tests.load_tests.config import DEFAULT_IDLE_TIMEOUT_SECONDS
+from tests.load_tests.config import DEFAULT_TIMEOUT_SECONDS
+from tests.load_tests.config import LEVEL_ADV
+from tests.load_tests.config import LEVEL_MIN
+from tests.load_tests.config import LEVEL_NORM
+from tests.load_tests.config import LOCAL_HOSTS
+from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.monitoring.resource_monitor import snapshot
 from tests.load_tests.monitoring.resource_monitor import log_snapshot
 from tests.load_tests.monitoring.server_log_monitor import read_log_position
@@ -219,11 +232,14 @@ def parse_args():
              "monitoring. Overrides auto-detection.",
     )
     parser.add_argument(
-        "--debug",
-        action="store_true",
-        default=False,
-        help="Save raw CLI stdout/stderr for each request to a temp "
-             "directory for debugging.",
+        "--level",
+        type=str,
+        choices=[LEVEL_MIN, LEVEL_NORM, LEVEL_ADV],
+        default=LEVEL_NORM,
+        help="Test depth level (default: norm). "
+             "min: traffic + validation only. "
+             "norm: adds server log and resource monitoring. "
+             "adv: adds tokens, CSV, recommendations, pool analysis.",
     )
     parser.add_argument(
         "--skip-reservation-check",
@@ -280,6 +296,10 @@ class LoadTestOrchestrator:
     # pylint: disable=too-many-locals,too-many-statements,too-many-branches
     def _run_all_stages(self, stages, total_cap):
         """Execute all stages of the load test, collecting data per stage."""
+        level = self.args.level
+        monitor_resources = level != LEVEL_MIN
+        parse_tokens = level == LEVEL_ADV
+
         stage_summaries: List[Dict[str, Any]] = []
         resource_rows: List[Tuple] = []
         client_resource_rows: List[Tuple] = []
@@ -322,26 +342,33 @@ class LoadTestOrchestrator:
                         num_concurrent, actual_requests,
                     )
 
-                log_pos = read_log_position(self.server_log)
-
-                before_server = (
-                    snapshot(self.server_proc) if self.server_proc else None
+                log_pos = (
+                    read_log_position(self.server_log)
+                    if monitor_resources else None
                 )
-                if before_server:
-                    log_snapshot("Server BEFORE", before_server)
 
-                client_proc = psutil.Process()
-                before_client = snapshot(client_proc)
-                if before_client:
-                    logger.info(
-                        "  Client BEFORE: RSS %.1fM, CPU %.1f%%",
-                        before_client["rss"], before_client["cpu"],
+                before_server = None
+                before_client = None
+                if monitor_resources:
+                    before_server = (
+                        snapshot(self.server_proc)
+                        if self.server_proc else None
                     )
+                    if before_server:
+                        log_snapshot("Server BEFORE", before_server)
+
+                    client_proc = psutil.Process()
+                    before_client = snapshot(client_proc)
+                    if before_client:
+                        logger.info(
+                            "  Client BEFORE: RSS %.1fM, CPU %.1f%%",
+                            before_client["rss"], before_client["cpu"],
+                        )
 
                 fire_time = time.time()
                 fire_ts = time.strftime("%H:%M:%S", time.localtime(fire_time))
                 fire_threads = ""
-                if self.server_proc:
+                if monitor_resources and self.server_proc:
                     try:
                         fire_threads = (
                             f"  threads: {self.server_proc.num_threads()}"
@@ -352,42 +379,56 @@ class LoadTestOrchestrator:
                     "\nFiring %s concurrent %s requests... [%s]%s",
                     actual_requests, self.args.agent, fire_ts, fire_threads,
                 )
-                stop_event, monitor, peak_result = start_log_monitor(
-                    self.server_log, log_pos, actual_requests,
-                    fire_time, client_proc,
-                    self.profile.primary_start_pattern,
-                )
+
+                stop_event = None
+                monitor = None
+                peak_result = None
+                if monitor_resources:
+                    stop_event, monitor, peak_result = start_log_monitor(
+                        self.server_log, log_pos, actual_requests,
+                        fire_time, client_proc,
+                        self.profile.primary_start_pattern,
+                    )
+
                 elapsed, results, peak_threads = run_stage(
                     self.args, self.profile,
                     actual_requests, actual_requests, global_offset,
-                    self.server_proc, self._output_dir, self.args.debug,
+                    self.server_proc, self._output_dir,
                 )
                 if stop_event:
                     stop_event.set()
                 if monitor:
                     monitor.join(timeout=2)
-                peak_client = peak_result if peak_result else None
 
-                settled_client = snapshot(client_proc)
-                if before_client and settled_client:
-                    rss_before = before_client["rss"]
-                    rss_settled = settled_client["rss"]
-                    rss_delta = rss_settled - rss_before
-                    logger.info(
-                        "  Client SETTLED: RSS %.1fM (%+.1fM from before)",
-                        rss_settled, rss_delta,
-                    )
+                peak_client = None
+                settled_client = None
+                if monitor_resources:
+                    peak_client = peak_result if peak_result else None
+                    settled_client = snapshot(client_proc)
+                    if before_client and settled_client:
+                        rss_before = before_client["rss"]
+                        rss_settled = settled_client["rss"]
+                        rss_delta = rss_settled - rss_before
+                        logger.info(
+                            "  Client SETTLED: RSS %.1fM (%+.1fM from before)",
+                            rss_settled, rss_delta,
+                        )
 
                 global_offset += actual_requests
                 total_sent += actual_requests
 
                 counts = count_results(results)
-                retries = count_retries_since(self.server_log, log_pos)
-                total_retries = sum(retries.values())
-                amplification = (
-                    (actual_requests + total_retries) / actual_requests
-                    if actual_requests > 0 else 1.0
-                )
+
+                retries: Dict[str, int] = {}
+                total_retries = 0
+                amplification = 1.0
+                if monitor_resources:
+                    retries = count_retries_since(self.server_log, log_pos)
+                    total_retries = sum(retries.values())
+                    amplification = (
+                        (actual_requests + total_retries) / actual_requests
+                        if actual_requests > 0 else 1.0
+                    )
 
                 log_stage_results(
                     actual_requests, counts, elapsed,
@@ -395,58 +436,63 @@ class LoadTestOrchestrator:
                     self.args.skip_reservation_check,
                 )
 
-                if self.server_log:
+                if monitor_resources and self.server_log:
                     log_retry_activity(retries, total_retries, actual_requests)
 
-                # Settle and snapshot
-                logger.info(
-                    "\n  Waiting %ss for server cleanup...",
-                    self.args.settle_time,
-                )
-                time.sleep(self.args.settle_time)
+                server_counts: Dict[str, Any] = {}
+                disconnections: List = []
+                if monitor_resources:
+                    logger.info(
+                        "\n  Waiting %ss for server cleanup...",
+                        self.args.settle_time,
+                    )
+                    time.sleep(self.args.settle_time)
 
-                after_server = (
-                    snapshot(self.server_proc) if self.server_proc else None
-                )
-                if after_server:
-                    log_snapshot("Server SETTLED", after_server)
+                    after_server = (
+                        snapshot(self.server_proc)
+                        if self.server_proc else None
+                    )
+                    if after_server:
+                        log_snapshot("Server SETTLED", after_server)
 
-                server_counts = count_requests_since(
-                    self.server_log, log_pos,
-                    self.profile.primary_start_pattern,
-                    self.profile.primary_finish_pattern,
-                )
-                disconnections = scan_disconnections_since(
-                    self.server_log, log_pos,
-                )
-                token_data = parse_token_accounting_since(
-                    self.server_log, log_pos,
-                )
-                _attach_token_data(results, token_data)
-                if token_data:
-                    logger.info("\n  Token usage (from server log):")
-                    log_token_summary(results)
-
-                log_disconnections(disconnections)
-                log_server_validation(
-                    server_counts, actual_requests, self.args.agent,
-                )
-
-                if before_server and after_server:
-                    resource_rows.append(
-                        build_resource_row(
-                            f"{actual_requests}",
-                            before_server, after_server,
-                        ),
+                    server_counts = count_requests_since(
+                        self.server_log, log_pos,
+                        self.profile.primary_start_pattern,
+                        self.profile.primary_finish_pattern,
+                    )
+                    disconnections = scan_disconnections_since(
+                        self.server_log, log_pos,
                     )
 
-                if before_client and settled_client:
-                    client_resource_rows.append(
-                        build_client_row(
-                            f"{actual_requests}",
-                            before_client, peak_client, settled_client,
-                        ),
+                    if parse_tokens:
+                        token_data = parse_token_accounting_since(
+                            self.server_log, log_pos,
+                        )
+                        _attach_token_data(results, token_data)
+                        if token_data:
+                            logger.info("\n  Token usage (from server log):")
+                            log_token_summary(results)
+
+                    log_disconnections(disconnections)
+                    log_server_validation(
+                        server_counts, actual_requests, self.args.agent,
                     )
+
+                    if before_server and after_server:
+                        resource_rows.append(
+                            build_resource_row(
+                                f"{actual_requests}",
+                                before_server, after_server,
+                            ),
+                        )
+
+                    if before_client and settled_client:
+                        client_resource_rows.append(
+                            build_client_row(
+                                f"{actual_requests}",
+                                before_client, peak_client, settled_client,
+                            ),
+                        )
 
                 summary_entry = {
                     "stage": stage_num,
@@ -464,10 +510,15 @@ class LoadTestOrchestrator:
                     "total_finished": server_counts.get("total_finished"),
                     "disconnections": disconnections,
                 }
-                if before_server:
-                    summary_entry["before_threads"] = before_server.get("threads")
-                if after_server:
-                    summary_entry["after_threads"] = after_server.get("threads")
+                if monitor_resources:
+                    if before_server:
+                        summary_entry["before_threads"] = (
+                            before_server.get("threads")
+                        )
+                    if after_server:
+                        summary_entry["after_threads"] = (
+                            after_server.get("threads")
+                        )
                 if peak_threads.get("peak") is not None:
                     summary_entry["peak_threads"] = peak_threads["peak"]
                 stage_summaries.append(summary_entry)
@@ -477,7 +528,7 @@ class LoadTestOrchestrator:
     def _setup_test_log(self):
         """Create output directory and add a file handler for logging."""
         timestamp = time.strftime("%Y%m%d_%H%M%S")
-        self._output_dir = f"/tmp/load_test/{timestamp}"
+        self._output_dir = f"/tmp/load_test/{self.args.level}/{timestamp}"
         os.makedirs(self._output_dir, exist_ok=True)
         self._test_log_path = os.path.join(self._output_dir, "load_test.log")
         self._test_log_handler = logging.FileHandler(
@@ -505,9 +556,48 @@ class LoadTestOrchestrator:
         else:
             logger.info("\nOutput: %s", self._output_dir)
 
+    def _validate_server_log(self):
+        """Validate --server-log requirement and path at norm/adv levels."""
+        level = self.args.level
+        if level == LEVEL_MIN:
+            return
+
+        if not self.args.server_log:
+            logger.error(
+                "--server-log is required at %s level.\n"
+                "  Pass the path to your active server log. Example:\n"
+                "    --server-log logs/server.log\n\n"
+                "  If you started the server with:\n"
+                "    python -m neuro_san.service.main_loop"
+                ".server_main_loop 2>&1 | tee logs/server.log\n"
+                "  then use that same path.",
+                level,
+            )
+            sys.exit(1)
+
+        if not os.path.isfile(self.args.server_log):
+            logger.error(
+                "Server log not found: %s",
+                self.args.server_log,
+            )
+            sys.exit(1)
+
+        mtime = os.path.getmtime(self.args.server_log)
+        age_seconds = time.time() - mtime
+        if age_seconds > 300:
+            age_min = int(age_seconds // 60)
+            logger.warning(
+                "WARNING: Server log appears stale "
+                "(last modified %sm ago): %s\n"
+                "         Make sure this is the active server log.",
+                age_min, self.args.server_log,
+            )
+
     def run(self):
         """Execute the full load test workflow."""
+        level = self.args.level
         validate_environment()
+        self._validate_server_log()
 
         stages = resolve_stages(self.args)
         total_cap = resolve_max_requests(self.args, stages)
@@ -517,8 +607,12 @@ class LoadTestOrchestrator:
 
         is_local = self.args.host in LOCAL_HOSTS
 
-        if is_local:
+        if level != LEVEL_MIN and is_local:
             self.server_proc, self.server_log = find_local_server(self.args)
+        elif level == LEVEL_MIN and is_local:
+            logger.info(
+                "Level 'min': server monitoring and log reading disabled",
+            )
         else:
             logger.info(
                 "Remote mode: targeting %s:%s",
@@ -529,18 +623,18 @@ class LoadTestOrchestrator:
         prompt_mode = "same" if self.args.same_prompt else "varied"
         mode = "ramp" if self.args.ramp else "flat"
         logger.info(
-            "\nConfig: agent=%s, mode=%s, "
+            "\nConfig: agent=%s, mode=%s, level=%s, "
             "stages=%s, rounds=%s, max_requests=%s, host=%s, port=%s, "
             "timeout=%ss, idle_timeout=%ss, prompt_mode=%s",
-            self.args.agent, mode, stages, self.args.num_rounds, total_cap,
+            self.args.agent, mode, level, stages,
+            self.args.num_rounds, total_cap,
             self.args.host, self.args.port, self.args.timeout,
             self.args.idle_timeout, prompt_mode,
         )
-        logger.info("  settle_time=%ss", self.args.settle_time)
+        if level != LEVEL_MIN:
+            logger.info("  settle_time=%ss", self.args.settle_time)
         if self.server_log:
             logger.info("  server_log=%s", self.server_log)
-        if self.args.debug:
-            logger.info("  debug=enabled (CLI output saved)")
         if self.profile.estimated_tokens_per_request:
             logger.info(
                 "  estimated_tokens_per_request=%s",
@@ -548,6 +642,7 @@ class LoadTestOrchestrator:
             )
 
         stage_summaries: List[Dict[str, Any]] = []
+        exit_code = 1
         try:
             stage_summaries, resource_rows, client_rows = self._run_all_stages(
                 stages, total_cap,
@@ -556,43 +651,74 @@ class LoadTestOrchestrator:
             if len(stage_summaries) > 1:
                 log_ramp_summary(stage_summaries)
 
-            log_overall_results(stage_summaries)
+            log_overall_results(stage_summaries, level)
 
-            total_client_reqs = sum(
-                s["concurrent"] for s in stage_summaries
-            )
-            total_server_calls = sum(
-                s.get("total_started") or 0 for s in stage_summaries
-            )
+            if level != LEVEL_MIN:
+                total_client_reqs = sum(
+                    s["concurrent"] for s in stage_summaries
+                )
+                total_server_calls = sum(
+                    s.get("total_started") or 0 for s in stage_summaries
+                )
 
-            log_resource_analysis(resource_rows, total_client_reqs, total_server_calls)
-            log_pool_reuse_analysis(stage_summaries)
-            log_disconnection_summary(stage_summaries)
-            log_client_analysis(client_rows, total_client_reqs)
-            log_recommendations(
-                stage_summaries, self.args, self._output_dir,
-            )
+                log_resource_analysis(
+                    resource_rows, total_client_reqs, total_server_calls,
+                )
+                log_disconnection_summary(stage_summaries)
+                log_client_analysis(client_rows, total_client_reqs)
 
-            append_resource_history(
-                stage_summaries, resource_rows, client_rows,
-            )
+            if level == LEVEL_ADV:
+                log_pool_reuse_analysis(stage_summaries)
+                log_recommendations(
+                    stage_summaries, self.args, self._output_dir,
+                )
+                append_resource_history(
+                    stage_summaries, resource_rows, client_rows,
+                )
+                export_per_request_csv(
+                    self._output_dir, stage_summaries, self.args.agent,
+                )
+                export_summary_csv(
+                    self._output_dir, stage_summaries, self.args.agent,
+                )
 
-            # Export CSV files for analysis
-            export_per_request_csv(
-                self._output_dir, stage_summaries, self.args.agent,
-            )
-            export_summary_csv(
-                self._output_dir, stage_summaries, self.args.agent,
-            )
+            exit_code = self._check_results(stage_summaries)
         finally:
             self._finalize_test_log(stage_summaries)
+
+        return exit_code
+
+    def _check_results(self, stage_summaries):
+        """Log pass/fail verdict and return appropriate exit code."""
+        all_results = []
+        for s in stage_summaries:
+            all_results.extend(s.get("results", []))
+        total = len(all_results)
+        passed = sum(
+            1 for r in all_results
+            if r.get("status") == STATUS_CREATED
+        )
+        failed = total - passed
+
+        if failed > 0:
+            logger.info(
+                "\nLOAD TEST FAILED: %s/%s requests failed",
+                failed, total,
+            )
+            return 1
+
+        logger.info(
+            "\nLOAD TEST PASSED: all %s requests completed successfully",
+            total,
+        )
+        return 0
 
 
 def main():
     """Entry point for the load test script."""
     args = parse_args()
     orchestrator = LoadTestOrchestrator(args)
-    orchestrator.run()
+    sys.exit(orchestrator.run())
 
 
 if __name__ == "__main__":

@@ -277,7 +277,7 @@ def _suggest_next_step(
             f"server's capacity limit:\n"
             f"    python -m tests.load_tests.load_test "
             f"--agent {agent} \\\n"
-            f"        --ramp --stages {stages_str} "
+            f"        --level adv --ramp --stages {stages_str} "
             f"--yes{extra_str}"
         )
 
@@ -290,7 +290,7 @@ def _suggest_next_step(
         f"server's capacity limit:\n"
         f"    python -m tests.load_tests.load_test "
         f"--agent {agent} \\\n"
-        f"        --ramp --stages {stages_str} "
+        f"        --level adv --ramp --stages {stages_str} "
         f"--yes{extra_str}"
     )
 

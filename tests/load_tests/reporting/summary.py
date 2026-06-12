@@ -5,10 +5,11 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from tests.load_tests.config import LEVEL_ADV
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
-from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.config import STATUS_KILLED
+from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.reporting.table_utils import log_table
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,7 @@ def log_ramp_summary(stage_summaries):
     log_table(header, rows)
 
 
-def log_overall_results(stage_summaries):
+def log_overall_results(stage_summaries, level=LEVEL_ADV):
     """Log overall results across all stages."""
     total_created = 0
     total_failed = 0
@@ -110,9 +111,9 @@ def log_overall_results(stage_summaries):
         logger.info("    Total retries:   %s", total_retries)
         logger.info("    Amplification:   %.2fx", amplification)
 
-    # Token usage summary
+    # Token usage summary (adv level only)
     token_totals = [r.get("total_tokens", 0) for r in all_results if r.get("total_tokens")]
-    if token_totals:
+    if token_totals and level == LEVEL_ADV:
         token_totals_sorted = sorted(token_totals)
         total_all = sum(token_totals)
         avg_tokens = total_all / len(token_totals)

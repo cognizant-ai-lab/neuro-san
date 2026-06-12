@@ -9,6 +9,11 @@ STATUS_FAILED = "FAILED"
 STATUS_TIMEOUT = "TIMEOUT"
 STATUS_KILLED = "KILLED"
 
+# Load test levels
+LEVEL_MIN = "min"
+LEVEL_NORM = "norm"
+LEVEL_ADV = "adv"
+
 # Tracked retry error types
 RETRY_ERROR_TYPES = [
     "RateLimitError",

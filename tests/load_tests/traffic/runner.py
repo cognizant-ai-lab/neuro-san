@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 def run_one(args, profile, request_id, global_request_id,
-            output_dir=None, debug=False):
+            output_dir=None):
     """Execute a single request with idle-timeout detection.
 
     Returns a result dict with status, elapsed, prompt, and parsed output fields.
@@ -44,7 +44,7 @@ def run_one(args, profile, request_id, global_request_id,
     for field in profile.success_fields:
         parsed_fields[field] = parse_stdout_field(stdout, field)
 
-    _save_debug_output(output_dir, debug, request_id, stdout, stderr)
+    _save_request_output(output_dir, request_id, stdout, stderr)
 
     failure_reason = None
     if status not in (STATUS_TIMEOUT, STATUS_KILLED):
@@ -90,7 +90,7 @@ def run_one(args, profile, request_id, global_request_id,
 
 
 def run_stage(args, profile, num_requests, max_workers, global_offset,
-              server_proc=None, output_dir=None, debug=False):
+              server_proc=None, output_dir=None):
     """Fire num_requests concurrent requests using a thread pool."""
     from tests.load_tests.monitoring.heartbeat import progress_heartbeat
 
@@ -102,7 +102,7 @@ def run_stage(args, profile, num_requests, max_workers, global_offset,
             pool.submit(
                 run_one, args, profile,
                 i + 1, global_offset + i,
-                output_dir, debug,
+                output_dir,
             )
             for i in range(num_requests)
         ]
@@ -188,22 +188,25 @@ def log_token_summary(results):
         )
 
 
-_debug_dir = None
+_output_log_dir = None
 
 
-def _save_debug_output(output_dir, debug, request_id, stdout, stderr):
-    """Save raw CLI output to debug directory when debug is enabled."""
-    global _debug_dir  # pylint: disable=global-statement
-    if not debug:
+def _save_request_output(output_dir, request_id, stdout, stderr):
+    """Save raw CLI stdout/stderr for every request."""
+    global _output_log_dir  # pylint: disable=global-statement
+    if not output_dir:
         return
-    if _debug_dir is None:
-        _debug_dir = os.path.join(output_dir, "debug")
-        os.makedirs(_debug_dir, exist_ok=True)
-        logger.info("Debug output directory: %s", _debug_dir)
-    stdout_path = os.path.join(_debug_dir, f"request_{request_id}_stdout.txt")
-    stderr_path = os.path.join(_debug_dir, f"request_{request_id}_stderr.txt")
+    if _output_log_dir is None:
+        _output_log_dir = os.path.join(output_dir, "requests")
+        os.makedirs(_output_log_dir, exist_ok=True)
+    stdout_path = os.path.join(
+        _output_log_dir, f"request_{request_id}_stdout.txt",
+    )
     with open(stdout_path, "w", encoding="utf-8") as fh:
         fh.write(stdout)
     if stderr and stderr.strip():
+        stderr_path = os.path.join(
+            _output_log_dir, f"request_{request_id}_stderr.txt",
+        )
         with open(stderr_path, "w", encoding="utf-8") as fh:
             fh.write(stderr)
