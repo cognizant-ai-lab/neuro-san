@@ -42,6 +42,8 @@ ${PIP} freeze
 PACKAGE_INSTALL=${PACKAGE_INSTALL:-.}
 echo "PACKAGE_INSTALL is ${PACKAGE_INSTALL}"
 
+echo "AGENT_SESSION_REQUIRE_HTTPS = ${AGENT_SESSION_REQUIRE_HTTPS}"
+
 echo "Starting service with args '$1'..."
 ${PYTHON} "${PACKAGE_INSTALL}"/neuro_san/service/main_loop/server_main_loop.py "$@"
 
