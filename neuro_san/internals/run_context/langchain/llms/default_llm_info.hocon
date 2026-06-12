@@ -1193,6 +1193,7 @@
                 "top_logprobs": null,
                 "logit_bias": null,
                 # streaming defaults to off; set "streaming": true in llm_config to enable.
+                "streaming": false,
                 # n is always 1.  neuro-san will only ever consider a single chat completion.
                 "top_p": null,
                 "max_tokens": null,         # This is always for output
@@ -1221,6 +1222,7 @@
                 "azure_ad_token": null,
                 "model_version": "",
                 # streaming defaults to off; set "streaming": true in llm_config to enable.
+                "streaming": false,
                 # n is always 1.  neuro-san will only ever consider a single chat completion.
 
                 # If you really need more parameters, you will likely have to create your own LlmFactory.
@@ -1241,6 +1243,7 @@
                 "anthropic_api_key": null,
                 # streaming defaults to off; set "streaming": true in llm_config to enable.
                 # stream_usage tracks streaming, so it is enabled iff streaming is enabled.
+                "streaming": false,
 
                 # Reasoning / thinking parameters
                 #
@@ -1380,6 +1383,7 @@
                 "max_tokens": null,
                 "max_retries": 6,
                 "n": 1,         # Number of chat completions to generate for each prompt.
+                "streaming": false,
                 "temperature": 0.7,         # [0.0, 2.0],
                 # Note that for Gemini 3.0+ models, it is recommended to keep the temperature parameter at 1.0 as setting it to 0.7 can cause infinite loops,
                 # degraded reasoning performance, and failure on complex tasks.
@@ -1427,6 +1431,7 @@
                 "region_name": null,
                 "stop_sequences": null,
                 # streaming defaults to off; set "streaming": true in llm_config to enable.
+                "streaming": false,
                 "system_prompt_with_tools": "",
                 "tags": null,
                 "temperature": null,
