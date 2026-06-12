@@ -9,63 +9,74 @@ from tests.load_tests.config import DEFAULT_STAGES
 logger = logging.getLogger(__name__)
 
 
-def resolve_stages(args) -> List[int]:
-    """Return the list of concurrency stages to run.
+class InputValidator:
+    """Validates and resolves user input for load test configuration."""
 
-    In ramp mode, returns parsed --stages or defaults.
-    In flat mode, returns a single-element list from --num-requests.
-    """
-    if args.ramp:
-        if args.stages is not None:
-            return [int(s.strip()) for s in args.stages.split(",")]
-        return list(DEFAULT_STAGES)
-    return [args.num_requests]
+    @staticmethod
+    def resolve_stages(args) -> List[int]:
+        """Return the list of concurrency stages to run.
 
+        In ramp mode, returns parsed --stages or defaults.
+        In flat mode, returns a single-element list from --num-requests.
+        """
+        if args.ramp:
+            if args.stages is not None:
+                return [
+                    int(s.strip()) for s in args.stages.split(",")
+                ]
+            return list(DEFAULT_STAGES)
+        return [args.num_requests]
 
-def resolve_max_requests(args, stages) -> int:
-    """Return the effective max-requests cap."""
-    if args.max_requests is not None:
-        return args.max_requests
-    if args.ramp:
-        return sum(stages) * args.num_rounds
-    return 100
+    @staticmethod
+    def resolve_max_requests(args, stages) -> int:
+        """Return the effective max-requests cap."""
+        if args.max_requests is not None:
+            return args.max_requests
+        if args.ramp:
+            return sum(stages) * args.num_rounds
+        return 100
 
+    @staticmethod
+    def confirm_cost(args, stages, total_cap, profile=None):
+        """Display cost warning and ask for confirmation unless --yes."""
+        total_planned = sum(stages) * args.num_rounds
+        capped = min(total_planned, total_cap)
+        logger.info("\n%s", "=" * 60)
+        logger.info("  COST WARNING: REAL LLM CALLS")
+        logger.info("=" * 60)
+        if args.ramp:
+            logger.info("  Ramp-up stages: %s", stages)
+            logger.info("  Rounds: %s", args.num_rounds)
+        logger.info("  Total planned requests: %s", total_planned)
+        if capped < total_planned:
+            logger.info(
+                "  Capped by --max-requests: %s", capped,
+            )
 
-def confirm_cost(args, stages, total_cap, profile=None):
-    """Display cost warning and ask for confirmation unless --yes is passed."""
-    total_planned = sum(stages) * args.num_rounds
-    capped = min(total_planned, total_cap)
-    logger.info("\n%s", "=" * 60)
-    logger.info("  COST WARNING: REAL LLM CALLS")
-    logger.info("=" * 60)
-    if args.ramp:
-        logger.info("  Ramp-up stages: %s", stages)
-        logger.info("  Rounds: %s", args.num_rounds)
-    logger.info("  Total planned requests: %s", total_planned)
-    if capped < total_planned:
-        logger.info("  Capped by --max-requests: %s", capped)
+        if profile and profile.estimated_tokens_per_request:
+            total_tokens = (
+                capped * profile.estimated_tokens_per_request
+            )
+            logger.info(
+                "  Estimated tokens: %s × %s = ~%s tokens",
+                capped,
+                f"{profile.estimated_tokens_per_request:,}",
+                f"{total_tokens:,}",
+            )
+        else:
+            logger.info(
+                "  Each request involves multiple recursive "
+                "LLM calls."
+            )
+            logger.info(
+                "  Estimated cost depends on model and prompt "
+                "complexity."
+            )
 
-    # Show token/cost estimate if available from profile
-    if profile and profile.estimated_tokens_per_request:
-        total_tokens = capped * profile.estimated_tokens_per_request
-        logger.info(
-            "  Estimated tokens: %s × %s = ~%s tokens",
-            capped,
-            f"{profile.estimated_tokens_per_request:,}",
-            f"{total_tokens:,}",
-        )
-    else:
-        logger.info(
-            "  Each request involves multiple recursive LLM calls."
-        )
-        logger.info(
-            "  Estimated cost depends on model and prompt complexity."
-        )
+        logger.info("=" * 60)
 
-    logger.info("=" * 60)
-
-    if not args.yes:
-        answer = input("\nProceed? [y/N]: ").strip().lower()
-        if answer not in ("y", "yes"):
-            logger.info("Aborted by user.")
-            sys.exit(0)
+        if not args.yes:
+            answer = input("\nProceed? [y/N]: ").strip().lower()
+            if answer not in ("y", "yes"):
+                logger.info("Aborted by user.")
+                sys.exit(0)

@@ -60,226 +60,223 @@ from tests.load_tests.config import LEVEL_MIN
 from tests.load_tests.config import LEVEL_NORM
 from tests.load_tests.config import LOCAL_HOSTS
 from tests.load_tests.config import STATUS_CREATED
-from tests.load_tests.monitoring.resource_monitor import snapshot
-from tests.load_tests.monitoring.resource_monitor import log_snapshot
-from tests.load_tests.monitoring.server_log_monitor import read_log_position
-from tests.load_tests.monitoring.server_log_monitor import count_retries_since
-from tests.load_tests.monitoring.server_log_monitor import count_requests_since
-from tests.load_tests.monitoring.server_log_monitor import parse_token_accounting_since
-from tests.load_tests.monitoring.server_log_monitor import scan_disconnections_since
-from tests.load_tests.monitoring.server_log_monitor import start_log_monitor
+from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
+from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.prompts.agent_profile import AgentProfile
-from tests.load_tests.reporting.csv_export import append_resource_history
-from tests.load_tests.reporting.csv_export import export_per_request_csv
-from tests.load_tests.reporting.csv_export import export_summary_csv
-from tests.load_tests.reporting.disconnection_report import log_disconnection_summary
-from tests.load_tests.reporting.pool_analysis import log_pool_reuse_analysis
-from tests.load_tests.reporting.recommendations import log_recommendations
-from tests.load_tests.reporting.resource_report import build_client_row
-from tests.load_tests.reporting.resource_report import build_resource_row
-from tests.load_tests.reporting.resource_report import log_client_analysis
-from tests.load_tests.reporting.resource_report import log_resource_analysis
-from tests.load_tests.reporting.summary import log_overall_results
-from tests.load_tests.reporting.summary import log_ramp_summary
-from tests.load_tests.traffic.runner import count_results
-from tests.load_tests.traffic.runner import log_token_summary
-from tests.load_tests.traffic.runner import run_stage
-from tests.load_tests.validation.environment import find_local_server
-from tests.load_tests.validation.environment import validate_environment
-from tests.load_tests.validation.input_validation import confirm_cost
-from tests.load_tests.validation.input_validation import resolve_max_requests
-from tests.load_tests.validation.input_validation import resolve_stages
-from tests.load_tests.validation.output_validation import log_disconnections
-from tests.load_tests.validation.output_validation import log_retry_activity
-from tests.load_tests.validation.output_validation import log_server_validation
-from tests.load_tests.validation.output_validation import log_stage_results
+from tests.load_tests.reporting.csv_export import CsvExporter
+from tests.load_tests.reporting.disconnection_report import DisconnectionReporter
+from tests.load_tests.reporting.pool_analysis import PoolAnalyzer
+from tests.load_tests.reporting.recommendations import RecommendationEngine
+from tests.load_tests.reporting.resource_report import ResourceReporter
+from tests.load_tests.reporting.summary import SummaryReporter
+from tests.load_tests.traffic.runner import TrafficRunner
+from tests.load_tests.validation.environment import EnvironmentValidator
+from tests.load_tests.validation.input_validation import InputValidator
+from tests.load_tests.validation.output_validation import OutputValidator
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 
-def parse_args():
-    """Parse command-line arguments for the load test."""
-    parser = argparse.ArgumentParser(
-        description="Load-test neuro-san agent networks with real LLM calls.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__,
-    )
+class LoadTestOrchestrator:
+    """Orchestrates the full load test workflow."""
 
-    # Agent selection
-    parser.add_argument(
-        "--agent",
-        type=str,
-        default="hello_world",
-        help="Agent network name to test (default: hello_world). "
-             "Must be registered in the server's AGENT_REGISTRY_PATH.",
-    )
-    parser.add_argument(
-        "--profile",
-        type=str,
-        default=None,
-        help="Path to agent profile JSON file. If not set, "
-             "auto-discovers from profiles/ directory.",
-    )
-    parser.add_argument(
-        "--project-root",
-        type=str,
-        default=None,
-        help="Path to the project root where the server is running from "
-             "(e.g., /path/to/neuro-san-studio). Used to find agent "
-             "profiles at {project-root}/tests/load_tests/profiles/. "
-             "Falls back to PYTHONPATH if not set.",
-    )
+    @staticmethod
+    def parse_args():
+        """Parse command-line arguments for the load test."""
+        parser = argparse.ArgumentParser(
+            description=(
+                "Load-test neuro-san agent networks "
+                "with real LLM calls."
+            ),
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            epilog=__doc__,
+        )
 
-    # Flat mode arguments
-    parser.add_argument(
-        "--num-requests",
-        type=int,
-        default=3,
-        help="Number of requests per round in flat mode (default: 3). "
-             "Ignored when --ramp is used.",
-    )
-    parser.add_argument(
-        "--max-workers",
-        type=int,
-        default=3,
-        help="Max concurrent workers in flat mode (default: 3). "
-             "Ignored when --ramp is used.",
-    )
-    parser.add_argument(
-        "--num-rounds",
-        type=int,
-        default=1,
-        help="Number of rounds in flat mode, or number of times to "
-             "repeat the full ramp sequence (default: 1).",
-    )
+        parser.add_argument(
+            "--agent",
+            type=str,
+            default="hello_world",
+            help="Agent network name to test (default: hello_world). "
+                 "Must be registered in the server's "
+                 "AGENT_REGISTRY_PATH.",
+        )
+        parser.add_argument(
+            "--profile",
+            type=str,
+            default=None,
+            help="Path to agent profile JSON file. If not set, "
+                 "auto-discovers from profiles/ directory.",
+        )
+        parser.add_argument(
+            "--project-root",
+            type=str,
+            default=None,
+            help="Path to the project root where the server is "
+                 "running from (e.g., /path/to/neuro-san-studio). "
+                 "Used to find agent profiles at "
+                 "{project-root}/tests/load_tests/profiles/. "
+                 "Falls back to PYTHONPATH if not set.",
+        )
+        parser.add_argument(
+            "--num-requests",
+            type=int,
+            default=3,
+            help="Number of requests per round in flat mode "
+                 "(default: 3). Ignored when --ramp is used.",
+        )
+        parser.add_argument(
+            "--max-workers",
+            type=int,
+            default=3,
+            help="Max concurrent workers in flat mode (default: 3)."
+                 " Ignored when --ramp is used.",
+        )
+        parser.add_argument(
+            "--num-rounds",
+            type=int,
+            default=1,
+            help="Number of rounds in flat mode, or number of "
+                 "times to repeat the full ramp sequence "
+                 "(default: 1).",
+        )
+        parser.add_argument(
+            "--ramp",
+            action="store_true",
+            default=False,
+            help="Enable staged ramp-up mode. Runs escalating "
+                 "concurrency stages instead of flat requests.",
+        )
+        parser.add_argument(
+            "--stages",
+            type=str,
+            default=None,
+            help="Comma-separated concurrency levels for ramp-up "
+                 "mode (default: 10,30,50,100). "
+                 "Only used with --ramp.",
+        )
+        parser.add_argument(
+            "--max-requests",
+            type=int,
+            default=None,
+            help="Hard cap on total requests across all "
+                 "stages/rounds. Cost safeguard for real LLM calls."
+                 " Default: 100 for flat mode, sum of stages for "
+                 "ramp mode.",
+        )
+        parser.add_argument(
+            "--host",
+            type=str,
+            default="localhost",
+            help="Neuro-san server host (default: localhost)",
+        )
+        parser.add_argument(
+            "--port",
+            type=int,
+            default=8080,
+            help="Neuro-san server port (default: 8080)",
+        )
+        parser.add_argument(
+            "--timeout",
+            type=int,
+            default=DEFAULT_TIMEOUT_SECONDS,
+            help="Hard timeout per request in seconds "
+                 "(default: 1200). Safety net to prevent requests "
+                 "from running forever.",
+        )
+        parser.add_argument(
+            "--idle-timeout",
+            type=int,
+            default=DEFAULT_IDLE_TIMEOUT_SECONDS,
+            help="Kill a request if no output for this many "
+                 "seconds (default: 900). "
+                 "Detects hanging requests.",
+        )
+        parser.add_argument(
+            "--settle-time",
+            type=int,
+            default=15,
+            help="Seconds to wait after each stage for cleanup "
+                 "(default: 15)",
+        )
+        parser.add_argument(
+            "--same-prompt",
+            action="store_true",
+            default=False,
+            help="Use the same prompt for all requests "
+                 "(collision stress test). Default is varied "
+                 "prompts from the agent's prompt pool.",
+        )
+        parser.add_argument(
+            "--yes",
+            action="store_true",
+            default=False,
+            help="Skip the cost confirmation prompt",
+        )
+        parser.add_argument(
+            "--server-log",
+            type=str,
+            default=None,
+            help="Explicit path to neuro-san server log file for "
+                 "retry monitoring. Overrides auto-detection.",
+        )
+        parser.add_argument(
+            "--level",
+            type=str,
+            choices=[LEVEL_MIN, LEVEL_NORM, LEVEL_ADV],
+            default=LEVEL_NORM,
+            help="Test depth level (default: norm). "
+                 "min: traffic + validation only. "
+                 "norm: adds server log and resource monitoring. "
+                 "adv: adds tokens, CSV, recommendations, "
+                 "pool analysis.",
+        )
+        parser.add_argument(
+            "--skip-reservation-check",
+            action="store_true",
+            default=False,
+            help="Skip reservation_id validation. A request is "
+                 "marked CREATED if other success fields are "
+                 "present, even without a reservation_id.",
+        )
+        return parser.parse_args()
 
-    # Ramp mode arguments
-    parser.add_argument(
-        "--ramp",
-        action="store_true",
-        default=False,
-        help="Enable staged ramp-up mode. Runs escalating concurrency "
-             "stages instead of flat requests.",
-    )
-    parser.add_argument(
-        "--stages",
-        type=str,
-        default=None,
-        help="Comma-separated concurrency levels for ramp-up mode "
-             "(default: 10,30,50,100). Only used with --ramp.",
-    )
-
-    # Common arguments
-    parser.add_argument(
-        "--max-requests",
-        type=int,
-        default=None,
-        help="Hard cap on total requests across all stages/rounds. "
-             "Cost safeguard for real LLM calls. "
-             "Default: 100 for flat mode, sum of stages for ramp mode.",
-    )
-    parser.add_argument(
-        "--host",
-        type=str,
-        default="localhost",
-        help="Neuro-san server host (default: localhost)",
-    )
-    parser.add_argument(
-        "--port",
-        type=int,
-        default=8080,
-        help="Neuro-san server port (default: 8080)",
-    )
-    parser.add_argument(
-        "--timeout",
-        type=int,
-        default=DEFAULT_TIMEOUT_SECONDS,
-        help="Hard timeout per request in seconds (default: 1200). "
-             "Safety net to prevent requests from running forever.",
-    )
-    parser.add_argument(
-        "--idle-timeout",
-        type=int,
-        default=DEFAULT_IDLE_TIMEOUT_SECONDS,
-        help="Kill a request if no output for this many seconds "
-             "(default: 900). Detects hanging requests.",
-    )
-    parser.add_argument(
-        "--settle-time",
-        type=int,
-        default=15,
-        help="Seconds to wait after each stage for cleanup (default: 15)",
-    )
-    parser.add_argument(
-        "--same-prompt",
-        action="store_true",
-        default=False,
-        help="Use the same prompt for all requests (collision stress test). "
-             "Default is varied prompts from the agent's prompt pool.",
-    )
-    parser.add_argument(
-        "--yes",
-        action="store_true",
-        default=False,
-        help="Skip the cost confirmation prompt",
-    )
-    parser.add_argument(
-        "--server-log",
-        type=str,
-        default=None,
-        help="Explicit path to neuro-san server log file for retry "
-             "monitoring. Overrides auto-detection.",
-    )
-    parser.add_argument(
-        "--level",
-        type=str,
-        choices=[LEVEL_MIN, LEVEL_NORM, LEVEL_ADV],
-        default=LEVEL_NORM,
-        help="Test depth level (default: norm). "
-             "min: traffic + validation only. "
-             "norm: adds server log and resource monitoring. "
-             "adv: adds tokens, CSV, recommendations, pool analysis.",
-    )
-    parser.add_argument(
-        "--skip-reservation-check",
-        action="store_true",
-        default=False,
-        help="Skip reservation_id validation. A request is marked "
-             "CREATED if other success fields are present, even without "
-             "a reservation_id.",
-    )
-    return parser.parse_args()
-
-
-def _attach_token_data(results, token_data):
-    """Attach token accounting data to request results.
-
-    The server assigns its own request_id numbering (e.g. request-3,
-    request-4) which differs from the client's (request-1, request-2).
-    Match by order: sort server entries by request_id number, then
-    attach to client results in submission order.
-    """
-    if not token_data:
-        return
-
-    def _sort_key(rid):
+    @staticmethod
+    def _token_sort_key(rid):
+        """Extract numeric suffix from a request_id for sorting."""
         match = re.search(r"(\d+)$", rid)
         return int(match.group(1)) if match else 0
 
-    sorted_entries = sorted(token_data.values(), key=lambda e: _sort_key(e["request_id"]))
-    sorted_results = sorted(results, key=lambda r: _sort_key(r.get("request_id", "")))
+    @staticmethod
+    def _attach_token_data(results, token_data):
+        """Attach token accounting data to request results.
 
-    for result, entry in zip(sorted_results, sorted_entries):
-        result["total_tokens"] = entry["total_tokens"]
-        result["prompt_tokens"] = entry["prompt_tokens"]
-        result["completion_tokens"] = entry["completion_tokens"]
-        result["llm_calls"] = entry["llm_calls"]
-        result["model"] = entry["model"]
+        The server assigns its own request_id numbering (e.g. request-3,
+        request-4) which differs from the client's (request-1, request-2).
+        Match by order: sort server entries by request_id number, then
+        attach to client results in submission order.
+        """
+        if not token_data:
+            return
 
+        key_fn = LoadTestOrchestrator._token_sort_key
+        sorted_entries = sorted(
+            token_data.values(),
+            key=lambda e: key_fn(e.get("request_id", "")),
+        )
+        sorted_results = sorted(
+            results,
+            key=lambda r: key_fn(r.get("request_id", "")),
+        )
 
-class LoadTestOrchestrator:
-    """Orchestrates the full load test workflow."""
+        for result, entry in zip(sorted_results, sorted_entries):
+            result["total_tokens"] = entry.get("total_tokens")
+            result["prompt_tokens"] = entry.get("prompt_tokens")
+            result["completion_tokens"] = entry.get(
+                "completion_tokens",
+            )
+            result["llm_calls"] = entry.get("llm_calls")
+            result["model"] = entry.get("model")
 
     def __init__(self, args):
         """Initialize the orchestrator with parsed arguments."""
@@ -343,7 +340,9 @@ class LoadTestOrchestrator:
                     )
 
                 log_pos = (
-                    read_log_position(self.server_log)
+                    ServerLogMonitor.read_log_position(
+                        self.server_log,
+                    )
                     if monitor_resources else None
                 )
 
@@ -351,14 +350,18 @@ class LoadTestOrchestrator:
                 before_client = None
                 if monitor_resources:
                     before_server = (
-                        snapshot(self.server_proc)
+                        ResourceMonitor.snapshot(self.server_proc)
                         if self.server_proc else None
                     )
                     if before_server:
-                        log_snapshot("Server BEFORE", before_server)
+                        ResourceMonitor.log_snapshot(
+                            "Server BEFORE", before_server,
+                        )
 
                     client_proc = psutil.Process()
-                    before_client = snapshot(client_proc)
+                    before_client = ResourceMonitor.snapshot(
+                        client_proc,
+                    )
                     if before_client:
                         logger.info(
                             "  Client BEFORE: RSS %.1fM, CPU %.1f%%",
@@ -384,13 +387,16 @@ class LoadTestOrchestrator:
                 monitor = None
                 peak_result = None
                 if monitor_resources:
-                    stop_event, monitor, peak_result = start_log_monitor(
-                        self.server_log, log_pos, actual_requests,
-                        fire_time, client_proc,
-                        self.profile.primary_start_pattern,
+                    stop_event, monitor, peak_result = (
+                        ServerLogMonitor.start_log_monitor(
+                            self.server_log, log_pos,
+                            actual_requests,
+                            fire_time, client_proc,
+                            self.profile.primary_start_pattern,
+                        )
                     )
 
-                elapsed, results, peak_threads = run_stage(
+                elapsed, results, peak_threads = TrafficRunner.run_stage(
                     self.args, self.profile,
                     actual_requests, actual_requests, global_offset,
                     self.server_proc, self._output_dir,
@@ -404,7 +410,9 @@ class LoadTestOrchestrator:
                 settled_client = None
                 if monitor_resources:
                     peak_client = peak_result if peak_result else None
-                    settled_client = snapshot(client_proc)
+                    settled_client = ResourceMonitor.snapshot(
+                        client_proc,
+                    )
                     if before_client and settled_client:
                         rss_before = before_client["rss"]
                         rss_settled = settled_client["rss"]
@@ -417,27 +425,31 @@ class LoadTestOrchestrator:
                 global_offset += actual_requests
                 total_sent += actual_requests
 
-                counts = count_results(results)
+                counts = OutputValidator.count_results(results)
 
                 retries: Dict[str, int] = {}
                 total_retries = 0
                 amplification = 1.0
                 if monitor_resources:
-                    retries = count_retries_since(self.server_log, log_pos)
+                    retries = ServerLogMonitor.count_retries_since(
+                        self.server_log, log_pos,
+                    )
                     total_retries = sum(retries.values())
                     amplification = (
                         (actual_requests + total_retries) / actual_requests
                         if actual_requests > 0 else 1.0
                     )
 
-                log_stage_results(
+                OutputValidator.log_stage_results(
                     actual_requests, counts, elapsed,
                     self.args.timeout, self.args.idle_timeout,
                     self.args.skip_reservation_check,
                 )
 
                 if monitor_resources and self.server_log:
-                    log_retry_activity(retries, total_retries, actual_requests)
+                    OutputValidator.log_retry_activity(
+                        retries, total_retries, actual_requests,
+                    )
 
                 server_counts: Dict[str, Any] = {}
                 disconnections: List = []
@@ -449,38 +461,56 @@ class LoadTestOrchestrator:
                     time.sleep(self.args.settle_time)
 
                     after_server = (
-                        snapshot(self.server_proc)
+                        ResourceMonitor.snapshot(self.server_proc)
                         if self.server_proc else None
                     )
                     if after_server:
-                        log_snapshot("Server SETTLED", after_server)
+                        ResourceMonitor.log_snapshot(
+                            "Server SETTLED", after_server,
+                        )
 
-                    server_counts = count_requests_since(
-                        self.server_log, log_pos,
-                        self.profile.primary_start_pattern,
-                        self.profile.primary_finish_pattern,
+                    server_counts = (
+                        ServerLogMonitor.count_requests_since(
+                            self.server_log, log_pos,
+                            self.profile.primary_start_pattern,
+                            self.profile.primary_finish_pattern,
+                        )
                     )
-                    disconnections = scan_disconnections_since(
-                        self.server_log, log_pos,
+                    disconnections = (
+                        ServerLogMonitor.scan_disconnections_since(
+                            self.server_log, log_pos,
+                        )
                     )
 
                     if parse_tokens:
-                        token_data = parse_token_accounting_since(
-                            self.server_log, log_pos,
+                        token_data = (
+                            ServerLogMonitor
+                            .parse_token_accounting_since(
+                                self.server_log, log_pos,
+                            )
                         )
-                        _attach_token_data(results, token_data)
+                        LoadTestOrchestrator._attach_token_data(
+                            results, token_data,
+                        )
                         if token_data:
-                            logger.info("\n  Token usage (from server log):")
-                            log_token_summary(results)
+                            logger.info(
+                                "\n  Token usage (from server log):",
+                            )
+                            TrafficRunner.log_token_summary(
+                                results,
+                            )
 
-                    log_disconnections(disconnections)
-                    log_server_validation(
-                        server_counts, actual_requests, self.args.agent,
+                    OutputValidator.log_disconnections(
+                        disconnections,
+                    )
+                    OutputValidator.log_server_validation(
+                        server_counts, actual_requests,
+                        self.args.agent,
                     )
 
                     if before_server and after_server:
                         resource_rows.append(
-                            build_resource_row(
+                            ResourceReporter.build_resource_row(
                                 f"{actual_requests}",
                                 before_server, after_server,
                             ),
@@ -488,9 +518,11 @@ class LoadTestOrchestrator:
 
                     if before_client and settled_client:
                         client_resource_rows.append(
-                            build_client_row(
+                            ResourceReporter.build_client_row(
                                 f"{actual_requests}",
-                                before_client, peak_client, settled_client,
+                                before_client,
+                                peak_client,
+                                settled_client,
                             ),
                         )
 
@@ -596,19 +628,25 @@ class LoadTestOrchestrator:
     def run(self):
         """Execute the full load test workflow."""
         level = self.args.level
-        validate_environment()
+        EnvironmentValidator.validate_environment()
         self._validate_server_log()
 
-        stages = resolve_stages(self.args)
-        total_cap = resolve_max_requests(self.args, stages)
+        stages = InputValidator.resolve_stages(self.args)
+        total_cap = InputValidator.resolve_max_requests(
+            self.args, stages,
+        )
 
-        confirm_cost(self.args, stages, total_cap, self.profile)
+        InputValidator.confirm_cost(
+            self.args, stages, total_cap, self.profile,
+        )
         self._setup_test_log()
 
         is_local = self.args.host in LOCAL_HOSTS
 
         if level != LEVEL_MIN and is_local:
-            self.server_proc, self.server_log = find_local_server(self.args)
+            self.server_proc, self.server_log = (
+                EnvironmentValidator.find_local_server(self.args)
+            )
         elif level == LEVEL_MIN and is_local:
             logger.info(
                 "Level 'min': server monitoring and log reading disabled",
@@ -649,9 +687,11 @@ class LoadTestOrchestrator:
             )
 
             if len(stage_summaries) > 1:
-                log_ramp_summary(stage_summaries)
+                SummaryReporter.log_ramp_summary(stage_summaries)
 
-            log_overall_results(stage_summaries, level)
+            SummaryReporter.log_overall_results(
+                stage_summaries, level,
+            )
 
             if level != LEVEL_MIN:
                 total_client_reqs = sum(
@@ -661,25 +701,35 @@ class LoadTestOrchestrator:
                     s.get("total_started") or 0 for s in stage_summaries
                 )
 
-                log_resource_analysis(
-                    resource_rows, total_client_reqs, total_server_calls,
+                ResourceReporter.log_resource_analysis(
+                    resource_rows, total_client_reqs,
+                    total_server_calls,
                 )
-                log_disconnection_summary(stage_summaries)
-                log_client_analysis(client_rows, total_client_reqs)
+                DisconnectionReporter.log_disconnection_summary(
+                    stage_summaries,
+                )
+                ResourceReporter.log_client_analysis(
+                    client_rows, total_client_reqs,
+                )
 
             if level == LEVEL_ADV:
-                log_pool_reuse_analysis(stage_summaries)
-                log_recommendations(
-                    stage_summaries, self.args, self._output_dir,
+                PoolAnalyzer.log_pool_reuse_analysis(
+                    stage_summaries,
                 )
-                append_resource_history(
+                RecommendationEngine.log_recommendations(
+                    stage_summaries, self.args,
+                    self._output_dir,
+                )
+                CsvExporter.append_resource_history(
                     stage_summaries, resource_rows, client_rows,
                 )
-                export_per_request_csv(
-                    self._output_dir, stage_summaries, self.args.agent,
+                CsvExporter.export_per_request_csv(
+                    self._output_dir, stage_summaries,
+                    self.args.agent,
                 )
-                export_summary_csv(
-                    self._output_dir, stage_summaries, self.args.agent,
+                CsvExporter.export_summary_csv(
+                    self._output_dir, stage_summaries,
+                    self.args.agent,
                 )
 
             exit_code = self._check_results(stage_summaries)
@@ -714,12 +764,13 @@ class LoadTestOrchestrator:
         return 0
 
 
-def main():
-    """Entry point for the load test script."""
-    args = parse_args()
-    orchestrator = LoadTestOrchestrator(args)
-    sys.exit(orchestrator.run())
+    @staticmethod
+    def main():
+        """Entry point for the load test script."""
+        args = LoadTestOrchestrator.parse_args()
+        orchestrator = LoadTestOrchestrator(args)
+        sys.exit(orchestrator.run())
 
 
 if __name__ == "__main__":
-    main()
+    LoadTestOrchestrator.main()
