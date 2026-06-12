@@ -28,8 +28,8 @@ from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 class TestLlmPolicyStreaming:
     """
     Verifies that LlmPolicy.is_streaming() correctly reads the "streaming"
-    key from the llm config, defaulting to False when absent, and coerces
-    arbitrary truthy / falsy values to a clean bool.
+    key from the llm config, defaulting to False when absent, and normalizes
+    supported boolean-like values to a clean bool.
     """
 
     def test_defaults_to_false_when_key_absent(self):
