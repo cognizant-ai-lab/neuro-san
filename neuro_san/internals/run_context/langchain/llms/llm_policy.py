@@ -136,7 +136,12 @@ class LlmPolicy(EnvironmentConfiguration):
         :return: True if the config sets a truthy value for the "streaming"
                  key; False otherwise (including when the key is absent).
         """
-        return bool(config.get("streaming", False))
+        value = config.get("streaming", False)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.strip().lower() == "true"
+        return False
 
     def create_llm_resources_components(self, config: Dict[str, Any]) -> Tuple[BaseLanguageModel, LlmPolicy]:
         """
