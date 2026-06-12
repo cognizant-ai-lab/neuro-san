@@ -85,14 +85,12 @@ class AbstractHttpServiceAgentSession(AgentSessionConstants):
         :param method: The method endpoint we wish to reach
         :return: The full URL for accessing the method, given the host, port and agent_name.
         """
-        # CheckMarx false positive
-        # The following line is a single source for 3 different Medium-level "Commuinication over HTTP"
-        # vulnerabilities. It sees "http" below an freaks out because absoultely everything is not going
-        # over https.  Reasonable for production, but not reasonable for development. While http
-        # communication is indeed a possibility, the choice of communication protocol is entirely up to
-        # the client code.  Agent network developers cannot start from a fully locked down https position
-        # because at that point no one has certificates, so this http possibility always needs to be
-        # here so that people can get their initial work done.
+        # CheckMarx false positive:
+        # CheckMarx flags the literal "http" below as a medium-level "Communication over HTTP" issue.
+        # This method only builds the URL; the caller decides whether to use https by providing
+        # appropriate session/security configuration. HTTP support is kept for ease of local
+        # development where certificates are often unavailable.
+        # For production, set AGENT_SESSION_REQUIRE_HTTPS=true (and configure https) to forbid http.
         scheme: str = "http"
         if self.security_cfg is not None:
             scheme = "https"
