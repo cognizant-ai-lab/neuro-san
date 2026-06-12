@@ -131,7 +131,9 @@ class ServerLogMonitor:
                                 full_block,
                             )
                             if entry:
-                                results[entry["request_id"]] = entry
+                                rid = entry.get("request_id")
+                                if rid is not None:
+                                    results[rid] = entry
                             in_block = False
                             block_lines = []
         except (OSError, IOError):
@@ -190,8 +192,9 @@ class ServerLogMonitor:
                     cancel_match = TASK_CANCELLED_PATTERN.search(line)
                     if cancel_match and context_request_id:
                         agent = cancel_match.group(1)
-                        if context_request_id in disconnections:
-                            disconnections[context_request_id]["agent"] = agent
+                        disc = disconnections.get(context_request_id)
+                        if disc is not None:
+                            disc["agent"] = agent
         except (OSError, IOError):
             pass
         return list(disconnections.values())

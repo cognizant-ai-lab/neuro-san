@@ -63,6 +63,7 @@ class OutputValidator:
     @staticmethod
     def log_retry_activity(retries, total_retries, actual_requests):
         """Log retry activity from server log."""
+        # Lazy import to avoid circular dependency: config -> validation
         from tests.load_tests.config import RETRY_ERROR_TYPES  # pylint: disable=import-outside-toplevel
         logger.info(
             "\n  max_attempts retry activity (from server log):",

@@ -43,7 +43,7 @@ class ProcessMonitor:
                 proc, stdout_chunks, stderr_chunks,
                 last_activity, timeout, idle_timeout,
             )
-        except Exception:  # pylint: disable=broad-exception-caught
+        except (OSError, subprocess.SubprocessError):
             proc.kill()
             proc.wait()
             status = STATUS_FAILED

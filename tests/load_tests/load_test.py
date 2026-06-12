@@ -365,7 +365,7 @@ class LoadTestOrchestrator:
                     if before_client:
                         logger.info(
                             "  Client BEFORE: RSS %.1fM, CPU %.1f%%",
-                            before_client["rss"], before_client["cpu"],
+                            before_client.get("rss"), before_client.get("cpu"),
                         )
 
                 fire_time = time.time()
@@ -376,7 +376,7 @@ class LoadTestOrchestrator:
                         fire_threads = (
                             f"  threads: {self.server_proc.num_threads()}"
                         )
-                    except Exception:  # pylint: disable=broad-exception-caught
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
                         pass
                 logger.info(
                     "\nFiring %s concurrent %s requests... [%s]%s",
@@ -414,8 +414,8 @@ class LoadTestOrchestrator:
                         client_proc,
                     )
                     if before_client and settled_client:
-                        rss_before = before_client["rss"]
-                        rss_settled = settled_client["rss"]
+                        rss_before = before_client.get("rss", 0)
+                        rss_settled = settled_client.get("rss", 0)
                         rss_delta = rss_settled - rss_before
                         logger.info(
                             "  Client SETTLED: RSS %.1fM (%+.1fM from before)",
@@ -552,7 +552,7 @@ class LoadTestOrchestrator:
                             after_server.get("threads")
                         )
                 if peak_threads.get("peak") is not None:
-                    summary_entry["peak_threads"] = peak_threads["peak"]
+                    summary_entry["peak_threads"] = peak_threads.get("peak")
                 stage_summaries.append(summary_entry)
 
         return stage_summaries, resource_rows, client_resource_rows
@@ -695,7 +695,7 @@ class LoadTestOrchestrator:
 
             if level != LEVEL_MIN:
                 total_client_reqs = sum(
-                    s["concurrent"] for s in stage_summaries
+                    s.get("concurrent", 0) for s in stage_summaries
                 )
                 total_server_calls = sum(
                     s.get("total_started") or 0 for s in stage_summaries

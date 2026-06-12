@@ -5,6 +5,8 @@ import os
 import socket
 import sys
 
+import psutil
+
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 
 logger = logging.getLogger(__name__)
@@ -125,7 +127,7 @@ class EnvironmentValidator:
                 "Retry monitoring unavailable.",
                 candidate,
             )
-        except Exception:  # pylint: disable=broad-exception-caught
+        except (psutil.AccessDenied, psutil.NoSuchProcess, OSError):
             logger.warning(
                 "  Could not determine server working directory. "
                 "Retry monitoring unavailable.",

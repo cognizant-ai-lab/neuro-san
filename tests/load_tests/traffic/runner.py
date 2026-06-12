@@ -110,6 +110,7 @@ class TrafficRunner:
     def run_stage(args, profile, num_requests, max_workers, global_offset,
                   server_proc=None, output_dir=None):
         """Fire num_requests concurrent requests using a thread pool."""
+        # Lazy import to avoid circular dependency: heartbeat -> runner
         from tests.load_tests.monitoring.heartbeat import Heartbeat  # pylint: disable=import-outside-toplevel
 
         results_list: List[Dict[str, Any]] = []
