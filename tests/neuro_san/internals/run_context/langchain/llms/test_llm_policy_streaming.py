@@ -54,15 +54,11 @@ class TestLlmPolicyStreaming:
         """
         assert not (LlmPolicy.is_streaming({"streaming": None}))
 
-    def test_truthy_non_bool_coerces_to_true(self):
-        """
-        Non-boolean truthy values resolve to True. Defensive against
-        configs that surface 'streaming' as e.g. an int or string.
-        """
-        assert (LlmPolicy.is_streaming({"streaming": 1}))
-        assert (LlmPolicy.is_streaming({"streaming": "yes"}))
+    def test_non_bool_values_are_handled_defensively(self):
+        """Ints (0/!=0) and "true"/"yes" strings are supported; other types default to False."""
+        assert LlmPolicy.is_streaming({"streaming": 1})
+        assert LlmPolicy.is_streaming({"streaming": "yes"})
         assert not (LlmPolicy.is_streaming({"streaming": ["x"]}))
-
     def test_falsy_non_bool_coerces_to_false(self):
         """Non-boolean falsy values resolve to False."""
         assert not (LlmPolicy.is_streaming({"streaming": 0}))
