@@ -133,8 +133,8 @@ class LlmPolicy(EnvironmentConfiguration):
         manager.
 
         :param config: The fully specified llm config
-        :return: True if the config sets a truthy value for the "streaming"
-                 key; False otherwise (including when the key is absent).
+        :return: True when the config sets a boolean True, a recognized string value ("true"/"yes"),
+                 or a non-zero integer for the "streaming" key; False otherwise (including when absent).
         """
         value = config.get("streaming", False)
         if isinstance(value, bool):
