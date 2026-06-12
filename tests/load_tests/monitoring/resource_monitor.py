@@ -1,4 +1,8 @@
-"""Resource monitoring — psutil-based process snapshots."""
+"""Resource monitoring — psutil-based process snapshots.
+
+Interim implementation. May be replaced by neuro-san built-in
+monitoring and telemetry when those features become available.
+"""
 
 import logging
 from typing import Any

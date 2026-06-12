@@ -1,4 +1,8 @@
-"""Server log monitoring — retry counting, request tracking, and disconnection scanning."""
+"""Server log monitoring — retry counting, request tracking, and disconnection scanning.
+
+Interim implementation. May be replaced by neuro-san built-in
+monitoring and telemetry when those features become available.
+"""
 
 import logging
 import re

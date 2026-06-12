@@ -1,4 +1,8 @@
-"""Progress heartbeat — periodic logging while requests are in-flight."""
+"""Progress heartbeat — periodic logging while requests are in-flight.
+
+Interim implementation. May be replaced by neuro-san built-in
+monitoring and telemetry when those features become available.
+"""
 
 import logging
 import time
