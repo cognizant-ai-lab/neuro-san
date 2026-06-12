@@ -99,10 +99,11 @@ class AbstractHttpServiceAgentSession(AgentSessionConstants):
 
         # By default, be permissive so developers can get work done.
         # Servers can turn this on to be more strict within their systems.
-        env_setting: str = getenv("AGENT_SESSION_REQUIRE_HTTPS", "false").lower()
-        allow_http: bool = env_setting in ["false", "0", "no", "off", "disable", "disabled", ""]
-        if not allow_http:
-            raise ValueError("Session is only configured to allow https communication, not http")
+        require_https: bool = getenv("AGENT_SESSION_REQUIRE_HTTPS", "false").lower() == "true"
+        if require_https and scheme != "https":
+            raise ValueError(
+                "AGENT_SESSION_REQUIRE_HTTPS=true requires https; configure the session for https (e.g., provide security_cfg)"
+            )
 
         if self.agent_name is None:
             return f"{scheme}://{self.use_host}:{self.use_port}/api/v1/{method}"
