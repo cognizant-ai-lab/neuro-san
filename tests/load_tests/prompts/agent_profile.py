@@ -68,10 +68,14 @@ class AgentProfile:
 
         Search order:
         1. Explicit --profile path (abort if not found)
-        2. ./profiles/{agent_name}.json (built-in, mirrors registry structure)
+        2. ./profiles/{agent_name}.json (built-in)
         3. {project_root}/tests/load_tests/profiles/{agent_name}.json
            where project_root comes from --project-root or PYTHONPATH
         4. Not found → abort
+
+        If the server registers the agent with a prefix (e.g.,
+        basic/hello_world), use --profile to point to the flat
+        profile file directly.
         """
         if profile_path:
             if not os.path.isfile(profile_path):
@@ -87,9 +91,7 @@ class AgentProfile:
         searched = []
 
         # Search in the built-in profiles directory next to this module
-        # Mirrors the registry folder structure:
-        #   basic/hello_world  → profiles/basic/hello_world.json
-        #   agent_network_designer → profiles/agent_network_designer.json
+        # Flat structure: profiles/{agent_name}.json
         profiles_dir = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "profiles",
         )
