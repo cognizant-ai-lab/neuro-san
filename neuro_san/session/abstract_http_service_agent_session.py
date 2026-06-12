@@ -18,6 +18,8 @@
 from typing import Any
 from typing import Dict
 
+from os import getenv
+
 from leaf_common.time.timeout import Timeout
 
 from neuro_san.interfaces.agent_session_constants import AgentSessionConstants
@@ -83,9 +85,24 @@ class AbstractHttpServiceAgentSession(AgentSessionConstants):
         :param method: The method endpoint we wish to reach
         :return: The full URL for accessing the method, given the host, port and agent_name.
         """
+        # CheckMarx false positive
+        # The following line is a single source for 3 different Medium-level "Commuinication over HTTP"
+        # vulnerabilities. It sees "http" below an freaks out because absoultely everything is not going
+        # over https.  Reasonable for production, but not reasonable for development. While http
+        # communication is indeed a possibility, the choice of communication protocol is entirely up to
+        # the client code.  Agent network developers cannot start from a fully locked down https position
+        # because at that point no one has certificates, so this http possibility always needs to be
+        # here so that people can get their initial work done.
         scheme: str = "http"
         if self.security_cfg is not None:
             scheme = "https"
+
+        # By default, be permissive so developers can get work done.
+        # Servers can turn this on to be more strict within their systems.
+        env_setting: str = getenv("AGENT_SESSION_REQUIRE_HTTPS", "false").lower()
+        allow_http: bool = env_setting in ["false", "0", "no", "off", "disable", "disabled", ""]
+        if not allow_http:
+            raise ValueError("Session is only configured to allow https communication, not http")
 
         if self.agent_name is None:
             return f"{scheme}://{self.use_host}:{self.use_port}/api/v1/{method}"
