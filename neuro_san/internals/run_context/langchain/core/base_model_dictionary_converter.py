@@ -96,7 +96,7 @@ class BaseModelDictionaryConverter(DictionaryConverter):
 
         # Get stuff from the object-level function dictionary
         # from the OpenAI function spec
-        properties: Dict[str, Any] = function_dict.get("properties")
+        properties: Dict[str, Any] = function_dict.get("properties", {})
         required: List[str] = []
         required = function_dict.get("required", required)
 
