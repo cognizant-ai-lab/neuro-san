@@ -22,13 +22,12 @@ LlmPolicy.is_streaming(), which reads the "streaming" key from the fully
 specified llm config dict. These tests verify the contract that
 is_streaming() upholds, so the per-provider policies can rely on it.
 """
-
-from unittest import TestCase
+import pytest
 
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 
 
-class LlmPolicyIsStreamingTest(TestCase):
+class TestLlmPolicyStreaming:
     """
     Verifies that LlmPolicy.is_streaming() correctly reads the "streaming"
     key from the llm config, defaulting to False when absent, and coerces
@@ -40,39 +39,39 @@ class LlmPolicyIsStreamingTest(TestCase):
         A config without 'streaming' yields False, preserving the
         long-standing non-streaming default neuro-san has shipped with.
         """
-        self.assertFalse(LlmPolicy.is_streaming({}))
+        assert not (LlmPolicy.is_streaming({}))
 
     def test_true_when_key_is_true(self):
         """Explicit True turns streaming on."""
-        self.assertTrue(LlmPolicy.is_streaming({"streaming": True}))
+        assert(LlmPolicy.is_streaming({"streaming": True}))
 
     def test_false_when_key_is_false(self):
         """Explicit False keeps streaming off."""
-        self.assertFalse(LlmPolicy.is_streaming({"streaming": False}))
+        assert not (LlmPolicy.is_streaming({"streaming": False}))
 
     def test_none_resolves_to_false(self):
         """
         A literal None (which HOCON's `null` produces) is treated as
         streaming off, matching the documented default.
         """
-        self.assertFalse(LlmPolicy.is_streaming({"streaming": None}))
+        assert not (LlmPolicy.is_streaming({"streaming": None}))
 
     def test_truthy_non_bool_coerces_to_true(self):
         """
         Non-boolean truthy values resolve to True. Defensive against
         configs that surface 'streaming' as e.g. an int or string.
         """
-        self.assertTrue(LlmPolicy.is_streaming({"streaming": 1}))
-        self.assertTrue(LlmPolicy.is_streaming({"streaming": "yes"}))
-        self.assertTrue(LlmPolicy.is_streaming({"streaming": ["x"]}))
+        assert (LlmPolicy.is_streaming({"streaming": 1}))
+        assert (LlmPolicy.is_streaming({"streaming": "yes"}))
+        assert not (LlmPolicy.is_streaming({"streaming": ["x"]}))
 
     def test_falsy_non_bool_coerces_to_false(self):
         """Non-boolean falsy values resolve to False."""
-        self.assertFalse(LlmPolicy.is_streaming({"streaming": 0}))
-        self.assertFalse(LlmPolicy.is_streaming({"streaming": ""}))
-        self.assertFalse(LlmPolicy.is_streaming({"streaming": []}))
+        assert not (LlmPolicy.is_streaming({"streaming": 0}))
+        assert not (LlmPolicy.is_streaming({"streaming": ""}))
+        assert not (LlmPolicy.is_streaming({"streaming": []}))
 
     def test_other_config_keys_do_not_affect_result(self):
         """Only the 'streaming' key is consulted; siblings are ignored."""
-        self.assertFalse(LlmPolicy.is_streaming({"stream_usage": True}))
-        self.assertTrue(LlmPolicy.is_streaming({"streaming": True, "stream_usage": False}))
+        assert not (LlmPolicy.is_streaming({"stream_usage": True}))
+        assert (LlmPolicy.is_streaming({"streaming": True, "stream_usage": False}))

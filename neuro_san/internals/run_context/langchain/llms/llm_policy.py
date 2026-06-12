@@ -140,7 +140,9 @@ class LlmPolicy(EnvironmentConfiguration):
         if isinstance(value, bool):
             return value
         if isinstance(value, str):
-            return value.strip().lower() == "true"
+            return value.strip().lower() in ("true", "yes")
+        if isinstance(value, int):
+            return value != 0
         return False
 
     def create_llm_resources_components(self, config: Dict[str, Any]) -> Tuple[BaseLanguageModel, LlmPolicy]:
