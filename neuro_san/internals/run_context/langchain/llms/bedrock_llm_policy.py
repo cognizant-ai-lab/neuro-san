@@ -21,6 +21,7 @@ from typing import Dict
 from langchain_core.language_models.base import BaseLanguageModel
 
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
+from neuro_san.internals.utils.config_util import ConfigUtil
 
 
 class BedrockLlmPolicy(LlmPolicy):
@@ -74,7 +75,7 @@ class BedrockLlmPolicy(LlmPolicy):
             # a streaming-aware callback is attached. Token usage is collected from
             # AIMessage.usage_metadata in LlmTokenCallbackHandler regardless of streaming
             # mode.
-            streaming=self.is_streaming(config),
+            streaming=ConfigUtil.get_bool(config, "streaming"),
             system_prompt_with_tools=config.get("system_prompt_with_tools"),
             tags=config.get("tags"),
             temperature=config.get("temperature"),

@@ -23,6 +23,7 @@ from httpx import AsyncClient
 from langchain_core.language_models.base import BaseLanguageModel
 
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
+from neuro_san.internals.utils.config_util import ConfigUtil
 
 
 class OpenAILlmPolicy(LlmPolicy):
@@ -149,7 +150,7 @@ class OpenAILlmPolicy(LlmPolicy):
             # a streaming-aware callback handler is attached to the run manager. Token
             # usage is collected from AIMessage.usage_metadata in LlmTokenCallbackHandler
             # regardless of streaming mode.
-            streaming=self.is_streaming(config),
+            streaming=ConfigUtil.get_bool(config, "streaming"),
             n=1,  # n is always 1.  neuro-san will only ever consider one chat completion.
             top_p=config.get("top_p"),
             max_tokens=config.get("max_tokens"),  # This is always for output
@@ -177,7 +178,7 @@ class OpenAILlmPolicy(LlmPolicy):
             verbose=False,
 
             # Track streaming: emit token-usage frames only when streaming is enabled.
-            stream_usage=self.is_streaming(config)
+            stream_usage=ConfigUtil.get_bool(config, "streaming")
         )
 
         return llm

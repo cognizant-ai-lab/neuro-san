@@ -23,6 +23,7 @@ from contextlib import suppress
 from langchain_core.language_models.base import BaseLanguageModel
 
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
+from neuro_san.internals.utils.config_util import ConfigUtil
 
 
 class GeminiLlmPolicy(LlmPolicy):
@@ -65,7 +66,7 @@ class GeminiLlmPolicy(LlmPolicy):
             # We pass streaming explicitly (rather than relying on LangChain's default) so
             # that langchain_core._should_stream() picks up the configured value even when
             # a streaming-aware callback handler is attached to the run manager.
-            streaming=self.is_streaming(config),
+            streaming=ConfigUtil.get_bool(config, "streaming"),
 
             # If omitted, this defaults to the global verbose value,
             # accessible via langchain_core.globals.get_verbose():

@@ -23,6 +23,7 @@ from contextlib import suppress
 from langchain_core.language_models.base import BaseLanguageModel
 
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
+from neuro_san.internals.utils.config_util import ConfigUtil
 
 
 class AnthropicLlmPolicy(LlmPolicy):
@@ -72,8 +73,8 @@ class AnthropicLlmPolicy(LlmPolicy):
             # a streaming-aware callback is attached. Token usage is collected from
             # AIMessage.usage_metadata in LlmTokenCallbackHandler regardless of streaming
             # mode; stream_usage tracks streaming so usage frames flow only when streaming.
-            streaming=self.is_streaming(config),
-            stream_usage=self.is_streaming(config),
+            streaming=ConfigUtil.get_bool(config, "streaming"),
+            stream_usage=ConfigUtil.get_bool(config, "streaming"),
             thinking=config.get("thinking"),
             effort=config.get("effort"),
             mcp_servers=config.get("mcp_servers"),
