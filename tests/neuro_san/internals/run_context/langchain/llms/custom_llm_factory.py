@@ -47,7 +47,7 @@ class CustomLlmFactory(StandardLangChainLlmFactory):
         #           settings for any given agent in an agent network hocon file overlayed
         #           on top of the default settings you specify in your own llm_info.hocon file.
         #   * delete_resources() deletes any resources related to network clients that were
-        #           created by create_llm(). Unfortunately, most often this involes reaching
+        #           created by create_llm(). Unfortunately, most often this involves reaching
         #           into the internals of your particular BaseLanguageModel implementation
         #           in order to shut down any network connections.  This isn't strictly required,
         #           but it's highly recommended in a server environment.
