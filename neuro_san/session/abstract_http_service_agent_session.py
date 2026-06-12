@@ -100,7 +100,7 @@ class AbstractHttpServiceAgentSession(AgentSessionConstants):
         require_https: bool = getenv("AGENT_SESSION_REQUIRE_HTTPS", "false").lower() == "true"
         if require_https and scheme != "https":
             raise ValueError(
-                "AGENT_SESSION_REQUIRE_HTTPS=true requires https; configure the session for https (e.g., provide security_cfg)"
+                f"AGENT_SESSION_REQUIRE_HTTPS=true requires https. Configure the {self.__class__.__name__} accordingly"
             )
 
         if self.agent_name is None:
