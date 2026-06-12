@@ -59,6 +59,7 @@ class TestLlmPolicyStreaming:
         assert LlmPolicy.is_streaming({"streaming": 1})
         assert LlmPolicy.is_streaming({"streaming": "yes"})
         assert not (LlmPolicy.is_streaming({"streaming": ["x"]}))
+        
     def test_falsy_non_bool_coerces_to_false(self):
         """Non-boolean falsy values resolve to False."""
         assert not (LlmPolicy.is_streaming({"streaming": 0}))
