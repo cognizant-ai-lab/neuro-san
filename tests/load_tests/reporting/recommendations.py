@@ -186,9 +186,10 @@ def _summarize_observations(stage_summaries) -> List[str]:
         overall_avg = (
             sum(r.get("elapsed", 0) for r in all_results) / total
         )
+        latency_str = " \u2192 ".join(stage_latencies)
         observations.append(
             f"\u2022 Avg latency: {overall_avg:.1f}s "
-            f"(per stage: {' \u2192 '.join(stage_latencies)})",
+            f"(per stage: {latency_str})",
         )
 
     # Server RSS
@@ -218,8 +219,9 @@ def _summarize_observations(stage_summaries) -> List[str]:
             pct = (reused / calls * 100) if calls > 0 else 0
             reuse_rates.append(f"{pct:.0f}%")
         if reuse_rates:
+            reuse_str = " \u2192 ".join(reuse_rates)
             observations.append(
-                f"\u2022 Pool reuse: {' \u2192 '.join(reuse_rates)}",
+                f"\u2022 Pool reuse: {reuse_str}",
             )
 
     # Token usage
