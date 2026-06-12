@@ -22,8 +22,6 @@ LlmPolicy.is_streaming(), which reads the "streaming" key from the fully
 specified llm config dict. These tests verify the contract that
 is_streaming() upholds, so the per-provider policies can rely on it.
 """
-import pytest
-
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
 
 
@@ -43,7 +41,7 @@ class TestLlmPolicyStreaming:
 
     def test_true_when_key_is_true(self):
         """Explicit True turns streaming on."""
-        assert(LlmPolicy.is_streaming({"streaming": True}))
+        assert (LlmPolicy.is_streaming({"streaming": True}))
 
     def test_false_when_key_is_false(self):
         """Explicit False keeps streaming off."""

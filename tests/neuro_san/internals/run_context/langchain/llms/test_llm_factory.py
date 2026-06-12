@@ -29,4 +29,3 @@ class TestLlmFactory:
         instantiated by this factory that don't specify an llm_policy_class in their config.
         """
         _ = CustomLlmFactory()
-
