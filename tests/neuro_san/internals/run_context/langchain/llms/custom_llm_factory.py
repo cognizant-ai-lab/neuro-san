@@ -31,7 +31,7 @@ class CustomLlmFactory(StandardLangChainLlmFactory):
         """
         Constructor.
 
-        Extension constructors of te LangChainLlmFactory must take no arguments.
+        Extension constructors of the LangChainLlmFactory must take no arguments.
         """
 
         # The preferred way of extending the library to use your own LLM classes.
