@@ -763,7 +763,6 @@ class LoadTestOrchestrator:
         )
         return 0
 
-
     @staticmethod
     def main():
         """Entry point for the load test script."""
