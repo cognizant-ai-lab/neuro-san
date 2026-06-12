@@ -1,0 +1,12 @@
+{
+    "agent": "hello_world",
+    "prompts": [
+        "Hello, how are you today?",
+        "What can you help me with?",
+        "Tell me something interesting about yourself",
+        "What is the meaning of hello world in programming?",
+        "Can you greet me in different languages?"
+    ],
+    "estimated_tokens_per_request": 1000,
+    "success_fields": []
+}
