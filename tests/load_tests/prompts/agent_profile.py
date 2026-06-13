@@ -84,7 +84,7 @@ class AgentProfile:
         Search order:
         1. Explicit --profile path (abort if not found)
         2. ./profiles/{agent_name}.json (built-in)
-        3. {project_root}/tests/load_tests/profiles/{agent_name}.json
+        3. {project_root}/tests/load_tests/prompts/profiles/{agent_name}.json
            where project_root comes from --project-root or PYTHONPATH
         4. Not found → abort
 
@@ -119,7 +119,7 @@ class AgentProfile:
         resolved_root = cls._resolve_project_root(project_root)
         if resolved_root:
             candidate = os.path.normpath(os.path.join(
-                resolved_root, "tests", "load_tests", "profiles",
+                resolved_root, "tests", "load_tests", "prompts", "profiles",
                 f"{agent_name}.json",
             ))
             searched.append(candidate)

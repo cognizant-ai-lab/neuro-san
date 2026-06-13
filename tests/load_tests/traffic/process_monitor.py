@@ -69,7 +69,13 @@ class ProcessMonitor:
             stdout_chunks.append(remaining_out)
         if remaining_err:
             stderr_chunks.append(remaining_err)
-        proc.wait(timeout=10)
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+            if status != STATUS_FAILED:
+                status = STATUS_KILLED
 
         return (
             status,

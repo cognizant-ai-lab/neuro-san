@@ -410,9 +410,14 @@ class LoadTestOrchestrator:
                         )
                     )
 
+                stage_workers = (
+                    self.args.max_workers
+                    if not self.args.ramp
+                    else actual_requests
+                )
                 elapsed, results, peak_threads = TrafficRunner.run_stage(
                     self.args, self.profile,
-                    actual_requests, actual_requests, global_offset,
+                    actual_requests, stage_workers, global_offset,
                     self.server_proc, self._output_dir,
                 )
                 if stop_event:

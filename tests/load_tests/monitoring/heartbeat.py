@@ -44,13 +44,13 @@ class Heartbeat:
             elapsed = int(time.time() - start_time)
             ts = time.strftime("%H:%M:%S", time.localtime())
             pct = done * 100 // total if total > 0 else 0
-            if done > last_done:
-                last_change = time.time()
-                last_done = done
             suffix = ""
             if done == last_done and done < total:
                 stall = int(time.time() - last_change)
                 suffix = f"  !! no new completions in {stall}s"
+            if done > last_done:
+                last_change = time.time()
+                last_done = done
             thread_info = ""
             if server_proc is not None:
                 try:
