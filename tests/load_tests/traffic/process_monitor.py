@@ -16,6 +16,7 @@
 """Subprocess execution with idle-timeout and hard-timeout detection."""
 
 import logging
+import os
 import select
 import subprocess
 import time
@@ -40,8 +41,8 @@ class ProcessMonitor:
 
         Returns (status, stdout, stderr, returncode).
         """
-        stdout_chunks: List[str] = []
-        stderr_chunks: List[str] = []
+        stdout_chunks: List[bytes] = []
+        stderr_chunks: List[bytes] = []
         status = STATUS_FAILED
         last_activity = time.time()
 
@@ -50,7 +51,6 @@ class ProcessMonitor:
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
         )
 
         try:
@@ -79,8 +79,8 @@ class ProcessMonitor:
 
         return (
             status,
-            "".join(stdout_chunks),
-            "".join(stderr_chunks),
+            b"".join(stdout_chunks).decode("utf-8", errors="replace"),
+            b"".join(stderr_chunks).decode("utf-8", errors="replace"),
             proc.returncode,
         )
 
@@ -108,16 +108,11 @@ class ProcessMonitor:
                 [proc.stdout, proc.stderr], [], [], 5.0,
             )
             for stream in readable:
-                chunk = (
-                    stream.read1(4096)
-                    if hasattr(stream, "read1") else ""
-                )
-                if not chunk:
-                    chunk = stream.readline()
-                if chunk:
+                data = os.read(stream.fileno(), 4096)
+                if data:
                     last_activity = time.time()
                     if stream == proc.stdout:
-                        stdout_chunks.append(chunk)
+                        stdout_chunks.append(data)
                     else:
-                        stderr_chunks.append(chunk)
+                        stderr_chunks.append(data)
         return STATUS_FAILED
