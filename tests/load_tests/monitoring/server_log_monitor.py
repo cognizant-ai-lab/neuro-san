@@ -1,3 +1,18 @@
+# Copyright © 2023-2026 Cognizant Technology Solutions Corp, www.cognizant.com.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 """Server log monitoring — retry counting, request tracking, and disconnection scanning.
 
 Interim implementation. May be replaced by neuro-san built-in
@@ -58,8 +73,8 @@ class ServerLogMonitor:
                         retry_counts[error_type] = (
                             retry_counts.get(error_type, 0) + 1
                         )
-        except (OSError, IOError):
-            pass
+        except (OSError, IOError) as exc:
+            logger.warning("Could not read server log for retries: %s", exc)
         return retry_counts
 
     @staticmethod
@@ -92,8 +107,8 @@ class ServerLogMonitor:
                         primary_started += 1
                     if pri_finish_re.search(line):
                         primary_finished += 1
-        except (OSError, IOError):
-            pass
+        except (OSError, IOError) as exc:
+            logger.warning("Could not read server log for counts: %s", exc)
         return {
             "primary_started": primary_started,
             "primary_finished": primary_finished,
@@ -136,8 +151,8 @@ class ServerLogMonitor:
                                     results[rid] = entry
                             in_block = False
                             block_lines = []
-        except (OSError, IOError):
-            pass
+        except (OSError, IOError) as exc:
+            logger.warning("Could not read server log for tokens: %s", exc)
         return results
 
     @staticmethod
@@ -195,8 +210,11 @@ class ServerLogMonitor:
                         disc = disconnections.get(context_request_id)
                         if disc is not None:
                             disc["agent"] = agent
-        except (OSError, IOError):
-            pass
+        except (OSError, IOError) as exc:
+            logger.warning(
+                "Could not read server log for disconnections: %s",
+                exc,
+            )
         return list(disconnections.values())
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -263,5 +281,5 @@ class ServerLogMonitor:
                                     peak_result.update(snap)
                     else:
                         stop_event.wait(0.5)
-        except (OSError, IOError):
-            pass
+        except (OSError, IOError) as exc:
+            logger.debug("Log monitor stopped: %s", exc)

@@ -322,7 +322,7 @@ tests/load_tests/
         recommendations.py   # Observations + next-step suggestions
         resource_report.py   # Server and client resource tables
         summary.py           # Overall results and ramp-up summary
-        table_utils.py       # Console table formatting
+        table_formatter.py    # Console table formatting
     traffic/
         cli_builder.py       # Build agent_cli subprocess commands
         process_monitor.py   # Idle timeout and hanging request detection

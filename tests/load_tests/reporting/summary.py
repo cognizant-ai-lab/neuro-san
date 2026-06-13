@@ -1,3 +1,18 @@
+# Copyright © 2023-2026 Cognizant Technology Solutions Corp, www.cognizant.com.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 """Summary reporting — ramp-up and overall results."""
 
 import logging
@@ -10,7 +25,7 @@ from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
-from tests.load_tests.reporting.table_utils import TableFormatter
+from tests.load_tests.reporting.table_formatter import TableFormatter
 
 logger = logging.getLogger(__name__)
 
@@ -151,22 +166,31 @@ class SummaryReporter:
             r.get("llm_calls", 0) for r in all_results
         )
         logger.info("\n  Token usage:")
-        logger.info("    Total tokens:    %s", f"{total_all:,}")
-        logger.info("    Avg per request: %s", f"{int(avg_tokens):,}")
-        logger.info("    P50:             %s", f"{p50:,}")
-        logger.info("    P90:             %s", f"{p90:,}")
-        logger.info(
-            "    Max:             %s", f"{max(token_totals):,}",
+        fmt_total = f"{total_all:,}"
+        fmt_avg = f"{int(avg_tokens):,}"
+        fmt_p50 = f"{p50:,}"
+        fmt_p90 = f"{p90:,}"
+        fmt_max = f"{max(token_totals):,}"
+        fmt_prompt = f"{total_prompt:,}"
+        fmt_comp = f"{total_comp:,}"
+        pct_prompt = (
+            100 * total_prompt / total_all if total_all else 0
         )
+        pct_comp = (
+            100 * total_comp / total_all if total_all else 0
+        )
+        logger.info("    Total tokens:    %s", fmt_total)
+        logger.info("    Avg per request: %s", fmt_avg)
+        logger.info("    P50:             %s", fmt_p50)
+        logger.info("    P90:             %s", fmt_p90)
+        logger.info("    Max:             %s", fmt_max)
         logger.info(
             "    Prompt tokens:   %s (%.0f%%)",
-            f"{total_prompt:,}",
-            100 * total_prompt / total_all if total_all else 0,
+            fmt_prompt, pct_prompt,
         )
         logger.info(
             "    Completion:      %s (%.0f%%)",
-            f"{total_comp:,}",
-            100 * total_comp / total_all if total_all else 0,
+            fmt_comp, pct_comp,
         )
         logger.info(
             "    LLM calls:       %s (avg %.1f/request)",
