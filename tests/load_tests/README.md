@@ -3,6 +3,17 @@
 Fire concurrent requests at a neuro-san server, monitor resource usage,
 and report results. Uses real LLM calls via `agent_cli` subprocesses.
 
+## Contents
+
+- [Quick Start](#quick-start)
+- [Test Levels](#test-levels---level)
+- [Traffic Modes](#traffic-modes)
+- [Flags](#flags)
+- [Agent Profiles](#agent-profiles)
+- [Output](#output)
+- [Exit Codes](#exit-codes)
+- [Notes](#notes)
+
 ## Quick Start
 
 Start the server (from neuro-san-studio):
