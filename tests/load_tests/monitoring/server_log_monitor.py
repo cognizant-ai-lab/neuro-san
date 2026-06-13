@@ -28,12 +28,13 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from tests.load_tests.config import RETRY_LOG_PATTERN
-from tests.load_tests.config import REQUEST_START_PATTERN
-from tests.load_tests.config import REQUEST_FINISH_PATTERN
 from tests.load_tests.config import CLIENT_DISCONNECT_PATTERN
+from tests.load_tests.config import REQUEST_FINISH_PATTERN
+from tests.load_tests.config import REQUEST_START_PATTERN
+from tests.load_tests.config import RETRY_LOG_PATTERN
 from tests.load_tests.config import STREAM_CLOSED_REQUEST_PATTERN
 from tests.load_tests.config import TASK_CANCELLED_PATTERN
+from tests.load_tests.config import TokenEntry
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 
 logger = logging.getLogger(__name__)
@@ -66,15 +67,17 @@ class ServerLogMonitor:
         try:
             with open(server_log, "r", encoding="utf-8") as log_fh:
                 log_fh.seek(position)
-                for line in log_fh:
-                    match = RETRY_LOG_PATTERN.search(line)
-                    if match:
-                        error_type = match.group(2)
-                        retry_counts[error_type] = (
-                            retry_counts.get(error_type, 0) + 1
-                        )
+                lines = log_fh.readlines()
         except (OSError, IOError) as exc:
             logger.warning("Could not read server log for retries: %s", exc)
+            return retry_counts
+        for line in lines:
+            match = RETRY_LOG_PATTERN.search(line)
+            if match:
+                error_type = match.group(2)
+                retry_counts[error_type] = (
+                    retry_counts.get(error_type, 0) + 1
+                )
         return retry_counts
 
     @staticmethod
@@ -98,17 +101,24 @@ class ServerLogMonitor:
         try:
             with open(server_log, "r", encoding="utf-8") as log_fh:
                 log_fh.seek(position)
-                for line in log_fh:
-                    if REQUEST_START_PATTERN.search(line):
-                        total_started += 1
-                    if REQUEST_FINISH_PATTERN.search(line):
-                        total_finished += 1
-                    if pri_start_re.search(line):
-                        primary_started += 1
-                    if pri_finish_re.search(line):
-                        primary_finished += 1
+                lines = log_fh.readlines()
         except (OSError, IOError) as exc:
             logger.warning("Could not read server log for counts: %s", exc)
+            return {
+                "primary_started": primary_started,
+                "primary_finished": primary_finished,
+                "total_started": total_started,
+                "total_finished": total_finished,
+            }
+        for line in lines:
+            if REQUEST_START_PATTERN.search(line):
+                total_started += 1
+            if REQUEST_FINISH_PATTERN.search(line):
+                total_finished += 1
+            if pri_start_re.search(line):
+                primary_started += 1
+            if pri_finish_re.search(line):
+                primary_finished += 1
         return {
             "primary_started": primary_started,
             "primary_finished": primary_finished,
@@ -119,7 +129,7 @@ class ServerLogMonitor:
     @staticmethod
     def parse_token_accounting_since(
             server_log, position,
-    ) -> Dict[str, Dict[str, Any]]:
+    ) -> Dict[str, TokenEntry]:
         """Parse Request reporting entries for token accounting data.
 
         Returns a dict of request_id -> token data, where each entry has:
@@ -128,35 +138,37 @@ class ServerLogMonitor:
         """
         if server_log is None or position is None:
             return {}
-        results: Dict[str, Dict[str, Any]] = {}
+        results: Dict[str, TokenEntry] = {}
         try:
             with open(server_log, "r", encoding="utf-8") as log_fh:
                 log_fh.seek(position)
-                in_block = False
-                block_lines: List[str] = []
-                for line in log_fh:
-                    if "Request reporting" in line and not in_block:
-                        in_block = True
-                        block_lines = [line]
-                    elif in_block:
-                        block_lines.append(line)
-                        if '"request_id"' in line:
-                            full_block = "".join(block_lines)
-                            entry = ServerLogMonitor._extract_token_entry(
-                                full_block,
-                            )
-                            if entry:
-                                rid = entry.get("request_id")
-                                if rid is not None:
-                                    results[rid] = entry
-                            in_block = False
-                            block_lines = []
+                lines = log_fh.readlines()
         except (OSError, IOError) as exc:
             logger.warning("Could not read server log for tokens: %s", exc)
+            return results
+        in_block = False
+        block_lines: List[str] = []
+        for line in lines:
+            if "Request reporting" in line and not in_block:
+                in_block = True
+                block_lines = [line]
+            elif in_block:
+                block_lines.append(line)
+                if '"request_id"' in line:
+                    full_block = "".join(block_lines)
+                    entry = ServerLogMonitor._extract_token_entry(
+                        full_block,
+                    )
+                    if entry:
+                        rid = entry.get("request_id")
+                        if rid is not None:
+                            results[rid] = entry
+                    in_block = False
+                    block_lines = []
         return results
 
     @staticmethod
-    def _extract_token_entry(block: str) -> Optional[Dict[str, Any]]:
+    def _extract_token_entry(block: str) -> Optional[TokenEntry]:
         """Extract token accounting fields from a Request reporting log block."""
         rid_match = re.search(r'"request_id": "([^"]+)"', block)
         if not rid_match:
@@ -192,29 +204,31 @@ class ServerLogMonitor:
         try:
             with open(server_log, "r", encoding="utf-8") as log_fh:
                 log_fh.seek(position)
-                context_request_id = None
-                for line in log_fh:
-                    req_match = STREAM_CLOSED_REQUEST_PATTERN.search(line)
-                    if req_match:
-                        context_request_id = req_match.group(1)
-                    if CLIENT_DISCONNECT_PATTERN.search(line):
-                        req_id = context_request_id or "unknown"
-                        if req_id not in disconnections:
-                            disconnections[req_id] = {
-                                "request_id": req_id,
-                                "agent": "unknown",
-                            }
-                    cancel_match = TASK_CANCELLED_PATTERN.search(line)
-                    if cancel_match and context_request_id:
-                        agent = cancel_match.group(1)
-                        disc = disconnections.get(context_request_id)
-                        if disc is not None:
-                            disc["agent"] = agent
+                lines = log_fh.readlines()
         except (OSError, IOError) as exc:
             logger.warning(
                 "Could not read server log for disconnections: %s",
                 exc,
             )
+            return []
+        context_request_id = None
+        for line in lines:
+            req_match = STREAM_CLOSED_REQUEST_PATTERN.search(line)
+            if req_match:
+                context_request_id = req_match.group(1)
+            if CLIENT_DISCONNECT_PATTERN.search(line):
+                req_id = context_request_id or "unknown"
+                if req_id not in disconnections:
+                    disconnections[req_id] = {
+                        "request_id": req_id,
+                        "agent": "unknown",
+                    }
+            cancel_match = TASK_CANCELLED_PATTERN.search(line)
+            if cancel_match and context_request_id:
+                agent = cancel_match.group(1)
+                disc = disconnections.get(context_request_id)
+                if disc is not None:
+                    disc["agent"] = agent
         return list(disconnections.values())
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments

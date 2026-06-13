@@ -16,6 +16,38 @@
 """Shared constants, regex patterns, and defaults for the load test framework."""
 
 import re
+from typing import TypedDict
+
+
+class TokenEntry(TypedDict):
+    """Token accounting data parsed from a server log block."""
+
+    request_id: str
+    total_tokens: int
+    prompt_tokens: int
+    completion_tokens: int
+    llm_calls: int
+    model: str
+
+
+class ResourceSnapshot(TypedDict):
+    """Point-in-time resource usage of a process."""
+
+    rss: float
+    fds: int
+    threads: int
+    connections: int
+    children: int
+    cpu: float
+
+
+class ServerCounts(TypedDict):
+    """Request start/finish counts from the server log."""
+
+    primary_started: int
+    primary_finished: int
+    total_started: int
+    total_finished: int
 
 
 # Result status constants
