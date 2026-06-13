@@ -78,7 +78,7 @@ then moves to the next.
 | `--ramp`               | off         | Enable ramp-up mode                            |
 | `--stages`             | 10,30,50,100| Concurrency per stage in ramp mode             |
 | `--num-rounds`         | 1           | Repeat the full sequence N times               |
-| `--max-requests`       | 100         | Hard cap on total requests (cost safeguard)    |
+| `--max-requests`       | 100 (flat) / sum(stages) (ramp) | Hard cap on total requests (cost safeguard) |
 | `--timeout`            | 1200        | Hard timeout per request (seconds)             |
 | `--idle-timeout`       | 900         | Kill if no output for N seconds                |
 | `--settle-time`        | 15          | Wait after each stage for server cleanup       |

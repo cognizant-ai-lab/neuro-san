@@ -587,12 +587,12 @@ class LoadTestOrchestrator:
         )
         self._test_log_handler.setLevel(logging.INFO)
         self._test_log_handler.setFormatter(logging.Formatter("%(message)s"))
-        logger.addHandler(self._test_log_handler)
+        logging.getLogger().addHandler(self._test_log_handler)
 
     def _finalize_test_log(self, stage_summaries):
         """Close the log handler and report the output directory."""
         if self._test_log_handler is not None:
-            logger.removeHandler(self._test_log_handler)
+            logging.getLogger().removeHandler(self._test_log_handler)
             self._test_log_handler.close()
         if self._output_dir is None:
             return

@@ -358,5 +358,5 @@ class RecommendationEngine:
         filepath = os.path.join(output_dir, "recommendations.txt")
         with open(filepath, "w", encoding="utf-8") as fh:
             for line in lines:
-                fh.write(line.strip() + "\n")
+                fh.write(line.rstrip("\n") + "\n")
         logger.info("Recommendations: %s", filepath)

@@ -105,10 +105,8 @@ class ServerLogMonitor:
         except (OSError, IOError) as exc:
             logger.warning("Could not read server log for counts: %s", exc)
             return {
-                "primary_started": primary_started,
-                "primary_finished": primary_finished,
-                "total_started": total_started,
-                "total_finished": total_finished,
+                "primary_started": None, "primary_finished": None,
+                "total_started": None, "total_finished": None,
             }
         for line in lines:
             if REQUEST_START_PATTERN.search(line):
