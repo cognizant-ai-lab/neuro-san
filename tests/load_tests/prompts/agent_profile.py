@@ -128,7 +128,7 @@ class AgentProfile:
 
         logger.error(
             "No profile found for agent '%s'.\n"
-            "Searched:\n%s"
+            "Searched:\n%s\n"
             "Create a profile JSON or use --profile to specify one.\n"
             "Aborting.",
             agent_name,

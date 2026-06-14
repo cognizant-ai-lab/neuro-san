@@ -232,7 +232,7 @@ class CsvExporter:
         ]
 
         with open(
-                history_path, "a", encoding="utf-8",
+                history_path, "a", encoding="utf-8", newline="",
         ) as csvfile:
             writer = csv.writer(csvfile)
             if write_header:

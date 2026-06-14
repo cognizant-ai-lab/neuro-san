@@ -18,6 +18,7 @@
 import logging
 import os
 import re
+import tempfile
 from typing import List
 from typing import Optional
 
@@ -47,8 +48,11 @@ class CliBuilder:
     @staticmethod
     def write_prompt_file(global_request_id, prompt) -> str:
         """Write prompt text to a temporary file and return its path."""
-        prompt_file = f"/tmp/load_test_prompt_{global_request_id}.txt"
-        with open(prompt_file, "w", encoding="utf-8") as fh:
+        fd, prompt_file = tempfile.mkstemp(
+            prefix=f"load_test_prompt_{global_request_id}_",
+            suffix=".txt",
+        )
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(prompt)
         return prompt_file
 

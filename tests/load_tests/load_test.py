@@ -129,7 +129,7 @@ class LoadTestOrchestrator:
             help="Path to the project root where the server is "
                  "running from (e.g., /path/to/neuro-san-studio). "
                  "Used to find agent profiles at "
-                 "{project-root}/tests/load_tests/profiles/. "
+                 "{project-root}/tests/load_tests/prompts/profiles/. "
                  "Falls back to PYTHONPATH if not set.",
         )
         parser.add_argument(
@@ -175,8 +175,8 @@ class LoadTestOrchestrator:
             default=None,
             help="Hard cap on total requests across all "
                  "stages/rounds. Cost safeguard for real LLM calls."
-                 " Default: 100 for flat mode, sum of stages for "
-                 "ramp mode.",
+                 " Default: 100 for flat mode, sum(stages) * "
+                 "num_rounds for ramp mode.",
         )
         parser.add_argument(
             "--host",
@@ -339,9 +339,14 @@ class LoadTestOrchestrator:
                 remaining = total_cap - total_sent
                 actual_requests = min(num_concurrent, remaining)
                 stage_num = stage_idx + 1
+                stage_workers = (
+                    self.args.max_workers
+                    if not self.args.ramp
+                    else actual_requests
+                )
 
                 logger.info("\n%s", "=" * 60)
-                stage_label = f"[STAGE {stage_num}] {actual_requests} concurrent connections"
+                stage_label = f"[STAGE {stage_num}] {stage_workers} concurrent connections"
                 if self.args.num_rounds > 1:
                     stage_label += f" (round {round_num})"
                 logger.info("  %s", stage_label)
@@ -410,11 +415,6 @@ class LoadTestOrchestrator:
                         )
                     )
 
-                stage_workers = (
-                    self.args.max_workers
-                    if not self.args.ramp
-                    else actual_requests
-                )
                 elapsed, results, peak_threads = TrafficRunner.run_stage(
                     self.args, self.profile,
                     actual_requests, stage_workers, global_offset,
