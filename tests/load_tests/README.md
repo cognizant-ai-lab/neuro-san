@@ -106,6 +106,7 @@ then moves to the next.
 | `--same-prompt`            | off         | Use identical prompt for all requests        |
 | `--yes`                    | off         | Skip dry-run probe and cost confirmation     |
 | `--skip-reservation-check` | off         | Skip reservation_id validation               |
+| `--output-dir`             | (none)      | Base directory for test output               |
 | `--project-root`           | (none)      | Project root for profile discovery           |
 
 ## Cost Confirmation and Dry-Run Probe
@@ -151,8 +152,8 @@ agent_network_designer — the request is marked FAILED if any are missing.
 
 ## Output
 
-Results go to `/tmp/load_test/{level}/{timestamp}/`. At `adv` level this
-includes:
+Results go to `/tmp/load_test/{level}/{timestamp}/` by default, or to
+the path specified by `--output-dir`. At `adv` level this includes:
 
 | File                  | Contents                                         |
 |-----------------------|--------------------------------------------------|

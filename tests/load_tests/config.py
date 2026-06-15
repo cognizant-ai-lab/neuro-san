@@ -133,25 +133,3 @@ MODEL_PRICING = {
 }
 # Fallback pricing when model is unknown
 DEFAULT_PRICING = {"prompt": 2.50, "completion": 10.00}
-
-
-class CostEstimator:
-    """Estimate USD cost from token counts and model pricing."""
-
-    @staticmethod
-    def estimate(prompt_tokens, completion_tokens, model="unknown"):
-        """Estimate USD cost from token counts and model name."""
-        pricing = DEFAULT_PRICING
-        for key, val in MODEL_PRICING.items():
-            if key in model:
-                pricing = val
-                break
-        prompt_cost = (
-            (prompt_tokens / TOKENS_PER_MILLION)
-            * pricing.get("prompt", 0)
-        )
-        completion_cost = (
-            (completion_tokens / TOKENS_PER_MILLION)
-            * pricing.get("completion", 0)
-        )
-        return prompt_cost + completion_cost

@@ -61,8 +61,8 @@ class Heartbeat:
                         thread_info = f"  threads: {threads} (peak)"
                     else:
                         thread_info = f"  threads: {threads}"
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    pass
+                except (psutil.NoSuchProcess, psutil.AccessDenied) as exc:
+                    logger.debug("Heartbeat thread count unavailable: %s", exc)
             logger.info(
                 "  [progress] %s of %s completed"
                 " (%s%%) -- %ss elapsed [%s]%s%s",

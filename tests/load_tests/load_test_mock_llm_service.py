@@ -334,8 +334,8 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             for i, arg in enumerate(cmdline):
                 if arg == "--port" and i + 1 < len(cmdline):
                     return cmdline[i + 1]
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            pass
+        except (psutil.NoSuchProcess, psutil.AccessDenied) as exc:
+            logger.debug("Could not read mock process cmdline: %s", exc)
         return "8888"
 
     @staticmethod

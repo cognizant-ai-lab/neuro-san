@@ -68,7 +68,6 @@ from typing import Tuple
 
 import psutil
 
-from tests.load_tests.config import CostEstimator
 from tests.load_tests.config import DEFAULT_IDLE_TIMEOUT_SECONDS
 from tests.load_tests.config import DEFAULT_TIMEOUT_SECONDS
 from tests.load_tests.config import LEVEL_ADV
@@ -78,6 +77,7 @@ from tests.load_tests.config import LOCAL_HOSTS
 from tests.load_tests.config import STALE_LOG_THRESHOLD_SECONDS
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import THREAD_JOIN_TIMEOUT
+from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.prompts.agent_profile import AgentProfile
@@ -433,8 +433,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                         fire_threads = (
                             f"  threads: {self.server_proc.num_threads()}"
                         )
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        pass
+                    except (psutil.NoSuchProcess, psutil.AccessDenied) as exc:
+                        logger.debug("Thread count unavailable: %s", exc)
                 fire_label = actual_requests
                 if probe_result is not None:
                     fire_label = f"{actual_requests} ({actual_requests - 1} + 1 probe)"

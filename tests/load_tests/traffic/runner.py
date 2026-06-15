@@ -29,7 +29,7 @@ from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.config import THREAD_JOIN_TIMEOUT
-from tests.load_tests.config import CostEstimator
+from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.traffic.cli_builder import CliBuilder
 from tests.load_tests.traffic.process_monitor import ProcessMonitor

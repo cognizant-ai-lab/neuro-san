@@ -70,8 +70,8 @@ class CliBuilder:
         """Remove the temporary prompt file."""
         try:
             os.remove(prompt_file)
-        except OSError:
-            pass
+        except OSError as exc:
+            logger.debug("Could not remove prompt file: %s", exc)
 
     @staticmethod
     def parse_stdout_field(stdout, field_name) -> Optional[str]:
