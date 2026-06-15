@@ -48,7 +48,7 @@ python -m tests.load_tests.load_test --agent hello_world --level adv \
     --ramp --stages 2,4,8 \
     --server-log /path/to/logs/server.log --yes
 
-# Full analysis — without server log (CSV + tokens, no retries)
+# Full analysis — without server log (JSON + tokens, no retries)
 python -m tests.load_tests.load_test --agent hello_world --level adv \
     --ramp --stages 2,4,8 --yes
 ```
@@ -62,7 +62,7 @@ python -m tests.load_tests.load_test --agent hello_world --level adv \
 | Resource monitoring (RSS, threads)   | opt |  Y   |  Y  |
 | Token accounting (from stdout)       | opt |  Y   |  Y  |
 | Pool reuse analysis                  |     |      | opt |
-| CSV export                           |     |      |  Y  |
+| JSON export (`raw_results.json`)     |     |      |  Y  |
 | Recommendations + next-step command  |     |      |  Y  |
 
 `opt` = available with optional flags. `--server-log` enables retry
@@ -155,64 +155,33 @@ agent_network_designer — the request is marked FAILED if any are missing.
 Results go to `/tmp/load_test/{level}/{timestamp}/`. At `adv` level this
 includes:
 
-| File                      | Contents                                    |
-|---------------------------|---------------------------------------------|
-| `results_per_request.csv` | One row per request: status, duration, tokens, cost, retries, disconnections |
-| `results_resources.csv`   | One row per stage: server/client RSS, threads, FDs, CPU, wall clock, test config |
-| `results_per_network.csv` | One row per sub-network per request (only when `--server-log` provides per-network data) |
-| `recommendations.txt`     | Analysis and next-step suggestions           |
-| `load_test.log`           | Full terminal output                         |
-| `requests/`               | Raw stdout/stderr per request                |
+| File                  | Contents                                         |
+|-----------------------|--------------------------------------------------|
+| `raw_results.json`    | All test data in a single JSON file              |
+| `recommendations.txt` | Analysis and next-step suggestions               |
+| `load_test.log`       | Full terminal output                             |
+| `requests/`           | Raw stdout/stderr per request                    |
 
-### CSV schema: `results_per_request.csv`
+### `raw_results.json`
 
-Core: `run_id, timestamp, agent, stage, round, request_id, status,
-duration_sec, prompt, error`
+Single source of truth for all test data. Feed it to an LLM to
+generate Confluence reports, or load it in Python/pandas for custom
+analysis.
 
-Tokens: `total_tokens, prompt_tokens, completion_tokens, llm_calls,
-model, cost_usd`
+Top-level keys: `agent`, `level`, `mode`, `host`, `port`, `timeout`,
+`idle_timeout`, `settle_time`, `max_workers`, `server_log`,
+`stage_summaries`, `resource_rows`, `client_resource_rows`.
 
-Server log: `total_retries, client_disconnected` (empty when no
-`--server-log`; `client_disconnected` uses `yes`/`no`)
+Each stage summary contains:
+- Per-request results (status, duration, tokens, cost, model, errors)
+- Server log data (retries, disconnections, amplification, server counts)
+- Per-sub-network token breakdowns (`network_tokens`) when
+  `--server-log` is provided — each entry has `network`, `llm_calls`,
+  `total_tokens`, `prompt_tokens`, `completion_tokens`, `duration_sec`,
+  `cost_usd`, and `model`
 
-Any agent-specific parsed fields (e.g., `reservation_id`) are appended
-as additional columns.
-
-### CSV schema: `results_resources.csv`
-
-Server: `server_before_rss, server_settled_rss, server_rss_delta,
-server_before_threads, server_peak_threads, server_settled_threads,
-server_thread_delta, server_fds, server_conns, server_cpu,
-server_children`
-
-Client: `client_before_rss, client_peak_rss, client_settled_rss,
-client_rss_delta, client_cpu, client_fds, client_threads`
-
-Server log: `total_retries, amplification, rate_limit_retries,
-api_error_retries, key_error_retries, value_error_retries,
-other_retries, primary_started, primary_finished, total_started,
-total_finished, disconnections` (empty when no `--server-log`)
-
-Pool reuse: `new_threads, reused_threads, reuse_pct` (requires
-`--server-log` with thread monitoring data)
-
-Config: `mode, max_workers, timeout, idle_timeout, settle_time`
-
-### CSV schema: `results_per_network.csv`
-
-One row per sub-network per request: `run_id, timestamp, agent,
-stage, round, request_id, network, llm_calls, total_tokens,
-prompt_tokens, completion_tokens, duration_sec, cost_usd, model`
-
-Generated at `adv` level when `--server-log` is provided. Each
-Request reporting block in the server log is matched to its network
-via the "Done with X.StreamingChat" log entry. For agents with
-loopback sub-networks (e.g., AND), each sub-network produces its
-own row (designer, editor, instructions_editor, query_generator).
-For single-network agents (e.g., smart_home), one row per request.
-
-These CSVs contain all data needed to generate the Confluence load
-test report without re-running the test.
+Resource rows contain server/client snapshots (RSS, threads, FDs, CPU)
+captured before and after each stage.
 
 ## Exit Codes
 

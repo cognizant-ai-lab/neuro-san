@@ -34,7 +34,7 @@ Prerequisites:
 Test levels (--level):
     min:  Traffic + validation only. Fast smoke test.
     norm: Adds server log reading and resource monitoring. (default)
-    adv:  Adds token parsing, CSV export, recommendations, pool analysis.
+    adv:  Adds token parsing, JSON export, recommendations, pool analysis.
 
 Usage examples:
     # Quick smoke test (min level)
@@ -43,7 +43,7 @@ Usage examples:
     # Standard load test with resource monitoring (default: norm)
     python -m tests.load_tests.load_test --agent hello_world --yes
 
-    # Full analysis with CSV and recommendations (adv level)
+    # Full analysis with JSON output and recommendations (adv level)
     python -m tests.load_tests.load_test --agent hello_world --level adv --ramp --yes
 
     # Custom stages and profile
@@ -55,6 +55,7 @@ Usage examples:
 """
 
 import argparse
+import json
 import logging
 import os
 import re
@@ -77,7 +78,6 @@ from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.prompts.agent_profile import AgentProfile
-from tests.load_tests.reporting.csv_export import CsvExporter
 from tests.load_tests.reporting.disconnection_report import DisconnectionReporter
 from tests.load_tests.reporting.pool_analysis import PoolAnalyzer
 from tests.load_tests.reporting.recommendations import RecommendationEngine
@@ -852,17 +852,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     stage_summaries, self.args,
                     self._output_dir,
                 )
-                CsvExporter.export_resources_csv(
-                    self._output_dir, stage_summaries,
-                    resource_rows, client_rows, self.args,
-                )
-                CsvExporter.export_per_request_csv(
-                    self._output_dir, stage_summaries,
-                    self.args.agent,
-                )
-                CsvExporter.export_per_network_csv(
-                    self._output_dir, stage_summaries,
-                    self.args.agent,
+                self._export_raw_json(
+                    stage_summaries, resource_rows, client_rows,
                 )
 
             exit_code = self._check_results(stage_summaries)
@@ -870,6 +861,29 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             self._finalize_test_log(stage_summaries)
 
         return exit_code
+
+    def _export_raw_json(self, stage_summaries, resource_rows,
+                         client_rows):
+        """Save all test data as a single raw_results.json file."""
+        raw_data = {
+            "agent": self.args.agent,
+            "level": self.args.level,
+            "mode": "ramp" if self.args.ramp else "flat",
+            "host": self.args.host,
+            "port": self.args.port,
+            "timeout": self.args.timeout,
+            "idle_timeout": self.args.idle_timeout,
+            "settle_time": self.args.settle_time,
+            "max_workers": self.args.max_workers,
+            "server_log": self.server_log,
+            "stage_summaries": stage_summaries,
+            "resource_rows": resource_rows,
+            "client_resource_rows": client_rows,
+        }
+        json_path = os.path.join(self._output_dir, "raw_results.json")
+        with open(json_path, "w", encoding="utf-8") as fh:
+            json.dump(raw_data, fh, indent=2, default=str)
+        logger.info("\nRaw results: %s", json_path)
 
     def _check_results(self, stage_summaries):
         """Log pass/fail verdict and return appropriate exit code."""
