@@ -68,6 +68,7 @@ from typing import Tuple
 
 import psutil
 
+from tests.load_tests.config import CostEstimator
 from tests.load_tests.config import DEFAULT_IDLE_TIMEOUT_SECONDS
 from tests.load_tests.config import DEFAULT_TIMEOUT_SECONDS
 from tests.load_tests.config import LEVEL_ADV
@@ -314,6 +315,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             )
             result["llm_calls"] = entry.get("llm_calls")
             result["model"] = entry.get("model")
+            result["cost_usd"] = CostEstimator.estimate(
+                entry.get("prompt_tokens", 0),
+                entry.get("completion_tokens", 0),
+                entry.get("model", "unknown"),
+            )
 
     def __init__(self, args):
         """Initialize the orchestrator with parsed arguments."""
