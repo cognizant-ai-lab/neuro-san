@@ -1151,9 +1151,8 @@
         },
         "capabilities": [ "tools" ],
         # Like openrouter/free, the underlying model is chosen per-request, so the
-        # true context window varies. OpenRouter's model page does not publish a
-        # nominal window for the router itself, so we follow the same 200k figure
-        # used for openrouter/free as a reasonable default for prompt-token math.
+        # true context window varies. OpenRouter's model page advertises 2m, so we go
+        # with that as the nominal value used for prompt-token math.
         "context_window_size": 2000000,
         # max_output_tokens depends on which model the router picks; leave null so
         # the underlying model's default applies.

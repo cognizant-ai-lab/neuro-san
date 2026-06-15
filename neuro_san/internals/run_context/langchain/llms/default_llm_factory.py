@@ -514,7 +514,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         # Unpack user_config  into llm constructor
         return llm_class(**user_config)
 
-    def get_max_prompt_tokens(self, config: Dict[str, Any]) -> int | None:
+    def get_max_prompt_tokens(self, config: Dict[str, Any]) -> Optional[int]:
         """
         :param config: A dictionary which describes which LLM to use.
         :return: The maximum number of tokens given the 'model_name' in the
