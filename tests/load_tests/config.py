@@ -127,15 +127,22 @@ MODEL_PRICING = {
 DEFAULT_PRICING = {"prompt": 2.50, "completion": 10.00}
 
 
-def estimate_cost(prompt_tokens, completion_tokens, model="unknown"):
-    """Estimate USD cost from token counts and model name."""
-    pricing = DEFAULT_PRICING
-    for key, val in MODEL_PRICING.items():
-        if key in model:
-            pricing = val
-            break
-    prompt_cost = (prompt_tokens / 1_000_000) * pricing["prompt"]
-    completion_cost = (
-        (completion_tokens / 1_000_000) * pricing["completion"]
-    )
-    return prompt_cost + completion_cost
+class CostEstimator:
+    """Estimate USD cost from token counts and model pricing."""
+
+    @staticmethod
+    def estimate(prompt_tokens, completion_tokens, model="unknown"):
+        """Estimate USD cost from token counts and model name."""
+        pricing = DEFAULT_PRICING
+        for key, val in MODEL_PRICING.items():
+            if key in model:
+                pricing = val
+                break
+        prompt_cost = (
+            (prompt_tokens / 1_000_000) * pricing.get("prompt", 0)
+        )
+        completion_cost = (
+            (completion_tokens / 1_000_000)
+            * pricing.get("completion", 0)
+        )
+        return prompt_cost + completion_cost

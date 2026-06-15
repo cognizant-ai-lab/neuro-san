@@ -297,13 +297,8 @@ class RecommendationEngine:
         if not stage_summaries:
             return None
 
-        agent = (
-            getattr(args, "agent", "hello_world")
-            if args else "hello_world"
-        )
-        is_ramp = (
-            getattr(args, "ramp", False) if args else False
-        )
+        agent = args.agent if args else "hello_world"
+        is_ramp = args.ramp if args else False
         stages_used = []
         for s in stage_summaries:
             concurrent = s.get("concurrent", 0)
@@ -312,11 +307,11 @@ class RecommendationEngine:
 
         extra_flags = []
         if args:
-            if getattr(args, "server_log", None):
+            if args.server_log:
                 extra_flags.append(
                     f"--server-log {args.server_log}",
                 )
-            if getattr(args, "project_root", None):
+            if args.project_root:
                 extra_flags.append(
                     f"--project-root {args.project_root}",
                 )

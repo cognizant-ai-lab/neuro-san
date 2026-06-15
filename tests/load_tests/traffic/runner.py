@@ -28,7 +28,7 @@ from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
-from tests.load_tests.config import estimate_cost
+from tests.load_tests.config import CostEstimator
 from tests.load_tests.traffic.cli_builder import CliBuilder
 from tests.load_tests.traffic.process_monitor import ProcessMonitor
 
@@ -53,7 +53,7 @@ class TrafficRunner:
         )
         prompt_file = CliBuilder.write_prompt_file(global_request_id, prompt)
 
-        include_tokens = getattr(args, "include_tokens", False)
+        include_tokens = args.include_tokens
         cmd = CliBuilder.build_cli_command(
             args.host, args.port, args.agent, prompt_file,
             include_tokens=include_tokens,
@@ -77,9 +77,7 @@ class TrafficRunner:
         failure_reason = None
         if status not in (STATUS_TIMEOUT, STATUS_KILLED):
             if profile.success_fields:
-                skip_reservation = getattr(
-                    args, "skip_reservation_check", False,
-                )
+                skip_reservation = args.skip_reservation_check
                 if skip_reservation:
                     required = [
                         f for f in profile.success_fields
@@ -99,12 +97,12 @@ class TrafficRunner:
             if status == STATUS_FAILED and not failure_reason:
                 failure_reason = TrafficRunner._diagnose_failure(
                     returncode, parsed_fields, profile.success_fields,
-                    getattr(args, "skip_reservation_check", False),
+                    args.skip_reservation_check,
                 )
 
         TrafficRunner._log_request_result(
             request_id, status, elapsed, parsed_fields, failure_reason,
-            stderr, getattr(args, "skip_reservation_check", False),
+            stderr, args.skip_reservation_check,
         )
         CliBuilder.cleanup_prompt_file(prompt_file)
         error_line = (
@@ -139,7 +137,7 @@ class TrafficRunner:
                 result["model"] = TrafficRunner._extract_model(
                     token_data.get("models", {}),
                 )
-                result["cost_usd"] = estimate_cost(
+                result["cost_usd"] = CostEstimator.estimate(
                     result["prompt_tokens"],
                     result["completion_tokens"],
                     result["model"],

@@ -242,35 +242,38 @@ class ServerLogMonitor:
         """Match each block to its network via Done-with log lines."""
         results: List[NetworkTokenEntry] = []
         for block in blocks:
+            block_text = block.get("text", "")
             entry = ServerLogMonitor._extract_token_entry(
-                block["text"],
+                block_text,
             )
             if not entry:
                 continue
             network = ServerLogMonitor._find_network_after(
-                lines, block["end_idx"],
+                lines, block.get("end_idx", 0),
             )
             if not network:
                 continue
             duration = re.search(
                 r'"time_taken_in_seconds": ([\d.]+)',
-                block["text"],
+                block_text,
             )
             total_cost = re.search(
                 r'"total_cost": ([\d.]+)',
-                block["text"],
+                block_text,
             )
             results.append({
-                "request_id": entry["request_id"],
+                "request_id": entry.get("request_id", ""),
                 "network": network,
-                "total_tokens": entry["total_tokens"],
-                "prompt_tokens": entry["prompt_tokens"],
-                "completion_tokens": entry["completion_tokens"],
-                "llm_calls": entry["llm_calls"],
+                "total_tokens": entry.get("total_tokens", 0),
+                "prompt_tokens": entry.get("prompt_tokens", 0),
+                "completion_tokens": entry.get(
+                    "completion_tokens", 0,
+                ),
+                "llm_calls": entry.get("llm_calls", 0),
                 "duration": (
                     float(duration.group(1)) if duration else 0.0
                 ),
-                "model": entry["model"],
+                "model": entry.get("model", "unknown"),
                 "cost": (
                     float(total_cost.group(1)) if total_cost else 0.0
                 ),

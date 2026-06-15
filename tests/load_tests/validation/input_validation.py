@@ -124,7 +124,7 @@ class InputValidator:
         )
 
         # Temporarily enable token parsing for the probe
-        original_include = getattr(args, "include_tokens", False)
+        original_include = args.include_tokens
         args.include_tokens = True
         probe_result = TrafficRunner.run_one(
             args, profile,

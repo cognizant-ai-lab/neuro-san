@@ -270,6 +270,13 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                  "marked CREATED if other success fields are "
                  "present, even without a reservation_id.",
         )
+        parser.add_argument(
+            "--output-dir",
+            type=str,
+            default=None,
+            help="Base directory for test output. Defaults to "
+                 "/tmp/load_test/{level}/{timestamp}.",
+        )
         return parser.parse_args()
 
     @staticmethod
@@ -333,7 +340,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         parse_tokens = (
             level != LEVEL_MIN or self.args.include_tokens
         )
-        probe_result = getattr(self, "probe_result", None)
+        probe_result = self.probe_result
 
         stage_summaries: List[Dict[str, Any]] = []
         resource_rows: List[Tuple] = []
@@ -660,7 +667,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     def _setup_test_log(self):
         """Create output directory and add a file handler for logging."""
         timestamp = time.strftime("%Y%m%d_%H%M%S")
-        self._output_dir = f"/tmp/load_test/{self.args.level}/{timestamp}"
+        base = self.args.output_dir or "/tmp/load_test"
+        self._output_dir = os.path.join(
+            base, self.args.level, timestamp,
+        )
         os.makedirs(self._output_dir, exist_ok=True)
         self._test_log_path = os.path.join(self._output_dir, "load_test.log")
         self._test_log_handler = logging.FileHandler(

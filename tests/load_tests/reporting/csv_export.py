@@ -20,7 +20,7 @@ import logging
 import os
 import time
 
-from tests.load_tests.config import estimate_cost
+from tests.load_tests.config import CostEstimator
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +122,7 @@ class CsvExporter:
                         cost == ""
                         and tok_measured
                     ):
-                        cost = estimate_cost(
+                        cost = CostEstimator.estimate(
                             prompt_tok, compl_tok, model,
                         )
 
@@ -398,7 +398,9 @@ class CsvExporter:
                 model = entry.get("model", "unknown")
                 cost = entry.get("cost", 0.0)
                 if not cost:
-                    cost = estimate_cost(p_tok, c_tok, model)
+                    cost = CostEstimator.estimate(
+                        p_tok, c_tok, model,
+                    )
                 rows.append({
                     "run_id": run_id,
                     "timestamp": timestamp,
