@@ -1,0 +1,11 @@
+{
+    "agent_name": "basic/smart_home",
+    "prompts": [
+        "Turn on the living room lights",
+        "Turn off the kitchen lights",
+        "Can you turn on the TV?",
+        "Please turn off all the lights",
+        "Switch on the radio"
+    ],
+    "estimated_tokens_per_request": 5000
+}

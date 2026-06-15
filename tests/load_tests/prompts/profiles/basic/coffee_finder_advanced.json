@@ -1,0 +1,11 @@
+{
+    "agent_name": "basic/coffee_finder_advanced",
+    "prompts": [
+        "Find me a good coffee shop nearby",
+        "I need a late night coffee, what's open?",
+        "Where can I get coffee at 3am?",
+        "What are my coffee options right now?",
+        "I want to order a latte, where should I go?"
+    ],
+    "estimated_tokens_per_request": 10000
+}

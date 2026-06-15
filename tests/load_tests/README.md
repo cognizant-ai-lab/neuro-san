@@ -204,8 +204,12 @@ One row per sub-network per request: `run_id, timestamp, agent,
 stage, round, request_id, network, llm_calls, total_tokens,
 prompt_tokens, completion_tokens, duration_sec, cost_usd, model`
 
-Only generated when `--server-log` provides per-sub-network token
-accounting data (e.g., for multi-agent networks like AND).
+Generated at `adv` level when `--server-log` is provided. Each
+Request reporting block in the server log is matched to its network
+via the "Done with X.StreamingChat" log entry. For agents with
+loopback sub-networks (e.g., AND), each sub-network produces its
+own row (designer, editor, instructions_editor, query_generator).
+For single-network agents (e.g., smart_home), one row per request.
 
 These CSVs contain all data needed to generate the Confluence load
 test report without re-running the test.

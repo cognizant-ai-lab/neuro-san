@@ -515,6 +515,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
                 server_counts: Dict[str, Any] = {}
                 disconnections: List = []
+                network_tokens: List = []
                 if monitor_resources or has_server_log:
                     logger.info(
                         "\n  Waiting %ss for server cleanup...",
@@ -531,7 +532,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                             "Server SETTLED", after_server,
                         )
 
-                    server_counts, disconnections = (
+                    server_counts, disconnections, network_tokens = (
                         self._analyze_server_log(
                             has_server_log, parse_tokens,
                             log_pos, results, actual_requests,
@@ -571,6 +572,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     "total_started": server_counts.get("total_started"),
                     "total_finished": server_counts.get("total_finished"),
                     "disconnections": disconnections,
+                    "network_tokens": network_tokens,
                     "has_server_log": has_server_log,
                     "has_tokens": parse_tokens,
                 }
@@ -596,10 +598,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     ):
         """Analyze server log or report unavailability.
 
-        Returns (server_counts, disconnections).
+        Returns (server_counts, disconnections, network_tokens).
         """
         server_counts: Dict[str, Any] = {}
         disconnections: List = []
+        network_tokens: List = []
         if has_server_log:
             server_counts = (
                 ServerLogMonitor.count_requests_since(
@@ -627,6 +630,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                         "\n  Token usage (from server log):",
                     )
                     TrafficRunner.log_token_summary(results)
+                network_tokens = (
+                    ServerLogMonitor.parse_per_network_tokens_since(
+                        self.server_log, log_pos,
+                    )
+                )
             OutputValidator.log_disconnections(disconnections)
             OutputValidator.log_server_validation(
                 server_counts, actual_requests,
@@ -647,7 +655,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 "\n  Server-side validation: "
                 "not available (no --server-log)",
             )
-        return server_counts, disconnections
+        return server_counts, disconnections, network_tokens
 
     def _setup_test_log(self):
         """Create output directory and add a file handler for logging."""

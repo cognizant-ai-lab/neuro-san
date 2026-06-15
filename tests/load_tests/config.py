@@ -30,6 +30,20 @@ class TokenEntry(TypedDict):
     model: str
 
 
+class NetworkTokenEntry(TypedDict):
+    """Per-sub-network token data from a server log block."""
+
+    request_id: str
+    network: str
+    total_tokens: int
+    prompt_tokens: int
+    completion_tokens: int
+    llm_calls: int
+    duration: float
+    model: str
+    cost: float
+
+
 class ResourceSnapshot(TypedDict):
     """Point-in-time resource usage of a process."""
 
@@ -93,6 +107,9 @@ STREAM_CLOSED_REQUEST_PATTERN = re.compile(
 )
 TASK_CANCELLED_PATTERN = re.compile(
     r"Task from ([^:]+):.*was cancelled"
+)
+DONE_STREAMING_PATTERN = re.compile(
+    r'Done with (\S+)\.StreamingChat'
 )
 
 # Model pricing (USD per 1M tokens) — update as providers change rates

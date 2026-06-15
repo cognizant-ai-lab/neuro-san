@@ -29,6 +29,8 @@ from typing import List
 from typing import Optional
 
 from tests.load_tests.config import CLIENT_DISCONNECT_PATTERN
+from tests.load_tests.config import DONE_STREAMING_PATTERN
+from tests.load_tests.config import NetworkTokenEntry
 from tests.load_tests.config import REQUEST_FINISH_PATTERN
 from tests.load_tests.config import REQUEST_START_PATTERN
 from tests.load_tests.config import RETRY_LOG_PATTERN
@@ -186,6 +188,104 @@ class ServerLogMonitor:
             "llm_calls": int(llm_calls.group(1)) if llm_calls else 0,
             "model": model_names[0] if model_names else "unknown",
         }
+
+    @staticmethod
+    def parse_per_network_tokens_since(
+            server_log, position,
+    ) -> List[NetworkTokenEntry]:
+        """Parse per-sub-network token data from Request reporting blocks.
+
+        For multi-agent networks (e.g. AND), each sub-network produces
+        its own Request reporting block followed by a
+        "Done with <network>.StreamingChat" log line.  This method
+        collects all such blocks and returns one entry per sub-network
+        per request.
+        """
+        if server_log is None or position is None:
+            return []
+        try:
+            with open(server_log, "r", encoding="utf-8") as log_fh:
+                log_fh.seek(position)
+                lines = log_fh.readlines()
+        except (OSError, IOError) as exc:
+            logger.warning(
+                "Could not read server log for network tokens: %s",
+                exc,
+            )
+            return []
+        blocks = ServerLogMonitor._collect_reporting_blocks(lines)
+        return ServerLogMonitor._resolve_network_names(blocks, lines)
+
+    @staticmethod
+    def _collect_reporting_blocks(lines):
+        """Collect Request reporting blocks with their line positions."""
+        blocks = []
+        in_block = False
+        block_lines: List[str] = []
+        for idx, line in enumerate(lines):
+            if "Request reporting" in line and not in_block:
+                in_block = True
+                block_lines = [line]
+            elif in_block:
+                block_lines.append(line)
+                if '"request_id"' in line:
+                    blocks.append({
+                        "text": "".join(block_lines),
+                        "end_idx": idx,
+                    })
+                    in_block = False
+                    block_lines = []
+        return blocks
+
+    @staticmethod
+    def _resolve_network_names(blocks, lines):
+        """Match each block to its network via Done-with log lines."""
+        results: List[NetworkTokenEntry] = []
+        for block in blocks:
+            entry = ServerLogMonitor._extract_token_entry(
+                block["text"],
+            )
+            if not entry:
+                continue
+            network = ServerLogMonitor._find_network_after(
+                lines, block["end_idx"],
+            )
+            if not network:
+                continue
+            duration = re.search(
+                r'"time_taken_in_seconds": ([\d.]+)',
+                block["text"],
+            )
+            total_cost = re.search(
+                r'"total_cost": ([\d.]+)',
+                block["text"],
+            )
+            results.append({
+                "request_id": entry["request_id"],
+                "network": network,
+                "total_tokens": entry["total_tokens"],
+                "prompt_tokens": entry["prompt_tokens"],
+                "completion_tokens": entry["completion_tokens"],
+                "llm_calls": entry["llm_calls"],
+                "duration": (
+                    float(duration.group(1)) if duration else 0.0
+                ),
+                "model": entry["model"],
+                "cost": (
+                    float(total_cost.group(1)) if total_cost else 0.0
+                ),
+            })
+        return results
+
+    @staticmethod
+    def _find_network_after(lines, end_idx, lookahead=10):
+        """Find the network name from Done-with lines after a block."""
+        limit = min(end_idx + lookahead, len(lines))
+        for idx in range(end_idx + 1, limit):
+            match = DONE_STREAMING_PATTERN.search(lines[idx])
+            if match:
+                return match.group(1)
+        return None
 
     @staticmethod
     def scan_disconnections_since(

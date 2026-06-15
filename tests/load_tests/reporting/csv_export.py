@@ -392,35 +392,33 @@ class CsvExporter:
         for summary in stage_summaries:
             stage = summary.get("stage", 0)
             round_num = summary.get("round", 1)
-            for result in summary.get("results", []):
-                networks = result.get("network_tokens", {})
-                rid = result.get("request_id", "")
-                for network_name, net_data in networks.items():
-                    p_tok = net_data.get("prompt_tokens", 0)
-                    c_tok = net_data.get("completion_tokens", 0)
-                    model = net_data.get("model", "unknown")
-                    rows.append({
-                        "run_id": run_id,
-                        "timestamp": timestamp,
-                        "agent": agent_name,
-                        "stage": stage,
-                        "round": round_num,
-                        "request_id": rid,
-                        "network": network_name,
-                        "llm_calls": net_data.get("llm_calls", 0),
-                        "total_tokens": net_data.get(
-                            "total_tokens", 0,
-                        ),
-                        "prompt_tokens": p_tok,
-                        "completion_tokens": c_tok,
-                        "duration_sec": (
-                            f"{net_data.get('duration', 0):.2f}"
-                        ),
-                        "cost_usd": (
-                            f"{estimate_cost(p_tok, c_tok, model):.6f}"
-                        ),
-                        "model": model,
-                    })
+            for entry in summary.get("network_tokens", []):
+                p_tok = entry.get("prompt_tokens", 0)
+                c_tok = entry.get("completion_tokens", 0)
+                model = entry.get("model", "unknown")
+                cost = entry.get("cost", 0.0)
+                if not cost:
+                    cost = estimate_cost(p_tok, c_tok, model)
+                rows.append({
+                    "run_id": run_id,
+                    "timestamp": timestamp,
+                    "agent": agent_name,
+                    "stage": stage,
+                    "round": round_num,
+                    "request_id": entry.get("request_id", ""),
+                    "network": entry.get("network", "unknown"),
+                    "llm_calls": entry.get("llm_calls", 0),
+                    "total_tokens": entry.get(
+                        "total_tokens", 0,
+                    ),
+                    "prompt_tokens": p_tok,
+                    "completion_tokens": c_tok,
+                    "duration_sec": (
+                        f"{entry.get('duration', 0):.2f}"
+                    ),
+                    "cost_usd": f"{cost:.6f}",
+                    "model": model,
+                })
         return rows
 
     # ------------------------------------------------------------------
