@@ -38,10 +38,12 @@ class DefaultsConfigFilter(ConfigFilter):
     # A mapping of source keys for defaults at the top level to destination
     # keys on the specific tool where the top-level defaults (if any) should be copied.
     DEFAULTS_MAPPING: Dict[str, str] = {
-        # A value of None implies using the source key as the same destination
-        # key in the tool as well.
+        # A value of None implies using a default dictionary where the source key as the same destination
+        # key in the tool as well and it applies to all tools.
         "llm_config": None,
-        "llm_config.verbose": "verbose",
+        "llm_config.verbose": {
+            "dest_key": "verbose",
+        },
         "verbose": None,
         "max_steps": None,
         # Deprecated alias. Keep for now to avoid breaking existing networks that use it, but prefer max_steps.
@@ -51,6 +53,10 @@ class DefaultsConfigFilter(ConfigFilter):
         "max_attempts": None,
         "error_formatter": None,
         "error_fragments": None,
+        "sly_data_schema": {
+            "front_man_only": True,
+            "union_fields": ["required"],
+        },
     }
 
     def filter_config(self, basis_config: Dict[str, Any]) \
@@ -88,8 +94,11 @@ class DefaultsConfigFilter(ConfigFilter):
         for tool in tools:
             tool_extractor = DictionaryExtractor(tool)
 
+            # XXX For now, skip the determining whether the tool is the front man.
+            is_front_man: bool = True
+
             # Loop through all the keys in the defaults mapping.
-            for basis_source_key, tool_dest_key in self.DEFAULTS_MAPPING.items():
+            for basis_source_key, tool_dest_dict in self.DEFAULTS_MAPPING.items():
 
                 basis_value = basis_extractor.get(basis_source_key)
                 if basis_value is None:
@@ -97,8 +106,19 @@ class DefaultsConfigFilter(ConfigFilter):
                     continue
 
                 # Account for semantics outlined in default_mapping above
-                if tool_dest_key is None:
-                    tool_dest_key = basis_source_key
+                if tool_dest_dict is None:
+                    tool_dest_dict = {
+                        "dest_key": basis_source_key,
+                        "front_man_only": False,
+                        "union_fields": None,
+                    }
+
+                tool_dest_key = tool_dest_dict.get("dest_key", basis_source_key)
+                tool_front_man_only = tool_dest_dict.get("front_man_only", False)
+
+                if tool_front_man_only and not is_front_man:
+                    # Skip this one.
+                    continue
 
                 tool_value = tool_extractor.get(tool_dest_key)
                 if tool_value is None:
@@ -109,6 +129,16 @@ class DefaultsConfigFilter(ConfigFilter):
                     # Do a dictionary overlay with basis_value defaults as what is
                     # overrideable. The values of tool_value are favored.
                     tool[tool_dest_key] = overlayer.overlay(basis_value, tool_value)
+
+                    union_fields: List[str] | str | None = tool_dest_dict.get("union_fields")
+                    if union_fields is not None:
+                        if isinstance(union_fields, str):
+                            union_fields = [union_fields]
+                        for one_field in union_fields:
+                            basis_field: List[str] = basis_value.get(one_field, [])
+                            tool_field: List[str] = tool_value.get(one_field, [])
+                            # The merged value is the union of the two sets
+                            tool[tool_dest_key][one_field] = list(set(basis_field) | set(tool_field))
 
                 # Otherwise, don't touch the value already in the tool.
                 # Don't do anything funny with scalars.
