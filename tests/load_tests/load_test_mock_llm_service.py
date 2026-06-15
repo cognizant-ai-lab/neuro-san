@@ -60,6 +60,10 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 
+MOCK_REQUEST_TIMEOUT = 120
+PROCESS_WAIT_TIMEOUT = 10
+
+
 class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
     """Load test runner for the neuro-san server using mock LLM service."""
 
@@ -250,7 +254,7 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             cmd,
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=MOCK_REQUEST_TIMEOUT,
             check=False,
         )
         elapsed = time.time() - start
@@ -346,7 +350,7 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         try:
             server_env = server_proc.environ()
         except (psutil.NoSuchProcess, psutil.AccessDenied) as exc:
-            logger.warning("Could not read server environment: %s", exc)
+            logger.info("Could not read server environment: %s", exc)
             return None
 
         api_base = server_env.get("OPENAI_API_BASE")
@@ -471,14 +475,14 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 self._auto_server_popen.pid,
             )
             self._auto_server_popen.terminate()
-            self._auto_server_popen.wait(timeout=10)
+            self._auto_server_popen.wait(timeout=PROCESS_WAIT_TIMEOUT)
         if self._auto_mock_popen is not None:
             logger.info(
                 "Stopping mock LLM server (PID %s)...",
                 self._auto_mock_popen.pid,
             )
             self._auto_mock_popen.terminate()
-            self._auto_mock_popen.wait(timeout=10)
+            self._auto_mock_popen.wait(timeout=PROCESS_WAIT_TIMEOUT)
         if self._server_log_fh is not None:
             self._server_log_fh.close()
         if self._mock_log_fh is not None:
@@ -532,9 +536,11 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 self.args.num_requests, self.args.max_workers,
             )
             passed, failed, elapsed = self._run_round()
-            totals["passed"] = totals.get("passed", 0) + passed
-            totals["failed"] = totals.get("failed", 0) + failed
-            totals["time"] = totals.get("time", 0.0) + elapsed
+            totals.update({
+                "passed": totals.get("passed", 0) + passed,
+                "failed": totals.get("failed", 0) + failed,
+                "time": totals.get("time", 0.0) + elapsed,
+            })
 
             logger.info("\nWaiting %ss for server cleanup...", self.args.settle_time)
             time.sleep(self.args.settle_time)

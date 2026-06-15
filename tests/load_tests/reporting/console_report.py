@@ -316,7 +316,7 @@ class DisconnectionReporter:
         for idx, stage in enumerate(stage_summaries):
             for disc in stage.get("disconnections") or []:
                 disc_copy = dict(disc)
-                disc_copy["batch"] = idx + 1
+                disc_copy.update({"batch": idx + 1})
                 all_disconnections.append(disc_copy)
         if not all_disconnections:
             return

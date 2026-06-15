@@ -23,6 +23,7 @@ import time
 from typing import List
 from typing import Tuple
 
+from tests.load_tests.config import PROCESS_WAIT_TIMEOUT
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
@@ -70,7 +71,7 @@ class ProcessMonitor:
         if remaining_err:
             stderr_chunks.append(remaining_err)
         try:
-            proc.wait(timeout=10)
+            proc.wait(timeout=PROCESS_WAIT_TIMEOUT)
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait()

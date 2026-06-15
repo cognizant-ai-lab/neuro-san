@@ -28,6 +28,7 @@ from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
+from tests.load_tests.config import THREAD_JOIN_TIMEOUT
 from tests.load_tests.config import CostEstimator
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.traffic.cli_builder import CliBuilder
@@ -64,9 +65,10 @@ class TrafficRunner:
         )
         elapsed = time.time() - start
 
-        parsed_fields: Dict[str, str] = {}
-        for field in profile.success_fields:
-            parsed_fields[field] = CliBuilder.parse_stdout_field(stdout, field)
+        parsed_fields: Dict[str, str] = {
+            field: CliBuilder.parse_stdout_field(stdout, field)
+            for field in profile.success_fields
+        }
 
         TrafficRunner._save_request_output(
             output_dir, request_id, stdout, stderr,
@@ -135,22 +137,21 @@ class TrafficRunner:
         token_data = CliBuilder.parse_token_accounting(stdout)
         if not token_data:
             return
-        result["total_tokens"] = token_data.get("total_tokens", 0)
-        result["prompt_tokens"] = token_data.get("prompt_tokens", 0)
-        result["completion_tokens"] = token_data.get(
-            "completion_tokens", 0,
-        )
-        result["llm_calls"] = token_data.get(
-            "successful_requests", 0,
-        )
-        result["model"] = TrafficRunner._extract_model(
+        model = TrafficRunner._extract_model(
             token_data.get("models", {}),
         )
-        result["cost_usd"] = CostEstimator.estimate(
-            result["prompt_tokens"],
-            result["completion_tokens"],
-            result["model"],
-        )
+        prompt_tok = token_data.get("prompt_tokens", 0)
+        completion_tok = token_data.get("completion_tokens", 0)
+        result.update({
+            "total_tokens": token_data.get("total_tokens", 0),
+            "prompt_tokens": prompt_tok,
+            "completion_tokens": completion_tok,
+            "llm_calls": token_data.get("successful_requests", 0),
+            "model": model,
+            "cost_usd": CostEstimator.estimate(
+                prompt_tok, completion_tok, model,
+            ),
+        })
 
     @staticmethod
     def _extract_model(models_dict) -> str:
@@ -196,7 +197,7 @@ class TrafficRunner:
             for future in futures:
                 results_list.append(future.result())
             heartbeat_stop.set()
-            heartbeat.join(timeout=2)
+            heartbeat.join(timeout=THREAD_JOIN_TIMEOUT)
         total_time = time.time() - start
         return total_time, results_list, peak_threads_result
 

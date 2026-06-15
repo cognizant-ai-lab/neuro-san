@@ -91,6 +91,12 @@ DEFAULT_IDLE_TIMEOUT_SECONDS = 900
 NETWORK_LOOKAHEAD_LINES = 10
 TOKENS_PER_MILLION = 1_000_000
 
+# Timeouts for short-lived operations (seconds)
+SOCKET_CHECK_TIMEOUT = 2
+THREAD_JOIN_TIMEOUT = 2
+PROCESS_WAIT_TIMEOUT = 10
+STALE_LOG_THRESHOLD_SECONDS = 300
+
 # Server log regex patterns
 RETRY_LOG_PATTERN = re.compile(
     r"retrying from (RateLimit error |)(\w+)"

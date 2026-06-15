@@ -28,6 +28,7 @@ import psutil
 
 from tests.load_tests.config import DEFAULT_STAGES
 from tests.load_tests.config import RETRY_ERROR_TYPES
+from tests.load_tests.config import SOCKET_CHECK_TIMEOUT
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
@@ -85,7 +86,9 @@ class EnvironmentValidator:
     def is_port_open(host, port) -> bool:
         """Check if a TCP port is accepting connections."""
         try:
-            with socket.create_connection((host, port), timeout=2):
+            with socket.create_connection(
+                (host, port), timeout=SOCKET_CHECK_TIMEOUT,
+            ):
                 return True
         except (ConnectionRefusedError, OSError):
             return False
@@ -150,13 +153,13 @@ class EnvironmentValidator:
                     "  Auto-detected server log: %s", candidate,
                 )
                 return candidate
-            logger.warning(
+            logger.info(
                 "  Server log not found at %s. "
                 "Retry monitoring unavailable.",
                 candidate,
             )
         except (psutil.AccessDenied, psutil.NoSuchProcess, OSError):
-            logger.warning(
+            logger.info(
                 "  Could not determine server working directory. "
                 "Retry monitoring unavailable.",
             )

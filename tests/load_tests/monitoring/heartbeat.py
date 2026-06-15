@@ -57,7 +57,7 @@ class Heartbeat:
                     threads = server_proc.num_threads()
                     if threads > peak_threads:
                         peak_threads = threads
-                        peak_threads_result["peak"] = threads
+                        peak_threads_result.update({"peak": threads})
                         thread_info = f"  threads: {threads} (peak)"
                     else:
                         thread_info = f"  threads: {threads}"

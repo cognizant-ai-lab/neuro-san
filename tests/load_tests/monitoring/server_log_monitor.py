@@ -72,7 +72,7 @@ class ServerLogMonitor:
                 log_fh.seek(position)
                 lines = log_fh.readlines()
         except OSError as exc:
-            logger.warning("Could not read server log for retries: %s", exc)
+            logger.info("Could not read server log for retries: %s", exc)
             return retry_counts
         for line in lines:
             match = RETRY_LOG_PATTERN.search(line)
@@ -106,7 +106,7 @@ class ServerLogMonitor:
                 log_fh.seek(position)
                 lines = log_fh.readlines()
         except OSError as exc:
-            logger.warning("Could not read server log for counts: %s", exc)
+            logger.info("Could not read server log for counts: %s", exc)
             return {
                 "primary_started": None, "primary_finished": None,
                 "total_started": None, "total_finished": None,
@@ -145,7 +145,7 @@ class ServerLogMonitor:
                 log_fh.seek(position)
                 lines = log_fh.readlines()
         except OSError as exc:
-            logger.warning("Could not read server log for tokens: %s", exc)
+            logger.info("Could not read server log for tokens: %s", exc)
             return results
         in_block = False
         block_lines: List[str] = []
@@ -209,7 +209,7 @@ class ServerLogMonitor:
                 log_fh.seek(position)
                 lines = log_fh.readlines()
         except OSError as exc:
-            logger.warning(
+            logger.info(
                 "Could not read server log for network tokens: %s",
                 exc,
             )
@@ -309,7 +309,7 @@ class ServerLogMonitor:
                 log_fh.seek(position)
                 lines = log_fh.readlines()
         except OSError as exc:
-            logger.warning(
+            logger.info(
                 "Could not read server log for disconnections: %s",
                 exc,
             )
@@ -331,7 +331,7 @@ class ServerLogMonitor:
                 agent = cancel_match.group(1)
                 disc = disconnections.get(context_request_id)
                 if disc is not None:
-                    disc["agent"] = agent
+                    disc.update({"agent": agent})
         return list(disconnections.values())
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments

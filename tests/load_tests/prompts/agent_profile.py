@@ -37,7 +37,7 @@ class AgentProfile:
     @property
     def prompts(self) -> List[str]:
         """Return the list of prompts for this agent."""
-        return self._data["prompts"]
+        return self._data.get("prompts", [])
 
     @property
     def estimated_tokens_per_request(self) -> Optional[int]:

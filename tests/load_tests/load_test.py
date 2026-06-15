@@ -75,7 +75,9 @@ from tests.load_tests.config import LEVEL_ADV
 from tests.load_tests.config import LEVEL_MIN
 from tests.load_tests.config import LEVEL_NORM
 from tests.load_tests.config import LOCAL_HOSTS
+from tests.load_tests.config import STALE_LOG_THRESHOLD_SECONDS
 from tests.load_tests.config import STATUS_CREATED
+from tests.load_tests.config import THREAD_JOIN_TIMEOUT
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.prompts.agent_profile import AgentProfile
@@ -308,18 +310,18 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
 
         for result, entry in zip(sorted_results, sorted_entries):
-            result["total_tokens"] = entry.get("total_tokens")
-            result["prompt_tokens"] = entry.get("prompt_tokens")
-            result["completion_tokens"] = entry.get(
-                "completion_tokens",
-            )
-            result["llm_calls"] = entry.get("llm_calls")
-            result["model"] = entry.get("model")
-            result["cost_usd"] = CostEstimator.estimate(
-                entry.get("prompt_tokens", 0),
-                entry.get("completion_tokens", 0),
-                entry.get("model", "unknown"),
-            )
+            result.update({
+                "total_tokens": entry.get("total_tokens"),
+                "prompt_tokens": entry.get("prompt_tokens"),
+                "completion_tokens": entry.get("completion_tokens"),
+                "llm_calls": entry.get("llm_calls"),
+                "model": entry.get("model"),
+                "cost_usd": CostEstimator.estimate(
+                    entry.get("prompt_tokens", 0),
+                    entry.get("completion_tokens", 0),
+                    entry.get("model", "unknown"),
+                ),
+            })
 
     def __init__(self, args):
         """Initialize the orchestrator with parsed arguments."""
@@ -473,7 +475,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 if stop_event:
                     stop_event.set()
                 if monitor:
-                    monitor.join(timeout=2)
+                    monitor.join(timeout=THREAD_JOIN_TIMEOUT)
 
                 peak_client = None
                 settled_client = None
@@ -590,15 +592,19 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 }
                 if monitor_resources:
                     if before_server:
-                        summary_entry["before_threads"] = (
-                            before_server.get("threads")
-                        )
+                        summary_entry.update({
+                            "before_threads":
+                                before_server.get("threads"),
+                        })
                     if after_server:
-                        summary_entry["after_threads"] = (
-                            after_server.get("threads")
-                        )
+                        summary_entry.update({
+                            "after_threads":
+                                after_server.get("threads"),
+                        })
                 if peak_threads.get("peak") is not None:
-                    summary_entry["peak_threads"] = peak_threads.get("peak")
+                    summary_entry.update({
+                        "peak_threads": peak_threads.get("peak"),
+                    })
                 stage_summaries.append(summary_entry)
 
         return stage_summaries, resource_rows, client_resource_rows
@@ -739,7 +745,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         mtime = os.path.getmtime(self.args.server_log)
         age_seconds = time.time() - mtime
-        if age_seconds > 300:
+        if age_seconds > STALE_LOG_THRESHOLD_SECONDS:
             age_min = int(age_seconds // 60)
             logger.warning(
                 "WARNING: Server log appears stale "
