@@ -34,7 +34,7 @@ Prerequisites:
 Test levels (--level):
     min:  Traffic + validation only. Fast smoke test.
     norm: Adds server log reading and resource monitoring. (default)
-    adv:  Adds token parsing, JSON export, recommendations, pool analysis.
+    adv:  Adds token parsing, JSON export, pool analysis.
 
 Usage examples:
     # Quick smoke test (min level)
@@ -43,7 +43,7 @@ Usage examples:
     # Standard load test with resource monitoring (default: norm)
     python -m tests.load_tests.load_test --agent hello_world --yes
 
-    # Full analysis with JSON output and recommendations (adv level)
+    # Full analysis with JSON output (adv level)
     python -m tests.load_tests.load_test --agent hello_world --level adv --ramp --yes
 
     # Custom stages and profile
@@ -78,15 +78,14 @@ from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.prompts.agent_profile import AgentProfile
-from tests.load_tests.reporting.disconnection_report import DisconnectionReporter
-from tests.load_tests.reporting.pool_analysis import PoolAnalyzer
-from tests.load_tests.reporting.recommendations import RecommendationEngine
-from tests.load_tests.reporting.resource_report import ResourceReporter
+from tests.load_tests.reporting.console_report import DisconnectionReporter
+from tests.load_tests.reporting.console_report import PoolAnalyzer
+from tests.load_tests.reporting.console_report import ResourceReporter
 from tests.load_tests.reporting.summary import SummaryReporter
 from tests.load_tests.traffic.runner import TrafficRunner
-from tests.load_tests.validation.environment import EnvironmentValidator
-from tests.load_tests.validation.input_validation import InputValidator
-from tests.load_tests.validation.output_validation import OutputValidator
+from tests.load_tests.validation import EnvironmentValidator
+from tests.load_tests.validation import InputValidator
+from tests.load_tests.validation import OutputValidator
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
@@ -244,7 +243,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                  "norm: adds resource monitoring and "
                  "server log analysis (if --server-log given). "
                  "adv: adds token accounting, CSV export, "
-                 "recommendations, pool analysis.",
+                 "pool analysis.",
         )
         parser.add_argument(
             "--monitor-resources",
@@ -814,9 +813,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             if len(stage_summaries) > 1:
                 SummaryReporter.log_ramp_summary(stage_summaries)
 
-            SummaryReporter.log_overall_results(
-                stage_summaries, level,
-            )
+            SummaryReporter.log_overall_results(stage_summaries)
 
             if monitor_resources:
                 total_client_reqs = sum(
@@ -848,10 +845,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                         "\n  Pool reuse analysis: "
                         "not available (no --server-log)",
                     )
-                RecommendationEngine.log_recommendations(
-                    stage_summaries, self.args,
-                    self._output_dir,
-                )
                 self._export_raw_json(
                     stage_summaries, resource_rows, client_rows,
                 )

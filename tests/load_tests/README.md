@@ -63,7 +63,6 @@ python -m tests.load_tests.load_test --agent hello_world --level adv \
 | Token accounting (from stdout)       | opt |  Y   |  Y  |
 | Pool reuse analysis                  |     |      | opt |
 | JSON export (`raw_results.json`)     |     |      |  Y  |
-| Recommendations + next-step command  |     |      |  Y  |
 
 `opt` = available with optional flags. `--server-log` enables retry
 counting, server-side validation, disconnection detection, and pool
@@ -158,7 +157,6 @@ includes:
 | File                  | Contents                                         |
 |-----------------------|--------------------------------------------------|
 | `raw_results.json`    | All test data in a single JSON file              |
-| `recommendations.txt` | Analysis and next-step suggestions               |
 | `load_test.log`       | Full terminal output                             |
 | `requests/`           | Raw stdout/stderr per request                    |
 

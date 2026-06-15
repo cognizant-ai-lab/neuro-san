@@ -16,18 +16,16 @@
 """Summary reporting — ramp-up and overall results."""
 
 import logging
-from typing import Any
-from typing import Dict
-from typing import List
 
-from tests.load_tests.config import LEVEL_ADV
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
-from tests.load_tests.reporting.table_formatter import TableFormatter
+from tests.load_tests.reporting.console_report import TableFormatter
 
 logger = logging.getLogger(__name__)
+
+SEPARATOR_WIDTH = 60
 
 
 class SummaryReporter:
@@ -36,9 +34,9 @@ class SummaryReporter:
     @staticmethod
     def log_ramp_summary(stage_summaries):
         """Log the ramp-up summary table across all stages."""
-        logger.info("\n%s", "=" * 60)
+        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         logger.info("  RAMP-UP SUMMARY")
-        logger.info("=" * 60)
+        logger.info("=" * SEPARATOR_WIDTH)
 
         has_server_counts = any(
             summary.get("primary_started") is not None
@@ -85,9 +83,8 @@ class SummaryReporter:
             rows.append(row)
         TableFormatter.log_table(header, rows)
 
-    # pylint: disable=too-many-locals
     @staticmethod
-    def log_overall_results(stage_summaries, level=LEVEL_ADV):
+    def log_overall_results(stage_summaries):
         """Log overall results across all stages."""
         total_created = 0
         total_failed = 0
@@ -95,8 +92,6 @@ class SummaryReporter:
         total_killed = 0
         total_time = 0.0
         total_retries = 0
-        total_requests = 0
-        all_results: List[Dict[str, Any]] = []
 
         for summary in stage_summaries:
             counts = summary.get("counts", {})
@@ -106,16 +101,14 @@ class SummaryReporter:
             total_killed += counts.get(STATUS_KILLED, 0)
             total_time += summary.get("elapsed", 0)
             total_retries += summary.get("total_retries", 0)
-            total_requests += summary.get("concurrent", 0)
-            all_results.extend(summary.get("results", []))
 
         total_sent = (
             total_created + total_failed + total_timeout + total_killed
         )
 
-        logger.info("\n%s", "=" * 60)
+        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         logger.info("  OVERALL RESULTS")
-        logger.info("=" * 60)
+        logger.info("=" * SEPARATOR_WIDTH)
         logger.info("  Total requests: %s", total_sent)
         logger.info("    Created:   %s", total_created)
         logger.info("    Failed:    %s", total_failed)
@@ -128,99 +121,15 @@ class SummaryReporter:
             )
 
         if total_retries > 0:
+            total_requests = sum(
+                s.get("concurrent", 0) for s in stage_summaries
+            )
             amplification = (
                 (total_requests + total_retries) / total_requests
                 if total_requests > 0 else 1.0
             )
             logger.info("\n  Overall max_attempts retry totals:")
             logger.info("    Total retries:   %s", total_retries)
-            logger.info("    Amplification:   %.2fx", amplification)
-
-        SummaryReporter._log_token_summary(all_results, level)
-        SummaryReporter._log_created_list(all_results)
-
-    @staticmethod
-    def _log_token_summary(all_results, level):
-        """Log token usage summary at adv level."""
-        token_totals = [
-            r.get("total_tokens", 0)
-            for r in all_results if r.get("total_tokens")
-        ]
-        if not token_totals or level != LEVEL_ADV:
-            return
-        token_totals_sorted = sorted(token_totals)
-        total_all = sum(token_totals)
-        avg_tokens = total_all / len(token_totals)
-        p50 = token_totals_sorted[len(token_totals_sorted) // 2]
-        p90_idx = int(len(token_totals_sorted) * 0.9)
-        p90 = token_totals_sorted[
-            min(p90_idx, len(token_totals_sorted) - 1)
-        ]
-        total_prompt = sum(
-            r.get("prompt_tokens", 0) for r in all_results
-        )
-        total_comp = sum(
-            r.get("completion_tokens", 0) for r in all_results
-        )
-        total_llm = sum(
-            r.get("llm_calls", 0) for r in all_results
-        )
-        logger.info("\n  Token usage:")
-        fmt_total = f"{total_all:,}"
-        fmt_avg = f"{int(avg_tokens):,}"
-        fmt_p50 = f"{p50:,}"
-        fmt_p90 = f"{p90:,}"
-        fmt_max = f"{max(token_totals):,}"
-        fmt_prompt = f"{total_prompt:,}"
-        fmt_comp = f"{total_comp:,}"
-        pct_prompt = (
-            100 * total_prompt / total_all if total_all else 0
-        )
-        pct_comp = (
-            100 * total_comp / total_all if total_all else 0
-        )
-        logger.info("    Total tokens:    %s", fmt_total)
-        logger.info("    Avg per request: %s", fmt_avg)
-        logger.info("    P50:             %s", fmt_p50)
-        logger.info("    P90:             %s", fmt_p90)
-        logger.info("    Max:             %s", fmt_max)
-        logger.info(
-            "    Prompt tokens:   %s (%.0f%%)",
-            fmt_prompt, pct_prompt,
-        )
-        logger.info(
-            "    Completion:      %s (%.0f%%)",
-            fmt_comp, pct_comp,
-        )
-        logger.info(
-            "    LLM calls:       %s (avg %.1f/request)",
-            total_llm, total_llm / len(token_totals),
-        )
-
-    @staticmethod
-    def _log_created_list(all_results):
-        """Log list of successfully created networks/requests."""
-        created = [
-            r for r in all_results
-            if r.get("status") == STATUS_CREATED
-        ]
-        if not created:
-            return
-        logger.info("\n  Networks/requests successfully created:")
-        for result in created:
-            name = (
-                result.get("agent_network_name")
-                or result.get("network_name")
+            logger.info(
+                "    Amplification:   %.2fx", amplification,
             )
-            reservation = result.get("reservation_id")
-            if name:
-                logger.info(
-                    "    %s (reservation: %s, %.2fs)",
-                    name, reservation or "none",
-                    result.get("elapsed"),
-                )
-            else:
-                logger.info(
-                    "    request completed (%.2fs)",
-                    result.get("elapsed"),
-                )
