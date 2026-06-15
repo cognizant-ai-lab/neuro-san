@@ -211,12 +211,25 @@ to use LLMs from various providers.
 | NVidia        | NVIDIA_API_KEY                                 |
 | Ollma         | &lt;None required&gt;                          |
 | OpenAI        | OPENAI_API_KEY                                 |
+| OpenRouter    | OPENROUTER_API_KEY                             |
 
 **Anthropic Model Names:** The model names `claude-haiku`, `claude-sonnet`, `claude-opus`, and `claude-fable`
 are aliases that automatically reference the latest versions of their respective Anthropic model lines.
 This aliasing is recommended because Anthropic frequently deprecates older model versions. For information
 on current models and deprecation schedules, see the
 [Anthropic model deprecations documentation](https://platform.claude.com/docs/en/about-claude/model-deprecations).
+
+**OpenRouter Model Names:** [OpenRouter](https://openrouter.ai/) is a unified API gateway that fronts
+hundreds of models from many providers (OpenAI, Anthropic, Google, Meta, etc.) behind a single endpoint.
+With the `openrouter` class, the `model_name` follows OpenRouter's `provider/model` convention, e.g.
+`anthropic/claude-sonnet-4-5` or `openai/gpt-4o`. OpenRouter also exposes "meta-router" models such as
+`openrouter/free` and `openrouter/auto` that select an underlying model at request time based on the
+capabilities the request needs (image understanding, tool calling, structured outputs, etc.). Because
+the underlying model is not known ahead of time for these routers, their `max_output_tokens` is left
+unset in `default_llm_info.hocon` — see the
+[llm_info_hocon_reference](./llm_info_hocon_reference.md#max_output_tokens) for what that means in practice.
+This integration requires the [`langchain-openrouter`](https://docs.langchain.com/oss/python/integrations/chat/openrouter)
+package, which neuro-san lazy-installs on first use.
 
 **Security Best Practice:** _We strongly recommend to **not** set secrets as values within any source file._
 These files tend to creep into source control repos, and it is **very** bad practice
@@ -280,6 +293,7 @@ Set the `class` key to one of the values listed below, then specify the model us
 | NVidia        | nvidiea       |
 | Ollma         | ollama        |
 | OpenAI        | openai        |
+| OpenRouter    | openrouter    |
 
 You may only provide parameters that are explicitly defined for that provider's class under the
 `classes.<class>.args` section of

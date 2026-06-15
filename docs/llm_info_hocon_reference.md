@@ -144,6 +144,15 @@ While it is possible to specify a smaller max_output_tokens in a given [classes]
 configuration, it is not possible to simply list a new larger value and have it
 magically manifest itself.  This is a matter of how the LLM was trained.
 
+**`null` is allowed** for entries whose true output ceiling is not known ahead of time.
+The motivating case is OpenRouter's meta-router models (e.g. `openrouter/free`,
+`openrouter/auto`), which pick an underlying model at request time, so the real
+`max_output_tokens` varies per request. When `max_output_tokens` is `null`, neuro-san
+skips the `prompt_token_fraction` multiplication and leaves the resulting `max_tokens`
+unset on the LLM, letting the provider's own default take over. Concrete numeric values
+are still preferred whenever the model has a known fixed ceiling — `null` should be
+reserved for the cases above.
+
 #### `knowledge_cutoff`
 
 String date indicating the origination date of the last piece of training data.

@@ -48,6 +48,8 @@ class TestSmokeTestHocons(TestCase):
             "Issue #910: disabled until #909 is resolved.",
         "music_nerd_pro_llm_anthropic/combination_responses_with_history_direct.hocon":
             "Issue #936: disabled until #909 is resolved.",
+        "music_nerd_pro_llm_openrouter/combination_responses_with_history_direct.hocon":
+            "Disabled until OPENROUTER_API_KEY is added to the GitHub Actions secrets.",
     }
 
     def _skip_if_disabled(self, test_hocon: str) -> None:
@@ -122,6 +124,7 @@ class TestSmokeTestHocons(TestCase):
         "music_nerd_pro_llm_gemini/combination_responses_with_history_direct.hocon",
         "music_nerd_pro_llm_azure/combination_responses_with_history_direct.hocon",
         "music_nerd_pro_llm_bedrock_claude/combination_responses_with_history_direct.hocon",
+        "music_nerd_pro_llm_openrouter/combination_responses_with_history_direct.hocon",
 
         # List more hocon files as they become available here.
     ]), skip_on_empty=True)

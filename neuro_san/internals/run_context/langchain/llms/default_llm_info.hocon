@@ -1107,6 +1107,59 @@
         "knowledge_cutoff": "03/2025",
     },
 
+    # OpenRouter
+    # https://openrouter.ai/
+    #
+    # OpenRouter is a unified API gateway that fronts hundreds of models from many
+    # providers (OpenAI, Anthropic, Google, Meta, etc.) behind a single
+    # OpenAI-compatible endpoint. Models are addressed as "provider/model", e.g.
+    # "anthropic/claude-sonnet-4-5". A few "meta" router models (like openrouter/free
+    # and openrouter/auto) pick an underlying model at request time based on the
+    # capabilities your prompt needs.
+
+    "openrouter/free": {
+        # openrouter/free is a router that selects free models at random from the models available on OpenRouter.
+        # The router smartly filters for models that support features needed for your request
+        # such as image understanding, tool calling, structured outputs and more.
+        "class": "openrouter",
+        "model_info_url": "https://openrouter.ai/openrouter/free",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        # The underlying model is chosen at request time, so the true context window
+        # also varies per request. OpenRouter's model page advertises 200k, so we go
+        # with that as the nominal value used for prompt-token math.
+        "context_window_size": 200000,
+        # max_output_tokens likewise depends on which model the router picks, so we
+        # leave it null and let the underlying model's default apply.
+        "max_output_tokens": null,
+        "knowledge_cutoff": "unknown",
+    },
+
+    "openrouter/auto": {
+        # openrouter/auto is a paid auto-router that uses a meta-model to analyze the
+        # incoming prompt and pick one of dozens of candidate models for quality.
+        # Pricing matches whichever underlying model handles the request — there is
+        # no premium routing fee. See https://openrouter.ai/openrouter/auto
+        "class": "openrouter",
+        "model_info_url": "https://openrouter.ai/openrouter/auto",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        # Like openrouter/free, the underlying model is chosen per-request, so the
+        # true context window varies. OpenRouter's model page advertises 2m, so we go
+        # with that as the nominal value used for prompt-token math.
+        "context_window_size": 2000000,
+        # max_output_tokens depends on which model the router picks; leave null so
+        # the underlying model's default applies.
+        "max_output_tokens": null,
+        "knowledge_cutoff": "unknown",
+    },
+
     # These are data for each LLM class, so they don't have to be repeated for each
     # LLM info entry above.
     "classes": {
@@ -1285,6 +1338,38 @@
                 "stop": null,
                 "nvidia_api_key": null,
                 "nvidia_base_url": null,
+            }
+        },
+        "openrouter": {
+            "args": {
+                # Note that we can only supply arguments that are "Just Data" in nature.
+                # See https://docs.langchain.com/oss/python/integrations/chat/openrouter
+                "openrouter_api_key": null,
+                "openrouter_api_base": null,
+                "request_timeout": null,    # In milliseconds; maps to ChatOpenRouter `timeout`
+                "max_retries": 2,
+                "temperature": null,
+                "max_tokens": null,         # This is always for output
+                "top_p": null,
+                "frequency_penalty": null,
+                "presence_penalty": null,
+                "seed": null,
+                "stop": null,               # Maps to ChatOpenRouter `stop_sequences`
+
+                # OpenRouter-specific options
+                # See https://openrouter.ai/docs
+
+                # Reasoning settings, e.g. {"effort": "high", "summary": "auto"}
+                "reasoning": null,
+                # Provider routing preferences, e.g. {"order": ["Anthropic", "OpenAI"]}
+                "openrouter_provider": null,
+                # Route preference, e.g. "fallback"
+                "route": null,
+                # Session id used by OpenRouter to group related requests for observability.
+                # Falls back to OPENROUTER_SESSION_ID env var when null.
+                "session_id": null,
+                # Trace metadata forwarded to broadcast destinations (Langfuse, LangSmith, ...).
+                "trace": null,
             }
         },
         "gemini": {
