@@ -13,30 +13,37 @@
 # limitations under the License.
 #
 
-"""CSV export — per-request and summary data for analysis."""
+"""CSV export — per-request and per-stage resource data for analysis."""
 
 import csv
 import logging
 import os
 import time
-from typing import Any
-from typing import Dict
-from typing import List
 
-from tests.load_tests.config import STATUS_CREATED
+from tests.load_tests.config import estimate_cost
 
 logger = logging.getLogger(__name__)
 
+# Fields that live on each result dict (not CSV-specific metadata)
+_RESULT_META_KEYS = {
+    "status", "elapsed", "prompt", "error", "request_id",
+}
+
 
 class CsvExporter:
-    """Writes per-request and summary CSV files for analysis."""
+    """Writes per-request and per-stage resource CSV files."""
+
+    # ------------------------------------------------------------------
+    # results_per_request.csv
+    # ------------------------------------------------------------------
 
     # pylint: disable=too-many-locals
     @staticmethod
     def export_per_request_csv(output_dir, stage_summaries, agent_name):
         """Write per-request CSV with one row per request.
 
-        Includes all data needed for LLM-based analysis.
+        Columns include: core fields, token accounting, cost,
+        retry/disconnection data, and any agent-specific parsed fields.
         """
         if not output_dir:
             return
@@ -44,23 +51,33 @@ class CsvExporter:
         csv_path = os.path.join(output_dir, "results_per_request.csv")
         run_id = time.strftime("%Y-%m-%d_%H%M")
 
+        # Core columns always present
         fieldnames = [
             "run_id", "timestamp", "agent", "stage", "round",
             "request_id", "status", "duration_sec", "prompt",
             "error",
+            "total_tokens", "prompt_tokens", "completion_tokens",
+            "llm_calls", "model", "cost_usd",
+            "total_retries", "disconnected",
         ]
 
-        parsed_field_names = set()
+        # Discover additional dynamic fields from results
+        extra_keys = set()
         for summary in stage_summaries:
             for result in summary.get("results", []):
                 for key in result:
-                    if key not in {
-                        "status", "elapsed", "prompt",
-                        "error", "request_id",
+                    if key not in _RESULT_META_KEYS and key not in {
+                        "total_tokens", "prompt_tokens",
+                        "completion_tokens", "llm_calls",
+                        "model", "cost_usd",
                     }:
-                        parsed_field_names.add(key)
-        sorted_fields = sorted(parsed_field_names)
-        fieldnames.extend(sorted_fields)
+                        extra_keys.add(key)
+        sorted_extras = sorted(extra_keys)
+        fieldnames.extend(sorted_extras)
+
+        disconnection_index = CsvExporter._build_disconnection_index(
+            stage_summaries,
+        )
 
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%S")
         with open(csv_path, "w", encoding="utf-8", newline="") as csvfile:
@@ -71,188 +88,253 @@ class CsvExporter:
             for summary in stage_summaries:
                 stage = summary.get("stage", 0)
                 round_num = summary.get("round", 1)
+                has_log = summary.get("has_server_log", False)
+                has_tok = summary.get("has_tokens", False)
+                stage_retries = summary.get("total_retries", 0)
+                stage_reqs = summary.get("concurrent", 0)
+                retry_per_req = (
+                    stage_retries / stage_reqs
+                    if stage_reqs > 0 else 0
+                )
+
                 for result in summary.get("results", []):
                     request_num += 1
+                    rid = result.get(
+                        "request_id", f"request-{request_num}",
+                    )
+                    tok_measured = (
+                        has_tok
+                        or "total_tokens" in result
+                    )
+                    prompt_tok = result.get(
+                        "prompt_tokens", 0 if tok_measured else "",
+                    )
+                    compl_tok = result.get(
+                        "completion_tokens",
+                        0 if tok_measured else "",
+                    )
+                    model = result.get(
+                        "model",
+                        "unknown" if tok_measured else "",
+                    )
+                    cost = result.get("cost_usd", "")
+                    if (
+                        cost == ""
+                        and tok_measured
+                    ):
+                        cost = estimate_cost(
+                            prompt_tok, compl_tok, model,
+                        )
+
                     row = {
                         "run_id": run_id,
                         "timestamp": timestamp,
                         "agent": agent_name,
                         "stage": stage,
                         "round": round_num,
-                        "request_id": result.get(
-                            "request_id", f"request-{request_num}",
-                        ),
+                        "request_id": rid,
                         "status": result.get("status", ""),
                         "duration_sec": (
                             f"{result.get('elapsed', 0):.2f}"
                         ),
                         "prompt": result.get("prompt", ""),
                         "error": result.get("error", ""),
+                        "total_tokens": result.get(
+                            "total_tokens",
+                            0 if tok_measured else "",
+                        ),
+                        "prompt_tokens": prompt_tok,
+                        "completion_tokens": compl_tok,
+                        "llm_calls": result.get(
+                            "llm_calls",
+                            0 if tok_measured else "",
+                        ),
+                        "model": model,
+                        "cost_usd": (
+                            f"{cost:.6f}" if isinstance(cost, float)
+                            else cost
+                        ),
+                        "total_retries": (
+                            f"{retry_per_req:.1f}"
+                            if has_log else ""
+                        ),
+                        "disconnected": (
+                            "true" if rid in disconnection_index
+                            else ("false" if has_log else "")
+                        ),
                     }
-                    for field in sorted_fields:
+                    for field in sorted_extras:
                         row[field] = result.get(field, "")
                     writer.writerow(row)
 
         logger.info("Per-request CSV: %s", csv_path)
 
+    @staticmethod
+    def _build_disconnection_index(stage_summaries):
+        """Build a set of request_ids that experienced disconnections."""
+        disconnected = set()
+        for summary in stage_summaries:
+            for disc in summary.get("disconnections", []):
+                rid = disc.get("request_id")
+                if rid:
+                    disconnected.add(rid)
+        return disconnected
+
+    # ------------------------------------------------------------------
+    # results_resources.csv
+    # ------------------------------------------------------------------
+
     # pylint: disable=too-many-locals
     @staticmethod
-    def export_summary_csv(output_dir, stage_summaries, agent_name):
-        """Write summary CSV with one row per run for cross-run comparison."""
+    def export_resources_csv(
+            output_dir, stage_summaries,
+            resource_rows, client_rows, args,
+    ):
+        """Write per-stage resource CSV with test configuration.
+
+        One row per stage with server and client resource snapshots,
+        wall clock time, thread deltas, and test config metadata.
+        """
         if not output_dir:
             return
 
-        csv_path = os.path.join(output_dir, "results_summary.csv")
+        csv_path = os.path.join(output_dir, "results_resources.csv")
         run_id = time.strftime("%Y-%m-%d_%H%M")
-
-        all_results: List[Dict[str, Any]] = []
-        total_requests = 0
-        total_created = 0
-        total_failed = 0
-        total_time = 0.0
-
-        for summary in stage_summaries:
-            counts = summary.get("counts", {})
-            total_requests += summary.get("concurrent", 0)
-            total_created += counts.get(STATUS_CREATED, 0)
-            total_failed += (
-                counts.get("FAILED", 0)
-                + counts.get("TIMEOUT", 0)
-                + counts.get("KILLED", 0)
-            )
-            total_time += summary.get("elapsed", 0)
-            all_results.extend(summary.get("results", []))
-
-        durations = [r.get("elapsed", 0) for r in all_results]
-        durations.sort()
-
-        avg_duration = (
-            sum(durations) / len(durations) if durations else 0
-        )
-        p50_duration = CsvExporter._percentile(durations, 50)
-        p90_duration = CsvExporter._percentile(durations, 90)
-
-        token_totals = [
-            r.get("total_tokens", 0)
-            for r in all_results if r.get("total_tokens")
-        ]
-        token_totals.sort()
-        has_tokens = len(token_totals) > 0
+        timestamp = time.strftime("%Y-%m-%dT%H:%M:%S")
 
         fieldnames = [
-            "run_id", "date", "agent", "total_requests",
-            "completed", "failed",
-            "avg_duration_sec", "p50_duration_sec", "p90_duration_sec",
-            "total_time_sec",
+            "run_id", "timestamp", "agent",
+            "stage", "round", "concurrent", "wall_clock_sec",
+            "server_before_rss", "server_settled_rss",
+            "server_rss_delta",
+            "server_before_threads", "server_peak_threads",
+            "server_settled_threads", "server_thread_delta",
+            "server_fds", "server_conns", "server_cpu",
+            "server_children",
+            "client_before_rss", "client_peak_rss",
+            "client_settled_rss", "client_rss_delta",
+            "client_cpu", "client_fds", "client_threads",
+            "total_retries", "amplification",
+            "primary_started", "primary_finished",
+            "total_started", "total_finished",
+            "disconnections",
+            "mode", "max_workers", "timeout",
+            "idle_timeout", "settle_time",
         ]
-        if has_tokens:
-            fieldnames.extend([
-                "total_tokens", "avg_tokens",
-                "p50_tokens", "p90_tokens",
-                "max_tokens", "total_prompt_tokens",
-                "total_completion_tokens",
-                "total_llm_calls", "model",
-            ])
-
-        row = {
-            "run_id": run_id,
-            "date": time.strftime("%Y-%m-%d"),
-            "agent": agent_name,
-            "total_requests": total_requests,
-            "completed": total_created,
-            "failed": total_failed,
-            "avg_duration_sec": f"{avg_duration:.2f}",
-            "p50_duration_sec": f"{p50_duration:.2f}",
-            "p90_duration_sec": f"{p90_duration:.2f}",
-            "total_time_sec": f"{total_time:.2f}",
-        }
-
-        if has_tokens:
-            avg_tokens = sum(token_totals) / len(token_totals)
-            total_prompt = sum(
-                r.get("prompt_tokens", 0) for r in all_results
-            )
-            total_comp = sum(
-                r.get("completion_tokens", 0) for r in all_results
-            )
-            total_llm = sum(
-                r.get("llm_calls", 0) for r in all_results
-            )
-            models = set(
-                r.get("model") for r in all_results if r.get("model")
-            )
-            row.update({
-                "total_tokens": sum(token_totals),
-                "avg_tokens": int(avg_tokens),
-                "p50_tokens": int(
-                    CsvExporter._percentile(token_totals, 50),
-                ),
-                "p90_tokens": int(
-                    CsvExporter._percentile(token_totals, 90),
-                ),
-                "max_tokens": max(token_totals),
-                "total_prompt_tokens": total_prompt,
-                "total_completion_tokens": total_comp,
-                "total_llm_calls": total_llm,
-                "model": ";".join(sorted(models)),
-            })
 
         with open(csv_path, "w", encoding="utf-8", newline="") as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
-            writer.writerow(row)
 
-        logger.info("Summary CSV: %s", csv_path)
+            for idx, summary in enumerate(stage_summaries):
+                srv = (
+                    resource_rows[idx]
+                    if idx < len(resource_rows) else None
+                )
+                cli = (
+                    client_rows[idx]
+                    if idx < len(client_rows) else None
+                )
+
+                row = {
+                    "run_id": run_id,
+                    "timestamp": timestamp,
+                    "agent": args.agent,
+                    "stage": summary.get("stage", 0),
+                    "round": summary.get("round", 1),
+                    "concurrent": summary.get("concurrent", 0),
+                    "wall_clock_sec": (
+                        f"{summary.get('elapsed', 0):.2f}"
+                    ),
+                    "total_retries": (
+                        summary.get("total_retries", 0)
+                        if summary.get("has_server_log")
+                        else ""
+                    ),
+                    "amplification": (
+                        f"{summary.get('amplification', 1.0):.2f}"
+                        if summary.get("has_server_log")
+                        else ""
+                    ),
+                    "primary_started": (
+                        summary.get("primary_started", 0)
+                        if summary.get("has_server_log")
+                        else ""
+                    ),
+                    "primary_finished": (
+                        summary.get("primary_finished", 0)
+                        if summary.get("has_server_log")
+                        else ""
+                    ),
+                    "total_started": (
+                        summary.get("total_started", 0)
+                        if summary.get("has_server_log")
+                        else ""
+                    ),
+                    "total_finished": (
+                        summary.get("total_finished", 0)
+                        if summary.get("has_server_log")
+                        else ""
+                    ),
+                    "disconnections": (
+                        len(summary.get("disconnections", []))
+                        if summary.get("has_server_log")
+                        else ""
+                    ),
+                    "mode": (
+                        "ramp" if args.ramp else "flat"
+                    ),
+                    "max_workers": args.max_workers,
+                    "timeout": args.timeout,
+                    "idle_timeout": args.idle_timeout,
+                    "settle_time": args.settle_time,
+                }
+
+                CsvExporter._fill_server_resource_row(row, srv, summary)
+                CsvExporter._fill_client_resource_row(row, cli)
+                writer.writerow(row)
+
+        logger.info("Resources CSV: %s", csv_path)
 
     @staticmethod
-    def append_resource_history(
-            stage_summaries, resource_rows, client_rows,
-    ):
-        """Append resource data to a persistent CSV history file.
-
-        Only writes data from successful runs (all requests created).
-        """
-        all_created = all(
-            s.get("counts", {}).get(STATUS_CREATED, 0)
-            == s.get("concurrent")
-            for s in stage_summaries
-        )
-        if not all_created:
+    def _fill_server_resource_row(row, srv_tuple, summary):
+        """Populate server resource columns from a resource tuple."""
+        if srv_tuple is None:
             return
+        row["server_before_rss"] = srv_tuple[1]
+        row["server_settled_rss"] = srv_tuple[2]
+        row["server_rss_delta"] = srv_tuple[3]
+        row["server_fds"] = srv_tuple[4]
+        before_threads = summary.get("before_threads", "")
+        settled_threads = summary.get("after_threads", "")
+        peak_threads = summary.get("peak_threads", "")
+        row["server_before_threads"] = before_threads
+        row["server_peak_threads"] = peak_threads
+        row["server_settled_threads"] = settled_threads
+        if before_threads != "" and settled_threads != "":
+            row["server_thread_delta"] = (
+                settled_threads - before_threads
+            )
+        row["server_conns"] = srv_tuple[7]
+        row["server_cpu"] = srv_tuple[8]
+        row["server_children"] = srv_tuple[9]
 
-        history_path = "/tmp/load_test/adv/resource_history.csv"
-        os.makedirs(os.path.dirname(history_path), exist_ok=True)
-        write_header = not os.path.exists(history_path)
+    @staticmethod
+    def _fill_client_resource_row(row, cli_tuple):
+        """Populate client resource columns from a client resource tuple."""
+        if cli_tuple is None:
+            return
+        row["client_before_rss"] = cli_tuple[1]
+        row["client_peak_rss"] = cli_tuple[2]
+        row["client_settled_rss"] = cli_tuple[3]
+        row["client_rss_delta"] = cli_tuple[4]
+        row["client_cpu"] = cli_tuple[5]
+        row["client_fds"] = cli_tuple[6]
+        row["client_threads"] = cli_tuple[7]
 
-        now = time.strftime("%Y-%m-%d %H:%M:%S")
-        server_fields = [
-            "datetime", "concurrent", "before_rss", "settled_rss",
-            "rss_delta", "fds", "threads", "conns", "cpu",
-            "children", "side",
-        ]
-
-        with open(
-                history_path, "a", encoding="utf-8", newline="",
-        ) as csvfile:
-            writer = csv.writer(csvfile)
-            if write_header:
-                writer.writerow(server_fields)
-
-            for row in resource_rows:
-                writer.writerow([
-                    now, row[0], row[1], row[2], row[3],
-                    row[4], row[5], row[7], row[8], row[9],
-                    "server",
-                ])
-
-            for row in client_rows:
-                writer.writerow([
-                    now, row[0], row[1], row[3], row[4],
-                    row[6], row[7], "0", row[5], "0",
-                    "client",
-                ])
-
-        logger.info("\nResource history appended: %s", history_path)
+    # ------------------------------------------------------------------
+    # Utilities
+    # ------------------------------------------------------------------
 
     @staticmethod
     def _percentile(sorted_data, pct):

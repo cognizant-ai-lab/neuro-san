@@ -241,9 +241,26 @@ class LoadTestOrchestrator:
             default=LEVEL_NORM,
             help="Test depth level (default: norm). "
                  "min: traffic + validation only. "
-                 "norm: adds server log and resource monitoring. "
-                 "adv: adds tokens, CSV, recommendations, "
-                 "pool analysis.",
+                 "norm: adds resource monitoring and "
+                 "server log analysis (if --server-log given). "
+                 "adv: adds token accounting, CSV export, "
+                 "recommendations, pool analysis.",
+        )
+        parser.add_argument(
+            "--monitor-resources",
+            action="store_true",
+            default=False,
+            help="Enable psutil resource monitoring (CPU, memory, "
+                 "threads, FDs) even at min level. "
+                 "Automatically enabled at norm/adv.",
+        )
+        parser.add_argument(
+            "--include-tokens",
+            action="store_true",
+            default=False,
+            help="Pass --tokens to agent_cli to capture per-request "
+                 "token accounting from stdout. Automatically "
+                 "enabled at adv level.",
         )
         parser.add_argument(
             "--skip-reservation-check",
@@ -308,8 +325,13 @@ class LoadTestOrchestrator:
     def _run_all_stages(self, stages, total_cap):
         """Execute all stages of the load test, collecting data per stage."""
         level = self.args.level
-        monitor_resources = level != LEVEL_MIN
-        parse_tokens = level == LEVEL_ADV
+        monitor_resources = (
+            level != LEVEL_MIN or self.args.monitor_resources
+        )
+        has_server_log = self.server_log is not None
+        parse_tokens = (
+            level != LEVEL_MIN or self.args.include_tokens
+        )
 
         stage_summaries: List[Dict[str, Any]] = []
         resource_rows: List[Tuple] = []
@@ -362,7 +384,7 @@ class LoadTestOrchestrator:
                     ServerLogMonitor.read_log_position(
                         self.server_log,
                     )
-                    if monitor_resources else None
+                    if has_server_log else None
                 )
 
                 before_server = None
@@ -405,7 +427,7 @@ class LoadTestOrchestrator:
                 stop_event = None
                 monitor = None
                 peak_result = None
-                if monitor_resources:
+                if has_server_log:
                     stop_event, monitor, peak_result = (
                         ServerLogMonitor.start_log_monitor(
                             self.server_log, log_pos,
@@ -449,7 +471,7 @@ class LoadTestOrchestrator:
                 retries: Dict[str, int] = {}
                 total_retries = 0
                 amplification = 1.0
-                if monitor_resources:
+                if has_server_log:
                     retries = ServerLogMonitor.count_retries_since(
                         self.server_log, log_pos,
                     )
@@ -465,14 +487,19 @@ class LoadTestOrchestrator:
                     self.args.skip_reservation_check,
                 )
 
-                if monitor_resources and self.server_log:
+                if has_server_log:
                     OutputValidator.log_retry_activity(
                         retries, total_retries, actual_requests,
+                    )
+                elif monitor_resources:
+                    logger.info(
+                        "\n  Retry activity: not available "
+                        "(no --server-log)",
                     )
 
                 server_counts: Dict[str, Any] = {}
                 disconnections: List = []
-                if monitor_resources:
+                if monitor_resources or has_server_log:
                     logger.info(
                         "\n  Waiting %ss for server cleanup...",
                         self.args.settle_time,
@@ -488,43 +515,11 @@ class LoadTestOrchestrator:
                             "Server SETTLED", after_server,
                         )
 
-                    server_counts = (
-                        ServerLogMonitor.count_requests_since(
-                            self.server_log, log_pos,
-                            self.profile.primary_start_pattern,
-                            self.profile.primary_finish_pattern,
+                    server_counts, disconnections = (
+                        self._analyze_server_log(
+                            has_server_log, parse_tokens,
+                            log_pos, results, actual_requests,
                         )
-                    )
-                    disconnections = (
-                        ServerLogMonitor.scan_disconnections_since(
-                            self.server_log, log_pos,
-                        )
-                    )
-
-                    if parse_tokens:
-                        token_data = (
-                            ServerLogMonitor
-                            .parse_token_accounting_since(
-                                self.server_log, log_pos,
-                            )
-                        )
-                        LoadTestOrchestrator._attach_token_data(
-                            results, token_data,
-                        )
-                        if token_data:
-                            logger.info(
-                                "\n  Token usage (from server log):",
-                            )
-                            TrafficRunner.log_token_summary(
-                                results,
-                            )
-
-                    OutputValidator.log_disconnections(
-                        disconnections,
-                    )
-                    OutputValidator.log_server_validation(
-                        server_counts, actual_requests,
-                        self.args.agent,
                     )
 
                     if before_server and after_server:
@@ -560,6 +555,8 @@ class LoadTestOrchestrator:
                     "total_started": server_counts.get("total_started"),
                     "total_finished": server_counts.get("total_finished"),
                     "disconnections": disconnections,
+                    "has_server_log": has_server_log,
+                    "has_tokens": parse_tokens,
                 }
                 if monitor_resources:
                     if before_server:
@@ -575,6 +572,66 @@ class LoadTestOrchestrator:
                 stage_summaries.append(summary_entry)
 
         return stage_summaries, resource_rows, client_resource_rows
+
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def _analyze_server_log(
+            self, has_server_log, parse_tokens,
+            log_pos, results, actual_requests,
+    ):
+        """Analyze server log or report unavailability.
+
+        Returns (server_counts, disconnections).
+        """
+        server_counts: Dict[str, Any] = {}
+        disconnections: List = []
+        if has_server_log:
+            server_counts = (
+                ServerLogMonitor.count_requests_since(
+                    self.server_log, log_pos,
+                    self.profile.primary_start_pattern,
+                    self.profile.primary_finish_pattern,
+                )
+            )
+            disconnections = (
+                ServerLogMonitor.scan_disconnections_since(
+                    self.server_log, log_pos,
+                )
+            )
+            if parse_tokens:
+                token_data = (
+                    ServerLogMonitor.parse_token_accounting_since(
+                        self.server_log, log_pos,
+                    )
+                )
+                LoadTestOrchestrator._attach_token_data(
+                    results, token_data,
+                )
+                if token_data:
+                    logger.info(
+                        "\n  Token usage (from server log):",
+                    )
+                    TrafficRunner.log_token_summary(results)
+            OutputValidator.log_disconnections(disconnections)
+            OutputValidator.log_server_validation(
+                server_counts, actual_requests,
+                self.args.agent,
+            )
+        else:
+            if parse_tokens:
+                has_token_data = any(
+                    r.get("total_tokens") for r in results
+                )
+                if has_token_data:
+                    logger.info(
+                        "\n  Token usage "
+                        "(from agent_cli --tokens):",
+                    )
+                    TrafficRunner.log_token_summary(results)
+            logger.info(
+                "\n  Server-side validation: "
+                "not available (no --server-log)",
+            )
+        return server_counts, disconnections
 
     def _setup_test_log(self):
         """Create output directory and add a file handler for logging."""
@@ -608,23 +665,31 @@ class LoadTestOrchestrator:
             logger.info("\nOutput: %s", self._output_dir)
 
     def _validate_server_log(self):
-        """Validate --server-log requirement and path at norm/adv levels."""
+        """Validate --server-log path when provided.
+
+        At norm/adv levels without --server-log, logs a warning listing
+        which features will be unavailable.
+        """
         level = self.args.level
-        if level == LEVEL_MIN:
+        if level == LEVEL_MIN and not self.args.server_log:
             return
 
         if not self.args.server_log:
-            logger.error(
-                "--server-log is required at %s level.\n"
-                "  Pass the path to your active server log. Example:\n"
-                "    --server-log logs/server.log\n\n"
-                "  If you started the server with:\n"
-                "    python -m neuro_san.service.main_loop"
-                ".server_main_loop 2>&1 | tee logs/server.log\n"
-                "  then use that same path.",
+            logger.warning(
+                "No --server-log provided at %s level.\n"
+                "  The following will be unavailable:\n"
+                "    - Retry counts and amplification factor\n"
+                "    - Server-side request validation\n"
+                "    - Client disconnection detection\n"
+                "    - Per-agent-network token breakdown "
+                "(server log only)\n"
+                "  Resource monitoring (psutil) and aggregated "
+                "token accounting (--tokens) still work.\n"
+                "  To enable full analysis, add:\n"
+                "    --server-log logs/server.log",
                 level,
             )
-            sys.exit(1)
+            return
 
         if not os.path.isfile(self.args.server_log):
             logger.error(
@@ -661,14 +726,18 @@ class LoadTestOrchestrator:
         self._setup_test_log()
 
         is_local = self.args.host in LOCAL_HOSTS
+        monitor_resources = (
+            level != LEVEL_MIN or self.args.monitor_resources
+        )
 
-        if level != LEVEL_MIN and is_local:
+        if monitor_resources and is_local:
             self.server_proc, self.server_log = (
                 EnvironmentValidator.find_local_server(self.args)
             )
-        elif level == LEVEL_MIN and is_local:
+        elif level == LEVEL_MIN and not self.args.monitor_resources:
             logger.info(
-                "Level 'min': server monitoring and log reading disabled",
+                "Level 'min': resource monitoring disabled. "
+                "Use --monitor-resources to enable.",
             )
         else:
             logger.info(
@@ -688,10 +757,12 @@ class LoadTestOrchestrator:
             self.args.host, self.args.port, self.args.timeout,
             self.args.idle_timeout, prompt_mode,
         )
-        if level != LEVEL_MIN:
+        if monitor_resources:
             logger.info("  settle_time=%ss", self.args.settle_time)
         if self.server_log:
             logger.info("  server_log=%s", self.server_log)
+        else:
+            logger.info("  server_log=none")
         if self.profile.estimated_tokens_per_request:
             logger.info(
                 "  estimated_tokens_per_request=%s",
@@ -712,7 +783,7 @@ class LoadTestOrchestrator:
                 stage_summaries, level,
             )
 
-            if level != LEVEL_MIN:
+            if monitor_resources:
                 total_client_reqs = sum(
                     s.get("concurrent", 0) for s in stage_summaries
                 )
@@ -732,21 +803,25 @@ class LoadTestOrchestrator:
                 )
 
             if level == LEVEL_ADV:
-                PoolAnalyzer.log_pool_reuse_analysis(
-                    stage_summaries,
-                )
+                has_server_log = self.server_log is not None
+                if has_server_log:
+                    PoolAnalyzer.log_pool_reuse_analysis(
+                        stage_summaries,
+                    )
+                else:
+                    logger.info(
+                        "\n  Pool reuse analysis: "
+                        "not available (no --server-log)",
+                    )
                 RecommendationEngine.log_recommendations(
                     stage_summaries, self.args,
                     self._output_dir,
                 )
-                CsvExporter.append_resource_history(
-                    stage_summaries, resource_rows, client_rows,
+                CsvExporter.export_resources_csv(
+                    self._output_dir, stage_summaries,
+                    resource_rows, client_rows, self.args,
                 )
                 CsvExporter.export_per_request_csv(
-                    self._output_dir, stage_summaries,
-                    self.args.agent,
-                )
-                CsvExporter.export_summary_csv(
                     self._output_dir, stage_summaries,
                     self.args.agent,
                 )

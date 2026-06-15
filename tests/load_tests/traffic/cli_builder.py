@@ -15,10 +15,13 @@
 
 """Build agent_cli subprocess commands and manage prompt files."""
 
+import json
 import logging
 import os
 import re
 import tempfile
+from typing import Any
+from typing import Dict
 from typing import List
 from typing import Optional
 
@@ -29,12 +32,15 @@ class CliBuilder:
     """Builds agent_cli subprocess commands and manages prompt files."""
 
     @staticmethod
-    def build_cli_command(host, port, agent_name, prompt_file) -> List[str]:
+    def build_cli_command(
+            host, port, agent_name, prompt_file, include_tokens=False,
+    ) -> List[str]:
         """Build the agent_cli subprocess command list.
 
         Includes --no_thinking_file to avoid race conditions under concurrency.
+        When include_tokens is True, adds --tokens for inline token accounting.
         """
-        return [
+        cmd = [
             "python", "-m", "neuro_san.client.agent_cli",
             "--http",
             "--host", host,
@@ -44,6 +50,9 @@ class CliBuilder:
             "--one_shot",
             "--no_thinking_file",
         ]
+        if include_tokens:
+            cmd.append("--tokens")
+        return cmd
 
     @staticmethod
     def write_prompt_file(global_request_id, prompt) -> str:
@@ -71,6 +80,31 @@ class CliBuilder:
         if match:
             return match.group(1)
         return None
+
+    @staticmethod
+    def parse_token_accounting(stdout) -> Dict[str, Any]:
+        """Extract Token Accounting JSON block from agent_cli stdout."""
+        marker = "Token Accounting:"
+        idx = stdout.find(marker)
+        if idx < 0:
+            return {}
+        json_start = stdout.find("{", idx)
+        if json_start < 0:
+            return {}
+        depth = 0
+        json_end = json_start
+        for i in range(json_start, len(stdout)):
+            if stdout[i] == "{":
+                depth += 1
+            elif stdout[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    json_end = i + 1
+                    break
+        try:
+            return json.loads(stdout[json_start:json_end])
+        except (json.JSONDecodeError, ValueError):
+            return {}
 
     @staticmethod
     def last_stderr_line(stderr) -> str:

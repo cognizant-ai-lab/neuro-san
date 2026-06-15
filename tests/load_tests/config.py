@@ -94,3 +94,31 @@ STREAM_CLOSED_REQUEST_PATTERN = re.compile(
 TASK_CANCELLED_PATTERN = re.compile(
     r"Task from ([^:]+):.*was cancelled"
 )
+
+# Model pricing (USD per 1M tokens) — update as providers change rates
+# Source: https://openai.com/api/pricing/
+MODEL_PRICING = {
+    "gpt-4o": {"prompt": 2.50, "completion": 10.00},
+    "gpt-4o-mini": {"prompt": 0.15, "completion": 0.60},
+    "gpt-4.1": {"prompt": 2.00, "completion": 8.00},
+    "gpt-4.1-mini": {"prompt": 0.40, "completion": 1.60},
+    "gpt-4.1-nano": {"prompt": 0.10, "completion": 0.40},
+    "gpt-5.2": {"prompt": 2.00, "completion": 8.00},
+    "o4-mini": {"prompt": 1.10, "completion": 4.40},
+}
+# Fallback pricing when model is unknown
+DEFAULT_PRICING = {"prompt": 2.50, "completion": 10.00}
+
+
+def estimate_cost(prompt_tokens, completion_tokens, model="unknown"):
+    """Estimate USD cost from token counts and model name."""
+    pricing = DEFAULT_PRICING
+    for key, val in MODEL_PRICING.items():
+        if key in model:
+            pricing = val
+            break
+    prompt_cost = (prompt_tokens / 1_000_000) * pricing["prompt"]
+    completion_cost = (
+        (completion_tokens / 1_000_000) * pricing["completion"]
+    )
+    return prompt_cost + completion_cost

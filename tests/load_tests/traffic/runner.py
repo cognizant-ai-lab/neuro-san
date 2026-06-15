@@ -28,6 +28,7 @@ from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
+from tests.load_tests.config import estimate_cost
 from tests.load_tests.traffic.cli_builder import CliBuilder
 from tests.load_tests.traffic.process_monitor import ProcessMonitor
 
@@ -52,8 +53,10 @@ class TrafficRunner:
         )
         prompt_file = CliBuilder.write_prompt_file(global_request_id, prompt)
 
+        include_tokens = getattr(args, "include_tokens", False)
         cmd = CliBuilder.build_cli_command(
             args.host, args.port, args.agent, prompt_file,
+            include_tokens=include_tokens,
         )
         start = time.time()
         status, stdout, stderr, returncode = (
@@ -117,6 +120,32 @@ class TrafficRunner:
             "error": error_line,
         }
         result.update(parsed_fields)
+
+        if include_tokens:
+            token_data = CliBuilder.parse_token_accounting(stdout)
+            if token_data:
+                result["total_tokens"] = token_data.get(
+                    "total_tokens", 0,
+                )
+                result["prompt_tokens"] = token_data.get(
+                    "prompt_tokens", 0,
+                )
+                result["completion_tokens"] = token_data.get(
+                    "completion_tokens", 0,
+                )
+                result["llm_calls"] = token_data.get(
+                    "successful_requests", 0,
+                )
+                models = token_data.get("models", {})
+                result["model"] = (
+                    next(iter(models)) if models else "unknown"
+                )
+                result["cost_usd"] = estimate_cost(
+                    result["prompt_tokens"],
+                    result["completion_tokens"],
+                    result["model"],
+                )
+
         return result
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
