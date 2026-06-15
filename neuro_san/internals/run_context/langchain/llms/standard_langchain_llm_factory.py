@@ -31,6 +31,7 @@ from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources impo
 from neuro_san.internals.run_context.langchain.llms.nvidia_llm_policy import NvidiaLlmPolicy
 from neuro_san.internals.run_context.langchain.llms.ollama_llm_policy import OllamaLlmPolicy
 from neuro_san.internals.run_context.langchain.llms.openai_llm_policy import OpenAILlmPolicy
+from neuro_san.internals.run_context.langchain.llms.openrouter_llm_policy import OpenRouterLlmPolicy
 
 
 class StandardLangChainLlmFactory(LangChainLlmFactory):
@@ -75,6 +76,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
                 "gemini": GeminiLlmPolicy,
                 "nvidia": NvidiaLlmPolicy,
                 "openai": OpenAILlmPolicy,
+                "openrouter": OpenRouterLlmPolicy,
                 "ollama": OllamaLlmPolicy,
             }
 

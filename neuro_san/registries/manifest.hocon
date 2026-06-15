@@ -47,6 +47,7 @@
     "music_nerd_pro_llm_ollama.hocon": true,
     "music_nerd_pro_multi_agents.hocon": true,
     "music_nerd_pro_llm_bedrock_claude.hocon": true,
+    "music_nerd_pro_llm_openrouter.hocon": true,
 
     # This is an example of summarization middleware.
     "music_nerd_summarize.hocon": true,

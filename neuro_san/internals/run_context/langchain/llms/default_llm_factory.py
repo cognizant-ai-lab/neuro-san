@@ -18,6 +18,7 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Set
 from typing import Type
 from typing import Tuple
@@ -513,30 +514,42 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         # Unpack user_config  into llm constructor
         return llm_class(**user_config)
 
-    def get_max_prompt_tokens(self, config: Dict[str, Any]) -> int:
+    def get_max_prompt_tokens(self, config: Dict[str, Any]) -> int | None:
         """
         :param config: A dictionary which describes which LLM to use.
         :return: The maximum number of tokens given the 'model_name' in the
-                config dictionary.
+                config dictionary, or None if the llm entry does not declare a
+                fixed max_output_tokens (e.g. OpenRouter meta-routers where the
+                underlying model is chosen per-request).
         """
 
-        model_name = config.get("model_name")
+        model_name: str = config.get("model_name")
 
-        llm_entry = self.llm_infos.get(model_name)
+        llm_entry: Dict[str, Any] = self.llm_infos.get(model_name)
         if llm_entry is None:
             raise ValueError(f"No llm entry for model_name {model_name}")
 
-        use_model_name = llm_entry.get("use_model_name", model_name)
+        use_model_name: str = llm_entry.get("use_model_name", model_name)
         if len(llm_entry.keys()) <= 2 and use_model_name is not None:
             # We effectively have an alias. Switch out the llm entry.
             llm_entry = self.llm_infos.get(use_model_name)
 
-        entry_max_tokens = llm_entry.get("max_output_tokens")
-        prompt_token_fraction = config.get("prompt_token_fraction")
-        use_max_tokens = int(entry_max_tokens * prompt_token_fraction)
+        entry_max_tokens: Optional[int] = llm_entry.get("max_output_tokens")
+        prompt_token_fraction: Optional[float] = config.get("prompt_token_fraction")
+
+        # Both factors must be concrete numbers for the multiplication to work —
+        # entry_max_tokens is intentionally null in llm_info for models whose true
+        # max_output_tokens is unknown until the underlying model is selected at
+        # request time (e.g. openrouter/free, openrouter/auto). Without this guard,
+        # int(None * fraction) raises TypeError, which has been observed to surface
+        # as a hang upstream. Returning None lets callers fall back to the model's
+        # own default.
+        use_max_tokens: Optional[int] = None
+        if entry_max_tokens is not None and prompt_token_fraction is not None:
+            use_max_tokens = int(entry_max_tokens * prompt_token_fraction)
 
         # Allow the actual value for max_tokens to come from the config, if there
-        max_prompt_tokens = config.get("max_tokens", use_max_tokens)
+        max_prompt_tokens: Optional[int] = config.get("max_tokens", use_max_tokens)
         if max_prompt_tokens is None:
             max_prompt_tokens = use_max_tokens
 
