@@ -215,9 +215,13 @@ class CsvExporter:
             "client_settled_rss", "client_rss_delta",
             "client_cpu", "client_fds", "client_threads",
             "total_retries", "amplification",
+            "rate_limit_retries", "api_error_retries",
+            "key_error_retries", "value_error_retries",
+            "other_retries",
             "primary_started", "primary_finished",
             "total_started", "total_finished",
             "disconnections",
+            "new_threads", "reused_threads", "reuse_pct",
             "mode", "max_workers", "timeout",
             "idle_timeout", "settle_time",
         ]
@@ -281,6 +285,14 @@ class CsvExporter:
                         if summary.get("has_server_log")
                         else ""
                     ),
+                }
+
+                CsvExporter._fill_retry_breakdown(
+                    row, summary,
+                )
+                CsvExporter._fill_pool_reuse(row, summary)
+
+                row.update({
                     "mode": (
                         "ramp" if args.ramp else "flat"
                     ),
@@ -288,7 +300,7 @@ class CsvExporter:
                     "timeout": args.timeout,
                     "idle_timeout": args.idle_timeout,
                     "settle_time": args.settle_time,
-                }
+                })
 
                 CsvExporter._fill_server_resource_row(row, srv, summary)
                 CsvExporter._fill_client_resource_row(row, cli)
@@ -331,6 +343,136 @@ class CsvExporter:
         row["client_cpu"] = cli_tuple[5]
         row["client_fds"] = cli_tuple[6]
         row["client_threads"] = cli_tuple[7]
+
+    # ------------------------------------------------------------------
+    # results_per_network.csv
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def export_per_network_csv(output_dir, stage_summaries, agent_name):
+        """Write per-network CSV with one row per sub-network per request.
+
+        Only generated when server log data includes per-network
+        token accounting. Each row contains the sub-network name,
+        its token usage, LLM calls, duration, and cost.
+        """
+        if not output_dir:
+            return
+
+        rows = CsvExporter._collect_network_rows(
+            stage_summaries, agent_name,
+        )
+        if not rows:
+            return
+
+        csv_path = os.path.join(output_dir, "results_per_network.csv")
+        fieldnames = [
+            "run_id", "timestamp", "agent",
+            "stage", "round", "request_id",
+            "network", "llm_calls", "total_tokens",
+            "prompt_tokens", "completion_tokens",
+            "duration_sec", "cost_usd", "model",
+        ]
+
+        with open(csv_path, "w", encoding="utf-8", newline="") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            for row in rows:
+                writer.writerow(row)
+
+        logger.info("Per-network CSV: %s", csv_path)
+
+    @staticmethod
+    def _collect_network_rows(stage_summaries, agent_name):
+        """Build rows from per-network token data in stage summaries."""
+        run_id = time.strftime("%Y-%m-%d_%H%M")
+        timestamp = time.strftime("%Y-%m-%dT%H:%M:%S")
+        rows = []
+
+        for summary in stage_summaries:
+            stage = summary.get("stage", 0)
+            round_num = summary.get("round", 1)
+            for result in summary.get("results", []):
+                networks = result.get("network_tokens", {})
+                rid = result.get("request_id", "")
+                for network_name, net_data in networks.items():
+                    p_tok = net_data.get("prompt_tokens", 0)
+                    c_tok = net_data.get("completion_tokens", 0)
+                    model = net_data.get("model", "unknown")
+                    rows.append({
+                        "run_id": run_id,
+                        "timestamp": timestamp,
+                        "agent": agent_name,
+                        "stage": stage,
+                        "round": round_num,
+                        "request_id": rid,
+                        "network": network_name,
+                        "llm_calls": net_data.get("llm_calls", 0),
+                        "total_tokens": net_data.get(
+                            "total_tokens", 0,
+                        ),
+                        "prompt_tokens": p_tok,
+                        "completion_tokens": c_tok,
+                        "duration_sec": (
+                            f"{net_data.get('duration', 0):.2f}"
+                        ),
+                        "cost_usd": (
+                            f"{estimate_cost(p_tok, c_tok, model):.6f}"
+                        ),
+                        "model": model,
+                    })
+        return rows
+
+    # ------------------------------------------------------------------
+    # Retry and pool reuse helpers
+    # ------------------------------------------------------------------
+
+    _KNOWN_RETRY_TYPES = {
+        "RateLimitError": "rate_limit_retries",
+        "APIError": "api_error_retries",
+        "KeyError": "key_error_retries",
+        "ValueError": "value_error_retries",
+    }
+
+    @staticmethod
+    def _fill_retry_breakdown(row, summary):
+        """Populate per-error-type retry columns from stage summary."""
+        has_log = summary.get("has_server_log", False)
+        retries = summary.get("retries", {})
+
+        known_total = 0
+        for error_type, col_name in CsvExporter._KNOWN_RETRY_TYPES.items():
+            count = retries.get(error_type, 0)
+            row[col_name] = count if has_log else ""
+            known_total += count
+
+        total = sum(retries.values()) if retries else 0
+        row["other_retries"] = (
+            (total - known_total) if has_log else ""
+        )
+
+    @staticmethod
+    def _fill_pool_reuse(row, summary):
+        """Populate pool reuse columns from thread data."""
+        before_threads = summary.get("before_threads")
+        after_threads = summary.get("after_threads")
+        total_started = summary.get("total_started")
+
+        if (
+            before_threads is None
+            or after_threads is None
+            or total_started is None
+            or total_started <= 0
+        ):
+            return
+
+        new_threads = max(after_threads - before_threads, 0)
+        reused = max(total_started - new_threads, 0)
+        reuse_pct = reused / total_started * 100.0
+
+        row["new_threads"] = new_threads
+        row["reused_threads"] = reused
+        row["reuse_pct"] = f"{reuse_pct:.1f}"
 
     # ------------------------------------------------------------------
     # Utilities

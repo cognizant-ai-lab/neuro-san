@@ -159,6 +159,7 @@ includes:
 |---------------------------|---------------------------------------------|
 | `results_per_request.csv` | One row per request: status, duration, tokens, cost, retries, disconnections |
 | `results_resources.csv`   | One row per stage: server/client RSS, threads, FDs, CPU, wall clock, test config |
+| `results_per_network.csv` | One row per sub-network per request (only when `--server-log` provides per-network data) |
 | `recommendations.txt`     | Analysis and next-step suggestions           |
 | `load_test.log`           | Full terminal output                         |
 | `requests/`               | Raw stdout/stderr per request                |
@@ -186,11 +187,24 @@ server_children`
 Client: `client_before_rss, client_peak_rss, client_settled_rss,
 client_rss_delta, client_cpu, client_fds, client_threads`
 
-Server log: `total_retries, amplification, primary_started,
-primary_finished, total_started, total_finished, disconnections`
-(empty when no `--server-log`)
+Server log: `total_retries, amplification, rate_limit_retries,
+api_error_retries, key_error_retries, value_error_retries,
+other_retries, primary_started, primary_finished, total_started,
+total_finished, disconnections` (empty when no `--server-log`)
+
+Pool reuse: `new_threads, reused_threads, reuse_pct` (requires
+`--server-log` with thread monitoring data)
 
 Config: `mode, max_workers, timeout, idle_timeout, settle_time`
+
+### CSV schema: `results_per_network.csv`
+
+One row per sub-network per request: `run_id, timestamp, agent,
+stage, round, request_id, network, llm_calls, total_tokens,
+prompt_tokens, completion_tokens, duration_sec, cost_usd, model`
+
+Only generated when `--server-log` provides per-sub-network token
+accounting data (e.g., for multi-agent networks like AND).
 
 These CSVs contain all data needed to generate the Confluence load
 test report without re-running the test.

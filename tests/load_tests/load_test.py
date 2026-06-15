@@ -842,6 +842,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     self._output_dir, stage_summaries,
                     self.args.agent,
                 )
+                CsvExporter.export_per_network_csv(
+                    self._output_dir, stage_summaries,
+                    self.args.agent,
+                )
 
             exit_code = self._check_results(stage_summaries)
         finally:
