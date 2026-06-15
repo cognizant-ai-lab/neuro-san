@@ -39,14 +39,17 @@ python -m tests.load_tests.load_test --agent hello_world --level min \
 python -m tests.load_tests.load_test --agent hello_world --level norm \
     --server-log /path/to/logs/server.log --yes
 
-# Standard — without server log (resources + tokens only)
-python -m tests.load_tests.load_test --agent hello_world --level norm \
-    --include-tokens --yes
+# Standard — without server log (resources + tokens)
+python -m tests.load_tests.load_test --agent hello_world --level norm --yes
 
-# Full analysis — ramp-up with CSV, tokens, recommendations
+# Full analysis — with server log
 python -m tests.load_tests.load_test --agent hello_world --level adv \
     --ramp --stages 2,4,8 \
     --server-log /path/to/logs/server.log --yes
+
+# Full analysis — without server log (CSV + tokens, no retries)
+python -m tests.load_tests.load_test --agent hello_world --level adv \
+    --ramp --stages 2,4,8 --yes
 ```
 
 ## Test Levels (`--level`)
