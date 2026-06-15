@@ -172,7 +172,8 @@ duration_sec, prompt, error`
 Tokens: `total_tokens, prompt_tokens, completion_tokens, llm_calls,
 model, cost_usd`
 
-Server log: `total_retries, disconnected` (empty when no `--server-log`)
+Server log: `total_retries, client_disconnected` (empty when no
+`--server-log`; `client_disconnected` uses `yes`/`no`)
 
 Any agent-specific parsed fields (e.g., `reservation_id`) are appended
 as additional columns.

@@ -58,7 +58,7 @@ class CsvExporter:
             "error",
             "total_tokens", "prompt_tokens", "completion_tokens",
             "llm_calls", "model", "cost_usd",
-            "total_retries", "disconnected",
+            "total_retries", "client_disconnected",
         ]
 
         # Discover additional dynamic fields from results
@@ -158,9 +158,9 @@ class CsvExporter:
                             f"{retry_per_req:.1f}"
                             if has_log else ""
                         ),
-                        "disconnected": (
-                            "true" if rid in disconnection_index
-                            else ("false" if has_log else "")
+                        "client_disconnected": (
+                            "yes" if rid in disconnection_index
+                            else ("no" if has_log else "")
                         ),
                     }
                     for field in sorted_extras:
