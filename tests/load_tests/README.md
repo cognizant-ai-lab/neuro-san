@@ -9,6 +9,7 @@ and report results. Uses real LLM calls via `agent_cli` subprocesses.
 - [Test Levels](#test-levels---level)
 - [Traffic Modes](#traffic-modes)
 - [Flags](#flags)
+- [Cost Confirmation and Dry-Run Probe](#cost-confirmation-and-dry-run-probe)
 - [Agent Profiles](#agent-profiles)
 - [Output](#output)
 - [Exit Codes](#exit-codes)
@@ -104,9 +105,31 @@ then moves to the next.
 | `--idle-timeout`           | 900         | Kill if no output for N seconds              |
 | `--settle-time`            | 15          | Wait after each stage for server cleanup     |
 | `--same-prompt`            | off         | Use identical prompt for all requests        |
-| `--yes`                    | off         | Skip the cost confirmation prompt            |
+| `--yes`                    | off         | Skip dry-run probe and cost confirmation     |
 | `--skip-reservation-check` | off         | Skip reservation_id validation               |
 | `--project-root`           | (none)      | Project root for profile discovery           |
+
+## Cost Confirmation and Dry-Run Probe
+
+Before firing the full test, the load test shows a cost warning.
+
+**With `--yes`:** Shows the warning and runs immediately (no probe).
+
+**Without `--yes`:** Fires 1 probe request with `--tokens` to measure
+actual token usage and cost, then asks the user to confirm:
+
+```
+Running 1 dry-run probe to measure actual cost...
+Request 1: CREATED (22.8s)
+  Probe result: CREATED in 22.8s
+  Probe tokens: 2,158 (model: gpt-5.2-2025-12-11, cost: $0.011342)
+  Estimated total for 10 requests: ~21,580 tokens (~$0.1134)
+
+Proceed with remaining 9 requests? [y/N]:
+```
+
+The probe result counts as request #1 of the first stage (not wasted).
+If the user declines, only 1 request was consumed.
 
 ## Agent Profiles
 
