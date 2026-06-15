@@ -81,14 +81,14 @@ from tests.load_tests.config import THREAD_JOIN_TIMEOUT
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.prompts.agent_profile import AgentProfile
-from tests.load_tests.reporting.console_report import DisconnectionReporter
-from tests.load_tests.reporting.console_report import PoolAnalyzer
-from tests.load_tests.reporting.console_report import ResourceReporter
+from tests.load_tests.reporting.disconnection_reporter import DisconnectionReporter
+from tests.load_tests.reporting.pool_analyzer import PoolAnalyzer
+from tests.load_tests.reporting.resource_reporter import ResourceReporter
 from tests.load_tests.reporting.summary import SummaryReporter
 from tests.load_tests.traffic.runner import TrafficRunner
-from tests.load_tests.validation import EnvironmentValidator
-from tests.load_tests.validation import InputValidator
-from tests.load_tests.validation import OutputValidator
+from tests.load_tests.validation.environment_validator import EnvironmentValidator
+from tests.load_tests.validation.input_validator import InputValidator
+from tests.load_tests.validation.output_validator import OutputValidator
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)

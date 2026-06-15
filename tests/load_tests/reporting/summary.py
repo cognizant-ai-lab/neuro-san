@@ -21,7 +21,7 @@ from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
-from tests.load_tests.reporting.console_report import TableFormatter
+from tests.load_tests.reporting.table_formatter import TableFormatter
 
 logger = logging.getLogger(__name__)
 

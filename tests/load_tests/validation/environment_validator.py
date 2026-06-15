@@ -1,0 +1,174 @@
+# Copyright © 2023-2026 Cognizant Technology Solutions Corp, www.cognizant.com.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+"""Pre-flight environment checks for real-LLM load testing.
+
+Validates that the runtime environment is configured for real LLM calls:
+  - OPENAI_API_KEY must be set
+  - No mock LLM server or OPENAI_API_BASE override detected
+  - Target server must be reachable on the specified host/port
+  - Optionally auto-detects the server log path from the process CWD
+"""
+
+import logging
+import os
+import socket
+import sys
+
+import psutil
+
+from tests.load_tests.config import SOCKET_CHECK_TIMEOUT
+from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
+
+logger = logging.getLogger(__name__)
+
+
+class EnvironmentValidator:
+    """Validates the runtime environment for load testing.
+
+    Ensures that real LLM infrastructure is in place and no mock
+    environment is accidentally active.  Also locates the neuro-san
+    server process for resource monitoring.
+    """
+
+    @staticmethod
+    def validate_environment():
+        """Validate that OPENAI_API_KEY is set and no mock LLM is active."""
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if api_key is None or len(api_key) == 0:
+            logger.error(
+                "OPENAI_API_KEY is not set.\n"
+                "This test requires real LLM calls. Set your API key:\n"
+                "  export OPENAI_API_KEY=<your-key>"
+            )
+            sys.exit(1)
+        logger.info("OPENAI_API_KEY is set.")
+        EnvironmentValidator._check_no_mock_environment()
+
+    @staticmethod
+    def _check_no_mock_environment():
+        """Exit if a mock LLM environment is detected."""
+        issues = []
+        api_base = os.environ.get("OPENAI_API_BASE")
+        if api_base:
+            issues.append(f"  OPENAI_API_BASE={api_base}")
+        mock_proc = ResourceMonitor.find_process("mock_llm_server")
+        if mock_proc is not None:
+            issues.append(
+                f"  mock_llm_server process running "
+                f"(PID {mock_proc.pid})"
+            )
+        if issues:
+            logger.error(
+                "Mock LLM environment detected — this test requires "
+                "real LLM calls.\n%s\n\n"
+                "Unset OPENAI_API_BASE and stop the mock server "
+                "before running this test.\n"
+                "For mock-based load testing, use "
+                "load_test_mock_llm_service.py instead.",
+                "\n".join(issues),
+            )
+            sys.exit(1)
+        logger.info("No mock LLM environment detected.")
+
+    @staticmethod
+    def is_port_open(host, port) -> bool:
+        """Check if a TCP port is accepting connections."""
+        try:
+            with socket.create_connection(
+                (host, port), timeout=SOCKET_CHECK_TIMEOUT,
+            ):
+                return True
+        except (ConnectionRefusedError, OSError):
+            return False
+
+    @staticmethod
+    def find_local_server(args):
+        """Locate the neuro-san server process for resource monitoring.
+
+        Searches by process keyword first, then falls back to port
+        ownership.  Auto-detects the server log if not specified.
+
+        Returns (server_proc, server_log) tuple.
+        """
+        if not EnvironmentValidator.is_port_open(args.host, args.port):
+            logger.error(
+                "No service listening on %s:%s.\n"
+                "Start the server first.",
+                args.host, args.port,
+            )
+            sys.exit(1)
+
+        server_proc = None
+        for keyword in ["neuro_san_studio", "server_main_loop"]:
+            server_proc = ResourceMonitor.find_process(keyword)
+            if server_proc is not None:
+                logger.info(
+                    "Found neuro-san server (PID %s) via %s",
+                    server_proc.pid, keyword,
+                )
+                break
+
+        if server_proc is None:
+            server_proc = ResourceMonitor.find_process_by_port(
+                args.port,
+            )
+            if server_proc is not None:
+                logger.info(
+                    "Found neuro-san server (PID %s) via port %s",
+                    server_proc.pid, args.port,
+                )
+
+        if server_proc is None:
+            logger.info(
+                "neuro-san server process not found locally. "
+                "Resource monitoring disabled."
+            )
+            return None, args.server_log
+
+        server_log = args.server_log
+        if server_log is None:
+            server_log = EnvironmentValidator._auto_detect_server_log(
+                server_proc,
+            )
+
+        return server_proc, server_log
+
+    @staticmethod
+    def _auto_detect_server_log(server_proc):
+        """Auto-detect server log from server process CWD.
+
+        Looks for logs/server.log relative to the server's working
+        directory.  Returns None if detection fails.
+        """
+        try:
+            cwd = server_proc.cwd()
+            candidate = os.path.join(cwd, "logs", "server.log")
+            if os.path.isfile(candidate):
+                logger.info(
+                    "  Auto-detected server log: %s", candidate,
+                )
+                return candidate
+            logger.info(
+                "  Server log not found at %s. "
+                "Retry monitoring unavailable.",
+                candidate,
+            )
+        except (psutil.AccessDenied, psutil.NoSuchProcess, OSError):
+            logger.info(
+                "  Could not determine server working directory. "
+                "Retry monitoring unavailable.",
+            )
+        return None
