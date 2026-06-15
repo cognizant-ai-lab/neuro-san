@@ -1,5 +1,5 @@
 {
-    "agent_name": "basic/coffee_finder_advanced",
+    "agent": "basic/coffee_finder_advanced",
     "prompts": [
         "Find me a good coffee shop nearby",
         "I need a late night coffee, what's open?",

@@ -88,6 +88,8 @@ LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 DEFAULT_STAGES = [10, 30, 50, 100]
 DEFAULT_TIMEOUT_SECONDS = 1200
 DEFAULT_IDLE_TIMEOUT_SECONDS = 900
+NETWORK_LOOKAHEAD_LINES = 10
+TOKENS_PER_MILLION = 1_000_000
 
 # Server log regex patterns
 RETRY_LOG_PATTERN = re.compile(
@@ -139,10 +141,11 @@ class CostEstimator:
                 pricing = val
                 break
         prompt_cost = (
-            (prompt_tokens / 1_000_000) * pricing.get("prompt", 0)
+            (prompt_tokens / TOKENS_PER_MILLION)
+            * pricing.get("prompt", 0)
         )
         completion_cost = (
-            (completion_tokens / 1_000_000)
+            (completion_tokens / TOKENS_PER_MILLION)
             * pricing.get("completion", 0)
         )
         return prompt_cost + completion_cost

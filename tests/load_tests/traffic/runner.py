@@ -29,6 +29,7 @@ from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.config import CostEstimator
+from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.traffic.cli_builder import CliBuilder
 from tests.load_tests.traffic.process_monitor import ProcessMonitor
 
@@ -37,8 +38,6 @@ logger = logging.getLogger(__name__)
 
 class TrafficRunner:
     """Fires concurrent requests via a thread pool and collects results."""
-
-    _output_log_dir = None
 
     # pylint: disable=too-many-locals
     @staticmethod
@@ -53,10 +52,9 @@ class TrafficRunner:
         )
         prompt_file = CliBuilder.write_prompt_file(global_request_id, prompt)
 
-        include_tokens = args.include_tokens
         cmd = CliBuilder.build_cli_command(
             args.host, args.port, args.agent, prompt_file,
-            include_tokens=include_tokens,
+            include_tokens=args.include_tokens,
         )
         start = time.time()
         status, stdout, stderr, returncode = (
@@ -74,76 +72,85 @@ class TrafficRunner:
             output_dir, request_id, stdout, stderr,
         )
 
-        failure_reason = None
-        if status not in (STATUS_TIMEOUT, STATUS_KILLED):
-            if profile.success_fields:
-                skip_reservation = args.skip_reservation_check
-                if skip_reservation:
-                    required = [
-                        f for f in profile.success_fields
-                        if f != "reservation_id"
-                    ]
-                else:
-                    required = profile.success_fields
-                passed = returncode == 0 and all(
-                    parsed_fields.get(f) for f in required
-                )
-            else:
-                passed = returncode == 0
-            if passed and not stdout.strip():
-                passed = False
-                failure_reason = "empty response from agent"
-            status = STATUS_CREATED if passed else STATUS_FAILED
-            if status == STATUS_FAILED and not failure_reason:
-                failure_reason = TrafficRunner._diagnose_failure(
-                    returncode, parsed_fields, profile.success_fields,
-                    args.skip_reservation_check,
-                )
-
+        status, failure_reason = TrafficRunner._validate_result(
+            status, returncode, stdout, parsed_fields,
+            profile, args.skip_reservation_check,
+        )
         TrafficRunner._log_request_result(
             request_id, status, elapsed, parsed_fields, failure_reason,
             stderr, args.skip_reservation_check,
         )
         CliBuilder.cleanup_prompt_file(prompt_file)
-        error_line = (
-            CliBuilder.last_stderr_line(stderr)
-            if status != STATUS_CREATED else None
-        )
 
         result = {
             "request_id": f"request-{request_id}",
             "status": status,
             "elapsed": elapsed,
             "prompt": prompt,
-            "error": error_line,
+            "error": (
+                CliBuilder.last_stderr_line(stderr)
+                if status != STATUS_CREATED else None
+            ),
         }
         result.update(parsed_fields)
-
-        if include_tokens:
-            token_data = CliBuilder.parse_token_accounting(stdout)
-            if token_data:
-                result["total_tokens"] = token_data.get(
-                    "total_tokens", 0,
-                )
-                result["prompt_tokens"] = token_data.get(
-                    "prompt_tokens", 0,
-                )
-                result["completion_tokens"] = token_data.get(
-                    "completion_tokens", 0,
-                )
-                result["llm_calls"] = token_data.get(
-                    "successful_requests", 0,
-                )
-                result["model"] = TrafficRunner._extract_model(
-                    token_data.get("models", {}),
-                )
-                result["cost_usd"] = CostEstimator.estimate(
-                    result["prompt_tokens"],
-                    result["completion_tokens"],
-                    result["model"],
-                )
-
+        if args.include_tokens:
+            TrafficRunner._attach_token_data(result, stdout)
         return result
+
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    @staticmethod
+    def _validate_result(status, returncode, stdout, parsed_fields,
+                         profile, skip_reservation_check):
+        """Determine final status and failure reason for a request."""
+        failure_reason = None
+        if status in (STATUS_TIMEOUT, STATUS_KILLED):
+            return status, failure_reason
+        if profile.success_fields:
+            if skip_reservation_check:
+                required = [
+                    f for f in profile.success_fields
+                    if f != "reservation_id"
+                ]
+            else:
+                required = profile.success_fields
+            passed = returncode == 0 and all(
+                parsed_fields.get(f) for f in required
+            )
+        else:
+            passed = returncode == 0
+        if passed and not stdout.strip():
+            passed = False
+            failure_reason = "empty response from agent"
+        status = STATUS_CREATED if passed else STATUS_FAILED
+        if status == STATUS_FAILED and not failure_reason:
+            failure_reason = TrafficRunner._diagnose_failure(
+                returncode, parsed_fields, profile.success_fields,
+                skip_reservation_check,
+            )
+        return status, failure_reason
+
+    @staticmethod
+    def _attach_token_data(result, stdout):
+        """Parse token accounting from stdout and attach to result."""
+        token_data = CliBuilder.parse_token_accounting(stdout)
+        if not token_data:
+            return
+        result["total_tokens"] = token_data.get("total_tokens", 0)
+        result["prompt_tokens"] = token_data.get("prompt_tokens", 0)
+        result["completion_tokens"] = token_data.get(
+            "completion_tokens", 0,
+        )
+        result["llm_calls"] = token_data.get(
+            "successful_requests", 0,
+        )
+        result["model"] = TrafficRunner._extract_model(
+            token_data.get("models", {}),
+        )
+        result["cost_usd"] = CostEstimator.estimate(
+            result["prompt_tokens"],
+            result["completion_tokens"],
+            result["model"],
+        )
 
     @staticmethod
     def _extract_model(models_dict) -> str:
@@ -164,8 +171,6 @@ class TrafficRunner:
     def run_stage(args, profile, num_requests, max_workers, global_offset,
                   server_proc=None, output_dir=None):
         """Fire num_requests concurrent requests using a thread pool."""
-        # Lazy import to avoid circular dependency: heartbeat -> runner
-        from tests.load_tests.monitoring.heartbeat import Heartbeat  # pylint: disable=import-outside-toplevel
 
         results_list: List[Dict[str, Any]] = []
         peak_threads_result: Dict[str, int] = {}
@@ -243,7 +248,9 @@ class TrafficRunner:
             logger.info(
                 "  %s: %s tokens (%s prompt + %s completion), "
                 "%s LLM call(s), model=%s",
-                rid, f"{total:,}", f"{prompt_tok:,}", f"{comp_tok:,}",
+                rid, f"{total:,}",
+                f"{prompt_tok:,}",
+                f"{comp_tok:,}",
                 llm_calls, model,
             )
 
@@ -252,20 +259,17 @@ class TrafficRunner:
         """Save raw CLI stdout/stderr for every request."""
         if not output_dir:
             return
-        if TrafficRunner._output_log_dir is None:
-            TrafficRunner._output_log_dir = os.path.join(
-                output_dir, "requests",
-            )
-            os.makedirs(TrafficRunner._output_log_dir, exist_ok=True)
+        requests_dir = os.path.join(output_dir, "requests")
+        os.makedirs(requests_dir, exist_ok=True)
         stdout_path = os.path.join(
-            TrafficRunner._output_log_dir,
+            requests_dir,
             f"request_{request_id}_stdout.txt",
         )
         with open(stdout_path, "w", encoding="utf-8") as fh:
             fh.write(stdout)
         if stderr and stderr.strip():
             stderr_path = os.path.join(
-                TrafficRunner._output_log_dir,
+                requests_dir,
                 f"request_{request_id}_stderr.txt",
             )
             with open(stderr_path, "w", encoding="utf-8") as fh:

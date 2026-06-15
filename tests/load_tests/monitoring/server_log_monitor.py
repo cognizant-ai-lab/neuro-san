@@ -30,6 +30,7 @@ from typing import Optional
 
 from tests.load_tests.config import CLIENT_DISCONNECT_PATTERN
 from tests.load_tests.config import DONE_STREAMING_PATTERN
+from tests.load_tests.config import NETWORK_LOOKAHEAD_LINES
 from tests.load_tests.config import NetworkTokenEntry
 from tests.load_tests.config import REQUEST_FINISH_PATTERN
 from tests.load_tests.config import REQUEST_START_PATTERN
@@ -54,7 +55,7 @@ class ServerLogMonitor:
             with open(server_log, "r", encoding="utf-8") as log_fh:
                 log_fh.seek(0, 2)
                 return log_fh.tell()
-        except (OSError, IOError):
+        except OSError:
             return None
 
     @staticmethod
@@ -70,7 +71,7 @@ class ServerLogMonitor:
             with open(server_log, "r", encoding="utf-8") as log_fh:
                 log_fh.seek(position)
                 lines = log_fh.readlines()
-        except (OSError, IOError) as exc:
+        except OSError as exc:
             logger.warning("Could not read server log for retries: %s", exc)
             return retry_counts
         for line in lines:
@@ -104,7 +105,7 @@ class ServerLogMonitor:
             with open(server_log, "r", encoding="utf-8") as log_fh:
                 log_fh.seek(position)
                 lines = log_fh.readlines()
-        except (OSError, IOError) as exc:
+        except OSError as exc:
             logger.warning("Could not read server log for counts: %s", exc)
             return {
                 "primary_started": None, "primary_finished": None,
@@ -143,7 +144,7 @@ class ServerLogMonitor:
             with open(server_log, "r", encoding="utf-8") as log_fh:
                 log_fh.seek(position)
                 lines = log_fh.readlines()
-        except (OSError, IOError) as exc:
+        except OSError as exc:
             logger.warning("Could not read server log for tokens: %s", exc)
             return results
         in_block = False
@@ -207,7 +208,7 @@ class ServerLogMonitor:
             with open(server_log, "r", encoding="utf-8") as log_fh:
                 log_fh.seek(position)
                 lines = log_fh.readlines()
-        except (OSError, IOError) as exc:
+        except OSError as exc:
             logger.warning(
                 "Could not read server log for network tokens: %s",
                 exc,
@@ -281,7 +282,8 @@ class ServerLogMonitor:
         return results
 
     @staticmethod
-    def _find_network_after(lines, end_idx, lookahead=10):
+    def _find_network_after(lines, end_idx,
+                            lookahead=NETWORK_LOOKAHEAD_LINES):
         """Find the network name from Done-with lines after a block."""
         limit = min(end_idx + lookahead, len(lines))
         for idx in range(end_idx + 1, limit):
@@ -306,7 +308,7 @@ class ServerLogMonitor:
             with open(server_log, "r", encoding="utf-8") as log_fh:
                 log_fh.seek(position)
                 lines = log_fh.readlines()
-        except (OSError, IOError) as exc:
+        except OSError as exc:
             logger.warning(
                 "Could not read server log for disconnections: %s",
                 exc,
@@ -396,5 +398,5 @@ class ServerLogMonitor:
                                     peak_result.update(snap)
                     else:
                         stop_event.wait(0.5)
-        except (OSError, IOError) as exc:
+        except OSError as exc:
             logger.debug("Log monitor stopped: %s", exc)

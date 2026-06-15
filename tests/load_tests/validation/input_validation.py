@@ -23,6 +23,7 @@ from typing import List
 from typing import Optional
 
 from tests.load_tests.config import DEFAULT_STAGES
+from tests.load_tests.traffic.runner import TrafficRunner
 
 logger = logging.getLogger(__name__)
 
@@ -116,9 +117,6 @@ class InputValidator:
             args, profile, total_requests, output_dir,
     ) -> Optional[Dict[str, Any]]:
         """Fire one probe request with --tokens and confirm cost."""
-        # Lazy import to avoid circular dependency
-        from tests.load_tests.traffic.runner import TrafficRunner  # pylint: disable=import-outside-toplevel
-
         logger.info(
             "\nRunning 1 dry-run probe to measure actual cost...",
         )

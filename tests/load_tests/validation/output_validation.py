@@ -18,10 +18,11 @@
 import logging
 from typing import Dict
 
+from tests.load_tests.config import RETRY_ERROR_TYPES
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
-from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.config import STATUS_KILLED
+from tests.load_tests.config import STATUS_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -78,8 +79,6 @@ class OutputValidator:
     @staticmethod
     def log_retry_activity(retries, total_retries, actual_requests):
         """Log retry activity from server log."""
-        # Lazy import to avoid circular dependency: config -> validation
-        from tests.load_tests.config import RETRY_ERROR_TYPES  # pylint: disable=import-outside-toplevel
         logger.info(
             "\n  max_attempts retry activity (from server log):",
         )

@@ -1,5 +1,5 @@
 {
-    "agent_name": "basic/smart_home",
+    "agent": "basic/smart_home",
     "prompts": [
         "Turn on the living room lights",
         "Turn off the kitchen lights",
