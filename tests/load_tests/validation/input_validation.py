@@ -17,7 +17,10 @@
 
 import logging
 import sys
+from typing import Any
+from typing import Dict
 from typing import List
+from typing import Optional
 
 from tests.load_tests.config import DEFAULT_STAGES
 
@@ -52,8 +55,19 @@ class InputValidator:
         return 100
 
     @staticmethod
-    def confirm_cost(args, stages, total_cap, profile=None):
-        """Display cost warning and ask for confirmation unless --yes."""
+    def confirm_cost(
+            args, stages, total_cap, profile=None,
+            output_dir=None,
+    ) -> Optional[Dict[str, Any]]:
+        """Display cost warning and optionally run a dry-run probe.
+
+        With --yes: shows the cost warning and returns immediately.
+        Without --yes: fires one probe request with --tokens to
+        measure actual token usage, shows the extrapolated cost,
+        and asks the user to confirm.
+
+        Returns the probe result dict if a probe was run, else None.
+        """
         total_planned = sum(stages) * args.num_rounds
         capped = min(total_planned, total_cap)
         logger.info("\n%s", "=" * 60)
@@ -90,8 +104,72 @@ class InputValidator:
 
         logger.info("=" * 60)
 
-        if not args.yes:
-            answer = input("\nProceed? [y/N]: ").strip().lower()
-            if answer not in ("y", "yes"):
-                logger.info("Aborted by user.")
-                sys.exit(0)
+        if args.yes:
+            return None
+
+        return InputValidator._run_cost_probe(
+            args, profile, capped, output_dir,
+        )
+
+    @staticmethod
+    def _run_cost_probe(
+            args, profile, total_requests, output_dir,
+    ) -> Optional[Dict[str, Any]]:
+        """Fire one probe request with --tokens and confirm cost."""
+        # Lazy import to avoid circular dependency
+        from tests.load_tests.traffic.runner import TrafficRunner  # pylint: disable=import-outside-toplevel
+
+        logger.info(
+            "\nRunning 1 dry-run probe to measure actual cost...",
+        )
+
+        # Temporarily enable token parsing for the probe
+        original_include = getattr(args, "include_tokens", False)
+        args.include_tokens = True
+        probe_result = TrafficRunner.run_one(
+            args, profile,
+            request_id=1, global_request_id=0,
+            output_dir=output_dir,
+        )
+        args.include_tokens = original_include
+
+        probe_tokens = probe_result.get("total_tokens", 0)
+        probe_cost = probe_result.get("cost_usd", 0.0)
+        probe_model = probe_result.get("model", "unknown")
+        probe_status = probe_result.get("status", "FAILED")
+        probe_elapsed = probe_result.get("elapsed", 0)
+
+        logger.info(
+            "  Probe result: %s in %.1fs",
+            probe_status, probe_elapsed,
+        )
+        logger.info(
+            "  Probe tokens: %s (model: %s, cost: $%.6f)",
+            f"{probe_tokens:,}", probe_model, probe_cost,
+        )
+
+        if probe_tokens > 0:
+            est_total_cost = probe_cost * total_requests
+            est_total_tokens = probe_tokens * total_requests
+            logger.info(
+                "  Estimated total for %s requests: "
+                "~%s tokens (~$%.4f)",
+                total_requests,
+                f"{est_total_tokens:,}",
+                est_total_cost,
+            )
+        else:
+            logger.info(
+                "  No token data from probe (agent may not "
+                "track tokens)."
+            )
+
+        answer = input(
+            "\nProceed with remaining "
+            f"{total_requests - 1} requests? [y/N]: ",
+        ).strip().lower()
+        if answer not in ("y", "yes"):
+            logger.info("Aborted by user.")
+            sys.exit(0)
+
+        return probe_result

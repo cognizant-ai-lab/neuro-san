@@ -1,0 +1,12 @@
+{
+    "agent": "music_nerd_pro",
+    "prompts": [
+        "Tell me about the history of jazz music",
+        "Who are the greatest rock guitarists of all time?",
+        "What makes classical music different from baroque?",
+        "Recommend some albums for someone who likes blues",
+        "What is the connection between hip hop and jazz?"
+    ],
+    "estimated_tokens_per_request": 5000,
+    "success_fields": []
+}

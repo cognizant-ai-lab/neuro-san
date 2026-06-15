@@ -92,7 +92,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 
-class LoadTestOrchestrator:
+class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     """Orchestrates the full load test workflow."""
 
     @staticmethod
@@ -317,6 +317,7 @@ class LoadTestOrchestrator:
         )
         self.server_proc = None
         self.server_log = args.server_log
+        self.probe_result = None
         self._output_dir = None
         self._test_log_path = None
         self._test_log_handler = None
@@ -332,6 +333,7 @@ class LoadTestOrchestrator:
         parse_tokens = (
             level != LEVEL_MIN or self.args.include_tokens
         )
+        probe_result = getattr(self, "probe_result", None)
 
         stage_summaries: List[Dict[str, Any]] = []
         resource_rows: List[Tuple] = []
@@ -419,9 +421,12 @@ class LoadTestOrchestrator:
                         )
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
                         pass
+                fire_label = actual_requests
+                if probe_result is not None:
+                    fire_label = f"{actual_requests} ({actual_requests - 1} + 1 probe)"
                 logger.info(
                     "\nFiring %s concurrent %s requests... [%s]%s",
-                    actual_requests, self.args.agent, fire_ts, fire_threads,
+                    fire_label, self.args.agent, fire_ts, fire_threads,
                 )
 
                 stop_event = None
@@ -437,11 +442,22 @@ class LoadTestOrchestrator:
                         )
                     )
 
+                # If a dry-run probe ran, inject it into stage 1
+                stage_requests = actual_requests
+                if probe_result is not None:
+                    stage_requests = max(actual_requests - 1, 0)
+
                 elapsed, results, peak_threads = TrafficRunner.run_stage(
                     self.args, self.profile,
-                    actual_requests, stage_workers, global_offset,
+                    stage_requests, stage_workers,
+                    global_offset + (1 if probe_result else 0),
                     self.server_proc, self._output_dir,
                 )
+
+                if probe_result is not None:
+                    results.insert(0, probe_result)
+                    probe_result = None
+
                 if stop_event:
                     stop_event.set()
                 if monitor:
@@ -720,10 +736,11 @@ class LoadTestOrchestrator:
             self.args, stages,
         )
 
-        InputValidator.confirm_cost(
-            self.args, stages, total_cap, self.profile,
-        )
         self._setup_test_log()
+        self.probe_result = InputValidator.confirm_cost(
+            self.args, stages, total_cap, self.profile,
+            self._output_dir,
+        )
 
         is_local = self.args.host in LOCAL_HOSTS
         monitor_resources = (

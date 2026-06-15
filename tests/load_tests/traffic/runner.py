@@ -136,9 +136,8 @@ class TrafficRunner:
                 result["llm_calls"] = token_data.get(
                     "successful_requests", 0,
                 )
-                models = token_data.get("models", {})
-                result["model"] = (
-                    next(iter(models)) if models else "unknown"
+                result["model"] = TrafficRunner._extract_model(
+                    token_data.get("models", {}),
                 )
                 result["cost_usd"] = estimate_cost(
                     result["prompt_tokens"],
@@ -147,6 +146,19 @@ class TrafficRunner:
                 )
 
         return result
+
+    @staticmethod
+    def _extract_model(models_dict) -> str:
+        """Extract the specific model name from the nested models dict.
+
+        Token Accounting returns: {"openai": {"gpt-4o-mini": {...}}}.
+        This traverses provider -> model to return "gpt-4o-mini".
+        """
+        for provider_models in models_dict.values():
+            if isinstance(provider_models, dict):
+                for model_name in provider_models:
+                    return model_name
+        return "unknown"
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     # pylint: disable=too-many-locals
