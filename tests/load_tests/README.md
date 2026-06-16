@@ -154,8 +154,9 @@ agent_network_designer — the request is marked FAILED if any are missing.
 
 ## Output
 
-Results go to `/tmp/load_test/{level}/{timestamp}/` by default, or to
-the path specified by `--output-dir`. At `adv` level this includes:
+Results go to `{tempdir}/load_test/{level}/{timestamp}/` by default
+(where `{tempdir}` is the system temp directory, e.g. `/tmp` on Linux),
+or to the path specified by `--output-dir`. At `adv` level this includes:
 
 | File                  | Contents                                         |
 |-----------------------|--------------------------------------------------|
@@ -169,17 +170,33 @@ Single source of truth for all test data. Feed it to an LLM to
 generate Confluence reports, or load it in Python/pandas for custom
 analysis.
 
-Top-level keys: `agent`, `level`, `mode`, `host`, `port`, `timeout`,
-`idle_timeout`, `settle_time`, `max_workers`, `server_log`,
-`stage_summaries`, `resource_rows`, `client_resource_rows`.
+Top-level keys:
+
+| Key                       | Description                                          |
+|---------------------------|------------------------------------------------------|
+| `test_metadata`           | Timestamp, versions, platform, verdict, exit code    |
+| `config`                  | All test parameters (agent, level, mode, timeouts)   |
+| `aggregates`              | Totals: requests, tokens, cost, elapsed time         |
+| `stage_summaries`         | Per-round results, retries, server counts, tokens    |
+| `resource_rows`           | Server resource snapshots (before/after per round)   |
+| `client_resource_rows`    | Client resource snapshots (before/peak/settled)      |
+| `_schema`                 | 38 field descriptions for LLM self-service           |
+| `_thresholds`             | 16 health benchmarks (warning/critical levels)       |
+| `_analysis_hints`         | 10 diagnostic patterns to check                      |
+| `_units`                  | 16 unit labels (seconds, MB, USD, etc.)              |
+| `_reporting_instructions` | Tells LLMs to report all checks, even clean ones     |
+
+The `_`-prefixed keys are metadata for LLM-driven analysis. Upload
+the JSON to ChatGPT/Claude/Gemini and say "analyze this" — no prompt
+engineering needed.
 
 Each stage summary contains:
 - Per-request results (status, duration, tokens, cost, model, errors)
 - Server log data (retries, disconnections, amplification, server counts)
 - Per-sub-network token breakdowns (`network_tokens`) when
   `--server-log` is provided — each entry has `network`, `llm_calls`,
-  `total_tokens`, `prompt_tokens`, `completion_tokens`, `duration_sec`,
-  `cost_usd`, and `model`
+  `total_tokens`, `prompt_tokens`, `completion_tokens`, `duration`,
+  `cost`, and `model`
 
 Resource rows contain server/client snapshots (RSS, threads, FDs, CPU)
 captured before and after each stage.
@@ -203,10 +220,16 @@ This framework follows three review playbooks:
   documents all flags including `--output-dir`.
 
 - **Code_Sargent (Darren):** TypedDicts (`RequestResult`,
-  `StageSummary`, `ServerCounts`, `TokenEntry`, `NetworkTokenEntry`,
-  `ResourceSnapshot`) replace `Dict[str, Any]` at data boundaries.
-  Keyword-only arguments (`*`) eliminate all `too-many-positional-arguments`
-  warnings. Explicit return type annotations on every method.
+  `StageSummary`, `StatusCounts`, `ServerCounts`, `TokenEntry`,
+  `NetworkTokenEntry`, `ResourceSnapshot`) replace `Dict[str, Any]`
+  at data boundaries. Keyword-only arguments (`*`) eliminate all
+  `too-many-positional-arguments` warnings. Explicit return type
+  annotations on every method.
+
+- **Copilot:** Empty-prompts validation in `AgentProfile`,
+  signed delta formatting (no more `+-3.0M`), Windows compatibility
+  fallbacks (`num_fds`/`select.select`/temp dir), `try/finally`
+  safety in cost probe, `ServerCounts` partial TypedDict.
 
 Lint status: flake8 clean, pylint 10.00/10.
 
@@ -228,7 +251,9 @@ tests/load_tests/
     profiles/                  Per-agent JSON profiles
 
   reporting/
+    csv_export.py              CsvExport (CSV output)
     disconnection_reporter.py  DisconnectionReporter
+    json_metadata.py           JsonMetadata (self-documenting JSON)
     pool_analyzer.py           PoolAnalyzer
     resource_reporter.py       ResourceReporter
     summary.py                 SummaryReporter
