@@ -26,6 +26,7 @@ from tests.neuro_san.internals.network_providers.recording_listener \
     import RecordingListener
 
 
+# pylint: disable=too-many-public-methods
 class TestExpiringAgentNetworkStorage(TestCase):
     """
     Unit tests for ExpiringAgentNetworkStorage LRU eviction and access tracking functionality.

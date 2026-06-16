@@ -40,6 +40,9 @@ class RecordingListener(AgentStateListener):
         self.removed.append(agent_name)
 
     def reset(self):
+        """
+        Reset the state of the listener.
+        """
         self.added.clear()
         self.modified.clear()
         self.removed.clear()
