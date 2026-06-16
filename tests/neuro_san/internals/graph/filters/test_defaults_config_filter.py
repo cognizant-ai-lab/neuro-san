@@ -188,7 +188,6 @@ class TestDefaultsConfigFilter(TestCase):
                     "name": "foo",
                     "function": {
                         "description": "blah blah",
-                        # Typical BYOK
                         "sly_data_schema": {
                             "type": "object",
                             "properties": {
@@ -223,3 +222,70 @@ class TestDefaultsConfigFilter(TestCase):
         self.assertIsNotNone(value)
         self.assertIsInstance(value, list)
         self.assertEqual(len(value), 2)
+
+    def test_sly_data_schema_both_union(self):
+        """
+        Tests when sly_data_schema is in both the global defs and local defs
+        and they have the same key
+        """
+        my_filter: ConfigFilter = self.get_filter()
+
+        dict_in: Dict[str, Any] = {
+            # Typical BYOK
+            "sly_data_schema": {
+                "type": "object",
+                "properties": {
+                    "llm_config": {
+                        "type": "object",
+                        "properties": {
+                            "openai_api_key": {
+                                "type": "string",
+                                "description": "The user's OpenAI API key"
+                            }
+                        }
+                    }
+                },
+                "required": ["llm_config"]
+            },
+            "tools": [
+                {
+                    "name": "foo",
+                    "function": {
+                        "description": "blah blah",
+                        # Typical BYOK
+                        "sly_data_schema": {
+                            "llm_config": {
+                                "type": "object",
+                                "properties": {
+                                    "openai_api_key": {
+                                        "type": "string",
+                                        "description": "The user's OpenAI API key"
+                                    }
+                                }
+                            },
+                            "required": ["llm_config"]
+                        }
+                    }
+                }
+            ]
+        }
+
+        dict_out: Dict[str, Any] = my_filter.filter_config(dict_in)
+
+        tools: List[Dict[str, Any]] = dict_out.get("tools")
+        first_tool: Dict[str, Any] = tools[0]
+        extractor: DictionaryExtractor = DictionaryExtractor(first_tool)
+
+        value: Any = extractor.get("function.sly_data_schema")
+        self.assertIsNotNone(value)
+        self.assertIsInstance(value, dict)
+
+        value: Any = extractor.get("function.sly_data_schema.properties")
+        self.assertIsNotNone(value)
+        self.assertIsInstance(value, dict)
+        self.assertEqual(len(value.keys()), 1)
+
+        value: Any = extractor.get("function.sly_data_schema.required")
+        self.assertIsNotNone(value)
+        self.assertIsInstance(value, list)
+        self.assertEqual(len(value), 1)
