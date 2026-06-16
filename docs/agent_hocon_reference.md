@@ -43,6 +43,7 @@ Items in ***bold*** are essentials. Try to understand these first.
     - [request_timeout_seconds](#request_timeout_seconds)
     - [toolbox_info_file](#toolbox_info_file)
     - [verbose](#verbose)
+    - [sly_data_schema](#sly_data_schema)
 - [Single Agent Specification](#single-agent-specification)
     - [***name*** - the name of the agent so that other agents can reference it](#name)
     - [***function*** - specifies what the agent can do/needs as input to clients or other agents](#function)
@@ -51,7 +52,7 @@ Items in ***bold*** are essentials. Try to understand these first.
             - [type](#type)
             - [properties](#properties)
             - [required](#required)
-        - [sly_data_schema](#sly_data_schema)
+        - [sly_data_schema](#sly_data_schema-1)
             - [llm_config](#llm_config-1)
         - [sly_data_output_schema](#sly_data_output_schema)
     - [***instructions*** - main system prompt for the agent](#instructions)
@@ -254,7 +255,7 @@ This will cause the system to look at the sly_data's llm_config dictionary for t
 api key(s) depending on the model provider. Note that key names are all-smalls versions of any
 environment variable names above.
 
-See also: [llm_config](#llm_config-1) in the [sly_data_schema](#sly_data_schema) section.
+See also: [llm_config](#llm_config-1) in the [sly_data_schema](#sly_data_schema-1) section.
 
 Example networks that advertise that their sly_data_schema needs external API keys:
 
@@ -396,6 +397,21 @@ which contains the following keys:
 A list of strings where if any one of the strings appears in agent output,
 it is considered an error and reported as such per the [error_formatter](#error_formatter).
 
+#### sly_data_schema
+
+The optional [JSON Schema](https://json-schema.org) dictionary describing what
+specific information the agent needs as input arguments over the private sly_data dictionary
+channel when it is called.  The sly_data itself is generally considered to be private information
+that does not belong in the chat stream, for example: credential information.
+
+This is a "global" definition of sly_data_schema that will be merged with any tool-specific definition.
+While this is intended only for use with a front-man agent only, it can sometimes be useful to
+have partial definitions for sly_data_schema that pertain to all agent networks in the manifest
+defined globally with this key while network-specific definitions can be defined with the `sly_data_schema`
+key within the front-man tool.
+
+For more details, see the [sly_data_schema](#sly_data_schema-1) key below.
+
 ### tools
 
 A list/array of [single agent specifications](#single-agent-specification) that make up the agent network.
@@ -530,6 +546,7 @@ definition, as sly_data itself is already visible to all other internal agents o
 Example networks that advertise their sly_data_schema:
 
 - [math_guy.hocon](../neuro_san/registries/math_guy.hocon)
+- [music_nerd_pro_sly_api_key.hocon](../neuro_san/registries/music_nerd_pro_sly_api_key.hocon)
 
 There are select few tacit conventions supported for certain sly_data values that need to come from the client:
 
@@ -551,7 +568,7 @@ Example networks that advertise that their sly_data_schema needs external API ke
 
 #### sly_data_output_schema
 
-Similar optional dictionary to [sly_data_schema](#sly_data_schema) above, but this specifies the schema
+Similar optional dictionary to [sly_data_schema](#sly_data_schema-1) above, but this specifies the schema
 for the sly_data being output by the agent network.
 
 Example networks that advertise their sly_data_output_schema:
