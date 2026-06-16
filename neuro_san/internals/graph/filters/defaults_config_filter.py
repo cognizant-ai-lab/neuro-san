@@ -67,6 +67,7 @@ class DefaultsConfigFilter(ConfigFilter):
         super().__init__()
         self.overlayer = DictionaryOverlay()
 
+    # pylint: disable=too-many-locals
     def filter_config(self, basis_config: Dict[str, Any]) \
             -> Dict[str, Any]:
         """
@@ -177,9 +178,10 @@ class DefaultsConfigFilter(ConfigFilter):
                 basis_field: List[str] = basis_value.get(one_field, [])
                 tool_field: List[str] = tool_value.get(one_field, [])
 
-                # The merged value is the union of the two sets with no duplicates
+                # The merged value is the union of the two sets with no duplicates (stable order)
                 one_field_key: str = f"{tool_dest_key}.{one_field}"
-                self.set_tool_value(tool, one_field_key, list(set(basis_field) | set(tool_field)))
+                merged_field: List[str] = list(dict.fromkeys(basis_field + tool_field))
+                self.set_tool_value(tool, one_field_key, merged_field)
 
     def set_tool_value(self, target: Dict[str, Any], key: str, value: Any):
         """
