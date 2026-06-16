@@ -37,7 +37,7 @@ class TestUrlNetworkValidator(TestCase, AbstractNetworkValidatorTest):
         """
         return UrlNetworkValidator(external_agents=["/math_guy"])
 
-    def test_valid(self):
+    def test_valid(self, hocon_file: str = "hello_world.hocon"):
         """
         Tests a valid network
         """

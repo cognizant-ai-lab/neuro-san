@@ -42,10 +42,13 @@ class AbstractNetworkValidatorTest(AssertForwarder):
         """
         Creates an instance of the validator
         """
-        return NotImplementedError
+        raise NotImplementedError
 
     @staticmethod
     def restore(file_reference: str) -> Dict[str, Any]:
+        """
+        Load a HOCON fixture from the registry.
+        """
         # Open a known good network file
         restorer = AgentNetworkRestorer()
         hocon_file: str = REGISTRIES_DIR.get_file_in_basis(file_reference)
@@ -105,3 +108,48 @@ class AbstractNetworkValidatorTest(AssertForwarder):
         if len(errors) > 0:
             failure_message = errors[0]
         self.assertEqual(0, len(errors), failure_message)
+
+    def assertEqual(self, first: Any, second: Any, msg: str = None) -> None:
+        raise NotImplementedError
+
+    def assertFalse(self, expr: Any, msg: str = None) -> bool:
+        raise NotImplementedError
+
+    def assertGreater(self, first: Any, second: Any, msg: str = None) -> bool:
+        raise NotImplementedError
+
+    def assertGreaterEqual(self, first: Any, second: Any, msg: str = None) -> bool:
+        raise NotImplementedError
+
+    def assertIn(self, member: Any, container: Any, msg: str = None) -> bool:
+        raise NotImplementedError
+
+    def assertIs(self, first: Any, second: Any, msg: str = None) -> bool:
+        raise NotImplementedError
+
+    def assertIsInstance(self, obj: Any, cls: Any, msg: str = None) -> bool:
+        raise NotImplementedError
+
+    def assertIsNone(self, expr: Any, msg: str = None) -> bool:
+        raise NotImplementedError
+
+    def assertIsNot(self, first: Any, second: Any, msg: str = None) -> bool:
+        raise NotImplementedError
+
+    def assertLess(self, first: Any, second: Any, msg: str = None) -> bool:
+        raise NotImplementedError
+
+    def assertNotEqual(self, first: Any, second: Any, msg: str = None) -> bool:
+        raise NotImplementedError
+
+    def assertNotIsInstance(self, obj: Any, cls: Any, msg: str = None) -> bool:
+        raise NotImplementedError
+
+    def assertTrue(self, expr: Any, msg: str = None) -> bool:
+        raise NotImplementedError
+
+    def assertGist(self, gist: bool, acceptance_criteria: str, text_sample: str, msg: str = None) -> bool:
+        return False
+
+    def assertNotGist(self, gist: bool, acceptance_criteria: str, text_sample: str, msg: str = None) -> bool:
+        return False
