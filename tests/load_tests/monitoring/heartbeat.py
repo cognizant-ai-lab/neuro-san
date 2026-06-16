@@ -20,6 +20,7 @@ monitoring and telemetry when those features become available.
 """
 
 import logging
+import threading
 import time
 from typing import Optional
 
@@ -66,14 +67,21 @@ class Heartbeat:
     # pylint: disable=too-many-locals,too-many-arguments
     def progress_heartbeat(self, futures, total, start_time,
                            stop_event, *,
+                           ready_event: threading.Event,
                            peak_threads_ref: SharedRef,
                            peak_client_rss_ref: SharedRef,
                            ) -> None:
-        """Log periodic progress while requests are in-flight."""
+        """Log periodic progress while requests are in-flight.
+
+        Signals ready_event after the initial RSS sample so the
+        caller can wait for the heartbeat to be ready before
+        firing requests.
+        """
         last_done = 0
         last_change = start_time
         peak_threads = 0
         peak_rss = self._sample_client_rss(0.0, peak_client_rss_ref)
+        ready_event.set()
         while not stop_event.wait(timeout=HEARTBEAT_INTERVAL_SECONDS):
             peak_rss = self._sample_client_rss(
                 peak_rss, peak_client_rss_ref,

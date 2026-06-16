@@ -211,28 +211,32 @@ class TrafficRunner:
         peak_client_rss_ref = SharedRef()
         start = time.time()
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = [
-                pool.submit(
-                    self.run_one,
-                    i + 1, global_offset + i,
-                    output_dir,
-                )
-                for i in range(num_requests)
-            ]
             heartbeat_stop = threading.Event()
+            heartbeat_ready = threading.Event()
+            futures_ref: list = []
             hb = Heartbeat(server_proc, client_proc)
             heartbeat_thread = threading.Thread(
                 target=hb.progress_heartbeat,
-                args=(futures, num_requests, start,
+                args=(futures_ref, num_requests, start,
                       heartbeat_stop),
                 kwargs={
+                    "ready_event": heartbeat_ready,
                     "peak_threads_ref": peak_threads_ref,
                     "peak_client_rss_ref": peak_client_rss_ref,
                 },
                 daemon=True,
             )
             heartbeat_thread.start()
-            for future in futures:
+            heartbeat_ready.wait()
+            futures_ref.extend(
+                pool.submit(
+                    self.run_one,
+                    i + 1, global_offset + i,
+                    output_dir,
+                )
+                for i in range(num_requests)
+            )
+            for future in futures_ref:
                 results_list.append(future.result())
             heartbeat_stop.set()
             heartbeat_thread.join(timeout=THREAD_JOIN_TIMEOUT)
