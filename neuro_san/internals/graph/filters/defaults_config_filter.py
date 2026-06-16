@@ -37,7 +37,7 @@ class DefaultsConfigFilter(ConfigFilter):
 
     # A mapping of source keys for defaults at the top level to destination
     # keys on the specific tool where the top-level defaults (if any) should be copied.
-    DEFAULTS_MAPPING: Dict[str, str] = {
+    DEFAULTS_MAPPING: Dict[str, Dict[str, Any]] = {
         # A value of None implies using a default dictionary where the source key as the same destination
         # key in the tool as well and it applies to all tools.
         "llm_config": None,
