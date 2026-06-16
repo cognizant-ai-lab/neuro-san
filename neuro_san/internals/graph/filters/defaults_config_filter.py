@@ -98,6 +98,9 @@ class DefaultsConfigFilter(ConfigFilter):
 
         # Loop through all the tools making additions.
         tools = result_config.get("tools")
+
+        idx: int = 0
+        tool: Dict[str, Any] = None
         for idx, tool in enumerate(tools):
             tool_extractor = DictionaryExtractor(tool)
 
@@ -105,6 +108,8 @@ class DefaultsConfigFilter(ConfigFilter):
             is_front_man: bool = idx == 0
 
             # Loop through all the keys in the defaults mapping.
+            basis_source_key: str = None
+            tool_dest_dict: Dict[str, Any] = None
             for basis_source_key, tool_dest_dict in self.DEFAULTS_MAPPING.items():
 
                 basis_value = basis_extractor.get(basis_source_key)
@@ -159,12 +164,19 @@ class DefaultsConfigFilter(ConfigFilter):
         # overrideable. The values of tool_value are favored.
         self.set_tool_value(tool, tool_dest_key, self.overlayer.overlay(basis_value, tool_value))
 
+        # Take care of special merge cases where lists are unioned
         if union_fields is not None:
+
+            # Case of unioning a single field
             if isinstance(union_fields, str):
                 union_fields = [union_fields]
+
+            one_field: str = None
             for one_field in union_fields:
+
                 basis_field: List[str] = basis_value.get(one_field, [])
                 tool_field: List[str] = tool_value.get(one_field, [])
+
                 # The merged value is the union of the two sets with no duplicates
                 one_field_key: str = f"{tool_dest_key}.{one_field}"
                 self.set_tool_value(tool, one_field_key, list(set(basis_field) | set(tool_field)))
