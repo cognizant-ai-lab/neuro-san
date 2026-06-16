@@ -648,23 +648,23 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         server_counts: ServerCounts = {}
         disconnections: List[Dict[str, str]] = []
         network_tokens: List[NetworkTokenEntry] = []
-        if not (monitor_resources or has_server_log):
-            return server_counts, disconnections, network_tokens, None
+        after_server = None
 
-        logger.info(
-            "\n  Waiting %ss for server cleanup...",
-            self.args.settle_time,
-        )
-        time.sleep(self.args.settle_time)
-
-        after_server = (
-            ResourceMonitor.snapshot(self.server_proc)
-            if self.server_proc else None
-        )
-        if after_server:
-            ResourceMonitor.log_snapshot(
-                "Server SETTLED", after_server,
+        if monitor_resources or has_server_log:
+            logger.info(
+                "\n  Waiting %ss for server cleanup...",
+                self.args.settle_time,
             )
+            time.sleep(self.args.settle_time)
+
+            after_server = (
+                ResourceMonitor.snapshot(self.server_proc)
+                if self.server_proc else None
+            )
+            if after_server:
+                ResourceMonitor.log_snapshot(
+                    "Server SETTLED", after_server,
+                )
 
         server_counts, disconnections, network_tokens = (
             self._analyze_server_log(
@@ -800,10 +800,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     "(from agent_cli --tokens):",
                 )
                 TrafficRunner.log_token_summary(results)
-            logger.info(
-                "\n  Server-side validation: "
-                "not available (no --server-log)",
-            )
+            if self.args.level != LEVEL_MIN:
+                logger.info(
+                    "\n  Server-side validation: "
+                    "not available (no --server-log)",
+                )
         return server_counts, disconnections, network_tokens
 
     def _setup_test_log(self) -> None:
