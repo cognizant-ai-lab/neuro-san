@@ -62,16 +62,15 @@ python -m tests.load_tests.load_test --agent hello_world --level adv \
 | Fire requests + validate responses   |  Y  |  Y   |  Y  |
 | Server log (retries, disconnections) |     | opt  | opt |
 | Resource monitoring (RSS, threads)   | opt |  Y   |  Y  |
-| Token accounting (from stdout)       | opt |  Y   |  Y  |
+| Token accounting (from stdout)       |  Y  |  Y   |  Y  |
 | Pool reuse analysis                  |     |      | opt |
 | JSON export (`raw_results.json`)     |     |      |  Y  |
 
 `opt` = available with optional flags. `--server-log` enables retry
 counting, server-side validation, disconnection detection, and pool
 reuse analysis at any level. `--monitor-resources` enables psutil
-monitoring at `min` level. `--include-tokens` enables per-request
-token accounting via `agent_cli --tokens` at `min` level (auto-enabled
-at `norm` and `adv`).
+monitoring at `min` level. Token accounting via `agent_cli --tokens`
+is enabled at all levels by default (disable with `--no-tokens`).
 
 When `--server-log` is omitted, server-log-dependent sections print
 "not available" in the output.
@@ -92,7 +91,7 @@ then moves to the next.
 | `--level`                  | norm        | Test depth: min, norm, or adv                |
 | `--server-log`             | (none)      | Path to server log file (optional)           |
 | `--monitor-resources`      | off         | Enable psutil monitoring at min level         |
-| `--include-tokens`         | off         | Capture token accounting from agent_cli      |
+| `--no-tokens`              | off         | Disable per-request token accounting         |
 | `--profile`                | auto        | Path to agent profile JSON                   |
 | `--host`                   | localhost   | Neuro-san server host                        |
 | `--port`                   | 8080        | Neuro-san server port                        |

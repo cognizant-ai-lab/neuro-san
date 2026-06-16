@@ -155,15 +155,10 @@ class InputValidator:
             "\nRunning 1 dry-run probe to measure actual cost...",
         )
 
-        original_include = self._args.include_tokens
-        self._args.include_tokens = True
-        try:
-            probe_result = runner.run_one(
-                request_id=0, global_request_id=0,
-                output_dir=output_dir,
-            )
-        finally:
-            self._args.include_tokens = original_include
+        probe_result = runner.run_one(
+            request_id=0, global_request_id=0,
+            output_dir=output_dir,
+        )
 
         probe_tokens = probe_result.get("total_tokens", 0)
         probe_cost = probe_result.get("cost_usd", 0.0)

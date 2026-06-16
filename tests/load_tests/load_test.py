@@ -236,12 +236,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                  "Automatically enabled at norm/adv.",
         )
         parser.add_argument(
-            "--include-tokens",
+            "--no-tokens",
             action="store_true",
             default=False,
-            help="Pass --tokens to agent_cli to capture per-request "
-                 "token accounting from stdout. Automatically "
-                 "enabled at adv level.",
+            help="Disable per-request token accounting. By default "
+                 "the load test passes --tokens to agent_cli at "
+                 "all levels.",
         )
         parser.add_argument(
             "--skip-reservation-check",
@@ -331,10 +331,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             or self.args.monitor_resources
         )
         has_server_log = self.server_log is not None
-        parse_tokens = (
-            self.args.level != LEVEL_MIN
-            or self.args.include_tokens
-        )
         probe_result = self.probe_result
 
         stage_summaries: List[StageSummary] = []
@@ -372,7 +368,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                         global_offset=global_offset,
                         monitor_resources=monitor_resources,
                         has_server_log=has_server_log,
-                        parse_tokens=parse_tokens,
                         probe_result=probe_result,
                     )
                 )
@@ -393,7 +388,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     def _run_single_stage(
             self, *, actual_requests, num_concurrent,
             stage_num, round_num, global_offset,
-            monitor_resources, has_server_log, parse_tokens,
+            monitor_resources, has_server_log,
             probe_result,
     ) -> Tuple[StageSummary, bool, bool]:
         """Execute one stage of the load test.
@@ -530,7 +525,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 disconnections=[],
                 network_tokens=[],
                 has_server_log=has_server_log,
-                parse_tokens=parse_tokens,
                 monitor_resources=monitor_resources,
                 before_server=before_server,
                 after_server=None,
@@ -551,7 +545,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         server_counts, disconnections, network_tokens, after_server = (
             self._collect_post_stage_data(
                 actual_requests, monitor_resources,
-                has_server_log, parse_tokens,
+                has_server_log,
                 log_pos, results,
                 before_server=before_server,
                 before_client=before_client,
@@ -574,7 +568,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             disconnections=disconnections,
             network_tokens=network_tokens,
             has_server_log=has_server_log,
-            parse_tokens=parse_tokens,
             monitor_resources=monitor_resources,
             before_server=before_server,
             after_server=after_server,
@@ -637,7 +630,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _collect_post_stage_data(
             self, actual_requests, monitor_resources,
-            has_server_log, parse_tokens,
+            has_server_log,
             log_pos, results, *,
             before_server, before_client,
             peak_client, settled_client,
@@ -673,7 +666,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         server_counts, disconnections, network_tokens = (
             self._analyze_server_log(
-                has_server_log, parse_tokens,
+                has_server_log,
                 log_pos,
                 results=results,
                 actual_requests=actual_requests,
@@ -706,7 +699,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             counts, elapsed, retries, total_retries,
             amplification, results, server_counts,
             disconnections, network_tokens,
-            has_server_log, parse_tokens,
+            has_server_log,
             monitor_resources, before_server,
             after_server, peak_threads,
     ) -> StageSummary:
@@ -728,7 +721,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "disconnections": disconnections,
             "network_tokens": network_tokens,
             "has_server_log": has_server_log,
-            "has_tokens": parse_tokens,
+            "has_tokens": True,
         }
         if monitor_resources:
             if before_server:
@@ -747,7 +740,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
     # pylint: disable=too-many-arguments
     def _analyze_server_log(
-            self, has_server_log, parse_tokens,
+            self, has_server_log,
             log_pos, *, results, actual_requests,
     ) -> Tuple[
         ServerCounts, List[Dict[str, str]], List[NetworkTokenEntry],
@@ -772,41 +765,39 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     log_pos,
                 )
             )
-            if parse_tokens:
-                token_data = (
-                    self.log_monitor.parse_token_accounting_since(
-                        log_pos,
-                    )
+            token_data = (
+                self.log_monitor.parse_token_accounting_since(
+                    log_pos,
                 )
-                LoadTestOrchestrator._attach_token_data(
-                    results, token_data,
+            )
+            LoadTestOrchestrator._attach_token_data(
+                results, token_data,
+            )
+            if token_data:
+                logger.info(
+                    "\n  Token usage (from server log):",
                 )
-                if token_data:
-                    logger.info(
-                        "\n  Token usage (from server log):",
-                    )
-                    TrafficRunner.log_token_summary(results)
-                network_tokens = (
-                    self.log_monitor.parse_per_network_tokens_since(
-                        log_pos,
-                    )
+                TrafficRunner.log_token_summary(results)
+            network_tokens = (
+                self.log_monitor.parse_per_network_tokens_since(
+                    log_pos,
                 )
+            )
             OutputValidator.log_disconnections(disconnections)
             OutputValidator.log_server_validation(
                 server_counts, actual_requests,
                 self.args.agent,
             )
         else:
-            if parse_tokens:
-                has_token_data = any(
-                    r.get("total_tokens") for r in results
+            has_token_data = any(
+                r.get("total_tokens") for r in results
+            )
+            if has_token_data:
+                logger.info(
+                    "\n  Token usage "
+                    "(from agent_cli --tokens):",
                 )
-                if has_token_data:
-                    logger.info(
-                        "\n  Token usage "
-                        "(from agent_cli --tokens):",
-                    )
-                    TrafficRunner.log_token_summary(results)
+                TrafficRunner.log_token_summary(results)
             logger.info(
                 "\n  Server-side validation: "
                 "not available (no --server-log)",
@@ -906,8 +897,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     def run(self) -> int:
         """Execute the full load test workflow."""
         level = self.args.level
-        if level == LEVEL_ADV:
-            self.args.include_tokens = True
+        self.args.include_tokens = not self.args.no_tokens
         self.input_validator.validate_agent_name()
         EnvironmentValidator.validate_environment()
         self._validate_server_log()
