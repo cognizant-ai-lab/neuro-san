@@ -49,12 +49,15 @@ class ProcessMonitor:
         stderr_chunks: List[bytes] = []
         status = STATUS_FAILED
 
-        # pylint: disable=consider-using-with
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
+        try:
+            # pylint: disable=consider-using-with
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+        except OSError as exc:
+            return (STATUS_FAILED, "", str(exc), -1)
 
         try:
             monitor_status = ProcessMonitor._monitor_process(

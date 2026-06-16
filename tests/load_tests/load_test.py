@@ -866,6 +866,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     def run(self) -> int:
         """Execute the full load test workflow."""
         level = self.args.level
+        if level == LEVEL_ADV:
+            self.args.include_tokens = True
         EnvironmentValidator.validate_environment()
         self._validate_server_log()
 

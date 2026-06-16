@@ -138,7 +138,7 @@ class InputValidator:
         self._args.include_tokens = True
         try:
             probe_result = runner.run_one(
-                request_id=1, global_request_id=0,
+                request_id=0, global_request_id=0,
                 output_dir=output_dir,
             )
         finally:

@@ -47,6 +47,8 @@ class OutputValidator:
         }
         for result in results:
             status = result.get("status", STATUS_FAILED)
+            if status not in counts:
+                status = STATUS_FAILED
             counts[status] = counts.get(status, 0) + 1
         return counts
 
