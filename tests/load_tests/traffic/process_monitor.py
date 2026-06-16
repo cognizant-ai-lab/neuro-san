@@ -21,6 +21,7 @@ import select
 import subprocess
 import time
 from typing import List
+from typing import Optional
 from typing import Tuple
 
 from tests.load_tests.config import PROCESS_WAIT_TIMEOUT
@@ -45,7 +46,6 @@ class ProcessMonitor:
         stdout_chunks: List[bytes] = []
         stderr_chunks: List[bytes] = []
         status = STATUS_FAILED
-        last_activity = time.time()
 
         # pylint: disable=consider-using-with
         proc = subprocess.Popen(
@@ -55,11 +55,12 @@ class ProcessMonitor:
         )
 
         try:
-            status = ProcessMonitor._monitor_process(
+            monitor_status = ProcessMonitor._monitor_process(
                 proc, stdout_chunks, stderr_chunks,
-                last_activity,
                 timeout=timeout, idle_timeout=idle_timeout,
             )
+            if monitor_status is not None:
+                status = monitor_status
         except (OSError, subprocess.SubprocessError):
             proc.kill()
             proc.wait()
@@ -76,7 +77,7 @@ class ProcessMonitor:
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait()
-            if status != STATUS_FAILED:
+            if status == STATUS_FAILED:
                 status = STATUS_KILLED
 
         return (
@@ -86,13 +87,18 @@ class ProcessMonitor:
             proc.returncode,
         )
 
-    # pylint: disable=too-many-arguments
     @staticmethod
     def _monitor_process(proc, stdout_chunks,
-                         stderr_chunks, last_activity, *,
-                         timeout, idle_timeout) -> str:
-        """Monitor a running process for output, idle timeout, and hard timeout."""
+                         stderr_chunks, *,
+                         timeout, idle_timeout) -> Optional[str]:
+        """Monitor a running process for output, idle timeout, and hard timeout.
+
+        Returns STATUS_TIMEOUT or STATUS_KILLED for abnormal exits,
+        or None when the process exits normally (caller determines
+        final status from the return code).
+        """
         start = time.time()
+        last_activity = time.time()
         while proc.poll() is None:
             elapsed = time.time() - start
             idle_elapsed = time.time() - last_activity
@@ -118,4 +124,4 @@ class ProcessMonitor:
                         stdout_chunks.append(data)
                     else:
                         stderr_chunks.append(data)
-        return STATUS_FAILED
+        return None

@@ -21,13 +21,14 @@ request validation (sent vs received), and client disconnections.
 """
 
 import logging
-from typing import Dict
 
+from tests.load_tests.config import compute_amplification
 from tests.load_tests.config import RETRY_ERROR_TYPES
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
+from tests.load_tests.config import StatusCounts
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +37,9 @@ class OutputValidator:
     """Counts results and logs server-side request verification."""
 
     @staticmethod
-    def count_results(results) -> Dict[str, int]:
+    def count_results(results) -> StatusCounts:
         """Count results by status type."""
-        counts = {
+        counts: StatusCounts = {
             STATUS_CREATED: 0,
             STATUS_FAILED: 0,
             STATUS_TIMEOUT: 0,
@@ -94,9 +95,8 @@ class OutputValidator:
             count = retries.get(error_type, 0)
             logger.info("    %s retries: %s", error_type, count)
         logger.info("    Total retries:  %s", total_retries)
-        amplification = (
-            (actual_requests + total_retries) / actual_requests
-            if actual_requests > 0 else 1.0
+        amplification = compute_amplification(
+            actual_requests, total_retries,
         )
         logger.info(
             "    Amplification:  %.2fx "

@@ -17,7 +17,6 @@
 
 import logging
 from typing import List
-from typing import Tuple
 
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.reporting.table_formatter import TableFormatter
@@ -58,7 +57,7 @@ class PoolAnalyzer:
             "Peak Threads", "Reused", "Reuse%",
             "Pool Avail", "Exec/Req",
         ]
-        rows: List[Tuple] = []
+        rows: List[tuple] = []
         total_new_threads = 0
 
         for idx, stage in enumerate(stages_with_data):

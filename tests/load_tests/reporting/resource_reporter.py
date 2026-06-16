@@ -23,6 +23,14 @@ from tests.load_tests.config import ResourceSnapshot
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
+# (display_row, before_snapshot, after_snapshot)
+ServerResourceRow = Tuple[tuple, ResourceSnapshot, ResourceSnapshot]
+
+# (display_row, before_snapshot, peak_snapshot, settled_snapshot)
+ClientResourceRow = Tuple[
+    tuple, ResourceSnapshot, ResourceSnapshot, ResourceSnapshot,
+]
+
 logger = logging.getLogger(__name__)
 
 
@@ -34,22 +42,22 @@ class ResourceReporter:
     """
 
     def __init__(self) -> None:
-        self._resource_rows: List[Tuple] = []
-        self._client_rows: List[Tuple] = []
+        self._resource_rows: List[ServerResourceRow] = []
+        self._client_rows: List[ClientResourceRow] = []
 
     @property
-    def resource_rows(self) -> List[Tuple]:
+    def resource_rows(self) -> List[ServerResourceRow]:
         """Return the accumulated server resource rows."""
         return self._resource_rows
 
     @property
-    def client_rows(self) -> List[Tuple]:
+    def client_rows(self) -> List[ClientResourceRow]:
         """Return the accumulated client resource rows."""
         return self._client_rows
 
     def add_resource_row(
             self, stage_label, before, after,
-    ) -> Tuple[tuple, ResourceSnapshot, ResourceSnapshot]:
+    ) -> ServerResourceRow:
         """Build and store a server resource row from before/after snapshots.
 
         Returns (display_row, before_snapshot, after_snapshot) so that
@@ -76,8 +84,7 @@ class ResourceReporter:
 
     def add_client_row(
             self, stage_label, before, peak, settled,
-    ) -> Tuple[tuple, ResourceSnapshot, ResourceSnapshot,
-               ResourceSnapshot]:
+    ) -> ClientResourceRow:
         """Build and store a client resource row from before/peak/settled.
 
         Returns (display_row, before_snapshot, peak_snapshot,

@@ -13,6 +13,7 @@
 # limitations under the License.
 #
 
+# pylint: disable=too-many-lines
 """Generic load-test orchestrator for neuro-san agent networks.
 
 See tests/load_tests/README.md for prerequisites, test levels, and
@@ -37,8 +38,10 @@ from typing import Tuple
 import psutil
 
 from tests.load_tests.config import NetworkTokenEntry
+from tests.load_tests.config import ResourceSnapshot
 from tests.load_tests.config import ServerCounts
 from tests.load_tests.config import StageSummary
+from tests.load_tests.config import compute_amplification
 from tests.load_tests.config import DEFAULT_IDLE_TIMEOUT_SECONDS
 from tests.load_tests.config import DEFAULT_TIMEOUT_SECONDS
 from tests.load_tests.config import LEVEL_ADV
@@ -315,16 +318,17 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         self._test_log_path = None
         self._test_log_handler = None
 
-    # pylint: disable=too-many-locals,too-many-statements,too-many-branches
+    # pylint: disable=too-many-locals
     def _run_all_stages(self, stages, total_cap) -> List[StageSummary]:
         """Execute all stages of the load test, collecting data per stage."""
-        level = self.args.level
         monitor_resources = (
-            level != LEVEL_MIN or self.args.monitor_resources
+            self.args.level != LEVEL_MIN
+            or self.args.monitor_resources
         )
         has_server_log = self.server_log is not None
         parse_tokens = (
-            level != LEVEL_MIN or self.args.include_tokens
+            self.args.level != LEVEL_MIN
+            or self.args.include_tokens
         )
         probe_result = self.probe_result
 
@@ -353,240 +357,356 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
                 remaining = total_cap - total_sent
                 actual_requests = min(num_concurrent, remaining)
-                stage_num = stage_idx + 1
-                stage_workers = (
-                    self.args.max_workers
-                    if not self.args.ramp
-                    else actual_requests
+
+                summary, probe_used = self._run_single_stage(
+                    actual_requests=actual_requests,
+                    num_concurrent=num_concurrent,
+                    stage_num=stage_idx + 1,
+                    round_num=round_num,
+                    global_offset=global_offset,
+                    monitor_resources=monitor_resources,
+                    has_server_log=has_server_log,
+                    parse_tokens=parse_tokens,
+                    probe_result=probe_result,
                 )
-
-                logger.info("\n%s", "=" * 60)
-                stage_label = f"[STAGE {stage_num}] {stage_workers} concurrent connections"
-                if self.args.num_rounds > 1:
-                    stage_label += f" (round {round_num})"
-                logger.info("  %s", stage_label)
-                logger.info("=" * 60)
-
-                if actual_requests < num_concurrent:
-                    logger.info(
-                        "  (Capped from %s to %s by --max-requests)",
-                        num_concurrent, actual_requests,
-                    )
-
-                log_pos = (
-                    self.log_monitor.read_position()
-                    if has_server_log else None
-                )
-
-                before_server = None
-                before_client = None
-                client_proc = None
-                if monitor_resources:
-                    before_server = (
-                        ResourceMonitor.snapshot(self.server_proc)
-                        if self.server_proc else None
-                    )
-                    if before_server:
-                        ResourceMonitor.log_snapshot(
-                            "Server BEFORE", before_server,
-                        )
-
-                    client_proc = psutil.Process()
-                    before_client = ResourceMonitor.snapshot(
-                        client_proc,
-                    )
-                    if before_client:
-                        logger.info(
-                            "  Client BEFORE: RSS %.1fM, CPU %.1f%%",
-                            before_client.get("rss"), before_client.get("cpu"),
-                        )
-
-                fire_time = time.time()
-                fire_ts = time.strftime("%H:%M:%S", time.localtime(fire_time))
-                fire_threads = ""
-                if monitor_resources and self.server_proc:
-                    try:
-                        fire_threads = (
-                            f"  threads: {self.server_proc.num_threads()}"
-                        )
-                    except (psutil.NoSuchProcess, psutil.AccessDenied) as exc:
-                        logger.debug("Thread count unavailable: %s", exc)
-                fire_label = actual_requests
-                if probe_result is not None:
-                    fire_label = f"{actual_requests} ({actual_requests - 1} + 1 probe)"
-                logger.info(
-                    "\nFiring %s concurrent %s requests... [%s]%s",
-                    fire_label, self.args.agent, fire_ts, fire_threads,
-                )
-
-                stop_event = None
-                monitor = None
-                peak_result = None
-                if has_server_log:
-                    stop_event, monitor, peak_result = (
-                        self.log_monitor.start_log_monitor(
-                            log_pos,
-                            actual_requests, fire_time,
-                            client_proc=client_proc,
-                            primary_start_pattern=(
-                                self.profile.primary_start_pattern
-                            ),
-                        )
-                    )
-
-                # If a dry-run probe ran, inject it into stage 1
-                stage_requests = actual_requests
-                if probe_result is not None:
-                    stage_requests = max(actual_requests - 1, 0)
-
-                elapsed, results, peak_threads = self.runner.run_stage(
-                    stage_requests, stage_workers,
-                    global_offset + (1 if probe_result else 0),
-                    server_proc=self.server_proc,
-                    output_dir=self._output_dir,
-                )
-
-                if probe_result is not None:
-                    results.insert(0, probe_result)
-                    probe_result = None
-
-                if stop_event:
-                    stop_event.set()
-                if monitor:
-                    monitor.join(timeout=THREAD_JOIN_TIMEOUT)
-
-                peak_client = None
-                settled_client = None
-                if monitor_resources:
-                    peak_client = peak_result if peak_result else None
-                    settled_client = ResourceMonitor.snapshot(
-                        client_proc,
-                    )
-                    if before_client and settled_client:
-                        rss_before = before_client.get("rss", 0)
-                        rss_settled = settled_client.get("rss", 0)
-                        rss_delta = rss_settled - rss_before
-                        logger.info(
-                            "  Client SETTLED: RSS %.1fM (%+.1fM from before)",
-                            rss_settled, rss_delta,
-                        )
 
                 global_offset += actual_requests
                 total_sent += actual_requests
-
-                counts = OutputValidator.count_results(results)
-
-                retries: Dict[str, int] = {}
-                total_retries = 0
-                amplification = 1.0
-                if has_server_log:
-                    retries = self.log_monitor.count_retries_since(
-                        log_pos,
-                    )
-                    total_retries = sum(retries.values())
-                    amplification = (
-                        (actual_requests + total_retries) / actual_requests
-                        if actual_requests > 0 else 1.0
-                    )
-
-                OutputValidator.log_stage_results(
-                    actual_requests, counts, elapsed,
-                    timeout=self.args.timeout,
-                    idle_timeout=self.args.idle_timeout,
-                    skip_reservation_check=(
-                        self.args.skip_reservation_check
-                    ),
-                )
-
-                if has_server_log:
-                    OutputValidator.log_retry_activity(
-                        retries, total_retries, actual_requests,
-                    )
-                elif monitor_resources:
-                    logger.info(
-                        "\n  Retry activity: not available "
-                        "(no --server-log)",
-                    )
-
-                server_counts: ServerCounts = {}
-                disconnections: List[Dict[str, str]] = []
-                network_tokens: List[NetworkTokenEntry] = []
-                if monitor_resources or has_server_log:
-                    logger.info(
-                        "\n  Waiting %ss for server cleanup...",
-                        self.args.settle_time,
-                    )
-                    time.sleep(self.args.settle_time)
-
-                    after_server = (
-                        ResourceMonitor.snapshot(self.server_proc)
-                        if self.server_proc else None
-                    )
-                    if after_server:
-                        ResourceMonitor.log_snapshot(
-                            "Server SETTLED", after_server,
-                        )
-
-                    server_counts, disconnections, network_tokens = (
-                        self._analyze_server_log(
-                            has_server_log, parse_tokens,
-                            log_pos,
-                            results=results,
-                            actual_requests=actual_requests,
-                        )
-                    )
-
-                    if before_server and after_server:
-                        self.resource_reporter.add_resource_row(
-                            f"{actual_requests}",
-                            before_server, after_server,
-                        )
-
-                    if before_client and settled_client:
-                        self.resource_reporter.add_client_row(
-                            f"{actual_requests}",
-                            before_client,
-                            peak_client,
-                            settled_client,
-                        )
-
-                summary_entry = {
-                    "stage": stage_num,
-                    "round": round_num,
-                    "concurrent": actual_requests,
-                    "counts": counts,
-                    "elapsed": elapsed,
-                    "retries": retries,
-                    "total_retries": total_retries,
-                    "amplification": amplification,
-                    "results": results,
-                    "primary_started": server_counts.get("primary_started"),
-                    "primary_finished": server_counts.get("primary_finished"),
-                    "total_started": server_counts.get("total_started"),
-                    "total_finished": server_counts.get("total_finished"),
-                    "disconnections": disconnections,
-                    "network_tokens": network_tokens,
-                    "has_server_log": has_server_log,
-                    "has_tokens": parse_tokens,
-                }
-                if monitor_resources:
-                    if before_server:
-                        summary_entry.update({
-                            "before_threads":
-                                before_server.get("threads"),
-                        })
-                    if after_server:
-                        summary_entry.update({
-                            "after_threads":
-                                after_server.get("threads"),
-                        })
-                if peak_threads.get("peak") is not None:
-                    summary_entry.update({
-                        "peak_threads": peak_threads.get("peak"),
-                    })
-                stage_summaries.append(summary_entry)
+                if probe_used:
+                    probe_result = None
+                stage_summaries.append(summary)
 
         return stage_summaries
+
+    # pylint: disable=too-many-locals,too-many-statements,too-many-branches
+    # pylint: disable=too-many-arguments
+    def _run_single_stage(
+            self, *, actual_requests, num_concurrent,
+            stage_num, round_num, global_offset,
+            monitor_resources, has_server_log, parse_tokens,
+            probe_result,
+    ) -> Tuple[StageSummary, bool]:
+        """Execute one stage of the load test.
+
+        Returns (stage_summary, probe_was_used).
+        """
+        stage_workers = (
+            self.args.max_workers
+            if not self.args.ramp
+            else actual_requests
+        )
+
+        logger.info("\n%s", "=" * 60)
+        stage_label = (
+            f"[STAGE {stage_num}] "
+            f"{stage_workers} concurrent connections"
+        )
+        if self.args.num_rounds > 1:
+            stage_label += f" (round {round_num})"
+        logger.info("  %s", stage_label)
+        logger.info("=" * 60)
+
+        if actual_requests < num_concurrent:
+            logger.info(
+                "  (Capped from %s to %s by --max-requests)",
+                num_concurrent, actual_requests,
+            )
+
+        log_pos = (
+            self.log_monitor.read_position()
+            if has_server_log else None
+        )
+
+        before_server, before_client, client_proc = (
+            self._capture_before_snapshots(monitor_resources)
+        )
+
+        self._log_fire_info(
+            actual_requests, monitor_resources,
+            probe_result=probe_result,
+        )
+
+        stop_event = None
+        monitor = None
+        peak_result = None
+        if has_server_log:
+            stop_event, monitor, peak_result = (
+                self.log_monitor.start_log_monitor(
+                    log_pos,
+                    actual_requests, time.time(),
+                    client_proc=client_proc,
+                    primary_start_pattern=(
+                        self.profile.primary_start_pattern
+                    ),
+                )
+            )
+
+        # If a dry-run probe ran, inject it into stage 1
+        stage_requests = actual_requests
+        probe_used = probe_result is not None
+        if probe_used:
+            stage_requests = max(actual_requests - 1, 0)
+
+        elapsed, results, peak_threads = self.runner.run_stage(
+            stage_requests, stage_workers,
+            global_offset + (1 if probe_used else 0),
+            server_proc=self.server_proc,
+            output_dir=self._output_dir,
+        )
+
+        if probe_used:
+            results.insert(0, probe_result)
+
+        if stop_event:
+            stop_event.set()
+        if monitor:
+            monitor.join(timeout=THREAD_JOIN_TIMEOUT)
+
+        peak_client = None
+        settled_client = None
+        if monitor_resources:
+            peak_client = peak_result if peak_result else None
+            settled_client = ResourceMonitor.snapshot(
+                client_proc,
+            )
+            if before_client and settled_client:
+                rss_before = before_client.get("rss", 0)
+                rss_settled = settled_client.get("rss", 0)
+                rss_delta = rss_settled - rss_before
+                logger.info(
+                    "  Client SETTLED: RSS %.1fM (%+.1fM from before)",
+                    rss_settled, rss_delta,
+                )
+
+        counts = OutputValidator.count_results(results)
+
+        retries: Dict[str, int] = {}
+        total_retries = 0
+        amplification = 1.0
+        if has_server_log:
+            retries = self.log_monitor.count_retries_since(
+                log_pos,
+            )
+            total_retries = sum(retries.values())
+            amplification = compute_amplification(
+                actual_requests, total_retries,
+            )
+
+        OutputValidator.log_stage_results(
+            actual_requests, counts, elapsed,
+            timeout=self.args.timeout,
+            idle_timeout=self.args.idle_timeout,
+            skip_reservation_check=(
+                self.args.skip_reservation_check
+            ),
+        )
+
+        if has_server_log:
+            OutputValidator.log_retry_activity(
+                retries, total_retries, actual_requests,
+            )
+        elif monitor_resources:
+            logger.info(
+                "\n  Retry activity: not available "
+                "(no --server-log)",
+            )
+
+        server_counts, disconnections, network_tokens, after_server = (
+            self._collect_post_stage_data(
+                actual_requests, monitor_resources,
+                has_server_log, parse_tokens,
+                log_pos, results,
+                before_server=before_server,
+                before_client=before_client,
+                peak_client=peak_client,
+                settled_client=settled_client,
+            )
+        )
+
+        summary_entry = self._build_stage_summary(
+            stage_num=stage_num,
+            round_num=round_num,
+            actual_requests=actual_requests,
+            counts=counts,
+            elapsed=elapsed,
+            retries=retries,
+            total_retries=total_retries,
+            amplification=amplification,
+            results=results,
+            server_counts=server_counts,
+            disconnections=disconnections,
+            network_tokens=network_tokens,
+            has_server_log=has_server_log,
+            parse_tokens=parse_tokens,
+            monitor_resources=monitor_resources,
+            before_server=before_server,
+            after_server=after_server,
+            peak_threads=peak_threads,
+        )
+        return summary_entry, probe_used
+
+    def _capture_before_snapshots(self, monitor_resources):
+        """Capture server and client resource snapshots before a stage."""
+        before_server = None
+        before_client = None
+        client_proc = None
+        if monitor_resources:
+            before_server = (
+                ResourceMonitor.snapshot(self.server_proc)
+                if self.server_proc else None
+            )
+            if before_server:
+                ResourceMonitor.log_snapshot(
+                    "Server BEFORE", before_server,
+                )
+
+            client_proc = psutil.Process()
+            before_client = ResourceMonitor.snapshot(
+                client_proc,
+            )
+            if before_client:
+                logger.info(
+                    "  Client BEFORE: RSS %.1fM, CPU %.1f%%",
+                    before_client.get("rss"),
+                    before_client.get("cpu"),
+                )
+        return before_server, before_client, client_proc
+
+    def _log_fire_info(self, actual_requests,
+                       monitor_resources, *, probe_result):
+        """Log the 'Firing N requests' line with thread count."""
+        fire_ts = time.strftime(
+            "%H:%M:%S", time.localtime(time.time()),
+        )
+        fire_threads = ""
+        if monitor_resources and self.server_proc:
+            try:
+                fire_threads = (
+                    f"  threads: {self.server_proc.num_threads()}"
+                )
+            except (psutil.NoSuchProcess, psutil.AccessDenied) as exc:
+                logger.debug("Thread count unavailable: %s", exc)
+        fire_label = actual_requests
+        if probe_result is not None:
+            fire_label = (
+                f"{actual_requests} "
+                f"({actual_requests - 1} + 1 probe)"
+            )
+        logger.info(
+            "\nFiring %s concurrent %s requests... [%s]%s",
+            fire_label, self.args.agent, fire_ts, fire_threads,
+        )
+
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def _collect_post_stage_data(
+            self, actual_requests, monitor_resources,
+            has_server_log, parse_tokens,
+            log_pos, results, *,
+            before_server, before_client,
+            peak_client, settled_client,
+    ) -> Tuple[
+        ServerCounts, List[Dict[str, str]],
+        List[NetworkTokenEntry], Optional[ResourceSnapshot],
+    ]:
+        """Settle, snapshot, and analyze server log after a stage.
+
+        Returns (server_counts, disconnections, network_tokens,
+        after_server_snapshot).
+        """
+        server_counts: ServerCounts = {}
+        disconnections: List[Dict[str, str]] = []
+        network_tokens: List[NetworkTokenEntry] = []
+        if not (monitor_resources or has_server_log):
+            return server_counts, disconnections, network_tokens, None
+
+        logger.info(
+            "\n  Waiting %ss for server cleanup...",
+            self.args.settle_time,
+        )
+        time.sleep(self.args.settle_time)
+
+        after_server = (
+            ResourceMonitor.snapshot(self.server_proc)
+            if self.server_proc else None
+        )
+        if after_server:
+            ResourceMonitor.log_snapshot(
+                "Server SETTLED", after_server,
+            )
+
+        server_counts, disconnections, network_tokens = (
+            self._analyze_server_log(
+                has_server_log, parse_tokens,
+                log_pos,
+                results=results,
+                actual_requests=actual_requests,
+            )
+        )
+
+        if before_server and after_server:
+            self.resource_reporter.add_resource_row(
+                f"{actual_requests}",
+                before_server, after_server,
+            )
+
+        if before_client and settled_client:
+            self.resource_reporter.add_client_row(
+                f"{actual_requests}",
+                before_client,
+                peak_client,
+                settled_client,
+            )
+
+        return (
+            server_counts, disconnections,
+            network_tokens, after_server,
+        )
+
+    @staticmethod
+    # pylint: disable=too-many-arguments
+    def _build_stage_summary(
+            *, stage_num, round_num, actual_requests,
+            counts, elapsed, retries, total_retries,
+            amplification, results, server_counts,
+            disconnections, network_tokens,
+            has_server_log, parse_tokens,
+            monitor_resources, before_server,
+            after_server, peak_threads,
+    ) -> StageSummary:
+        """Assemble the stage summary dict."""
+        summary_entry: StageSummary = {
+            "stage": stage_num,
+            "round": round_num,
+            "concurrent": actual_requests,
+            "counts": counts,
+            "elapsed": elapsed,
+            "retries": retries,
+            "total_retries": total_retries,
+            "amplification": amplification,
+            "results": results,
+            "primary_started": server_counts.get("primary_started"),
+            "primary_finished": server_counts.get("primary_finished"),
+            "total_started": server_counts.get("total_started"),
+            "total_finished": server_counts.get("total_finished"),
+            "disconnections": disconnections,
+            "network_tokens": network_tokens,
+            "has_server_log": has_server_log,
+            "has_tokens": parse_tokens,
+        }
+        if monitor_resources:
+            if before_server:
+                summary_entry["before_threads"] = (
+                    before_server.get("threads")
+                )
+            if after_server:
+                summary_entry["after_threads"] = (
+                    after_server.get("threads")
+                )
+        if peak_threads.get("peak") is not None:
+            summary_entry["peak_threads"] = (
+                peak_threads.get("peak")
+            )
+        return summary_entry
 
     # pylint: disable=too-many-arguments
     def _analyze_server_log(

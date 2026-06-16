@@ -92,6 +92,22 @@ class RequestResult(_RequestResultRequired, total=False):
     cost_usd: float
 
 
+# Result status constants
+STATUS_CREATED = "CREATED"
+STATUS_FAILED = "FAILED"
+STATUS_TIMEOUT = "TIMEOUT"
+STATUS_KILLED = "KILLED"
+
+
+class StatusCounts(TypedDict):
+    """Per-status request counts from a load test stage."""
+
+    CREATED: int
+    FAILED: int
+    TIMEOUT: int
+    KILLED: int
+
+
 class StageSummary(TypedDict, total=False):
     """Aggregate data for a single load test stage.
 
@@ -102,7 +118,7 @@ class StageSummary(TypedDict, total=False):
     stage: int
     round: int
     concurrent: int
-    counts: Dict[str, int]
+    counts: StatusCounts
     elapsed: float
     retries: Dict[str, int]
     total_retries: int
@@ -120,12 +136,6 @@ class StageSummary(TypedDict, total=False):
     after_threads: Optional[int]
     peak_threads: Optional[int]
 
-
-# Result status constants
-STATUS_CREATED = "CREATED"
-STATUS_FAILED = "FAILED"
-STATUS_TIMEOUT = "TIMEOUT"
-STATUS_KILLED = "KILLED"
 
 # Load test levels
 LEVEL_MIN = "min"
@@ -193,3 +203,15 @@ MODEL_PRICING = {
 }
 # Fallback pricing when model is unknown
 DEFAULT_PRICING = {"prompt": 2.50, "completion": 10.00}
+
+
+def compute_amplification(
+        actual_requests: int, total_retries: int,
+) -> float:
+    """Return the retry amplification factor.
+
+    1.0 means no retries; >1.0 means some LLM calls were retried.
+    """
+    if actual_requests <= 0:
+        return 1.0
+    return (actual_requests + total_retries) / actual_requests
