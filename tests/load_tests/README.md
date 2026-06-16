@@ -79,7 +79,9 @@ explicit file. `--monitor-resources` enables psutil monitoring at
 at all levels by default (disable with `--no-tokens`).
 
 When `--server-log` is omitted, server-log-dependent sections print
-"not available" in the output.
+"not available" in the output.  When `--server-log` is passed without
+a path and auto-detection fails, the load test aborts with an error
+and suggests providing the path explicitly.
 
 ## Traffic Modes
 
