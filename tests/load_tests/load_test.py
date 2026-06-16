@@ -362,16 +362,18 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 remaining = total_cap - total_sent
                 actual_requests = min(num_concurrent, remaining)
 
-                summary, probe_used = self._run_single_stage(
-                    actual_requests=actual_requests,
-                    num_concurrent=num_concurrent,
-                    stage_num=stage_idx + 1,
-                    round_num=round_num,
-                    global_offset=global_offset,
-                    monitor_resources=monitor_resources,
-                    has_server_log=has_server_log,
-                    parse_tokens=parse_tokens,
-                    probe_result=probe_result,
+                summary, probe_used, should_abort = (
+                    self._run_single_stage(
+                        actual_requests=actual_requests,
+                        num_concurrent=num_concurrent,
+                        stage_num=stage_idx + 1,
+                        round_num=round_num,
+                        global_offset=global_offset,
+                        monitor_resources=monitor_resources,
+                        has_server_log=has_server_log,
+                        parse_tokens=parse_tokens,
+                        probe_result=probe_result,
+                    )
                 )
 
                 global_offset += actual_requests
@@ -379,6 +381,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 if probe_used:
                     probe_result = None
                 stage_summaries.append(summary)
+                if should_abort:
+                    return stage_summaries
 
         return stage_summaries
 
@@ -389,10 +393,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             stage_num, round_num, global_offset,
             monitor_resources, has_server_log, parse_tokens,
             probe_result,
-    ) -> Tuple[StageSummary, bool]:
+    ) -> Tuple[StageSummary, bool, bool]:
         """Execute one stage of the load test.
 
-        Returns (stage_summary, probe_was_used).
+        Returns (stage_summary, probe_was_used, should_abort).
         """
         stage_workers = (
             self.args.max_workers
@@ -506,6 +510,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 self.args.skip_reservation_check
             ),
         )
+        should_abort = OutputValidator.check_permission_failures(
+            results, self.args.agent,
+        )
 
         if has_server_log:
             OutputValidator.log_retry_activity(
@@ -549,7 +556,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             after_server=after_server,
             peak_threads=peak_threads,
         )
-        return summary_entry, probe_used
+        return summary_entry, probe_used, should_abort
 
     def _capture_before_snapshots(self, monitor_resources):
         """Capture server and client resource snapshots before a stage."""
@@ -868,6 +875,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         level = self.args.level
         if level == LEVEL_ADV:
             self.args.include_tokens = True
+        self.input_validator.validate_agent_name()
         EnvironmentValidator.validate_environment()
         self._validate_server_log()
 

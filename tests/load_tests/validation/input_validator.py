@@ -21,6 +21,7 @@ actual token usage before committing to a full run.
 """
 
 import logging
+import os
 import sys
 from typing import List
 from typing import Optional
@@ -41,6 +42,26 @@ class InputValidator:
 
     def __init__(self, args) -> None:
         self._args = args
+
+    def validate_agent_name(self) -> None:
+        """Reject --agent values that look like filesystem paths.
+
+        The server resolves agents by registry-relative name
+        (e.g. 'basic/hello_world'), not by absolute path.
+        """
+        agent = self._args.agent
+        if os.path.isabs(agent):
+            logger.error(
+                "ERROR: --agent appears to be a filesystem path:\n"
+                "  %s\n\n"
+                "Use the registry-relative name instead.\n"
+                "For example, if the agent HOCON is at:\n"
+                "  registries/basic/hello_world.hocon\n"
+                "Then use:\n"
+                "  --agent basic/hello_world",
+                agent,
+            )
+            sys.exit(1)
 
     def resolve_stages(self) -> List[int]:
         """Return the list of concurrency stages to run.

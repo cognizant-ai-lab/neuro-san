@@ -22,7 +22,10 @@ request validation (sent vs received), and client disconnections.
 
 import logging
 
+from typing import List
+
 from tests.load_tests.config import compute_amplification
+from tests.load_tests.config import RequestResult
 from tests.load_tests.config import RETRY_ERROR_TYPES
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
@@ -172,3 +175,57 @@ class OutputValidator:
                 "    %s: %s still running at disconnect",
                 req_id, agent,
             )
+
+    @staticmethod
+    def check_permission_failures(
+            results: List[RequestResult], agent_name: str,
+    ) -> bool:
+        """Check if all requests failed with a permissions error.
+
+        When neuro-san-studio organizes agents under subdirectories
+        (e.g. registries/basic/hello_world), the --agent value must
+        include the subdirectory prefix (basic/hello_world).
+
+        Returns True if the test should abort (all requests failed
+        with a permissions-related error).
+        """
+        if not results:
+            return False
+        all_failed = all(
+            r.get("status") == STATUS_FAILED for r in results
+        )
+        if not all_failed:
+            return False
+        permission_keywords = ["permissions", "permission", "not found"]
+        has_perm_error = any(
+            any(
+                kw in (r.get("error") or "").lower()
+                for kw in permission_keywords
+            )
+            for r in results
+        )
+        if not has_perm_error:
+            return False
+        if "/" in agent_name:
+            logger.error(
+                "\n  ERROR: All requests failed with a permissions "
+                "error for agent '%s'.\n"
+                "  Verify that the agent is registered in the "
+                "server's AGENT_REGISTRY_PATH and that your user\n"
+                "  has the correct permissions for the network.\n\n"
+                "  Aborting test.",
+                agent_name,
+            )
+        else:
+            logger.error(
+                "\n  ERROR: All requests failed with a permissions "
+                "error.\n"
+                "  The --agent value '%s' may need a registry "
+                "subdirectory prefix.\n"
+                "  For example, if the agent is registered under\n"
+                "  registries/basic/, use:\n"
+                "    --agent basic/%s\n\n"
+                "  Aborting test.",
+                agent_name, agent_name,
+            )
+        return True
