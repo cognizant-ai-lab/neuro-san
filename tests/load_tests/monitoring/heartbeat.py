@@ -45,6 +45,24 @@ class Heartbeat:
         self._server_proc = server_proc
         self._client_proc = client_proc
 
+    def _sample_client_rss(self, peak_rss, peak_ref) -> float:
+        """Sample client RSS and update peak if higher.
+
+        Returns the current peak value.
+        """
+        if self._client_proc is None:
+            return peak_rss
+        try:
+            rss = (
+                self._client_proc.memory_info().rss / (1024 * 1024)
+            )
+            if rss > peak_rss:
+                peak_rss = rss
+                peak_ref.value = rss
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+        return peak_rss
+
     # pylint: disable=too-many-locals,too-many-arguments
     def progress_heartbeat(self, futures, total, start_time,
                            stop_event, *,
@@ -55,16 +73,11 @@ class Heartbeat:
         last_done = 0
         last_change = start_time
         peak_threads = 0
-        peak_rss = 0.0
+        peak_rss = self._sample_client_rss(0.0, peak_client_rss_ref)
         while not stop_event.wait(timeout=HEARTBEAT_INTERVAL_SECONDS):
-            if self._client_proc is not None:
-                try:
-                    rss = self._client_proc.memory_info().rss / (1024 * 1024)
-                    if rss > peak_rss:
-                        peak_rss = rss
-                        peak_client_rss_ref.value = rss
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    pass
+            peak_rss = self._sample_client_rss(
+                peak_rss, peak_client_rss_ref,
+            )
             done = sum(1 for f in futures if f.done())
             elapsed = int(time.time() - start_time)
             ts = time.strftime("%H:%M:%S", time.localtime())
