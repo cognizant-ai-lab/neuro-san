@@ -18,6 +18,7 @@
 Validates that the runtime environment is configured for real LLM calls:
   - No mock LLM server or OPENAI_API_BASE override detected
   - Target server must be reachable on the specified host/port
+  - Auto-detects server log from process CWD when requested
 
 API key validation is intentionally omitted because the load test
 communicates with the server over HTTP — API keys are only needed
@@ -139,3 +140,39 @@ class EnvironmentValidator:
             return None
 
         return server_proc
+
+    @staticmethod
+    def auto_detect_server_log(server_proc) -> str:
+        """Auto-detect server log from server process CWD.
+
+        Looks for logs/server.log relative to the server's working
+        directory.  Aborts with sys.exit(1) when auto-detection
+        fails because the user explicitly requested --server-log.
+        """
+        if server_proc is None:
+            logger.error(
+                "Cannot auto-detect server log: "
+                "server process not found.",
+            )
+            sys.exit(1)
+        try:
+            cwd = server_proc.cwd()
+            candidate = os.path.join(cwd, "logs", "server.log")
+            if os.path.isfile(candidate):
+                logger.info(
+                    "  Auto-detected server log: %s", candidate,
+                )
+                return candidate
+            logger.error(
+                "Server log not found at %s\n"
+                "  Provide the path explicitly: "
+                "--server-log /path/to/server.log",
+                candidate,
+            )
+        except (psutil.AccessDenied, psutil.NoSuchProcess, OSError):
+            logger.error(
+                "Could not determine server working directory.\n"
+                "  Provide the path explicitly: "
+                "--server-log /path/to/server.log",
+            )
+        sys.exit(1)

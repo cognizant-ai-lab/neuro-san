@@ -38,7 +38,11 @@ python -m tests.load_tests.load_test --agent hello_world --level min --yes
 python -m tests.load_tests.load_test --agent hello_world --level min \
     --monitor-resources --yes
 
-# Standard — with resource monitoring and server log
+# Standard — with server log (auto-detect from server process)
+python -m tests.load_tests.load_test --agent hello_world --level norm \
+    --server-log --yes
+
+# Standard — with server log (explicit path)
 python -m tests.load_tests.load_test --agent hello_world --level norm \
     --server-log /path/to/logs/server.log --yes
 
@@ -68,9 +72,11 @@ python -m tests.load_tests.load_test --agent hello_world --level adv \
 
 `opt` = available with optional flags. `--server-log` enables retry
 counting, server-side validation, disconnection detection, and pool
-reuse analysis at any level. `--monitor-resources` enables psutil
-monitoring at `min` level. Token accounting via `agent_cli --tokens`
-is enabled at all levels by default (disable with `--no-tokens`).
+reuse analysis at any level.  Use `--server-log` alone to auto-detect
+the log from the server process, or `--server-log <path>` for an
+explicit file. `--monitor-resources` enables psutil monitoring at
+`min` level. Token accounting via `agent_cli --tokens` is enabled
+at all levels by default (disable with `--no-tokens`).
 
 When `--server-log` is omitted, server-log-dependent sections print
 "not available" in the output.
@@ -89,7 +95,7 @@ then moves to the next.
 |----------------------------|-------------|----------------------------------------------|
 | `--agent`                  | hello_world | Agent name as registered in the server       |
 | `--level`                  | norm        | Test depth: min, norm, or adv                |
-| `--server-log`             | (none)      | Path to server log file (optional)           |
+| `--server-log [PATH]`      | (none)      | Enable server log analysis. Without a path, auto-detects from server process. With a path, uses the given file. |
 | `--monitor-resources`      | off         | Enable psutil monitoring at min level         |
 | `--no-tokens`              | off         | Disable per-request token accounting         |
 | `--profile`                | auto        | Path to agent profile JSON                   |

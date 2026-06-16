@@ -210,10 +210,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
         parser.add_argument(
             "--server-log",
-            type=str,
+            nargs="?",
+            const="auto",
             default=None,
-            help="Path to neuro-san server log file for retry "
-                 "monitoring and server-side token accounting.",
+            help="Enable server log analysis.  Without a path, "
+                 "auto-detects the log from the server process.  "
+                 "With a path, uses the given file.",
         )
         parser.add_argument(
             "--level",
@@ -855,14 +857,21 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     def _validate_server_log(self) -> None:
         """Validate --server-log path when provided.
 
-        At norm/adv levels without --server-log, logs a warning listing
-        which features will be unavailable.
+        Skips validation when --server-log is used without a path
+        (auto-detect mode, value is ``"auto"``).  At norm/adv levels
+        without --server-log, logs a warning listing which features
+        will be unavailable.
         """
         level = self.args.level
-        if level == LEVEL_MIN and not self.args.server_log:
+        server_log = self.args.server_log
+
+        if server_log == "auto":
             return
 
-        if not self.args.server_log:
+        if level == LEVEL_MIN and not server_log:
+            return
+
+        if not server_log:
             logger.warning(
                 "No --server-log provided at %s level.\n"
                 "  The following will be unavailable:\n"
@@ -874,19 +883,19 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 "  Resource monitoring (psutil) and aggregated "
                 "token accounting (--tokens) still work.\n"
                 "  To enable full analysis, add:\n"
+                "    --server-log  (auto-detect)\n"
                 "    --server-log logs/server.log",
                 level,
             )
             return
 
-        if not os.path.isfile(self.args.server_log):
+        if not os.path.isfile(server_log):
             logger.error(
-                "Server log not found: %s",
-                self.args.server_log,
+                "Server log not found: %s", server_log,
             )
             sys.exit(1)
 
-        mtime = os.path.getmtime(self.args.server_log)
+        mtime = os.path.getmtime(server_log)
         age_seconds = time.time() - mtime
         if age_seconds > STALE_LOG_THRESHOLD_SECONDS:
             age_min = int(age_seconds // 60)
@@ -894,7 +903,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 "WARNING: Server log appears stale "
                 "(last modified %sm ago): %s\n"
                 "         Make sure this is the active server log.",
-                age_min, self.args.server_log,
+                age_min, server_log,
             )
 
     def run(self) -> int:
@@ -922,25 +931,41 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         monitor_resources = (
             level != LEVEL_MIN or self.args.monitor_resources
         )
+        needs_server_proc = (
+            (monitor_resources and is_local)
+            or self.args.server_log is not None
+        )
 
-        if monitor_resources and is_local:
+        if needs_server_proc and is_local:
             self.server_proc = (
                 EnvironmentValidator.find_local_server(self.args)
             )
-            self.server_log = self.args.server_log
-            if self.server_log:
-                self.log_monitor = ServerLogMonitor(self.server_log)
-        elif level == LEVEL_MIN and not self.args.monitor_resources:
+
+        if self.args.server_log == "auto":
+            self.args.server_log = (
+                EnvironmentValidator.auto_detect_server_log(
+                    self.server_proc,
+                )
+            )
+
+        self.server_log = self.args.server_log
+        if self.server_log:
+            self.log_monitor = ServerLogMonitor(self.server_log)
+
+        if not monitor_resources:
             logger.info(
                 "Level 'min': resource monitoring disabled. "
                 "Use --monitor-resources to enable.",
             )
-        else:
+        elif not is_local:
             logger.info(
                 "Remote mode: targeting %s:%s",
                 self.args.host, self.args.port,
             )
-            logger.info("  Process monitoring disabled (server is not local)")
+            logger.info(
+                "  Process monitoring disabled "
+                "(server is not local)",
+            )
 
         prompt_mode = "same" if self.args.same_prompt else "varied"
         mode = "ramp" if self.args.ramp else "flat"
