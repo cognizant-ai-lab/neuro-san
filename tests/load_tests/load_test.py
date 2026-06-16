@@ -309,7 +309,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
         self.server_proc = None
         self.server_log = args.server_log
-        self.log_monitor = ServerLogMonitor(self.server_log)
+        self.log_monitor = (
+            ServerLogMonitor(self.server_log)
+            if self.server_log else None
+        )
         self.runner = TrafficRunner(args, self.profile)
         self.input_validator = InputValidator(args)
         self.resource_reporter = ResourceReporter()
