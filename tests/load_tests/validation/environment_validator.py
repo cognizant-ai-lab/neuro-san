@@ -16,7 +16,8 @@
 """Pre-flight environment checks for real-LLM load testing.
 
 Validates that the runtime environment is configured for real LLM calls:
-  - OPENAI_API_KEY must be set
+  - OPENAI_API_KEY should be set (warned, not required — the server
+    may use a different provider or hold its own key)
   - No mock LLM server or OPENAI_API_BASE override detected
   - Target server must be reachable on the specified host/port
   - Optionally auto-detects the server log path from the process CWD
@@ -47,16 +48,26 @@ class EnvironmentValidator:
 
     @staticmethod
     def validate_environment() -> None:
-        """Validate that OPENAI_API_KEY is set and no mock LLM is active."""
+        """Validate that OPENAI_API_KEY is set and no mock LLM is active.
+
+        The API key check is a warning rather than a hard error because
+        the load test communicates with the server over HTTP — the key
+        is only needed on the server side.  When testing against a
+        remote server or a non-OpenAI provider, the client machine may
+        legitimately lack this variable.
+        """
         api_key = os.environ.get("OPENAI_API_KEY")
         if api_key is None or len(api_key) == 0:
-            logger.error(
+            logger.warning(
                 "OPENAI_API_KEY is not set.\n"
-                "This test requires real LLM calls. Set your API key:\n"
-                "  export OPENAI_API_KEY=<your-key>"
+                "  If the server uses OpenAI and runs locally, "
+                "requests will fail.\n"
+                "  Set it with:  export OPENAI_API_KEY=<your-key>\n"
+                "  (Ignored when the server is remote or uses a "
+                "different provider.)"
             )
-            sys.exit(1)
-        logger.info("OPENAI_API_KEY is set.")
+        else:
+            logger.info("OPENAI_API_KEY is set.")
         EnvironmentValidator._check_no_mock_environment()
 
     @staticmethod
