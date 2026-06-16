@@ -135,7 +135,7 @@ class DefaultsConfigFilter(ConfigFilter):
                 tool_value = tool_extractor.get(tool_dest_key)
                 if tool_value is None:
                     # If the tool does not have a value, use the basis_value whole cloth
-                    self.set_tool_value(tool, tool_dest_key, basis_value)
+                    self.set_tool_value(tool, tool_dest_key, deep_copy(basis_value))
 
                 elif isinstance(tool_value, Dict) and isinstance(basis_value, Dict):
                     # Merge the dictionaries
