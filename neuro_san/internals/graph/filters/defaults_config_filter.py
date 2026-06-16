@@ -105,7 +105,8 @@ class DefaultsConfigFilter(ConfigFilter):
         for idx, tool in enumerate(tools):
             tool_extractor = DictionaryExtractor(tool)
 
-            # Front-man is the **first** tool in the list (consistent with AgentNetwork.find_front_man()).
+            # Assume the front-man is the first tool in the list.
+            # This is largely consistent with AgentNetwork.find_front_man().
             is_front_man: bool = idx == 0
 
             # Loop through all the keys in the defaults mapping.
