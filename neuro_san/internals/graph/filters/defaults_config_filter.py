@@ -54,6 +54,7 @@ class DefaultsConfigFilter(ConfigFilter):
         "error_formatter": None,
         "error_fragments": None,
         "sly_data_schema": {
+            "dest_key": "function.sly_data_schema",
             "front_man_only": True,
             "union_fields": ["required"],
         },
@@ -123,12 +124,12 @@ class DefaultsConfigFilter(ConfigFilter):
                 tool_value = tool_extractor.get(tool_dest_key)
                 if tool_value is None:
                     # If the tool does not have a value, use the basis_value whole cloth
-                    tool[tool_dest_key] = deepcopy(basis_value)
+                    self.set_tool_value(tool, tool_dest_key, basis_value)
 
                 elif isinstance(tool_value, Dict) and isinstance(basis_value, Dict):
                     # Do a dictionary overlay with basis_value defaults as what is
                     # overrideable. The values of tool_value are favored.
-                    tool[tool_dest_key] = overlayer.overlay(basis_value, tool_value)
+                    self.set_tool_value(tool, tool_dest_key, overlayer.overlay(basis_value, tool_value))
 
                     union_fields: List[str] | str | None = tool_dest_dict.get("union_fields")
                     if union_fields is not None:
@@ -137,11 +138,41 @@ class DefaultsConfigFilter(ConfigFilter):
                         for one_field in union_fields:
                             basis_field: List[str] = basis_value.get(one_field, [])
                             tool_field: List[str] = tool_value.get(one_field, [])
-                            # The merged value is the union of the two sets
-                            tool[tool_dest_key][one_field] = list(set(basis_field) | set(tool_field))
+                            # The merged value is the union of the two sets with no duplicates
+                            one_field_key: str = f"{tool_dest_key}.{one_field}"
+                            self.set_tool_value(tool, one_field_key, list(set(basis_field) | set(tool_field)))
 
                 # Otherwise, don't touch the value already in the tool.
                 # Don't do anything funny with scalars.
                 # Don't try to merge lists (semantics are fragile here).
 
         return result_config
+
+    def set_tool_value(self, target: Dict[str, Any], key: str, value: Any):
+
+        delimiter: str = "."
+
+        # Simple case, there is no field delimiter in the key
+        if delimiter not in key:
+            target[key] = value
+            return
+
+        #
+        # Complex case, there is a field delimiter in the key
+        #
+
+        # Split the key into parts based on the delimiter
+        parts: List[str] = key.split(delimiter)
+
+        # Find the current value of the first part
+        first_part: str = parts[0]
+        part_value: Dict[str, Any] = target.get(first_part)
+        if part_value is None:
+            # There is no existing value for the first part, so make it a dictionary
+            target[first_part] = {}
+            # Be sure we get the correct value for later use
+            part_value: Dict[str, Any] = target[first_part]
+
+        # Reassemble a shorter key for recursion
+        remaining_parts: str = ".".join(parts[1:])
+        self.tool_value(part_value, remaining_parts, value)
