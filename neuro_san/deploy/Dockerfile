@@ -34,7 +34,7 @@
 
 # Build arguments
 ARG NEURO_SAN_VERSION="Unspecified"
-ARG PACKAGE_INSTALL=/usr/local/lib/python3.12/site-packages
+ARG PACKAGE_INSTALL="/usr/local/lib/python3.12/site-packages"
 
 # Stage 1: Builder Stage - Use our python base image for installations
 # Set python image as base image
@@ -47,10 +47,10 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /
 
 # App-specific constants
-ENV USERNAME=neuro-san
-ENV APP_HOME=/usr/local/${USERNAME}
-ENV APP_SOURCE=${APP_HOME}/myapp
-ENV PIP3_VERSION=25.0.1
+ENV USERNAME="neuro-san"
+ENV APP_HOME="/usr/local/${USERNAME}"
+ENV APP_SOURCE="${APP_HOME}/myapp"
+ENV PIP3_VERSION="25.0.1"
 
 # Explicitly get the desired pip version
 RUN pip3 install --upgrade pip==${PIP3_VERSION} --no-cache-dir ; mkdir -p ${APP_SOURCE}
@@ -66,9 +66,9 @@ FROM python:3.12-slim AS final
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Set up user for app running in container
-ENV USERNAME=neuro-san
-ENV APP_HOME=/usr/local/${USERNAME}
-ENV APP_SOURCE=${APP_HOME}/myapp
+ENV USERNAME="neuro-san"
+ENV APP_HOME="/usr/local/${USERNAME}"
+ENV APP_SOURCE="${APP_HOME}/myapp"
 
 RUN \
     useradd -ms /bin/bash -d ${APP_HOME} -u 1001 ${USERNAME} \
@@ -110,9 +110,9 @@ WORKDIR ${APP_SOURCE}
 # Cannot set ENV vars in Dockerfiles based on shell output within in-progress container build,
 # only from build args.
 ARG PACKAGE_INSTALL
-ENV PACKAGE_INSTALL=${PACKAGE_INSTALL}
-ENV PACKAGE_DEPLOY=${PACKAGE_INSTALL}/neuro_san/deploy
-ENV APP_ENTRYPOINT=${PACKAGE_DEPLOY}/entrypoint.sh
+ENV PACKAGE_INSTALL="${PACKAGE_INSTALL}"
+ENV PACKAGE_DEPLOY="${PACKAGE_INSTALL}/neuro_san/deploy"
+ENV APP_ENTRYPOINT="${PACKAGE_DEPLOY}/entrypoint.sh"
 
 ARG NEURO_SAN_VERSION
 
@@ -159,7 +159,7 @@ ENV NVIDIA_API_KEY=""
 # simply use a space-separated list of manifest files.  Manifest dictionaries will
 # effectively be merged, where content coming from manifests later in the list
 # have precedence.
-ENV AGENT_MANIFEST_FILE=${APP_SOURCE}/registries/manifest.hocon
+ENV AGENT_MANIFEST_FILE="${APP_SOURCE}/registries/manifest.hocon"
 
 # An llm_info hocon file with user-provided llm descriptions that are to be used
 # in addition to the neuro-san defaults.
@@ -171,14 +171,14 @@ ENV AGENT_TOOLBOX_INFO_FILE=""
 
 # Where to find the classes for CodedTool class implementations
 # that are used by specific agent networks.
-ENV AGENT_TOOL_PATH=${APP_SOURCE}/coded_tools
+ENV AGENT_TOOL_PATH="${APP_SOURCE}/coded_tools"
 
 # Where to find the configuration file for Python logging.
 # See https://docs.python.org/3/library/logging.config.html#dictionary-schema-details
 # as to how this file can be configured for your own needs.  Examples there are provided in YAML,
 # but these can be easily translated to JSON or HOCON (which we prefer).
 # Another good resource: https://docs.python.org/3/howto/logging-cookbook.html
-ENV AGENT_SERVICE_LOG_JSON=${PACKAGE_DEPLOY}/logging.hocon
+ENV AGENT_SERVICE_LOG_JSON="${PACKAGE_DEPLOY}/logging.hocon"
 
 # Threshold for logging.
 # See https://docs.python.org/3/library/logging.html#logging.Handler.setLevel
@@ -209,15 +209,15 @@ ENV AGENT_FORWARDED_REQUEST_METADATA="request_id user_id"
 # If you are changing this, you should also change the EXPOSE port above
 # and when running your container locally be sure to have a -p <port>:<port> entry
 # for it on your docker run command line.
-ENV AGENT_HTTP_PORT=8080
+ENV AGENT_HTTP_PORT="8080"
 
 # Maximm number of requests that can be served at the same time
-ENV AGENT_MAX_CONCURRENT_REQUESTS 50
+ENV AGENT_MAX_CONCURRENT_REQUESTS="50"
 
 # Number of requests served before the server shuts down in an orderly fashion.
 # This is useful for testing response handling in clusters with duplicated pods.
 # A value of -1 indicates unlimited requests are handled.
-ENV AGENT_REQUEST_LIMIT=-1
+ENV AGENT_REQUEST_LIMIT="-1"
 
 # If this value is specified and >0,
 # it will enable dynamic run-time updates of the server agents configuration according
@@ -227,7 +227,7 @@ ENV AGENT_REQUEST_LIMIT=-1
 # with corresponding changes in manifest file.
 # Update will be done every AGENT_MANIFEST_UPDATE_PERIOD_SECONDS seconds;
 # if value is not specified or <= 0, no such dynamic updates will be executed.
-ENV AGENT_MANIFEST_UPDATE_PERIOD_SECONDS=0
+ENV AGENT_MANIFEST_UPDATE_PERIOD_SECONDS="0"
 
 # By default, the HTTP service reports the neuro-san library pip version in its health-check response.
 # It is possible to add other libraries to those results by listing them within this env var
@@ -265,13 +265,13 @@ ENV AGENT_TRACING_METADATA_ENV_VARS="POD_NAME POD_NAMESPACE POD_IP NODE_NAME"
 # Impact:
 # Higher values allow the kernel to queue more incoming connections during traffic spikes,
 # reducing the chance of refused connections.
-ENV AGENT_HTTP_CONNECTIONS_BACKLOG=128
+ENV AGENT_HTTP_CONNECTIONS_BACKLOG="128"
 
 # Sets the maximum idle time (in seconds) before Tornado closes a keep-alive connection.
 # Impact:
 # Shorter timeouts free up resources faster under high load.
 # Longer timeouts reduce reconnections for clients that make periodic requests.
-ENV AGENT_HTTP_IDLE_CONNECTIONS_TIMEOUT=3600
+ENV AGENT_HTTP_IDLE_CONNECTIONS_TIMEOUT="3600"
 
 # Forks multiple worker processes, each with its own Tornado event loop, all sharing the same listening socket.
 # Impact:
@@ -280,14 +280,14 @@ ENV AGENT_HTTP_IDLE_CONNECTIONS_TIMEOUT=3600
 # Typical Usage:
 # start(0) → Automatically spawns one process per CPU core.
 # start(N) → Manually specifies number of worker processes.
-ENV AGENT_HTTP_SERVER_INSTANCES=1
+ENV AGENT_HTTP_SERVER_INSTANCES="1"
 
 # If set to a value>0, will start periodic logging of currently used
 # run-time server resources:
 # open file descriptors;
 # open connections for server port.
 # Logging period is specified in seconds.
-ENV AGENT_HTTP_RESOURCES_MONITOR_INTERVAL=0
+ENV AGENT_HTTP_RESOURCES_MONITOR_INTERVAL="0"
 
 # Optional URL describing how the server is to be referenced by the outside world.
 # This is useful when a server is behind a load-balancer as part of a larger cluster.
@@ -357,7 +357,7 @@ ENV AGENT_SESSION_REQUIRE_HTTPS="false"
 ENV AGENT_AUTHORIZER=""
 
 # The request metadata field to use as the actor id for authorization
-ENV AGENT_AUTHORIZER_ACTOR_ID_METADATA_KEY=user_id
+ENV AGENT_AUTHORIZER_ACTOR_ID_METADATA_KEY="user_id"
 
 # See authorization logging.
 # In production you would not want to set this at all.
@@ -366,16 +366,16 @@ ENV AGENT_DEBUG_AUTH=""
 
 # The Actor type sent to the Authorizer
 # This typically corresponds to a specific type set up in the authorization policy
-ENV AGENT_AUTHORIZER_ACTOR_KEY=User
+ENV AGENT_AUTHORIZER_ACTOR_KEY="User"
 
 # The Resource type sent to the Authorizer
 # This typically corresponds to a specific type set up in the authorization policy
-ENV AGENT_AUTHORIZER_RESOURCE_KEY=AgentNetwork
+ENV AGENT_AUTHORIZER_RESOURCE_KEY="AgentNetwork"
 
 # The Relation type sent to the Authorizer used to judge whether the Actor has permission to access the Resource.
 # This typically corresponds to a specific relation set up in the authorization policy
 # Typically "read" from CRUD-based permissions.
-ENV AGENT_AUTHORIZER_ALLOW_RELATION=read
+ENV AGENT_AUTHORIZER_ALLOW_RELATION="read"
 
 # Whether to enable run-time statistics endpoints for neuro-san server as a whole.
 # These endpoints can be used to get information about the server's current resource usage
@@ -386,15 +386,15 @@ ENV ENABLE_RUN_TIME_STATISTICS="false"
 
 # Where the OpenFGA HTTP server is running for the OpenFgaAuthorizer
 # Typical development example might be "http://localhost:8082"
-ENV FGA_API_URL=
+ENV FGA_API_URL=""
 
 # The file containing the authorization policy for the OpenFgaAuthorizer
 # This is a path to a json file that has been compiled from a .fga policy file using the fga CLI tool.
-ENV FGA_POLICY_FILE=
+ENV FGA_POLICY_FILE=""
 
 # The name of the authorization store to use
 # Typically "default"
-ENV FGA_STORE_NAME=
+ENV FGA_STORE_NAME=""
 
 
 ENTRYPOINT ["/bin/bash", "-c", "exec ${APP_ENTRYPOINT}"]
