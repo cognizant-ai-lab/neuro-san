@@ -60,6 +60,13 @@ class DefaultsConfigFilter(ConfigFilter):
         },
     }
 
+    def __init__(self):
+        """
+        Constructor
+        """
+        super().__init__()
+        self.overlayer = DictionaryOverlay()
+
     def filter_config(self, basis_config: Dict[str, Any]) \
             -> Dict[str, Any]:
         """
@@ -88,14 +95,13 @@ class DefaultsConfigFilter(ConfigFilter):
 
         # Create a single extractor for the top-level.
         basis_extractor = DictionaryExtractor(basis_config)
-        overlayer = DictionaryOverlay()
 
         # Loop through all the tools making additions.
         tools = result_config.get("tools")
         for tool in tools:
             tool_extractor = DictionaryExtractor(tool)
 
-            # XXX For now, skip the determining whether the tool is the front man.
+            # DEF: For now, skip the determining whether the tool is the front man.
             is_front_man: bool = True
 
             # Loop through all the keys in the defaults mapping.
@@ -127,20 +133,9 @@ class DefaultsConfigFilter(ConfigFilter):
                     self.set_tool_value(tool, tool_dest_key, basis_value)
 
                 elif isinstance(tool_value, Dict) and isinstance(basis_value, Dict):
-                    # Do a dictionary overlay with basis_value defaults as what is
-                    # overrideable. The values of tool_value are favored.
-                    self.set_tool_value(tool, tool_dest_key, overlayer.overlay(basis_value, tool_value))
-
+                    # Merge the dictionaries
                     union_fields: List[str] | str | None = tool_dest_dict.get("union_fields")
-                    if union_fields is not None:
-                        if isinstance(union_fields, str):
-                            union_fields = [union_fields]
-                        for one_field in union_fields:
-                            basis_field: List[str] = basis_value.get(one_field, [])
-                            tool_field: List[str] = tool_value.get(one_field, [])
-                            # The merged value is the union of the two sets with no duplicates
-                            one_field_key: str = f"{tool_dest_key}.{one_field}"
-                            self.set_tool_value(tool, one_field_key, list(set(basis_field) | set(tool_field)))
+                    self.merge_dictionaries(tool, tool_dest_key, basis_value, tool_value, union_fields)
 
                 # Otherwise, don't touch the value already in the tool.
                 # Don't do anything funny with scalars.
@@ -148,7 +143,40 @@ class DefaultsConfigFilter(ConfigFilter):
 
         return result_config
 
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
+    def merge_dictionaries(self, tool: Dict[str, Any], tool_dest_key: str,
+                           basis_value: Dict[str, Any], tool_value: Dict[str, Any],
+                           union_fields: List[str] | str | None = None):
+        """
+        Merges the basis and tool dictionaries
+        :param tool: The tool dictionary itself
+        :param tool_dest_key: The destination key in the tool dictionary
+        :param basis_value: The dictionary value from the global basis
+        :param tool_value: The dictionary value from the tool
+        :param union_fields: The fields to union. Currently can not be a multi-part key.
+        """
+
+        # overrideable. The values of tool_value are favored.
+        self.set_tool_value(tool, tool_dest_key, self.overlayer.overlay(basis_value, tool_value))
+
+        if union_fields is not None:
+            if isinstance(union_fields, str):
+                union_fields = [union_fields]
+            for one_field in union_fields:
+                basis_field: List[str] = basis_value.get(one_field, [])
+                tool_field: List[str] = tool_value.get(one_field, [])
+                # The merged value is the union of the two sets with no duplicates
+                one_field_key: str = f"{tool_dest_key}.{one_field}"
+                self.set_tool_value(tool, one_field_key, list(set(basis_field) | set(tool_field)))
+
     def set_tool_value(self, target: Dict[str, Any], key: str, value: Any):
+        """
+        Sets the value of a key in the tool dictionary
+
+        :param target: The dictionary to set the value in
+        :param key: The key to set the value for. This can be a multi-part key delimited by "."
+        :param value: The value to set
+        """
 
         delimiter: str = "."
 
@@ -175,4 +203,4 @@ class DefaultsConfigFilter(ConfigFilter):
 
         # Reassemble a shorter key for recursion
         remaining_parts: str = ".".join(parts[1:])
-        self.tool_value(part_value, remaining_parts, value)
+        self.set_tool_value(part_value, remaining_parts, value)
