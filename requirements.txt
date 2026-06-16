@@ -6,7 +6,7 @@
 # requirements-build.txt
 
 # In-house dependencies
-leaf-common>=1.2.40
+leaf-common>=1.2.43
 leaf-server-common>=0.1.24
 
 # These are needed for generating code from .proto files and for the
@@ -77,7 +77,18 @@ json-repair>=0.47.3,<1.0
 croniter>=6.2.2
 
 # MCP tools
-langchain-mcp-adapters>=0.1.7,<1.0
-# 1.23 is needed for MCP OAuth with grant type "client_credentials" and <2.0 to avoid breaking changes.
-# https://github.com/modelcontextprotocol/python-sdk/releases/tag/v1.25.0
+# These two pins are coupled: langchain-mcp-adapters depends on the mcp package,
+# so changes in either can affect us. Keep the rationales in sync.
+
+# Ceiling <0.2.0: 0.2.0 ships langchain-ai/langchain-mcp-adapters#379, which
+# changed ToolMessage.content from a concatenated text string to a list of
+# LangChain content blocks. JournalingCallbackHandler.on_tool_end then calls
+# str() on .content and would log the raw list structure instead of the tool's
+# text output.
+langchain-mcp-adapters>=0.1.7,<0.2.0
+
+# Floor >=1.23.0: needed for MCP OAuth client_credentials grant, required by
+# the MCP Authentication work in cognizant-ai-lab/neuro-san#683.
+# Ceiling <2.0: avoid breaking changes from the upcoming 2.x line.
+# See https://github.com/modelcontextprotocol/python-sdk/releases/ for changelogs.
 mcp>=1.23.0,<2.0

@@ -23,6 +23,7 @@ from contextlib import suppress
 from langchain_core.language_models.base import BaseLanguageModel
 
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
+from neuro_san.internals.utils.config_util import ConfigUtil
 
 
 class AnthropicLlmPolicy(LlmPolicy):
@@ -65,14 +66,15 @@ class AnthropicLlmPolicy(LlmPolicy):
                                                     "ANTHROPIC_API_KEY"),
             default_headers=config.get("default_headers"),
             betas=config.get("betas"),
-            # Disable streaming: neuro-san does not consume per-token chunks from the model,
-            # and disabling streaming reduces per-request LangChain pipeline overhead.
-            # Token usage is collected from AIMessage.usage_metadata in LlmTokenCallbackHandler.
-            # We set streaming explicitly (rather than relying on the False default) so that
-            # langchain_core._should_stream() recognizes it as opted-out
-            # even when a streaming-aware callback is attached.
-            streaming=False,
-            stream_usage=False,  # Don't even include token usage in the streaming response, since we're not streaming
+            # Streaming is configurable via the "streaming" key in llm_config; defaults
+            # to False so existing agents keep their long-standing non-streaming behavior.
+            # We pass streaming explicitly (rather than relying on LangChain's default) so
+            # that langchain_core._should_stream() picks up the configured value even when
+            # a streaming-aware callback is attached. Token usage is collected from
+            # AIMessage.usage_metadata in LlmTokenCallbackHandler regardless of streaming
+            # mode; stream_usage tracks streaming so usage frames flow only when streaming.
+            streaming=ConfigUtil.get_bool(config, "streaming"),
+            stream_usage=ConfigUtil.get_bool(config, "streaming"),
             thinking=config.get("thinking"),
             effort=config.get("effort"),
             mcp_servers=config.get("mcp_servers"),

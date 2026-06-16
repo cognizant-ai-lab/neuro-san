@@ -1,0 +1,262 @@
+
+# Copyright © 2023-2026 Cognizant Technology Solutions Corp, www.cognizant.com.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# END COPYRIGHT
+
+# The schema specifications for this file are documented here:
+# https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md
+
+{
+    # Optional metadata describing this agent network
+    "metadata": {
+        "description": """
+Complex agent network consisting of several LLM-based agents using AAOSA prompting federation
+with middleware optimization.
+""",
+        "tags": ["example", "aaosa", "middleware"],
+        "sample_queries": [
+            "I just got married. What do I need to update in the system?",
+            "I'm relocating to another country. What do I need to do?",
+        ]
+    },
+    "llm_config": {
+        "model_name": "gpt-5.2"
+    },
+    "commondefs": {
+        "replacement_strings": {
+            "aaosa_instructions": """
+When you receive an inquiry, you will:
+
+    1. Call your tools to determine which down-chain agents in your tools are
+       responsible for all or part of it.
+    2. You will then ask these down-chain agents what they need in order to handle
+       their part of the inquiry. Once the requirements are gathered, you will,
+    3. Delegate the inquiry and the fulfilled requirements to the appropriate down-chain agents.
+    4. Once all down-chain agents respond, you will compile their responses and return the final response.
+
+You may, in turn, be called by other agents in the system and have to act as a down-chain to them.
+            """
+        },
+        "replacement_values": {
+            "aaosa_call": {
+                "description": "Depending on the mode, returns a natural language string in response.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "inquiry": {
+                            "type": "string",
+                            "description": "The inquiry"
+                        },
+                        "mode": {
+                            "type": "string",
+                            "description": """
+indicates whether the agent is being asked to determine if the inquiry belongs to it
+in its entirety or in part. or if it is being asked to provide requirements to fulfill
+the inquiry, if any. or if it is being asked to respond to the inquiry.
+                            """
+                        },
+                    },
+                    "required": [
+                        "inquiry",
+                        "mode"
+                    ]
+                }
+            },
+            "aaosa_command": "Explain if you can respond to all or parts of the inquiry and what you need in order to respond, if anything."
+        },
+    }
+    "tools": [
+        # This first agent definition is regarded as the "Front Man", which
+        # does all the talking to the outside world/client.
+        #
+        # Some disqualifications from being a front man:
+        #   1) Cannot use a CodedTool "class" definition
+        #   2) Cannot use a Tool "toolbox" definition
+        #
+        # Besides the first agent being the front man, these tool definitions
+        # do not have to be in any particular order. How they are linked and
+        # call each other is defined within their own specs.
+        # This could be a graph, potentially even with cycles.
+        {
+            "name": "main_search_box",
+
+            # Note that there are no parameters defined for this guy's "function" key.
+            # This is the primary way to identify this tool as a front-man,
+            # distinguishing it from the rest of the tools.
+
+            "function": {
+
+                # The description acts as an initial prompt.
+                "description": "I can help you with your intranet needs."
+            },
+            "instructions": """
+You are the top-level agent responsible for handling all inquiries.
+{aaosa_instructions}
+When interacting with the user, act as the single point of interaction. No need to mention the other tools or agents.
+If there are any requirements that need user input, ask them one at a time, with clear examples of the choices available.
+            """,
+            "tools": [
+                "Security_agent", "Networking_agent",                                       # from "IT_agent",
+                "Budgeting_agent", "Accounting_agent", "Financial_reporting_agent",         # From "Finance_agent",
+                "Purchasing_agent", "Vendor_management_agent", "Contract_negotiation_agent", # From "Procurement_agent",
+                "Contracts_agent", "Compliance_agent", "Legal_advice_agent",                # From "Legal_agent",
+                "Benefits_agent", "Payroll_agent",                                          # From "HR_agent"
+            ],
+            "middleware": [
+                {
+                    # The LLMConfigToolSelectorMiddleware is no performance panacea.
+                    # Know the tradeoffs:
+                    #
+                    # * On the one hand, it can be a lot more token and time (latency) efficient to use
+                    #   this middleware, as it allows you to flatten the depth of an agent network
+                    #   and extend the tool list specs beyond the normal limit of 7 tools per agent w/rt
+                    #   the way the network can branch. (The use limit of 7 still applies in terms
+                    #   of what tools are picked - this is not magically changing the way models are trained.)
+                    #
+                    # * On the other hand, there are other beneficial aspects that can suffer:
+                    #
+                    #   * The down-chain agents' function descriptions and parameter descriptions
+                    #     should be more carefully written to reflect the nuances of what they actually do.
+                    #     (FWIW Refinement here is a good idea anyway). In the end, robustness of responses
+                    #     from down-chain agents can suffer because they are skipped over for consideration
+                    #     due to overly terse function descriptions.
+                    #
+                    #   * AAOSA networks can lose the modularity that the federated approach of AAOSA provides.
+                    #     That is, overdoing it with centralization can overtax the single middleware llm
+                    #     deciding about the tool usage and you can lose the freedom of (for example) different
+                    #     departments managing their own sets of tools they wish to contribute to the overall network.
+                    "class": "neuro_san.middleware.llm_config_tool_selector_middleware.LlmConfigToolSelectorMiddleware",
+                    "args": {
+                        "activation_capsule": true,
+                        "llm_config": {
+                            "fallbacks": [
+                                # Add more here to test fallbacks
+                                { "model_name": "gpt-5.2" },
+                            ]
+                        },
+                        "sly_data": true,
+                        # "system_prompt": "<your_system_prompt_here>",
+                        "max_tools": 7,
+                        "always_include": []
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Security_agent",
+            "function": "aaosa_call",
+            "instructions": """
+Handles security-related tasks, including system protection, cybersecurity, and data security.
+            """,
+            "command": "aaosa_command"
+        },
+        {
+            "name": "Networking_agent",
+            "function": "aaosa_call",
+            "instructions": """
+Handles network-related tasks, including network setup, maintenance, and troubleshooting.
+            """,
+            "command": "aaosa_command"
+        },
+        {
+            "name": "Budgeting_agent",
+            "function": "aaosa_call",
+            "instructions": """
+Handles budgeting tasks, including budget planning, allocation, and tracking.
+            """,
+            "command": "aaosa_command"
+        },
+        {
+            "name": "Accounting_agent",
+            "function": "aaosa_call",
+            "instructions": """
+Handles accounting tasks, including bookkeeping, financial records, and audits.
+            """,
+            "command": "aaosa_command"
+        },
+        {
+            "name": "Financial_reporting_agent",
+            "function": "aaosa_call",
+            "instructions": """
+Handles financial reporting tasks, including preparing financial statements, regulatory reporting, and performance analysis.
+            """,
+            "command": "aaosa_command"
+        },
+        {
+            "name": "Purchasing_agent",
+            "function": "aaosa_call",
+            "instructions": """
+Handles purchasing-related tasks, including ordering, supply management, and procurement processes.
+            """,
+            "command": "aaosa_command"
+        },
+        {
+            "name": "Vendor_management_agent",
+            "function": "aaosa_call",
+            "instructions": """
+Handles vendor management tasks, including vendor selection, performance monitoring, and relationship management.
+            """,
+            "command": "aaosa_command"
+        },
+        {
+            "name": "Contract_negotiation_agent",
+            "function": "aaosa_call",
+            "instructions": """
+Handles contract negotiation tasks, including drafting, reviewing, and finalizing procurement contracts.
+            """,
+            "command": "aaosa_command"
+        },
+        {
+            "name": "Contracts_agent",
+            "function": "aaosa_call",
+            "instructions": """
+Handles contract-related tasks, including drafting, reviewing, and enforcing legal agreements.
+            """,
+            "command": "aaosa_command"
+        },
+        {
+            "name": "Compliance_agent",
+            "function": "aaosa_call",
+            "instructions": """
+Handles compliance-related tasks, including ensuring adherence to laws, regulations, and internal policies.
+            """,
+            "command": "aaosa_command"
+        },
+        {
+            "name": "Legal_advice_agent",
+            "function": "aaosa_call",
+            "instructions": """
+Handles legal advice tasks, including providing legal counsel, risk assessment, and legal strategy.
+            """,
+            "command": "aaosa_command"
+        },
+        {
+            "name": "Benefits_agent",
+            "function": "aaosa_call",
+            "instructions": """
+Handles benefits-related tasks, including employee benefits, health insurance, and retirement plans.
+            """,
+            "command": "aaosa_command"
+        },
+        {
+            "name": "Payroll_agent",
+            "function": "aaosa_call",
+            "instructions": """
+Handles payroll-related tasks, including salary processing, tax deductions, and pay slips.
+            """,
+            "command": "aaosa_command"
+        }
+    ]
+}

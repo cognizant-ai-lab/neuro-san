@@ -7,6 +7,7 @@ langchain-aws>=1.0.0,<2.0
 langchain-google-genai>=4.1.2,<5.0
 langchain-nvidia-ai-endpoints>=1.0.0,<2.0
 langchain-ollama>=1.0.0,<2.0
+langchain-openrouter>=0.2.3,<1.0
 
 # Optional Authorization
 openfga-sdk

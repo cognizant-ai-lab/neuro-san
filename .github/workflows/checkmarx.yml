@@ -1,30 +1,210 @@
 ---
 name: Checkmarx One
 
-permissions:
-  contents: read
-  security-events: write
-
 on:
   schedule:
     # M-F at 2 am UTC
     - cron: '0 2 * * 1-5'
+  workflow_dispatch:
+  release:
+    types:
+      - published
 
 jobs:
   checkmarx-scan:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
-      # v6.0.2
       - name: Checkout repository
+        # v6.0.2
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 0
 
       - name: Run Checkmarx One scan
-        # build-common 1.0.5
-        uses: cognizant-ai-lab/build-common/actions/checkmarx-one@550f3d7338e598c813b9580a238141328f7baaaa
+        id: scan
+        # build-common 1.0.7
+        uses: cognizant-ai-lab/build-common/actions/checkmarx-one@3ead7f681f92044709ffc3a533f41c3f48230cfd
         with:
           base-uri: ${{ vars.CX_BASE_URI }}
           cx-tenant: ${{ vars.CX_TENANT }}
           cx-client-id: ${{ vars.CX_CLIENT_ID }}
           cx-client-secret: ${{ secrets.CX_CLIENT_SECRET }}
+          scan-params: '--sast-preset-name "Checkmarx Default" --threshold "sast-critical=1;sast-high=1"'
+
+      - name: Generate and download Checkmarx report
+        id: report
+        if: always() && steps.scan.outputs.scan-id != ''
+        env:
+          CX_BASE_URI: ${{ vars.CX_BASE_URI }}
+          CX_IAM_URI: ${{ vars.CX_IAM_URI }}
+          CX_TENANT: ${{ vars.CX_TENANT }}
+          CX_CLIENT_ID: ${{ vars.CX_CLIENT_ID }}
+          CX_CLIENT_SECRET: ${{ secrets.CX_CLIENT_SECRET }}
+          SCAN_ID: ${{ steps.scan.outputs.scan-id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Strip trailing slash from base URI
+          API_BASE="${CX_BASE_URI%/}"
+
+          # Use CX_IAM_URI if set, otherwise derive from CX_BASE_URI
+          # (e.g., https://us.ast.checkmarx.net -> https://us.iam.checkmarx.net)
+          if [[ -n "${CX_IAM_URI:-}" ]]; then
+            IAM_URI="${CX_IAM_URI%/}"
+          else
+            IAM_URI="$(echo "$API_BASE" | sed 's|ast\.checkmarx|iam.checkmarx|')"
+          fi
+
+          echo "Authenticating with Checkmarx One at ${IAM_URI}"
+          AUTH_RESPONSE="$(curl --silent --show-error \
+            --request POST \
+            --header "Content-Type: application/x-www-form-urlencoded" \
+            --data-urlencode "grant_type=client_credentials" \
+            --data-urlencode "client_id=${CX_CLIENT_ID}" \
+            --data-urlencode "client_secret=${CX_CLIENT_SECRET}" \
+            "${IAM_URI}/auth/realms/${CX_TENANT}/protocol/openid-connect/token")"
+
+          TOKEN="$(echo "$AUTH_RESPONSE" | jq --raw-output '.access_token')"
+          if [[ -z "$TOKEN" || "$TOKEN" == "null" ]]; then
+            echo "::error::Failed to authenticate. Response: ${AUTH_RESPONSE}"
+            exit 1
+          fi
+
+          # Get project ID from scan details
+          echo "Fetching scan details for ${SCAN_ID}"
+          SCAN_RESPONSE="$(curl --silent --show-error \
+            --header "Authorization: Bearer ${TOKEN}" \
+            "${API_BASE}/api/scans/${SCAN_ID}")"
+          echo "Scan response: ${SCAN_RESPONSE}" | head -c 500
+
+          PROJECT_ID="$(echo "$SCAN_RESPONSE" | jq --raw-output '.projectId // .projectID // empty')"
+          if [[ -z "$PROJECT_ID" ]]; then
+            echo "::warning::Could not extract projectId from scan details"
+          else
+            echo "Project ID: ${PROJECT_ID}"
+          fi
+
+          # Build report request body using jq to avoid shell interpolation injection
+          if [[ -n "$PROJECT_ID" ]]; then
+            REPORT_BODY="$(jq --null-input \
+              --arg scanId "$SCAN_ID" \
+              --arg projectId "$PROJECT_ID" \
+              '{reportType: "cli", reportName: "improved-scan-report", fileFormat: "pdf", data: {scanId: $scanId, projectId: $projectId}}')"
+          else
+            REPORT_BODY="$(jq --null-input \
+              --arg scanId "$SCAN_ID" \
+              '{reportType: "cli", reportName: "improved-scan-report", fileFormat: "pdf", data: {scanId: $scanId}}')"
+          fi
+
+          echo "Requesting report for scan ${SCAN_ID}"
+          REPORT_RESPONSE="$(curl --silent --show-error \
+            --write-out "\n%{http_code}" \
+            --request POST \
+            --header "Authorization: Bearer ${TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data "$REPORT_BODY" \
+            "${API_BASE}/api/reports")"
+
+          HTTP_CODE="$(echo "$REPORT_RESPONSE" | tail -n1)"
+          REPORT_BODY_RESP="$(echo "$REPORT_RESPONSE" | sed '$d')"
+          echo "Report API response (HTTP ${HTTP_CODE}): ${REPORT_BODY_RESP}"
+
+          if [[ "$HTTP_CODE" -ge 400 ]]; then
+            echo "::error::Report creation failed (HTTP ${HTTP_CODE}): ${REPORT_BODY_RESP}"
+            exit 1
+          fi
+
+          REPORT_ID="$(echo "$REPORT_BODY_RESP" | jq --raw-output '.reportId')"
+          if [[ -z "$REPORT_ID" || "$REPORT_ID" == "null" ]]; then
+            echo "::error::No reportId in response: ${REPORT_BODY_RESP}"
+            exit 1
+          fi
+
+          echo "Report ID: ${REPORT_ID} — polling for completion"
+          STATUS="unknown"
+          for i in $(seq 1 30); do
+            STATUS_RESP="$(curl --silent --show-error \
+              --header "Authorization: Bearer ${TOKEN}" \
+              "${API_BASE}/api/reports/${REPORT_ID}")"
+
+            echo "  Attempt ${i}/30 raw response: ${STATUS_RESP}"
+
+            # Try common field names for status
+            STATUS="$(echo "$STATUS_RESP" \
+              | jq --raw-output '
+                  if type == "object" then
+                    (.status // .reportStatus // "unknown")
+                  else
+                    tostring
+                  end
+                ' 2>/dev/null || echo "parse-error")"
+
+            # Normalize to lowercase for comparison
+            STATUS_LOWER="$(echo "$STATUS" | tr '[:upper:]' '[:lower:]')"
+            echo "  Parsed status: ${STATUS_LOWER}"
+
+            if [[ "$STATUS_LOWER" == "completed" ]]; then
+              break
+            elif [[ "$STATUS_LOWER" == "failed" ]]; then
+              echo "::error::Report generation failed: ${STATUS_RESP}"
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          if [[ "$STATUS_LOWER" != "completed" ]]; then
+            echo "::error::Report generation timed out after 5 minutes"
+            exit 1
+          fi
+
+          # Try the download URL from the status response first, fall back to convention
+          DOWNLOAD_URL="$(echo "$STATUS_RESP" | jq --raw-output '.url // empty' 2>/dev/null || true)"
+          if [[ -z "$DOWNLOAD_URL" ]]; then
+            DOWNLOAD_URL="${API_BASE}/api/reports/${REPORT_ID}/download"
+          fi
+
+          echo "Downloading report from ${DOWNLOAD_URL}"
+          curl --silent --show-error --fail \
+            --header "Authorization: Bearer ${TOKEN}" \
+            --output "checkmarx-report.pdf" \
+            "$DOWNLOAD_URL"
+
+          echo "Report downloaded successfully"
+          ls -la checkmarx-report.pdf
+
+      - name: Upload Checkmarx report
+        if: always() && steps.report.outcome == 'success'
+        # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: checkmarx-report-${{ github.run_id }}
+          path: checkmarx-report.pdf
+          retention-days: 90
+
+  attach-to-release:
+    if: always() && github.event_name == 'release'
+    needs: checkmarx-scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download report artifact
+        # v4.3.0
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: checkmarx-report-${{ github.run_id }}
+
+      - name: Attach report to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
+        shell: bash
+        run: |
+          gh release upload "$TAG_NAME" \
+            checkmarx-report.pdf#checkmarx-sast-report.pdf \
+            --clobber

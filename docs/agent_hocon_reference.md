@@ -210,13 +210,25 @@ to use LLMs from various providers.
 | NVidia        | NVIDIA_API_KEY                                 |
 | Ollma         | &lt;None required&gt;                          |
 | OpenAI        | OPENAI_API_KEY                                 |
+| OpenRouter    | OPENROUTER_API_KEY                             |
 
-**Anthropic Model Names:** The model names `claude-haiku`, `claude-sonnet`, and `claude-opus`
+**Anthropic Model Names:** The model names `claude-haiku`, `claude-sonnet`, `claude-opus`, and `claude-fable`
 are aliases that automatically reference the latest versions of their respective Anthropic model lines.
 This aliasing is recommended because Anthropic frequently deprecates older model versions. For information
 on current models and deprecation schedules, see the
 [Anthropic model deprecations documentation](https://platform.claude.com/docs/en/about-claude/model-deprecations).
-Note that most retired Anthropic models can still be accessed via Amazon Bedrock.
+
+**OpenRouter Model Names:** [OpenRouter](https://openrouter.ai/) is a unified API gateway that fronts
+hundreds of models from many providers (OpenAI, Anthropic, Google, Meta, etc.) behind a single endpoint.
+With the `openrouter` class, the `model_name` follows OpenRouter's `provider/model` convention, e.g.
+`anthropic/claude-sonnet-4-5` or `openai/gpt-4o`. OpenRouter also exposes "meta-router" models such as
+`openrouter/free` and `openrouter/auto` that select an underlying model at request time based on the
+capabilities the request needs (image understanding, tool calling, structured outputs, etc.). Because
+the underlying model is not known ahead of time for these routers, their `max_output_tokens` is left
+unset in `default_llm_info.hocon` — see the
+[llm_info_hocon_reference](./llm_info_hocon_reference.md#max_output_tokens) for what that means in practice.
+This integration requires the [`langchain-openrouter`](https://docs.langchain.com/oss/python/integrations/chat/openrouter)
+package, which neuro-san lazy-installs on first use.
 
 **Security Best Practice:** _We strongly recommend to **not** set secrets as values within any source file._
 These files tend to creep into source control repos, and it is **very** bad practice
@@ -280,6 +292,7 @@ Set the `class` key to one of the values listed below, then specify the model us
 | NVidia        | nvidiea       |
 | Ollma         | ollama        |
 | OpenAI        | openai        |
+| OpenRouter    | openrouter    |
 
 You may only provide parameters that are explicitly defined for that provider's class under the
 `classes.<class>.args` section of
@@ -340,7 +353,7 @@ Deprecated. Use [max_steps](#max_steps) instead.
 
 An integer controlling the maximum amount of wall clock time (in seconds) to spend in the langchain
 [AgentExecutor](https://api.python.langchain.com/en/latest/agents/langchain.agents.agent.AgentExecutor.html)
-used for the agent.  Default is set for 2 minutes.
+used for the agent.  Default is set for 5 minutes.
 
 ### max_attempts
 
@@ -596,7 +609,25 @@ This enables entire ecosystems of agent webs.
 #### MCP Servers
 
 Agents can call tools exposed by external Model Context Protocol (MCP) servers.
-MCP server URLs must either start with `https://mcp` or end with `/mcp`.
+
+MCP server URLs are recognized when they conform to the
+[MCP canonical server URI specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#canonical-server-uri):
+they must use the `http` or `https` scheme, must include a host, and must not contain a fragment.
+To distinguish MCP server URLs from other external agent URLs, the literal `mcp` must appear either
+as a label in the hostname (e.g. `mcp.example.com`) or as any segment of the URL path
+(e.g. `/mcp`, `/mcp/free`, `/server/mcp`, `/v1/mcp/server`).
+
+Examples of URLs that are recognized as MCP servers:
+
+- `https://mcp.example.com/mcp`
+- `https://mcp.example.com`
+- `https://mcp.example.com:8443`
+- `https://example.com/mcp/free`
+- `https://example.com/v1/mcp/server`
+- `http://localhost:8000/mcp/`
+
+If a URL you want to use does not satisfy these rules, fall back to the dictionary form below,
+which is always treated as an MCP reference regardless of URL shape.
 
 MCP servers can be configured in two formats:
 

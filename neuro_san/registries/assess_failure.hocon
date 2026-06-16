@@ -80,7 +80,7 @@ are known to fail against the given acceptance_criteria.
                             }
                         }
                     },
-                    "required": ["sample", "acceptance_criteria"]
+                    "required": ["text_sample", "acceptance_criteria"]
                 }
             },
 

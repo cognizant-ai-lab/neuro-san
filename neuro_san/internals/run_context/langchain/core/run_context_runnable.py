@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from asyncio import TimeoutError as AsyncTimeout
 from typing import Any
 from typing import Dict
 from typing import List
@@ -28,7 +29,6 @@ from pydantic import ConfigDict
 from langchain_classic.callbacks.tracers.logging import LoggingCallbackHandler
 from langchain_core.agents import AgentFinish
 from langchain_core.callbacks.base import BaseCallbackHandler
-from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 from langchain_core.runnables.base import Runnable
@@ -75,7 +75,10 @@ class RunContextRunnable(NeuroSanRunnable):
     # is able to use JSON schema definitions to validate fields.
     agent_chain: Runnable
 
-    primary_llm: BaseLanguageModel
+    # This needs to be a Runnable because nowadays the primary LLM could be
+    # be a BaseLanguageModel with fallbacks attached to it, which ends up
+    # being a Runnable.
+    primary_llm: Runnable
 
     journal: Journal
 
@@ -105,7 +108,7 @@ class RunContextRunnable(NeuroSanRunnable):
         # as input.
         agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
 
-        max_execution_seconds: float = agent_spec.get("max_execution_seconds", 2.0 * MINUTES)
+        max_execution_seconds: float = agent_spec.get("max_execution_seconds", 5.0 * MINUTES)
 
         # Langchain `create_agent` uses LangGraph under the hood, which has a default recursion limit of 10,000.
         # Even though it is called "recursion limit", it is actually more of a step ("super-step") limit for
@@ -163,8 +166,18 @@ class RunContextRunnable(NeuroSanRunnable):
 
         # Attempt to count tokens/costs while invoking the agent.
         token_counter = LangChainTokenCounter(self.primary_llm, self.invocation_context, self.journal, self.origin)
-        await token_counter.count_tokens(self.invoke_agent_chain(inputs, runnable_config, max_attempts),
-                                         max_execution_seconds)
+        try:
+            await token_counter.count_tokens(self.invoke_agent_chain(inputs, runnable_config, max_attempts),
+                                             max_execution_seconds)
+        except AsyncTimeout:
+            # The token counter already wrote the final AIMessage to the journal
+            # (before its token-accounting messages, to preserve message order).
+            # Here we only need to surface the timeout in server logs.
+            self.logger.warning(
+                "Agent '%s' timed out: exceeded max_execution_seconds=%ss and was cancelled.",
+                Origination.get_full_name_from_origin(self.origin),
+                max_execution_seconds,
+            )
 
         return inputs
 
@@ -316,12 +329,17 @@ class RunContextRunnable(NeuroSanRunnable):
                 # We generally want the content of any single AIMessage we found from above
                 output = ai_message.content
 
-        # In general, output is a string. but output from Anthropic can either be
-        # a single string or a list of content blocks.
-        # If it is a list, "text" is a key of a dictionary which is the first element of
-        # the list. For more details: https://python.langchain.com/docs/integrations/chat/anthropic/#content-blocks
+        # In general, output is a string, but it can also be a list of content blocks when there are multiple
+        # message types, such as "thinking", "reasoning", etc.
+        # If it is a list, "text" is a key in the dict containing the actual string output we want to return.
+        # For more details: https://docs.langchain.com/oss/python/langchain/messages#standard-content-blocks
         if isinstance(output, list):
-            output = output[0].get("text", "")
+            text_output: str = ""
+            for block in output:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    text_output = block.get("text", "")
+                    break
+            output = text_output
 
         # See if we had some kind of error and format accordingly, if asked for.
         output = self.error_detector.handle_error(output, backtrace)

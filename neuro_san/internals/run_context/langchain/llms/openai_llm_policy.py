@@ -23,6 +23,7 @@ from httpx import AsyncClient
 from langchain_core.language_models.base import BaseLanguageModel
 
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
+from neuro_san.internals.utils.config_util import ConfigUtil
 
 
 class OpenAILlmPolicy(LlmPolicy):
@@ -120,6 +121,7 @@ class OpenAILlmPolicy(LlmPolicy):
         # Now construct LLM chat model we will be using:
         llm = ChatOpenAI(
             async_client=client,
+            root_async_client=self.async_openai_client,
             model_name=model_name,
             temperature=config.get("temperature"),
 
@@ -141,13 +143,14 @@ class OpenAILlmPolicy(LlmPolicy):
             logprobs=config.get("logprobs"),
             top_logprobs=config.get("top_logprobs"),
             logit_bias=config.get("logit_bias"),
-            # Disable streaming: neuro-san does not consume per-token chunks from the model,
-            # and disabling streaming reduces per-request LangChain pipeline overhead.
-            # Token usage is collected from AIMessage.usage_metadata in LlmTokenCallbackHandler.
-            # We set streaming explicitly (rather than relying on the False default) so that
-            # langchain_core._should_stream() recognizes it as opted-out even when a
-            # streaming-aware callback handler is attached to the run manager.
-            streaming=False,
+            # Streaming is configurable via the "streaming" key in llm_config; defaults
+            # to False so existing agents keep their long-standing non-streaming behavior.
+            # We pass streaming explicitly (rather than relying on LangChain's default) so
+            # that langchain_core._should_stream() picks up the configured value even when
+            # a streaming-aware callback handler is attached to the run manager. Token
+            # usage is collected from AIMessage.usage_metadata in LlmTokenCallbackHandler
+            # regardless of streaming mode.
+            streaming=ConfigUtil.get_bool(config, "streaming"),
             n=1,  # n is always 1.  neuro-san will only ever consider one chat completion.
             top_p=config.get("top_p"),
             max_tokens=config.get("max_tokens"),  # This is always for output
@@ -174,8 +177,8 @@ class OpenAILlmPolicy(LlmPolicy):
             # global verbose value) so that the warning is never triggered.
             verbose=False,
 
-            # Set stream_usage to False - we don't use streaming.
-            stream_usage=False
+            # Track streaming: emit token-usage frames only when streaming is enabled.
+            stream_usage=ConfigUtil.get_bool(config, "streaming")
         )
 
         return llm
