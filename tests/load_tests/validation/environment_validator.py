@@ -18,7 +18,6 @@
 Validates that the runtime environment is configured for real LLM calls:
   - No mock LLM server or OPENAI_API_BASE override detected
   - Target server must be reachable on the specified host/port
-  - Optionally auto-detects the server log path from the process CWD
 
 API key validation is intentionally omitted because the load test
 communicates with the server over HTTP — API keys are only needed
@@ -31,7 +30,6 @@ import os
 import socket
 import sys
 from typing import Optional
-from typing import Tuple
 
 import psutil
 
@@ -99,15 +97,11 @@ class EnvironmentValidator:
             return False
 
     @staticmethod
-    def find_local_server(args) -> Tuple[
-        Optional[psutil.Process], Optional[str],
-    ]:
+    def find_local_server(args) -> Optional[psutil.Process]:
         """Locate the neuro-san server process for resource monitoring.
 
         Searches by process keyword first, then falls back to port
-        ownership.  Auto-detects the server log if not specified.
-
-        Returns (server_proc, server_log) tuple.
+        ownership.  Returns the process or None.
         """
         if not EnvironmentValidator.is_port_open(args.host, args.port):
             logger.error(
@@ -142,39 +136,6 @@ class EnvironmentValidator:
                 "neuro-san server process not found locally. "
                 "Resource monitoring disabled."
             )
-            return None, args.server_log
+            return None
 
-        server_log = args.server_log
-        if server_log is None:
-            server_log = EnvironmentValidator._auto_detect_server_log(
-                server_proc,
-            )
-
-        return server_proc, server_log
-
-    @staticmethod
-    def _auto_detect_server_log(server_proc) -> Optional[str]:
-        """Auto-detect server log from server process CWD.
-
-        Looks for logs/server.log relative to the server's working
-        directory.  Returns None if detection fails.
-        """
-        try:
-            cwd = server_proc.cwd()
-            candidate = os.path.join(cwd, "logs", "server.log")
-            if os.path.isfile(candidate):
-                logger.info(
-                    "  Auto-detected server log: %s", candidate,
-                )
-                return candidate
-            logger.info(
-                "  Server log not found at %s. "
-                "Retry monitoring unavailable.",
-                candidate,
-            )
-        except (psutil.AccessDenied, psutil.NoSuchProcess, OSError):
-            logger.info(
-                "  Could not determine server working directory. "
-                "Retry monitoring unavailable.",
-            )
-        return None
+        return server_proc

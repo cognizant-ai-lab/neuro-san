@@ -212,8 +212,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "--server-log",
             type=str,
             default=None,
-            help="Explicit path to neuro-san server log file for "
-                 "retry monitoring. Overrides auto-detection.",
+            help="Path to neuro-san server log file for retry "
+                 "monitoring and server-side token accounting.",
         )
         parser.add_argument(
             "--level",
@@ -921,10 +921,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
 
         if monitor_resources and is_local:
-            self.server_proc, self.server_log = (
+            self.server_proc = (
                 EnvironmentValidator.find_local_server(self.args)
             )
-            self.log_monitor = ServerLogMonitor(self.server_log)
+            self.server_log = self.args.server_log
+            if self.server_log:
+                self.log_monitor = ServerLogMonitor(self.server_log)
         elif level == LEVEL_MIN and not self.args.monitor_resources:
             logger.info(
                 "Level 'min': resource monitoring disabled. "
