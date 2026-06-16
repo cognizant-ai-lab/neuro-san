@@ -34,6 +34,9 @@ class TestDefaultsConfigFilter(TestCase):
     """
 
     def get_filter(self) -> ConfigFilter:
+        """
+        Return the object we are testing
+        """
         return DefaultsConfigFilter()
 
     def test_assumptions(self):
@@ -220,4 +223,3 @@ class TestDefaultsConfigFilter(TestCase):
         self.assertIsNotNone(value)
         self.assertIsInstance(value, list)
         self.assertEqual(len(value), 2)
-
