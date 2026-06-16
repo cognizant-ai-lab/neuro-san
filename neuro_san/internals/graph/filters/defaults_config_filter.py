@@ -98,11 +98,11 @@ class DefaultsConfigFilter(ConfigFilter):
 
         # Loop through all the tools making additions.
         tools = result_config.get("tools")
-        for tool in tools:
+        for idx, tool in enumerate(tools):
             tool_extractor = DictionaryExtractor(tool)
 
-            # DEF: For now, skip the determining whether the tool is the front man.
-            is_front_man: bool = True
+            # Front-man is the **first** tool in the list (consistent with AgentNetwork.find_front_man()).
+            is_front_man: bool = idx == 0
 
             # Loop through all the keys in the defaults mapping.
             for basis_source_key, tool_dest_dict in self.DEFAULTS_MAPPING.items():
