@@ -207,4 +207,5 @@ jobs:
         run: |
           gh release upload "$TAG_NAME" \
             checkmarx-report.pdf#checkmarx-sast-report.pdf \
+            --repo "${{ github.repository }}" \
             --clobber
