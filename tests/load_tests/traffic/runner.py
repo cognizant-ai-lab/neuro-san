@@ -196,12 +196,19 @@ class TrafficRunner:
     # pylint: disable=too-many-locals,too-many-arguments
     def run_stage(self, num_requests,
                   max_workers, global_offset, *,
-                  server_proc=None, output_dir=None
-                  ) -> Tuple[float, List[RequestResult], SharedRef]:
-        """Fire num_requests concurrent requests using a thread pool."""
+                  server_proc=None, client_proc=None,
+                  output_dir=None,
+                  ) -> Tuple[
+        float, List[RequestResult], SharedRef, SharedRef,
+    ]:
+        """Fire num_requests concurrent requests using a thread pool.
 
+        Returns (elapsed, results, peak_threads_ref,
+        peak_client_rss_ref).
+        """
         results_list: List[RequestResult] = []
         peak_threads_ref = SharedRef()
+        peak_client_rss_ref = SharedRef()
         start = time.time()
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures = [
@@ -213,13 +220,14 @@ class TrafficRunner:
                 for i in range(num_requests)
             ]
             heartbeat_stop = threading.Event()
-            hb = Heartbeat(server_proc)
+            hb = Heartbeat(server_proc, client_proc)
             heartbeat_thread = threading.Thread(
                 target=hb.progress_heartbeat,
                 args=(futures, num_requests, start,
                       heartbeat_stop),
                 kwargs={
                     "peak_threads_ref": peak_threads_ref,
+                    "peak_client_rss_ref": peak_client_rss_ref,
                 },
                 daemon=True,
             )
@@ -229,7 +237,10 @@ class TrafficRunner:
             heartbeat_stop.set()
             heartbeat_thread.join(timeout=THREAD_JOIN_TIMEOUT)
         total_time = time.time() - start
-        return total_time, results_list, peak_threads_ref
+        return (
+            total_time, results_list,
+            peak_threads_ref, peak_client_rss_ref,
+        )
 
     def _diagnose_failure(self, returncode, parsed_fields) -> str:
         """Return a human-readable reason why a request was marked FAILED."""

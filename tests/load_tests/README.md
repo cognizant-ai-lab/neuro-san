@@ -253,7 +253,7 @@ tests/load_tests/
   cost_estimator.py            CostEstimator (per-model pricing)
 
   monitoring/
-    heartbeat.py               Heartbeat (progress logging)
+    heartbeat.py               Heartbeat (progress + peak RSS tracking)
     resource_monitor.py        ResourceMonitor (psutil snapshots)
     server_log_monitor.py      ServerLogMonitor (log parsing)
 

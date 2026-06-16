@@ -38,18 +38,33 @@ class Heartbeat:
     read thread counts without the caller passing it each time.
     """
 
-    def __init__(self, server_proc: Optional[psutil.Process]) -> None:
+    def __init__(
+            self, server_proc: Optional[psutil.Process],
+            client_proc: Optional[psutil.Process] = None,
+    ) -> None:
         self._server_proc = server_proc
+        self._client_proc = client_proc
 
     # pylint: disable=too-many-locals,too-many-arguments
     def progress_heartbeat(self, futures, total, start_time,
                            stop_event, *,
-                           peak_threads_ref: SharedRef) -> None:
+                           peak_threads_ref: SharedRef,
+                           peak_client_rss_ref: SharedRef,
+                           ) -> None:
         """Log periodic progress while requests are in-flight."""
         last_done = 0
         last_change = start_time
         peak_threads = 0
+        peak_rss = 0.0
         while not stop_event.wait(timeout=HEARTBEAT_INTERVAL_SECONDS):
+            if self._client_proc is not None:
+                try:
+                    rss = self._client_proc.memory_info().rss / (1024 * 1024)
+                    if rss > peak_rss:
+                        peak_rss = rss
+                        peak_client_rss_ref.value = rss
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
             done = sum(1 for f in futures if f.done())
             elapsed = int(time.time() - start_time)
             ts = time.strftime("%H:%M:%S", time.localtime())

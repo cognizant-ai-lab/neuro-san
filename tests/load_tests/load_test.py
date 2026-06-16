@@ -433,9 +433,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         stop_event = None
         monitor = None
-        peak_result = None
         if has_server_log:
-            stop_event, monitor, peak_result = (
+            stop_event, monitor, _peak = (
                 self.log_monitor.start_log_monitor(
                     log_pos,
                     actual_requests, time.time(),
@@ -452,11 +451,14 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if probe_used:
             stage_requests = max(actual_requests - 1, 0)
 
-        elapsed, results, peak_threads = self.runner.run_stage(
-            stage_requests, stage_workers,
-            global_offset + (1 if probe_used else 0),
-            server_proc=self.server_proc,
-            output_dir=self._output_dir,
+        elapsed, results, peak_threads, peak_client_rss = (
+            self.runner.run_stage(
+                stage_requests, stage_workers,
+                global_offset + (1 if probe_used else 0),
+                server_proc=self.server_proc,
+                client_proc=client_proc,
+                output_dir=self._output_dir,
+            )
         )
 
         if probe_used:
@@ -470,9 +472,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         peak_client = None
         settled_client = None
         if monitor_resources:
-            peak_client = (
-                peak_result.value if peak_result else None
-            )
+            peak_rss = peak_client_rss.value
+            if peak_rss is not None:
+                peak_client = {"rss": peak_rss}
             settled_client = ResourceMonitor.snapshot(
                 client_proc,
             )
