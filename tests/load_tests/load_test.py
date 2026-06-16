@@ -321,6 +321,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         self._output_dir = None
         self._test_log_path = None
         self._test_log_handler = None
+        self._aborted = False
 
     # pylint: disable=too-many-locals
     def _run_all_stages(self, stages, total_cap) -> List[StageSummary]:
@@ -382,6 +383,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     probe_result = None
                 stage_summaries.append(summary)
                 if should_abort:
+                    self._aborted = True
                     return stage_summaries
 
         return stage_summaries
@@ -965,6 +967,13 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             stage_summaries = self._run_all_stages(
                 stages, total_cap,
             )
+
+            if self._aborted:
+                exit_code = 1
+                self._export_raw_json(
+                    stage_summaries, exit_code=exit_code,
+                )
+                return exit_code
 
             summary_reporter = SummaryReporter(stage_summaries)
             if len(stage_summaries) > 1:
