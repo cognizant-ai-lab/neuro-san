@@ -524,6 +524,7 @@ This is an optional list of string keys in the [properties](#properties) diction
 to be required whenever an upstream agent calls the one being described.
 Note that it's possible to specify a default value for any property that is not listed as required.
 
+<!--- pyml disable-next-line no-duplicate-heading -->
 #### sly_data_schema
 
 The optional [JSON Schema](https://json-schema.org) dictionary describing what
