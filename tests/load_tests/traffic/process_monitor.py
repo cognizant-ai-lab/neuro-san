@@ -17,8 +17,8 @@
 
 import logging
 import os
-import select
 import subprocess
+import sys
 import time
 from typing import List
 from typing import Optional
@@ -99,6 +99,22 @@ class ProcessMonitor:
         or None when the process exits normally (caller determines
         final status from the return code).
         """
+        if sys.platform == "win32":
+            return ProcessMonitor._monitor_process_win(
+                proc, stdout_chunks, stderr_chunks,
+                timeout=timeout,
+            )
+        return ProcessMonitor._monitor_process_unix(
+            proc, stdout_chunks, stderr_chunks,
+            timeout=timeout, idle_timeout=idle_timeout,
+        )
+
+    @staticmethod
+    def _monitor_process_unix(proc, stdout_chunks,
+                              stderr_chunks, *,
+                              timeout, idle_timeout) -> Optional[str]:
+        """Unix implementation using select() for idle-timeout detection."""
+        import select  # pylint: disable=import-outside-toplevel
         start = time.time()
         last_activity = time.time()
         while proc.poll() is None:
@@ -127,4 +143,21 @@ class ProcessMonitor:
                         stdout_chunks.append(data)
                     else:
                         stderr_chunks.append(data)
+        return None
+
+    @staticmethod
+    def _monitor_process_win(proc, stdout_chunks,
+                             stderr_chunks, *,
+                             timeout) -> Optional[str]:
+        """Windows fallback using communicate() (hard-timeout only)."""
+        try:
+            out, err = proc.communicate(timeout=timeout)
+            if out:
+                stdout_chunks.append(out)
+            if err:
+                stderr_chunks.append(err)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+            return STATUS_TIMEOUT
         return None

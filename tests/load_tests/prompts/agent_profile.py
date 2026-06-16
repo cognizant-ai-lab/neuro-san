@@ -72,6 +72,10 @@ class AgentProfile:
         In varied mode, cycles through the pool and appends the request_id.
         """
         prompts = self.prompts
+        if not prompts:
+            raise ValueError(
+                f"Agent profile '{self.agent_name}' has no prompts"
+            )
         if same_prompt:
             return prompts[0]
         base_prompt = prompts[request_id % len(prompts)]

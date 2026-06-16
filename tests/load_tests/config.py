@@ -58,8 +58,12 @@ class ResourceSnapshot(TypedDict):
     cpu: float
 
 
-class ServerCounts(TypedDict):
-    """Request start/finish counts from the server log."""
+class ServerCounts(TypedDict, total=False):
+    """Request start/finish counts from the server log.
+
+    All fields are optional because this dict is empty when
+    no server log is available.
+    """
 
     primary_started: int
     primary_finished: int

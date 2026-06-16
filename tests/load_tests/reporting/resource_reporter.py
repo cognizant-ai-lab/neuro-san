@@ -70,10 +70,10 @@ class ResourceReporter:
             str(stage_label),
             f"{before.get('rss'):.1f}M",
             f"{after.get('rss'):.1f}M",
-            f"+{rss_delta:.1f}M",
+            f"{rss_delta:+.1f}M",
             str(after.get("fds")),
             f"{before.get('threads')} -> {after.get('threads')}",
-            f"+{thread_delta}",
+            f"{thread_delta:+d}",
             str(after.get("connections")),
             f"{after.get('cpu'):.1f}%",
             str(after.get("children")),
@@ -199,6 +199,8 @@ class ResourceReporter:
         for name, key, fmt in fields:
             delta = after.get(key) - before.get(key)
             padded = f"{name}:".ljust(max_name + 1)
+            formatted = fmt % abs(delta)
+            sign = "+" if delta >= 0 else "-"
             logger.info(
-                "    %s +%s", padded, fmt % delta,
+                "    %s %s%s", padded, sign, formatted,
             )

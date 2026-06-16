@@ -29,6 +29,7 @@ import platform
 import re
 import socket
 import sys
+import tempfile
 import time
 from typing import Dict
 from typing import List
@@ -784,7 +785,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     def _setup_test_log(self) -> None:
         """Create output directory and add a file handler for logging."""
         timestamp = time.strftime("%Y%m%d_%H%M%S")
-        base = self.args.output_dir or "/tmp/load_test"
+        base = self.args.output_dir or os.path.join(
+            tempfile.gettempdir(), "load_test",
+        )
         self._output_dir = os.path.join(
             base, self.args.level, timestamp,
         )

@@ -136,11 +136,13 @@ class InputValidator:
 
         original_include = self._args.include_tokens
         self._args.include_tokens = True
-        probe_result = runner.run_one(
-            request_id=1, global_request_id=0,
-            output_dir=output_dir,
-        )
-        self._args.include_tokens = original_include
+        try:
+            probe_result = runner.run_one(
+                request_id=1, global_request_id=0,
+                output_dir=output_dir,
+            )
+        finally:
+            self._args.include_tokens = original_include
 
         probe_tokens = probe_result.get("total_tokens", 0)
         probe_cost = probe_result.get("cost_usd", 0.0)

@@ -63,9 +63,13 @@ class ResourceMonitor:
             return None
         try:
             mem = proc.memory_info()
+            try:
+                fds = proc.num_fds()
+            except AttributeError:
+                fds = proc.num_handles()
             return {
                 "rss": mem.rss / 1024 / 1024,
-                "fds": proc.num_fds(),
+                "fds": fds,
                 "threads": proc.num_threads(),
                 "connections": len(proc.net_connections()),
                 "children": len(proc.children()),
