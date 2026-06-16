@@ -94,7 +94,7 @@ class DefaultsConfigFilter(ConfigFilter):
         result_config: Dict[str, Any] = deepcopy(basis_config)
 
         # Create a single extractor for the top-level.
-        basis_extractor = DictionaryExtractor(basis_config)
+        basis_extractor = DictionaryExtractor(result_config)
 
         # Loop through all the tools making additions.
         tools = result_config.get("tools")
