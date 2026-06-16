@@ -513,6 +513,28 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         should_abort = OutputValidator.check_permission_failures(
             results, self.args.agent,
         )
+        if should_abort:
+            summary_entry = self._build_stage_summary(
+                stage_num=stage_num,
+                round_num=round_num,
+                actual_requests=actual_requests,
+                counts=counts,
+                elapsed=elapsed,
+                retries=retries,
+                total_retries=total_retries,
+                amplification=amplification,
+                results=results,
+                server_counts={},
+                disconnections=[],
+                network_tokens=[],
+                has_server_log=has_server_log,
+                parse_tokens=parse_tokens,
+                monitor_resources=monitor_resources,
+                before_server=before_server,
+                after_server=None,
+                peak_threads=peak_threads,
+            )
+            return summary_entry, probe_used, True
 
         if has_server_log:
             OutputValidator.log_retry_activity(
@@ -556,7 +578,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             after_server=after_server,
             peak_threads=peak_threads,
         )
-        return summary_entry, probe_used, should_abort
+        return summary_entry, probe_used, False
 
     def _capture_before_snapshots(self, monitor_resources):
         """Capture server and client resource snapshots before a stage."""
