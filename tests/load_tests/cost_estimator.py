@@ -30,7 +30,7 @@ class CostEstimator:
     """Estimate USD cost from token counts and model pricing."""
 
     @staticmethod
-    def estimate(prompt_tokens, completion_tokens, model="unknown"):
+    def estimate(prompt_tokens, completion_tokens, model="unknown") -> float:
         """Estimate USD cost from token counts and model name.
 
         Looks up per-model pricing by substring match, then computes

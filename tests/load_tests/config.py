@@ -16,6 +16,9 @@
 """Shared constants, regex patterns, and defaults for the load test framework."""
 
 import re
+from typing import Dict
+from typing import List
+from typing import Optional
 from typing import TypedDict
 
 
@@ -64,6 +67,60 @@ class ServerCounts(TypedDict):
     total_finished: int
 
 
+class _RequestResultRequired(TypedDict):
+    """Required fields in every request result."""
+
+    request_id: str
+    status: str
+    elapsed: float
+    prompt: str
+
+
+class RequestResult(_RequestResultRequired, total=False):
+    """Per-request result from a load test run.
+
+    Required fields are always present.  Optional fields appear when
+    token tracking is enabled or when the request fails.
+    """
+
+    error: Optional[str]
+    total_tokens: int
+    prompt_tokens: int
+    completion_tokens: int
+    llm_calls: int
+    model: str
+    cost_usd: float
+
+
+class StageSummary(TypedDict, total=False):
+    """Aggregate data for a single load test stage.
+
+    All fields are optional because resource monitoring and server
+    log parsing are not always enabled.
+    """
+
+    stage: int
+    round: int
+    concurrent: int
+    counts: Dict[str, int]
+    elapsed: float
+    retries: Dict[str, int]
+    total_retries: int
+    amplification: float
+    results: List[RequestResult]
+    primary_started: Optional[int]
+    primary_finished: Optional[int]
+    total_started: Optional[int]
+    total_finished: Optional[int]
+    disconnections: List[Dict[str, str]]
+    network_tokens: List[NetworkTokenEntry]
+    has_server_log: bool
+    has_tokens: bool
+    before_threads: Optional[int]
+    after_threads: Optional[int]
+    peak_threads: Optional[int]
+
+
 # Result status constants
 STATUS_CREATED = "CREATED"
 STATUS_FAILED = "FAILED"
@@ -82,6 +139,9 @@ RETRY_ERROR_TYPES = [
     "KeyError",
     "ValueError",
 ]
+
+# Console formatting
+SEPARATOR_WIDTH = 60
 
 # Default configuration
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}

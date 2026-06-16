@@ -23,10 +23,10 @@ import logging
 import re
 import threading
 import time
-from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Tuple
 
 from tests.load_tests.config import CLIENT_DISCONNECT_PATTERN
 from tests.load_tests.config import DONE_STREAMING_PATTERN
@@ -44,36 +44,51 @@ logger = logging.getLogger(__name__)
 
 
 class ServerLogMonitor:
-    """Parses a neuro-san server log for retries, tokens, and disconnections."""
+    """Parses a neuro-san server log for retries, tokens, and disconnections.
 
-    @staticmethod
-    def read_log_position(server_log) -> Optional[int]:
+    Holds the server log path so that callers do not need to pass it
+    to every method.
+    """
+
+    def __init__(self, server_log: Optional[str]) -> None:
+        self._server_log = server_log
+
+    def read_position(self) -> Optional[int]:
         """Return the current end position of the server log file."""
-        if server_log is None:
+        if self._server_log is None:
             return None
         try:
-            with open(server_log, "r", encoding="utf-8") as log_fh:
+            with open(self._server_log, "r", encoding="utf-8") as log_fh:
                 log_fh.seek(0, 2)
                 return log_fh.tell()
         except OSError:
             return None
 
-    @staticmethod
-    def count_retries_since(server_log, position) -> Dict[str, int]:
+    def _read_lines_since(self, position, label) -> List[str]:
+        """Read all lines from server_log starting at the given position.
+
+        Returns an empty list on read failure.  The label is used in
+        the log message when an OSError occurs.
+        """
+        try:
+            with open(self._server_log, "r", encoding="utf-8") as log_fh:
+                log_fh.seek(position)
+                return log_fh.readlines()
+        except OSError as exc:
+            logger.info(
+                "Could not read server log for %s: %s", label, exc,
+            )
+            return []
+
+    def count_retries_since(self, position) -> Dict[str, int]:
         """Count max_attempts retry log entries since the given position.
 
         Returns a dict of error_type -> count for each tracked error type.
         """
-        if server_log is None or position is None:
+        if self._server_log is None or position is None:
             return {}
+        lines = self._read_lines_since(position, "retries")
         retry_counts: Dict[str, int] = {}
-        try:
-            with open(server_log, "r", encoding="utf-8") as log_fh:
-                log_fh.seek(position)
-                lines = log_fh.readlines()
-        except OSError as exc:
-            logger.info("Could not read server log for retries: %s", exc)
-            return retry_counts
         for line in lines:
             match = RETRY_LOG_PATTERN.search(line)
             if match:
@@ -83,34 +98,29 @@ class ServerLogMonitor:
                 )
         return retry_counts
 
-    @staticmethod
-    def count_requests_since(server_log, position,
-                             primary_start_pattern, primary_finish_pattern):
+    def count_requests_since(self, position,
+                             primary_start_pattern,
+                             primary_finish_pattern
+                             ) -> Dict[str, Optional[int]]:
         """Count request Start/Finish entries since the given position.
 
         Uses agent-specific patterns for primary requests.
         """
-        if server_log is None or position is None:
-            return {
-                "primary_started": None, "primary_finished": None,
-                "total_started": None, "total_finished": None,
-            }
+        none_result = {
+            "primary_started": None, "primary_finished": None,
+            "total_started": None, "total_finished": None,
+        }
+        if self._server_log is None or position is None:
+            return none_result
+        lines = self._read_lines_since(position, "counts")
+        if not lines:
+            return none_result
         primary_started = 0
         primary_finished = 0
         total_started = 0
         total_finished = 0
         pri_start_re = re.compile(primary_start_pattern)
         pri_finish_re = re.compile(primary_finish_pattern)
-        try:
-            with open(server_log, "r", encoding="utf-8") as log_fh:
-                log_fh.seek(position)
-                lines = log_fh.readlines()
-        except OSError as exc:
-            logger.info("Could not read server log for counts: %s", exc)
-            return {
-                "primary_started": None, "primary_finished": None,
-                "total_started": None, "total_finished": None,
-            }
         for line in lines:
             if REQUEST_START_PATTERN.search(line):
                 total_started += 1
@@ -127,9 +137,8 @@ class ServerLogMonitor:
             "total_finished": total_finished,
         }
 
-    @staticmethod
     def parse_token_accounting_since(
-            server_log, position,
+            self, position,
     ) -> Dict[str, TokenEntry]:
         """Parse Request reporting entries for token accounting data.
 
@@ -137,35 +146,20 @@ class ServerLogMonitor:
             total_tokens, prompt_tokens, completion_tokens,
             successful_requests, model
         """
-        if server_log is None or position is None:
+        if self._server_log is None or position is None:
+            return {}
+        lines = self._read_lines_since(position, "tokens")
+        if not lines:
             return {}
         results: Dict[str, TokenEntry] = {}
-        try:
-            with open(server_log, "r", encoding="utf-8") as log_fh:
-                log_fh.seek(position)
-                lines = log_fh.readlines()
-        except OSError as exc:
-            logger.info("Could not read server log for tokens: %s", exc)
-            return results
-        in_block = False
-        block_lines: List[str] = []
-        for line in lines:
-            if "Request reporting" in line and not in_block:
-                in_block = True
-                block_lines = [line]
-            elif in_block:
-                block_lines.append(line)
-                if '"request_id"' in line:
-                    full_block = "".join(block_lines)
-                    entry = ServerLogMonitor._extract_token_entry(
-                        full_block,
-                    )
-                    if entry:
-                        rid = entry.get("request_id")
-                        if rid is not None:
-                            results[rid] = entry
-                    in_block = False
-                    block_lines = []
+        for block in self._collect_reporting_blocks(lines):
+            entry = self._extract_token_entry(
+                block.get("text", ""),
+            )
+            if entry:
+                rid = entry.get("request_id")
+                if rid is not None:
+                    results[rid] = entry
         return results
 
     @staticmethod
@@ -190,9 +184,8 @@ class ServerLogMonitor:
             "model": model_names[0] if model_names else "unknown",
         }
 
-    @staticmethod
     def parse_per_network_tokens_since(
-            server_log, position,
+            self, position,
     ) -> List[NetworkTokenEntry]:
         """Parse per-sub-network token data from Request reporting blocks.
 
@@ -202,23 +195,16 @@ class ServerLogMonitor:
         collects all such blocks and returns one entry per sub-network
         per request.
         """
-        if server_log is None or position is None:
+        if self._server_log is None or position is None:
             return []
-        try:
-            with open(server_log, "r", encoding="utf-8") as log_fh:
-                log_fh.seek(position)
-                lines = log_fh.readlines()
-        except OSError as exc:
-            logger.info(
-                "Could not read server log for network tokens: %s",
-                exc,
-            )
+        lines = self._read_lines_since(position, "network tokens")
+        if not lines:
             return []
-        blocks = ServerLogMonitor._collect_reporting_blocks(lines)
-        return ServerLogMonitor._resolve_network_names(blocks, lines)
+        blocks = self._collect_reporting_blocks(lines)
+        return self._resolve_network_names(blocks, lines)
 
     @staticmethod
-    def _collect_reporting_blocks(lines):
+    def _collect_reporting_blocks(lines) -> List[Dict[str, object]]:
         """Collect Request reporting blocks with their line positions."""
         blocks = []
         in_block = False
@@ -239,7 +225,7 @@ class ServerLogMonitor:
         return blocks
 
     @staticmethod
-    def _resolve_network_names(blocks, lines):
+    def _resolve_network_names(blocks, lines) -> List[NetworkTokenEntry]:
         """Match each block to its network via Done-with log lines."""
         results: List[NetworkTokenEntry] = []
         for block in blocks:
@@ -283,7 +269,8 @@ class ServerLogMonitor:
 
     @staticmethod
     def _find_network_after(lines, end_idx,
-                            lookahead=NETWORK_LOOKAHEAD_LINES):
+                            lookahead=NETWORK_LOOKAHEAD_LINES
+                            ) -> Optional[str]:
         """Find the network name from Done-with lines after a block."""
         limit = min(end_idx + lookahead, len(lines))
         for idx in range(end_idx + 1, limit):
@@ -292,28 +279,20 @@ class ServerLogMonitor:
                 return match.group(1)
         return None
 
-    @staticmethod
     def scan_disconnections_since(
-            server_log, position,
-    ) -> List[Dict[str, Any]]:
+            self, position,
+    ) -> List[Dict[str, str]]:
         """Scan server log for client disconnections since the given position.
 
         Returns a list of dicts with request_id and the agent that was
         still running when the client disconnected.
         """
-        if server_log is None or position is None:
+        if self._server_log is None or position is None:
+            return []
+        lines = self._read_lines_since(position, "disconnections")
+        if not lines:
             return []
         disconnections = {}
-        try:
-            with open(server_log, "r", encoding="utf-8") as log_fh:
-                log_fh.seek(position)
-                lines = log_fh.readlines()
-        except OSError as exc:
-            logger.info(
-                "Could not read server log for disconnections: %s",
-                exc,
-            )
-            return []
         context_request_id = None
         for line in lines:
             req_match = STREAM_CLOSED_REQUEST_PATTERN.search(line)
@@ -334,35 +313,45 @@ class ServerLogMonitor:
                     disc.update({"agent": agent})
         return list(disconnections.values())
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
-    @staticmethod
-    def start_log_monitor(server_log, position, expected_count,
-                          fire_time, client_proc, primary_start_pattern):
+    # pylint: disable=too-many-arguments
+    def start_log_monitor(self, position,
+                          expected_count, fire_time, *,
+                          client_proc, primary_start_pattern
+                          ) -> Tuple[
+        Optional[threading.Event],
+        Optional[threading.Thread],
+        Optional[dict],
+    ]:
         """Start a background thread to monitor server log for request arrivals.
 
         Returns (stop_event, thread, peak_result).
         Returns (None, None, None) if monitoring is not available.
         """
-        if server_log is None or position is None:
+        if self._server_log is None or position is None:
             return None, None, None
         stop_event = threading.Event()
         peak_result = {}
         monitor = threading.Thread(
             target=ServerLogMonitor._log_monitor_worker,
-            args=(server_log, position, expected_count, stop_event,
-                  fire_time, client_proc, peak_result,
-                  primary_start_pattern),
+            args=(self._server_log, position, expected_count,
+                  stop_event, fire_time),
+            kwargs={
+                "client_proc": client_proc,
+                "peak_result": peak_result,
+                "primary_start_pattern": primary_start_pattern,
+            },
             daemon=True,
         )
         monitor.start()
         return stop_event, monitor, peak_result
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
-    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-arguments,too-many-locals
     @staticmethod
-    def _log_monitor_worker(server_log, position, expected_count, stop_event,
-                            fire_time, client_proc, peak_result,
-                            primary_start_pattern):
+    def _log_monitor_worker(server_log, position,
+                            expected_count, stop_event,
+                            fire_time, *, client_proc,
+                            peak_result,
+                            primary_start_pattern) -> None:
         """Background worker that tails server log and reports arrivals."""
         count = 0
         pri_start_re = re.compile(primary_start_pattern)

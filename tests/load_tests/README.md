@@ -13,6 +13,8 @@ and report results. Uses real LLM calls via `agent_cli` subprocesses.
 - [Agent Profiles](#agent-profiles)
 - [Output](#output)
 - [Exit Codes](#exit-codes)
+- [Code Quality](#code-quality)
+- [Architecture](#architecture)
 - [Notes](#notes)
 
 ## Quick Start
@@ -186,6 +188,62 @@ captured before and after each stage.
 
 - `0` — All requests completed successfully
 - `1` — One or more requests failed, timed out, or were killed
+
+## Code Quality
+
+This framework follows three review playbooks:
+
+- **Code_Fink (Dan):** One class per file, `.get()` for dict reads,
+  `.update()` for dict writes, no standalone functions, `%`-formatting
+  for logger calls, specific exception types, named constants for
+  magic numbers.
+
+- **Code_Francon (Olivier):** Silent `except/pass` blocks log via
+  `logger.debug`, `CostEstimator` extracted to its own file, README
+  documents all flags including `--output-dir`.
+
+- **Code_Sargent (Darren):** TypedDicts (`RequestResult`,
+  `StageSummary`, `ServerCounts`, `TokenEntry`, `NetworkTokenEntry`,
+  `ResourceSnapshot`) replace `Dict[str, Any]` at data boundaries.
+  Keyword-only arguments (`*`) eliminate all `too-many-positional-arguments`
+  warnings. Explicit return type annotations on every method.
+
+Lint status: flake8 clean, pylint 10.00/10.
+
+## Architecture
+
+```
+tests/load_tests/
+  load_test.py                 LoadTestOrchestrator (main entry point)
+  config.py                    Constants, TypedDicts, compiled patterns
+  cost_estimator.py            CostEstimator (per-model pricing)
+
+  monitoring/
+    heartbeat.py               Heartbeat (progress logging)
+    resource_monitor.py        ResourceMonitor (psutil snapshots)
+    server_log_monitor.py      ServerLogMonitor (log parsing)
+
+  prompts/
+    agent_profile.py           AgentProfile (prompt/validation config)
+    profiles/                  Per-agent JSON profiles
+
+  reporting/
+    disconnection_reporter.py  DisconnectionReporter
+    pool_analyzer.py           PoolAnalyzer
+    resource_reporter.py       ResourceReporter
+    summary.py                 SummaryReporter
+    table_formatter.py         TableFormatter
+
+  traffic/
+    cli_builder.py             CliBuilder (agent_cli commands)
+    process_monitor.py         ProcessMonitor (subprocess lifecycle)
+    runner.py                  TrafficRunner (thread pool executor)
+
+  validation/
+    environment_validator.py   EnvironmentValidator (API keys, server)
+    input_validator.py         InputValidator (stages, cost probe)
+    output_validator.py        OutputValidator (results, retries)
+```
 
 ## Notes
 

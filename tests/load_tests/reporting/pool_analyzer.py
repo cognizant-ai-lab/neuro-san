@@ -19,22 +19,26 @@ import logging
 from typing import List
 from typing import Tuple
 
+from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
 logger = logging.getLogger(__name__)
 
-SEPARATOR_WIDTH = 60
-
 
 class PoolAnalyzer:
-    """Analyzes executor thread pool reuse across load test stages."""
+    """Analyzes executor thread pool reuse across load test stages.
+
+    Holds the collected stage summaries for analysis.
+    """
+
+    def __init__(self, stage_summaries) -> None:
+        self._summaries = stage_summaries
 
     # pylint: disable=too-many-locals
-    @staticmethod
-    def log_pool_reuse_analysis(stage_summaries):
+    def log_pool_reuse_analysis(self) -> None:
         """Log executor pool reuse analysis across stages."""
         stages_with_data = [
-            s for s in stage_summaries
+            s for s in self._summaries
             if s.get("before_threads") is not None
             and s.get("after_threads") is not None
             and s.get("total_started") is not None
@@ -94,12 +98,12 @@ class PoolAnalyzer:
             ))
 
         TableFormatter.log_table(header, rows)
-        PoolAnalyzer._log_pool_diagnostics(
+        self._log_pool_diagnostics(
             stages_with_data, total_new_threads,
         )
 
     @staticmethod
-    def _log_pool_diagnostics(stages_with_data, total_new_threads):
+    def _log_pool_diagnostics(stages_with_data, total_new_threads) -> None:
         """Log summary diagnostics for pool reuse if enough data."""
         if len(stages_with_data) < 2:
             return

@@ -17,19 +17,24 @@
 
 import logging
 
-logger = logging.getLogger(__name__)
+from tests.load_tests.config import SEPARATOR_WIDTH
 
-SEPARATOR_WIDTH = 60
+logger = logging.getLogger(__name__)
 
 
 class DisconnectionReporter:
-    """Aggregates and logs client disconnection analysis."""
+    """Aggregates and logs client disconnection analysis.
 
-    @staticmethod
-    def log_disconnection_summary(stage_summaries):
+    Holds the collected stage summaries for analysis.
+    """
+
+    def __init__(self, stage_summaries) -> None:
+        self._summaries = stage_summaries
+
+    def log_disconnection_summary(self) -> None:
         """Log aggregate client disconnection report."""
         all_disconnections = []
-        for idx, stage in enumerate(stage_summaries):
+        for idx, stage in enumerate(self._summaries):
             for disc in stage.get("disconnections") or []:
                 disc_copy = dict(disc)
                 disc_copy.update({"batch": idx + 1})

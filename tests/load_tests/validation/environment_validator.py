@@ -26,6 +26,8 @@ import logging
 import os
 import socket
 import sys
+from typing import Optional
+from typing import Tuple
 
 import psutil
 
@@ -44,7 +46,7 @@ class EnvironmentValidator:
     """
 
     @staticmethod
-    def validate_environment():
+    def validate_environment() -> None:
         """Validate that OPENAI_API_KEY is set and no mock LLM is active."""
         api_key = os.environ.get("OPENAI_API_KEY")
         if api_key is None or len(api_key) == 0:
@@ -58,7 +60,7 @@ class EnvironmentValidator:
         EnvironmentValidator._check_no_mock_environment()
 
     @staticmethod
-    def _check_no_mock_environment():
+    def _check_no_mock_environment() -> None:
         """Exit if a mock LLM environment is detected."""
         issues = []
         api_base = os.environ.get("OPENAI_API_BASE")
@@ -95,7 +97,9 @@ class EnvironmentValidator:
             return False
 
     @staticmethod
-    def find_local_server(args):
+    def find_local_server(args) -> Tuple[
+        Optional[psutil.Process], Optional[str],
+    ]:
         """Locate the neuro-san server process for resource monitoring.
 
         Searches by process keyword first, then falls back to port
@@ -147,7 +151,7 @@ class EnvironmentValidator:
         return server_proc, server_log
 
     @staticmethod
-    def _auto_detect_server_log(server_proc):
+    def _auto_detect_server_log(server_proc) -> Optional[str]:
         """Auto-detect server log from server process CWD.
 
         Looks for logs/server.log relative to the server's working

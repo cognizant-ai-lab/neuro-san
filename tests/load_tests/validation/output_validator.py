@@ -49,10 +49,11 @@ class OutputValidator:
             counts[status] = counts.get(status, 0) + 1
         return counts
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    # pylint: disable=too-many-arguments
     @staticmethod
-    def log_stage_results(actual_requests, counts, elapsed, timeout,
-                          idle_timeout, skip_reservation_check=False):
+    def log_stage_results(actual_requests, counts, elapsed, *,
+                          timeout, idle_timeout,
+                          skip_reservation_check=False) -> None:
         """Log per-stage summary of request results."""
         logger.info("\n  Requests: %s", actual_requests)
         if skip_reservation_check:
@@ -82,7 +83,9 @@ class OutputValidator:
         )
 
     @staticmethod
-    def log_retry_activity(retries, total_retries, actual_requests):
+    def log_retry_activity(
+            retries, total_retries, actual_requests,
+    ) -> None:
         """Log retry activity from server log."""
         logger.info(
             "\n  max_attempts retry activity (from server log):",
@@ -106,7 +109,7 @@ class OutputValidator:
     @staticmethod
     def log_server_validation(
             server_counts, actual_requests, agent_name,
-    ):
+    ) -> None:
         """Log server-side request validation from log counts.
 
         Compares the number of requests the server received (from the
@@ -152,7 +155,7 @@ class OutputValidator:
             )
 
     @staticmethod
-    def log_disconnections(disconnections):
+    def log_disconnections(disconnections) -> None:
         """Log client disconnections detected in the current stage."""
         if not disconnections:
             return

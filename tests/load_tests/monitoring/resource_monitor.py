@@ -59,6 +59,8 @@ class ResourceMonitor:
     @staticmethod
     def snapshot(proc) -> Optional[ResourceSnapshot]:
         """Capture a point-in-time resource snapshot of a process."""
+        if proc is None:
+            return None
         try:
             mem = proc.memory_info()
             return {
@@ -73,7 +75,7 @@ class ResourceMonitor:
             return None
 
     @staticmethod
-    def log_snapshot(label, snap):
+    def log_snapshot(label, snap) -> None:
         """Log a single resource snapshot."""
         if snap is None:
             logger.info("  %s: process not found", label)

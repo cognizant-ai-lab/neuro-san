@@ -20,10 +20,12 @@ import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
+from typing import Tuple
 
+from tests.load_tests.config import RequestResult
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
@@ -38,49 +40,58 @@ logger = logging.getLogger(__name__)
 
 
 class TrafficRunner:
-    """Fires concurrent requests via a thread pool and collects results."""
+    """Fires concurrent requests via a thread pool and collects results.
+
+    Holds the parsed CLI args and the agent profile so that callers
+    do not need to thread them through every method.
+    """
+
+    def __init__(self, args, profile) -> None:
+        self._args = args
+        self._profile = profile
 
     # pylint: disable=too-many-locals
-    @staticmethod
-    def run_one(args, profile, request_id, global_request_id,
-                output_dir=None):
+    def run_one(self, request_id, global_request_id,
+                output_dir=None) -> RequestResult:
         """Execute a single request with idle-timeout detection.
 
         Returns a result dict with status, elapsed, prompt, and parsed fields.
         """
-        prompt = profile.get_prompt(
-            global_request_id, same_prompt=args.same_prompt,
+        prompt = self._profile.get_prompt(
+            global_request_id, same_prompt=self._args.same_prompt,
         )
         prompt_file = CliBuilder.write_prompt_file(global_request_id, prompt)
 
-        cmd = CliBuilder.build_cli_command(
-            args.host, args.port, args.agent, prompt_file,
-            include_tokens=args.include_tokens,
-        )
         start = time.time()
         status, stdout, stderr, returncode = (
             ProcessMonitor.execute_with_idle_detection(
-                cmd, args.timeout, args.idle_timeout,
+                CliBuilder.build_cli_command(
+                    self._args.host, self._args.port,
+                    self._args.agent, prompt_file,
+                    include_tokens=self._args.include_tokens,
+                ),
+                self._args.timeout, self._args.idle_timeout,
             )
         )
         elapsed = time.time() - start
 
         parsed_fields: Dict[str, str] = {
             field: CliBuilder.parse_stdout_field(stdout, field)
-            for field in profile.success_fields
+            for field in self._profile.success_fields
         }
 
-        TrafficRunner._save_request_output(
+        self._save_request_output(
             output_dir, request_id, stdout, stderr,
         )
 
-        status, failure_reason = TrafficRunner._validate_result(
+        status, failure_reason = self._validate_result(
             status, returncode, stdout, parsed_fields,
-            profile, args.skip_reservation_check,
         )
-        TrafficRunner._log_request_result(
-            request_id, status, elapsed, parsed_fields, failure_reason,
-            stderr, args.skip_reservation_check,
+        self._log_request_result(
+            request_id, status, elapsed,
+            parsed_fields=parsed_fields,
+            failure_reason=failure_reason,
+            stderr=stderr,
         )
         CliBuilder.cleanup_prompt_file(prompt_file)
 
@@ -95,26 +106,25 @@ class TrafficRunner:
             ),
         }
         result.update(parsed_fields)
-        if args.include_tokens:
-            TrafficRunner._attach_token_data(result, stdout)
+        if self._args.include_tokens:
+            self._attach_token_data(result, stdout)
         return result
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
-    @staticmethod
-    def _validate_result(status, returncode, stdout, parsed_fields,
-                         profile, skip_reservation_check):
+    def _validate_result(self, status, returncode, stdout,
+                         parsed_fields,
+                         ) -> Tuple[str, Optional[str]]:
         """Determine final status and failure reason for a request."""
         failure_reason = None
         if status in (STATUS_TIMEOUT, STATUS_KILLED):
             return status, failure_reason
-        if profile.success_fields:
-            if skip_reservation_check:
+        if self._profile.success_fields:
+            if self._args.skip_reservation_check:
                 required = [
-                    f for f in profile.success_fields
+                    f for f in self._profile.success_fields
                     if f != "reservation_id"
                 ]
             else:
-                required = profile.success_fields
+                required = self._profile.success_fields
             passed = returncode == 0 and all(
                 parsed_fields.get(f) for f in required
             )
@@ -125,14 +135,13 @@ class TrafficRunner:
             failure_reason = "empty response from agent"
         status = STATUS_CREATED if passed else STATUS_FAILED
         if status == STATUS_FAILED and not failure_reason:
-            failure_reason = TrafficRunner._diagnose_failure(
-                returncode, parsed_fields, profile.success_fields,
-                skip_reservation_check,
+            failure_reason = self._diagnose_failure(
+                returncode, parsed_fields,
             )
         return status, failure_reason
 
     @staticmethod
-    def _attach_token_data(result, stdout):
+    def _attach_token_data(result, stdout) -> None:
         """Parse token accounting from stdout and attach to result."""
         token_data = CliBuilder.parse_token_accounting(stdout)
         if not token_data:
@@ -166,63 +175,63 @@ class TrafficRunner:
                     return model_name
         return "unknown"
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
-    # pylint: disable=too-many-locals
-    @staticmethod
-    def run_stage(args, profile, num_requests, max_workers, global_offset,
-                  server_proc=None, output_dir=None):
+    # pylint: disable=too-many-locals,too-many-arguments
+    def run_stage(self, num_requests,
+                  max_workers, global_offset, *,
+                  server_proc=None, output_dir=None
+                  ) -> Tuple[float, List[RequestResult], Dict[str, int]]:
         """Fire num_requests concurrent requests using a thread pool."""
 
-        results_list: List[Dict[str, Any]] = []
+        results_list: List[RequestResult] = []
         peak_threads_result: Dict[str, int] = {}
         start = time.time()
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures = [
                 pool.submit(
-                    TrafficRunner.run_one, args, profile,
+                    self.run_one,
                     i + 1, global_offset + i,
                     output_dir,
                 )
                 for i in range(num_requests)
             ]
             heartbeat_stop = threading.Event()
-            heartbeat = threading.Thread(
-                target=Heartbeat.progress_heartbeat,
+            hb = Heartbeat(server_proc)
+            heartbeat_thread = threading.Thread(
+                target=hb.progress_heartbeat,
                 args=(futures, num_requests, start,
-                      heartbeat_stop, server_proc,
-                      peak_threads_result),
+                      heartbeat_stop),
+                kwargs={
+                    "peak_threads_result": peak_threads_result,
+                },
                 daemon=True,
             )
-            heartbeat.start()
+            heartbeat_thread.start()
             for future in futures:
                 results_list.append(future.result())
             heartbeat_stop.set()
-            heartbeat.join(timeout=THREAD_JOIN_TIMEOUT)
+            heartbeat_thread.join(timeout=THREAD_JOIN_TIMEOUT)
         total_time = time.time() - start
         return total_time, results_list, peak_threads_result
 
-    @staticmethod
-    def _diagnose_failure(returncode, parsed_fields, success_fields,
-                          skip_reservation_check):
+    def _diagnose_failure(self, returncode, parsed_fields) -> str:
         """Return a human-readable reason why a request was marked FAILED."""
         reasons = []
         if returncode != 0:
             reasons.append(f"non-zero exit code ({returncode})")
-        for field in success_fields:
-            if field == "reservation_id" and skip_reservation_check:
+        for field in self._profile.success_fields:
+            if field == "reservation_id" and self._args.skip_reservation_check:
                 continue
             if not parsed_fields.get(field):
                 reasons.append(f"missing {field}")
         return "; ".join(reasons) if reasons else "unknown"
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
-    @staticmethod
-    def _log_request_result(request_id, status, elapsed, parsed_fields,
-                            failure_reason, stderr, skip_reservation_check):
+    def _log_request_result(self, request_id, status, elapsed, *,
+                            parsed_fields, failure_reason,
+                            stderr) -> None:
         """Log the result of a single request."""
         logger.info("Request %s: %s (%.2fs)", request_id, status, elapsed)
         for field, value in parsed_fields.items():
-            if field == "reservation_id" and skip_reservation_check:
+            if field == "reservation_id" and self._args.skip_reservation_check:
                 logger.info("  %s: skipped", field)
             else:
                 logger.info("  %s: %s", field, value or "")
@@ -232,7 +241,7 @@ class TrafficRunner:
             logger.info("  stderr: %s", CliBuilder.last_stderr_line(stderr))
 
     @staticmethod
-    def log_token_summary(results):
+    def log_token_summary(results) -> None:
         """Log token usage for each request after token data is attached."""
         has_tokens = any(r.get("total_tokens") for r in results)
         if not has_tokens:
@@ -256,7 +265,9 @@ class TrafficRunner:
             )
 
     @staticmethod
-    def _save_request_output(output_dir, request_id, stdout, stderr):
+    def _save_request_output(
+            output_dir, request_id, stdout, stderr,
+    ) -> None:
         """Save raw CLI stdout/stderr for every request."""
         if not output_dir:
             return

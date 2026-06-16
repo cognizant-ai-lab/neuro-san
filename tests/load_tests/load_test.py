@@ -13,61 +13,32 @@
 # limitations under the License.
 #
 
-"""
-Generic load-test script for neuro-san agent networks using real LLM calls.
+"""Generic load-test orchestrator for neuro-san agent networks.
 
-Fires concurrent requests via agent_cli subprocesses, monitors the neuro-san
-server for resource usage and max_attempts retry behavior, and prints a
-per-stage summary with an overall ramp-up analysis.
-
-Works with any agent network (hello_world, agent_network_designer, music_nerd_pro, etc.)
-by loading agent-specific prompts and success criteria from a profile JSON file.
-
-Prerequisites:
-    1. neuro-san server running (Terminal 1):
-       export AGENT_REGISTRY_PATH=/path/to/registries
-       export OPENAI_API_KEY=<your-key>
-       python -m neuro_san.service.main_loop.server_main_loop
-
-    2. OPENAI_API_KEY must be set (real LLM calls = real API costs).
-
-Test levels (--level):
-    min:  Traffic + validation only. Fast smoke test.
-    norm: Adds server log reading and resource monitoring. (default)
-    adv:  Adds token parsing, JSON export, pool analysis.
-
-Usage examples:
-    # Quick smoke test (min level)
-    python -m tests.load_tests.load_test --agent hello_world --level min --yes
-
-    # Standard load test with resource monitoring (default: norm)
-    python -m tests.load_tests.load_test --agent hello_world --yes
-
-    # Full analysis with JSON output (adv level)
-    python -m tests.load_tests.load_test --agent hello_world --level adv --ramp --yes
-
-    # Custom stages and profile
-    python -m tests.load_tests.load_test --agent my_agent --level adv --ramp \\
-        --stages 5,10,25 --profile ./my_profile.json --yes
-
-    # Same prompt for all requests (collision stress test)
-    python -m tests.load_tests.load_test --agent hello_world --ramp --same-prompt --yes
+See tests/load_tests/README.md for prerequisites, test levels, and
+usage examples.
 """
 
 import argparse
+import importlib.metadata as _pkg_meta
 import json
 import logging
 import os
+import platform
 import re
+import socket
 import sys
 import time
-from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Tuple
 
 import psutil
 
+from tests.load_tests.config import NetworkTokenEntry
+from tests.load_tests.config import ServerCounts
+from tests.load_tests.config import StageSummary
 from tests.load_tests.config import DEFAULT_IDLE_TIMEOUT_SECONDS
 from tests.load_tests.config import DEFAULT_TIMEOUT_SECONDS
 from tests.load_tests.config import LEVEL_ADV
@@ -76,12 +47,16 @@ from tests.load_tests.config import LEVEL_NORM
 from tests.load_tests.config import LOCAL_HOSTS
 from tests.load_tests.config import STALE_LOG_THRESHOLD_SECONDS
 from tests.load_tests.config import STATUS_CREATED
+from tests.load_tests.config import STATUS_FAILED
+from tests.load_tests.config import STATUS_KILLED
+from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.config import THREAD_JOIN_TIMEOUT
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.reporting.disconnection_reporter import DisconnectionReporter
+from tests.load_tests.reporting.json_metadata import JsonMetadata
 from tests.load_tests.reporting.pool_analyzer import PoolAnalyzer
 from tests.load_tests.reporting.resource_reporter import ResourceReporter
 from tests.load_tests.reporting.summary import SummaryReporter
@@ -98,7 +73,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     """Orchestrates the full load test workflow."""
 
     @staticmethod
-    def parse_args():
+    def parse_args() -> argparse.Namespace:
         """Parse command-line arguments for the load test."""
         parser = argparse.ArgumentParser(
             description=(
@@ -282,13 +257,13 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         return parser.parse_args()
 
     @staticmethod
-    def _token_sort_key(rid):
+    def _token_sort_key(rid) -> int:
         """Extract numeric suffix from a request_id for sorting."""
         match = re.search(r"(\d+)$", rid)
         return int(match.group(1)) if match else 0
 
     @staticmethod
-    def _attach_token_data(results, token_data):
+    def _attach_token_data(results, token_data) -> None:
         """Attach token accounting data to request results.
 
         The server assigns its own request_id numbering (e.g. request-3,
@@ -323,7 +298,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 ),
             })
 
-    def __init__(self, args):
+    def __init__(self, args) -> None:
         """Initialize the orchestrator with parsed arguments."""
         self.args = args
         self.profile = AgentProfile.load(
@@ -331,13 +306,17 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
         self.server_proc = None
         self.server_log = args.server_log
+        self.log_monitor = ServerLogMonitor(self.server_log)
+        self.runner = TrafficRunner(args, self.profile)
+        self.input_validator = InputValidator(args)
+        self.resource_reporter = ResourceReporter()
         self.probe_result = None
         self._output_dir = None
         self._test_log_path = None
         self._test_log_handler = None
 
     # pylint: disable=too-many-locals,too-many-statements,too-many-branches
-    def _run_all_stages(self, stages, total_cap):
+    def _run_all_stages(self, stages, total_cap) -> List[StageSummary]:
         """Execute all stages of the load test, collecting data per stage."""
         level = self.args.level
         monitor_resources = (
@@ -349,9 +328,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
         probe_result = self.probe_result
 
-        stage_summaries: List[Dict[str, Any]] = []
-        resource_rows: List[Tuple] = []
-        client_resource_rows: List[Tuple] = []
+        stage_summaries: List[StageSummary] = []
         global_offset = 0
         total_sent = 0
 
@@ -372,7 +349,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                         total_cap, total_sent, total_planned,
                         total_planned,
                     )
-                    return stage_summaries, resource_rows, client_resource_rows
+                    return stage_summaries
 
                 remaining = total_cap - total_sent
                 actual_requests = min(num_concurrent, remaining)
@@ -397,14 +374,13 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     )
 
                 log_pos = (
-                    ServerLogMonitor.read_log_position(
-                        self.server_log,
-                    )
+                    self.log_monitor.read_position()
                     if has_server_log else None
                 )
 
                 before_server = None
                 before_client = None
+                client_proc = None
                 if monitor_resources:
                     before_server = (
                         ResourceMonitor.snapshot(self.server_proc)
@@ -448,11 +424,13 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 peak_result = None
                 if has_server_log:
                     stop_event, monitor, peak_result = (
-                        ServerLogMonitor.start_log_monitor(
-                            self.server_log, log_pos,
-                            actual_requests,
-                            fire_time, client_proc,
-                            self.profile.primary_start_pattern,
+                        self.log_monitor.start_log_monitor(
+                            log_pos,
+                            actual_requests, fire_time,
+                            client_proc=client_proc,
+                            primary_start_pattern=(
+                                self.profile.primary_start_pattern
+                            ),
                         )
                     )
 
@@ -461,11 +439,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 if probe_result is not None:
                     stage_requests = max(actual_requests - 1, 0)
 
-                elapsed, results, peak_threads = TrafficRunner.run_stage(
-                    self.args, self.profile,
+                elapsed, results, peak_threads = self.runner.run_stage(
                     stage_requests, stage_workers,
                     global_offset + (1 if probe_result else 0),
-                    self.server_proc, self._output_dir,
+                    server_proc=self.server_proc,
+                    output_dir=self._output_dir,
                 )
 
                 if probe_result is not None:
@@ -502,8 +480,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 total_retries = 0
                 amplification = 1.0
                 if has_server_log:
-                    retries = ServerLogMonitor.count_retries_since(
-                        self.server_log, log_pos,
+                    retries = self.log_monitor.count_retries_since(
+                        log_pos,
                     )
                     total_retries = sum(retries.values())
                     amplification = (
@@ -513,8 +491,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
                 OutputValidator.log_stage_results(
                     actual_requests, counts, elapsed,
-                    self.args.timeout, self.args.idle_timeout,
-                    self.args.skip_reservation_check,
+                    timeout=self.args.timeout,
+                    idle_timeout=self.args.idle_timeout,
+                    skip_reservation_check=(
+                        self.args.skip_reservation_check
+                    ),
                 )
 
                 if has_server_log:
@@ -527,9 +508,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                         "(no --server-log)",
                     )
 
-                server_counts: Dict[str, Any] = {}
-                disconnections: List = []
-                network_tokens: List = []
+                server_counts: ServerCounts = {}
+                disconnections: List[Dict[str, str]] = []
+                network_tokens: List[NetworkTokenEntry] = []
                 if monitor_resources or has_server_log:
                     logger.info(
                         "\n  Waiting %ss for server cleanup...",
@@ -549,26 +530,24 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     server_counts, disconnections, network_tokens = (
                         self._analyze_server_log(
                             has_server_log, parse_tokens,
-                            log_pos, results, actual_requests,
+                            log_pos,
+                            results=results,
+                            actual_requests=actual_requests,
                         )
                     )
 
                     if before_server and after_server:
-                        resource_rows.append(
-                            ResourceReporter.build_resource_row(
-                                f"{actual_requests}",
-                                before_server, after_server,
-                            ),
+                        self.resource_reporter.add_resource_row(
+                            f"{actual_requests}",
+                            before_server, after_server,
                         )
 
                     if before_client and settled_client:
-                        client_resource_rows.append(
-                            ResourceReporter.build_client_row(
-                                f"{actual_requests}",
-                                before_client,
-                                peak_client,
-                                settled_client,
-                            ),
+                        self.resource_reporter.add_client_row(
+                            f"{actual_requests}",
+                            before_client,
+                            peak_client,
+                            settled_client,
                         )
 
                 summary_entry = {
@@ -607,37 +586,39 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     })
                 stage_summaries.append(summary_entry)
 
-        return stage_summaries, resource_rows, client_resource_rows
+        return stage_summaries
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    # pylint: disable=too-many-arguments
     def _analyze_server_log(
             self, has_server_log, parse_tokens,
-            log_pos, results, actual_requests,
-    ):
+            log_pos, *, results, actual_requests,
+    ) -> Tuple[
+        ServerCounts, List[Dict[str, str]], List[NetworkTokenEntry],
+    ]:
         """Analyze server log or report unavailability.
 
         Returns (server_counts, disconnections, network_tokens).
         """
-        server_counts: Dict[str, Any] = {}
-        disconnections: List = []
-        network_tokens: List = []
+        server_counts: ServerCounts = {}
+        disconnections: List[Dict[str, str]] = []
+        network_tokens: List[NetworkTokenEntry] = []
         if has_server_log:
             server_counts = (
-                ServerLogMonitor.count_requests_since(
-                    self.server_log, log_pos,
+                self.log_monitor.count_requests_since(
+                    log_pos,
                     self.profile.primary_start_pattern,
                     self.profile.primary_finish_pattern,
                 )
             )
             disconnections = (
-                ServerLogMonitor.scan_disconnections_since(
-                    self.server_log, log_pos,
+                self.log_monitor.scan_disconnections_since(
+                    log_pos,
                 )
             )
             if parse_tokens:
                 token_data = (
-                    ServerLogMonitor.parse_token_accounting_since(
-                        self.server_log, log_pos,
+                    self.log_monitor.parse_token_accounting_since(
+                        log_pos,
                     )
                 )
                 LoadTestOrchestrator._attach_token_data(
@@ -649,8 +630,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     )
                     TrafficRunner.log_token_summary(results)
                 network_tokens = (
-                    ServerLogMonitor.parse_per_network_tokens_since(
-                        self.server_log, log_pos,
+                    self.log_monitor.parse_per_network_tokens_since(
+                        log_pos,
                     )
                 )
             OutputValidator.log_disconnections(disconnections)
@@ -675,7 +656,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             )
         return server_counts, disconnections, network_tokens
 
-    def _setup_test_log(self):
+    def _setup_test_log(self) -> None:
         """Create output directory and add a file handler for logging."""
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         base = self.args.output_dir or "/tmp/load_test"
@@ -691,7 +672,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         self._test_log_handler.setFormatter(logging.Formatter("%(message)s"))
         logging.getLogger().addHandler(self._test_log_handler)
 
-    def _finalize_test_log(self, stage_summaries):
+    def _finalize_test_log(self, stage_summaries) -> None:
         """Close the log handler and report the output directory."""
         if self._test_log_handler is not None:
             logging.getLogger().removeHandler(self._test_log_handler)
@@ -699,9 +680,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if self._output_dir is None:
             return
         has_failures = any(
-            summary.get("counts", {}).get("FAILED", 0) > 0
-            or summary.get("counts", {}).get("TIMEOUT", 0) > 0
-            or summary.get("counts", {}).get("KILLED", 0) > 0
+            summary.get("counts", {}).get(STATUS_FAILED, 0) > 0
+            or summary.get("counts", {}).get(STATUS_TIMEOUT, 0) > 0
+            or summary.get("counts", {}).get(STATUS_KILLED, 0) > 0
             for summary in stage_summaries
         )
         if has_failures:
@@ -709,7 +690,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         else:
             logger.info("\nOutput: %s", self._output_dir)
 
-    def _validate_server_log(self):
+    def _validate_server_log(self) -> None:
         """Validate --server-log path when provided.
 
         At norm/adv levels without --server-log, logs a warning listing
@@ -754,21 +735,23 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 age_min, self.args.server_log,
             )
 
-    def run(self):
+    def run(self) -> int:
         """Execute the full load test workflow."""
         level = self.args.level
         EnvironmentValidator.validate_environment()
         self._validate_server_log()
 
-        stages = InputValidator.resolve_stages(self.args)
-        total_cap = InputValidator.resolve_max_requests(
-            self.args, stages,
+        stages = self.input_validator.resolve_stages()
+        total_cap = self.input_validator.resolve_max_requests(
+            stages,
         )
 
         self._setup_test_log()
-        self.probe_result = InputValidator.confirm_cost(
-            self.args, stages, total_cap, self.profile,
-            self._output_dir,
+        self.probe_result = self.input_validator.confirm_cost(
+            stages, total_cap,
+            runner=self.runner,
+            profile=self.profile,
+            output_dir=self._output_dir,
         )
 
         is_local = self.args.host in LOCAL_HOSTS
@@ -780,6 +763,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             self.server_proc, self.server_log = (
                 EnvironmentValidator.find_local_server(self.args)
             )
+            self.log_monitor = ServerLogMonitor(self.server_log)
         elif level == LEVEL_MIN and not self.args.monitor_resources:
             logger.info(
                 "Level 'min': resource monitoring disabled. "
@@ -815,17 +799,18 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 f"{self.profile.estimated_tokens_per_request:,}",
             )
 
-        stage_summaries: List[Dict[str, Any]] = []
+        stage_summaries: List[StageSummary] = []
         exit_code = 1
         try:
-            stage_summaries, resource_rows, client_rows = self._run_all_stages(
+            stage_summaries = self._run_all_stages(
                 stages, total_cap,
             )
 
+            summary_reporter = SummaryReporter(stage_summaries)
             if len(stage_summaries) > 1:
-                SummaryReporter.log_ramp_summary(stage_summaries)
+                summary_reporter.log_ramp_summary()
 
-            SummaryReporter.log_overall_results(stage_summaries)
+            summary_reporter.log_overall_results()
 
             if monitor_resources:
                 total_client_reqs = sum(
@@ -835,62 +820,126 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     s.get("total_started") or 0 for s in stage_summaries
                 )
 
-                ResourceReporter.log_resource_analysis(
-                    resource_rows, total_client_reqs,
+                self.resource_reporter.log_resource_analysis(
+                    total_client_reqs,
                     total_server_calls,
                 )
-                DisconnectionReporter.log_disconnection_summary(
+                disc_reporter = DisconnectionReporter(
                     stage_summaries,
                 )
-                ResourceReporter.log_client_analysis(
-                    client_rows, total_client_reqs,
+                disc_reporter.log_disconnection_summary()
+                self.resource_reporter.log_client_analysis(
+                    total_client_reqs,
                 )
 
             if level == LEVEL_ADV:
                 has_server_log = self.server_log is not None
                 if has_server_log:
-                    PoolAnalyzer.log_pool_reuse_analysis(
-                        stage_summaries,
-                    )
+                    pool_analyzer = PoolAnalyzer(stage_summaries)
+                    pool_analyzer.log_pool_reuse_analysis()
                 else:
                     logger.info(
                         "\n  Pool reuse analysis: "
                         "not available (no --server-log)",
                     )
-                self._export_raw_json(
-                    stage_summaries, resource_rows, client_rows,
-                )
 
             exit_code = self._check_results(stage_summaries)
+            self._export_raw_json(
+                stage_summaries, exit_code=exit_code,
+            )
         finally:
             self._finalize_test_log(stage_summaries)
 
         return exit_code
 
-    def _export_raw_json(self, stage_summaries, resource_rows,
-                         client_rows):
+    def _export_raw_json(self, stage_summaries, *,
+                         exit_code) -> None:
         """Save all test data as a single raw_results.json file."""
+        all_results = []
+        for s in stage_summaries:
+            all_results.extend(s.get("results", []))
+
+        total_tokens = sum(
+            r.get("total_tokens", 0) for r in all_results
+        )
+        total_cost = sum(
+            r.get("cost_usd", 0.0) for r in all_results
+        )
+        total_elapsed = sum(
+            s.get("elapsed", 0) for s in stage_summaries
+        )
+        total_requests = len(all_results)
+        passed = sum(
+            1 for r in all_results
+            if r.get("status") == STATUS_CREATED
+        )
+
         raw_data = {
-            "agent": self.args.agent,
-            "level": self.args.level,
-            "mode": "ramp" if self.args.ramp else "flat",
-            "host": self.args.host,
-            "port": self.args.port,
-            "timeout": self.args.timeout,
-            "idle_timeout": self.args.idle_timeout,
-            "settle_time": self.args.settle_time,
-            "max_workers": self.args.max_workers,
-            "server_log": self.server_log,
+            "test_metadata": {
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                "hostname": socket.gethostname(),
+                "python_version": platform.python_version(),
+                "platform": platform.platform(),
+                "neuro_san_version": self._get_package_version(
+                    "neuro_san",
+                ),
+                "neuro_san_studio_version": self._get_package_version(
+                    "neuro_san_studio",
+                ),
+                "verdict": "PASSED" if exit_code == 0 else "FAILED",
+                "exit_code": exit_code,
+            },
+            "config": {
+                "agent": self.args.agent,
+                "profile": self.args.profile,
+                "level": self.args.level,
+                "mode": "ramp" if self.args.ramp else "flat",
+                "host": self.args.host,
+                "port": self.args.port,
+                "timeout": self.args.timeout,
+                "idle_timeout": self.args.idle_timeout,
+                "settle_time": self.args.settle_time,
+                "max_workers": self.args.max_workers,
+                "num_rounds": self.args.num_rounds,
+                "num_requests": self.args.num_requests,
+                "same_prompt": self.args.same_prompt,
+                "server_log": self.server_log,
+                "estimated_tokens_per_request": (
+                    self.profile.estimated_tokens_per_request
+                ),
+            },
+            "aggregates": {
+                "total_requests": total_requests,
+                "passed": passed,
+                "failed": total_requests - passed,
+                "total_elapsed_seconds": round(total_elapsed, 2),
+                "avg_latency_seconds": round(
+                    total_elapsed / total_requests, 2,
+                ) if total_requests > 0 else 0,
+                "total_tokens": total_tokens,
+                "total_cost_usd": round(total_cost, 6),
+            },
             "stage_summaries": stage_summaries,
-            "resource_rows": resource_rows,
-            "client_resource_rows": client_rows,
+            "resource_rows": [
+                {"before": row[1], "after": row[2]}
+                for row in self.resource_reporter.resource_rows
+            ],
+            "client_resource_rows": [
+                {
+                    "before": row[1],
+                    "peak": row[2],
+                    "settled": row[3],
+                }
+                for row in self.resource_reporter.client_rows
+            ],
         }
+        raw_data.update(JsonMetadata.build())
         json_path = os.path.join(self._output_dir, "raw_results.json")
         with open(json_path, "w", encoding="utf-8") as fh:
             json.dump(raw_data, fh, indent=2, default=str)
         logger.info("\nRaw results: %s", json_path)
 
-    def _check_results(self, stage_summaries):
+    def _check_results(self, stage_summaries) -> int:
         """Log pass/fail verdict and return appropriate exit code."""
         all_results = []
         for s in stage_summaries:
@@ -916,7 +965,15 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         return 0
 
     @staticmethod
-    def main():
+    def _get_package_version(package_name) -> Optional[str]:
+        """Return the installed version of a package, or None."""
+        try:
+            return _pkg_meta.version(package_name)
+        except _pkg_meta.PackageNotFoundError:
+            return None
+
+    @staticmethod
+    def main() -> None:
         """Entry point for the load test script."""
         args = LoadTestOrchestrator.parse_args()
         orchestrator = LoadTestOrchestrator(args)

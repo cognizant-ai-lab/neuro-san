@@ -24,7 +24,7 @@ class TableFormatter:
     """Formats and logs aligned tables."""
 
     @staticmethod
-    def log_table(header, rows):
+    def log_table(header, rows) -> None:
         """Log an aligned table given a header list and rows."""
         col_widths = [len(h) for h in header]
         for row in rows:

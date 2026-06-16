@@ -21,6 +21,7 @@ monitoring and telemetry when those features become available.
 
 import logging
 import time
+from typing import Optional
 
 import psutil
 
@@ -28,12 +29,19 @@ logger = logging.getLogger(__name__)
 
 
 class Heartbeat:
-    """Logs periodic progress while requests are in-flight."""
+    """Logs periodic progress while requests are in-flight.
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
-    @staticmethod
-    def progress_heartbeat(futures, total, start_time, stop_event,
-                           server_proc, peak_threads_result):
+    Holds the server process handle so the heartbeat thread can
+    read thread counts without the caller passing it each time.
+    """
+
+    def __init__(self, server_proc: Optional[psutil.Process]) -> None:
+        self._server_proc = server_proc
+
+    # pylint: disable=too-many-locals,too-many-arguments
+    def progress_heartbeat(self, futures, total, start_time,
+                           stop_event, *,
+                           peak_threads_result) -> None:
         """Log periodic progress while requests are in-flight."""
         interval = 30
         last_done = 0
@@ -52,9 +60,9 @@ class Heartbeat:
                 last_change = time.time()
                 last_done = done
             thread_info = ""
-            if server_proc is not None:
+            if self._server_proc is not None:
                 try:
-                    threads = server_proc.num_threads()
+                    threads = self._server_proc.num_threads()
                     if threads > peak_threads:
                         peak_threads = threads
                         peak_threads_result.update({"peak": threads})

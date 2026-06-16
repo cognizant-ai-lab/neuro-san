@@ -22,52 +22,55 @@ actual token usage before committing to a full run.
 
 import logging
 import sys
-from typing import Any
-from typing import Dict
 from typing import List
 from typing import Optional
 
 from tests.load_tests.config import DEFAULT_STAGES
-from tests.load_tests.traffic.runner import TrafficRunner
+from tests.load_tests.config import RequestResult
+from tests.load_tests.config import SEPARATOR_WIDTH
 
 logger = logging.getLogger(__name__)
 
-SEPARATOR_WIDTH = 60
-
 
 class InputValidator:
-    """Validates and resolves user input for load test configuration."""
+    """Validates and resolves user input for load test configuration.
 
-    @staticmethod
-    def resolve_stages(args) -> List[int]:
+    Holds the parsed CLI args so that callers do not need to pass
+    them to every method.
+    """
+
+    def __init__(self, args) -> None:
+        self._args = args
+
+    def resolve_stages(self) -> List[int]:
         """Return the list of concurrency stages to run.
 
         If --ramp is set and --stages provided, parse the CSV.
         If --ramp is set without --stages, use DEFAULT_STAGES.
         Otherwise return a single-stage list from --num-requests.
         """
-        if args.ramp:
-            if args.stages is not None:
+        if self._args.ramp:
+            if self._args.stages is not None:
                 return [
-                    int(s.strip()) for s in args.stages.split(",")
+                    int(s.strip())
+                    for s in self._args.stages.split(",")
                 ]
             return list(DEFAULT_STAGES)
-        return [args.num_requests]
+        return [self._args.num_requests]
 
-    @staticmethod
-    def resolve_max_requests(args, stages) -> int:
+    def resolve_max_requests(self, stages) -> int:
         """Return the effective max-requests cap."""
-        if args.max_requests is not None:
-            return args.max_requests
-        if args.ramp:
-            return sum(stages) * args.num_rounds
+        if self._args.max_requests is not None:
+            return self._args.max_requests
+        if self._args.ramp:
+            return sum(stages) * self._args.num_rounds
         return 100
 
-    @staticmethod
+    # pylint: disable=too-many-arguments
     def confirm_cost(
-            args, stages, total_cap, profile=None,
-            output_dir=None,
-    ) -> Optional[Dict[str, Any]]:
+            self, stages, total_cap, *, runner,
+            profile=None, output_dir=None,
+    ) -> Optional[RequestResult]:
         """Display cost warning and optionally run a dry-run probe.
 
         With --yes: shows the cost warning and returns immediately.
@@ -77,14 +80,14 @@ class InputValidator:
 
         Returns the probe result dict if a probe was run, else None.
         """
-        total_planned = sum(stages) * args.num_rounds
+        total_planned = sum(stages) * self._args.num_rounds
         capped = min(total_planned, total_cap)
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         logger.info("  COST WARNING: REAL LLM CALLS")
         logger.info("=" * SEPARATOR_WIDTH)
-        if args.ramp:
+        if self._args.ramp:
             logger.info("  Ramp-up stages: %s", stages)
-            logger.info("  Rounds: %s", args.num_rounds)
+            logger.info("  Rounds: %s", self._args.num_rounds)
         logger.info("  Total planned requests: %s", total_planned)
         if capped < total_planned:
             logger.info(
@@ -113,17 +116,14 @@ class InputValidator:
 
         logger.info("=" * SEPARATOR_WIDTH)
 
-        if args.yes:
+        if self._args.yes:
             return None
 
-        return InputValidator._run_cost_probe(
-            args, profile, capped, output_dir,
-        )
+        return self._run_cost_probe(runner, capped, output_dir)
 
-    @staticmethod
     def _run_cost_probe(
-            args, profile, total_requests, output_dir,
-    ) -> Optional[Dict[str, Any]]:
+            self, runner, total_requests, output_dir,
+    ) -> Optional[RequestResult]:
         """Fire one probe request with --tokens and confirm cost.
 
         Temporarily enables token tracking, fires a single request,
@@ -134,14 +134,13 @@ class InputValidator:
             "\nRunning 1 dry-run probe to measure actual cost...",
         )
 
-        original_include = args.include_tokens
-        args.include_tokens = True
-        probe_result = TrafficRunner.run_one(
-            args, profile,
+        original_include = self._args.include_tokens
+        self._args.include_tokens = True
+        probe_result = runner.run_one(
             request_id=1, global_request_id=0,
             output_dir=output_dir,
         )
-        args.include_tokens = original_include
+        self._args.include_tokens = original_include
 
         probe_tokens = probe_result.get("total_tokens", 0)
         probe_cost = probe_result.get("cost_usd", 0.0)

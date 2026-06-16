@@ -17,6 +17,7 @@
 
 import logging
 
+from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
@@ -25,14 +26,18 @@ from tests.load_tests.reporting.table_formatter import TableFormatter
 
 logger = logging.getLogger(__name__)
 
-SEPARATOR_WIDTH = 60
-
 
 class SummaryReporter:
-    """Logs ramp-up and overall results across all stages."""
+    """Logs ramp-up and overall results across all stages.
 
-    @staticmethod
-    def log_ramp_summary(stage_summaries):
+    Holds the collected stage summaries so that multiple
+    reporting methods can access them without re-passing.
+    """
+
+    def __init__(self, stage_summaries) -> None:
+        self._summaries = stage_summaries
+
+    def log_ramp_summary(self) -> None:
         """Log the ramp-up summary table across all stages."""
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         logger.info("  RAMP-UP SUMMARY")
@@ -40,7 +45,7 @@ class SummaryReporter:
 
         has_server_counts = any(
             summary.get("primary_started") is not None
-            for summary in stage_summaries
+            for summary in self._summaries
         )
         header = [
             "Stage", "Concurrent", "Created", "Failed",
@@ -50,7 +55,7 @@ class SummaryReporter:
         if has_server_counts:
             header.extend(["Recv", "Done", "Internal"])
         rows = []
-        for summary in stage_summaries:
+        for summary in self._summaries:
             counts = summary.get("counts", {})
             row = (
                 str(summary.get("stage")),
@@ -83,8 +88,7 @@ class SummaryReporter:
             rows.append(row)
         TableFormatter.log_table(header, rows)
 
-    @staticmethod
-    def log_overall_results(stage_summaries):
+    def log_overall_results(self) -> None:
         """Log overall results across all stages."""
         total_created = 0
         total_failed = 0
@@ -93,7 +97,7 @@ class SummaryReporter:
         total_time = 0.0
         total_retries = 0
 
-        for summary in stage_summaries:
+        for summary in self._summaries:
             counts = summary.get("counts", {})
             total_created += counts.get(STATUS_CREATED, 0)
             total_failed += counts.get(STATUS_FAILED, 0)
@@ -122,7 +126,8 @@ class SummaryReporter:
 
         if total_retries > 0:
             total_requests = sum(
-                s.get("concurrent", 0) for s in stage_summaries
+                s.get("concurrent", 0)
+                for s in self._summaries
             )
             amplification = (
                 (total_requests + total_retries) / total_requests

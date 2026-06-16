@@ -66,7 +66,7 @@ class CliBuilder:
         return prompt_file
 
     @staticmethod
-    def cleanup_prompt_file(prompt_file):
+    def cleanup_prompt_file(prompt_file) -> None:
         """Remove the temporary prompt file."""
         try:
             os.remove(prompt_file)

@@ -16,24 +16,49 @@
 """Builds and logs server and client resource delta tables."""
 
 import logging
+from typing import List
 from typing import Tuple
 
+from tests.load_tests.config import ResourceSnapshot
+from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
 logger = logging.getLogger(__name__)
 
-SEPARATOR_WIDTH = 60
-
 
 class ResourceReporter:
-    """Builds and logs server and client resource delta tables."""
+    """Builds and logs server and client resource delta tables.
 
-    @staticmethod
-    def build_resource_row(stage_label, before, after) -> Tuple:
-        """Build a resource summary row from before/after snapshots."""
+    Accumulates resource rows during the test run, then logs
+    the complete analysis tables at the end.
+    """
+
+    def __init__(self) -> None:
+        self._resource_rows: List[Tuple] = []
+        self._client_rows: List[Tuple] = []
+
+    @property
+    def resource_rows(self) -> List[Tuple]:
+        """Return the accumulated server resource rows."""
+        return self._resource_rows
+
+    @property
+    def client_rows(self) -> List[Tuple]:
+        """Return the accumulated client resource rows."""
+        return self._client_rows
+
+    def add_resource_row(
+            self, stage_label, before, after,
+    ) -> Tuple[tuple, ResourceSnapshot, ResourceSnapshot]:
+        """Build and store a server resource row from before/after snapshots.
+
+        Returns (display_row, before_snapshot, after_snapshot) so that
+        delta calculations can use raw numeric values instead of
+        reverse-parsing formatted strings.
+        """
         rss_delta = after.get("rss") - before.get("rss")
         thread_delta = after.get("threads") - before.get("threads")
-        return (
+        display = (
             str(stage_label),
             f"{before.get('rss'):.1f}M",
             f"{after.get('rss'):.1f}M",
@@ -45,13 +70,23 @@ class ResourceReporter:
             f"{after.get('cpu'):.1f}%",
             str(after.get("children")),
         )
+        row = (display, before, after)
+        self._resource_rows.append(row)
+        return row
 
-    @staticmethod
-    def build_client_row(stage_label, before, peak, settled) -> Tuple:
-        """Build a client resource row from before/peak/settled."""
+    def add_client_row(
+            self, stage_label, before, peak, settled,
+    ) -> Tuple[tuple, ResourceSnapshot, ResourceSnapshot,
+               ResourceSnapshot]:
+        """Build and store a client resource row from before/peak/settled.
+
+        Returns (display_row, before_snapshot, peak_snapshot,
+        settled_snapshot) so that delta calculations and JSON export
+        can use raw numeric values.
+        """
         rss_delta = settled.get("rss") - before.get("rss")
         peak_rss = f"{peak.get('rss'):.1f}M" if peak else "-"
-        return (
+        display = (
             str(stage_label),
             f"{before.get('rss'):.1f}M",
             peak_rss,
@@ -61,14 +96,17 @@ class ResourceReporter:
             str(settled.get("fds")),
             str(settled.get("threads")),
         )
+        row = (display, before, peak or {}, settled)
+        self._client_rows.append(row)
+        return row
 
-    @staticmethod
     def log_resource_analysis(
-            resource_rows, total_client_reqs, total_server_calls,
-    ):
+            self, total_client_reqs, total_server_calls,
+    ) -> None:
         """Log server resource analysis table."""
-        if not resource_rows:
+        if not self._resource_rows:
             return
+        display_rows = [row[0] for row in self._resource_rows]
         resource_header = [
             "Concurrent", "Before RSS", "Settled RSS", "RSS Delta",
             "FDs", "Threads", "Thread Delta",
@@ -88,46 +126,46 @@ class ResourceReporter:
                 total_client_reqs,
             )
         logger.info("=" * SEPARATOR_WIDTH)
-        TableFormatter.log_table(resource_header, resource_rows)
-        ResourceReporter._log_resource_deltas(resource_rows)
+        TableFormatter.log_table(resource_header, display_rows)
+        self._log_resource_deltas()
 
-    @staticmethod
-    def _log_resource_deltas(resource_rows):
+    def _log_resource_deltas(self) -> None:
         """Log overall resource deltas if enough data points."""
-        if len(resource_rows) < 2:
+        if len(self._resource_rows) < 2:
             return
-        first = resource_rows[0]
-        last = resource_rows[-1]
+        first_before = self._resource_rows[0][1]
+        last_after = self._resource_rows[-1][2]
         logger.info(
             "\n  Server overall deltas (first stage vs last stage):",
         )
         logger.info(
             "    RSS:         +%.1f MB",
-            float(last[2].rstrip("M")) - float(first[1].rstrip("M")),
+            last_after.get("rss") - first_before.get("rss"),
         )
         logger.info(
             "    FDs:         +%s",
-            int(last[4]) - int(first[4]),
+            last_after.get("fds") - first_before.get("fds"),
         )
         logger.info(
             "    Threads:     +%s",
-            int(last[5].split(" -> ")[1])
-            - int(first[5].split(" -> ")[0]),
+            last_after.get("threads") - first_before.get("threads"),
         )
         logger.info(
             "    Connections: +%s",
-            int(last[7]) - int(first[7]),
+            last_after.get("connections")
+            - first_before.get("connections"),
         )
         logger.info(
             "    Children:    +%s",
-            int(last[9]) - int(first[9]),
+            last_after.get("children")
+            - first_before.get("children"),
         )
 
-    @staticmethod
-    def log_client_analysis(client_rows, total_client_reqs):
+    def log_client_analysis(self, total_client_reqs) -> None:
         """Log client resource analysis table."""
-        if not client_rows:
+        if not self._client_rows:
             return
+        display_rows = [row[0] for row in self._client_rows]
         client_header = [
             "Concurrent", "Before RSS", "Peak RSS",
             "Settled RSS", "RSS Delta",
@@ -140,29 +178,28 @@ class ResourceReporter:
             total_client_reqs,
         )
         logger.info("=" * SEPARATOR_WIDTH)
-        TableFormatter.log_table(client_header, client_rows)
-        ResourceReporter._log_client_deltas(client_rows)
+        TableFormatter.log_table(client_header, display_rows)
+        self._log_client_deltas()
 
-    @staticmethod
-    def _log_client_deltas(client_rows):
+    def _log_client_deltas(self) -> None:
         """Log overall client resource deltas if enough data points."""
-        if len(client_rows) < 2:
+        if len(self._client_rows) < 2:
             return
-        first = client_rows[0]
-        last = client_rows[-1]
+        first_before = self._client_rows[0][1]
+        last_settled = self._client_rows[-1][3]
         logger.info(
             "\n  Client overall deltas (first stage vs last stage):",
         )
         logger.info(
             "    RSS:     +%.1f MB",
-            float(last[3].rstrip("M"))
-            - float(first[1].rstrip("M")),
+            last_settled.get("rss") - first_before.get("rss"),
         )
         logger.info(
             "    FDs:     +%s",
-            int(last[6]) - int(first[6]),
+            last_settled.get("fds") - first_before.get("fds"),
         )
         logger.info(
             "    Threads: +%s",
-            int(last[7]) - int(first[7]),
+            last_settled.get("threads")
+            - first_before.get("threads"),
         )

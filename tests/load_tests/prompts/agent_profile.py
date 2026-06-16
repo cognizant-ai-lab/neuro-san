@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 class AgentProfile:
     """Configuration profile for a specific agent under test."""
 
-    def __init__(self, agent_name, profile_data):
+    def __init__(self, agent_name, profile_data) -> None:
         """Initialize the profile from a loaded profile dict."""
         self.agent_name = agent_name
         self._data = profile_data

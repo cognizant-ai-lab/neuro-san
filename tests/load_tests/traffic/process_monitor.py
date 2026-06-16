@@ -57,7 +57,8 @@ class ProcessMonitor:
         try:
             status = ProcessMonitor._monitor_process(
                 proc, stdout_chunks, stderr_chunks,
-                last_activity, timeout, idle_timeout,
+                last_activity,
+                timeout=timeout, idle_timeout=idle_timeout,
             )
         except (OSError, subprocess.SubprocessError):
             proc.kill()
@@ -85,10 +86,11 @@ class ProcessMonitor:
             proc.returncode,
         )
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    # pylint: disable=too-many-arguments
     @staticmethod
-    def _monitor_process(proc, stdout_chunks, stderr_chunks,
-                         last_activity, timeout, idle_timeout):
+    def _monitor_process(proc, stdout_chunks,
+                         stderr_chunks, last_activity, *,
+                         timeout, idle_timeout) -> str:
         """Monitor a running process for output, idle timeout, and hard timeout."""
         start = time.time()
         while proc.poll() is None:
