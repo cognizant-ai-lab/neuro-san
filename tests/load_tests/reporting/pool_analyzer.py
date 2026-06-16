@@ -59,6 +59,7 @@ class PoolAnalyzer:
         ]
         rows: List[tuple] = []
         total_new_threads = 0
+        reuse_pcts: List[float] = []
 
         for idx, stage in enumerate(stages_with_data):
             batch_num = idx + 1
@@ -72,6 +73,7 @@ class PoolAnalyzer:
                 (reused / server_calls * 100.0)
                 if server_calls > 0 else 0.0
             )
+            reuse_pcts.append(reuse_pct)
             pool_avail = max(before_threads - base_threads, 0)
 
             primary = (
@@ -97,39 +99,27 @@ class PoolAnalyzer:
             ))
 
         TableFormatter.log_table(header, rows)
-        self._log_pool_diagnostics(
-            stages_with_data, total_new_threads,
-        )
-
-    @staticmethod
-    def _log_pool_diagnostics(stages_with_data, total_new_threads) -> None:
-        """Log summary diagnostics for pool reuse if enough data."""
-        if len(stages_with_data) < 2:
-            return
-        first_reuse = 0.0
-        last_reuse = 0.0
-        for idx, stage in enumerate(stages_with_data):
-            server_calls = stage.get("total_started")
-            new_t = max(
-                stage.get("after_threads")
-                - stage.get("before_threads"), 0,
-            )
-            reused = max(server_calls - new_t, 0)
-            pct = (
-                (reused / server_calls * 100.0)
-                if server_calls > 0 else 0.0
-            )
-            if idx == 0:
-                first_reuse = pct
-            last_reuse = pct
 
         first_demand = max(
             stages_with_data[0].get("after_threads")
             - stages_with_data[0].get("before_threads"), 0,
         )
+        self._log_pool_diagnostics(
+            reuse_pcts, total_new_threads,
+            first_demand=first_demand,
+        )
+
+    @staticmethod
+    def _log_pool_diagnostics(
+            reuse_pcts, total_new_threads, *,
+            first_demand,
+    ) -> None:
+        """Log summary diagnostics for pool reuse."""
+        if len(reuse_pcts) < 2:
+            return
         logger.info(
             "\n  Pool reuse: %.1f%% (batch 1) -> %.1f%% (batch %d)",
-            first_reuse, last_reuse, len(stages_with_data),
+            reuse_pcts[0], reuse_pcts[-1], len(reuse_pcts),
         )
         if total_new_threads > first_demand > 0:
             excess = total_new_threads - first_demand

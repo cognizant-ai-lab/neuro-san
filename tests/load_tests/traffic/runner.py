@@ -26,6 +26,7 @@ from typing import Optional
 from typing import Tuple
 
 from tests.load_tests.config import RequestResult
+from tests.load_tests.config import SharedRef
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
@@ -179,11 +180,11 @@ class TrafficRunner:
     def run_stage(self, num_requests,
                   max_workers, global_offset, *,
                   server_proc=None, output_dir=None
-                  ) -> Tuple[float, List[RequestResult], Dict[str, int]]:
+                  ) -> Tuple[float, List[RequestResult], SharedRef]:
         """Fire num_requests concurrent requests using a thread pool."""
 
         results_list: List[RequestResult] = []
-        peak_threads_result: Dict[str, int] = {}
+        peak_threads_ref = SharedRef()
         start = time.time()
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures = [
@@ -201,7 +202,7 @@ class TrafficRunner:
                 args=(futures, num_requests, start,
                       heartbeat_stop),
                 kwargs={
-                    "peak_threads_result": peak_threads_result,
+                    "peak_threads_ref": peak_threads_ref,
                 },
                 daemon=True,
             )
@@ -211,7 +212,7 @@ class TrafficRunner:
             heartbeat_stop.set()
             heartbeat_thread.join(timeout=THREAD_JOIN_TIMEOUT)
         total_time = time.time() - start
-        return total_time, results_list, peak_threads_result
+        return total_time, results_list, peak_threads_ref
 
     def _diagnose_failure(self, returncode, parsed_fields) -> str:
         """Return a human-readable reason why a request was marked FAILED."""

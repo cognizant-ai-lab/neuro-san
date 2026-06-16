@@ -36,6 +36,7 @@ from tests.load_tests.config import REQUEST_FINISH_PATTERN
 from tests.load_tests.config import REQUEST_START_PATTERN
 from tests.load_tests.config import RETRY_LOG_PATTERN
 from tests.load_tests.config import STREAM_CLOSED_REQUEST_PATTERN
+from tests.load_tests.config import SharedRef
 from tests.load_tests.config import TASK_CANCELLED_PATTERN
 from tests.load_tests.config import TokenEntry
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
@@ -320,37 +321,37 @@ class ServerLogMonitor:
                           ) -> Tuple[
         Optional[threading.Event],
         Optional[threading.Thread],
-        Optional[dict],
+        Optional[SharedRef],
     ]:
         """Start a background thread to monitor server log for request arrivals.
 
-        Returns (stop_event, thread, peak_result).
+        Returns (stop_event, thread, peak_client_ref).
         Returns (None, None, None) if monitoring is not available.
         """
         if self._server_log is None or position is None:
             return None, None, None
         stop_event = threading.Event()
-        peak_result = {}
+        peak_client_ref = SharedRef()
         monitor = threading.Thread(
             target=ServerLogMonitor._log_monitor_worker,
             args=(self._server_log, position, expected_count,
                   stop_event, fire_time),
             kwargs={
                 "client_proc": client_proc,
-                "peak_result": peak_result,
+                "peak_client_ref": peak_client_ref,
                 "primary_start_pattern": primary_start_pattern,
             },
             daemon=True,
         )
         monitor.start()
-        return stop_event, monitor, peak_result
+        return stop_event, monitor, peak_client_ref
 
     # pylint: disable=too-many-arguments,too-many-locals
     @staticmethod
     def _log_monitor_worker(server_log, position,
                             expected_count, stop_event,
                             fire_time, *, client_proc,
-                            peak_result,
+                            peak_client_ref,
                             primary_start_pattern) -> None:
         """Background worker that tails server log and reports arrivals."""
         count = 0
@@ -384,7 +385,7 @@ class ServerLogMonitor:
                                         snap.get("rss"),
                                         snap.get("cpu"),
                                     )
-                                    peak_result.update(snap)
+                                    peak_client_ref.value = snap
                     else:
                         stop_event.wait(0.5)
         except OSError as exc:

@@ -167,6 +167,26 @@ THREAD_JOIN_TIMEOUT = 2
 PROCESS_WAIT_TIMEOUT = 10
 STALE_LOG_THRESHOLD_SECONDS = 300
 
+
+class SharedRef:
+    """Mutable container for passing a value between threads.
+
+    Replaces the bare-dict pattern (e.g., ``result = {}`` /
+    ``result.update(...)``), making the intent explicit and the
+    expected type visible.
+    """
+
+    __slots__ = ("value",)
+
+    def __init__(self) -> None:
+        self.value = None
+
+
+# Heartbeat and subprocess monitoring
+HEARTBEAT_INTERVAL_SECONDS = 30
+POLL_INTERVAL_SECONDS = 5.0
+READ_BUFFER_SIZE = 4096
+
 # Server log regex patterns
 RETRY_LOG_PATTERN = re.compile(
     r"retrying from (RateLimit error |)(\w+)"

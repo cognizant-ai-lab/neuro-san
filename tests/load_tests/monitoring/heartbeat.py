@@ -25,6 +25,9 @@ from typing import Optional
 
 import psutil
 
+from tests.load_tests.config import HEARTBEAT_INTERVAL_SECONDS
+from tests.load_tests.config import SharedRef
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,13 +44,12 @@ class Heartbeat:
     # pylint: disable=too-many-locals,too-many-arguments
     def progress_heartbeat(self, futures, total, start_time,
                            stop_event, *,
-                           peak_threads_result) -> None:
+                           peak_threads_ref: SharedRef) -> None:
         """Log periodic progress while requests are in-flight."""
-        interval = 30
         last_done = 0
         last_change = start_time
         peak_threads = 0
-        while not stop_event.wait(timeout=interval):
+        while not stop_event.wait(timeout=HEARTBEAT_INTERVAL_SECONDS):
             done = sum(1 for f in futures if f.done())
             elapsed = int(time.time() - start_time)
             ts = time.strftime("%H:%M:%S", time.localtime())
@@ -65,7 +67,7 @@ class Heartbeat:
                     threads = self._server_proc.num_threads()
                     if threads > peak_threads:
                         peak_threads = threads
-                        peak_threads_result.update({"peak": threads})
+                        peak_threads_ref.value = threads
                         thread_info = f"  threads: {threads} (peak)"
                     else:
                         thread_info = f"  threads: {threads}"

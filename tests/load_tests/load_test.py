@@ -465,7 +465,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         peak_client = None
         settled_client = None
         if monitor_resources:
-            peak_client = peak_result if peak_result else None
+            peak_client = (
+                peak_result.value if peak_result else None
+            )
             settled_client = ResourceMonitor.snapshot(
                 client_proc,
             )
@@ -702,9 +704,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 summary_entry["after_threads"] = (
                     after_server.get("threads")
                 )
-        if peak_threads.get("peak") is not None:
+        if peak_threads.value is not None:
             summary_entry["peak_threads"] = (
-                peak_threads.get("peak")
+                peak_threads.value
             )
         return summary_entry
 

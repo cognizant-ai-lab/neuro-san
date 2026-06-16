@@ -48,12 +48,12 @@ class ResourceReporter:
     @property
     def resource_rows(self) -> List[ServerResourceRow]:
         """Return the accumulated server resource rows."""
-        return self._resource_rows
+        return list(self._resource_rows)
 
     @property
     def client_rows(self) -> List[ClientResourceRow]:
         """Return the accumulated client resource rows."""
-        return self._client_rows
+        return list(self._client_rows)
 
     def add_resource_row(
             self, stage_label, before, after,
@@ -142,30 +142,15 @@ class ResourceReporter:
             return
         first_before = self._resource_rows[0][1]
         last_after = self._resource_rows[-1][2]
-        logger.info(
-            "\n  Server overall deltas (first stage vs last stage):",
-        )
-        logger.info(
-            "    RSS:         +%.1f MB",
-            last_after.get("rss") - first_before.get("rss"),
-        )
-        logger.info(
-            "    FDs:         +%s",
-            last_after.get("fds") - first_before.get("fds"),
-        )
-        logger.info(
-            "    Threads:     +%s",
-            last_after.get("threads") - first_before.get("threads"),
-        )
-        logger.info(
-            "    Connections: +%s",
-            last_after.get("connections")
-            - first_before.get("connections"),
-        )
-        logger.info(
-            "    Children:    +%s",
-            last_after.get("children")
-            - first_before.get("children"),
+        self._log_snapshot_deltas(
+            "Server", first_before, last_after,
+            fields=[
+                ("RSS", "rss", "%.1f MB"),
+                ("FDs", "fds", "%s"),
+                ("Threads", "threads", "%s"),
+                ("Connections", "connections", "%s"),
+                ("Children", "children", "%s"),
+            ],
         )
 
     def log_client_analysis(self, total_client_reqs) -> None:
@@ -194,19 +179,26 @@ class ResourceReporter:
             return
         first_before = self._client_rows[0][1]
         last_settled = self._client_rows[-1][3]
-        logger.info(
-            "\n  Client overall deltas (first stage vs last stage):",
+        self._log_snapshot_deltas(
+            "Client", first_before, last_settled,
+            fields=[
+                ("RSS", "rss", "%.1f MB"),
+                ("FDs", "fds", "%s"),
+                ("Threads", "threads", "%s"),
+            ],
         )
+
+    @staticmethod
+    def _log_snapshot_deltas(label, before, after, *, fields):
+        """Log deltas between two ResourceSnapshots."""
+        max_name = max(len(name) for name, _, _ in fields)
         logger.info(
-            "    RSS:     +%.1f MB",
-            last_settled.get("rss") - first_before.get("rss"),
+            "\n  %s overall deltas (first stage vs last stage):",
+            label,
         )
-        logger.info(
-            "    FDs:     +%s",
-            last_settled.get("fds") - first_before.get("fds"),
-        )
-        logger.info(
-            "    Threads: +%s",
-            last_settled.get("threads")
-            - first_before.get("threads"),
-        )
+        for name, key, fmt in fields:
+            delta = after.get(key) - before.get(key)
+            padded = f"{name}:".ljust(max_name + 1)
+            logger.info(
+                "    %s +%s", padded, fmt % delta,
+            )

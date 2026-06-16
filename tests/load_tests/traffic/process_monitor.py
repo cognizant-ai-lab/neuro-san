@@ -24,7 +24,9 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
+from tests.load_tests.config import POLL_INTERVAL_SECONDS
 from tests.load_tests.config import PROCESS_WAIT_TIMEOUT
+from tests.load_tests.config import READ_BUFFER_SIZE
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
@@ -114,10 +116,11 @@ class ProcessMonitor:
                 return STATUS_KILLED
 
             readable, _, _ = select.select(
-                [proc.stdout, proc.stderr], [], [], 5.0,
+                [proc.stdout, proc.stderr], [], [],
+                POLL_INTERVAL_SECONDS,
             )
             for stream in readable:
-                data = os.read(stream.fileno(), 4096)
+                data = os.read(stream.fileno(), READ_BUFFER_SIZE)
                 if data:
                     last_activity = time.time()
                     if stream == proc.stdout:
