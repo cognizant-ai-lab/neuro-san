@@ -216,6 +216,7 @@ class TestLangChainMcpAdapter:
     @pytest.mark.asyncio
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpServersInfoRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     async def test_get_mcp_tools_proceeds_when_restore_raises_value_error(
         self, mock_client_class, mock_restorer_class, adapter, mock_mcp_tool, caplog
     ):
@@ -238,6 +239,7 @@ class TestLangChainMcpAdapter:
         # The tool fetch still completes — the load failure does not propagate.
         assert len(tools) == 1
         # Fallback to the empty dict so subsequent lookups don't blow up.
+        # pylint: disable=use-implicit-booleaness-not-comparison
         assert LangChainMcpAdapter._mcp_servers_info == {}
         # The real underlying cause is surfaced in the log so users can diagnose.
         assert "Cannot resolve variable ${YDC_API_KEY}" in caplog.text

@@ -63,3 +63,6 @@ class CustomLlmFactory(StandardLangChainLlmFactory):
             "test-openai": OpenAILlmPolicy
         }
         super().__init__(class_to_llm_policy_type)
+
+    def create_base_chat_model(self, config: Dict[str, str]) -> None:
+        _ = config

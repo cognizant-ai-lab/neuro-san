@@ -39,6 +39,7 @@ class TestAbstractNetworkValidator(TestCase):
     # ---- coerce_tools ----
 
     def test_coerce_tools_returns_list_as_is(self):
+        """Returns a real list, not a dict_values view."""
         agent_spec: Dict[str, Any] = {"tools": ["a", "b"]}
         result: List[Any] = AbstractNetworkValidator.coerce_tools(agent_spec)
         self.assertEqual(["a", "b"], result)
@@ -50,6 +51,7 @@ class TestAbstractNetworkValidator(TestCase):
         self.assertEqual([], result)
 
     def test_coerce_tools_missing_returns_empty(self):
+        """tools as a bare string should not raise AttributeError on .values()."""
         agent_spec: Dict[str, Any] = {}
         result: List[Any] = AbstractNetworkValidator.coerce_tools(agent_spec)
         self.assertEqual([], result)
@@ -64,6 +66,7 @@ class TestAbstractNetworkValidator(TestCase):
         self.assertEqual(sorted(result), ["agent_a", "agent_b"])
 
     def test_coerce_args_tools_list_returns_as_is(self):
+        """Returns a real list, not a dict_values view."""
         agent_spec: Dict[str, Any] = {"args": {"tools": ["agent_a", "agent_b"]}}
         result: List[Any] = AbstractNetworkValidator.coerce_args_tools(agent_spec)
         self.assertEqual(["agent_a", "agent_b"], result)
@@ -75,6 +78,7 @@ class TestAbstractNetworkValidator(TestCase):
         self.assertEqual([], result)
 
     def test_coerce_args_tools_missing_returns_empty(self):
+        """args.tools as a bare string should not raise AttributeError on .values()."""
         agent_spec: Dict[str, Any] = {}
         result: List[Any] = AbstractNetworkValidator.coerce_args_tools(agent_spec)
         self.assertEqual([], result)
@@ -82,18 +86,23 @@ class TestAbstractNetworkValidator(TestCase):
     # ---- is_url_or_path ----
 
     def test_is_url_or_path_absolute_path(self):
+        """Absolute paths (starting with '/') should be recognized."""
         self.assertTrue(AbstractNetworkValidator.is_url_or_path("/some/path/to/file"))
 
     def test_is_url_or_path_http_url(self):
+        """HTTP URLs should be recognized as well."""
         self.assertTrue(AbstractNetworkValidator.is_url_or_path("http://example.com/api"))
 
     def test_is_url_or_path_https_url(self):
+        """HTTPS URLs should be recognized as well."""
         self.assertTrue(AbstractNetworkValidator.is_url_or_path("https://example.com/api"))
 
     def test_is_url_or_path_agent_name(self):
+        """Agent names should not be recognized as URLs or paths."""
         self.assertFalse(AbstractNetworkValidator.is_url_or_path("synonymizer"))
 
     def test_is_url_or_path_empty_string(self):
+        """Empty strings should not raise an exception."""
         self.assertFalse(AbstractNetworkValidator.is_url_or_path(""))
 
     def test_is_url_or_path_relative_path(self):
@@ -103,20 +112,32 @@ class TestAbstractNetworkValidator(TestCase):
     # ---- remove_dictionary_tools ----
 
     def test_remove_dictionary_tools_all_strings(self):
+        """
+        If all tools are strings, return them as-is.
+        """
         down_chains: List[Any] = ["a", "b", "c"]
         result: List[str] = AbstractNetworkValidator.remove_dictionary_tools(down_chains)
         self.assertEqual(["a", "b", "c"], result)
 
     def test_remove_dictionary_tools_mixed(self):
+        """
+        If some tools are dictionary entries, remove them.
+        """
         down_chains: List[Any] = ["a", {"server": "mcp"}, "b"]
         result: List[str] = AbstractNetworkValidator.remove_dictionary_tools(down_chains)
         self.assertEqual(["a", "b"], result)
 
     def test_remove_dictionary_tools_only_dicts(self):
+        """
+        If all tools are dictionary entries, return an empty list.
+        """
         down_chains: List[Any] = [{"server": "mcp"}, {"server": "other"}]
         result: List[str] = AbstractNetworkValidator.remove_dictionary_tools(down_chains)
         self.assertEqual([], result)
 
     def test_remove_dictionary_tools_empty(self):
+        """
+        An empty list should not raise an exception.
+        """
         result: List[str] = AbstractNetworkValidator.remove_dictionary_tools([])
         self.assertEqual([], result)
