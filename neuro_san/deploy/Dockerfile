@@ -322,7 +322,14 @@ ENV AGENT_MAX_TEMP_NETWORKS="0"
 
 # A hocon file with MCP servers information to be used by LangChainMcpAdapter
 # for connecting to external MCP servers with authentication and tool filtering.
+ENV AGENT_MCP_INFO_FILE=""
+
+# Fallback for AGENT_MCP_INFO_FILE. Deprecated in favor of AGENT_MCP_INFO_FILE, but still supported for now for backward compatibility.
+# Will be removed in neuro-san==0.7
 ENV MCP_SERVERS_INFO_FILE=""
+
+# Timeout to wait for MCP server authentication response, in seconds. Default is 300 seconds (5 minutes).
+ENV AGENT_MCP_TIMEOUT_SECONDS=300
 
 # When set, this parameter enables MCP service protocol for running neuro-san server.
 # Service endpoint is http://host:port/mcp

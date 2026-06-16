@@ -58,7 +58,6 @@ Items in ***bold*** are essentials. Try to understand these first.
     - [***tools*** - list of other agents/tools that this agent may access](#tools-agents)
         - [External Agents](#external-agents)
         - [MCP Servers](#mcp-servers)
-            - [Authentication](#authentication)
     - [***class*** - Python class name to invoke for Coded Tools](#class-1)
     - [llm_config - agent-specific LLM configuration](#llm_config-2)
     - [command](#command)
@@ -655,48 +654,7 @@ MCP servers can be configured in two formats:
     - `tools` key filters which specific tools from the MCP server are made available.
     If omitted, all tools on the server will be accessible.
 
-##### Authentication
-
-MCP tools can be authenticated using the following methods:
-
-- `http_headers` field in `sly_data`. The required fields depend on the authentication scheme expected by each MCP
-server. Users may specify different authorization credentials for different MCP URLs.
-
-    Example:
-
-    ```json
-    {
-        "http_headers": {
-            "<MCP_URL_1>": {
-                "Authorization": "Bearer <token_value>"
-            },
-            "<MCP_URL_2>": {
-                "client_id": "<client_id_value>",
-                "client_secret": "<client_secret_value>"
-            }
-        }
-    }
-    ```
-
-- Set the `MCP_SERVERS_INFO_FILE` environment variable to point to a HOCON file containing MCP server configurations:
-
-    ```json
-    {
-        "mcp_server_url_1": {
-            "http_headers": {
-                "Authorization": "Bearer <token>",
-            },
-            "tools": ["tool_1", "tool_2"]
-        },
-    }
-    ```
-
-    - Server URLs must match those in the agent network HOCON file
-
-    - If the headers exist in both `sly_data` and the configuration file for the same server,
-    `sly_data` takes precedence
-
-    - Tool filtering from the configuration file is used only if no tool filtering exists in the agent network HOCON
+See [this document](mcp_authentication.md) for MCP authentication.
 
 <!--- pyml disable-next-line no-duplicate-heading -->
 ### llm_config
