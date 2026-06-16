@@ -145,12 +145,24 @@ registers the agent with a prefix (e.g., `basic/hello_world`), use
     "agent": "hello_world",
     "prompts": ["Hello, how are you today?", "What can you help me with?"],
     "estimated_tokens_per_request": 1000,
-    "success_fields": []
+    "success_fields": [],
+    "failure_patterns": [
+        "No fully-specified LLM found",
+        "API key to be set as an environment variable"
+    ]
 }
 ```
 
-`success_fields` example: `["reservation_id", "agent_network_name"]` for
+`success_fields`: stdout fields that must be present for success.
+Example: `["reservation_id", "agent_network_name"]` for
 agent_network_designer — the request is marked FAILED if any are missing.
+
+`failure_patterns`: substrings matched against stdout to catch
+server-side errors returned inside a successful HTTP 200 response
+(e.g. missing API key).  When any pattern matches, the request is
+downgraded from CREATED to FAILED.  The load test client does not
+check for API keys itself — it communicates with the server over
+HTTP, so keys are only needed on the server side.
 
 ## Output
 
@@ -265,7 +277,7 @@ tests/load_tests/
     runner.py                  TrafficRunner (thread pool executor)
 
   validation/
-    environment_validator.py   EnvironmentValidator (API keys, server)
+    environment_validator.py   EnvironmentValidator (mock LLM, server)
     input_validator.py         InputValidator (stages, cost probe)
     output_validator.py        OutputValidator (results, retries)
 ```
