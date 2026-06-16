@@ -11,8 +11,6 @@
     "success_fields": [],
     "failure_patterns": [
         "No fully-specified LLM found",
-        "API key to be set as an environment variable",
-        "AuthenticationError",
-        "RateLimitError"
+        "API key to be set as an environment variable"
     ]
 }
