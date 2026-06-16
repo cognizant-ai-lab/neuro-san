@@ -206,12 +206,14 @@ class DefaultsConfigFilter(ConfigFilter):
 
         # Find the current value of the first part
         first_part: str = parts[0]
-        part_value: Dict[str, Any] = target.get(first_part)
+        part_value = target.get(first_part)
         if part_value is None:
             # There is no existing value for the first part, so make it a dictionary
             target[first_part] = {}
-            # Be sure we get the correct value for later use
-            part_value: Dict[str, Any] = target[first_part]
+            part_value = target[first_part]
+        elif not isinstance(part_value, dict):
+            # Can't descend into non-dict nodes (e.g., tool specs that use a string "function").
+            return
 
         # Reassemble a shorter key for recursion
         remaining_parts: str = ".".join(parts[1:])
