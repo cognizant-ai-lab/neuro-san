@@ -65,6 +65,17 @@ class AgentProfile:
         """
         return self._data.get("success_fields", [])
 
+    @property
+    def failure_patterns(self) -> List[str]:
+        """Return substrings that indicate a failed response.
+
+        When any pattern is found in stdout, a request that would
+        otherwise be marked CREATED is downgraded to FAILED.  This
+        catches cases where the server returns an error message
+        inside a successful HTTP 200 response (e.g. missing API key).
+        """
+        return self._data.get("failure_patterns", [])
+
     def get_prompt(self, request_id, same_prompt=False) -> str:
         """Return the prompt for a given request.
 

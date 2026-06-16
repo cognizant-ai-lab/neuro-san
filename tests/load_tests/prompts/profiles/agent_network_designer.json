@@ -23,5 +23,11 @@
         "Design a multi-agent system for a wedding planning company"
     ],
     "estimated_tokens_per_request": 500000,
-    "success_fields": ["reservation_id", "agent_network_name"]
+    "success_fields": ["reservation_id", "agent_network_name"],
+    "failure_patterns": [
+        "No fully-specified LLM found",
+        "API key to be set as an environment variable",
+        "AuthenticationError",
+        "RateLimitError"
+    ]
 }

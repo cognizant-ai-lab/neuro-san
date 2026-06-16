@@ -8,5 +8,11 @@
         "What is the connection between hip hop and jazz?"
     ],
     "estimated_tokens_per_request": 5000,
-    "success_fields": []
+    "success_fields": [],
+    "failure_patterns": [
+        "No fully-specified LLM found",
+        "API key to be set as an environment variable",
+        "AuthenticationError",
+        "RateLimitError"
+    ]
 }

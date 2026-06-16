@@ -7,5 +7,11 @@
         "Please turn off all the lights",
         "Switch on the radio"
     ],
-    "estimated_tokens_per_request": 5000
+    "estimated_tokens_per_request": 5000,
+    "failure_patterns": [
+        "No fully-specified LLM found",
+        "API key to be set as an environment variable",
+        "AuthenticationError",
+        "RateLimitError"
+    ]
 }

@@ -134,12 +134,29 @@ class TrafficRunner:
         if passed and not stdout.strip():
             passed = False
             failure_reason = "empty response from agent"
+        if passed:
+            matched = self._check_failure_patterns(stdout)
+            if matched is not None:
+                passed = False
+                failure_reason = (
+                    f"response matched failure pattern: {matched}"
+                )
         status = STATUS_CREATED if passed else STATUS_FAILED
         if status == STATUS_FAILED and not failure_reason:
             failure_reason = self._diagnose_failure(
                 returncode, parsed_fields,
             )
         return status, failure_reason
+
+    def _check_failure_patterns(self, stdout) -> Optional[str]:
+        """Check stdout against the profile's failure patterns.
+
+        Returns the first matched pattern, or None if no match.
+        """
+        for pattern in self._profile.failure_patterns:
+            if pattern in stdout:
+                return pattern
+        return None
 
     @staticmethod
     def _attach_token_data(result, stdout) -> None:
