@@ -844,10 +844,19 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             or summary.get("counts", {}).get(STATUS_KILLED, 0) > 0
             for summary in stage_summaries
         )
-        if has_failures:
-            logger.info("\nOutput (with failures): %s", self._output_dir)
-        else:
-            logger.info("\nOutput: %s", self._output_dir)
+        label = (
+            "OUTPUT FILES (with failures)"
+            if has_failures else "OUTPUT FILES"
+        )
+        logger.info("\n%s", "=" * 60)
+        logger.info("  %s", label)
+        logger.info("=" * 60)
+        logger.info("  Directory:   %s", self._output_dir)
+        json_path = os.path.join(
+            self._output_dir, "raw_results.json",
+        )
+        if os.path.isfile(json_path):
+            logger.info("  Raw results: %s", json_path)
 
     def _validate_server_log(self) -> None:
         """Validate --server-log path when provided.
@@ -1106,7 +1115,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         json_path = os.path.join(self._output_dir, "raw_results.json")
         with open(json_path, "w", encoding="utf-8") as fh:
             json.dump(raw_data, fh, indent=2, default=str)
-        logger.info("\nRaw results: %s", json_path)
 
     def _check_results(self, stage_summaries) -> int:
         """Log pass/fail verdict and return appropriate exit code."""
