@@ -419,13 +419,21 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
 
         logger.info("\n%s", "=" * 60)
-        stage_label = (
-            f"[STAGE {stage_num}] "
-            f"{actual_requests} requests "
-            f"(max {stage_workers} workers)"
-        )
-        if self.args.num_rounds > 1:
-            stage_label += f" (round {round_num})"
+        if self.args.ramp:
+            stage_label = (
+                f"[STAGE {stage_num}] "
+                f"{actual_requests} requests "
+                f"(max {stage_workers} workers)"
+            )
+            if self.args.num_rounds > 1:
+                stage_label += f" (round {round_num})"
+        else:
+            stage_label = (
+                f"{actual_requests} requests "
+                f"(max {stage_workers} workers)"
+            )
+            if self.args.num_rounds > 1:
+                stage_label += f" (round {round_num})"
         logger.info("  %s", stage_label)
         logger.info("=" * 60)
 
@@ -1041,7 +1049,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
             summary_reporter = SummaryReporter(stage_summaries)
             if len(stage_summaries) > 1:
-                summary_reporter.log_ramp_summary()
+                summary_reporter.log_ramp_summary(
+                    is_ramp=self.args.ramp,
+                )
 
             summary_reporter.log_overall_results()
 

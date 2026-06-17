@@ -37,18 +37,20 @@ class SummaryReporter:
     def __init__(self, stage_summaries) -> None:
         self._summaries = stage_summaries
 
-    def log_ramp_summary(self) -> None:
+    def log_ramp_summary(self, *, is_ramp=True) -> None:
         """Log the ramp-up summary table across all stages."""
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
-        logger.info("  RAMP-UP SUMMARY")
+        title = "RAMP-UP SUMMARY" if is_ramp else "ROUND SUMMARY"
+        logger.info("  %s", title)
         logger.info("=" * SEPARATOR_WIDTH)
 
         has_server_counts = any(
             summary.get("primary_started") is not None
             for summary in self._summaries
         )
+        first_col = "Stage" if is_ramp else "Round"
         header = [
-            "Stage", "Concurrent", "Created", "Failed",
+            first_col, "Concurrent", "Created", "Failed",
             "Timeout", "Killed", "Retries", "Amplification",
             "Duration",
         ]
@@ -58,7 +60,8 @@ class SummaryReporter:
         for summary in self._summaries:
             counts = summary.get("counts", {})
             row = (
-                str(summary.get("stage")),
+                str(summary.get("stage") if is_ramp
+                    else summary.get("round", summary.get("stage"))),
                 str(summary.get("concurrent")),
                 str(counts.get(STATUS_CREATED, 0)),
                 str(counts.get(STATUS_FAILED, 0)),
