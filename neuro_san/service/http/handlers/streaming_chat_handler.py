@@ -134,7 +134,8 @@ class StreamingChatHandler(BaseRequestHandler):
             # If heartbeat is enabled, time to start it here:
             if self.heartbeat_interval_seconds > 0:
                 # If heartbeat is enabled,
-                # start the heartbeat task in the background, so it can run concurrently with the main request processing.
+                # start the heartbeat task in the background,
+                # so it can run concurrently with the main request processing.
                 self.heartbeat_task = asyncio.create_task(self.run_heartbeat())
 
             # Now process the result stream
