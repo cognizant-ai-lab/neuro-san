@@ -24,6 +24,8 @@ import logging
 import time
 import threading
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
 from neuro_san.internals.interfaces.startable import Startable
@@ -75,7 +77,8 @@ class AbstractReservationsStorage(ReservationsStorage, Startable):
             try:
                 self.expire_reservations()
             except Exception as exception:  # pylint: disable=broad-except
-                self._logger.info("%s: Expiration cleanup failed: %s", self._name, exception)
+                sensitive_logger = SensitiveLogger(self._logger)
+                sensitive_logger.info("%s: Expiration cleanup failed: %s", self._name, exception)
             elapsed = time.monotonic() - start
             self._logger.debug("%s: Expiration cleanup took %f seconds.", self._name, elapsed)
 

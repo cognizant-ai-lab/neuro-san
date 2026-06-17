@@ -20,6 +20,7 @@ from logging import getLogger
 from os import environ
 
 from leaf_common.config.resolver_util import ResolverUtil
+from leaf_common.logging.sensitive_logger import SensitiveLogger
 
 from neuro_san.internals.authorization.interfaces.authorizer import Authorizer
 from neuro_san.internals.authorization.null.always_yes_authorizer import AlwaysYesAuthorizer
@@ -49,6 +50,7 @@ class AuthorizerFactory:
             raise ValueError(f"Unable to create an Authorizer instance from env var AGENT_AUTHORIZER: {auth_classname}")
 
         logger: Logger = getLogger(__name__)
-        logger.info("Using Authorizer: %s.%s", authorizer.__class__.__module__, authorizer.__class__.__name__)
+        sensitive_logger: Logger = SensitiveLogger(logger)
+        sensitive_logger.info("Using Authorizer: %s.%s", authorizer.__class__.__module__, authorizer.__class__.__name__)
 
         return authorizer

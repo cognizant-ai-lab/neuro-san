@@ -28,6 +28,8 @@ from logging import getLogger
 
 from pydantic_core import ValidationError
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from langchain.agents.factory import create_agent
 from langchain.agents.middleware.types import AgentMiddleware
 from langchain_core.language_models.base import BaseLanguageModel
@@ -466,7 +468,8 @@ class LangChainRunContext(RunContext):
         try:
             tool_chat_list = json.loads(tool_chat_list_string)
         except json.decoder.JSONDecodeError as exception:
-            self.logger.error("Exception: %s parsing %s", str(exception), str(tool_chat_list_string))
+            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger.error("Exception: %s parsing %s", str(exception), str(tool_chat_list_string))
             raise exception
 
         # The tool_output seems to contain the entire chat history of
