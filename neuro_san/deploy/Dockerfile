@@ -346,7 +346,7 @@ ENV AGENT_SESSION_REQUIRE_HTTPS="false"
 # as flagged by static analysis (SAST) tools.
 # The default is "true", to allow developers to work locally with reasonable failure information.
 # Strongly consider turning this off for production deployments.
-ENV LEAF_LOG_SENSTIVE="true"
+ENV LEAF_LOG_SENSITIVE="true"
 
 #
 # Authorization
