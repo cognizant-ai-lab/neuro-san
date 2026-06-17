@@ -77,6 +77,12 @@ class ProfilerControlHandler(RequestHandler):
         except JSONDecodeError as exc:
             self.set_status(HTTPStatus.BAD_REQUEST)
             self.write("Invalid JSON in request body")
+
+            # CheckMarx false-positive for Information Exposure Through an Error Message
+            # We specifically use the SenstiveLogger instance to log the message.
+            # This allows for a hardened server to turn off logging of this information
+            # by setting the env var LEAF_LOG_SENSITIVE to "false", while still allowing
+            # developers to see the error message.
             sensitive_logger.info("Invalid JSON in request body: %s", str(exc))
             return
 
