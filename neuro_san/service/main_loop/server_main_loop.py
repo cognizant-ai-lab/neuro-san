@@ -71,7 +71,6 @@ class ServerMainLoop:
         self.max_concurrent_requests: int = DEFAULT_MAX_CONCURRENT_REQUESTS
         self.request_limit: int = DEFAULT_REQUEST_LIMIT
         self.forwarded_request_metadata: str = AgentServer.DEFAULT_FORWARDED_REQUEST_METADATA
-        self.usage_logger_metadata: str = ""
         self.service_openapi_spec_file: str = self._get_default_openapi_spec_path()
         self.http_server: HttpServer = None
         self.server_context = ServerContext()
@@ -112,10 +111,6 @@ class ServerMainLoop:
                                                        self.forwarded_request_metadata),
                                 help="Space-delimited list of http request metadata keys to forward "
                                      "to logs/other requests")
-        arg_parser.add_argument("--usage_logger_metadata", type=str,
-                                default=os.environ.get("AGENT_USAGE_LOGGER_METADATA", ""),
-                                help="Space-delimited list of http request metadata keys to forward "
-                                     "to models usage statistics logger")
         arg_parser.add_argument("--openapi_service_spec_path", type=str,
                                 default=os.environ.get("AGENT_OPENAPI_SPEC",
                                                        self.service_openapi_spec_file),
@@ -183,9 +178,6 @@ class ServerMainLoop:
         self.forwarded_request_metadata = args.forwarded_request_metadata
         if not self.forwarded_request_metadata:
             self.forwarded_request_metadata = ""
-        self.usage_logger_metadata = args.usage_logger_metadata
-        if not self.usage_logger_metadata:
-            self.usage_logger_metadata = self.forwarded_request_metadata
         self.service_openapi_spec_file = args.openapi_service_spec_path
 
         if args.manifest_update_period_seconds <= 0:
@@ -235,10 +227,8 @@ class ServerMainLoop:
         logging_config_restorer = LoggingConfigRestorer()
         self.logging_config = logging_config_restorer.restore()
 
-        # Construct forwarded metadata list as a union of
-        # self.forwarded_request_metadata and self.usage_logger_metadata
+        # Construct forwarded metadata list as self.forwarded_request_metadata
         metadata_set = set(self.forwarded_request_metadata.split())
-        metadata_set = metadata_set | set(self.usage_logger_metadata.split())
         metadata_str: str = " ".join(sorted(metadata_set))
 
         server_status: ServerStatus = self.server_context.get_server_status()
