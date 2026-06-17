@@ -58,11 +58,6 @@ class StreamingChatHandler(BaseRequestHandler):
         self.last_send_ts = 0.0
         self.heartbeat_task: asyncio.Task = None
 
-        if self.heartbeat_interval_seconds > 0:
-            # If heartbeat is enabled,
-            # start the heartbeat task in the background, so it can run concurrently with the main request processing.
-            self.heartbeat_task = asyncio.create_task(self.run_heartbeat())
-
     @staticmethod
     def _build_heartbeat_frame() -> str:
         """
@@ -134,6 +129,13 @@ class StreamingChatHandler(BaseRequestHandler):
                 # most probably it's because connection is closed by a client.
                 # Raise accordingly - we will handle this exception:
                 raise tornado.iostream.StreamClosedError()
+
+            # We are now ready to start processing the request and streaming results back to the client.
+            # If heartbeat is enabled, time to start it here:
+            if self.heartbeat_interval_seconds > 0:
+                # If heartbeat is enabled,
+                # start the heartbeat task in the background, so it can run concurrently with the main request processing.
+                self.heartbeat_task = asyncio.create_task(self.run_heartbeat())
 
             # Now process the result stream
             async with asyncio.timeout(request_timeout):
@@ -211,7 +213,12 @@ class StreamingChatHandler(BaseRequestHandler):
                 # self.heartbeat_frame already includes the ChatResponse envelope
                 # and a trailing newline (see _build_heartbeat_frame()).
                 self.write(self.heartbeat_frame)
-                await self.flush()
+                flush_ok = await self.do_flush()
+                if not flush_ok:
+                    # We tried flushing the heartbeat with no success
+                    # (most probably because connection is closed by a client).
+                    # Finish heartbeat task
+                    return
                 self.last_send_ts = time.monotonic()
                 time_to_sleep = self.heartbeat_interval_seconds
             except tornado.iostream.StreamClosedError:
