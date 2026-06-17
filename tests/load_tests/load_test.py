@@ -405,7 +405,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         logger.info("\n%s", "=" * 60)
         stage_label = (
             f"[STAGE {stage_num}] "
-            f"{stage_workers} concurrent connections"
+            f"{actual_requests} requests "
+            f"(max {stage_workers} workers)"
         )
         if self.args.num_rounds > 1:
             stage_label += f" (round {round_num})"
