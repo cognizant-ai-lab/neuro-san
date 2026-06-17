@@ -101,7 +101,7 @@ class AgentProfile:
         """Load an agent profile from a JSON file.
 
         Search order:
-        1. Explicit --profile path (abort if not found)
+        1. Explicit --profile-path (abort if not found)
         2. ./profiles/{agent_name}.json then ./profiles/{base}.json
         3. {project_root}/tests/load_tests/prompts/profiles/{name}.json
            where project_root comes from --project-root or PYTHONPATH
@@ -109,13 +109,13 @@ class AgentProfile:
 
         When agent_name includes a prefix (e.g. basic/hello_world),
         the base name (hello_world) is tried as a fallback so
-        --profile is not required for prefixed agents.
+        --profile-path is not required for prefixed agents.
         """
         if profile_path:
             if not os.path.isfile(profile_path):
                 logger.error(
                     "Profile not found: %s\n"
-                    "The --profile path must point to an existing JSON file.\n"
+                    "--profile-path must point to an existing JSON file.\n"
                     "Aborting.",
                     profile_path,
                 )
@@ -151,7 +151,7 @@ class AgentProfile:
         logger.error(
             "No profile found for agent '%s'.\n"
             "Searched:\n%s\n"
-            "Create a profile JSON or use --profile to specify one.\n"
+            "Create a profile JSON or use --profile-path to specify one.\n"
             "Aborting.",
             agent_name,
             "".join(f"  - {p}\n" for p in searched),
@@ -173,7 +173,7 @@ class AgentProfile:
         if agent_base != profile_stem:
             logger.error(
                 "--agent '%s' does not match "
-                "--profile '%s'.\n"
+                "--profile-path '%s'.\n"
                 "  Expected profile: %s.json\n"
                 "  Aborting.",
                 agent_name,

@@ -100,7 +100,7 @@ then moves to the next.
 | `--server-log [PATH]`      | (none)      | Enable server log analysis. Without a path, auto-detects from server process. With a path, uses the given file. |
 | `--monitor-resources`      | off         | Enable psutil monitoring at min level         |
 | `--no-tokens`              | off         | Disable per-request token accounting         |
-| `--profile`                | auto        | Path to agent profile JSON                   |
+| `--profile-path`           | auto        | Path to agent profile JSON                   |
 | `--host`                   | localhost   | Neuro-san server host                        |
 | `--port`                   | 8080        | Neuro-san server port                        |
 | `--num-requests`           | 3           | Requests per stage in flat mode              |
@@ -145,7 +145,7 @@ If the user declines, only 1 request was consumed.
 Each agent needs a JSON profile at `tests/load_tests/prompts/profiles/`.
 `--agent hello_world` loads `profiles/hello_world.json`. Prefixed agents
 (e.g., `--agent basic/hello_world`) automatically resolve to the base
-name (`hello_world.json`), so `--profile` is not required.
+name (`hello_world.json`), so `--profile-path` is not required.
 
 ```json
 {

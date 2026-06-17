@@ -97,11 +97,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                  "AGENT_REGISTRY_PATH.",
         )
         parser.add_argument(
-            "--profile",
+            "--profile-path",
             type=str,
             default=None,
-            help="Path to agent profile JSON file. If not set, "
-                 "auto-discovers from profiles/ directory.",
+            help="Override auto-resolved profile with an explicit "
+                 "file path. Without this, the profile is "
+                 "discovered from the agent name.",
         )
         parser.add_argument(
             "--project-root",
@@ -307,7 +308,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         """Initialize the orchestrator with parsed arguments."""
         self.args = args
         self.profile = AgentProfile.load(
-            args.agent, args.profile, args.project_root,
+            args.agent, args.profile_path, args.project_root,
         )
         self.server_proc = None
         self.server_log = args.server_log
@@ -1091,7 +1092,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             },
             "config": {
                 "agent": self.args.agent,
-                "profile": self.args.profile,
+                "profile_path": self.args.profile_path,
                 "level": self.args.level,
                 "mode": "ramp" if self.args.ramp else "flat",
                 "host": self.args.host,
