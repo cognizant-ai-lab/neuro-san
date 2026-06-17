@@ -31,7 +31,7 @@ from pyparsing.exceptions import ParseSyntaxException
 from leaf_common.config.config_filter import ConfigFilter
 from leaf_common.config.dictionary_overlay import DictionaryOverlay
 from leaf_common.config.file_of_class import FileOfClass
-from leaf_common.logging.SensitiveLogger import SensitiveLogger
+from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.persistence.interface.restorer import Restorer
 
 from neuro_san import REGISTRIES_DIR
