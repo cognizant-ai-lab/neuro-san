@@ -78,6 +78,10 @@ explicit file. `--monitor-resources` enables psutil monitoring at
 `min` level. Token accounting via `agent_cli --tokens` is enabled
 at all levels by default (disable with `--no-tokens`).
 
+**`adv` level defaults:** 50 requests, 50 workers, 3 rounds (150 total
+requests). These are applied automatically unless overridden with
+`--num-requests`, `--max-workers`, or `--num-rounds`.
+
 When `--server-log` is omitted, server-log-dependent sections print
 "not available" in the output.  When `--server-log` is passed without
 a path and auto-detection fails, the load test aborts with an error

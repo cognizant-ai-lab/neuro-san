@@ -230,7 +230,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                  "min: traffic + validation only. "
                  "norm: adds resource monitoring and "
                  "server log analysis (if --server-log given). "
-                 "adv: adds JSON export and pool analysis.",
+                 "adv: adds JSON export and pool analysis "
+                 "(defaults to 50 requests, 50 workers, "
+                 "3 rounds unless overridden).",
         )
         parser.add_argument(
             "--monitor-resources",
@@ -263,7 +265,17 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             help="Base directory for test output. Defaults to "
                  "/tmp/load_test/{level}/{timestamp}.",
         )
-        return parser.parse_args()
+        args = parser.parse_args()
+        # Track which args the user explicitly provided so
+        # level-based defaults do not override them.
+        explicit = set()
+        for action in parser._actions:  # pylint: disable=protected-access
+            for opt in action.option_strings:
+                if opt in sys.argv:
+                    explicit.add(action.dest)
+                    break
+        args._explicit = explicit  # pylint: disable=protected-access
+        return args
 
     @staticmethod
     def _token_sort_key(rid) -> int:
@@ -912,10 +924,27 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 age_min, server_log,
             )
 
+    @staticmethod
+    def _apply_level_defaults(args, explicit_args) -> None:
+        """Override argparse defaults with level-specific values.
+
+        Only applies when the user did not explicitly set the flag.
+        adv: 50 requests, 50 workers, 3 rounds (stress test).
+        """
+        if args.level == LEVEL_ADV:
+            if "num_requests" not in explicit_args:
+                args.num_requests = 50
+            if "max_workers" not in explicit_args:
+                args.max_workers = 50
+            if "num_rounds" not in explicit_args:
+                args.num_rounds = 3
+
     def run(self) -> int:
         """Execute the full load test workflow."""
         level = self.args.level
         self.args.include_tokens = not self.args.no_tokens
+        explicit = getattr(self.args, "_explicit", set())
+        self._apply_level_defaults(self.args, explicit)
         self.input_validator.validate_agent_name()
         EnvironmentValidator.validate_environment()
         self._validate_server_log()
