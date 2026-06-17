@@ -1358,6 +1358,9 @@
                 "presence_penalty": null,
                 "seed": null,
                 "stop": null,               # Maps to ChatOpenRouter `stop_sequences`
+                # streaming defaults to off; set "streaming": true in llm_config to enable.
+                # stream_usage tracks streaming, so it is enabled iff streaming is enabled.
+                "streaming": false,
 
                 # OpenRouter-specific options
                 # See https://openrouter.ai/docs
