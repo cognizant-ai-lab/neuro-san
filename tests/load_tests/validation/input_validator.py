@@ -72,10 +72,19 @@ class InputValidator:
         """
         if self._args.ramp:
             if self._args.stages is not None:
-                return [
-                    int(s.strip())
-                    for s in self._args.stages.split(",")
-                ]
+                try:
+                    return [
+                        int(s.strip())
+                        for s in self._args.stages.split(",")
+                        if s.strip()
+                    ]
+                except ValueError:
+                    logger.error(
+                        "--stages must be comma-separated integers "
+                        "(e.g. 3,10,30). Got: '%s'",
+                        self._args.stages,
+                    )
+                    sys.exit(1)
             return list(DEFAULT_STAGES)
         return [self._args.num_requests]
 

@@ -71,12 +71,14 @@ class ProcessMonitor:
             proc.wait()
             status = STATUS_FAILED
 
-        remaining_out = proc.stdout.read()
-        remaining_err = proc.stderr.read()
-        if remaining_out:
-            stdout_chunks.append(remaining_out)
-        if remaining_err:
-            stderr_chunks.append(remaining_err)
+        if not proc.stdout.closed:
+            remaining_out = proc.stdout.read()
+            if remaining_out:
+                stdout_chunks.append(remaining_out)
+        if not proc.stderr.closed:
+            remaining_err = proc.stderr.read()
+            if remaining_err:
+                stderr_chunks.append(remaining_err)
         try:
             proc.wait(timeout=PROCESS_WAIT_TIMEOUT)
         except subprocess.TimeoutExpired:

@@ -84,9 +84,13 @@ class AgentProfile:
         """
         prompts = self.prompts
         if not prompts:
-            raise ValueError(
-                f"Agent profile '{self.agent_name}' has no prompts"
+            logger.error(
+                "Agent profile '%s' has an empty prompts list.\n"
+                "  Add at least one prompt to the profile JSON.\n"
+                "  Aborting.",
+                self.agent_name,
             )
+            raise SystemExit(1)
         if same_prompt:
             return prompts[0]
         base_prompt = prompts[request_id % len(prompts)]

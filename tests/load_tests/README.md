@@ -270,7 +270,6 @@ tests/load_tests/
     profiles/                  Per-agent JSON profiles
 
   reporting/
-    csv_export.py              CsvExport (CSV output)
     disconnection_reporter.py  DisconnectionReporter
     json_metadata.py           JsonMetadata (self-documenting JSON)
     pool_analyzer.py           PoolAnalyzer
