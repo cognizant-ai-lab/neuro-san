@@ -233,6 +233,12 @@ It's function_json is described thusly:
             # and verbally report on that.
             logger = logging.getLogger(self.__class__.__name__)
             sensitive_logger = SensitiveLogger(logger)
+
+            # CheckMarx false-positive for Information Exposure Through an Error Message
+            # We specifically use the SenstiveLogger instance to log the message.
+            # This allows for a hardened server to turn off logging of this information
+            # by setting the env var LEAF_LOG_SENSITIVE to "false", while still allowing
+            # developers to see the error message.
             sensitive_logger.error("Tool._arun() got Exception: %s", str(exception))
             sensitive_logger.error(traceback.format_exc())
             run = None

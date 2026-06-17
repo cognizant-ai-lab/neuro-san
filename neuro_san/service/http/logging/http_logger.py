@@ -97,6 +97,12 @@ class HttpLogger(EventLoopLogger):
         """
         self.prepare_filter(metadata)
         sensitive_logger = SensitiveLogger(self.logger)
+
+        # CheckMarx false-positive for Information Exposure Through an Error Message
+        # We specifically use the SenstiveLogger instance to log the message.
+        # This allows for a hardened server to turn off logging of this information
+        # by setting the env var LEAF_LOG_SENSITIVE to "false", while still allowing
+        # developers to see the error message.
         sensitive_logger.error(msg, *args)
 
     def setup_logging(self, logging_config: Dict[str, Any]):

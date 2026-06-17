@@ -65,6 +65,8 @@ class ProfilerControlHandler(RequestHandler):
         action: Optional[str] = None
         profiler_data_path: Optional[str] = None
 
+        sensitive_logger = SensitiveLogger(logger)
+
         # Parse the JSON request body:
         request_dict: Dict[str, Any] = None
         try:
@@ -75,7 +77,12 @@ class ProfilerControlHandler(RequestHandler):
         except JSONDecodeError as exc:
             self.set_status(HTTPStatus.BAD_REQUEST)
             self.write("Invalid JSON in request body")
-            sensitive_logger = SensitiveLogger(logger)
+
+            # CheckMarx false-positive for Information Exposure Through an Error Message
+            # We specifically use the SenstiveLogger instance to log the message.
+            # This allows for a hardened server to turn off logging of this information
+            # by setting the env var LEAF_LOG_SENSITIVE to "false", while still allowing
+            # developers to see the error message.
             sensitive_logger.info("Invalid JSON in request body: %s", str(exc))
             return
 
@@ -95,12 +102,11 @@ class ProfilerControlHandler(RequestHandler):
                 logger.info("PROFILER STOPPED AND SAVED TO %s", profiler_data_path)
             else:
                 self.write("Invalid profiler control action. Expected 'start' or 'stop'.")
-                sensitive_logger = SensitiveLogger(logger)
                 sensitive_logger.info("Invalid profiler control action received: %s", action)
                 self.set_status(HTTPStatus.BAD_REQUEST)
         except Exception as exception:  # pylint: disable=broad-exception-caught
-            logger.error("Error during profiler control operation '%s': %s",
-                         action, str(exception), exc_info=True)
+            sensitive_logger.error("Error during profiler control operation '%s': %s",
+                                   action, str(exception), exc_info=True)
             self.write(f"FAILED to {RequestUtil.safe_message(str(action))} profiler")
             self.set_status(HTTPStatus.INTERNAL_SERVER_ERROR)
 
