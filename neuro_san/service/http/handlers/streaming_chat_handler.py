@@ -33,6 +33,7 @@ import tornado
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_HEARTBEAT_PAYLOAD
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
+from neuro_san.service.utils.request_util import RequestUtil
 
 
 class StreamingChatHandler(BaseRequestHandler):
@@ -88,10 +89,10 @@ class StreamingChatHandler(BaseRequestHandler):
             chat_message: Dict[str, Any] = json.loads(configured_payload)
         except (JSONDecodeError, TypeError):
             # Not JSON -- pass through, ensuring a trailing newline for framing.
-            if configured_payload.endswith("\n"):
-                return configured_payload
-            return configured_payload + "\n"
-        return json.dumps({"response": chat_message}) + "\n"
+            if not configured_payload.endswith("\n"):
+                configured_payload = configured_payload + "\n"
+            return RequestUtil.safe_message(configured_payload)
+        return RequestUtil.safe_message(json.dumps({"response": chat_message}) + "\n")
 
     # pylint: disable=too-many-statements
     # pylint: disable=too-many-branches
