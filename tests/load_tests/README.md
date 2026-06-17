@@ -247,8 +247,9 @@ This framework follows three review playbooks:
 
 - **Copilot:** Empty-prompts validation in `AgentProfile`,
   signed delta formatting (no more `+-3.0M`), Windows compatibility
-  fallbacks (`num_fds`/`select.select`/temp dir), `try/finally`
-  safety in cost probe, `ServerCounts` partial TypedDict.
+  fallbacks (`num_fds`/`select.select`/closed-pipe guards/temp dir),
+  clean error on invalid `--stages`, `ServerCounts` partial TypedDict,
+  agent/profile mismatch validation.
 
 Lint status: flake8 clean, pylint 10.00/10.
 
