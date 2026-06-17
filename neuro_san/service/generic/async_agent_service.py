@@ -45,8 +45,6 @@ from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.chat_message_converter import ChatMessageConverter
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
 from neuro_san.service.interfaces.server_context_lite import ServerContextLite
-from neuro_san.service.usage.usage_logger_factory import UsageLoggerFactory
-from neuro_san.service.usage.wrapped_usage_logger import WrappedUsageLogger
 from neuro_san.session.async_direct_agent_session import AsyncDirectAgentSession
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
 from neuro_san.session.session_invocation_context import SessionInvocationContext
@@ -324,12 +322,6 @@ class AsyncAgentService:
             # even if generator is interrupted.
             invocation_context.finish_request()
             invocation_context = None
-
-        # Maybe report token accounting to a UsageLogger
-        token_dict: Dict[str, Any] = request_reporting.get("token_accounting")
-        if token_dict is not None:
-            usage_logger: WrappedUsageLogger = UsageLoggerFactory.create_usage_logger()
-            await usage_logger.log_usage(token_dict, request_metadata)
 
         # Iterator has finally signaled that there are no more responses to be had.
         # Log that we are done.
