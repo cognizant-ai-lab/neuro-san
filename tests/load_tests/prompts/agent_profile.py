@@ -116,6 +116,7 @@ class AgentProfile:
                     profile_path,
                 )
                 raise SystemExit(1)
+            cls._validate_profile_match(agent_name, profile_path)
             return cls._load_from_file(agent_name, profile_path)
 
         searched = []
@@ -150,6 +151,30 @@ class AgentProfile:
             "".join(f"  - {p}\n" for p in searched),
         )
         raise SystemExit(1)
+
+    @staticmethod
+    def _validate_profile_match(agent_name, profile_path) -> None:
+        """Abort if the profile filename does not match the agent.
+
+        The agent name may include a registry prefix (e.g.
+        basic/hello_world).  The profile filename should match
+        the final component (hello_world.json).
+        """
+        agent_base = agent_name.rsplit("/", 1)[-1]
+        profile_stem = os.path.splitext(
+            os.path.basename(profile_path),
+        )[0]
+        if agent_base != profile_stem:
+            logger.error(
+                "--agent '%s' does not match "
+                "--profile '%s'.\n"
+                "  Expected profile: %s.json\n"
+                "  Aborting.",
+                agent_name,
+                os.path.basename(profile_path),
+                agent_base,
+            )
+            raise SystemExit(1)
 
     @classmethod
     def _resolve_project_root(cls, project_root=None) -> Optional[str]:
