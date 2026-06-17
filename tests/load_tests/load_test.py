@@ -128,8 +128,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "--max-workers",
             type=int,
             default=3,
-            help="Max concurrent workers in flat mode (default: 3)."
-                 " Ignored when --ramp is used.",
+            help="Max concurrent workers in flat mode. "
+                 "Defaults to --num-requests (all concurrent). "
+                 "Ignored when --ramp is used.",
         )
         parser.add_argument(
             "--num-rounds",
@@ -938,6 +939,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         Only applies when the user did not explicitly set the flag.
         adv: 50 requests, 50 workers, 3 rounds (stress test).
+
+        When --max-workers is not set, it matches --num-requests
+        so all requests fire concurrently.
         """
         if args.level == LEVEL_ADV:
             if "num_requests" not in explicit_args:
@@ -946,6 +950,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 args.max_workers = 50
             if "num_rounds" not in explicit_args:
                 args.num_rounds = 3
+
+        if "max_workers" not in explicit_args:
+            args.max_workers = args.num_requests
 
     def run(self) -> int:
         """Execute the full load test workflow."""
