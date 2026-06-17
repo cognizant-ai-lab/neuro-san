@@ -628,7 +628,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 f"({actual_requests - 1} + 1 probe)"
             )
         logger.info(
-            "\nFiring %s concurrent %s requests... [%s]%s",
+            "\nFiring %s %s requests... [%s]%s",
             fire_label, self.args.agent, fire_ts, fire_threads,
         )
 
