@@ -114,6 +114,15 @@ class AgentProfile:
         agent_base = agent_name.rsplit("/", 1)[-1]
 
         if profile_path:
+            if os.path.isfile(profile_path):
+                logger.error(
+                    "--profile-path should be a directory, not a "
+                    "file.\n"
+                    "  Got: %s\n"
+                    "  Try: --profile-path %s",
+                    profile_path, os.path.dirname(profile_path),
+                )
+                raise SystemExit(1)
             candidate = os.path.join(profile_path, f"{agent_base}.json")
             if not os.path.isfile(candidate):
                 logger.error(
