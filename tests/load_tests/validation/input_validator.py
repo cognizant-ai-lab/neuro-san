@@ -154,11 +154,11 @@ class InputValidator:
     def _run_cost_probe(
             self, runner, total_requests, output_dir,
     ) -> Optional[RequestResult]:
-        """Fire one probe request with --tokens and confirm cost.
+        """Fire one probe request and confirm cost.
 
-        Temporarily enables token tracking, fires a single request,
-        and extrapolates cost for the full run.  Exits if the user
-        declines to proceed.
+        Fires a single request (tokens are enabled by default),
+        extrapolates cost for the full run, and asks the user
+        to confirm.  Exits if the user declines.
         """
         logger.info(
             "\nRunning 1 dry-run probe to measure actual cost...",
