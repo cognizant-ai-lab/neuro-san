@@ -102,14 +102,14 @@ class AgentProfile:
 
         Search order:
         1. Explicit --profile path (abort if not found)
-        2. ./profiles/{agent_name}.json (built-in)
-        3. {project_root}/tests/load_tests/prompts/profiles/{agent_name}.json
+        2. ./profiles/{agent_name}.json then ./profiles/{base}.json
+        3. {project_root}/tests/load_tests/prompts/profiles/{name}.json
            where project_root comes from --project-root or PYTHONPATH
         4. Not found → abort
 
-        If the server registers the agent with a prefix (e.g.,
-        basic/hello_world), use --profile to point to the flat
-        profile file directly.
+        When agent_name includes a prefix (e.g. basic/hello_world),
+        the base name (hello_world) is tried as a fallback so
+        --profile is not required for prefixed agents.
         """
         if profile_path:
             if not os.path.isfile(profile_path):
@@ -124,27 +124,29 @@ class AgentProfile:
             return cls._load_from_file(agent_name, profile_path)
 
         searched = []
+        agent_base = agent_name.rsplit("/", 1)[-1]
 
         # Search in the built-in profiles directory next to this module
-        # Flat structure: profiles/{agent_name}.json
         profiles_dir = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "profiles",
         )
-        candidate = os.path.join(profiles_dir, f"{agent_name}.json")
-        searched.append(candidate)
-        if os.path.isfile(candidate):
-            return cls._load_from_file(agent_name, candidate)
+        for name in (agent_name, agent_base):
+            candidate = os.path.join(profiles_dir, f"{name}.json")
+            searched.append(candidate)
+            if os.path.isfile(candidate):
+                return cls._load_from_file(agent_name, candidate)
 
         # Resolve project root: --project-root flag → PYTHONPATH fallback
         resolved_root = cls._resolve_project_root(project_root)
         if resolved_root:
-            candidate = os.path.normpath(os.path.join(
-                resolved_root, "tests", "load_tests", "prompts", "profiles",
-                f"{agent_name}.json",
-            ))
-            searched.append(candidate)
-            if os.path.isfile(candidate):
-                return cls._load_from_file(agent_name, candidate)
+            for name in (agent_name, agent_base):
+                candidate = os.path.normpath(os.path.join(
+                    resolved_root, "tests", "load_tests",
+                    "prompts", "profiles", f"{name}.json",
+                ))
+                searched.append(candidate)
+                if os.path.isfile(candidate):
+                    return cls._load_from_file(agent_name, candidate)
 
         logger.error(
             "No profile found for agent '%s'.\n"

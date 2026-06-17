@@ -143,9 +143,9 @@ If the user declines, only 1 request was consumed.
 ## Agent Profiles
 
 Each agent needs a JSON profile at `tests/load_tests/prompts/profiles/`.
-`--agent hello_world` loads `profiles/hello_world.json`. If the server
-registers the agent with a prefix (e.g., `basic/hello_world`), use
-`--profile` to point to the file explicitly.
+`--agent hello_world` loads `profiles/hello_world.json`. Prefixed agents
+(e.g., `--agent basic/hello_world`) automatically resolve to the base
+name (`hello_world.json`), so `--profile` is not required.
 
 ```json
 {
