@@ -79,7 +79,7 @@ class ProfilerControlHandler(RequestHandler):
             self.write("Invalid JSON in request body")
 
             # CheckMarx false-positive for Information Exposure Through an Error Message
-            # We specifically use the SenstiveLogger instance to log the message.
+            # We specifically use the SensitiveLogger instance to log the message.
             # This allows for a hardened server to turn off logging of this information
             # by setting the env var LEAF_LOG_SENSITIVE to "false", while still allowing
             # developers to see the error message.
@@ -105,6 +105,11 @@ class ProfilerControlHandler(RequestHandler):
                 sensitive_logger.info("Invalid profiler control action received: %s", action)
                 self.set_status(HTTPStatus.BAD_REQUEST)
         except Exception as exception:  # pylint: disable=broad-exception-caught
+            # CheckMarx false-positive for Information Exposure Through an Error Message
+            # We specifically use the SensitiveLogger instance to log the message.
+            # This allows for a hardened server to turn off logging of this information
+            # by setting the env var LEAF_LOG_SENSITIVE to "false", while still allowing
+            # developers to see the error message.
             sensitive_logger.error("Error during profiler control operation '%s': %s",
                                    action, str(exception), exc_info=True)
             self.write(f"FAILED to {RequestUtil.safe_message(str(action))} profiler")
