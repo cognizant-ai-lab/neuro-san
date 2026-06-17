@@ -25,6 +25,24 @@ API_KEY_EXCEPTIONS: Dict[str, List] = {
     "ANTHROPIC_API_KEY": ["ANTHROPIC_API_KEY", "anthropic_api_key", "invalid x-api-key", "credit balance"],
     "GOOGLE_API_KEY": ["Application Default Credentials", "default credentials", "Gemini: 400 API key not valid"],
 
+    # OpenRouter surfaces a few distinct families of failures that the friendly
+    # OPENROUTER_API_KEY guidance addresses (matches the
+    # "1) double-check key / 2) get a key / 3) low credit balance" trio):
+    #   * Construction-time: ChatOpenRouter's pydantic validator raises with the
+    #     literal text "OPENROUTER_API_KEY must be set." (wrapped in a
+    #     pydantic_core.ValidationError, which is in API_KEY_ERRORS).
+    #   * Runtime 401 (UnauthorizedResponseError): str() is just the API's error
+    #     message — typically "Missing Authentication header" when no key was
+    #     sent and provider-defined strings (e.g. "No auth credentials found")
+    #     when one was sent but rejected.
+    #   * Runtime 402 (PaymentRequiredResponseError): "Insufficient credits..."
+    #     with a link to https://openrouter.ai/settings/credits. The same low-
+    #     balance bullet in the friendly message applies; matching "Insufficient
+    #     credits" plus the OpenRouter settings URL keeps the catch tight.
+    "OPENROUTER_API_KEY": ["OPENROUTER_API_KEY", "openrouter_api_key",
+                           "Missing Authentication header", "No auth credentials found",
+                           "Insufficient credits", "openrouter.ai/settings/credits"],
+
     # Azure OpenAI requires several parameters; all can be set via environment variables
     # except "deployment_name", which must be provided explicitly.
     "AZURE_OPENAI_API_KEY": ["invalid subscription key", "wrong API endpoint"],

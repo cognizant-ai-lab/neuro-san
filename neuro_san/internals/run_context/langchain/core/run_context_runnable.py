@@ -55,6 +55,8 @@ RATE_LIMIT_ERROR_TYPES: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
                                             "openai.RateLimitError",
                                             "anthropic.RateLimitError",
                                             "google.genai._interactions.RateLimitError",
+                                            # OpenRouter SDK rate-limit error (HTTP 429)
+                                            "openrouter.errors.TooManyRequestsResponseError",
                                          ])
 
 # Lazily import specific errors from llm providers
@@ -62,6 +64,13 @@ API_ERROR_TYPES: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
                                             "openai.APIError",
                                             "anthropic.APIError",
                                             "langchain_google_genai.chat_models.ChatGoogleGenerativeAIError",
+                                            # Base class for all OpenRouter SDK HTTP errors (UnauthorizedResponseError,
+                                            # BadGatewayResponseError, ResponseValidationError, etc.). Routing these
+                                            # through this branch lets ApiKeyErrorCheck convert runtime 401s
+                                            # ("Missing Authentication header") into the friendly OPENROUTER_API_KEY
+                                            # message instead of letting them fall through to the generic
+                                            # `except Exception` retry.
+                                            "openrouter.errors.OpenRouterError",
                                          ])
 
 
