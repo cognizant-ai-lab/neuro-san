@@ -99,11 +99,13 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         parser.add_argument(
             "--profile-path",
             type=str,
-            default=None,
+            default=os.environ.get("LOAD_TEST_PROFILE_PATH"),
             help="Directory containing agent profile JSON files. "
                  "The filename is derived from --agent "
                  "(e.g. basic/smart_home → smart_home.json). "
-                 "Without this, searches built-in profiles/.",
+                 "Without this, searches built-in profiles/. "
+                 "Can also be set via LOAD_TEST_PROFILE_PATH "
+                 "env var.",
         )
         parser.add_argument(
             "--project-root",

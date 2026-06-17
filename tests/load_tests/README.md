@@ -100,7 +100,7 @@ then moves to the next.
 | `--server-log [PATH]`      | (none)      | Enable server log analysis. Without a path, auto-detects from server process. With a path, uses the given file. |
 | `--monitor-resources`      | off         | Enable psutil monitoring at min level         |
 | `--no-tokens`              | off         | Disable per-request token accounting         |
-| `--profile-path`           | auto        | Directory containing profile JSON files      |
+| `--profile-path`           | auto        | Directory containing profile JSON files (or `LOAD_TEST_PROFILE_PATH` env var) |
 | `--host`                   | localhost   | Neuro-san server host                        |
 | `--port`                   | 8080        | Neuro-san server port                        |
 | `--num-requests`           | 3           | Requests per stage in flat mode              |
