@@ -528,6 +528,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 disconnections=[],
                 network_tokens=[],
                 has_server_log=has_server_log,
+                has_tokens=self.args.include_tokens,
                 monitor_resources=monitor_resources,
                 before_server=before_server,
                 after_server=None,
@@ -571,6 +572,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             disconnections=disconnections,
             network_tokens=network_tokens,
             has_server_log=has_server_log,
+            has_tokens=self.args.include_tokens,
             monitor_resources=monitor_resources,
             before_server=before_server,
             after_server=after_server,
@@ -702,7 +704,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             counts, elapsed, retries, total_retries,
             amplification, results, server_counts,
             disconnections, network_tokens,
-            has_server_log,
+            has_server_log, has_tokens,
             monitor_resources, before_server,
             after_server, peak_threads,
     ) -> StageSummary:
@@ -724,7 +726,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "disconnections": disconnections,
             "network_tokens": network_tokens,
             "has_server_log": has_server_log,
-            "has_tokens": True,
+            "has_tokens": has_tokens,
         }
         if monitor_resources:
             if before_server:

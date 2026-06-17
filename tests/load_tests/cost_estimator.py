@@ -38,9 +38,9 @@ class CostEstimator:
         separately.
         """
         pricing = DEFAULT_PRICING
-        for key, val in MODEL_PRICING.items():
+        for key in sorted(MODEL_PRICING, key=len, reverse=True):
             if key in model:
-                pricing = val
+                pricing = MODEL_PRICING[key]
                 break
         prompt_cost = (
             (prompt_tokens / TOKENS_PER_MILLION)

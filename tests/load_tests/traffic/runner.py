@@ -63,53 +63,55 @@ class TrafficRunner:
         )
         prompt_file = CliBuilder.write_prompt_file(global_request_id, prompt)
 
-        start = time.time()
-        status, stdout, stderr, returncode = (
-            ProcessMonitor.execute_with_idle_detection(
-                CliBuilder.build_cli_command(
-                    self._args.host, self._args.port,
-                    self._args.agent, prompt_file,
-                    include_tokens=self._args.include_tokens,
-                ),
-                self._args.timeout, self._args.idle_timeout,
+        try:
+            start = time.time()
+            status, stdout, stderr, returncode = (
+                ProcessMonitor.execute_with_idle_detection(
+                    CliBuilder.build_cli_command(
+                        self._args.host, self._args.port,
+                        self._args.agent, prompt_file,
+                        include_tokens=self._args.include_tokens,
+                    ),
+                    self._args.timeout, self._args.idle_timeout,
+                )
             )
-        )
-        elapsed = time.time() - start
+            elapsed = time.time() - start
 
-        parsed_fields: Dict[str, str] = {
-            field: CliBuilder.parse_stdout_field(stdout, field)
-            for field in self._profile.success_fields
-        }
+            parsed_fields: Dict[str, str] = {
+                field: CliBuilder.parse_stdout_field(stdout, field)
+                for field in self._profile.success_fields
+            }
 
-        self._save_request_output(
-            output_dir, request_id, stdout, stderr,
-        )
+            self._save_request_output(
+                output_dir, request_id, stdout, stderr,
+            )
 
-        status, failure_reason = self._validate_result(
-            status, returncode, stdout, parsed_fields,
-        )
-        self._log_request_result(
-            request_id, status, elapsed,
-            parsed_fields=parsed_fields,
-            failure_reason=failure_reason,
-            stderr=stderr,
-        )
-        CliBuilder.cleanup_prompt_file(prompt_file)
+            status, failure_reason = self._validate_result(
+                status, returncode, stdout, parsed_fields,
+            )
+            self._log_request_result(
+                request_id, status, elapsed,
+                parsed_fields=parsed_fields,
+                failure_reason=failure_reason,
+                stderr=stderr,
+            )
 
-        result = {
-            "request_id": f"request-{request_id}",
-            "status": status,
-            "elapsed": elapsed,
-            "prompt": prompt,
-            "error": (
-                CliBuilder.last_stderr_line(stderr)
-                if status != STATUS_CREATED else None
-            ),
-        }
-        result.update(parsed_fields)
-        if self._args.include_tokens:
-            self._attach_token_data(result, stdout)
-        return result
+            result = {
+                "request_id": f"request-{request_id}",
+                "status": status,
+                "elapsed": elapsed,
+                "prompt": prompt,
+                "error": (
+                    CliBuilder.last_stderr_line(stderr)
+                    if status != STATUS_CREATED else None
+                ),
+            }
+            result.update(parsed_fields)
+            if self._args.include_tokens:
+                self._attach_token_data(result, stdout)
+            return result
+        finally:
+            CliBuilder.cleanup_prompt_file(prompt_file)
 
     def _validate_result(self, status, returncode, stdout,
                          parsed_fields,

@@ -68,7 +68,7 @@ python -m tests.load_tests.load_test --agent hello_world --level adv \
 | Resource monitoring (RSS, threads)   | opt |  Y   |  Y  |
 | Token accounting (from stdout)       |  Y  |  Y   |  Y  |
 | Pool reuse analysis                  |     |      | opt |
-| JSON export (`raw_results.json`)     |     |      |  Y  |
+| JSON export (`raw_results.json`)     |  Y  |  Y   |  Y  |
 
 `opt` = available with optional flags. `--server-log` enables retry
 counting, server-side validation, disconnection detection, and pool
@@ -137,7 +137,7 @@ Request 1: CREATED (22.8s)
 Proceed with remaining 9 requests? [y/N]:
 ```
 
-The probe result counts as request #1 of the first stage (not wasted).
+The probe result counts as request #0 of the first stage (not wasted).
 If the user declines, only 1 request was consumed.
 
 ## Agent Profiles
