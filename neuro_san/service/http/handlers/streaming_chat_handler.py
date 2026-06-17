@@ -207,10 +207,6 @@ class StreamingChatHandler(BaseRequestHandler):
                 # We have seen some request traffic recently, so we can delay our heartbeat a bit.
                 # Time to sleep is long enough - so go sleep
                 continue
-            if self._finished:
-                # No need to send heartbeats if we are already finished.
-                # Time to exit and end the heartbeat task.
-                return
             try:
                 # self.heartbeat_frame already includes the ChatResponse envelope
                 # and a trailing newline (see _build_heartbeat_frame()).
