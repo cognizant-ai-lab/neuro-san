@@ -24,6 +24,8 @@ from typing import Tuple
 import logging
 import time
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
@@ -100,7 +102,8 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             if self.base_storage is not None:
                 self.base_storage.start()
         except Exception as exc:  # pylint: disable=broad-except
-            self.logger.error("%s: Failed to start base storage: %s", self._name, exc)
+            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger.error("%s: Failed to start base storage: %s", self._name, exc)
             super().stop()
             raise
 
@@ -113,7 +116,8 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             if self.base_storage is not None and isinstance(self.base_storage, Startable):
                 self.base_storage.stop()
         except Exception as exc:  # pylint: disable=broad-except
-            self.logger.error("%s: Failed to stop base storage: %s", self._name, exc)
+            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger.error("%s: Failed to stop base storage: %s", self._name, exc)
             raise
 
     @staticmethod

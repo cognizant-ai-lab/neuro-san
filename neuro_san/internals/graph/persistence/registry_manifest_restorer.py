@@ -31,6 +31,7 @@ from pyparsing.exceptions import ParseSyntaxException
 from leaf_common.config.config_filter import ConfigFilter
 from leaf_common.config.dictionary_overlay import DictionaryOverlay
 from leaf_common.config.file_of_class import FileOfClass
+from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.persistence.interface.restorer import Restorer
 
 from neuro_san import REGISTRIES_DIR
@@ -284,7 +285,8 @@ class RegistryManifestRestorer(Restorer):
             agent_network = registry_restorer.restore(file_reference=agent_filepath)
         except FileNotFoundError as exception:
             message: str = f"Failed to restore registry item {manifest_key}. Skipping. - {str(exception)}"
-            self.logger.error(message)
+            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger.error(message)
             agent_network = None
         except (ParseException, ParseSyntaxException, JSONDecodeError, ValueError) as exception:
             # ValueError is the wrapper type raised by AbstractAsyncConfigRestorer for any
@@ -299,7 +301,8 @@ class RegistryManifestRestorer(Restorer):
                 use_exception = exception.__cause__
 
             message: str = f"Parse error in registry item {manifest_key}. Skipping. - {str(use_exception)}"
-            self.logger.error(message)
+            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger.error(message)
             agent_network = None
 
         return agent_network
@@ -319,7 +322,8 @@ class RegistryManifestRestorer(Restorer):
             agent_network = await registry_restorer.async_restore(file_reference=agent_filepath)
         except FileNotFoundError as exception:
             message: str = f"Failed to restore registry item {manifest_key}. Skipping. - {str(exception)}"
-            self.logger.error(message)
+            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger.error(message)
             agent_network = None
         except (ParseException, ParseSyntaxException, JSONDecodeError, ValueError) as exception:
             # ValueError is the wrapper type raised by AbstractAsyncConfigRestorer for any
@@ -334,7 +338,8 @@ class RegistryManifestRestorer(Restorer):
                 use_exception = exception.__cause__
 
             message: str = f"Parse error in registry item {manifest_key}. Skipping. - {str(use_exception)}"
-            self.logger.error(message)
+            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger.error(message)
             agent_network = None
 
         return agent_network

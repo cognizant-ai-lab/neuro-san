@@ -26,6 +26,8 @@ import logging
 from http import HTTPStatus
 from tornado.web import RequestHandler
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from neuro_san.service.utils.request_util import RequestUtil
 
 try:
@@ -73,7 +75,8 @@ class ProfilerControlHandler(RequestHandler):
         except JSONDecodeError as exc:
             self.set_status(HTTPStatus.BAD_REQUEST)
             self.write("Invalid JSON in request body")
-            logger.info("Invalid JSON in request body: %s", str(exc))
+            sensitive_logger = SensitiveLogger(logger)
+            sensitive_logger.info("Invalid JSON in request body: %s", str(exc))
             return
 
         try:
@@ -92,7 +95,8 @@ class ProfilerControlHandler(RequestHandler):
                 logger.info("PROFILER STOPPED AND SAVED TO %s", profiler_data_path)
             else:
                 self.write("Invalid profiler control action. Expected 'start' or 'stop'.")
-                logger.info("Invalid profiler control action received: %s", action)
+                sensitive_logger = SensitiveLogger(logger)
+                sensitive_logger.info("Invalid profiler control action received: %s", action)
                 self.set_status(HTTPStatus.BAD_REQUEST)
         except Exception as exception:  # pylint: disable=broad-exception-caught
             logger.error("Error during profiler control operation '%s': %s",

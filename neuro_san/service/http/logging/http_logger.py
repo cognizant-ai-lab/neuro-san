@@ -25,6 +25,8 @@ import copy
 import logging
 import pathlib
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from leaf_server_common.logging.logging_setup import setup_logging
 
 from neuro_san.service.http.logging.log_context_filter import LogContextFilter
@@ -94,7 +96,8 @@ class HttpLogger(EventLoopLogger):
         and delegate logging to underlying standard Logger.
         """
         self.prepare_filter(metadata)
-        self.logger.error(msg, *args)
+        sensitive_logger = SensitiveLogger(self.logger)
+        sensitive_logger.error(msg, *args)
 
     def setup_logging(self, logging_config: Dict[str, Any]):
         """
