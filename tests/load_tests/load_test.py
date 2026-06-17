@@ -226,8 +226,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                  "min: traffic + validation only. "
                  "norm: adds resource monitoring and "
                  "server log analysis (if --server-log given). "
-                 "adv: adds token accounting, CSV export, "
-                 "pool analysis.",
+                 "adv: adds JSON export and pool analysis.",
         )
         parser.add_argument(
             "--monitor-resources",
