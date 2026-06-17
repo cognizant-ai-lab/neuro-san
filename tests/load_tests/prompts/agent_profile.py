@@ -101,7 +101,7 @@ class AgentProfile:
         """Load an agent profile from a JSON file.
 
         Search order:
-        1. Explicit --profile-path (abort if not found)
+        1. --profile-path directory: look for {base}.json there
         2. ./profiles/{agent_name}.json then ./profiles/{base}.json
         3. {project_root}/tests/load_tests/prompts/profiles/{name}.json
            where project_root comes from --project-root or PYTHONPATH
@@ -111,20 +111,22 @@ class AgentProfile:
         the base name (hello_world) is tried as a fallback so
         --profile-path is not required for prefixed agents.
         """
+        agent_base = agent_name.rsplit("/", 1)[-1]
+
         if profile_path:
-            if not os.path.isfile(profile_path):
+            candidate = os.path.join(profile_path, f"{agent_base}.json")
+            if not os.path.isfile(candidate):
                 logger.error(
                     "Profile not found: %s\n"
-                    "--profile-path must point to an existing JSON file.\n"
-                    "Aborting.",
-                    profile_path,
+                    "  --profile-path directory: %s\n"
+                    "  Expected file: %s.json\n"
+                    "  Aborting.",
+                    candidate, profile_path, agent_base,
                 )
                 raise SystemExit(1)
-            cls._validate_profile_match(agent_name, profile_path)
-            return cls._load_from_file(agent_name, profile_path)
+            return cls._load_from_file(agent_name, candidate)
 
         searched = []
-        agent_base = agent_name.rsplit("/", 1)[-1]
 
         # Search in the built-in profiles directory next to this module
         profiles_dir = os.path.join(
@@ -157,30 +159,6 @@ class AgentProfile:
             "".join(f"  - {p}\n" for p in searched),
         )
         raise SystemExit(1)
-
-    @staticmethod
-    def _validate_profile_match(agent_name, profile_path) -> None:
-        """Abort if the profile filename does not match the agent.
-
-        The agent name may include a registry prefix (e.g.
-        basic/hello_world).  The profile filename should match
-        the final component (hello_world.json).
-        """
-        agent_base = agent_name.rsplit("/", 1)[-1]
-        profile_stem = os.path.splitext(
-            os.path.basename(profile_path),
-        )[0]
-        if agent_base != profile_stem:
-            logger.error(
-                "--agent '%s' does not match "
-                "--profile-path '%s'.\n"
-                "  Expected profile: %s.json\n"
-                "  Aborting.",
-                agent_name,
-                os.path.basename(profile_path),
-                agent_base,
-            )
-            raise SystemExit(1)
 
     @classmethod
     def _resolve_project_root(cls, project_root=None) -> Optional[str]:

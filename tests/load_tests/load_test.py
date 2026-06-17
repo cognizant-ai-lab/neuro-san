@@ -100,9 +100,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "--profile-path",
             type=str,
             default=None,
-            help="Override auto-resolved profile with an explicit "
-                 "file path. Without this, the profile is "
-                 "discovered from the agent name.",
+            help="Directory containing agent profile JSON files. "
+                 "The filename is derived from --agent "
+                 "(e.g. basic/smart_home → smart_home.json). "
+                 "Without this, searches built-in profiles/.",
         )
         parser.add_argument(
             "--project-root",
