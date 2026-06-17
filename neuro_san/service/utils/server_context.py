@@ -45,7 +45,7 @@ class ServerContext(ServerContextLite):
         Constructor.
         """
         self.server_status: ServerStatus = None
-        self.executor_pool = AsyncioExecutorPool(reuse_mode=True)
+        self.executor_pool = AsyncioExecutorPool(reuse_mode=True, idle_timeout_seconds=60)
         self.queues: Queue[AsyncCollatingQueue] = Queue()
         self.mcp_server_context: McpServerContext = McpServerContext()
         self.server_port: int = AgentSessionConstants.DEFAULT_HTTP_PORT
