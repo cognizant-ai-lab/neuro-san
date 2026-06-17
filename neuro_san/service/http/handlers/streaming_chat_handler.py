@@ -27,9 +27,11 @@ import asyncio
 import contextlib
 import json
 from json.decoder import JSONDecodeError
+import time
 import tornado
 
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
+from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_HEARTBEAT_PAYLOAD
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
 
 
@@ -37,6 +39,59 @@ class StreamingChatHandler(BaseRequestHandler):
     """
     Handler class for neuro-san streaming chat API call.
     """
+
+    # pylint: disable=attribute-defined-outside-init
+    def initialize(self, **kwargs):
+        """
+        This method is called by Tornado framework to allow
+        injecting service-specific data into local handler context.
+        :param kwargs: dictionary of named parameters, including:
+            "heartbeat_interval_seconds" - heartbeat protocol message interval in seconds;
+            "heartbeat_payload" - string containing the heartbeat ChatMessage
+                (e.g. an empty AGENT_PROGRESS) that will be wrapped in the standard
+                ChatResponse envelope before being sent on the wire.
+        """
+        super().initialize(**kwargs)
+        self.heartbeat_interval_seconds = kwargs.get("heartbeat_interval_seconds", 0)
+        # Pre-build the on-the-wire heartbeat frame once so each tick only needs to
+        # write bytes -- no per-tick JSON parsing or string-concat.
+        heartbeat_payload: str = kwargs.get("heartbeat_payload", DEFAULT_HTTP_SERVER_HEARTBEAT_PAYLOAD)
+        self.heartbeat_frame: str = self._build_heartbeat_frame(heartbeat_payload)
+        self.last_send_ts = 0.0
+
+        if self.heartbeat_interval_seconds > 0:
+            # If heartbeat is enabled,
+            # start the heartbeat task in the background, so it can run concurrently with the main request processing.
+            asyncio.create_task(self.run_heartbeat())
+
+    @staticmethod
+    def _build_heartbeat_frame(configured_payload: str) -> str:
+        """
+        Build the exact wire frame to write for each heartbeat tick.
+
+        The configured payload is expected to be a JSON ChatMessage dictionary
+        (e.g. an empty AGENT_PROGRESS), which is wrapped here in the standard
+        ChatResponse envelope -- {"response": <chat-message>} -- so that
+        clients see the same shape they see for real chat responses. A newline
+        is appended so JSON-Lines parsers see a clean frame boundary even
+        when the heartbeat lands between two real messages.
+
+        If the configured payload is not valid JSON (legacy callers that pass
+        raw bytes such as "\\n"), it is sent as-is with a trailing newline
+        ensured -- preserving backward-compatible behavior.
+
+        :param configured_payload: The value of the heartbeat_payload kwarg,
+                typically sourced from AGENT_HTTP_SERVER_HEARTBEAT_PAYLOAD.
+        :return: The exact string to write per heartbeat tick.
+        """
+        try:
+            chat_message: Dict[str, Any] = json.loads(configured_payload)
+        except (JSONDecodeError, TypeError):
+            # Not JSON -- pass through, ensuring a trailing newline for framing.
+            if configured_payload.endswith("\n"):
+                return configured_payload
+            return configured_payload + "\n"
+        return json.dumps({"response": chat_message}) + "\n"
 
     # pylint: disable=too-many-statements
     # pylint: disable=too-many-branches
@@ -100,6 +155,8 @@ class StreamingChatHandler(BaseRequestHandler):
                     if flush_ok:
                         # Some flush was successful. This is good.
                         flushed_first_result = True
+                        # Register the time of the last successful flush, so that we can adjust our heartbeat timing.
+                        self.last_send_ts = time.monotonic()
                     else:
                         # We tried flushing the result to no avail
                         if self._is_client_close_a_problem(is_event, flushed_first_result):
@@ -134,6 +191,40 @@ class StreamingChatHandler(BaseRequestHandler):
 
         finally:
             await self._finish_request(result_generator, metadata, agent_name)
+
+    async def run_heartbeat(self):
+        """
+        Background task driving the HTTP heartbeat: every
+        heartbeat_interval_seconds (and only when no real traffic has been
+        flushed within that window), write the pre-built heartbeat frame
+        to keep proxies/clients from dropping the streaming connection.
+        Exits when the request finishes or the client disconnects.
+        """
+        metadata: Dict[str, Any] = self.get_metadata()
+        self.logger.info(metadata, "Starting heartbeat generator with interval %d seconds",
+                         self.heartbeat_interval_seconds)
+        time_to_sleep: float = self.heartbeat_interval_seconds
+        while True:
+            await asyncio.sleep(time_to_sleep)
+            time_now: float = time.monotonic()
+            time_to_sleep = self.heartbeat_interval_seconds - (time_now - self.last_send_ts)
+            if time_to_sleep > 0.5:
+                # We have seen some request traffic recently, so we can delay our heartbeat a bit.
+                # Time to sleep is long enough - so go sleep
+                continue
+            if self._finished:
+                # No need to send heartbeats if we are already finished.
+                # Time to exit and end the heartbeat task.
+                return
+            try:
+                # self.heartbeat_frame already includes the ChatResponse envelope
+                # and a trailing newline (see _build_heartbeat_frame()).
+                self.write(self.heartbeat_frame)
+                self.flush()
+                self.last_send_ts = time.monotonic()
+                time_to_sleep = self.heartbeat_interval_seconds
+            except tornado.iostream.StreamClosedError:
+                return  # client gone; main loop's next flush will see it too
 
     def _is_client_close_a_problem(self, is_event: bool, flushed_first_result: bool) -> bool:
         """

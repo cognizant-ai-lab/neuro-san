@@ -75,6 +75,13 @@ class ThinkingFileMessageProcessor(MessageProcessor):
         if text is None and structure is None:
             return
 
+        # An AGENT_PROGRESS message with empty text and no structure is the server's
+        # HTTP heartbeat keepalive frame (sent to keep proxies / clients from dropping
+        # an otherwise quiet streaming connection). It carries no real progress info,
+        # so don't pollute the thinking file with empty entries per tick.
+        if message_type == ChatMessageType.AGENT_PROGRESS and not text and structure is None:
+            return
+
         origin: List[str] = chat_message_dict.get("origin")
         test_origin_str: str = Origination.get_full_name_from_origin(origin)
 
