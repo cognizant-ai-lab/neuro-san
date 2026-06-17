@@ -56,11 +56,12 @@ class StreamingChatHandler(BaseRequestHandler):
         # each tick only needs to write bytes -- no per-tick JSON serialization.
         self.heartbeat_frame: str = self._build_heartbeat_frame()
         self.last_send_ts = 0.0
+        self.heartbeat_task: asyncio.Task = None
 
         if self.heartbeat_interval_seconds > 0:
             # If heartbeat is enabled,
             # start the heartbeat task in the background, so it can run concurrently with the main request processing.
-            asyncio.create_task(self.run_heartbeat())
+            self.heartbeat_task = asyncio.create_task(self.run_heartbeat())
 
     @staticmethod
     def _build_heartbeat_frame() -> str:
@@ -179,6 +180,11 @@ class StreamingChatHandler(BaseRequestHandler):
                 self.process_exception(exc)
 
         finally:
+            # If we started a heartbeat task, cancel it now to clean up resources.
+            if self.heartbeat_task is not None:
+                self.heartbeat_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self.heartbeat_task
             await self._finish_request(result_generator, metadata, agent_name)
 
     async def run_heartbeat(self):
@@ -209,7 +215,7 @@ class StreamingChatHandler(BaseRequestHandler):
                 # self.heartbeat_frame already includes the ChatResponse envelope
                 # and a trailing newline (see _build_heartbeat_frame()).
                 self.write(self.heartbeat_frame)
-                self.flush()
+                await self.flush()
                 self.last_send_ts = time.monotonic()
                 time_to_sleep = self.heartbeat_interval_seconds
             except tornado.iostream.StreamClosedError:
