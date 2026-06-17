@@ -36,7 +36,6 @@ from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_IDLE_C
 from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_INSTANCES
 from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS
 from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_HEARTBEAT_INTERVAL_SECONDS
-from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_HEARTBEAT_PAYLOAD
 from neuro_san.service.http.config.http_server_config import HttpServerConfig
 from neuro_san.service.http.logging.logging_config_restorer import LoggingConfigRestorer
 from neuro_san.service.http.server.http_server import DEFAULT_SERVER_NAME
@@ -145,10 +144,6 @@ class ServerMainLoop:
                                                            DEFAULT_HTTP_SERVER_HEARTBEAT_INTERVAL_SECONDS)),
                                 help="Http server heartbeat interval in seconds "
                                      "0 means no heartbeat")
-        arg_parser.add_argument("--http_server_heartbeat_payload", type=str,
-                                default=os.environ.get("AGENT_HTTP_SERVER_HEARTBEAT_PAYLOAD",
-                                                       DEFAULT_HTTP_SERVER_HEARTBEAT_PAYLOAD),
-                                help="Http server heartbeat payload as a string")
         arg_parser.add_argument("--max_temp_networks", type=int,
                                 default=int(os.environ.get("AGENT_MAX_TEMP_NETWORKS", "0")),
                                 help="Maximum number of temporary agent networks to keep in memory. "
@@ -208,7 +203,6 @@ class ServerMainLoop:
         self.http_server_config.http_server_monitor_interval_seconds = args.http_resources_monitor_interval_seconds
         self.http_server_config.http_port = args.http_port
         self.http_server_config.http_server_heartbeat_interval_seconds = args.http_server_heartbeat_interval_seconds
-        self.http_server_config.http_server_heartbeat_payload = args.http_server_heartbeat_payload
 
         self.server_context.set_temp_storage_max_items(args.max_temp_networks)
 

@@ -319,5 +319,4 @@ class HttpServer(AgentStateListener):
             "server_context": self.server_context,
             "logging_config": self.logging_config,
             "heartbeat_interval_seconds": self.server_config.http_server_heartbeat_interval_seconds,
-            "heartbeat_payload": self.server_config.http_server_heartbeat_payload
         }

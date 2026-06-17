@@ -17,17 +17,12 @@
 """
 See class comment for details
 """
-from neuro_san.internals.messages.chat_message_type import ChatMessageType
 
 DEFAULT_HTTP_CONNECTIONS_BACKLOG: int = 128
 DEFAULT_HTTP_IDLE_CONNECTIONS_TIMEOUT_SECONDS: int = 3600
 DEFAULT_HTTP_SERVER_INSTANCES: int = 1
 DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS: int = 0
 DEFAULT_HTTP_SERVER_HEARTBEAT_INTERVAL_SECONDS: int = 0
-# Payload to send as heartbeat message.
-# Default is a JSON string with serialized AGENT_PROGRESS message with empty text.
-DEFAULT_HTTP_SERVER_HEARTBEAT_PAYLOAD: str = \
-    f'{{"type": "{ChatMessageType.to_string(ChatMessageType.AGENT_PROGRESS)}", "text": ""}}'
 
 
 class HttpServerConfig:
@@ -42,4 +37,3 @@ class HttpServerConfig:
         self.http_port: int = 80
         self.http_server_monitor_interval_seconds: int = DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS
         self.http_server_heartbeat_interval_seconds: int = DEFAULT_HTTP_SERVER_HEARTBEAT_INTERVAL_SECONDS
-        self.http_server_heartbeat_payload: str = DEFAULT_HTTP_SERVER_HEARTBEAT_PAYLOAD

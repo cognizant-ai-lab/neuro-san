@@ -288,13 +288,6 @@ ENV AGENT_HTTP_RESOURCES_MONITOR_INTERVAL="0"
 # Typical production value is 25-30 (under the 60s defaults of common proxies).
 ENV AGENT_HTTP_SERVER_HEARTBEAT_INTERVAL=0
 
-# Payload written for each heartbeat tick. This is the exact wire shape of an
-# empty AGENT_PROGRESS message (ChatMessageType.AGENT_PROGRESS), so any
-# client already handling AGENT_PROGRESS messages will accept it as a no-op
-# tick: empty text, no structure, no origin.
-# Only consulted when AGENT_HTTP_SERVER_HEARTBEAT_INTERVAL > 0.
-ENV AGENT_HTTP_SERVER_HEARTBEAT_PAYLOAD='{"type": "AGENT_PROGRESS", "text": ""}'
-
 # Optional URL describing how the server is to be referenced by the outside world.
 # This is useful when a server is behind a load-balancer as part of a larger cluster.
 ENV AGENT_EXTERNAL_SERVER_URL=""

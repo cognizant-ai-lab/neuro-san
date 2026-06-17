@@ -17,98 +17,78 @@
 """
 Unit tests for StreamingChatHandler._build_heartbeat_frame().
 
-The handler pre-builds the heartbeat wire frame once at initialize() time
-and writes it verbatim per tick. The frame must:
-  - wrap a JSON ChatMessage payload in the {"response": ...} envelope so
-    clients see the same shape as real chat responses;
-  - end in a newline so JSON-Lines framing remains intact even when the
-    heartbeat lands between two real messages;
-  - fall back to passing non-JSON payloads through with a trailing newline,
-    preserving the legacy "\\n" default's behavior.
+The heartbeat payload is no longer user-configurable: only the heartbeat
+interval is. The handler calls _build_heartbeat_frame() once at
+initialize() time and writes that frame verbatim for every tick. These
+tests pin the frame's wire shape so future refactors of how it is built
+do not silently change what clients see.
 """
 
 import json
 
+from neuro_san.internals.messages.chat_message_type import ChatMessageType
 from neuro_san.service.http.handlers.streaming_chat_handler import StreamingChatHandler
 
 
-# These tests exercise a deliberately-internal helper directly; suppress
-# protected-access warnings file-wide rather than at each call site.
+# These tests access a deliberately-internal helper directly; suppress
+# protected-access warnings file-wide.
 # pylint: disable=protected-access
 class TestStreamingChatHandlerHeartbeatFrame:
     """
-    Direct tests for the static frame builder. No Tornado runtime is
-    required because the method does not touch instance state.
+    Pins the wire-format invariants of the constant heartbeat frame:
+    it must be a ChatResponse-shaped JSON line carrying an empty
+    AGENT_PROGRESS ChatMessage and terminated with a newline.
     """
 
-    # ---- JSON ChatMessage payloads (the primary path) -----------------------
-
-    def test_agent_progress_payload_is_wrapped_in_response_envelope(self):
-        """
-        The Dockerfile-default AGENT_PROGRESS payload is wrapped in
-        {"response": ...} and a trailing newline is appended.
-        """
-        configured = '{"type": 104, "text": ""}'
-        frame = StreamingChatHandler._build_heartbeat_frame(configured)
-
-        assert frame.endswith("\n"), "Heartbeat frame must end with a newline for JSON-Lines framing."
-        # Parsing the line (minus the newline) must yield a ChatResponse-shaped dict.
-        parsed = json.loads(frame.rstrip("\n"))
-        assert parsed == {"response": {"type": 104, "text": ""}}, (
-            f"Expected the configured ChatMessage to be wrapped in 'response'; got {parsed}."
+    def test_frame_ends_with_newline(self):
+        """JSON-Lines framing requires a trailing newline on each frame."""
+        frame: str = StreamingChatHandler._build_heartbeat_frame()
+        assert frame.endswith("\n"), (
+            f"Heartbeat frame must end with a newline for JSON-Lines framing; got {frame!r}."
         )
 
-    def test_string_type_agent_progress_payload_is_wrapped(self):
+    def test_frame_wraps_chat_message_in_response_envelope(self):
         """
-        The string-name form of the type field (matching what
-        ChatMessageConverter emits for real messages) is wrapped the same way.
+        The frame parses as a ChatResponse: a top-level "response" key
+        whose value is the ChatMessage.
         """
-        configured = '{"type": "AGENT_PROGRESS", "text": ""}'
-        frame = StreamingChatHandler._build_heartbeat_frame(configured)
+        parsed = json.loads(StreamingChatHandler._build_heartbeat_frame().rstrip("\n"))
+        assert "response" in parsed, (
+            f"Expected the heartbeat frame to use the ChatResponse envelope; got {parsed}."
+        )
+        assert isinstance(parsed["response"], dict)
 
-        parsed = json.loads(frame.rstrip("\n"))
-        assert parsed == {"response": {"type": "AGENT_PROGRESS", "text": ""}}
+    def test_frame_is_an_empty_agent_progress_message(self):
+        """
+        The wrapped ChatMessage is an AGENT_PROGRESS (matching what the
+        CLI's ThinkingFileMessageProcessor heartbeat-skip recognizes)
+        with empty text and no structure / origin.
+        """
+        parsed = json.loads(StreamingChatHandler._build_heartbeat_frame().rstrip("\n"))
+        chat_message = parsed["response"]
+        expected_type_name: str = ChatMessageType.to_string(ChatMessageType.AGENT_PROGRESS)
 
-    def test_payload_with_extra_fields_is_wrapped_verbatim(self):
-        """
-        Extra fields on the configured ChatMessage are passed through into
-        the wrapped envelope unchanged -- the builder must not strip them.
-        """
-        configured = '{"type": "AGENT_PROGRESS", "text": "ping", "structure": {"k": 1}}'
-        frame = StreamingChatHandler._build_heartbeat_frame(configured)
+        assert chat_message == {"type": expected_type_name, "text": ""}, (
+            f"Heartbeat ChatMessage must be exactly an empty AGENT_PROGRESS; got {chat_message}."
+        )
 
-        parsed = json.loads(frame.rstrip("\n"))
-        assert parsed == {
-            "response": {"type": "AGENT_PROGRESS", "text": "ping", "structure": {"k": 1}}
-        }
+    def test_frame_is_a_single_json_line(self):
+        """
+        The frame must contain exactly one newline (the terminator) so
+        clients reading line-by-line see one frame per tick.
+        """
+        frame: str = StreamingChatHandler._build_heartbeat_frame()
+        assert frame.count("\n") == 1, (
+            f"Heartbeat frame must contain exactly one newline; got {frame!r}."
+        )
 
-    # ---- Legacy / fallback non-JSON payloads --------------------------------
-
-    def test_legacy_newline_payload_passes_through(self):
+    def test_repeated_calls_yield_identical_frames(self):
         """
-        The historical default heartbeat payload of "\\n" must be sent on
-        the wire unchanged, since it is already a valid JSON-Lines frame
-        (a blank line that all JSON-Lines parsers tolerate).
+        The builder is deterministic: calling it twice yields the same
+        bytes, so it's safe to call once at initialize() time and reuse.
         """
-        assert StreamingChatHandler._build_heartbeat_frame("\n") == "\n"
-
-    def test_non_json_string_gets_newline_appended(self):
-        """
-        A non-JSON heartbeat payload (e.g. a plain string sentinel) is
-        passed through with a newline appended for framing.
-        """
-        assert StreamingChatHandler._build_heartbeat_frame("ping") == "ping\n"
-
-    def test_non_json_string_with_trailing_newline_is_not_double_terminated(self):
-        """
-        A non-JSON payload that already ends in a newline must not get a
-        second newline appended.
-        """
-        assert StreamingChatHandler._build_heartbeat_frame("ping\n") == "ping\n"
-
-    def test_empty_string_payload_is_terminated(self):
-        """
-        Empty configured payload -- which json.loads treats as invalid --
-        yields a single newline frame.
-        """
-        assert StreamingChatHandler._build_heartbeat_frame("") == "\n"
+        first: str = StreamingChatHandler._build_heartbeat_frame()
+        second: str = StreamingChatHandler._build_heartbeat_frame()
+        assert first == second, (
+            f"Heartbeat frame must be stable across calls; got {first!r} vs {second!r}."
+        )

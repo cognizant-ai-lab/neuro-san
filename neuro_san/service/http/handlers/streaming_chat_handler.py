@@ -30,10 +30,9 @@ from json.decoder import JSONDecodeError
 import time
 import tornado
 
+from neuro_san.internals.messages.chat_message_type import ChatMessageType
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
-from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_HEARTBEAT_PAYLOAD
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
-from neuro_san.service.utils.request_util import RequestUtil
 
 
 class StreamingChatHandler(BaseRequestHandler):
@@ -47,17 +46,15 @@ class StreamingChatHandler(BaseRequestHandler):
         This method is called by Tornado framework to allow
         injecting service-specific data into local handler context.
         :param kwargs: dictionary of named parameters, including:
-            "heartbeat_interval_seconds" - heartbeat protocol message interval in seconds;
-            "heartbeat_payload" - string containing the heartbeat ChatMessage
-                (e.g. an empty AGENT_PROGRESS) that will be wrapped in the standard
-                ChatResponse envelope before being sent on the wire.
+            "heartbeat_interval_seconds" - heartbeat protocol message interval
+                in seconds. The heartbeat payload itself is fixed (see
+                _build_heartbeat_frame()); only the interval is configurable.
         """
         super().initialize(**kwargs)
         self.heartbeat_interval_seconds = kwargs.get("heartbeat_interval_seconds", 0)
-        # Pre-build the on-the-wire heartbeat frame once so each tick only needs to
-        # write bytes -- no per-tick JSON parsing or string-concat.
-        heartbeat_payload: str = kwargs.get("heartbeat_payload", DEFAULT_HTTP_SERVER_HEARTBEAT_PAYLOAD)
-        self.heartbeat_frame: str = self._build_heartbeat_frame(heartbeat_payload)
+        # Build the on-the-wire heartbeat frame once at initialize() time so
+        # each tick only needs to write bytes -- no per-tick JSON serialization.
+        self.heartbeat_frame: str = self._build_heartbeat_frame()
         self.last_send_ts = 0.0
 
         if self.heartbeat_interval_seconds > 0:
@@ -66,33 +63,24 @@ class StreamingChatHandler(BaseRequestHandler):
             asyncio.create_task(self.run_heartbeat())
 
     @staticmethod
-    def _build_heartbeat_frame(configured_payload: str) -> str:
+    def _build_heartbeat_frame() -> str:
         """
-        Build the exact wire frame to write for each heartbeat tick.
+        Build the exact wire frame to write for each heartbeat tick: an empty
+        AGENT_PROGRESS ChatMessage wrapped in the standard ChatResponse
+        envelope -- {"response": <chat-message>} -- so clients see the same
+        shape as real chat responses. A newline is appended so JSON-Lines
+        parsers see a clean frame boundary even when the heartbeat lands
+        between two real messages.
 
-        The configured payload is expected to be a JSON ChatMessage dictionary
-        (e.g. an empty AGENT_PROGRESS), which is wrapped here in the standard
-        ChatResponse envelope -- {"response": <chat-message>} -- so that
-        clients see the same shape they see for real chat responses. A newline
-        is appended so JSON-Lines parsers see a clean frame boundary even
-        when the heartbeat lands between two real messages.
+        The contents are not user-configurable; only the heartbeat interval is.
 
-        If the configured payload is not valid JSON (legacy callers that pass
-        raw bytes such as "\\n"), it is sent as-is with a trailing newline
-        ensured -- preserving backward-compatible behavior.
-
-        :param configured_payload: The value of the heartbeat_payload kwarg,
-                typically sourced from AGENT_HTTP_SERVER_HEARTBEAT_PAYLOAD.
         :return: The exact string to write per heartbeat tick.
         """
-        try:
-            chat_message: Dict[str, Any] = json.loads(configured_payload)
-        except (JSONDecodeError, TypeError):
-            # Not JSON -- pass through, ensuring a trailing newline for framing.
-            if not configured_payload.endswith("\n"):
-                configured_payload = configured_payload + "\n"
-            return RequestUtil.safe_message(configured_payload)
-        return RequestUtil.safe_message(json.dumps({"response": chat_message}) + "\n")
+        chat_message: Dict[str, Any] = {
+            "type": ChatMessageType.to_string(ChatMessageType.AGENT_PROGRESS),
+            "text": "",
+        }
+        return json.dumps({"response": chat_message}) + "\n"
 
     # pylint: disable=too-many-statements
     # pylint: disable=too-many-branches
