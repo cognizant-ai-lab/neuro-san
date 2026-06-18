@@ -62,7 +62,8 @@ class LatencyAnalyzer:
         logger.info("=" * SEPARATOR_WIDTH)
 
         self._log_completion_timeline(is_ramp=is_ramp)
-        self._log_ttft_summary(is_ramp=is_ramp)
+        if self._is_multi_agent():
+            self._log_ttft_summary(is_ramp=is_ramp)
 
     def _log_completion_timeline(self, *, is_ramp) -> None:
         """Log cumulative request completion milestones per stage."""
@@ -85,10 +86,14 @@ class LatencyAnalyzer:
                 "(%s, %s requests):",
                 label, total,
             )
+            prev_count = 0
             for pct in COMPLETION_MILESTONES:
                 count = int(
                     math.ceil(pct / 100.0 * total),
                 )
+                if count == prev_count:
+                    continue
+                prev_count = count
                 duration = _percentile(latencies, pct)
                 logger.info(
                     "    %3d%% (%d requests) completed by %.1fs",
@@ -236,6 +241,15 @@ class LatencyAnalyzer:
     # Helpers
     # ----------------------------------------------------------
 
+    def _is_multi_agent(self) -> bool:
+        """Check if thinking files show multiple agents."""
+        for summary in self._summaries:
+            for result in summary.get("results", []):
+                thinking = result.get("thinking_timing", {})
+                if len(thinking) > 1:
+                    return True
+        return False
+
     @staticmethod
     def _extract_latencies(
             summary,
@@ -310,13 +324,20 @@ class LatencyAnalyzer:
         num_buckets = min(20, int(total_duration) + 1)
         bucket_size = total_duration / num_buckets
         bucket_peaks = [0] * num_buckets
-        for ts, conc in timeline:
-            bucket_idx = min(
-                int(ts / bucket_size), num_buckets - 1,
-            )
-            bucket_peaks[bucket_idx] = max(
-                bucket_peaks[bucket_idx], conc,
-            )
+        # Carry forward the in-flight count so buckets
+        # without events reflect the actual state.
+        current = 0
+        event_idx = 0
+        for i in range(num_buckets):
+            bucket_end = (i + 1) * bucket_size
+            bucket_peaks[i] = current
+            while (event_idx < len(timeline)
+                   and timeline[event_idx][0] < bucket_end):
+                current = timeline[event_idx][1]
+                bucket_peaks[i] = max(
+                    bucket_peaks[i], current,
+                )
+                event_idx += 1
         for i, peak in enumerate(bucket_peaks):
             t_start = i * bucket_size
             chart = "#" * (peak * 40 // max_conc) if max_conc else ""
