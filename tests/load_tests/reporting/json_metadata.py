@@ -131,6 +131,22 @@ class JsonMetadata:
             "client_resource_rows[].settled":
                 "Client process snapshot after all subprocesses "
                 "completed.",
+            "config.timeout":
+                "Hard timeout per request in seconds. "
+                "Kills the request if it exceeds this limit.",
+            "config.idle_timeout":
+                "Per-request idle timeout in seconds. "
+                "Kills a request if agent_cli produces no "
+                "stdout/stderr output for this duration. "
+                "Resets on every output activity.",
+            "config.stage_timeout":
+                "Hard timeout for an entire stage/round in "
+                "seconds. Kills all remaining in-flight "
+                "requests when the stage exceeds this limit.",
+            "config.settle_time":
+                "Seconds to wait after each stage for server "
+                "cleanup before taking the post-stage resource "
+                "snapshot.",
         }
 
     @staticmethod
@@ -198,6 +214,7 @@ class JsonMetadata:
             "avg_latency_seconds": "seconds",
             "timeout": "seconds",
             "idle_timeout": "seconds",
+            "stage_timeout": "seconds",
             "settle_time": "seconds",
             "rss": "megabytes",
             "cpu": "percent",

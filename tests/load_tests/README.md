@@ -123,7 +123,8 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--num-rounds`             | 1           | Repeat the full sequence N times             |
 | `--max-requests`           | 100 (flat) / sum(stages) * num_rounds (ramp) | Hard cap on total requests |
 | `--timeout`                | 1200        | Hard timeout per request (seconds)           |
-| `--idle-timeout`           | 900         | Kill if no output for N seconds              |
+| `--idle-timeout`           | 900         | Kill if no `agent_cli` output for N seconds (resets on activity) |
+| `--stage-timeout`          | 1500        | Hard timeout for entire stage/round (seconds). Kills remaining in-flight requests |
 | `--settle-time`            | 15          | Wait after each stage for server cleanup     |
 | `--same-prompt`            | off         | Use identical prompt for all requests        |
 | `--yes`                    | off         | Skip dry-run probe and cost confirmation     |

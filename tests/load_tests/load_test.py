@@ -193,6 +193,14 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                  "Detects hanging requests.",
         )
         parser.add_argument(
+            "--stage-timeout",
+            type=int,
+            default=1500,
+            help="Hard timeout for an entire stage/round in "
+                 "seconds (default: 1500 / 25 min). "
+                 "Kills remaining in-flight requests when hit.",
+        )
+        parser.add_argument(
             "--settle-time",
             type=int,
             default=15,
@@ -485,6 +493,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 server_proc=self.server_proc,
                 client_proc=client_proc,
                 output_dir=self._output_dir,
+                stage_timeout=self.args.stage_timeout,
             )
         )
 
@@ -680,11 +689,21 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         after_server = None
 
         if monitor_resources or has_server_log:
+            settle_start = time.strftime(
+                "%H:%M:%S", time.localtime(time.time()),
+            )
             logger.info(
-                "\n  Waiting %ss for server cleanup...",
-                self.args.settle_time,
+                "\n  Settle: waiting %ss for server cleanup... "
+                "[%s]",
+                self.args.settle_time, settle_start,
             )
             time.sleep(self.args.settle_time)
+            settle_end = time.strftime(
+                "%H:%M:%S", time.localtime(time.time()),
+            )
+            logger.info(
+                "  Settle: done [%s]", settle_end,
+            )
 
             after_server = (
                 ResourceMonitor.snapshot(self.server_proc)
@@ -1022,11 +1041,13 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         logger.info(
             "\nConfig: agent=%s, mode=%s, level=%s, "
             "stages=%s, rounds=%s, max_requests=%s, host=%s, port=%s, "
-            "timeout=%ss, idle_timeout=%ss, prompt_mode=%s",
+            "timeout=%ss, idle_timeout=%ss, "
+            "stage_timeout=%ss, prompt_mode=%s",
             self.args.agent, mode, level, stages,
             self.args.num_rounds, total_cap,
             self.args.host, self.args.port, self.args.timeout,
-            self.args.idle_timeout, prompt_mode,
+            self.args.idle_timeout, self.args.stage_timeout,
+            prompt_mode,
         )
         if monitor_resources:
             logger.info("  settle_time=%ss", self.args.settle_time)
@@ -1148,6 +1169,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 "port": self.args.port,
                 "timeout": self.args.timeout,
                 "idle_timeout": self.args.idle_timeout,
+                "stage_timeout": self.args.stage_timeout,
                 "settle_time": self.args.settle_time,
                 "max_workers": self.args.max_workers,
                 "num_rounds": self.args.num_rounds,

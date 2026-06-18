@@ -19,6 +19,7 @@ import logging
 import os
 import threading
 import time
+from concurrent.futures import as_completed
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict
 from typing import List
@@ -200,6 +201,7 @@ class TrafficRunner:
                   max_workers, global_offset, *,
                   server_proc=None, client_proc=None,
                   output_dir=None,
+                  stage_timeout=None,
                   ) -> Tuple[
         float, List[RequestResult], SharedRef, SharedRef,
     ]:
@@ -238,8 +240,16 @@ class TrafficRunner:
                 )
                 for i in range(num_requests)
             )
-            for future in futures_ref:
-                results_list.append(future.result())
+            killed_count = self._collect_with_timeout(
+                futures_ref, results_list,
+                start=start, stage_timeout=stage_timeout,
+            )
+            if killed_count:
+                logger.warning(
+                    "  Stage timeout (%ss) reached — "
+                    "%s request(s) killed.",
+                    stage_timeout, killed_count,
+                )
             heartbeat_stop.set()
             heartbeat_thread.join(timeout=THREAD_JOIN_TIMEOUT)
         total_time = time.time() - start
@@ -247,6 +257,51 @@ class TrafficRunner:
             total_time, results_list,
             peak_threads_ref, peak_client_rss_ref,
         )
+
+    @staticmethod
+    def _collect_with_timeout(
+            futures, results_list, *,
+            start, stage_timeout,
+    ) -> int:
+        """Collect future results, cancelling stragglers on timeout.
+
+        Returns the number of futures that were killed.
+        """
+        if stage_timeout is None:
+            for fut in futures:
+                results_list.append(fut.result())
+            return 0
+
+        pending = set(futures)
+        killed = 0
+        while pending:
+            elapsed = time.time() - start
+            remaining = max(0, stage_timeout - elapsed)
+            if remaining <= 0:
+                break
+            try:
+                for fut in as_completed(pending, timeout=remaining):
+                    results_list.append(fut.result())
+                    pending.discard(fut)
+            except TimeoutError:
+                pass
+
+        for fut in pending:
+            fut.cancel()
+        for fut in pending:
+            if fut.cancelled():
+                killed += 1
+                results_list.append({
+                    "request_id": "unknown",
+                    "status": STATUS_KILLED,
+                    "stdout": "",
+                    "stderr": "Killed by --stage-timeout",
+                    "returncode": -1,
+                    "duration": time.time() - start,
+                })
+            else:
+                results_list.append(fut.result())
+        return killed
 
     def _diagnose_failure(self, returncode, parsed_fields) -> str:
         """Return a human-readable reason why a request was marked FAILED."""
