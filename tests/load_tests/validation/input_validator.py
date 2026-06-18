@@ -142,6 +142,20 @@ class InputValidator:
                 "complexity."
             )
 
+        if (not self._args.ramp
+                and self._args.max_workers < self._args.num_requests):
+            logger.warning(
+                "\n  *** NOTE: --max-workers (%s) < "
+                "--num-requests (%s) ***\n"
+                "  Requests will run in batches of %s, "
+                "not all at once.\n"
+                "  Use --max-workers %s for full concurrency.",
+                self._args.max_workers,
+                self._args.num_requests,
+                self._args.max_workers,
+                self._args.num_requests,
+            )
+
         logger.info("=" * SEPARATOR_WIDTH)
 
         if self._args.yes:
