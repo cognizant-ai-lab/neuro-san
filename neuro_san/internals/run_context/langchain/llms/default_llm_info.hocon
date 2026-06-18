@@ -731,8 +731,8 @@
     },
     "global.anthropic.claude-haiku-4-5-20251001-v1:0": {
         "class": "anthropic-bedrock",
-        "model_info_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-haiku-4-5.html"
-         "modalities": {
+        "model_info_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-haiku-4-5.html",
+        "modalities": {
             "input": [ "text", "image" ],
             "output": [ "text" ],
         },
