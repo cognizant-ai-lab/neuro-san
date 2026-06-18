@@ -280,14 +280,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                  "present, even without a reservation_id.",
         )
         parser.add_argument(
-            "--include-thinking",
-            action="store_true",
-            default=False,
-            help="Enable per-request thinking files for agent "
-                 "timing analysis. Each request gets its own "
-                 "thinking directory. Adds I/O overhead.",
-        )
-        parser.add_argument(
             "--output-dir",
             type=str,
             default=None,
@@ -1090,6 +1082,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         stage_summaries: List[StageSummary] = []
         exit_code = 1
+        pre_test_log_pos = (
+            self.log_monitor.read_position()
+            if self.server_log else None
+        )
         try:
             stage_summaries = self._run_all_stages(
                 stages, total_cap,
@@ -1118,7 +1114,17 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 is_ramp=self.args.ramp,
             )
             latency_analyzer.log_concurrency_timeline()
-            latency_analyzer.log_agent_timing()
+
+            if self.server_log and pre_test_log_pos is not None:
+                server_chat_timing = (
+                    self.log_monitor
+                    .parse_streaming_chat_timing_since(
+                        pre_test_log_pos,
+                    )
+                )
+                LatencyAnalyzer.log_server_timing(
+                    server_chat_timing, stage_summaries,
+                )
 
             if monitor_resources:
                 total_client_reqs = sum(

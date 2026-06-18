@@ -136,7 +136,6 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--same-prompt`            | off         | Use identical prompt for all requests        |
 | `--yes`                    | off         | Skip cost confirmation (adv only). Auto-matches `--max-workers` to `--num-requests` |
 | `--skip-reservation-check` | off         | Skip reservation_id validation               |
-| `--include-thinking`       | off         | Enable per-request thinking files for agent timing analysis |
 | `--output-dir`             | (none)      | Base directory for test output               |
 | `--project-root`           | (none)      | Project root for profile discovery           |
 
@@ -256,7 +255,7 @@ the JSON to ChatGPT/Claude/Gemini and say "analyze this" — no prompt
 engineering needed.
 
 Each stage summary contains:
-- Per-request results (status, duration, TTFT, start/end times, tokens,
+- Per-request results (status, duration, start/end times, tokens,
   cost, model, errors)
 - Server log data (retries, disconnections, amplification, server counts)
 - Per-sub-network token breakdowns (`network_tokens`) when
@@ -288,16 +287,6 @@ Shows cumulative request completion milestones per stage — answers
     100% (50 requests) completed by 30.2s
 ```
 
-### Time-to-first-token (TTFT)
-
-Measures how long before the LLM starts producing output. High TTFT
-indicates the request is queued waiting for LLM capacity:
-
-```
-Stage  Reqs  Min TTFT  P50 TTFT  P90 TTFT  Max TTFT
-    1    50     2.1s      5.3s      8.9s     15.2s
-```
-
 ### Round-over-round degradation
 
 Compares average latency at the same concurrency across rounds.
@@ -322,18 +311,21 @@ whether the LLM serializes concurrent requests:
      60s |########################                | 30
 ```
 
-### Agent timing (with `--include-thinking`)
+### Per-request server timing (with `--server-log`)
 
-When `--include-thinking` is enabled, shows per-agent timing from
-thinking files — identifies which agent in the network is the
-bottleneck:
+When `--server-log` is provided, parses Start/Finish streaming_chat
+timestamps to show per-request timing breakdown with sub-agent detail:
 
 ```
-  Agent timing (from thinking files):
-  Agent          Calls  Avg    Min    P50    P90    Max
-  front_man         50  2.1s   1.2s   1.9s   3.2s   4.5s
-  sub_agent_1       50  6.4s   4.1s   5.9s   8.1s  12.3s
-  sub_agent_2       50  2.7s   1.8s   2.5s   3.5s   5.1s
+  Per-request server timing (from server log):
+
+  request-1 (75.1s total):
+    Client -> Server:    4.0s
+    Server: agent_network_designer   71.0s
+      ├─ agent_network_editor        17.6s
+      ├─ agent_network_instructions_editor  27.9s
+      └─ agent_network_query_generator  6.3s
+    Server -> Client:    0.1s
 ```
 
 ## Exit Codes
@@ -393,8 +385,7 @@ tests/load_tests/
   reporting/
     disconnection_reporter.py  DisconnectionReporter
     json_metadata.py           JsonMetadata (self-documenting JSON)
-    latency_analyzer.py        LatencyAnalyzer (completion timeline, TTFT, degradation)
-    thinking_parser.py         ThinkingParser (per-agent timing from thinking files)
+    latency_analyzer.py        LatencyAnalyzer (completion timeline, degradation, server timing)
     pool_analyzer.py           PoolAnalyzer
     resource_reporter.py       ResourceReporter
     summary.py                 SummaryReporter

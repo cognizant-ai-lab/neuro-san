@@ -280,6 +280,73 @@ class ServerLogMonitor:
                 return match.group(1)
         return None
 
+    def parse_streaming_chat_timing_since(
+            self, position,
+    ) -> List[Dict[str, object]]:
+        """Parse Start/Finish streaming_chat entries for timing.
+
+        Returns a list of dicts with agent, start_ts, finish_ts,
+        duration, and request_id for each streaming_chat pair.
+        """
+        if self._server_log is None or position is None:
+            return []
+        lines = self._read_lines_since(
+            position, "streaming_chat timing",
+        )
+        if not lines:
+            return []
+        return self._match_streaming_chat_pairs(lines)
+
+    @staticmethod
+    def _match_streaming_chat_pairs(
+            lines,
+    ) -> List[Dict[str, object]]:
+        """Match Start/Finish pairs from server log lines."""
+        import json  # pylint: disable=import-outside-toplevel
+        from datetime import datetime  # pylint: disable=import-outside-toplevel
+
+        starts: Dict[Tuple[str, str], float] = {}
+        results: List[Dict[str, object]] = []
+        for line in lines:
+            try:
+                entry = json.loads(line.strip())
+            except (json.JSONDecodeError, ValueError):
+                continue
+            if not isinstance(entry, dict):
+                continue
+            msg = entry.get("message", "")
+            ts_str = entry.get("Timestamp", "")
+            req_id = entry.get("request_id", "")
+            if not msg or not ts_str:
+                continue
+            try:
+                ts = datetime.fromisoformat(
+                    ts_str,
+                ).timestamp()
+            except (ValueError, TypeError):
+                continue
+            if msg.startswith("Start ") and "/streaming_chat" in msg:
+                agent = msg.replace(
+                    "Start ", "",
+                ).replace("/streaming_chat", "")
+                starts[(agent, req_id)] = ts
+            elif msg.startswith("Finish ") and "/streaming_chat" in msg:
+                agent = msg.replace(
+                    "Finish ", "",
+                ).replace("/streaming_chat", "")
+                start_ts = starts.pop(
+                    (agent, req_id), None,
+                )
+                if start_ts is not None:
+                    results.append({
+                        "agent": agent,
+                        "start_ts": start_ts,
+                        "finish_ts": ts,
+                        "duration": ts - start_ts,
+                        "request_id": req_id,
+                    })
+        return results
+
     def scan_disconnections_since(
             self, position,
     ) -> List[Dict[str, str]]:

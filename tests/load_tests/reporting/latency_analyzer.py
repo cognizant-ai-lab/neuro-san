@@ -13,8 +13,8 @@
 # limitations under the License.
 #
 
-"""Latency analysis — completion timeline, TTFT, degradation, and
-concurrency timeline for diagnosing LLM bottlenecks.
+"""Latency analysis — completion timeline, degradation, concurrency
+timeline, and server-side timing for diagnosing LLM bottlenecks.
 """
 
 import logging
@@ -24,7 +24,6 @@ from typing import List
 from typing import Tuple
 
 from tests.load_tests.config import SEPARATOR_WIDTH
-from tests.load_tests.reporting.table_formatter import TableFormatter
 
 logger = logging.getLogger(__name__)
 
@@ -56,14 +55,12 @@ class LatencyAnalyzer:
     # ----------------------------------------------------------
 
     def log_latency_analysis(self, *, is_ramp=True) -> None:
-        """Log completion timeline and TTFT for each stage."""
+        """Log completion timeline for each stage."""
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         logger.info("  LATENCY ANALYSIS")
         logger.info("=" * SEPARATOR_WIDTH)
 
         self._log_completion_timeline(is_ramp=is_ramp)
-        if self._is_multi_agent():
-            self._log_ttft_summary(is_ramp=is_ramp)
 
     def _log_completion_timeline(self, *, is_ramp) -> None:
         """Log cumulative request completion milestones per stage."""
@@ -99,37 +96,6 @@ class LatencyAnalyzer:
                     "    %3d%% (%d requests) completed by %.1fs",
                     pct, count, duration,
                 )
-
-    def _log_ttft_summary(self, *, is_ramp) -> None:
-        """Log time-to-first-token percentiles per stage."""
-        first_col = "Stage" if is_ramp else "Round"
-        header = [
-            first_col, "Reqs", "Min TTFT", "P50 TTFT",
-            "P90 TTFT", "Max TTFT",
-        ]
-        rows = []
-        for summary in self._summaries:
-            ttfts = self._extract_ttfts(summary)
-            if not ttfts:
-                continue
-            ttfts.sort()
-            label = str(
-                summary.get("stage") if is_ramp
-                else summary.get(
-                    "round", summary.get("stage"),
-                )
-            )
-            rows.append((
-                label,
-                str(len(ttfts)),
-                f"{ttfts[0]:.1f}s",
-                f"{_percentile(ttfts, 50):.1f}s",
-                f"{_percentile(ttfts, 90):.1f}s",
-                f"{ttfts[-1]:.1f}s",
-            ))
-        if rows:
-            logger.info("\n  Time-to-first-token (TTFT):")
-            TableFormatter.log_table(header, rows)
 
     # ----------------------------------------------------------
     # 2. Round-over-round degradation
@@ -201,54 +167,132 @@ class LatencyAnalyzer:
             self._log_timeline_chart(timeline)
 
     # ----------------------------------------------------------
-    # 4. Agent timing from thinking files
+    # 4. Per-request server-side timing breakdown
     # ----------------------------------------------------------
 
-    def log_agent_timing(self) -> None:
-        """Log per-agent timing aggregated from thinking files."""
-        agent_timings: Dict[str, List[float]] = {}
-        for summary in self._summaries:
-            results = summary.get("results", [])
-            for result in results:
-                thinking = result.get("thinking_timing", {})
-                for agent_name, duration in thinking.items():
-                    agent_timings.setdefault(
-                        agent_name, [],
-                    ).append(duration)
-        if not agent_timings:
+    @staticmethod
+    def log_server_timing(
+            server_chat_timing, stage_summaries,
+    ) -> None:
+        """Log per-request timing from server log.
+
+        Shows client->server, server processing (with sub-agent
+        breakdown), and server->client for each request.
+
+        Server and client use independent request IDs, so
+        matching is done by timestamp: the server top-level
+        Start must fall within the client start/end window.
+        """
+        if not server_chat_timing:
             return
-        logger.info("\n  Agent timing (from thinking files):")
-        header = [
-            "Agent", "Calls", "Avg", "Min",
-            "P50", "P90", "Max",
+        logger.info(
+            "\n  Per-request server timing "
+            "(from server log):",
+        )
+        client_results = LatencyAnalyzer._collect_client_times(
+            stage_summaries,
+        )
+        by_server_id: Dict[str, list] = {}
+        for entry in server_chat_timing:
+            sid = entry.get("request_id", "")
+            by_server_id.setdefault(sid, []).append(entry)
+
+        for sid in sorted(by_server_id.keys()):
+            entries = by_server_id[sid]
+            entries.sort(key=lambda e: e.get("start_ts", 0))
+            if not entries:
+                continue
+            top_start = entries[0].get("start_ts", 0)
+            client = LatencyAnalyzer._match_client(
+                top_start, client_results,
+            )
+            label = client.get("id", sid)
+            LatencyAnalyzer._log_request_timing(
+                label, entries, client,
+            )
+
+    @staticmethod
+    def _collect_client_times(
+            stage_summaries,
+    ) -> List[Dict[str, float]]:
+        """Collect client start/end times from all results."""
+        results: List[Dict[str, float]] = []
+        for summary in stage_summaries:
+            for result in summary.get("results", []):
+                rid = result.get("request_id", "")
+                start = result.get("start_time", 0)
+                end = result.get("end_time", 0)
+                if rid and start and end:
+                    results.append({
+                        "id": rid,
+                        "start": start,
+                        "end": end,
+                    })
+        return results
+
+    @staticmethod
+    def _match_client(
+            server_start_ts, client_results,
+    ) -> Dict[str, float]:
+        """Find the client request whose window contains server_start_ts."""
+        for client in client_results:
+            if (client.get("start", 0)
+                    <= server_start_ts
+                    <= client.get("end", 0)):
+                return client
+        return {}
+
+    @staticmethod
+    def _log_request_timing(
+            rid, entries, client,
+    ) -> None:
+        """Log timing breakdown for a single request."""
+        top = entries[0]
+        top_agent = top.get("agent", "?")
+        c_start = client.get("start", 0)
+        c_end = client.get("end", 0)
+        s_start = top.get("start_ts", 0)
+        s_finish = top.get("finish_ts", 0)
+        total = (
+            c_end - c_start if c_start and c_end else 0
+        )
+        logger.info(
+            "\n  %s (%.1fs total):", rid, total,
+        )
+        if c_start and s_start and s_start > c_start:
+            logger.info(
+                "    Client -> Server:  %6.1fs",
+                s_start - c_start,
+            )
+        logger.info(
+            "    Server: %-25s %6.1fs",
+            top_agent, top.get("duration", 0),
+        )
+        sub_agents = [
+            e for e in entries
+            if e.get("agent") != top_agent
         ]
-        rows = []
-        for agent_name in sorted(agent_timings.keys()):
-            durations = sorted(agent_timings[agent_name])
-            avg = sum(durations) / len(durations)
-            rows.append((
-                agent_name,
-                str(len(durations)),
-                f"{avg:.1f}s",
-                f"{durations[0]:.1f}s",
-                f"{_percentile(durations, 50):.1f}s",
-                f"{_percentile(durations, 90):.1f}s",
-                f"{durations[-1]:.1f}s",
-            ))
-        TableFormatter.log_table(header, rows)
+        for i, sub in enumerate(sub_agents):
+            prefix = (
+                "\u2514\u2500"
+                if i == len(sub_agents) - 1
+                else "\u251c\u2500"
+            )
+            logger.info(
+                "      %s %-23s %6.1fs",
+                prefix,
+                sub.get("agent", "?"),
+                sub.get("duration", 0),
+            )
+        if c_end and s_finish and c_end > s_finish:
+            logger.info(
+                "    Server -> Client:  %6.1fs",
+                c_end - s_finish,
+            )
 
     # ----------------------------------------------------------
     # Helpers
     # ----------------------------------------------------------
-
-    def _is_multi_agent(self) -> bool:
-        """Check if thinking files show multiple agents."""
-        for summary in self._summaries:
-            for result in summary.get("results", []):
-                thinking = result.get("thinking_timing", {})
-                if len(thinking) > 1:
-                    return True
-        return False
 
     @staticmethod
     def _extract_latencies(
@@ -260,18 +304,6 @@ class LatencyAnalyzer:
             r.get("elapsed", 0)
             for r in results
             if r.get("elapsed", 0) > 0
-        ]
-
-    @staticmethod
-    def _extract_ttfts(
-            summary,
-    ) -> List[float]:
-        """Extract TTFT values from stage results."""
-        results = summary.get("results", [])
-        return [
-            r.get("ttft", 0)
-            for r in results
-            if r.get("ttft", 0) > 0
         ]
 
     def _group_by_concurrency(

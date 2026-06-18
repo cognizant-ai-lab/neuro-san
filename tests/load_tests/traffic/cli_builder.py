@@ -32,18 +32,15 @@ class CliBuilder:
     """Builds agent_cli subprocess commands and manages prompt files."""
 
     @staticmethod
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def build_cli_command(
             host, port, agent_name, prompt_file,
-            include_tokens=False, thinking_file=None,
+            include_tokens=False,
     ) -> List[str]:
         """Build the agent_cli subprocess command list.
 
-        When thinking_file is None, uses --no_thinking_file to avoid
-        race conditions under concurrency.  When provided, enables
-        per-request thinking dir for agent timing analysis.
-        When include_tokens is True, adds --tokens for inline token
-        accounting.
+        Uses --no_thinking_file to avoid race conditions under
+        concurrency.  When include_tokens is True, adds --tokens
+        for inline token accounting.
         """
         cmd = [
             "python", "-m", "neuro_san.client.agent_cli",
@@ -53,11 +50,8 @@ class CliBuilder:
             "--agent", agent_name,
             "--first_prompt_file", prompt_file,
             "--one_shot",
+            "--no_thinking_file",
         ]
-        if thinking_file is not None:
-            cmd.extend(["--thinking_file", thinking_file])
-        else:
-            cmd.append("--no_thinking_file")
         if include_tokens:
             cmd.append("--tokens")
         return cmd
