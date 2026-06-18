@@ -199,13 +199,22 @@ class InputValidator:
             "  Workers:  %s (concurrent)", args.max_workers,
         )
         logger.info(
-            "  Timeouts: --timeout %ss (%sm) / "
+            "  Timeouts: --request-timeout %ss (%sm) / "
             "--idle-timeout %ss (%sm) / "
             "--stage-timeout %ss (%sm)",
-            args.timeout, args.timeout // 60,
+            args.request_timeout, args.request_timeout // 60,
             args.idle_timeout, args.idle_timeout // 60,
             args.stage_timeout, args.stage_timeout // 60,
         )
+        if args.total_timeout > 0:
+            logger.info(
+                "            --total-timeout %ss (%sm)",
+                args.total_timeout, args.total_timeout // 60,
+            )
+        else:
+            logger.info(
+                "            --total-timeout disabled",
+            )
 
     def _estimate_stage_duration(
             self, probe_elapsed,

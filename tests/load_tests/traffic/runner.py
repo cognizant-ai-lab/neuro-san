@@ -73,7 +73,7 @@ class TrafficRunner:
                         self._args.agent, prompt_file,
                         include_tokens=self._args.include_tokens,
                     ),
-                    self._args.timeout, self._args.idle_timeout,
+                    self._args.request_timeout, self._args.idle_timeout,
                 )
             )
             elapsed = time.time() - start

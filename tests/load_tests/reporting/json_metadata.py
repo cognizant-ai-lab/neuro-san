@@ -131,7 +131,7 @@ class JsonMetadata:
             "client_resource_rows[].settled":
                 "Client process snapshot after all subprocesses "
                 "completed.",
-            "config.timeout":
+            "config.request_timeout":
                 "Hard timeout per request in seconds. "
                 "Kills the request if it exceeds this limit.",
             "config.idle_timeout":
@@ -143,6 +143,9 @@ class JsonMetadata:
                 "Hard timeout for an entire stage/round in "
                 "seconds. Kills all remaining in-flight "
                 "requests when the stage exceeds this limit.",
+            "config.total_timeout":
+                "Hard timeout for the entire load test in "
+                "seconds. 0 means disabled.",
             "config.settle_time":
                 "Seconds to wait after each stage for server "
                 "cleanup before taking the post-stage resource "
@@ -212,9 +215,10 @@ class JsonMetadata:
             "duration": "seconds",
             "total_elapsed_seconds": "seconds",
             "avg_latency_seconds": "seconds",
-            "timeout": "seconds",
+            "request_timeout": "seconds",
             "idle_timeout": "seconds",
             "stage_timeout": "seconds",
+            "total_timeout": "seconds",
             "settle_time": "seconds",
             "rss": "megabytes",
             "cpu": "percent",

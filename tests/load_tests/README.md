@@ -127,9 +127,10 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--stages`                 | 10,30,50,100| Concurrency per stage in ramp mode           |
 | `--num-rounds`             | 1           | Repeat the full sequence N times             |
 | `--max-requests`           | sum(stages) * num_rounds | Hard cap on total requests |
-| `--timeout`                | 1200        | Hard timeout per request (seconds)           |
+| `--request-timeout`        | 1200        | Hard timeout per request (seconds)           |
 | `--idle-timeout`           | 900         | Kill if no `agent_cli` output for N seconds (resets on activity) |
 | `--stage-timeout`          | 1500        | Hard timeout for entire stage/round (seconds). Kills remaining in-flight requests |
+| `--total-timeout`          | 0 (disabled)| Hard timeout for entire load test (seconds). Kills run when exceeded |
 | `--settle-time`            | 15          | Wait after each stage for server cleanup     |
 | `--same-prompt`            | off         | Use identical prompt for all requests        |
 | `--yes`                    | off         | Skip cost confirmation (adv only). Auto-matches `--max-workers` to `--num-requests` |
@@ -156,7 +157,8 @@ numbered warnings (if any), and asks the user to confirm:
   Level:    adv
   Requests: 50 x 3 rounds = 150 total
   Workers:  3 (concurrent)
-  Timeouts: 1200s request / 900s idle / 1500s stage
+  Timeouts: --request-timeout 1200s (20m) / --idle-timeout 900s (15m) / --stage-timeout 1500s (25m)
+            --total-timeout disabled
 
   Running 1 dry-run probe to measure actual cost...
 

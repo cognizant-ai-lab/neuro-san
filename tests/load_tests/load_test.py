@@ -178,7 +178,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             help="Neuro-san server port (default: 8080)",
         )
         parser.add_argument(
-            "--timeout",
+            "--request-timeout",
             type=int,
             default=DEFAULT_TIMEOUT_SECONDS,
             help="Hard timeout per request in seconds "
@@ -200,6 +200,14 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             help="Hard timeout for an entire stage/round in "
                  "seconds (default: 1500 / 25 min). "
                  "Kills remaining in-flight requests when hit.",
+        )
+        parser.add_argument(
+            "--total-timeout",
+            type=int,
+            default=0,
+            help="Hard timeout for the entire load test in "
+                 "seconds (default: 0 / disabled). "
+                 "Kills the test run when exceeded.",
         )
         parser.add_argument(
             "--settle-time",
@@ -542,7 +550,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         OutputValidator.log_stage_results(
             actual_requests, counts, elapsed,
-            timeout=self.args.timeout,
+            timeout=self.args.request_timeout,
             idle_timeout=self.args.idle_timeout,
             skip_reservation_check=(
                 self.args.skip_reservation_check
@@ -1055,7 +1063,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "stage_timeout=%ss, prompt_mode=%s",
             self.args.agent, mode, level, stages,
             self.args.num_rounds, total_cap,
-            self.args.host, self.args.port, self.args.timeout,
+            self.args.host, self.args.port, self.args.request_timeout,
             self.args.idle_timeout, self.args.stage_timeout,
             prompt_mode,
         )
@@ -1177,9 +1185,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 "mode": "ramp" if self.args.ramp else "flat",
                 "host": self.args.host,
                 "port": self.args.port,
-                "timeout": self.args.timeout,
+                "request_timeout": self.args.request_timeout,
                 "idle_timeout": self.args.idle_timeout,
                 "stage_timeout": self.args.stage_timeout,
+                "total_timeout": self.args.total_timeout,
                 "settle_time": self.args.settle_time,
                 "max_workers": self.args.max_workers,
                 "num_rounds": self.args.num_rounds,
