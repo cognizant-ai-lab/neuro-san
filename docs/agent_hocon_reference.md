@@ -325,7 +325,7 @@ Set the `class` key to one of the values listed below, then specify the model us
 | Azure OpenAI               | azure-openai        |
 | Bedrock (non-Anthropic)    | bedrock             |
 | Google Gemini              | gemini              |
-| NVidia                     | nvidiea             |
+| NVidia                     | nvidia              |
 | Ollma                      | ollama              |
 | OpenAI                     | openai              |
 | OpenRouter                 | openrouter          |
