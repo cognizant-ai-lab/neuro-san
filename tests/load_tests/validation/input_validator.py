@@ -154,7 +154,8 @@ class InputValidator:
         if self._args.level != LEVEL_ADV:
             logger.info(
                 "\n  Tip: use --yes at adv level to skip "
-                "this confirmation.",
+                "this confirmation.\n"
+                "       --yes does not auto-adjust timeouts.",
             )
 
         logger.info("=" * SEPARATOR_WIDTH)
