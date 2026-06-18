@@ -199,8 +199,12 @@ class InputValidator:
             "  Workers:  %s (concurrent)", args.max_workers,
         )
         logger.info(
-            "  Timeouts: %ss request / %ss idle / %ss stage",
-            args.timeout, args.idle_timeout, args.stage_timeout,
+            "  Timeouts: --timeout %ss (%sm) / "
+            "--idle-timeout %ss (%sm) / "
+            "--stage-timeout %ss (%sm)",
+            args.timeout, args.timeout // 60,
+            args.idle_timeout, args.idle_timeout // 60,
+            args.stage_timeout, args.stage_timeout // 60,
         )
 
     def _estimate_stage_duration(
