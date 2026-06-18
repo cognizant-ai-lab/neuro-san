@@ -211,7 +211,7 @@ to use LLMs from various providers.
 | Azure OpenAI               | AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT               |
 | Google Gemini              | GOOGLE_API_KEY                                               |
 | NVidia                     | NVIDIA_API_KEY                                               |
-| Ollma                      | &lt;None required&gt;                                        |
+| Ollama                     | &lt;None required&gt;                                        |
 | OpenAI                     | OPENAI_API_KEY                                               |
 | OpenRouter                 | OPENROUTER_API_KEY                                           |
 
