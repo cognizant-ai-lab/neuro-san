@@ -128,8 +128,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "--max-workers",
             type=int,
             default=3,
-            help="Max concurrent workers in flat mode. "
-                 "Defaults to --num-requests (all concurrent). "
+            help="Max concurrent workers in flat mode "
+                 "(default: 3). At adv level with --yes, "
+                 "auto-matches --num-requests unless "
+                 "explicitly set. "
                  "Ignored when --ramp is used.",
         )
         parser.add_argument(
@@ -218,7 +220,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "--yes",
             action="store_true",
             default=False,
-            help="Skip the cost confirmation prompt",
+            help="Skip the cost confirmation prompt "
+                 "(adv level only). Also auto-matches "
+                 "--max-workers to --num-requests.",
         )
         parser.add_argument(
             "--server-log",
@@ -956,26 +960,36 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         """Override argparse defaults with level-specific values.
 
         Only applies when the user did not explicitly set the flag.
-        adv: 50 requests, 50 workers, 3 rounds (stress test).
+        adv: 50 requests, 3 rounds (stress test).
 
-        When --max-workers is not set, it matches --num-requests
-        so all requests fire concurrently.
+        At adv level with --yes, workers auto-match num-requests
+        (power user mode).  Otherwise workers default to 3
+        (conservative) and a warning is shown if
+        max-workers < num-requests.
         """
         if args.level == LEVEL_ADV:
             if "num_requests" not in explicit_args:
                 args.num_requests = 50
-            if "max_workers" not in explicit_args:
-                args.max_workers = 50
             if "num_rounds" not in explicit_args:
                 args.num_rounds = 3
 
-        if "max_workers" not in explicit_args:
+        if ("max_workers" not in explicit_args
+                and args.yes
+                and args.level == LEVEL_ADV):
             args.max_workers = args.num_requests
 
     def run(self) -> int:
         """Execute the full load test workflow."""
         level = self.args.level
         self.args.include_tokens = not self.args.no_tokens
+        if self.args.yes and level != LEVEL_ADV:
+            logger.error(
+                "--yes is only supported at adv level. "
+                "At %s level, the cost confirmation prompt "
+                "is required.",
+                level,
+            )
+            raise SystemExit(1)
         explicit = getattr(self.args, "_explicit", set())
         self._apply_level_defaults(self.args, explicit)
         self.input_validator.validate_agent_name()

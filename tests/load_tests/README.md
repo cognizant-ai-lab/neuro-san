@@ -78,14 +78,19 @@ explicit file. `--monitor-resources` enables psutil monitoring at
 `min` level. Token accounting via `agent_cli --tokens` is enabled
 at all levels by default (disable with `--no-tokens`).
 
-**`adv` level defaults:** 50 requests, 50 workers, 3 rounds (150 total
-requests). These are applied automatically unless overridden with
-`--num-requests`, `--max-workers`, or `--num-rounds`.
+**`adv` level defaults:** 50 requests, 3 rounds (150 total requests).
+With `--yes`, workers auto-match to 50 (full concurrency). Without
+`--yes`, workers default to 3 with a warning. These are applied
+automatically unless overridden with `--num-requests`, `--max-workers`,
+or `--num-rounds`.
 
-**`--max-workers` auto-matching:** When `--max-workers` is not explicitly
-set, it defaults to `--num-requests` so all requests fire concurrently.
-For example, `--num-requests 100` fires all 100 at once. Use
-`--max-workers 10` to throttle to 10 concurrent.
+**`--max-workers` auto-matching:** At adv level with `--yes` (power
+user mode), `--max-workers` auto-matches `--num-requests` so all
+requests fire concurrently. At other levels or without `--yes`,
+`--max-workers` defaults to 3 (conservative). A warning is shown
+during the cost confirmation on all levels if
+`max-workers < num-requests`. Explicit `--max-workers` is always
+respected regardless of `--yes`.
 
 When `--server-log` is omitted, server-log-dependent sections print
 "not available" in the output.  When `--server-log` is passed without
@@ -117,7 +122,7 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--host`                   | localhost   | Neuro-san server host                        |
 | `--port`                   | 8080        | Neuro-san server port                        |
 | `--num-requests`           | 3           | Requests per round in flat mode              |
-| `--max-workers`            | = num-requests | Concurrent workers in flat mode. Defaults to `--num-requests` (all concurrent) |
+| `--max-workers`            | 3             | Concurrent workers in flat mode. At adv + `--yes`, auto-matches `--num-requests` |
 | `--ramp`                   | off         | Enable ramp-up mode                          |
 | `--stages`                 | 10,30,50,100| Concurrency per stage in ramp mode           |
 | `--num-rounds`             | 1           | Repeat the full sequence N times             |
@@ -127,7 +132,7 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--stage-timeout`          | 1500        | Hard timeout for entire stage/round (seconds). Kills remaining in-flight requests |
 | `--settle-time`            | 15          | Wait after each stage for server cleanup     |
 | `--same-prompt`            | off         | Use identical prompt for all requests        |
-| `--yes`                    | off         | Skip dry-run probe and cost confirmation     |
+| `--yes`                    | off         | Skip cost confirmation (adv only). Auto-matches `--max-workers` to `--num-requests` |
 | `--skip-reservation-check` | off         | Skip reservation_id validation               |
 | `--output-dir`             | (none)      | Base directory for test output               |
 | `--project-root`           | (none)      | Project root for profile discovery           |
