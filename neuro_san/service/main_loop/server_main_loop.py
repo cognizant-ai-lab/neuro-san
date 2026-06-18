@@ -37,6 +37,7 @@ from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER
 from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS
 from neuro_san.service.http.config.http_server_config import HttpServerConfig
 from neuro_san.service.http.logging.logging_config_restorer import LoggingConfigRestorer
+from neuro_san.service.http.server.health_server import HealthServer
 from neuro_san.service.http.server.http_server import DEFAULT_SERVER_NAME
 from neuro_san.service.http.server.http_server import DEFAULT_SERVER_NAME_FOR_LOGS
 from neuro_san.service.http.server.http_server import DEFAULT_MAX_CONCURRENT_REQUESTS
@@ -63,6 +64,7 @@ class ServerMainLoop:
         Constructor
         """
         self.http_port: int = 0
+        self.health_port: int = 0
 
         self.agent_networks: Dict[str, Dict[str, AgentNetwork]] = {}
 
@@ -149,6 +151,12 @@ class ServerMainLoop:
         arg_parser.add_argument("--mcp_only", type=str,
                                 default=os.environ.get("AGENT_MCP_ONLY", "false"),
                                 help="'true' if only MCP protocol service will be run (no HTTP service)")
+        arg_parser.add_argument("--health_port", type=int,
+                                default=int(os.environ.get("AGENT_HEALTH_PORT", "0")),
+                                help="Port for dedicated health check server. "
+                                     "When set, /livez and /readyz are served on a separate "
+                                     "thread so K8s probes are never blocked by request load. "
+                                     "0 disables the dedicated server.")
         return arg_parser
 
     def parse_args(self):
@@ -196,6 +204,8 @@ class ServerMainLoop:
         self.http_server_config.http_server_instances = args.http_server_instances
         self.http_server_config.http_server_monitor_interval_seconds = args.http_resources_monitor_interval_seconds
         self.http_server_config.http_port = args.http_port
+
+        self.health_port: int = args.health_port
 
         self.server_context.set_temp_storage_max_items(args.max_temp_networks)
 
@@ -285,6 +295,14 @@ class ServerMainLoop:
         for storage_class in StorageClass.ALL_PERMANENT:
             storage: AgentNetworkStorage = network_storage_dict.get(storage_class)
             storage.setup_agent_networks(self.agent_networks.get(storage_class))
+
+        # Start dedicated health check server if configured:
+        if self.health_port > 0:
+            health_server = HealthServer(
+                self.health_port,
+                self.server_context.get_server_status()
+            )
+            health_server.start()
 
         # Start http server:
         self.http_server.start(components_to_start)
