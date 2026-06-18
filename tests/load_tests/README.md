@@ -99,9 +99,9 @@ and suggests providing the path explicitly.
 
 ## Traffic Modes
 
-**Flat** (default): `--num-requests 10` — fixed concurrency. By default
-`--max-workers` matches `--num-requests` (all concurrent). Set
-`--max-workers` explicitly to limit concurrency:
+**Flat** (default): `--num-requests 10` — fixed concurrency.
+`--max-workers` defaults to 3; at adv level with `--yes` it auto-matches
+`--num-requests`. Set `--max-workers` explicitly to control concurrency:
 `--num-requests 100 --max-workers 10` fires 100 requests, 10 at a time.
 Flat mode output labels each iteration as a "round" (no stage numbers).
 
@@ -270,8 +270,9 @@ This framework follows three review playbooks:
   fallbacks (`num_fds`/`select.select`/closed-pipe guards/temp dir),
   clean error on invalid `--stages`, `ServerCounts` partial TypedDict,
   auto-resolve profile from agent name, `--max-workers` auto-matches
-  `--num-requests`, `adv` level defaults (50×50×3), flat mode hides
-  stage labels and uses round-based output.
+  `--num-requests` at adv + `--yes`, `adv` level defaults (50×3),
+  `--yes` restricted to adv level, flat mode hides stage labels and
+  uses round-based output.
 
 Lint status: flake8 clean, pylint 10.00/10.
 
