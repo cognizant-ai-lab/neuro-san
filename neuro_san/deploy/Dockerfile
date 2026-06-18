@@ -327,15 +327,15 @@ ENV AGENT_MCP_ONLY="false"
 #
 
 # When set to "true", this parameter requires https for internal agent session communication.
-# The default is "false", to allow developers to work locally without acquiring certificates.
-# Strongly consider turning this on for production deployments.
-ENV AGENT_SESSION_REQUIRE_HTTPS="false"
+# The default is "true". Developers should set this to false to work locally without acquiring certificates.
+# Strongly consider keeping this on for production deployments.
+ENV AGENT_SESSION_REQUIRE_HTTPS="true"
 
 # When set to "false", this parameter will squelch the logging of sensitive information
 # as flagged by static analysis (SAST) tools.
-# The default is "true", to allow developers to work locally with reasonable failure information.
-# Strongly consider turning this off for production deployments.
-ENV LEAF_LOG_SENSITIVE="true"
+# The default is "false". Developers should set this to true to work locally with reasonable failure information.
+# Strongly consider keeping this off for production deployments.
+ENV LEAF_LOG_SENSITIVE="false"
 
 #
 # Authorization
