@@ -22,7 +22,7 @@ DEFAULT_HTTP_CONNECTIONS_BACKLOG: int = 128
 DEFAULT_HTTP_IDLE_CONNECTIONS_TIMEOUT_SECONDS: int = 3600
 DEFAULT_HTTP_SERVER_INSTANCES: int = 1
 DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS: int = 0
-DEFAULT_HTTP_SERVER_HEARTBEAT_INTERVAL_SECONDS: int = 0
+DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS: int = 0
 
 
 class HttpServerConfig:
@@ -36,4 +36,4 @@ class HttpServerConfig:
         self.http_server_instances: int = DEFAULT_HTTP_SERVER_INSTANCES
         self.http_port: int = 80
         self.http_server_monitor_interval_seconds: int = DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS
-        self.http_server_heartbeat_interval_seconds: int = DEFAULT_HTTP_SERVER_HEARTBEAT_INTERVAL_SECONDS
+        self.http_server_heartbeat_interval_seconds: int = DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS

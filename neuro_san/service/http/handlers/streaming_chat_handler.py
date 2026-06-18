@@ -151,7 +151,6 @@ class StreamingChatHandler(BaseRequestHandler):
                     if flush_ok:
                         # Some flush was successful. This is good.
                         flushed_first_result = True
-                        # Register the time of the last successful flush, so that we can adjust our heartbeat timing.
                     else:
                         # We tried flushing the result to no avail
                         if self._is_client_close_a_problem(is_event, flushed_first_result):

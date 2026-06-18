@@ -35,7 +35,7 @@ from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_CONNEC
 from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_IDLE_CONNECTIONS_TIMEOUT_SECONDS
 from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_INSTANCES
 from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS
-from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_HEARTBEAT_INTERVAL_SECONDS
+from neuro_san.service.http.config.http_server_config import DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS
 from neuro_san.service.http.config.http_server_config import HttpServerConfig
 from neuro_san.service.http.logging.logging_config_restorer import LoggingConfigRestorer
 from neuro_san.service.http.server.http_server import DEFAULT_SERVER_NAME
@@ -139,9 +139,9 @@ class ServerMainLoop:
                                                            DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS)),
                                 help="Http server resources monitoring/logging interval in seconds "
                                      "0 means no logging")
-        arg_parser.add_argument("--http_server_heartbeat_interval_seconds", type=int,
-                                default=int(os.environ.get("AGENT_HTTP_SERVER_HEARTBEAT_INTERVAL",
-                                                           DEFAULT_HTTP_SERVER_HEARTBEAT_INTERVAL_SECONDS)),
+        arg_parser.add_argument("--stream_keep_alive_with_progress_interval_seconds", type=int,
+                                default=int(os.environ.get("AGENT_STREAM_KEEP_ALIVE_WITH_PROGRESS_INTERVAL",
+                                                           DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS)),
                                 help="Http server heartbeat interval in seconds "
                                      "0 means no heartbeat")
         arg_parser.add_argument("--max_temp_networks", type=int,
