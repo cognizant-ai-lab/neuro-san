@@ -716,7 +716,7 @@
     },
     "global.anthropic.claude-sonnet-4-6": {
         "class": "anthropic-bedrock",
-        "model_info_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-4-6.html"
+        "model_info_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-4-6.html",
         "modalities": {
             "input": [ "text", "image" ],
             "output": [ "text" ],
