@@ -9,7 +9,7 @@ and report results. Uses real LLM calls via `agent_cli` subprocesses.
 - [Test Levels](#test-levels---level)
 - [Traffic Modes](#traffic-modes)
 - [Flags](#flags)
-- [Cost Confirmation and Dry-Run Probe](#cost-confirmation-and-dry-run-probe)
+- [Pre-Run Summary and Dry-Run Probe](#pre-run-summary-and-dry-run-probe)
 - [Agent Profiles](#agent-profiles)
 - [Output](#output)
 - [Exit Codes](#exit-codes)
@@ -137,23 +137,45 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--output-dir`             | (none)      | Base directory for test output               |
 | `--project-root`           | (none)      | Project root for profile discovery           |
 
-## Cost Confirmation and Dry-Run Probe
+## Pre-Run Summary and Dry-Run Probe
 
-Before firing the full test, the load test shows a cost warning.
+Before firing the full test, the load test displays a PRE-RUN SUMMARY.
 
-**With `--yes`:** Shows the warning and runs immediately (no probe).
+**With `--yes` (adv only):** Shows the summary with any applicable
+warnings and runs immediately (no probe).
 
-**Without `--yes`:** Fires 1 probe request with `--tokens` to measure
-actual token usage and cost, then asks the user to confirm:
+**Without `--yes`:** Fires 1 probe request to measure actual token
+usage, cost, and response time.  Then shows estimated stage duration,
+numbered warnings (if any), and asks the user to confirm:
 
 ```
-Running 1 dry-run probe to measure actual cost...
-Request 1: CREATED (22.8s)
-  Probe result: CREATED in 22.8s
-  Probe tokens: 2,158 (model: gpt-5.2-2025-12-11, cost: $0.011342)
-  Estimated total for 10 requests: ~21,580 tokens (~$0.1134)
+============================================================
+  PRE-RUN SUMMARY
+============================================================
+  Agent:    agent_network_designer
+  Level:    adv
+  Requests: 50 x 3 rounds = 150 total
+  Workers:  3 (concurrent)
+  Timeouts: 1200s request / 900s idle / 1500s stage
 
-Proceed with remaining 9 requests? [y/N]:
+  Running 1 dry-run probe to measure actual cost...
+
+  Probe request completed in 30.2s (CREATED)
+  Probe tokens: 500,000 (model: gpt-4o, cost: $0.2500)
+  Estimated stage duration: ~1510s (30.2s x 50 requests)
+
+  WARNINGS (3 found):
+  1. Estimated cost exceeds $1:
+     Probe used ~500,000 tokens ($0.25) x 150 requests = ~75,000,000 tokens (~$37.50)
+     Model: gpt-4o
+  2. --max-workers (3) < --num-requests (50): requests run in batches
+  3. Estimated stage duration ~1510s exceeds --stage-timeout (1500s).
+     Requests may be killed before completing.
+
+  Tip: use --yes at adv level to skip this confirmation.
+============================================================
+
+Proceed with remaining 149 requests? [y/N]:
 ```
 
 The probe result counts as request #0 of the first stage (not wasted).
@@ -272,7 +294,8 @@ This framework follows three review playbooks:
   auto-resolve profile from agent name, `--max-workers` auto-matches
   `--num-requests` at adv + `--yes`, `adv` level defaults (50×3),
   `--yes` restricted to adv level, flat mode hides stage labels and
-  uses round-based output.
+  uses round-based output, PRE-RUN SUMMARY with numbered warnings
+  and estimated stage duration.
 
 Lint status: flake8 clean, pylint 10.00/10.
 

@@ -903,22 +903,24 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if os.path.isfile(json_path):
             logger.info("  Raw results: %s", json_path)
 
-    def _validate_server_log(self) -> None:
+    def _validate_server_log(self) -> Optional[int]:
         """Validate --server-log path when provided.
 
         Skips validation when --server-log is used without a path
         (auto-detect mode, value is ``"auto"``).  At norm/adv levels
         without --server-log, logs a warning listing which features
         will be unavailable.
+
+        Returns the stale log age in minutes, or None if not stale.
         """
         level = self.args.level
         server_log = self.args.server_log
 
         if server_log == "auto":
-            return
+            return None
 
         if level == LEVEL_MIN and not server_log:
-            return
+            return None
 
         if not server_log:
             logger.warning(
@@ -936,7 +938,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 "    --server-log logs/server.log",
                 level,
             )
-            return
+            return None
 
         if not os.path.isfile(server_log):
             logger.error(
@@ -947,13 +949,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         mtime = os.path.getmtime(server_log)
         age_seconds = time.time() - mtime
         if age_seconds > STALE_LOG_THRESHOLD_SECONDS:
-            age_min = int(age_seconds // 60)
-            logger.warning(
-                "WARNING: Server log appears stale "
-                "(last modified %sm ago): %s\n"
-                "         Make sure this is the active server log.",
-                age_min, server_log,
-            )
+            return int(age_seconds // 60)
+        return None
 
     @staticmethod
     def _apply_level_defaults(args, explicit_args) -> None:
@@ -994,7 +991,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         self._apply_level_defaults(self.args, explicit)
         self.input_validator.validate_agent_name()
         EnvironmentValidator.validate_environment()
-        self._validate_server_log()
+        stale_log_age = self._validate_server_log()
 
         stages = self.input_validator.resolve_stages()
         total_cap = self.input_validator.resolve_max_requests(
@@ -1005,8 +1002,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         self.probe_result = self.input_validator.confirm_cost(
             stages, total_cap,
             runner=self.runner,
-            profile=self.profile,
             output_dir=self._output_dir,
+            stale_log_age=stale_log_age,
         )
 
         is_local = self.args.host in LOCAL_HOSTS

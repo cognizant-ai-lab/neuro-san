@@ -25,8 +25,10 @@ import os
 import sys
 from typing import List
 from typing import Optional
+from typing import Tuple
 
 from tests.load_tests.config import DEFAULT_STAGES
+from tests.load_tests.config import LEVEL_ADV
 from tests.load_tests.config import RequestResult
 from tests.load_tests.config import SEPARATOR_WIDTH
 
@@ -97,83 +99,207 @@ class InputValidator:
     # pylint: disable=too-many-arguments
     def confirm_cost(
             self, stages, total_cap, *, runner,
-            profile=None, output_dir=None,
+            output_dir=None, stale_log_age=None,
     ) -> Optional[RequestResult]:
-        """Display cost warning and optionally run a dry-run probe.
+        """Display PRE-RUN SUMMARY and optionally run a dry-run probe.
 
-        With --yes: shows the cost warning and returns immediately.
+        With --yes: shows the summary and returns immediately.
         Without --yes: fires one probe request with --tokens to
-        measure actual token usage, shows the extrapolated cost,
-        and asks the user to confirm.
+        measure actual token usage, collects warnings, and asks
+        the user to confirm.
 
         Returns the probe result dict if a probe was run, else None.
         """
         total_planned = sum(stages) * self._args.num_rounds
         capped = min(total_planned, total_cap)
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
-        logger.info("  COST WARNING: REAL LLM CALLS")
-        logger.info("=" * SEPARATOR_WIDTH)
-        if self._args.ramp:
-            logger.info("  Ramp-up stages: %s", stages)
-            logger.info("  Rounds: %s", self._args.num_rounds)
-        logger.info("  Total planned requests: %s", total_planned)
-        if capped < total_planned:
-            logger.info(
-                "  Capped by --max-requests: %s", capped,
-            )
 
-        if profile and profile.estimated_tokens_per_request:
-            total_tokens = (
-                capped * profile.estimated_tokens_per_request
-            )
-            logger.info(
-                "  Estimated tokens: %s × %s = ~%s tokens",
-                capped,
-                f"{profile.estimated_tokens_per_request:,}",
-                f"{total_tokens:,}",
-            )
-        else:
-            logger.info(
-                "  Each request involves multiple recursive "
-                "LLM calls."
-            )
-            logger.info(
-                "  Estimated cost depends on model and prompt "
-                "complexity."
-            )
-
-        if (not self._args.ramp
-                and self._args.max_workers < self._args.num_requests):
-            logger.warning(
-                "\n  *** NOTE: --max-workers (%s) < "
-                "--num-requests (%s) ***\n"
-                "  Requests will run in batches of %s, "
-                "not all at once.\n"
-                "  Use --max-workers %s for full concurrency.",
-                self._args.max_workers,
-                self._args.num_requests,
-                self._args.max_workers,
-                self._args.num_requests,
-            )
-
-        logger.info("=" * SEPARATOR_WIDTH)
+        self._print_summary_header(stages, total_planned, capped)
 
         if self._args.yes:
+            warnings = self._collect_warnings(
+                capped=capped,
+                total_planned=total_planned,
+                stale_log_age=stale_log_age,
+            )
+            self._print_warnings(warnings)
+            logger.info("=" * SEPARATOR_WIDTH)
             return None
 
-        return self._run_cost_probe(runner, capped, output_dir)
+        probe_result, probe_data = (
+            self._run_cost_probe(runner, output_dir)
+        )
+
+        est_stage_duration = self._estimate_stage_duration(
+            probe_data["elapsed"],
+        )
+        logger.info(
+            "  Estimated stage duration: ~%ss "
+            "(%.1fs x %s requests)",
+            int(est_stage_duration),
+            probe_data["elapsed"],
+            self._args.num_requests,
+        )
+
+        warnings = self._collect_warnings(
+            capped=capped,
+            total_planned=total_planned,
+            stale_log_age=stale_log_age,
+            est_stage_duration=est_stage_duration,
+            probe_tokens=probe_data["tokens"],
+            probe_cost=probe_data["cost"],
+            probe_model=probe_data["model"],
+        )
+        self._print_warnings(warnings)
+
+        if self._args.level != LEVEL_ADV:
+            logger.info(
+                "\n  Tip: use --yes at adv level to skip "
+                "this confirmation.",
+            )
+
+        logger.info("=" * SEPARATOR_WIDTH)
+
+        answer = input(
+            "\nProceed with remaining "
+            f"{capped - 1} requests? [y/N]: ",
+        ).strip().lower()
+        if answer not in ("y", "yes"):
+            logger.info("Aborted by user.")
+            sys.exit(0)
+
+        return probe_result
+
+    def _print_summary_header(
+            self, stages, total_planned, capped,
+    ) -> None:
+        """Print the PRE-RUN SUMMARY header block."""
+        args = self._args
+        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("  PRE-RUN SUMMARY")
+        logger.info("=" * SEPARATOR_WIDTH)
+        logger.info("  Agent:    %s", args.agent)
+        logger.info("  Level:    %s", args.level)
+        if args.ramp:
+            logger.info(
+                "  Stages:   %s", stages,
+            )
+        logger.info(
+            "  Requests: %s x %s round%s = %s total",
+            args.num_requests,
+            args.num_rounds,
+            "s" if args.num_rounds > 1 else "",
+            total_planned,
+        )
+        if capped < total_planned:
+            logger.info(
+                "  Capped:   %s (--max-requests)", capped,
+            )
+        logger.info(
+            "  Workers:  %s (concurrent)", args.max_workers,
+        )
+        logger.info(
+            "  Timeouts: %ss request / %ss idle / %ss stage",
+            args.timeout, args.idle_timeout, args.stage_timeout,
+        )
+
+    def _estimate_stage_duration(
+            self, probe_elapsed,
+    ) -> float:
+        """Estimate stage wall time from probe duration.
+
+        LLM is the bottleneck, so concurrent requests do not
+        scale linearly.  Estimate as probe_time x num_requests.
+        """
+        return probe_elapsed * self._args.num_requests
+
+    def _collect_warnings(
+            self, *, capped, total_planned,
+            stale_log_age=None,
+            est_stage_duration=None,
+            probe_tokens=None, probe_cost=None,
+            probe_model=None,
+    ) -> List[str]:
+        """Collect all pre-run warnings as a list of strings."""
+        warnings: List[str] = []
+
+        if probe_cost is not None and probe_tokens:
+            est_total_cost = probe_cost * capped
+            est_total_tokens = probe_tokens * capped
+            if est_total_cost > 1.0:
+                warnings.append(
+                    f"Estimated cost exceeds $1:\n"
+                    f"     Probe used ~{probe_tokens:,} "
+                    f"tokens (${probe_cost:.2f}) "
+                    f"x {capped} requests = "
+                    f"~{est_total_tokens:,} tokens "
+                    f"(~${est_total_cost:.2f})\n"
+                    f"     Model: {probe_model}"
+                )
+
+        max_w = self._args.max_workers
+        num_r = self._args.num_requests
+        if not self._args.ramp and max_w < num_r:
+            warnings.append(
+                f"--max-workers ({max_w}) < "
+                f"--num-requests ({num_r}): "
+                f"requests run in batches"
+            )
+
+        if (est_stage_duration is not None
+                and est_stage_duration
+                > self._args.stage_timeout):
+            stage_to = self._args.stage_timeout
+            warnings.append(
+                f"Estimated stage duration "
+                f"~{int(est_stage_duration)}s "
+                f"exceeds --stage-timeout ({stage_to}s).\n"
+                f"     Requests may be killed "
+                f"before completing."
+            )
+
+        if capped < total_planned:
+            warnings.append(
+                f"--max-requests ({capped}) "
+                f"caps planned total ({total_planned})"
+            )
+
+        if stale_log_age is not None:
+            warnings.append(
+                f"Server log appears stale "
+                f"(last modified {stale_log_age}m ago)"
+            )
+
+        return warnings
+
+    @staticmethod
+    def _print_warnings(warnings) -> None:
+        """Print numbered warnings or 'No warnings'."""
+        if not warnings:
+            logger.info("\n  No warnings.")
+            return
+
+        logger.warning(
+            "\n  WARNINGS (%s found):", len(warnings),
+        )
+        for idx, warning in enumerate(warnings, 1):
+            lines = warning.split("\n")
+            logger.warning("  %s. %s", idx, lines[0])
+            for line in lines[1:]:
+                logger.warning("  %s", line)
 
     def _run_cost_probe(
-            self, runner, total_requests, output_dir,
-    ) -> Optional[RequestResult]:
-        """Fire one probe request and confirm cost.
+            self, runner, output_dir,
+    ) -> Tuple[RequestResult, dict]:
+        """Fire one probe request and return results.
 
-        Fires a single request (tokens are enabled by default),
-        extrapolates cost for the full run, and asks the user
-        to confirm.  Exits if the user declines.
+        Fires a single request (tokens are enabled by default)
+        and logs the outcome.
+
+        Returns (probe_result, probe_data_dict).
         """
         logger.info(
-            "\nRunning 1 dry-run probe to measure actual cost...",
+            "\n  Running 1 dry-run probe to measure actual "
+            "cost...",
         )
 
         probe_result = runner.run_one(
@@ -188,36 +314,25 @@ class InputValidator:
         probe_elapsed = probe_result.get("elapsed", 0)
 
         logger.info(
-            "  Probe result: %s in %.1fs",
-            probe_status, probe_elapsed,
-        )
-        logger.info(
-            "  Probe tokens: %s (model: %s, cost: $%.6f)",
-            f"{probe_tokens:,}", probe_model, probe_cost,
+            "\n  Probe request completed in %.1fs (%s)",
+            probe_elapsed, probe_status,
         )
 
         if probe_tokens > 0:
-            est_total_cost = probe_cost * total_requests
-            est_total_tokens = probe_tokens * total_requests
             logger.info(
-                "  Estimated total for %s requests: "
-                "~%s tokens (~$%.4f)",
-                total_requests,
-                f"{est_total_tokens:,}",
-                est_total_cost,
+                "  Probe tokens: %s (model: %s, cost: $%.4f)",
+                f"{probe_tokens:,}", probe_model, probe_cost,
             )
         else:
             logger.info(
                 "  No token data from probe (agent may not "
-                "track tokens)."
+                "track tokens).",
             )
 
-        answer = input(
-            "\nProceed with remaining "
-            f"{total_requests - 1} requests? [y/N]: ",
-        ).strip().lower()
-        if answer not in ("y", "yes"):
-            logger.info("Aborted by user.")
-            sys.exit(0)
-
-        return probe_result
+        probe_data = {
+            "tokens": probe_tokens,
+            "cost": probe_cost,
+            "model": probe_model,
+            "elapsed": probe_elapsed,
+        }
+        return probe_result, probe_data
