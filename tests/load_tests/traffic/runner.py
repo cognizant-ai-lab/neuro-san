@@ -66,7 +66,7 @@ class TrafficRunner:
 
         try:
             start = time.time()
-            status, stdout, stderr, returncode = (
+            status, stdout, stderr, returncode, ttft = (
                 ProcessMonitor.execute_with_idle_detection(
                     CliBuilder.build_cli_command(
                         self._args.host, self._args.port,
@@ -101,6 +101,9 @@ class TrafficRunner:
                 "request_id": f"request-{request_id}",
                 "status": status,
                 "elapsed": elapsed,
+                "ttft": ttft,
+                "start_time": start,
+                "end_time": start + elapsed,
                 "prompt": prompt,
                 "error": (
                     CliBuilder.last_stderr_line(stderr)

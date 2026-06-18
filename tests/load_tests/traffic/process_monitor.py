@@ -40,14 +40,16 @@ class ProcessMonitor:
     @staticmethod
     def execute_with_idle_detection(
             cmd, timeout, idle_timeout,
-    ) -> Tuple[str, str, str, int]:
+    ) -> Tuple[str, str, str, int, float]:
         """Run a subprocess with idle-timeout and hard-timeout detection.
 
-        Returns (status, stdout, stderr, returncode).
+        Returns (status, stdout, stderr, returncode, ttft).
+        ttft is time-to-first-token in seconds (0.0 if no stdout).
         """
         stdout_chunks: List[bytes] = []
         stderr_chunks: List[bytes] = []
         status = STATUS_FAILED
+        ttft_ref: List[float] = []
 
         try:
             # pylint: disable=consider-using-with
@@ -57,12 +59,13 @@ class ProcessMonitor:
                 stderr=subprocess.PIPE,
             )
         except OSError as exc:
-            return (STATUS_FAILED, "", str(exc), -1)
+            return (STATUS_FAILED, "", str(exc), -1, 0.0)
 
         try:
             monitor_status = ProcessMonitor._monitor_process(
                 proc, stdout_chunks, stderr_chunks,
                 timeout=timeout, idle_timeout=idle_timeout,
+                ttft_ref=ttft_ref,
             )
             if monitor_status is not None:
                 status = monitor_status
@@ -87,17 +90,21 @@ class ProcessMonitor:
             if status == STATUS_FAILED:
                 status = STATUS_KILLED
 
+        ttft = ttft_ref[0] if ttft_ref else 0.0
         return (
             status,
             b"".join(stdout_chunks).decode("utf-8", errors="replace"),
             b"".join(stderr_chunks).decode("utf-8", errors="replace"),
             proc.returncode,
+            ttft,
         )
 
     @staticmethod
+    # pylint: disable=too-many-arguments
     def _monitor_process(proc, stdout_chunks,
                          stderr_chunks, *,
-                         timeout, idle_timeout) -> Optional[str]:
+                         timeout, idle_timeout,
+                         ttft_ref) -> Optional[str]:
         """Monitor a running process for output, idle timeout, and hard timeout.
 
         Returns STATUS_TIMEOUT or STATUS_KILLED for abnormal exits,
@@ -112,12 +119,15 @@ class ProcessMonitor:
         return ProcessMonitor._monitor_process_unix(
             proc, stdout_chunks, stderr_chunks,
             timeout=timeout, idle_timeout=idle_timeout,
+            ttft_ref=ttft_ref,
         )
 
     @staticmethod
+    # pylint: disable=too-many-arguments
     def _monitor_process_unix(proc, stdout_chunks,
                               stderr_chunks, *,
-                              timeout, idle_timeout) -> Optional[str]:
+                              timeout, idle_timeout,
+                              ttft_ref) -> Optional[str]:
         """Unix implementation using select() for idle-timeout detection."""
         import select  # pylint: disable=import-outside-toplevel
         start = time.time()
@@ -145,6 +155,10 @@ class ProcessMonitor:
                 if data:
                     last_activity = time.time()
                     if stream == proc.stdout:
+                        if not ttft_ref:
+                            ttft_ref.append(
+                                time.time() - start,
+                            )
                         stdout_chunks.append(data)
                     else:
                         stderr_chunks.append(data)

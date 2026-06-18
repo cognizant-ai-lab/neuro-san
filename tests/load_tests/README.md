@@ -12,6 +12,7 @@ and report results. Uses real LLM calls via `agent_cli` subprocesses.
 - [Pre-Run Summary and Dry-Run Probe](#pre-run-summary-and-dry-run-probe)
 - [Agent Profiles](#agent-profiles)
 - [Output](#output)
+- [Latency Analysis](#latency-analysis)
 - [Exit Codes](#exit-codes)
 - [Code Quality](#code-quality)
 - [Architecture](#architecture)
@@ -254,7 +255,8 @@ the JSON to ChatGPT/Claude/Gemini and say "analyze this" — no prompt
 engineering needed.
 
 Each stage summary contains:
-- Per-request results (status, duration, tokens, cost, model, errors)
+- Per-request results (status, duration, TTFT, start/end times, tokens,
+  cost, model, errors)
 - Server log data (retries, disconnections, amplification, server counts)
 - Per-sub-network token breakdowns (`network_tokens`) when
   `--server-log` is provided — each entry has `network`, `llm_calls`,
@@ -263,6 +265,68 @@ Each stage summary contains:
 
 Resource rows contain server/client snapshots (RSS, threads, FDs, CPU)
 captured before and after each round (flat mode) or stage (ramp mode).
+
+## Latency Analysis
+
+After each test run, a `LATENCY ANALYSIS` section reports LLM bottleneck
+diagnostics:
+
+### Latency percentiles
+
+Per-stage min/P50/P90/P99/max/avg shows the spread of response times:
+
+```
+Stage  Reqs   Min    P50    P90    P99    Max    Avg
+    1    50   8.2s  12.1s  18.5s  25.0s  30.2s  12.8s
+    1    50   9.1s  13.5s  20.1s  28.3s  35.0s  14.2s
+```
+
+### Latency histogram
+
+Distribution of request completion times per stage:
+
+```
+  Latency distribution (Round 1, 50 requests):
+    < 10s       5 ( 10.0%) #####
+    10-30s     35 ( 70.0%) ###################################
+    30-60s      8 ( 16.0%) ########
+    60-120s     2 (  4.0%) ##
+    > 300s      0 (  0.0%)
+```
+
+### Time-to-first-token (TTFT)
+
+Measures how long before the LLM starts producing output. High TTFT
+indicates the request is queued waiting for LLM capacity:
+
+```
+Stage  Reqs  Min TTFT  P50 TTFT  P90 TTFT  Max TTFT
+    1    50     2.1s      5.3s      8.9s     15.2s
+```
+
+### Round-over-round degradation
+
+Compares average latency at the same concurrency across rounds.
+Increasing latency indicates LLM performance degradation under
+sustained load:
+
+```
+  Latency degradation (round-over-round):
+    50 concurrent: 12.8s -> 14.2s -> 16.1s (+26%)
+```
+
+### Concurrency timeline
+
+Shows actual in-flight request count over time (ASCII chart). Reveals
+whether the LLM serializes concurrent requests:
+
+```
+  Concurrency timeline (stage 1, round 1, 50 planned):
+    Peak in-flight: 50
+      0s |########################################| 50
+     30s |################################        | 40
+     60s |########################                | 30
+```
 
 ## Exit Codes
 
@@ -321,6 +385,7 @@ tests/load_tests/
   reporting/
     disconnection_reporter.py  DisconnectionReporter
     json_metadata.py           JsonMetadata (self-documenting JSON)
+    latency_analyzer.py        LatencyAnalyzer (percentiles, TTFT, degradation)
     pool_analyzer.py           PoolAnalyzer
     resource_reporter.py       ResourceReporter
     summary.py                 SummaryReporter

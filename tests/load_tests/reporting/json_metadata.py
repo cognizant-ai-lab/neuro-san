@@ -150,6 +150,14 @@ class JsonMetadata:
                 "Seconds to wait after each stage for server "
                 "cleanup before taking the post-stage resource "
                 "snapshot.",
+            "results[].ttft":
+                "Time-to-first-token in seconds. Time from "
+                "request start until the first stdout output "
+                "is received from agent_cli.",
+            "results[].start_time":
+                "Unix timestamp when the request started.",
+            "results[].end_time":
+                "Unix timestamp when the request completed.",
         }
 
     @staticmethod
@@ -220,6 +228,9 @@ class JsonMetadata:
             "stage_timeout": "seconds",
             "total_timeout": "seconds",
             "settle_time": "seconds",
+            "ttft": "seconds",
+            "start_time": "unix_timestamp",
+            "end_time": "unix_timestamp",
             "rss": "megabytes",
             "cpu": "percent",
             "cost_usd": "USD",

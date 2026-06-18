@@ -88,6 +88,9 @@ class RequestResult(_RequestResultRequired, total=False):
     """
 
     error: Optional[str]
+    ttft: float
+    start_time: float
+    end_time: float
     total_tokens: int
     prompt_tokens: int
     completion_tokens: int

@@ -61,6 +61,7 @@ from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.reporting.disconnection_reporter import DisconnectionReporter
 from tests.load_tests.reporting.json_metadata import JsonMetadata
+from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
 from tests.load_tests.reporting.pool_analyzer import PoolAnalyzer
 from tests.load_tests.reporting.resource_reporter import ResourceReporter
 from tests.load_tests.reporting.summary import SummaryReporter
@@ -1100,6 +1101,15 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 )
 
             summary_reporter.log_overall_results()
+
+            latency_analyzer = LatencyAnalyzer(stage_summaries)
+            latency_analyzer.log_latency_analysis(
+                is_ramp=self.args.ramp,
+            )
+            latency_analyzer.log_degradation(
+                is_ramp=self.args.ramp,
+            )
+            latency_analyzer.log_concurrency_timeline()
 
             if monitor_resources:
                 total_client_reqs = sum(
