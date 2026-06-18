@@ -21,6 +21,7 @@ from typing import Type
 
 from langchain_core.language_models.base import BaseLanguageModel
 
+from neuro_san.internals.run_context.langchain.llms.anthropic_bedrock_llm_policy import AnthropicBedrockLlmPolicy
 from neuro_san.internals.run_context.langchain.llms.anthropic_llm_policy import AnthropicLlmPolicy
 from neuro_san.internals.run_context.langchain.llms.azure_llm_policy import AzureLlmPolicy
 from neuro_san.internals.run_context.langchain.llms.bedrock_llm_policy import BedrockLlmPolicy
@@ -71,6 +72,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         if self.class_to_llm_policy_type is None:
             self.class_to_llm_policy_type = {
                 "anthropic": AnthropicLlmPolicy,
+                "anthropic-bedrock": AnthropicBedrockLlmPolicy,
                 "azure-openai": AzureLlmPolicy,
                 "bedrock": BedrockLlmPolicy,
                 "gemini": GeminiLlmPolicy,
