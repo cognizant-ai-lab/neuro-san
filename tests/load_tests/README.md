@@ -121,7 +121,7 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--ramp`                   | off         | Enable ramp-up mode                          |
 | `--stages`                 | 10,30,50,100| Concurrency per stage in ramp mode           |
 | `--num-rounds`             | 1           | Repeat the full sequence N times             |
-| `--max-requests`           | 100 (flat) / sum(stages) * num_rounds (ramp) | Hard cap on total requests |
+| `--max-requests`           | sum(stages) * num_rounds | Hard cap on total requests |
 | `--timeout`                | 1200        | Hard timeout per request (seconds)           |
 | `--idle-timeout`           | 900         | Kill if no `agent_cli` output for N seconds (resets on activity) |
 | `--stage-timeout`          | 1500        | Hard timeout for entire stage/round (seconds). Kills remaining in-flight requests |

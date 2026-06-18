@@ -92,9 +92,7 @@ class InputValidator:
         """Return the effective max-requests cap."""
         if self._args.max_requests is not None:
             return self._args.max_requests
-        if self._args.ramp:
-            return sum(stages) * self._args.num_rounds
-        return 100
+        return sum(stages) * self._args.num_rounds
 
     # pylint: disable=too-many-arguments
     def confirm_cost(

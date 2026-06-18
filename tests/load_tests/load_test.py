@@ -161,8 +161,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             default=None,
             help="Hard cap on total requests across all "
                  "stages/rounds. Cost safeguard for real LLM calls."
-                 " Default: 100 for flat mode, sum(stages) * "
-                 "num_rounds for ramp mode.",
+                 " Default: sum(stages) * num_rounds.",
         )
         parser.add_argument(
             "--host",
