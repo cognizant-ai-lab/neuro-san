@@ -57,6 +57,7 @@ class StreamingChatHandler(BaseRequestHandler):
         self.heartbeat_frame: str = self._build_heartbeat_frame()
         self.last_send_ts = 0.0
         self.heartbeat_task: asyncio.Task = None
+        self.lock: asyncio.Lock = asyncio.Lock()  # protects request writes to output stream and last_send_ts updates
 
     @staticmethod
     def _build_heartbeat_frame() -> str:
@@ -143,13 +144,14 @@ class StreamingChatHandler(BaseRequestHandler):
                 result_generator = service.streaming_chat(request_dict, metadata)
                 async for result_dict in result_generator:
                     result_str: str = json.dumps(result_dict) + "\n"
-                    self.write(result_str)
-                    flush_ok = await self.do_flush()
+                    async with self.lock:
+                        self.write(result_str)
+                        flush_ok = await self.do_flush()
+                        self.last_send_ts = time.monotonic()
                     if flush_ok:
                         # Some flush was successful. This is good.
                         flushed_first_result = True
                         # Register the time of the last successful flush, so that we can adjust our heartbeat timing.
-                        self.last_send_ts = time.monotonic()
                     else:
                         # We tried flushing the result to no avail
                         if self._is_client_close_a_problem(is_event, flushed_first_result):
@@ -213,14 +215,15 @@ class StreamingChatHandler(BaseRequestHandler):
             try:
                 # self.heartbeat_frame already includes the ChatResponse envelope
                 # and a trailing newline (see _build_heartbeat_frame()).
-                self.write(self.heartbeat_frame)
-                flush_ok = await self.do_flush()
+                async with self.lock:
+                    self.write(self.heartbeat_frame)
+                    flush_ok = await self.do_flush()
+                    self.last_send_ts = time.monotonic()
                 if not flush_ok:
                     # We tried flushing the heartbeat with no success
                     # (most probably because connection is closed by a client).
                     # Finish heartbeat task
                     return
-                self.last_send_ts = time.monotonic()
                 time_to_sleep = self.heartbeat_interval_seconds
             except tornado.iostream.StreamClosedError:
                 return  # client gone; main loop's next flush will see it too
