@@ -82,6 +82,11 @@ at all levels by default (disable with `--no-tokens`).
 requests). These are applied automatically unless overridden with
 `--num-requests`, `--max-workers`, or `--num-rounds`.
 
+**`--max-workers` auto-matching:** When `--max-workers` is not explicitly
+set, it defaults to `--num-requests` so all requests fire concurrently.
+For example, `--num-requests 100` fires all 100 at once. Use
+`--max-workers 10` to throttle to 10 concurrent.
+
 When `--server-log` is omitted, server-log-dependent sections print
 "not available" in the output.  When `--server-log` is passed without
 a path and auto-detection fails, the load test aborts with an error
@@ -89,11 +94,15 @@ and suggests providing the path explicitly.
 
 ## Traffic Modes
 
-**Flat** (default): `--num-requests 10 --max-workers 5` — fixed concurrency.
+**Flat** (default): `--num-requests 10` — fixed concurrency. By default
+`--max-workers` matches `--num-requests` (all concurrent). Set
+`--max-workers` explicitly to limit concurrency:
+`--num-requests 100 --max-workers 10` fires 100 requests, 10 at a time.
+Flat mode output labels each iteration as a "round" (no stage numbers).
 
 **Ramp-up**: `--ramp --stages 2,4,8,16` — escalating concurrency across
 stages. Each stage fires N concurrent requests, waits for completion,
-then moves to the next.
+then moves to the next. Output labels each batch as `[STAGE N]`.
 
 ## Flags
 
@@ -107,8 +116,8 @@ then moves to the next.
 | `--profile-path`           | auto        | Directory containing profile JSON files (or `LOAD_TEST_PROFILE_PATH` env var) |
 | `--host`                   | localhost   | Neuro-san server host                        |
 | `--port`                   | 8080        | Neuro-san server port                        |
-| `--num-requests`           | 3           | Requests per stage in flat mode              |
-| `--max-workers`            | 3           | Concurrent workers in flat mode              |
+| `--num-requests`           | 3           | Requests per round in flat mode              |
+| `--max-workers`            | = num-requests | Concurrent workers in flat mode. Defaults to `--num-requests` (all concurrent) |
 | `--ramp`                   | off         | Enable ramp-up mode                          |
 | `--stages`                 | 10,30,50,100| Concurrency per stage in ramp mode           |
 | `--num-rounds`             | 1           | Repeat the full sequence N times             |
@@ -223,7 +232,7 @@ Each stage summary contains:
   `cost`, and `model`
 
 Resource rows contain server/client snapshots (RSS, threads, FDs, CPU)
-captured before and after each stage.
+captured before and after each round (flat mode) or stage (ramp mode).
 
 ## Exit Codes
 
@@ -254,7 +263,9 @@ This framework follows three review playbooks:
   signed delta formatting (no more `+-3.0M`), Windows compatibility
   fallbacks (`num_fds`/`select.select`/closed-pipe guards/temp dir),
   clean error on invalid `--stages`, `ServerCounts` partial TypedDict,
-  auto-resolve profile from agent name.
+  auto-resolve profile from agent name, `--max-workers` auto-matches
+  `--num-requests`, `adv` level defaults (50×50×3), flat mode hides
+  stage labels and uses round-based output.
 
 Lint status: flake8 clean, pylint 10.00/10.
 
