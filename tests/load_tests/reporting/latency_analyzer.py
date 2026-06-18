@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 
-"""Latency analysis — percentiles, histograms, degradation, and
+"""Latency analysis — completion timeline, TTFT, degradation, and
 concurrency timeline for diagnosing LLM bottlenecks.
 """
 
@@ -28,8 +28,8 @@ from tests.load_tests.reporting.table_formatter import TableFormatter
 
 logger = logging.getLogger(__name__)
 
-# Histogram bucket boundaries in seconds
-HISTOGRAM_BUCKETS = [10, 30, 60, 120, 300]
+# Cumulative completion milestones (percent)
+COMPLETION_MILESTONES = [50, 60, 70, 80, 90, 95, 100]
 
 
 def _percentile(sorted_values, pct):
@@ -52,74 +52,47 @@ class LatencyAnalyzer:
         self._summaries = stage_summaries
 
     # ----------------------------------------------------------
-    # 1. Latency percentiles + histogram per stage
+    # 1. Cumulative completion timeline per stage
     # ----------------------------------------------------------
 
     def log_latency_analysis(self, *, is_ramp=True) -> None:
-        """Log latency percentiles and histogram for each stage."""
+        """Log completion timeline and TTFT for each stage."""
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         logger.info("  LATENCY ANALYSIS")
         logger.info("=" * SEPARATOR_WIDTH)
 
-        self._log_percentile_table(is_ramp=is_ramp)
-        self._log_histogram(is_ramp=is_ramp)
+        self._log_completion_timeline(is_ramp=is_ramp)
         self._log_ttft_summary(is_ramp=is_ramp)
 
-    def _log_percentile_table(self, *, is_ramp) -> None:
-        """Log min/P50/P90/P99/max per stage as a table."""
-        first_col = "Stage" if is_ramp else "Round"
-        header = [
-            first_col, "Reqs", "Min", "P50", "P90",
-            "P99", "Max", "Avg",
-        ]
-        rows = []
+    def _log_completion_timeline(self, *, is_ramp) -> None:
+        """Log cumulative request completion milestones per stage."""
         for summary in self._summaries:
             latencies = self._extract_latencies(summary)
             if not latencies:
                 continue
             latencies.sort()
-            label = str(
-                summary.get("stage") if is_ramp
-                else summary.get(
-                    "round", summary.get("stage"),
-                )
-            )
-            rows.append((
-                label,
-                str(len(latencies)),
-                f"{latencies[0]:.1f}s",
-                f"{_percentile(latencies, 50):.1f}s",
-                f"{_percentile(latencies, 90):.1f}s",
-                f"{_percentile(latencies, 99):.1f}s",
-                f"{latencies[-1]:.1f}s",
-                f"{sum(latencies) / len(latencies):.1f}s",
-            ))
-        if rows:
-            logger.info("\n  Latency percentiles:")
-            TableFormatter.log_table(header, rows)
-
-    def _log_histogram(self, *, is_ramp) -> None:
-        """Log latency distribution histogram per stage."""
-        for summary in self._summaries:
-            latencies = self._extract_latencies(summary)
-            if not latencies:
-                continue
-            label = (
-                f"Stage {summary.get('stage')}" if is_ramp
-                else f"Round {summary.get('round', summary.get('stage'))}"
-            )
-            buckets = self._build_histogram(latencies)
             total = len(latencies)
+            stage = summary.get("stage", "?")
+            rnd = summary.get("round", "?")
+            if is_ramp:
+                label = f"Stage {stage}"
+                if rnd != "?":
+                    label += f", round {rnd}"
+            else:
+                label = f"Round {rnd}"
             logger.info(
-                "\n  Latency distribution (%s, %s requests):",
+                "\n  Request completion timeline "
+                "(%s, %s requests):",
                 label, total,
             )
-            for bucket_label, count in buckets:
-                pct = count * 100.0 / total if total else 0
-                chart = "#" * int(pct / 2)
+            for pct in COMPLETION_MILESTONES:
+                count = int(
+                    math.ceil(pct / 100.0 * total),
+                )
+                duration = _percentile(latencies, pct)
                 logger.info(
-                    "    %-10s %3d (%5.1f%%) %s",
-                    bucket_label, count, pct, chart,
+                    "    %3d%% (%d requests) completed by %.1fs",
+                    pct, count, duration,
                 )
 
     def _log_ttft_summary(self, *, is_ramp) -> None:
@@ -198,7 +171,7 @@ class LatencyAnalyzer:
             )
 
     # ----------------------------------------------------------
-    # 4. Concurrent request timeline
+    # 3. Concurrent request timeline
     # ----------------------------------------------------------
 
     def log_concurrency_timeline(self) -> None:
@@ -221,6 +194,43 @@ class LatencyAnalyzer:
                 "    Peak in-flight: %s", peak,
             )
             self._log_timeline_chart(timeline)
+
+    # ----------------------------------------------------------
+    # 4. Agent timing from thinking files
+    # ----------------------------------------------------------
+
+    def log_agent_timing(self) -> None:
+        """Log per-agent timing aggregated from thinking files."""
+        agent_timings: Dict[str, List[float]] = {}
+        for summary in self._summaries:
+            results = summary.get("results", [])
+            for result in results:
+                thinking = result.get("thinking_timing", {})
+                for agent_name, duration in thinking.items():
+                    agent_timings.setdefault(
+                        agent_name, [],
+                    ).append(duration)
+        if not agent_timings:
+            return
+        logger.info("\n  Agent timing (from thinking files):")
+        header = [
+            "Agent", "Calls", "Avg", "Min",
+            "P50", "P90", "Max",
+        ]
+        rows = []
+        for agent_name in sorted(agent_timings.keys()):
+            durations = sorted(agent_timings[agent_name])
+            avg = sum(durations) / len(durations)
+            rows.append((
+                agent_name,
+                str(len(durations)),
+                f"{avg:.1f}s",
+                f"{durations[0]:.1f}s",
+                f"{_percentile(durations, 50):.1f}s",
+                f"{_percentile(durations, 90):.1f}s",
+                f"{durations[-1]:.1f}s",
+            ))
+        TableFormatter.log_table(header, rows)
 
     # ----------------------------------------------------------
     # Helpers
@@ -249,29 +259,6 @@ class LatencyAnalyzer:
             for r in results
             if r.get("ttft", 0) > 0
         ]
-
-    @staticmethod
-    def _build_histogram(
-            latencies,
-    ) -> List[Tuple[str, int]]:
-        """Build histogram buckets from latency values."""
-        buckets: List[Tuple[str, int]] = []
-        prev = 0
-        for boundary in HISTOGRAM_BUCKETS:
-            label = f"< {boundary}s" if prev == 0 else (
-                f"{prev}-{boundary}s"
-            )
-            count = sum(
-                1 for v in latencies
-                if prev <= v < boundary
-            )
-            buckets.append((label, count))
-            prev = boundary
-        over_count = sum(
-            1 for v in latencies if v >= HISTOGRAM_BUCKETS[-1]
-        )
-        buckets.append((f"> {HISTOGRAM_BUCKETS[-1]}s", over_count))
-        return buckets
 
     def _group_by_concurrency(
             self,

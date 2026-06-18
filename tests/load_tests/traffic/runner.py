@@ -17,6 +17,7 @@
 
 import logging
 import os
+import tempfile
 import threading
 import time
 from concurrent.futures import as_completed
@@ -35,6 +36,7 @@ from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.config import THREAD_JOIN_TIMEOUT
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.monitoring.heartbeat import Heartbeat
+from tests.load_tests.reporting.thinking_parser import ThinkingParser
 from tests.load_tests.traffic.cli_builder import CliBuilder
 from tests.load_tests.traffic.process_monitor import ProcessMonitor
 
@@ -64,6 +66,13 @@ class TrafficRunner:
         )
         prompt_file = CliBuilder.write_prompt_file(global_request_id, prompt)
 
+        thinking_file = None
+        if getattr(self._args, "include_thinking", False):
+            thinking_file = os.path.join(
+                tempfile.gettempdir(),
+                f"load_test_thinking_{global_request_id}.txt",
+            )
+
         try:
             start = time.time()
             status, stdout, stderr, returncode, ttft = (
@@ -72,6 +81,7 @@ class TrafficRunner:
                         self._args.host, self._args.port,
                         self._args.agent, prompt_file,
                         include_tokens=self._args.include_tokens,
+                        thinking_file=thinking_file,
                     ),
                     self._args.request_timeout, self._args.idle_timeout,
                 )
@@ -113,6 +123,15 @@ class TrafficRunner:
             result.update(parsed_fields)
             if self._args.include_tokens:
                 self._attach_token_data(result, stdout)
+            if thinking_file is not None:
+                thinking_dir, _ = os.path.splitext(
+                    thinking_file,
+                )
+                timing = ThinkingParser.parse_thinking_dir(
+                    thinking_dir,
+                )
+                if timing:
+                    result["thinking_timing"] = timing
             return result
         finally:
             CliBuilder.cleanup_prompt_file(prompt_file)

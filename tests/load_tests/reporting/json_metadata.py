@@ -158,6 +158,10 @@ class JsonMetadata:
                 "Unix timestamp when the request started.",
             "results[].end_time":
                 "Unix timestamp when the request completed.",
+            "results[].thinking_timing":
+                "Per-agent timing from thinking files. Dict of "
+                "agent_name -> duration_seconds. Only present "
+                "when --include-thinking is enabled.",
         }
 
     @staticmethod

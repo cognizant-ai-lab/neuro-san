@@ -91,6 +91,7 @@ class RequestResult(_RequestResultRequired, total=False):
     ttft: float
     start_time: float
     end_time: float
+    thinking_timing: Dict[str, float]
     total_tokens: int
     prompt_tokens: int
     completion_tokens: int

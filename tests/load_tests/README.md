@@ -136,6 +136,7 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--same-prompt`            | off         | Use identical prompt for all requests        |
 | `--yes`                    | off         | Skip cost confirmation (adv only). Auto-matches `--max-workers` to `--num-requests` |
 | `--skip-reservation-check` | off         | Skip reservation_id validation               |
+| `--include-thinking`       | off         | Enable per-request thinking files for agent timing analysis |
 | `--output-dir`             | (none)      | Base directory for test output               |
 | `--project-root`           | (none)      | Project root for profile discovery           |
 
@@ -271,27 +272,20 @@ captured before and after each round (flat mode) or stage (ramp mode).
 After each test run, a `LATENCY ANALYSIS` section reports LLM bottleneck
 diagnostics:
 
-### Latency percentiles
+### Request completion timeline
 
-Per-stage min/P50/P90/P99/max/avg shows the spread of response times:
-
-```
-Stage  Reqs   Min    P50    P90    P99    Max    Avg
-    1    50   8.2s  12.1s  18.5s  25.0s  30.2s  12.8s
-    1    50   9.1s  13.5s  20.1s  28.3s  35.0s  14.2s
-```
-
-### Latency histogram
-
-Distribution of request completion times per stage:
+Shows cumulative request completion milestones per stage — answers
+"how many requests came back after X time":
 
 ```
-  Latency distribution (Round 1, 50 requests):
-    < 10s       5 ( 10.0%) #####
-    10-30s     35 ( 70.0%) ###################################
-    30-60s      8 ( 16.0%) ########
-    60-120s     2 (  4.0%) ##
-    > 300s      0 (  0.0%)
+  Request completion timeline (Stage 1, 50 requests):
+     50% (25 requests) completed by 12.1s
+     60% (30 requests) completed by 14.3s
+     70% (35 requests) completed by 16.8s
+     80% (40 requests) completed by 19.2s
+     90% (45 requests) completed by 22.5s
+     95% (48 requests) completed by 26.1s
+    100% (50 requests) completed by 30.2s
 ```
 
 ### Time-to-first-token (TTFT)
@@ -326,6 +320,20 @@ whether the LLM serializes concurrent requests:
       0s |########################################| 50
      30s |################################        | 40
      60s |########################                | 30
+```
+
+### Agent timing (with `--include-thinking`)
+
+When `--include-thinking` is enabled, shows per-agent timing from
+thinking files — identifies which agent in the network is the
+bottleneck:
+
+```
+  Agent timing (from thinking files):
+  Agent          Calls  Avg    Min    P50    P90    Max
+  front_man         50  2.1s   1.2s   1.9s   3.2s   4.5s
+  sub_agent_1       50  6.4s   4.1s   5.9s   8.1s  12.3s
+  sub_agent_2       50  2.7s   1.8s   2.5s   3.5s   5.1s
 ```
 
 ## Exit Codes
@@ -385,7 +393,8 @@ tests/load_tests/
   reporting/
     disconnection_reporter.py  DisconnectionReporter
     json_metadata.py           JsonMetadata (self-documenting JSON)
-    latency_analyzer.py        LatencyAnalyzer (percentiles, TTFT, degradation)
+    latency_analyzer.py        LatencyAnalyzer (completion timeline, TTFT, degradation)
+    thinking_parser.py         ThinkingParser (per-agent timing from thinking files)
     pool_analyzer.py           PoolAnalyzer
     resource_reporter.py       ResourceReporter
     summary.py                 SummaryReporter

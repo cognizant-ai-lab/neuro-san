@@ -280,6 +280,14 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                  "present, even without a reservation_id.",
         )
         parser.add_argument(
+            "--include-thinking",
+            action="store_true",
+            default=False,
+            help="Enable per-request thinking files for agent "
+                 "timing analysis. Each request gets its own "
+                 "thinking directory. Adds I/O overhead.",
+        )
+        parser.add_argument(
             "--output-dir",
             type=str,
             default=None,
@@ -1110,6 +1118,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 is_ramp=self.args.ramp,
             )
             latency_analyzer.log_concurrency_timeline()
+            latency_analyzer.log_agent_timing()
 
             if monitor_resources:
                 total_client_reqs = sum(
