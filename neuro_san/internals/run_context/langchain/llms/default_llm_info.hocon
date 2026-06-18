@@ -701,7 +701,7 @@
     },
     "global.anthropic.claude-opus-4-8": {
         "class": "anthropic-bedrock",
-        "model_info_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-opus-4-8.html"
+        "model_info_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-opus-4-8.html",
         "modalities": {
             "input": [ "text", "image" ],
             "output": [ "text" ],
