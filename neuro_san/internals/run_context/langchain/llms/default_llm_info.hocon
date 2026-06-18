@@ -485,51 +485,6 @@
         "use_model_name": "claude-fable-5"
     },
 
-    "claude-sonnet-4-0": {
-        "use_model_name": "claude-sonnet-4-20250514"
-    },
-    "claude-sonnet-4-20250514": {
-        "class": "anthropic",
-        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
-        "modalities": {
-            "input": [ "text", "image" ],
-            "output": [ "text" ],
-        },
-        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
-        "capabilities": [ "tools" ],
-        "context_window_size": 200000,
-        "max_output_tokens": 64000,
-        "knowledge_cutoff": "03/2025",
-        # https://platform.claude.com/docs/en/about-claude/pricing
-        "price_per_1k_input_tokens": 0.003,
-        "price_per_1k_output_tokens": 0.015,
-        "model_launch_date": "2025-05-23",
-        "model_retirement_date": "2026-06-15",
-    },
-
-    "claude-opus-4-0": {
-        "use_model_name": "claude-opus-4-20250514"
-    },
-    "claude-opus-4-20250514": {
-        "class": "anthropic",
-        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
-        "modalities": {
-            "input": [ "text", "image" ],
-            "output": [ "text" ],
-        },
-        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
-        "capabilities": [ "tools" ],
-        "context_window_size": 200000,
-        "max_output_tokens": 32000,
-        "knowledge_cutoff": "03/2025",
-        # https://platform.claude.com/docs/en/about-claude/pricing
-        "price_per_1k_input_tokens": 0.015,
-        "price_per_1k_output_tokens": 0.075,
-        # AWS removed the Claude Opus 4 model card; launch date matches Claude Sonnet 4 (released as a pair).
-        "model_launch_date": "2025-05-23",
-        "model_retirement_date": "2026-06-15",
-    },
-
     "claude-opus-4-1": {
         "use_model_name": "claude-opus-4-1-20250805"
     },
@@ -713,6 +668,79 @@
     # which is invitation-only. Thus, we are not including it in the default LLM info at this time.
     # If it becomes generally available, we will add it to the registry with the appropriate details.
 
+    # Anthropic Claude via AWS Bedrock (class: "anthropic-bedrock")
+    #
+    # Recommendation: for Anthropic Claude on Bedrock, prefer this class over the
+    # legacy "bedrock" class. Reach for "bedrock" only when you need a
+    # non-Anthropic Bedrock model (Amazon Nova, Mistral, Meta Llama, AI21,
+    # Cohere, etc.).
+    #
+    # Why this section instead of the "bedrock" class further down:
+    #   * Built on the anthropic SDK's AnthropicBedrock / AsyncAnthropicBedrock
+    #     clients, so requests are fully async. The "bedrock" class uses boto3,
+    #     which is synchronous and serializes concurrent calls inside a worker.
+    #   * Exposes ChatAnthropic's parameter surface (thinking, effort,
+    #     mcp_servers, context_management, ...). The boto3 path does not.
+    #
+    # Cross-region inference profiles
+    # -------------------------------
+    # Bedrock routes Claude requests through inference profiles whose IDs are
+    # region-prefixed: "global." (any AWS region — typically cheapest and lowest
+    # latency) or geographic prefixes like "us.", "eu.", "apac." (which keep
+    # inference inside that geography for data residency or to reach models
+    # that are not exposed globally).
+    # See https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference.html
+    #
+    # The defaults below use the global profile. To pin to a geographic profile
+    # instead, swap the prefix on both the alias's "use_model_name" and the
+    # entry key, e.g.:
+    #     global.anthropic.claude-opus-4-8  ->  us.anthropic.claude-opus-4-8
+
+    "bedrock-claude-opus": {
+        "use_model_name": "global.anthropic.claude-opus-4-8"
+    },
+    "global.anthropic.claude-opus-4-8": {
+        "class": "anthropic-bedrock",
+        "model_info_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-opus-4-8.html"
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "01/2026",
+    },
+    "bedrock-claude-sonnet": {
+        "use_model_name": "global.anthropic.claude-sonnet-4-6"
+    },
+    "global.anthropic.claude-sonnet-4-6": {
+        "class": "anthropic-bedrock",
+        "model_info_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-4-6.html"
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 200000,
+        "max_output_tokens": 64000,
+        "knowledge_cutoff": "01/2026",
+    },
+    "bedrock-claude-haiku": {
+        "use_model_name": "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+    },
+    "global.anthropic.claude-haiku-4-5-20251001-v1:0": {
+        "class": "anthropic-bedrock",
+        "model_info_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-haiku-4-5.html"
+         "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 200000,
+        "max_output_tokens": 64000,
+        "knowledge_cutoff": "07/2025",
+    },
 
     # Ollama models
     # See https://ollama.com/search?c=tools for latest in tool-supporting Ollama models
@@ -1066,30 +1094,24 @@
         "model_launch_date": "2025-07-22",
         "model_retirement_date": "2026-10-16",
     },
-    # Bedrock
 
+    # Bedrock (class: "bedrock") — boto3-based ChatBedrock
+    #
+    # Do not pick this class for Anthropic Claude — use the "anthropic-bedrock"
+    # class further up instead. It is async, exposes ChatAnthropic's full
+    # parameter surface (thinking, effort, mcp_servers, context_management,
+    # ...), and avoids the per-process serialization boto3 imposes. The Claude
+    # entry below is kept only for backward compatibility with networks that
+    # still reference it.
+    #
+    # Reach for the "bedrock" class only when you need a non-Anthropic Bedrock
+    # model (Amazon Nova, Mistral, Meta Llama, AI21, Cohere, etc.).
+    #
     # These models require access to AWS endpoints in either us-east-1, us-east-2, or us-west-2
     # Also know that so far as of 10/7/2025, all bedrock models use synchronous clients,
     # which might not be the most performant choice for a server situation.
     # Consider bugging the maintainers of langchain-aws for async functionality.
 
-    "bedrock-us-claude-opus-4": {
-        "use_model_name": "us.anthropic.claude-opus-4-20250514-v1:0"
-    },
-    "us.anthropic.claude-opus-4-20250514-v1:0": {
-        # Per AWS, this will sunset on 3/1/2026
-        "class": "bedrock",
-        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
-        "modalities": {
-            "input": [ "text", "image" ],
-            "output": [ "text" ],
-        },
-        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
-        "capabilities": [ "tools" ],
-        "context_window_size": 200000,
-        "max_output_tokens": 32000,
-        "knowledge_cutoff": "03/2025",
-    },
     "bedrock-us-claude-sonnet-4": {
         "use_model_name": "us.anthropic.claude-sonnet-4-20250514-v1:0"
     },
@@ -1105,6 +1127,9 @@
         "context_window_size": 200000,
         "max_output_tokens": 64000,
         "knowledge_cutoff": "03/2025",
+        "model_launch_date": "2025-05-23",
+        # https://docs.aws.amazon.com/bedrock/latest/userguide/model-lifecycle.html
+        "model_retirement_date": "2026-10-14",
     },
 
     # OpenRouter

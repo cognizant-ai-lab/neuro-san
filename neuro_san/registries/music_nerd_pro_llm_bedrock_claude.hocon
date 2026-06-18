@@ -21,7 +21,7 @@
 {
     # Optional metadata describing this agent network
     "metadata": {
-        "description": "Simple agent network using a single Bedrock-based agent and a single CodedTool",
+        "description": "Simple agent network using a single Anthropic-Bedrock-based agent and a single CodedTool",
         "tags": ["example", "llm_tests"],
         "sample_queries": [
             "Which band wrote Yellow Submarine?",
@@ -29,7 +29,54 @@
         ]
     },
     "llm_config": {
-        "model_name": "bedrock-us-claude-sonnet-4",
+        # For Anthropic Claude on Bedrock, prefer the "anthropic-bedrock" class
+        # over the legacy "bedrock" class: it is async, exposes ChatAnthropic's
+        # full parameter surface (thinking, effort, mcp_servers,
+        # context_management, ...), and avoids the per-process serialization
+        # boto3 imposes. Reach for "bedrock" only when you need a non-Anthropic
+        # Bedrock model (Amazon Nova, Mistral, Meta Llama, AI21, Cohere, etc.).
+        #
+        # AWS authentication
+        # ------------------
+        # Both classes resolve credentials through the standard AWS credential
+        # chain. Pick whichever style fits your environment:
+        #   * Explicit keys:   AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY
+        #                      (plus optional AWS_SESSION_TOKEN for temporary
+        #                      / SSO credentials)
+        #   * Named profile:   AWS_PROFILE pointing at an entry in
+        #                      ~/.aws/credentials / ~/.aws/config
+        #   * EC2 / ECS / Lambda instance roles and IMDS also work with no env
+        #     vars set.
+        # Region resolution falls back to AWS_REGION, then AWS_DEFAULT_REGION,
+        # then the profile's configured region.
+        #
+        # You can also override any of these inline in llm_config — env vars are
+        # only the fallback. Keys are "region_name", "aws_access_key_id",
+        # "aws_secret_access_key", "aws_session_token". Example:
+        #     "llm_config": {
+        #         "model_name": "bedrock-claude-sonnet",
+        #         "region_name": "eu-west-1",
+        #         "aws_access_key_id": "AKIA...",
+        #         "aws_secret_access_key": "..."
+        #     }
+        # Do not check real secrets into source control — prefer env vars or
+        # sly_data (see the Client-Provided API Keys section of
+        # docs/agent_hocon_reference.md) for credentials in checked-in files.
+        #
+        # Bedrock addresses Claude models by cross-region inference profile id,
+        # e.g.:
+        #     global.anthropic.claude-opus-4-8     (any region, default)
+        #     us.anthropic.claude-opus-4-8         (US-only)
+        #     eu.anthropic.claude-opus-4-8         (EU-only)
+        # See https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference.html
+        #
+        # The aliases below — "bedrock-claude-opus", "bedrock-claude-sonnet",
+        # "bedrock-claude-haiku" — are defined in default_llm_info.hocon and
+        # resolve to the "global." profile of each line. To pin to a geographic
+        # region, use the full prefixed id directly (e.g.
+        # "us.anthropic.claude-opus-4-8") and also set "class": "anthropic-bedrock"
+        # so the policy lookup succeeds without a matching llm_info entry.
+        "model_name": "bedrock-claude-sonnet",
     },
     "tools": [
         # This first agent definition is regarded as the "Front Man", which

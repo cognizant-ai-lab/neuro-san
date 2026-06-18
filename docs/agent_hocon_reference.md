@@ -203,16 +203,25 @@ branches off work to any other agent/tool.  You can browse the `capabilities` se
 The most common situation is one where you will need your own access key set as an environment variable in order
 to use LLMs from various providers.
 
-| LLM Provider  | API Key environment variable                   |
-|:--------------|:-----------------------------------------------|
-| Amazon Bedrock| AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY    |
-| Anthropic     | ANTHROPIC_API_KEY                              |
-| Azure OpenAI  | AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT |
-| Google Gemini | GOOGLE_API_KEY                                 |
-| NVidia        | NVIDIA_API_KEY                                 |
-| Ollma         | &lt;None required&gt;                          |
-| OpenAI        | OPENAI_API_KEY                                 |
-| OpenRouter    | OPENROUTER_API_KEY                             |
+| LLM Provider               | API Key environment variable                                 |
+|:---------------------------|:-------------------------------------------------------------|
+| Amazon Bedrock             | AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or AWS_PROFILE  |
+| Anthropic                  | ANTHROPIC_API_KEY                                            |
+| Anthropic via Bedrock      | AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or AWS_PROFILE  |
+| Azure OpenAI               | AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT               |
+| Google Gemini              | GOOGLE_API_KEY                                               |
+| NVidia                     | NVIDIA_API_KEY                                               |
+| Ollma                      | &lt;None required&gt;                                        |
+| OpenAI                     | OPENAI_API_KEY                                               |
+| OpenRouter                 | OPENROUTER_API_KEY                                           |
+
+For the Bedrock-based entries you can either set explicit credentials via
+`AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` (plus optional `AWS_SESSION_TOKEN`
+for temporary credentials), or point at a named profile in `~/.aws/credentials`
+via `AWS_PROFILE`. Both classes resolve credentials through the standard AWS
+credential chain, so SSO, EC2 instance roles, IMDS, and `AWS_DEFAULT_REGION` /
+`AWS_REGION` env vars all work the same way they do for any boto3 / anthropic-SDK
+call.
 
 **Anthropic Model Names:** The model names `claude-haiku`, `claude-sonnet`, `claude-opus`, and `claude-fable`
 are aliases that automatically reference the latest versions of their respective Anthropic model lines.
@@ -231,6 +240,29 @@ unset in `default_llm_info.hocon` — see the
 [llm_info_hocon_reference](./llm_info_hocon_reference.md#max_output_tokens) for what that means in practice.
 This integration requires the [`langchain-openrouter`](https://docs.langchain.com/oss/python/integrations/chat/openrouter)
 package, which neuro-san lazy-installs on first use.
+
+**Anthropic Claude on Bedrock — pick the right class:** AWS Bedrock can host Anthropic Claude models
+under two different langchain classes, and neuro-san wires up both:
+
+- `anthropic-bedrock` (recommended for Claude) — built on the `anthropic` SDK's
+  `AnthropicBedrock` / `AsyncAnthropicBedrock` clients. Fully async, and exposes
+  `ChatAnthropic`'s full parameter surface (`thinking`, `effort`, `mcp_servers`,
+  `context_management`, …).
+- `bedrock` — the legacy boto3-based `ChatBedrock`. Synchronous and serializes concurrent
+  calls inside a worker, and does not expose the Anthropic-specific knobs above. Reach for it
+  only when you need a non-Anthropic Bedrock model (Amazon Nova, Mistral, Meta Llama, AI21,
+  Cohere, etc.).
+
+Bedrock addresses Claude models by cross-region inference profile id with a region prefix
+(`global.`, `us.`, `eu.`, `apac.`), e.g. `global.anthropic.claude-opus-4-8` or
+`us.anthropic.claude-opus-4-8`. The short aliases in `default_llm_info.hocon`
+(`bedrock-claude-opus`, `bedrock-claude-sonnet`, `bedrock-claude-haiku`) all resolve to the
+`global.` profile; swap the prefix on both the alias's `use_model_name` and the target entry
+key to pin to a geographic region. See
+[AWS cross-region inference docs](https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference.html)
+for the trade-offs. The `anthropic-bedrock` class is provided by the
+[`langchain-aws[anthropic]`](https://docs.langchain.com/oss/python/integrations/chat/bedrock#chatanthropicbedrock)
+extra, which neuro-san lazy-installs on first use.
 
 **Security Best Practice:** _We strongly recommend to **not** set secrets as values within any source file._
 These files tend to creep into source control repos, and it is **very** bad practice
@@ -286,15 +318,17 @@ You can use the `class` key in two ways:
 
 Set the `class` key to one of the values listed below, then specify the model using the `model_name` key.
 
-| LLM Provider  | Class Value   |
-|:--------------|:--------------|
-| Anthropic     | anthropic     |
-| Azure OpenAI  | azure-openai  |
-| Google Gemini | gemini        |
-| NVidia        | nvidiea       |
-| Ollma         | ollama        |
-| OpenAI        | openai        |
-| OpenRouter    | openrouter    |
+| LLM Provider               | Class Value         |
+|:---------------------------|:--------------------|
+| Anthropic                  | anthropic           |
+| Anthropic via Bedrock      | anthropic-bedrock   |
+| Azure OpenAI               | azure-openai        |
+| Bedrock (non-Anthropic)    | bedrock             |
+| Google Gemini              | gemini              |
+| NVidia                     | nvidiea             |
+| Ollma                      | ollama              |
+| OpenAI                     | openai              |
+| OpenRouter                 | openrouter          |
 
 You may only provide parameters that are explicitly defined for that provider's class under the
 `classes.<class>.args` section of
