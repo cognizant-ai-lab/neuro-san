@@ -229,3 +229,34 @@ class OutputValidator:
                 agent_name, agent_name,
             )
         return True
+
+    @staticmethod
+    def check_timeout_abort(
+            counts: "StatusCounts",
+    ) -> bool:
+        """Check if any requests hit a timeout or were killed.
+
+        Returns True if the test should abort because at least one
+        request exceeded its idle-timeout, request-timeout, or was
+        killed by stage-timeout.
+        """
+        timed_out = counts.get(STATUS_TIMEOUT, 0)
+        killed = counts.get(STATUS_KILLED, 0)
+        total_bad = timed_out + killed
+        if total_bad == 0:
+            return False
+        parts = []
+        if timed_out:
+            parts.append(
+                f"{timed_out} timed out"
+            )
+        if killed:
+            parts.append(
+                f"{killed} killed by stage-timeout"
+            )
+        logger.warning(
+            "\n  ABORT: %s — %s.\n"
+            "  Stopping test and reporting available results.",
+            ", ".join(parts), f"{total_bad} request(s) failed",
+        )
+        return True

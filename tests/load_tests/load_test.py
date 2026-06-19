@@ -387,6 +387,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         stage_summaries: List[StageSummary] = []
         global_offset = 0
         total_sent = 0
+        test_start = time.time()
 
         for round_num in range(1, self.args.num_rounds + 1):
             if self.args.num_rounds > 1:
@@ -405,6 +406,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                         total_cap, total_sent, total_planned,
                         total_planned,
                     )
+                    return stage_summaries
+
+                if self._total_timeout_reached(test_start):
+                    self._aborted = True
                     return stage_summaries
 
                 remaining = total_cap - total_sent
@@ -433,6 +438,25 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     return stage_summaries
 
         return stage_summaries
+
+    def _total_timeout_reached(self, test_start) -> bool:
+        """Check if total-timeout has been exceeded.
+
+        Returns True and logs a warning when the elapsed time since
+        test_start exceeds --total-timeout (0 means disabled).
+        """
+        limit = self.args.total_timeout
+        if limit <= 0:
+            return False
+        elapsed = time.time() - test_start
+        if elapsed < limit:
+            return False
+        logger.warning(
+            "\n  ABORT: --total-timeout (%ss) reached after %.0fs.\n"
+            "  Stopping test and reporting available results.",
+            limit, elapsed,
+        )
+        return True
 
     # pylint: disable=too-many-locals,too-many-statements,too-many-branches
     # pylint: disable=too-many-arguments
@@ -574,6 +598,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         should_abort = OutputValidator.check_permission_failures(
             results, self.args.agent,
         )
+        if not should_abort:
+            should_abort = OutputValidator.check_timeout_abort(counts)
         if should_abort:
             summary_entry = self._build_stage_summary(
                 stage_num=stage_num,
@@ -1130,10 +1156,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
             if self._aborted:
                 exit_code = 1
-                self._export_raw_json(
-                    stage_summaries, exit_code=exit_code,
-                )
-                return exit_code
 
             summary_reporter = SummaryReporter(stage_summaries)
             if len(stage_summaries) > 1:
@@ -1192,7 +1214,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                         "not available (no --server-log)",
                     )
 
-            exit_code = self._check_results(stage_summaries)
+            if not self._aborted:
+                exit_code = self._check_results(stage_summaries)
             self._export_raw_json(
                 stage_summaries, exit_code=exit_code,
             )

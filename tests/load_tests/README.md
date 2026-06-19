@@ -140,6 +140,24 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--output-dir`             | (none)      | Base directory for test output               |
 | `--project-root`           | (none)      | Project root for profile discovery           |
 
+### Abort on timeout
+
+Any timeout aborts the entire test immediately and reports results
+collected so far:
+
+- **`--idle-timeout`**: A request produces no output for N seconds →
+  abort.
+- **`--request-timeout`**: A request exceeds its hard time limit →
+  abort.
+- **`--stage-timeout`**: A stage/round exceeds its limit, remaining
+  requests killed → abort.
+- **`--total-timeout`**: Overall test elapsed time exceeded → abort
+  before starting the next stage.
+
+On abort the test still runs the full reporting pipeline (latency
+analysis, completion timeline, summary file, raw JSON) on whatever
+results completed before the timeout.
+
 ## Pre-Run Summary and Dry-Run Probe
 
 Before firing the full test, the load test displays a PRE-RUN SUMMARY.
