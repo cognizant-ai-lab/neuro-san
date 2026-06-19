@@ -311,21 +311,24 @@ whether the LLM serializes concurrent requests:
      60s |########################                | 30
 ```
 
-### Per-request server timing (with `--server-log`)
+### Summary file (`--level adv` only)
 
-When `--server-log` is provided, parses Start/Finish streaming_chat
-timestamps to show per-request timing breakdown with sub-agent detail:
+At `adv` level, a human-readable `summary.txt` is written to the
+output directory. With `--yes` it is written automatically; without
+`--yes` the user is prompted.
+
+The summary includes per-request results, completion timeline, and
+(when `--server-log` is provided) a per-request server timing
+breakdown parsed from Start/Finish streaming_chat timestamps:
 
 ```
-  Per-request server timing (from server log):
-
-  request-1 (75.1s total):
-    Client -> Server:    4.0s
-    Server: agent_network_designer   71.0s
-      ├─ agent_network_editor        17.6s
-      ├─ agent_network_instructions_editor  27.9s
-      └─ agent_network_query_generator  6.3s
-    Server -> Client:    0.1s
+  request-1 (95.5s total):
+    Client -> Server:     4.5s
+    Server: agent_network_designer      90.8s
+      ├─ agent_network_editor            19.7s
+      ├─ agent_network_instructions_editor  44.4s
+      └─ agent_network_query_generator    8.4s
+    Server -> Client:     0.2s
 ```
 
 ## Exit Codes
@@ -385,7 +388,8 @@ tests/load_tests/
   reporting/
     disconnection_reporter.py  DisconnectionReporter
     json_metadata.py           JsonMetadata (self-documenting JSON)
-    latency_analyzer.py        LatencyAnalyzer (completion timeline, degradation, server timing)
+    latency_analyzer.py        LatencyAnalyzer (completion timeline, degradation)
+    summary_file_writer.py     SummaryFileWriter (summary.txt output)
     pool_analyzer.py           PoolAnalyzer
     resource_reporter.py       ResourceReporter
     summary.py                 SummaryReporter

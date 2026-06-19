@@ -65,6 +65,7 @@ from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
 from tests.load_tests.reporting.pool_analyzer import PoolAnalyzer
 from tests.load_tests.reporting.resource_reporter import ResourceReporter
 from tests.load_tests.reporting.summary import SummaryReporter
+from tests.load_tests.reporting.summary_file_writer import SummaryFileWriter
 from tests.load_tests.traffic.runner import TrafficRunner
 from tests.load_tests.validation.environment_validator import EnvironmentValidator
 from tests.load_tests.validation.input_validator import InputValidator
@@ -1115,15 +1116,13 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             )
             latency_analyzer.log_concurrency_timeline()
 
+            server_chat_timing = []
             if self.server_log and pre_test_log_pos is not None:
                 server_chat_timing = (
                     self.log_monitor
                     .parse_streaming_chat_timing_since(
                         pre_test_log_pos,
                     )
-                )
-                LatencyAnalyzer.log_server_timing(
-                    server_chat_timing, stage_summaries,
                 )
 
             if monitor_resources:
@@ -1160,6 +1159,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             exit_code = self._check_results(stage_summaries)
             self._export_raw_json(
                 stage_summaries, exit_code=exit_code,
+            )
+            self._maybe_write_summary(
+                stage_summaries, server_chat_timing,
             )
         finally:
             self._finalize_test_log(stage_summaries)
@@ -1253,6 +1255,30 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         json_path = os.path.join(self._output_dir, "raw_results.json")
         with open(json_path, "w", encoding="utf-8") as fh:
             json.dump(raw_data, fh, indent=2, default=str)
+
+    def _maybe_write_summary(
+            self, stage_summaries, server_chat_timing,
+    ) -> None:
+        """Write summary.txt for adv level only.
+
+        With --yes: auto-write.  Without --yes: prompt the user.
+        """
+        if self.args.level != LEVEL_ADV:
+            return
+        if not getattr(self.args, "yes", False):
+            try:
+                answer = input(
+                    "\nSave summary.txt? [y/N] ",
+                )
+            except (EOFError, KeyboardInterrupt):
+                return
+            if answer.strip().lower() != "y":
+                return
+        writer = SummaryFileWriter(
+            stage_summaries, self.args,
+            server_chat_timing=server_chat_timing,
+        )
+        writer.write(self._output_dir)
 
     def _check_results(self, stage_summaries) -> int:
         """Log pass/fail verdict and return appropriate exit code."""
