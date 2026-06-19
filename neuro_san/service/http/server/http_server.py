@@ -317,5 +317,6 @@ class HttpServer(AgentStateListener):
             "forwarded_request_metadata": self.forwarded_request_metadata,
             "openapi_service_spec": open_api_dict,
             "server_context": self.server_context,
-            "logging_config": self.logging_config
+            "logging_config": self.logging_config,
+            "keep_alive_interval_seconds": self.server_config.stream_keep_alive_with_progress_interval_seconds,
         }
