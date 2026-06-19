@@ -95,6 +95,7 @@ class TrafficRunner:
                 parsed_fields=parsed_fields,
                 failure_reason=failure_reason,
                 stderr=stderr,
+                output_dir=output_dir,
             )
 
             result = {
@@ -221,7 +222,7 @@ class TrafficRunner:
             heartbeat_stop = threading.Event()
             heartbeat_ready = threading.Event()
             futures_ref: list = []
-            hb = Heartbeat(server_proc, client_proc)
+            hb = Heartbeat(server_proc, client_proc, output_dir)
             heartbeat_thread = threading.Thread(
                 target=hb.progress_heartbeat,
                 args=(futures_ref, num_requests, start,
@@ -320,8 +321,21 @@ class TrafficRunner:
 
     def _log_request_result(self, request_id, status, elapsed, *,
                             parsed_fields, failure_reason,
-                            stderr) -> None:
-        """Log the result of a single request."""
+                            stderr, output_dir=None) -> None:
+        """Log the result of a single request.
+
+        CREATED results go to progress.log when output_dir is set.
+        FAILED/TIMEOUT/KILLED always print to console.
+        """
+        is_failure = status in (
+            STATUS_FAILED, STATUS_TIMEOUT, STATUS_KILLED,
+        )
+        if output_dir and not is_failure:
+            self._write_result_to_file(
+                output_dir, request_id, status, elapsed,
+                parsed_fields=parsed_fields,
+            )
+            return
         logger.info("Request %s: %s (%.2fs)", request_id, status, elapsed)
         for field, value in parsed_fields.items():
             if field == "reservation_id" and self._args.skip_reservation_check:
@@ -330,8 +344,23 @@ class TrafficRunner:
                 logger.info("  %s: %s", field, value or "")
         if failure_reason:
             logger.info("  reason: %s", failure_reason)
-        if status in (STATUS_FAILED, STATUS_TIMEOUT, STATUS_KILLED):
+        if is_failure:
             logger.info("  stderr: %s", CliBuilder.last_stderr_line(stderr))
+
+    @staticmethod
+    def _write_result_to_file(output_dir, request_id, status,
+                              elapsed, *, parsed_fields) -> None:
+        """Append a successful request result to progress.log."""
+        path = os.path.join(output_dir, "progress.log")
+        fields_str = "  ".join(
+            f"{k}: {v or ''}" for k, v in parsed_fields.items()
+        )
+        line = (
+            f"Request {request_id}: {status} ({elapsed:.2f}s)"
+            f"  {fields_str}\n"
+        )
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(line)
 
     @staticmethod
     def log_token_summary(results, *, output_dir=None) -> None:

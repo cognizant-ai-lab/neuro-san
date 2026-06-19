@@ -20,6 +20,8 @@ monitoring and telemetry when those features become available.
 """
 
 import logging
+import os
+import sys
 import threading
 import time
 from typing import Optional
@@ -30,6 +32,8 @@ from tests.load_tests.config import HEARTBEAT_INTERVAL_SECONDS
 from tests.load_tests.config import SharedRef
 
 logger = logging.getLogger(__name__)
+
+CONSOLE_TICK_INTERVAL = 10
 
 
 class Heartbeat:
@@ -42,9 +46,11 @@ class Heartbeat:
     def __init__(
             self, server_proc: Optional[psutil.Process],
             client_proc: Optional[psutil.Process] = None,
+            output_dir: Optional[str] = None,
     ) -> None:
         self._server_proc = server_proc
         self._client_proc = client_proc
+        self._output_dir = output_dir
 
     def _sample_client_rss(self, peak_rss, peak_ref) -> float:
         """Sample client RSS and update peak if higher.
@@ -80,38 +86,93 @@ class Heartbeat:
         last_done = 0
         last_change = start_time
         peak_threads = 0
+        tick_count = 0
         peak_rss = self._sample_client_rss(0.0, peak_client_rss_ref)
         ready_event.set()
-        while not stop_event.wait(timeout=HEARTBEAT_INTERVAL_SECONDS):
-            peak_rss = self._sample_client_rss(
-                peak_rss, peak_client_rss_ref,
-            )
-            done = sum(1 for f in futures if f.done())
-            elapsed = int(time.time() - start_time)
-            ts = time.strftime("%H:%M:%S", time.localtime())
-            pct = done * 100 // total if total > 0 else 0
-            suffix = ""
-            if done == last_done and done < total:
-                stall = int(time.time() - last_change)
-                suffix = f"  !! no new completions in {stall}s"
-            if done > last_done:
-                last_change = time.time()
-                last_done = done
-            thread_info = ""
-            if self._server_proc is not None:
-                try:
-                    threads = self._server_proc.num_threads()
-                    if threads > peak_threads:
-                        peak_threads = threads
-                        peak_threads_ref.value = threads
-                        thread_info = f"  threads: {threads} (peak)"
-                    else:
-                        thread_info = f"  threads: {threads}"
-                except (psutil.NoSuchProcess, psutil.AccessDenied) as exc:
-                    logger.debug("Heartbeat thread count unavailable: %s", exc)
-            logger.info(
-                "  [progress] %s of %s completed"
-                " (%s%%) -- %ss elapsed [%s]%s%s",
-                done, total, pct, elapsed, ts,
-                suffix, thread_info,
-            )
+        progress_file = self._open_progress_file()
+        try:
+            while not stop_event.wait(
+                timeout=HEARTBEAT_INTERVAL_SECONDS,
+            ):
+                peak_rss = self._sample_client_rss(
+                    peak_rss, peak_client_rss_ref,
+                )
+                done = sum(1 for f in futures if f.done())
+                elapsed = int(time.time() - start_time)
+                ts = time.strftime("%H:%M:%S", time.localtime())
+                pct = done * 100 // total if total > 0 else 0
+                suffix = ""
+                if done == last_done and done < total:
+                    stall = int(time.time() - last_change)
+                    suffix = (
+                        f"  !! no new completions in {stall}s"
+                    )
+                if done > last_done:
+                    last_change = time.time()
+                    last_done = done
+                thread_info = ""
+                if self._server_proc is not None:
+                    try:
+                        threads = self._server_proc.num_threads()
+                        if threads > peak_threads:
+                            peak_threads = threads
+                            peak_threads_ref.value = threads
+                            thread_info = (
+                                f"  threads: {threads} (peak)"
+                            )
+                        else:
+                            thread_info = f"  threads: {threads}"
+                    except (
+                        psutil.NoSuchProcess, psutil.AccessDenied,
+                    ) as exc:
+                        logger.debug(
+                            "Heartbeat thread count unavailable: %s",
+                            exc,
+                        )
+                tick_count += 1
+                line = (
+                    f"  [progress] {done} of {total} completed"
+                    f" ({pct}%) -- {elapsed}s elapsed"
+                    f" [{ts}]{suffix}{thread_info}"
+                )
+                self._write_to_file(progress_file, line)
+                self._write_to_console(tick_count, line)
+        finally:
+            if progress_file is not None:
+                progress_file.close()
+
+    def _open_progress_file(self):
+        """Open progress.log for writing if output_dir is set."""
+        if not self._output_dir:
+            return None
+        path = os.path.join(self._output_dir, "progress.log")
+        # pylint: disable=consider-using-with
+        return open(path, "w", encoding="utf-8")
+
+    @staticmethod
+    def _write_to_file(progress_file, line) -> None:
+        """Write a progress line to the file."""
+        if progress_file is None:
+            return
+        progress_file.write(line + "\n")
+        progress_file.flush()
+
+    @staticmethod
+    def _write_to_console(tick_count, line) -> None:
+        """Write progress to console with reduced verbosity.
+
+        Prints the full line on tick 1 and every 10th tick.
+        Prints the tick number (comma-separated) in between.
+        """
+        if tick_count == 1 or tick_count % CONSOLE_TICK_INTERVAL == 0:
+            if tick_count > 1:
+                sys.stdout.write("\n")
+            logger.info("%s", line)
+        else:
+            position = tick_count % CONSOLE_TICK_INTERVAL
+            if position == 2:
+                sys.stdout.write("  ")
+            else:
+                sys.stdout.write(",")
+            sys.stdout.write(str(position))
+            sys.stdout.flush()

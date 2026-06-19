@@ -245,6 +245,7 @@ or to the path specified by `--output-dir`. At `adv` level this includes:
 |-----------------------|--------------------------------------------------|
 | `raw_results.json`    | All test data in a single JSON file              |
 | `load_test.log`       | Full terminal output                             |
+| `progress.log`        | All progress ticks and per-request CREATED results |
 | `server_receipts.log` | Per-request server receipt details (with `--server-log`) |
 | `server_tokens.log`   | Per-request token breakdown (when token data available) |
 | `summary.txt`         | Human-readable summary (`adv` level only)        |
