@@ -281,6 +281,18 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                  "present, even without a reservation_id.",
         )
         parser.add_argument(
+            "--scale",
+            type=int,
+            default=1,
+            help="Multiplier for load parameters. Scales "
+                 "--num-requests, --max-workers, "
+                 "--request-timeout, --idle-timeout, "
+                 "--stage-timeout, and --total-timeout "
+                 "by this factor. "
+                 "--max-requests auto-adjusts. "
+                 "Integer only (default: 1).",
+        )
+        parser.add_argument(
             "--output-dir",
             type=str,
             default=None,
@@ -985,6 +997,24 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 and args.level == LEVEL_ADV):
             args.max_workers = args.num_requests
 
+    @staticmethod
+    def _apply_scale(args) -> None:
+        """Multiply load parameters by --scale factor.
+
+        Applied after level defaults so that both explicit
+        values and level defaults are scaled uniformly.
+        """
+        factor = args.scale
+        if factor <= 1:
+            return
+        args.num_requests *= factor
+        args.max_workers *= factor
+        args.request_timeout *= factor
+        args.idle_timeout *= factor
+        args.stage_timeout *= factor
+        if args.total_timeout > 0:
+            args.total_timeout *= factor
+
     def run(self) -> int:
         """Execute the full load test workflow."""
         level = self.args.level
@@ -999,6 +1029,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             raise SystemExit(1)
         explicit = getattr(self.args, "_explicit", set())
         self._apply_level_defaults(self.args, explicit)
+        self._apply_scale(self.args)
         self.input_validator.validate_agent_name()
         EnvironmentValidator.validate_environment()
         stale_log_age = self._validate_server_log()

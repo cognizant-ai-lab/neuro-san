@@ -135,6 +135,7 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--settle-time`            | 15          | Wait after each stage for server cleanup     |
 | `--same-prompt`            | off         | Use identical prompt for all requests        |
 | `--yes`                    | off         | Skip cost confirmation (adv only). Auto-matches `--max-workers` to `--num-requests` |
+| `--scale`                  | 1           | Multiply `--num-requests`, `--max-workers`, `--request-timeout`, `--idle-timeout`, `--stage-timeout`, `--total-timeout` by this factor. `--max-requests` auto-adjusts. |
 | `--skip-reservation-check` | off         | Skip reservation_id validation               |
 | `--output-dir`             | (none)      | Base directory for test output               |
 | `--project-root`           | (none)      | Project root for profile discovery           |
