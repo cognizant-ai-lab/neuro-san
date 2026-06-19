@@ -1,7 +1,7 @@
 ---
 name: Checkmarx One
 
-"on":
+on:
   schedule:
     # M-F at 2 am UTC
     - cron: '0 2 * * 1-5'
