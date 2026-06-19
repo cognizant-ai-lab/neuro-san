@@ -227,6 +227,8 @@ or to the path specified by `--output-dir`. At `adv` level this includes:
 |-----------------------|--------------------------------------------------|
 | `raw_results.json`    | All test data in a single JSON file              |
 | `load_test.log`       | Full terminal output                             |
+| `server_receipts.log` | Per-request server receipt details (with `--server-log`) |
+| `summary.txt`         | Human-readable summary (`adv` level only)        |
 | `requests/`           | Raw stdout/stderr per request                    |
 
 ### `raw_results.json`

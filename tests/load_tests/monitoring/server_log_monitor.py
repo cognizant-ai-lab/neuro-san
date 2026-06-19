@@ -20,6 +20,7 @@ monitoring and telemetry when those features become available.
 """
 
 import logging
+import os
 import re
 import threading
 import time
@@ -42,6 +43,16 @@ from tests.load_tests.config import TokenEntry
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 
 logger = logging.getLogger(__name__)
+
+
+class _NullFile:
+    """No-op context manager used when no receipt file is needed."""
+
+    def __enter__(self):
+        return None
+
+    def __exit__(self, *args):
+        pass
 
 
 class ServerLogMonitor:
@@ -384,7 +395,8 @@ class ServerLogMonitor:
     # pylint: disable=too-many-arguments
     def start_log_monitor(self, position,
                           expected_count, fire_time, *,
-                          client_proc, primary_start_pattern
+                          client_proc, primary_start_pattern,
+                          output_dir=None,
                           ) -> Tuple[
         Optional[threading.Event],
         Optional[threading.Thread],
@@ -407,6 +419,7 @@ class ServerLogMonitor:
                 "client_proc": client_proc,
                 "peak_client_ref": peak_client_ref,
                 "primary_start_pattern": primary_start_pattern,
+                "output_dir": output_dir,
             },
             daemon=True,
         )
@@ -419,41 +432,101 @@ class ServerLogMonitor:
                             expected_count, stop_event,
                             fire_time, *, client_proc,
                             peak_client_ref,
-                            primary_start_pattern) -> None:
+                            primary_start_pattern,
+                            output_dir=None) -> None:
         """Background worker that tails server log and reports arrivals."""
-        count = 0
         pri_start_re = re.compile(primary_start_pattern)
         agent_label = primary_start_pattern.split("/")[0].split(" ")[-1]
+        receipt_path = (
+            os.path.join(output_dir, "server_receipts.log")
+            if output_dir else None
+        )
         try:
-            with open(server_log, "r", encoding="utf-8") as log_fh:
-                log_fh.seek(position)
-                while not stop_event.is_set() and count < expected_count:
-                    line = log_fh.readline()
-                    if line:
-                        if pri_start_re.search(line):
-                            count += 1
-                            now = time.time()
-                            ts = time.strftime(
-                                "%H:%M:%S", time.localtime(now),
-                            )
-                            delta = now - fire_time
-                            logger.info(
-                                "  [server] %s request %s/%s "
-                                "received [%s] (+%.1fs)",
-                                agent_label, count, expected_count,
-                                ts, delta,
-                            )
-                            if count >= expected_count:
-                                snap = ResourceMonitor.snapshot(client_proc)
-                                if snap:
-                                    logger.info(
-                                        "  Client AFTER: "
-                                        "RSS %.1fM, CPU %.1f%%",
-                                        snap.get("rss"),
-                                        snap.get("cpu"),
-                                    )
-                                    peak_client_ref.value = snap
-                    else:
-                        stop_event.wait(0.5)
+            with ServerLogMonitor._open_receipt_log(
+                    receipt_path,
+            ) as receipt_fh:
+                with open(
+                        server_log, "r", encoding="utf-8",
+                ) as log_fh:
+                    log_fh.seek(position)
+                    ServerLogMonitor._tail_arrivals(
+                        log_fh, stop_event, pri_start_re,
+                        expected_count, fire_time,
+                        agent_label=agent_label,
+                        receipt_fh=receipt_fh,
+                        client_proc=client_proc,
+                        peak_client_ref=peak_client_ref,
+                    )
         except OSError as exc:
             logger.debug("Log monitor stopped: %s", exc)
+
+    @staticmethod
+    def _open_receipt_log(path):
+        """Open the receipt log file or return a no-op context."""
+        if path:
+            return open(path, "w", encoding="utf-8")
+        return _NullFile()
+
+    # pylint: disable=too-many-arguments
+    @staticmethod
+    def _tail_arrivals(
+            log_fh, stop_event, pri_start_re,
+            expected_count, fire_time, *,
+            agent_label, receipt_fh,
+            client_proc, peak_client_ref,
+    ) -> None:
+        """Tail log for arrivals, printing dots or full lines."""
+        count = 0
+        use_dots = receipt_fh is not None
+        while not stop_event.is_set() and count < expected_count:
+            line = log_fh.readline()
+            if not line:
+                stop_event.wait(0.5)
+                continue
+            if not pri_start_re.search(line):
+                continue
+            count += 1
+            now = time.time()
+            ts = time.strftime(
+                "%H:%M:%S", time.localtime(now),
+            )
+            delta = now - fire_time
+            detail = (
+                f"  [server] {agent_label} request"
+                f" {count}/{expected_count}"
+                f" received [{ts}] (+{delta:.1f}s)"
+            )
+            if use_dots:
+                receipt_fh.write(detail + "\n")
+                receipt_fh.flush()
+                print(".", end="", flush=True)
+            else:
+                logger.info("%s", detail)
+            if count >= expected_count:
+                ServerLogMonitor._log_all_received(
+                    use_dots, count, expected_count,
+                    now - fire_time,
+                    client_proc=client_proc,
+                    peak_client_ref=peak_client_ref,
+                )
+
+    @staticmethod
+    def _log_all_received(
+            use_dots, count, expected_count,
+            elapsed, *, client_proc, peak_client_ref,
+    ) -> None:
+        """Log the final receipt summary and client snapshot."""
+        if use_dots:
+            print()
+            logger.info(
+                "  All %s/%s requests received by "
+                "server (%.1fs)",
+                count, expected_count, elapsed,
+            )
+        snap = ResourceMonitor.snapshot(client_proc)
+        if snap:
+            logger.info(
+                "  Client AFTER: RSS %.1fM, CPU %.1f%%",
+                snap.get("rss"), snap.get("cpu"),
+            )
+            peak_client_ref.value = snap
