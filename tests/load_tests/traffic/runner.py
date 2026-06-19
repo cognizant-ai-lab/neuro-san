@@ -334,11 +334,25 @@ class TrafficRunner:
             logger.info("  stderr: %s", CliBuilder.last_stderr_line(stderr))
 
     @staticmethod
-    def log_token_summary(results) -> None:
-        """Log token usage for each request after token data is attached."""
+    def log_token_summary(results, *, output_dir=None) -> None:
+        """Log token usage summary to console, detail to file.
+
+        When output_dir is provided, per-request lines go to
+        server_tokens.log and only totals appear on the console.
+        Without output_dir, per-request lines go to the console.
+        """
         has_tokens = any(r.get("total_tokens") for r in results)
         if not has_tokens:
             return
+        if output_dir:
+            TrafficRunner._write_token_file(results, output_dir)
+            TrafficRunner._log_token_totals(results)
+        else:
+            TrafficRunner._log_token_per_request(results)
+
+    @staticmethod
+    def _log_token_per_request(results) -> None:
+        """Log per-request token lines to the console."""
         for result in results:
             total = result.get("total_tokens", 0)
             if not total:
@@ -356,6 +370,57 @@ class TrafficRunner:
                 f"{comp_tok:,}",
                 llm_calls, model,
             )
+
+    @staticmethod
+    def _write_token_file(results, output_dir) -> None:
+        """Write per-request token detail to server_tokens.log."""
+        path = os.path.join(output_dir, "server_tokens.log")
+        with open(path, "w", encoding="utf-8") as fh:
+            for result in results:
+                total = result.get("total_tokens", 0)
+                if not total:
+                    continue
+                prompt_tok = result.get("prompt_tokens", 0)
+                comp_tok = result.get("completion_tokens", 0)
+                llm_calls = result.get("llm_calls", 0)
+                model = result.get("model", "unknown")
+                rid = result.get("request_id", "?")
+                fh.write(
+                    f"{rid}: {total:,} tokens "
+                    f"({prompt_tok:,} prompt + "
+                    f"{comp_tok:,} completion), "
+                    f"{llm_calls} LLM call(s), "
+                    f"model={model}\n"
+                )
+        logger.info("  Detail:  %s", path)
+
+    @staticmethod
+    def _log_token_totals(results) -> None:
+        """Log aggregate token totals to the console."""
+        total_tok = 0
+        total_prompt = 0
+        total_comp = 0
+        count = 0
+        for result in results:
+            tok = result.get("total_tokens", 0)
+            if not tok:
+                continue
+            total_tok += tok
+            total_prompt += result.get("prompt_tokens", 0)
+            total_comp += result.get("completion_tokens", 0)
+            count += 1
+        if count == 0:
+            return
+        avg = total_tok // count
+        logger.info(
+            "  Total: %s tokens (%s prompt + %s completion)",
+            f"{total_tok:,}", f"{total_prompt:,}",
+            f"{total_comp:,}",
+        )
+        logger.info(
+            "  %s requests, avg %s tokens/request",
+            count, f"{avg:,}",
+        )
 
     @staticmethod
     def _save_request_output(

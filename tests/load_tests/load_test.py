@@ -853,7 +853,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 logger.info(
                     "\n  Token usage (from server log):",
                 )
-                TrafficRunner.log_token_summary(results)
+                TrafficRunner.log_token_summary(
+                    results, output_dir=self._output_dir,
+                )
             network_tokens = (
                 self.log_monitor.parse_per_network_tokens_since(
                     log_pos,
@@ -873,7 +875,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     "\n  Token usage "
                     "(from agent_cli --tokens):",
                 )
-                TrafficRunner.log_token_summary(results)
+                TrafficRunner.log_token_summary(
+                    results, output_dir=self._output_dir,
+                )
             if self.args.level != LEVEL_MIN:
                 logger.info(
                     "\n  Server-side validation: "
