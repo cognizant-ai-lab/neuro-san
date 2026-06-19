@@ -3,7 +3,10 @@
 
 # Optional LLM Access
 langchain-anthropic>=1.4.3,<2.0
-langchain-aws>=1.0.0,<2.0
+# The [anthropic] extra adds anthropic[bedrock] + langchain-anthropic, needed for
+# the "anthropic-bedrock" class (ChatAnthropicBedrock). It is a superset of plain
+# langchain-aws, so the boto3-based "bedrock" class (ChatBedrock) keeps working.
+langchain-aws[anthropic]>=1.0.0,<2.0
 langchain-google-genai>=4.1.2,<5.0
 langchain-nvidia-ai-endpoints>=1.0.0,<2.0
 langchain-ollama>=1.0.0,<2.0

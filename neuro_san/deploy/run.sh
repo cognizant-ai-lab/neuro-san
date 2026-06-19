@@ -65,6 +65,8 @@ function run() {
         --network=$network \
         -e OPENAI_API_KEY \
         -e ANTHROPIC_API_KEY \
+        -e AGENT_SESSION_REQUIRE_HTTPS=false \
+        -e LEAF_LOG_SENSITIVE=true \
         -p $SERVICE_HTTP_PORT:$SERVICE_HTTP_PORT \
             neuro-san/neuro-san:$CONTAINER_VERSION"
 
