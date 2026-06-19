@@ -318,5 +318,5 @@ class HttpServer(AgentStateListener):
             "openapi_service_spec": open_api_dict,
             "server_context": self.server_context,
             "logging_config": self.logging_config,
-            "heartbeat_interval_seconds": self.server_config.http_server_heartbeat_interval_seconds,
+            "keep_alive_interval_seconds": self.server_config.stream_keep_alive_with_progress_interval_seconds,
         }

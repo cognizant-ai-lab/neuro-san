@@ -42,7 +42,7 @@ class TestStreamingChatHandlerHeartbeatFrame:
 
     def test_frame_ends_with_newline(self):
         """JSON-Lines framing requires a trailing newline on each frame."""
-        frame: str = StreamingChatHandler._build_heartbeat_frame()
+        frame: str = StreamingChatHandler._build_keep_alive_frame()
         assert frame.endswith("\n"), (
             f"Heartbeat frame must end with a newline for JSON-Lines framing; got {frame!r}."
         )
@@ -52,7 +52,7 @@ class TestStreamingChatHandlerHeartbeatFrame:
         The frame parses as a ChatResponse: a top-level "response" key
         whose value is the ChatMessage.
         """
-        parsed = json.loads(StreamingChatHandler._build_heartbeat_frame().rstrip("\n"))
+        parsed = json.loads(StreamingChatHandler._build_keep_alive_frame().rstrip("\n"))
         assert "response" in parsed, (
             f"Expected the heartbeat frame to use the ChatResponse envelope; got {parsed}."
         )
@@ -64,7 +64,7 @@ class TestStreamingChatHandlerHeartbeatFrame:
         CLI's ThinkingFileMessageProcessor heartbeat-skip recognizes)
         with empty text and no structure / origin.
         """
-        parsed = json.loads(StreamingChatHandler._build_heartbeat_frame().rstrip("\n"))
+        parsed = json.loads(StreamingChatHandler._build_keep_alive_frame().rstrip("\n"))
         chat_message = parsed["response"]
         expected_type_name: str = ChatMessageType.to_string(ChatMessageType.AGENT_PROGRESS)
 
@@ -77,7 +77,7 @@ class TestStreamingChatHandlerHeartbeatFrame:
         The frame must contain exactly one newline (the terminator) so
         clients reading line-by-line see one frame per tick.
         """
-        frame: str = StreamingChatHandler._build_heartbeat_frame()
+        frame: str = StreamingChatHandler._build_keep_alive_frame()
         assert frame.count("\n") == 1, (
             f"Heartbeat frame must contain exactly one newline; got {frame!r}."
         )
@@ -87,8 +87,8 @@ class TestStreamingChatHandlerHeartbeatFrame:
         The builder is deterministic: calling it twice yields the same
         bytes, so it's safe to call once at initialize() time and reuse.
         """
-        first: str = StreamingChatHandler._build_heartbeat_frame()
-        second: str = StreamingChatHandler._build_heartbeat_frame()
+        first: str = StreamingChatHandler._build_keep_alive_frame()
+        second: str = StreamingChatHandler._build_keep_alive_frame()
         assert first == second, (
             f"Heartbeat frame must be stable across calls; got {first!r} vs {second!r}."
         )

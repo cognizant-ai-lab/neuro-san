@@ -140,7 +140,7 @@ class ServerMainLoop:
                                 help="Http server resources monitoring/logging interval in seconds "
                                      "0 means no logging")
         arg_parser.add_argument("--stream_keep_alive_with_progress_interval_seconds", type=int,
-                                default=int(os.environ.get("AGENT_STREAM_KEEP_ALIVE_WITH_PROGRESS_INTERVAL",
+                                default=int(os.environ.get("AGENT_STREAM_KEEP_ALIVE_WITH_PROGRESS_INTERVAL_SECONDS",
                                                            DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS)),
                                 help="Http server heartbeat interval in seconds "
                                      "0 means no heartbeat")
@@ -202,7 +202,8 @@ class ServerMainLoop:
         self.http_server_config.http_server_instances = args.http_server_instances
         self.http_server_config.http_server_monitor_interval_seconds = args.http_resources_monitor_interval_seconds
         self.http_server_config.http_port = args.http_port
-        self.http_server_config.http_server_heartbeat_interval_seconds = args.http_server_heartbeat_interval_seconds
+        self.http_server_config.stream_keep_alive_with_progress_interval_seconds =\
+            args.stream_keep_alive_with_progress_interval_seconds
 
         self.server_context.set_temp_storage_max_items(args.max_temp_networks)
 

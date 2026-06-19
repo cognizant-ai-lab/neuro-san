@@ -36,4 +36,4 @@ class HttpServerConfig:
         self.http_server_instances: int = DEFAULT_HTTP_SERVER_INSTANCES
         self.http_port: int = 80
         self.http_server_monitor_interval_seconds: int = DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS
-        self.http_server_heartbeat_interval_seconds: int = DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS
+        self.stream_keep_alive_with_progress_interval_seconds: int = DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS

@@ -51,16 +51,16 @@ class StreamingChatHandler(BaseRequestHandler):
                 _build_heartbeat_frame()); only the interval is configurable.
         """
         super().initialize(**kwargs)
-        self.heartbeat_interval_seconds = kwargs.get("heartbeat_interval_seconds", 0)
+        self.keep_alive_interval_seconds = kwargs.get("keep_alive_interval_seconds", 0)
         # Build the on-the-wire heartbeat frame once at initialize() time so
         # each tick only needs to write bytes -- no per-tick JSON serialization.
-        self.heartbeat_frame: str = self._build_heartbeat_frame()
+        self.keep_alive_frame: str = self._build_keep_alive_frame()
         self.last_send_ts = 0.0
-        self.heartbeat_task: asyncio.Task = None
+        self.keep_alive_task: asyncio.Task = None
         self.lock: asyncio.Lock = asyncio.Lock()  # protects request writes to output stream and last_send_ts updates
 
     @staticmethod
-    def _build_heartbeat_frame() -> str:
+    def _build_keep_alive_frame() -> str:
         """
         Build the exact wire frame to write for each heartbeat tick: an empty
         AGENT_PROGRESS ChatMessage wrapped in the standard ChatResponse
@@ -133,11 +133,11 @@ class StreamingChatHandler(BaseRequestHandler):
 
             # We are now ready to start processing the request and streaming results back to the client.
             # If heartbeat is enabled, time to start it here:
-            if self.heartbeat_interval_seconds > 0:
+            if self.keep_alive_interval_seconds > 0:
                 # If heartbeat is enabled,
                 # start the heartbeat task in the background,
                 # so it can run concurrently with the main request processing.
-                self.heartbeat_task = asyncio.create_task(self.run_heartbeat())
+                self.keep_alive_task = asyncio.create_task(self.run_heartbeat())
 
             # Now process the result stream
             async with asyncio.timeout(request_timeout):
@@ -185,10 +185,10 @@ class StreamingChatHandler(BaseRequestHandler):
 
         finally:
             # If we started a heartbeat task, cancel it now to clean up resources.
-            if self.heartbeat_task is not None:
-                self.heartbeat_task.cancel()
+            if self.keep_alive_task is not None:
+                self.keep_alive_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
-                    await self.heartbeat_task
+                    await self.keep_alive_task
             await self._finish_request(result_generator, metadata, agent_name)
 
     async def run_heartbeat(self):
@@ -201,12 +201,12 @@ class StreamingChatHandler(BaseRequestHandler):
         """
         metadata: Dict[str, Any] = self.get_metadata()
         self.logger.info(metadata, "Starting heartbeat generator with interval %d seconds",
-                         self.heartbeat_interval_seconds)
-        time_to_sleep: float = self.heartbeat_interval_seconds
+                         self.keep_alive_interval_seconds)
+        time_to_sleep: float = self.keep_alive_interval_seconds
         while True:
             await asyncio.sleep(time_to_sleep)
             time_now: float = time.monotonic()
-            time_to_sleep = self.heartbeat_interval_seconds - (time_now - self.last_send_ts)
+            time_to_sleep = self.keep_alive_interval_seconds - (time_now - self.last_send_ts)
             if time_to_sleep > 0.5:
                 # We have seen some request traffic recently, so we can delay our heartbeat a bit.
                 # Time to sleep is long enough - so go sleep
@@ -215,7 +215,7 @@ class StreamingChatHandler(BaseRequestHandler):
                 # self.heartbeat_frame already includes the ChatResponse envelope
                 # and a trailing newline (see _build_heartbeat_frame()).
                 async with self.lock:
-                    self.write(self.heartbeat_frame)
+                    self.write(self.keep_alive_frame)
                     flush_ok = await self.do_flush()
                     self.last_send_ts = time.monotonic()
                 if not flush_ok:
@@ -223,7 +223,7 @@ class StreamingChatHandler(BaseRequestHandler):
                     # (most probably because connection is closed by a client).
                     # Finish heartbeat task
                     return
-                time_to_sleep = self.heartbeat_interval_seconds
+                time_to_sleep = self.keep_alive_interval_seconds
             except tornado.iostream.StreamClosedError:
                 return  # client gone; main loop's next flush will see it too
 
