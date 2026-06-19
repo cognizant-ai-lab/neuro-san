@@ -153,10 +153,25 @@ collected so far:
   requests killed → abort.
 - **`--total-timeout`**: Overall test elapsed time exceeded → abort
   before starting the next stage.
+- **Server death**: The heartbeat detects the server process is no
+  longer running (e.g. OOM kill) → abort.
 
 On abort the test still runs the full reporting pipeline (latency
 analysis, completion timeline, summary file, raw JSON) on whatever
 results completed before the timeout.
+
+### Memory monitoring
+
+The heartbeat prints server RSS alongside thread counts on every
+progress tick. The pre-run summary shows total and available system
+RAM. The overall results section reports the peak server RSS observed
+across all stages.
+
+When server RSS exceeds 80% of total system RAM, a warning is printed:
+
+```
+  WARNING: Server RSS 12.8G / 16.0G (80%) — risk of OOM kill
+```
 
 ## Pre-Run Summary and Dry-Run Probe
 

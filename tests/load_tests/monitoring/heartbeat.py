@@ -28,12 +28,14 @@ from typing import Optional
 
 import psutil
 
+from tests.load_tests.config import format_rss
 from tests.load_tests.config import HEARTBEAT_INTERVAL_SECONDS
 from tests.load_tests.config import SharedRef
 
 logger = logging.getLogger(__name__)
 
 CONSOLE_TICK_INTERVAL = 10
+OOM_WARNING_THRESHOLD = 0.80
 
 
 class Heartbeat:
@@ -51,6 +53,8 @@ class Heartbeat:
         self._server_proc = server_proc
         self._client_proc = client_proc
         self._output_dir = output_dir
+        self._total_system_ram = psutil.virtual_memory().total
+        self._oom_warned = False
 
     def _sample_client_rss(self, peak_rss, peak_ref) -> float:
         """Sample client RSS and update peak if higher.
@@ -70,12 +74,51 @@ class Heartbeat:
             pass
         return peak_rss
 
+    def _sample_server_rss(self) -> Optional[float]:
+        """Sample server RSS in MB. Returns None if unavailable."""
+        if self._server_proc is None:
+            return None
+        try:
+            return (
+                self._server_proc.memory_info().rss
+                / (1024 * 1024)
+            )
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            return None
+
+    def _check_server_alive(self) -> bool:
+        """Return True if the server process is still running."""
+        if self._server_proc is None:
+            return True
+        try:
+            return self._server_proc.is_running()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            return False
+
+    def _check_oom_risk(self, rss_mb, progress_file) -> None:
+        """Warn if server RSS exceeds OOM threshold."""
+        if self._oom_warned:
+            return
+        total_mb = self._total_system_ram / (1024 * 1024)
+        if rss_mb / total_mb >= OOM_WARNING_THRESHOLD:
+            self._oom_warned = True
+            warning = (
+                f"  WARNING: Server RSS {format_rss(rss_mb)}"
+                f" / {format_rss(total_mb)}"
+                f" ({rss_mb * 100 / total_mb:.0f}%)"
+                " — risk of OOM kill"
+            )
+            logger.warning("%s", warning)
+            self._write_to_file(progress_file, warning)
+
     # pylint: disable=too-many-locals,too-many-arguments
     def progress_heartbeat(self, futures, total, start_time,
                            stop_event, *,
                            ready_event: threading.Event,
                            peak_threads_ref: SharedRef,
                            peak_client_rss_ref: SharedRef,
+                           peak_server_rss_ref: SharedRef,
+                           server_dead_event: threading.Event,
                            ) -> None:
         """Log periodic progress while requests are in-flight.
 
@@ -86,6 +129,7 @@ class Heartbeat:
         last_done = 0
         last_change = start_time
         peak_threads = 0
+        peak_server_rss = 0.0
         tick_count = 0
         peak_rss = self._sample_client_rss(0.0, peak_client_rss_ref)
         ready_event.set()
@@ -94,6 +138,13 @@ class Heartbeat:
             while not stop_event.wait(
                 timeout=HEARTBEAT_INTERVAL_SECONDS,
             ):
+                if not self._check_server_alive():
+                    logger.error(
+                        "\n  ABORT: Server process is no longer"
+                        " running. Possible OOM kill.",
+                    )
+                    server_dead_event.set()
+                    break
                 peak_rss = self._sample_client_rss(
                     peak_rss, peak_client_rss_ref,
                 )
@@ -110,36 +161,68 @@ class Heartbeat:
                 if done > last_done:
                     last_change = time.time()
                     last_done = done
-                thread_info = ""
-                if self._server_proc is not None:
-                    try:
-                        threads = self._server_proc.num_threads()
-                        if threads > peak_threads:
-                            peak_threads = threads
-                            peak_threads_ref.value = threads
-                            thread_info = (
-                                f"  threads: {threads} (peak)"
-                            )
-                        else:
-                            thread_info = f"  threads: {threads}"
-                    except (
-                        psutil.NoSuchProcess, psutil.AccessDenied,
-                    ) as exc:
-                        logger.debug(
-                            "Heartbeat thread count unavailable: %s",
-                            exc,
-                        )
+                thread_info, server_rss_info = (
+                    self._sample_server_metrics(
+                        peak_threads, peak_threads_ref,
+                        peak_server_rss, peak_server_rss_ref,
+                        progress_file,
+                    )
+                )
+                peak_threads = peak_threads_ref.value or 0
+                if peak_server_rss_ref.value is not None:
+                    peak_server_rss = peak_server_rss_ref.value
                 tick_count += 1
                 line = (
                     f"  [progress] {done} of {total} completed"
                     f" ({pct}%) -- {elapsed}s elapsed"
                     f" [{ts}]{suffix}{thread_info}"
+                    f"{server_rss_info}"
                 )
                 self._write_to_file(progress_file, line)
                 self._write_to_console(tick_count, line)
         finally:
             if progress_file is not None:
                 progress_file.close()
+
+    # pylint: disable=too-many-positional-arguments
+    def _sample_server_metrics(
+            self, peak_threads, peak_threads_ref,
+            peak_server_rss, peak_server_rss_ref,
+            progress_file,
+    ):
+        """Sample server thread count and RSS.
+
+        Returns (thread_info, server_rss_info) strings.
+        """
+        thread_info = ""
+        server_rss_info = ""
+        if self._server_proc is None:
+            return thread_info, server_rss_info
+        try:
+            threads = self._server_proc.num_threads()
+            if threads > peak_threads:
+                peak_threads_ref.value = threads
+                thread_info = (
+                    f"  threads: {threads} (peak)"
+                )
+            else:
+                thread_info = f"  threads: {threads}"
+        except (
+            psutil.NoSuchProcess, psutil.AccessDenied,
+        ) as exc:
+            logger.debug(
+                "Heartbeat thread count unavailable: %s",
+                exc,
+            )
+        rss_mb = self._sample_server_rss()
+        if rss_mb is not None:
+            server_rss_info = (
+                f"  RSS: {format_rss(rss_mb)}"
+            )
+            if rss_mb > peak_server_rss:
+                peak_server_rss_ref.value = rss_mb
+            self._check_oom_risk(rss_mb, progress_file)
+        return thread_info, server_rss_info
 
     def _open_progress_file(self):
         """Open progress.log for writing if output_dir is set."""

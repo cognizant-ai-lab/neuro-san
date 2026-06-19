@@ -27,6 +27,8 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
+import psutil
+
 from tests.load_tests.config import DEFAULT_STAGES
 from tests.load_tests.config import LEVEL_ADV
 from tests.load_tests.config import RequestResult
@@ -215,6 +217,18 @@ class InputValidator:
             logger.info(
                 "            --total-timeout disabled",
             )
+        self._print_system_memory()
+
+    @staticmethod
+    def _print_system_memory() -> None:
+        """Print total and available system memory."""
+        mem = psutil.virtual_memory()
+        total_gb = mem.total / (1024 ** 3)
+        avail_gb = mem.available / (1024 ** 3)
+        logger.info(
+            "  System RAM: %.1fG (%.1fG available)",
+            total_gb, avail_gb,
+        )
 
     def _estimate_stage_duration(
             self, probe_elapsed,

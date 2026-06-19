@@ -536,7 +536,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if probe_used:
             stage_requests = max(actual_requests - 1, 0)
 
-        elapsed, results, peak_threads, peak_client_rss = (
+        (elapsed, results, peak_threads, peak_client_rss,
+         peak_server_rss, server_died) = (
             self.runner.run_stage(
                 stage_requests, stage_workers,
                 global_offset + (1 if probe_used else 0),
@@ -595,9 +596,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 self.args.skip_reservation_check
             ),
         )
-        should_abort = OutputValidator.check_permission_failures(
-            results, self.args.agent,
-        )
+        should_abort = server_died
+        if not should_abort:
+            should_abort = OutputValidator.check_permission_failures(
+                results, self.args.agent,
+            )
         if not should_abort:
             should_abort = OutputValidator.check_timeout_abort(counts)
         if should_abort:
@@ -620,6 +623,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 before_server=before_server,
                 after_server=None,
                 peak_threads=peak_threads,
+                peak_server_rss=peak_server_rss,
             )
             return summary_entry, probe_used, True
 
@@ -664,6 +668,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             before_server=before_server,
             after_server=after_server,
             peak_threads=peak_threads,
+            peak_server_rss=peak_server_rss,
         )
         return summary_entry, probe_used, False
 
@@ -804,6 +809,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             has_server_log, has_tokens,
             monitor_resources, before_server,
             after_server, peak_threads,
+            peak_server_rss,
     ) -> StageSummary:
         """Assemble the stage summary dict."""
         summary_entry: StageSummary = {
@@ -837,6 +843,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if peak_threads.value is not None:
             summary_entry["peak_threads"] = (
                 peak_threads.value
+            )
+        if peak_server_rss.value is not None:
+            summary_entry["peak_server_rss"] = (
+                peak_server_rss.value
             )
         return summary_entry
 

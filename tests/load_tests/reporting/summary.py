@@ -17,6 +17,7 @@
 
 import logging
 
+from tests.load_tests.config import format_rss
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
@@ -127,6 +128,12 @@ class SummaryReporter:
                 "  Avg per request: %.2fs", total_time / total_sent,
             )
 
+        peak_rss = self._find_peak_server_rss()
+        if peak_rss is not None:
+            logger.info(
+                "  Peak server RSS: %s", format_rss(peak_rss),
+            )
+
         if total_retries > 0:
             total_requests = sum(
                 s.get("concurrent", 0)
@@ -141,3 +148,13 @@ class SummaryReporter:
             logger.info(
                 "    Amplification:   %.2fx", amplification,
             )
+
+    def _find_peak_server_rss(self):
+        """Find the highest peak_server_rss across all stages."""
+        peak = None
+        for summary in self._summaries:
+            rss = summary.get("peak_server_rss")
+            if rss is not None:
+                if peak is None or rss > peak:
+                    peak = rss
+        return peak

@@ -142,6 +142,7 @@ class StageSummary(TypedDict, total=False):
     before_threads: Optional[int]
     after_threads: Optional[int]
     peak_threads: Optional[int]
+    peak_server_rss: Optional[float]
 
 
 # Load test levels
@@ -230,6 +231,13 @@ MODEL_PRICING = {
 }
 # Fallback pricing when model is unknown
 DEFAULT_PRICING = {"prompt": 2.50, "completion": 10.00}
+
+
+def format_rss(rss_mb: float) -> str:
+    """Format RSS in human-readable units."""
+    if rss_mb >= 1024:
+        return f"{rss_mb / 1024:.1f}G"
+    return f"{rss_mb:.0f}M"
 
 
 def compute_amplification(

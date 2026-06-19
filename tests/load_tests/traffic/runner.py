@@ -208,15 +208,18 @@ class TrafficRunner:
                   stage_timeout=None,
                   ) -> Tuple[
         float, List[RequestResult], SharedRef, SharedRef,
+        SharedRef, bool,
     ]:
         """Fire num_requests concurrent requests using a thread pool.
 
         Returns (elapsed, results, peak_threads_ref,
-        peak_client_rss_ref).
+        peak_client_rss_ref, peak_server_rss_ref, server_died).
         """
         results_list: List[RequestResult] = []
         peak_threads_ref = SharedRef()
         peak_client_rss_ref = SharedRef()
+        peak_server_rss_ref = SharedRef()
+        server_dead_event = threading.Event()
         start = time.time()
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             heartbeat_stop = threading.Event()
@@ -231,6 +234,8 @@ class TrafficRunner:
                     "ready_event": heartbeat_ready,
                     "peak_threads_ref": peak_threads_ref,
                     "peak_client_rss_ref": peak_client_rss_ref,
+                    "peak_server_rss_ref": peak_server_rss_ref,
+                    "server_dead_event": server_dead_event,
                 },
                 daemon=True,
             )
@@ -260,6 +265,7 @@ class TrafficRunner:
         return (
             total_time, results_list,
             peak_threads_ref, peak_client_rss_ref,
+            peak_server_rss_ref, server_dead_event.is_set(),
         )
 
     @staticmethod
