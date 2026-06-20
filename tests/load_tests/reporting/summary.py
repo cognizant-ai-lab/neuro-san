@@ -122,10 +122,15 @@ class SummaryReporter:
         logger.info("    Failed:    %s", total_failed)
         logger.info("    Timed out: %s", total_timeout)
         logger.info("    Killed:    %s", total_killed)
-        logger.info("  Total time:  %.2fs", total_time)
-        avg = self._avg_request_duration()
-        if avg is not None:
-            logger.info("  Avg per request: %.2fs", avg)
+        logger.info("  Total wall time: %.2fs", total_time)
+        duration = self._request_duration_stats()
+        if duration is not None:
+            logger.info(
+                "  Request duration: %.0fs min / %.0fs avg"
+                " / %.0fs max",
+                duration["min"], duration["avg"],
+                duration["max"],
+            )
 
         peak_rss = self._find_peak_server_rss()
         if peak_rss is not None:
@@ -148,15 +153,19 @@ class SummaryReporter:
                 "    Amplification:   %.2fx", amplification,
             )
 
-    def _avg_request_duration(self):
-        """Compute mean elapsed time across individual requests."""
+    def _request_duration_stats(self):
+        """Compute min/avg/max elapsed time across requests."""
         durations = []
         for summary in self._summaries:
             for result in summary.get("results", []):
                 durations.append(result.get("elapsed", 0))
         if not durations:
             return None
-        return sum(durations) / len(durations)
+        return {
+            "min": min(durations),
+            "avg": sum(durations) / len(durations),
+            "max": max(durations),
+        }
 
     def _find_peak_server_rss(self):
         """Find the highest peak_server_rss across all stages."""

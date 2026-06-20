@@ -80,7 +80,19 @@ class SummaryFileWriter:
             f" round(s) = {total_requests} total",
         )
         lines.append(f"  Workers:     {workers} (concurrent)")
-        lines.append(f"  Total time:  {total_elapsed:.1f}s")
+        lines.append(f"  Total wall time: {total_elapsed:.1f}s")
+        durations = [
+            r.get("elapsed", 0)
+            for s in self._summaries
+            for r in s.get("results", [])
+        ]
+        if durations:
+            lines.append(
+                f"  Request duration:"
+                f" {min(durations):.0f}s min"
+                f" / {sum(durations) / len(durations):.0f}s avg"
+                f" / {max(durations):.0f}s max"
+            )
         lines.append("")
 
     def _write_request_results(self, lines) -> None:
