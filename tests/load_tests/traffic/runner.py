@@ -372,7 +372,10 @@ class TrafficRunner:
             fh.write(line)
 
     @staticmethod
-    def log_token_summary(results, *, output_dir=None) -> None:
+    def log_token_summary(
+            results, *, output_dir=None,
+            network_tokens=None,
+    ) -> None:
         """Log token usage summary to console, detail to file.
 
         When output_dir is provided, per-request lines go to
@@ -383,7 +386,10 @@ class TrafficRunner:
         if not has_tokens:
             return
         if output_dir:
-            TrafficRunner._write_token_file(results, output_dir)
+            TrafficRunner._write_token_file(
+                results, output_dir,
+                network_tokens=network_tokens,
+            )
             TrafficRunner._log_token_totals(results)
         else:
             TrafficRunner._log_token_per_request(results)
@@ -410,27 +416,64 @@ class TrafficRunner:
             )
 
     @staticmethod
-    def _write_token_file(results, output_dir) -> None:
+    def _write_token_file(
+            results, output_dir, *,
+            network_tokens=None,
+    ) -> None:
         """Write per-request token detail to server_tokens.log."""
+        by_request = TrafficRunner._group_network_tokens(
+            network_tokens,
+        )
         path = os.path.join(output_dir, "server_tokens.log")
         with open(path, "w", encoding="utf-8") as fh:
             for result in results:
                 total = result.get("total_tokens", 0)
                 if not total:
                     continue
-                prompt_tok = result.get("prompt_tokens", 0)
-                comp_tok = result.get("completion_tokens", 0)
-                llm_calls = result.get("llm_calls", 0)
-                model = result.get("model", "unknown")
-                rid = result.get("request_id", "?")
-                fh.write(
-                    f"{rid}: {total:,} tokens "
-                    f"({prompt_tok:,} prompt + "
-                    f"{comp_tok:,} completion), "
-                    f"{llm_calls} LLM call(s), "
-                    f"model={model}\n"
+                TrafficRunner._write_token_request(
+                    fh, result, by_request,
                 )
         logger.info("  Detail:  %s", path)
+
+    @staticmethod
+    def _group_network_tokens(network_tokens):
+        """Group network token entries by request_id."""
+        by_request = {}
+        for entry in (network_tokens or []):
+            rid = entry.get("request_id", "")
+            by_request.setdefault(rid, []).append(entry)
+        return by_request
+
+    @staticmethod
+    def _write_token_request(fh, result, by_request) -> None:
+        """Write one request's token line with agent breakdown."""
+        rid = result.get("request_id", "?")
+        total = result.get("total_tokens", 0)
+        llm_calls = result.get("llm_calls", 0)
+        model = result.get("model", "unknown")
+        elapsed = result.get("elapsed", 0)
+        status = result.get("status", "?")
+        fh.write(
+            f"{rid}: {total:,} tokens, "
+            f"{llm_calls} LLM call(s), "
+            f"model={model}"
+            f"  [{elapsed:.1f}s {status}]\n"
+        )
+        agents = by_request.get(rid, [])
+        for agent in agents:
+            net = agent.get("network", "?")
+            a_calls = agent.get("llm_calls", 0)
+            a_total = agent.get("total_tokens", 0)
+            a_prompt = agent.get("prompt_tokens", 0)
+            a_comp = agent.get("completion_tokens", 0)
+            fh.write(
+                f"  {net}: {a_calls} call(s)"
+                f"  {a_total:,} tokens"
+                f" ({a_prompt:,} prompt"
+                f" / {a_comp:,} completion)\n"
+            )
+        if agents:
+            fh.write("\n")
 
     @staticmethod
     def _log_token_totals(results) -> None:

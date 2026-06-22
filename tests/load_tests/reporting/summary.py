@@ -132,6 +132,14 @@ class SummaryReporter:
                 duration["max"],
             )
 
+        llm_stats = self._llm_call_stats()
+        if llm_stats is not None:
+            logger.info(
+                "  LLM calls: %s min / %s avg / %s max",
+                llm_stats["min"], llm_stats["avg"],
+                llm_stats["max"],
+            )
+
         peak_rss = self._find_peak_server_rss()
         if peak_rss is not None:
             logger.info(
@@ -165,6 +173,22 @@ class SummaryReporter:
             "min": min(durations),
             "avg": sum(durations) / len(durations),
             "max": max(durations),
+        }
+
+    def _llm_call_stats(self):
+        """Compute min/avg/max LLM calls per request."""
+        calls = []
+        for summary in self._summaries:
+            for result in summary.get("results", []):
+                llm = result.get("llm_calls", 0)
+                if llm > 0:
+                    calls.append(llm)
+        if not calls:
+            return None
+        return {
+            "min": min(calls),
+            "avg": round(sum(calls) / len(calls)),
+            "max": max(calls),
         }
 
     def _find_peak_server_rss(self):

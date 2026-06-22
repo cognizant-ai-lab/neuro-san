@@ -174,7 +174,8 @@ class Heartbeat:
                 if done == last_done and done < total:
                     stall = int(time.time() - last_change)
                     suffix = (
-                        f"  !! no new completions in {stall}s"
+                        "  !! no new completions in "
+                        f"{Heartbeat._fmt_elapsed(stall)}"
                     )
                 if done > last_done:
                     last_change = time.time()
@@ -192,8 +193,9 @@ class Heartbeat:
                 tick_count += 1
                 line = (
                     f"  [progress] {done} of {total} completed"
-                    f" ({pct}%) -- {elapsed}s elapsed"
-                    f" [{ts}]{suffix}{thread_info}"
+                    f" ({pct}%) --"
+                    f" {Heartbeat._fmt_elapsed(elapsed)}"
+                    f" elapsed [{ts}]{suffix}{thread_info}"
                     f"{server_rss_info}"
                 )
                 self._write_to_file(progress_file, line)
@@ -201,6 +203,13 @@ class Heartbeat:
         finally:
             if progress_file is not None:
                 progress_file.close()
+
+    @staticmethod
+    def _fmt_elapsed(seconds) -> str:
+        """Format seconds with minutes when >= 60."""
+        if seconds >= 60:
+            return f"{seconds}s ({seconds // 60}m)"
+        return f"{seconds}s"
 
     # pylint: disable=too-many-positional-arguments
     def _sample_server_metrics(

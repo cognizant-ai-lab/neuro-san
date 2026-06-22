@@ -93,6 +93,20 @@ class SummaryFileWriter:
                 f" / {sum(durations) / len(durations):.0f}s avg"
                 f" / {max(durations):.0f}s max"
             )
+        llm_calls = [
+            r.get("llm_calls", 0)
+            for s in self._summaries
+            for r in s.get("results", [])
+            if r.get("llm_calls", 0) > 0
+        ]
+        if llm_calls:
+            avg_calls = round(sum(llm_calls) / len(llm_calls))
+            lines.append(
+                f"  LLM calls:"
+                f" {min(llm_calls)} min"
+                f" / {avg_calls} avg"
+                f" / {max(llm_calls)} max"
+            )
         lines.append("")
 
     def _write_request_results(self, lines) -> None:

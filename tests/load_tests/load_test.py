@@ -885,18 +885,19 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             LoadTestOrchestrator._attach_token_data(
                 results, token_data,
             )
+            network_tokens = (
+                self.log_monitor.parse_per_network_tokens_since(
+                    log_pos,
+                )
+            )
             if token_data:
                 logger.info(
                     "\n  Token usage (from server log):",
                 )
                 TrafficRunner.log_token_summary(
                     results, output_dir=self._output_dir,
+                    network_tokens=network_tokens,
                 )
-            network_tokens = (
-                self.log_monitor.parse_per_network_tokens_since(
-                    log_pos,
-                )
-            )
             OutputValidator.log_disconnections(disconnections)
             OutputValidator.log_server_validation(
                 server_counts, actual_requests,
