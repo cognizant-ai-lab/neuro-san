@@ -42,6 +42,7 @@ class CrossRunComparison:
                 self._base_dir,
             )
             return
+        runs = self._deduplicate(runs)
         runs.sort(key=lambda r: r.get("num_requests", 0))
         self._log_table(runs)
 
@@ -58,6 +59,19 @@ class CrossRunComparison:
             if metrics is not None:
                 runs.append(metrics)
         return runs
+
+    @staticmethod
+    def _deduplicate(runs):
+        """Keep only the latest run per request count."""
+        by_count = {}
+        for run in runs:
+            count = run.get("num_requests", 0)
+            existing = by_count.get(count)
+            if (existing is None
+                    or run.get("folder", "")
+                    > existing.get("folder", "")):
+                by_count[count] = run
+        return list(by_count.values())
 
     @staticmethod
     def _extract_metrics(json_path, folder_name):
@@ -144,8 +158,8 @@ class CrossRunComparison:
                     fmt_duration(run.get("avg_per_req", 0)),
                     deltas.get("avg_per_req"),
                 ),
-                CrossRunComparison._val_with_delta(
-                    fmt_duration(run.get("ttfr_avg", 0)),
+                CrossRunComparison._fmt_ttfr(
+                    run.get("ttfr_avg", 0),
                     deltas.get("ttfr_avg"),
                 ),
                 CrossRunComparison._val_with_delta(
@@ -178,3 +192,12 @@ class CrossRunComparison:
             return formatted_val
         sign = "+" if delta_pct >= 0 else ""
         return f"{formatted_val} ({sign}{delta_pct:.0f}%)"
+
+    @staticmethod
+    def _fmt_ttfr(value, delta_pct):
+        """Format TTFR, showing a dash when data is missing."""
+        if value <= 0:
+            return "\u2014"
+        return CrossRunComparison._val_with_delta(
+            fmt_duration(value), delta_pct,
+        )
