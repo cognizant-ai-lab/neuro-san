@@ -23,6 +23,8 @@ from typing import Dict
 from typing import List
 from typing import Tuple
 
+from tests.load_tests.config import fmt_duration
+
 from tests.load_tests.config import SEPARATOR_WIDTH
 
 logger = logging.getLogger(__name__)
@@ -93,8 +95,9 @@ class LatencyAnalyzer:
                 prev_count = count
                 duration = _percentile(latencies, pct)
                 logger.info(
-                    "    %3d%% (%d requests) completed by %.1fs",
-                    pct, count, duration,
+                    "    %3d%% (%d requests) completed by %s",
+                    pct, count,
+                    fmt_duration(duration, precision=1),
                 )
 
     # ----------------------------------------------------------
@@ -249,7 +252,8 @@ class LatencyAnalyzer:
         for i, peak in enumerate(bucket_peaks):
             t_start = i * bucket_size
             chart = "#" * (peak * 40 // max_conc) if max_conc else ""
+            label = fmt_duration(t_start)
             logger.info(
-                "    %5.0fs |%-40s| %d",
-                t_start, chart, peak,
+                "    %8s |%-40s| %d",
+                label, chart, peak,
             )

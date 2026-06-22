@@ -25,6 +25,7 @@ import logging
 from typing import List
 
 from tests.load_tests.config import compute_amplification
+from tests.load_tests.config import fmt_duration
 from tests.load_tests.config import RequestResult
 from tests.load_tests.config import RETRY_ERROR_TYPES
 from tests.load_tests.config import STATUS_CREATED
@@ -82,10 +83,14 @@ class OutputValidator:
             "    Killed:  %s  (no output for %ss, presumed hanging)",
             counts.get(STATUS_KILLED, 0), idle_timeout,
         )
+        avg_per = (
+            elapsed / actual_requests
+            if actual_requests else 0
+        )
         logger.info(
-            "  Duration: %.2fs | Avg: %.2fs per request",
-            elapsed,
-            elapsed / actual_requests if actual_requests else 0,
+            "  Duration: %s | Avg: %s per request",
+            fmt_duration(elapsed, precision=2),
+            fmt_duration(avg_per, precision=2),
         )
 
     @staticmethod

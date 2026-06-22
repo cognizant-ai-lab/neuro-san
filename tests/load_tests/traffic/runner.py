@@ -26,6 +26,7 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
+from tests.load_tests.config import fmt_duration
 from tests.load_tests.config import RequestResult
 from tests.load_tests.config import SharedRef
 from tests.load_tests.config import STATUS_CREATED
@@ -346,7 +347,11 @@ class TrafficRunner:
                 parsed_fields=parsed_fields,
             )
             return
-        logger.info("Request %s: %s (%.2fs)", request_id, status, elapsed)
+        logger.info(
+            "Request %s: %s (%s)",
+            request_id, status,
+            fmt_duration(elapsed, precision=2),
+        )
         for field, value in parsed_fields.items():
             if field == "reservation_id" and self._args.skip_reservation_check:
                 logger.info("  %s: skipped", field)
@@ -366,7 +371,8 @@ class TrafficRunner:
             f"{k}: {v or ''}" for k, v in parsed_fields.items()
         )
         line = (
-            f"Request {request_id}: {status} ({elapsed:.2f}s)"
+            f"Request {request_id}: {status}"
+            f" ({fmt_duration(elapsed, precision=2)})"
             f"  {fields_str}\n"
         )
         with open(path, "a", encoding="utf-8") as fh:

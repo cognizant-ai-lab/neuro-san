@@ -24,6 +24,7 @@ from typing import Optional
 
 from collections import Counter
 
+from tests.load_tests.config import fmt_duration
 from tests.load_tests.config import format_rss
 from tests.load_tests.config import STATUS_CREATED
 
@@ -83,7 +84,10 @@ class SummaryFileWriter:
             f" round(s) = {total_requests} total",
         )
         lines.append(f"  Workers:     {workers} (concurrent)")
-        lines.append(f"  Total wall time: {total_elapsed:.1f}s")
+        lines.append(
+            f"  Total wall time:"
+            f" {fmt_duration(total_elapsed, precision=1)}"
+        )
         ttfr_values = [
             r.get("ttft", 0)
             for s in self._summaries
@@ -94,9 +98,9 @@ class SummaryFileWriter:
             avg_ttfr = sum(ttfr_values) / len(ttfr_values)
             lines.append(
                 f"  Time to first response:"
-                f" {min(ttfr_values):.0f}s min"
-                f" / {avg_ttfr:.0f}s avg"
-                f" / {max(ttfr_values):.0f}s max"
+                f" {fmt_duration(min(ttfr_values))} min"
+                f" / {fmt_duration(avg_ttfr)} avg"
+                f" / {fmt_duration(max(ttfr_values))} max"
             )
         durations = [
             r.get("elapsed", 0)
@@ -104,11 +108,12 @@ class SummaryFileWriter:
             for r in s.get("results", [])
         ]
         if durations:
+            avg_dur = sum(durations) / len(durations)
             lines.append(
                 f"  Request duration:"
-                f" {min(durations):.0f}s min"
-                f" / {sum(durations) / len(durations):.0f}s avg"
-                f" / {max(durations):.0f}s max"
+                f" {fmt_duration(min(durations))} min"
+                f" / {fmt_duration(avg_dur)} avg"
+                f" / {fmt_duration(max(durations))} max"
             )
         llm_calls = [
             r.get("llm_calls", 0)
@@ -213,8 +218,9 @@ class SummaryFileWriter:
             )
             lines.append(
                 f"    Requests with fixes took"
-                f" {avg_with:.0f}s avg"
-                f" vs {avg_without:.0f}s avg without"
+                f" {fmt_duration(avg_with)} avg"
+                f" vs {fmt_duration(avg_without)} avg"
+                f" without"
             )
 
     def _write_request_results(self, lines) -> None:
@@ -306,7 +312,8 @@ class SummaryFileWriter:
             prev_count = count
             lines.append(
                 f"  {pct:4d}% ({count} requests)"
-                f" completed by {val:.1f}s",
+                f" completed by"
+                f" {fmt_duration(val, precision=1)}",
             )
         lines.append("")
 

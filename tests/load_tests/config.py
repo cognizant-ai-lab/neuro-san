@@ -264,6 +264,18 @@ def format_rss(rss_mb: float) -> str:
     return f"{rss_mb:.0f}M"
 
 
+def fmt_duration(seconds: float, *, precision: int = 0) -> str:
+    """Format seconds with minutes suffix when >= 60s.
+
+    Returns e.g. '1870s (31m)' or '45s' for short durations.
+    """
+    base = f"{seconds:.{precision}f}s"
+    if seconds >= 60:
+        mins = int(seconds) // 60
+        return f"{base} ({mins}m)"
+    return base
+
+
 def compute_amplification(
         actual_requests: int, total_retries: int,
 ) -> float:

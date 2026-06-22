@@ -19,6 +19,7 @@ import logging
 
 from collections import Counter
 
+from tests.load_tests.config import fmt_duration
 from tests.load_tests.config import format_rss
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.config import STATUS_CREATED
@@ -124,7 +125,10 @@ class SummaryReporter:
         logger.info("    Failed:    %s", total_failed)
         logger.info("    Timed out: %s", total_timeout)
         logger.info("    Killed:    %s", total_killed)
-        logger.info("  Total wall time: %.2fs", total_time)
+        logger.info(
+            "  Total wall time: %s",
+            fmt_duration(total_time, precision=2),
+        )
         self._log_performance_stats()
 
         if total_retries > 0:
@@ -147,18 +151,21 @@ class SummaryReporter:
         ttfr = self._ttfr_stats()
         if ttfr is not None:
             logger.info(
-                "  Time to first response: %.0fs min"
-                " / %.0fs avg / %.0fs max",
-                ttfr["min"], ttfr["avg"], ttfr["max"],
+                "  Time to first response: %s min"
+                " / %s avg / %s max",
+                fmt_duration(ttfr["min"]),
+                fmt_duration(ttfr["avg"]),
+                fmt_duration(ttfr["max"]),
             )
 
         duration = self._request_duration_stats()
         if duration is not None:
             logger.info(
-                "  Request duration: %.0fs min / %.0fs avg"
-                " / %.0fs max",
-                duration["min"], duration["avg"],
-                duration["max"],
+                "  Request duration: %s min / %s avg"
+                " / %s max",
+                fmt_duration(duration["min"]),
+                fmt_duration(duration["avg"]),
+                fmt_duration(duration["max"]),
             )
 
         llm_stats = self._llm_call_stats()
@@ -292,9 +299,10 @@ class SummaryReporter:
             avg_with = sum(with_fixes) / len(with_fixes)
             avg_without = sum(without_fixes) / len(without_fixes)
             logger.info(
-                "    Requests with fixes took %.0fs avg"
-                " vs %.0fs avg without",
-                avg_with, avg_without,
+                "    Requests with fixes took %s avg"
+                " vs %s avg without",
+                fmt_duration(avg_with),
+                fmt_duration(avg_without),
             )
 
     @staticmethod
