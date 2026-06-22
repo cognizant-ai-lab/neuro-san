@@ -16,6 +16,7 @@ and report results. Uses real LLM calls via `agent_cli` subprocesses.
 - [Exit Codes](#exit-codes)
 - [Code Quality](#code-quality)
 - [Architecture](#architecture)
+- [Cross-Run Comparison](#cross-run-comparison)
 - [Notes](#notes)
 
 ## Quick Start
@@ -138,6 +139,7 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--scale`                  | 1           | Multiply `--num-requests`, `--max-workers`, `--request-timeout`, `--idle-timeout`, `--stage-timeout`, `--total-timeout` by this factor. `--max-requests` auto-adjusts. |
 | `--skip-reservation-check` | off         | Skip reservation_id validation               |
 | `--output-dir`             | (none)      | Base directory for test output               |
+| `--compare DIR`            | (none)      | Skip load test; scan DIR for previous runs and print a comparison table |
 | `--project-root`           | (none)      | Project root for profile discovery           |
 
 ### Abort on timeout
@@ -252,9 +254,18 @@ HTTP, so keys are only needed on the server side.
 
 ## Output
 
-Results go to `{tempdir}/load_test/{level}/{timestamp}/` by default
-(where `{tempdir}` is the system temp directory, e.g. `/tmp` on Linux),
-or to the path specified by `--output-dir`. At `adv` level this includes:
+Results go to `{tempdir}/load_test/{level}/{timestamp}_{requests}/` by
+default (where `{tempdir}` is the system temp directory, e.g. `/tmp` on
+Linux), or to the path specified by `--output-dir`. The request count is
+appended to the directory name for quick identification:
+
+```
+/tmp/load_test/adv/20260622_151428_50/
+/tmp/load_test/adv/20260622_151531_100/
+/tmp/load_test/adv/20260622_151648_150/
+```
+
+At `adv` level this includes:
 
 | File                  | Contents                                         |
 |-----------------------|--------------------------------------------------|
@@ -369,6 +380,31 @@ breakdown parsed from Start/Finish streaming_chat timestamps:
     Server -> Client:     0.2s
 ```
 
+## Cross-Run Comparison
+
+Use `--compare` to scan a directory of previous runs and print a
+side-by-side comparison table:
+
+```bash
+python -m tests.load_tests.load_test --compare /tmp/load_test/adv/
+```
+
+Output:
+
+```
+============================================================
+  CROSS-RUN COMPARISON
+============================================================
+                    Folder  Requests  Wall Time  Avg/req  TTFR avg  Failed
+-----------------------------------------------------------------------------------
+  20260622_151428_50        50        1200s (20m)    24s      45s       0
+  20260622_151531_100      100        3600s (60m)    36s      90s       2
+  20260622_151648_150      150        6066s (101m)   40s     120s       8
+```
+
+No load test is executed — the command reads `raw_results.json` from
+each subdirectory, extracts key metrics, and sorts by request count.
+
 ## Exit Codes
 
 - `0` — All requests completed successfully
@@ -426,6 +462,7 @@ tests/load_tests/
   reporting/
     disconnection_reporter.py  DisconnectionReporter
     json_metadata.py           JsonMetadata (self-documenting JSON)
+    cross_run_comparison.py   CrossRunComparison (--compare output)
     latency_analyzer.py        LatencyAnalyzer (completion timeline, degradation)
     summary_file_writer.py     SummaryFileWriter (summary.txt output)
     pool_analyzer.py           PoolAnalyzer
