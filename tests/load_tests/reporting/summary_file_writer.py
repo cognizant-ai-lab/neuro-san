@@ -22,6 +22,8 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from collections import Counter
+
 from tests.load_tests.config import format_rss
 from tests.load_tests.config import STATUS_CREATED
 
@@ -123,6 +125,7 @@ class SummaryFileWriter:
                 f" / {max(llm_calls)} max"
             )
         self._write_rss_trajectory(lines)
+        self._write_validation_summary(lines)
         lines.append("")
 
     def _write_rss_trajectory(self, lines) -> None:
@@ -149,6 +152,70 @@ class SummaryFileWriter:
             f" \u2192 {format_rss(peak_rss)} peak"
             f" \u2192 {format_rss(end_rss or 0)} end"
         )
+
+    def _write_validation_summary(self, lines) -> None:
+        """Write validation retry summary if any events exist."""
+        all_events = []
+        for summary in self._summaries:
+            all_events.extend(
+                summary.get("validation_events", []),
+            )
+        if not all_events:
+            return
+        total_cycles = sum(
+            e.get("fix_cycles", 0) for e in all_events
+        )
+        total_requests = sum(
+            s.get("concurrent", 0) for s in self._summaries
+        )
+        affected = len(all_events)
+        lines.append(
+            f"  Validation: {affected} of {total_requests}"
+            f" requests needed fixes"
+            f" ({total_cycles} fix cycles total)"
+        )
+        self._write_validation_time_impact(
+            lines, all_events,
+        )
+        all_errors = []
+        for event in all_events:
+            all_errors.extend(event.get("errors", []))
+        if all_errors:
+            counts = Counter(all_errors)
+            top = counts.most_common(3)
+            parts = [
+                f"{err} ({cnt}x)" for err, cnt in top
+            ]
+            lines.append(
+                f"    {len(all_errors)} errors found:"
+                f" {', '.join(parts)}"
+            )
+
+    def _write_validation_time_impact(
+            self, lines, events,
+    ) -> None:
+        """Write avg duration with/without validation fixes."""
+        fix_rids = {e.get("request_id") for e in events}
+        with_fixes = []
+        without_fixes = []
+        for summary in self._summaries:
+            for result in summary.get("results", []):
+                rid = result.get("request_id", "")
+                elapsed = result.get("elapsed", 0)
+                if rid in fix_rids:
+                    with_fixes.append(elapsed)
+                else:
+                    without_fixes.append(elapsed)
+        if with_fixes and without_fixes:
+            avg_with = sum(with_fixes) / len(with_fixes)
+            avg_without = (
+                sum(without_fixes) / len(without_fixes)
+            )
+            lines.append(
+                f"    Requests with fixes took"
+                f" {avg_with:.0f}s avg"
+                f" vs {avg_without:.0f}s avg without"
+            )
 
     def _write_request_results(self, lines) -> None:
         """Write per-request result table."""

@@ -39,6 +39,7 @@ from typing import Tuple
 import psutil
 
 from tests.load_tests.config import NetworkTokenEntry
+from tests.load_tests.config import ValidationEvent
 from tests.load_tests.config import ResourceSnapshot
 from tests.load_tests.config import ServerCounts
 from tests.load_tests.config import StageSummary
@@ -617,6 +618,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 server_counts={},
                 disconnections=[],
                 network_tokens=[],
+                validation_events=[],
                 has_server_log=has_server_log,
                 has_tokens=self.args.include_tokens,
                 monitor_resources=monitor_resources,
@@ -637,17 +639,18 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 "(no --server-log)",
             )
 
-        server_counts, disconnections, network_tokens, after_server = (
-            self._collect_post_stage_data(
-                actual_requests, monitor_resources,
-                has_server_log,
-                log_pos, results,
-                before_server=before_server,
-                before_client=before_client,
-                peak_client=peak_client,
-                settled_client=settled_client,
+        server_counts, disconnections, network_tokens, \
+            validation_events, after_server = (
+                self._collect_post_stage_data(
+                    actual_requests, monitor_resources,
+                    has_server_log,
+                    log_pos, results,
+                    before_server=before_server,
+                    before_client=before_client,
+                    peak_client=peak_client,
+                    settled_client=settled_client,
+                )
             )
-        )
 
         summary_entry = self._build_stage_summary(
             stage_num=stage_num,
@@ -662,6 +665,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             server_counts=server_counts,
             disconnections=disconnections,
             network_tokens=network_tokens,
+            validation_events=validation_events,
             has_server_log=has_server_log,
             has_tokens=self.args.include_tokens,
             monitor_resources=monitor_resources,
@@ -771,14 +775,15 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     "Server SETTLED", after_server,
                 )
 
-        server_counts, disconnections, network_tokens = (
-            self._analyze_server_log(
-                has_server_log,
-                log_pos,
-                results=results,
-                actual_requests=actual_requests,
+        server_counts, disconnections, network_tokens, \
+            validation_events = (
+                self._analyze_server_log(
+                    has_server_log,
+                    log_pos,
+                    results=results,
+                    actual_requests=actual_requests,
+                )
             )
-        )
 
         if before_server and after_server:
             self.resource_reporter.add_resource_row(
@@ -796,7 +801,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         return (
             server_counts, disconnections,
-            network_tokens, after_server,
+            network_tokens, validation_events,
+            after_server,
         )
 
     @staticmethod
@@ -806,6 +812,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             counts, elapsed, retries, total_retries,
             amplification, results, server_counts,
             disconnections, network_tokens,
+            validation_events,
             has_server_log, has_tokens,
             monitor_resources, before_server,
             after_server, peak_threads,
@@ -828,6 +835,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "total_finished": server_counts.get("total_finished"),
             "disconnections": disconnections,
             "network_tokens": network_tokens,
+            "validation_events": validation_events,
             "has_server_log": has_server_log,
             "has_tokens": has_tokens,
         }
@@ -861,15 +869,18 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             self, has_server_log,
             log_pos, *, results, actual_requests,
     ) -> Tuple[
-        ServerCounts, List[Dict[str, str]], List[NetworkTokenEntry],
+        ServerCounts, List[Dict[str, str]],
+        List[NetworkTokenEntry], List[ValidationEvent],
     ]:
         """Analyze server log or report unavailability.
 
-        Returns (server_counts, disconnections, network_tokens).
+        Returns (server_counts, disconnections, network_tokens,
+        validation_events).
         """
         server_counts: ServerCounts = {}
         disconnections: List[Dict[str, str]] = []
         network_tokens: List[NetworkTokenEntry] = []
+        validation_events: List[ValidationEvent] = []
         if has_server_log:
             server_counts = (
                 self.log_monitor.count_requests_since(
@@ -896,6 +907,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     log_pos,
                 )
             )
+            validation_events = (
+                self.log_monitor.parse_validation_events_since(
+                    log_pos,
+                )
+            )
             if token_data:
                 logger.info(
                     "\n  Token usage (from server log):",
@@ -903,6 +919,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 TrafficRunner.log_token_summary(
                     results, output_dir=self._output_dir,
                     network_tokens=network_tokens,
+                    validation_events=validation_events,
                 )
             OutputValidator.log_disconnections(disconnections)
             OutputValidator.log_server_validation(
@@ -926,7 +943,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     "\n  Server-side validation: "
                     "not available (no --server-log)",
                 )
-        return server_counts, disconnections, network_tokens
+        return (
+            server_counts, disconnections,
+            network_tokens, validation_events,
+        )
 
     def _setup_test_log(self) -> None:
         """Create output directory and add a file handler for logging."""

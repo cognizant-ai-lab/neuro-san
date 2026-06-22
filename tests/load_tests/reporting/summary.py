@@ -17,6 +17,8 @@
 
 import logging
 
+from collections import Counter
+
 from tests.load_tests.config import format_rss
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.config import STATUS_CREATED
@@ -177,6 +179,8 @@ class SummaryReporter:
                 format_rss(rss_trajectory["end"]),
             )
 
+        self._log_validation_summary()
+
     def _request_duration_stats(self):
         """Compute min/avg/max elapsed time across requests."""
         durations = []
@@ -246,3 +250,71 @@ class SummaryReporter:
             "peak": peak_rss,
             "end": end_rss or 0,
         }
+
+    def _log_validation_summary(self) -> None:
+        """Log aggregate validation retry info if any."""
+        all_events = self._collect_validation_events()
+        if not all_events:
+            return
+        total_cycles = sum(
+            e.get("fix_cycles", 0) for e in all_events
+        )
+        total_requests = sum(
+            s.get("concurrent", 0) for s in self._summaries
+        )
+        affected = len(all_events)
+        all_errors = []
+        for event in all_events:
+            all_errors.extend(event.get("errors", []))
+        logger.info(
+            "\n  Validation: %s of %s requests needed"
+            " fixes (%s fix cycles total)",
+            affected, total_requests, total_cycles,
+        )
+        self._log_validation_time_impact(all_events)
+        if all_errors:
+            self._log_top_errors(all_errors)
+
+    def _log_validation_time_impact(self, events) -> None:
+        """Log avg duration of requests with/without fixes."""
+        fix_rids = {e.get("request_id") for e in events}
+        with_fixes = []
+        without_fixes = []
+        for summary in self._summaries:
+            for result in summary.get("results", []):
+                rid = result.get("request_id", "")
+                elapsed = result.get("elapsed", 0)
+                if rid in fix_rids:
+                    with_fixes.append(elapsed)
+                else:
+                    without_fixes.append(elapsed)
+        if with_fixes and without_fixes:
+            avg_with = sum(with_fixes) / len(with_fixes)
+            avg_without = sum(without_fixes) / len(without_fixes)
+            logger.info(
+                "    Requests with fixes took %.0fs avg"
+                " vs %.0fs avg without",
+                avg_with, avg_without,
+            )
+
+    @staticmethod
+    def _log_top_errors(all_errors) -> None:
+        """Log the most common validation errors."""
+        counts = Counter(all_errors)
+        top = counts.most_common(3)
+        parts = [
+            f"{err} ({cnt}x)" for err, cnt in top
+        ]
+        logger.info(
+            "    %s errors found: %s",
+            len(all_errors), ", ".join(parts),
+        )
+
+    def _collect_validation_events(self):
+        """Gather all validation events across stages."""
+        events = []
+        for summary in self._summaries:
+            events.extend(
+                summary.get("validation_events", []),
+            )
+        return events

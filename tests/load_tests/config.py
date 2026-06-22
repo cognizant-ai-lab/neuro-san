@@ -47,6 +47,15 @@ class NetworkTokenEntry(TypedDict):
     cost: float
 
 
+class ValidationEvent(TypedDict):
+    """Per-request validation tracking from server log."""
+
+    request_id: str
+    attempts: int
+    fix_cycles: int
+    errors: List[str]
+
+
 class ResourceSnapshot(TypedDict):
     """Point-in-time resource usage of a process."""
 
@@ -137,6 +146,7 @@ class StageSummary(TypedDict, total=False):
     total_finished: Optional[int]
     disconnections: List[Dict[str, str]]
     network_tokens: List[NetworkTokenEntry]
+    validation_events: List[ValidationEvent]
     has_server_log: bool
     has_tokens: bool
     before_threads: Optional[int]
@@ -218,6 +228,18 @@ TASK_CANCELLED_PATTERN = re.compile(
 )
 DONE_STREAMING_PATTERN = re.compile(
     r'Done with (\S+)\.StreamingChat'
+)
+VALIDATION_ATTEMPT_PATTERN = re.compile(
+    r'Validating toolbox agents'
+)
+VALIDATION_ERROR_PATTERN = re.compile(
+    r'"Validation errors: \[(.+?)\]"'
+)
+VALIDATION_REINVOKE_PATTERN = re.compile(
+    r'Invoking agent network designer to fix the issues'
+)
+VALIDATION_REQUEST_ID_PATTERN = re.compile(
+    r'"request_id":\s*"(request-\d+)"'
 )
 
 # Model pricing (USD per 1M tokens) — update as providers change rates

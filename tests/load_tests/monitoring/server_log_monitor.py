@@ -40,6 +40,11 @@ from tests.load_tests.config import STREAM_CLOSED_REQUEST_PATTERN
 from tests.load_tests.config import SharedRef
 from tests.load_tests.config import TASK_CANCELLED_PATTERN
 from tests.load_tests.config import TokenEntry
+from tests.load_tests.config import VALIDATION_ATTEMPT_PATTERN
+from tests.load_tests.config import VALIDATION_ERROR_PATTERN
+from tests.load_tests.config import ValidationEvent
+from tests.load_tests.config import VALIDATION_REINVOKE_PATTERN
+from tests.load_tests.config import VALIDATION_REQUEST_ID_PATTERN
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 
 logger = logging.getLogger(__name__)
@@ -290,6 +295,61 @@ class ServerLogMonitor:
             if match:
                 return match.group(1)
         return None
+
+    def parse_validation_events_since(
+            self, position,
+    ) -> List[ValidationEvent]:
+        """Parse validation attempts and fix cycles per request.
+
+        Scans for 'Validating toolbox agents' (attempt),
+        'Validation errors' (error detail), and
+        'Invoking agent network designer to fix' (fix cycle).
+        Groups by request_id.
+        """
+        if self._server_log is None or position is None:
+            return []
+        lines = self._read_lines_since(
+            position, "validation events",
+        )
+        if not lines:
+            return []
+        return self._collect_validation_events(lines)
+
+    @staticmethod
+    def _collect_validation_events(lines) -> List[ValidationEvent]:
+        """Group validation log lines by request_id."""
+        by_request: Dict[str, Dict[str, object]] = {}
+        for line in lines:
+            rid_match = VALIDATION_REQUEST_ID_PATTERN.search(line)
+            if not rid_match:
+                continue
+            rid = rid_match.group(1)
+            if rid not in by_request:
+                by_request[rid] = {
+                    "attempts": 0,
+                    "fix_cycles": 0,
+                    "errors": [],
+                }
+            entry = by_request[rid]
+            if VALIDATION_ATTEMPT_PATTERN.search(line):
+                entry["attempts"] += 1
+            if VALIDATION_REINVOKE_PATTERN.search(line):
+                entry["fix_cycles"] += 1
+            err_match = VALIDATION_ERROR_PATTERN.search(line)
+            if err_match:
+                raw = err_match.group(1)
+                for err in re.findall(r'"([^"]+)"', raw):
+                    entry["errors"].append(err)
+        results: List[ValidationEvent] = []
+        for rid, data in sorted(by_request.items()):
+            if data.get("fix_cycles", 0) > 0:
+                results.append({
+                    "request_id": rid,
+                    "attempts": data.get("attempts", 0),
+                    "fix_cycles": data.get("fix_cycles", 0),
+                    "errors": data.get("errors", []),
+                })
+        return results
 
     def parse_streaming_chat_timing_since(
             self, position,

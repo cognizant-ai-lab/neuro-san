@@ -375,6 +375,7 @@ class TrafficRunner:
     def log_token_summary(
             results, *, output_dir=None,
             network_tokens=None,
+            validation_events=None,
     ) -> None:
         """Log token usage summary to console, detail to file.
 
@@ -389,6 +390,7 @@ class TrafficRunner:
             TrafficRunner._write_token_file(
                 results, output_dir,
                 network_tokens=network_tokens,
+                validation_events=validation_events,
             )
             TrafficRunner._log_token_totals(results)
         else:
@@ -419,10 +421,14 @@ class TrafficRunner:
     def _write_token_file(
             results, output_dir, *,
             network_tokens=None,
+            validation_events=None,
     ) -> None:
         """Write per-request token detail to server_tokens.log."""
         by_request = TrafficRunner._group_network_tokens(
             network_tokens,
+        )
+        by_validation = TrafficRunner._group_validation_events(
+            validation_events,
         )
         path = os.path.join(output_dir, "server_tokens.log")
         with open(path, "w", encoding="utf-8") as fh:
@@ -432,6 +438,7 @@ class TrafficRunner:
                     continue
                 TrafficRunner._write_token_request(
                     fh, result, by_request,
+                    by_validation,
                 )
         logger.info("  Detail:  %s", path)
 
@@ -445,7 +452,18 @@ class TrafficRunner:
         return by_request
 
     @staticmethod
-    def _write_token_request(fh, result, by_request) -> None:
+    def _group_validation_events(validation_events):
+        """Index validation events by request_id."""
+        by_request = {}
+        for event in (validation_events or []):
+            rid = event.get("request_id", "")
+            by_request[rid] = event
+        return by_request
+
+    @staticmethod
+    def _write_token_request(
+            fh, result, by_request, by_validation,
+    ) -> None:
         """Write one request's token line with agent breakdown."""
         rid = result.get("request_id", "?")
         total = result.get("total_tokens", 0)
@@ -458,6 +476,9 @@ class TrafficRunner:
             f"{llm_calls} LLM call(s), "
             f"model={model}"
             f"  [{elapsed:.1f}s {status}]\n"
+        )
+        TrafficRunner._write_validation_detail(
+            fh, rid, by_validation,
         )
         agents = by_request.get(rid, [])
         for agent in agents:
@@ -472,8 +493,24 @@ class TrafficRunner:
                 f" ({a_prompt:,} prompt"
                 f" / {a_comp:,} completion)\n"
             )
-        if agents:
+        if agents or rid in by_validation:
             fh.write("\n")
+
+    @staticmethod
+    def _write_validation_detail(fh, rid, by_validation):
+        """Write per-request validation retry detail."""
+        event = by_validation.get(rid)
+        if not event:
+            return
+        attempts = event.get("attempts", 0)
+        fix_cycles = event.get("fix_cycles", 0)
+        fh.write(
+            f"  Validation: {attempts} attempt(s),"
+            f" {fix_cycles} fix cycle(s)\n"
+        )
+        errors = event.get("errors", [])
+        for err in errors:
+            fh.write(f"    - {err}\n")
 
     @staticmethod
     def _log_token_totals(results) -> None:
