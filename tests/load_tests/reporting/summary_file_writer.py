@@ -315,7 +315,27 @@ class SummaryFileWriter:
                 f" completed by"
                 f" {fmt_duration(val, precision=1)}",
             )
+        self._write_count_milestones(lines, all_latencies)
         lines.append("")
+
+    @staticmethod
+    def _write_count_milestones(lines, sorted_latencies):
+        """Write completion times at round-number request counts."""
+        total = len(sorted_latencies)
+        step = 50
+        if total < step:
+            return
+        milestones = list(range(step, total, step))
+        if milestones[-1] != total:
+            milestones.append(total)
+        lines.append("")
+        lines.append("  Completion by count:")
+        for count in milestones:
+            duration = sorted_latencies[count - 1]
+            lines.append(
+                f"  {count:5d} requests completed by"
+                f" {fmt_duration(duration, precision=1)}",
+            )
 
     def _write_server_timing(self, lines) -> None:
         """Write per-request server timing breakdown."""

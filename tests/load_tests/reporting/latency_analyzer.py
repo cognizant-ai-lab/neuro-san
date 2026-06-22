@@ -32,6 +32,9 @@ logger = logging.getLogger(__name__)
 # Cumulative completion milestones (percent)
 COMPLETION_MILESTONES = [50, 60, 70, 80, 90, 95, 100]
 
+# Step size for count-based milestones (e.g. 50, 100, 150...)
+COUNT_MILESTONE_STEP = 50
+
 
 def _percentile(sorted_values, pct):
     """Compute the pct-th percentile from pre-sorted values."""
@@ -99,6 +102,30 @@ class LatencyAnalyzer:
                     pct, count,
                     fmt_duration(duration, precision=1),
                 )
+            self._log_count_milestones(latencies)
+
+    @staticmethod
+    def _log_count_milestones(sorted_latencies) -> None:
+        """Log completion times at round-number request counts."""
+        total = len(sorted_latencies)
+        if total < COUNT_MILESTONE_STEP:
+            return
+        milestones = list(
+            range(
+                COUNT_MILESTONE_STEP, total,
+                COUNT_MILESTONE_STEP,
+            ),
+        )
+        if milestones[-1] != total:
+            milestones.append(total)
+        logger.info("\n  Completion by count:")
+        for count in milestones:
+            duration = sorted_latencies[count - 1]
+            logger.info(
+                "    %4d requests completed by %s",
+                count,
+                fmt_duration(duration, precision=1),
+            )
 
     # ----------------------------------------------------------
     # 2. Round-over-round degradation
