@@ -115,6 +115,7 @@ class Heartbeat:
     def progress_heartbeat(self, futures, total, start_time,
                            stop_event, *,
                            ready_event: threading.Event,
+                           fires_done_event: threading.Event,
                            peak_threads_ref: SharedRef,
                            peak_client_rss_ref: SharedRef,
                            peak_server_rss_ref: SharedRef,
@@ -124,7 +125,8 @@ class Heartbeat:
 
         Signals ready_event after the initial RSS sample so the
         caller can wait for the heartbeat to be ready before
-        firing requests.
+        firing requests.  Waits for fires_done_event before
+        printing progress so ticks do not overlap receipt dots.
         """
         last_done = 0
         last_change = start_time
@@ -133,6 +135,7 @@ class Heartbeat:
         tick_count = 0
         peak_rss = self._sample_client_rss(0.0, peak_client_rss_ref)
         ready_event.set()
+        fires_done_event.wait()
         progress_file = self._open_progress_file()
         try:
             while not stop_event.wait(

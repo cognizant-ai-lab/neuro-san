@@ -224,6 +224,7 @@ class TrafficRunner:
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             heartbeat_stop = threading.Event()
             heartbeat_ready = threading.Event()
+            fires_done_event = threading.Event()
             futures_ref: list = []
             hb = Heartbeat(server_proc, client_proc, output_dir)
             heartbeat_thread = threading.Thread(
@@ -232,6 +233,7 @@ class TrafficRunner:
                       heartbeat_stop),
                 kwargs={
                     "ready_event": heartbeat_ready,
+                    "fires_done_event": fires_done_event,
                     "peak_threads_ref": peak_threads_ref,
                     "peak_client_rss_ref": peak_client_rss_ref,
                     "peak_server_rss_ref": peak_server_rss_ref,
@@ -249,6 +251,7 @@ class TrafficRunner:
                 )
                 for i in range(num_requests)
             )
+            fires_done_event.set()
             killed_count = self._collect_with_timeout(
                 futures_ref, results_list,
                 start=start, stage_timeout=stage_timeout,
