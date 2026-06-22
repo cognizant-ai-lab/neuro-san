@@ -300,11 +300,9 @@ class CrossRunComparison:
         )
 
     @staticmethod
-    def _fmt_failed(count, delta_pct, breakdown):
+    def _fmt_failed(count, _delta_pct, breakdown):
         """Format failed count with optional breakdown."""
-        base = CrossRunComparison._val_with_delta(
-            str(count), delta_pct,
-        )
+        base = str(count)
         if count == 0 or not breakdown:
             return base
         parts = []
