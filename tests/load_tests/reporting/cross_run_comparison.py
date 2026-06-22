@@ -132,7 +132,7 @@ class CrossRunComparison:
 
         header = [
             "Folder", "Requests", "Wall Time",
-            "Avg/req", "TTFR avg", "Peak RSS",
+            "Avg duration", "TTFR avg", "Peak RSS",
             "Failed",
         ]
         rows = []
