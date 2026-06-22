@@ -278,16 +278,8 @@ class Heartbeat:
         """Write progress to console with reduced verbosity.
 
         Prints the full line on tick 1 and every 10th tick.
-        Prints the tick number (comma-separated) in between.
+        Silent in between to avoid overlapping receipt dots.
         """
         if tick_count == 1 or tick_count % CONSOLE_TICK_INTERVAL == 0:
             sys.stdout.write("\n")
             logger.info("%s", line)
-        else:
-            position = tick_count % CONSOLE_TICK_INTERVAL
-            if position == 1:
-                sys.stdout.write("  ")
-            else:
-                sys.stdout.write(",")
-            sys.stdout.write(str(position))
-            sys.stdout.flush()
