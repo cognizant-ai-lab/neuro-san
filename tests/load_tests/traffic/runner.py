@@ -17,6 +17,7 @@
 
 import logging
 import os
+import sys
 import threading
 import time
 from concurrent.futures import as_completed
@@ -347,6 +348,8 @@ class TrafficRunner:
                 parsed_fields=parsed_fields,
             )
             return
+        sys.stdout.write("\n")
+        sys.stdout.flush()
         logger.info(
             "Request %s: %s (%s)",
             request_id, status,
