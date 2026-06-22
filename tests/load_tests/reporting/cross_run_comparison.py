@@ -143,6 +143,7 @@ class CrossRunComparison:
                  for s in stages),
                 default=0,
             ),
+            "succeeded": aggregates.get("passed", 0),
             "failed": aggregates.get("failed", 0),
             "fail_breakdown": CrossRunComparison._classify_failures(
                 all_results,
@@ -205,7 +206,8 @@ class CrossRunComparison:
         logger.info("=" * SEPARATOR_WIDTH)
 
         header = [
-            "Folder", "Requests", "Wall Time",
+            "Folder", "Requests", "Succeeded",
+            "Wall Time",
             "Avg success (duration)",
             "TTFR avg", "Peak RSS",
             "Failed requests",
@@ -229,6 +231,7 @@ class CrossRunComparison:
                     str(run.get("num_requests", 0)),
                     deltas.get("num_requests"),
                 ),
+                str(run.get("succeeded", 0)),
                 CrossRunComparison._val_with_delta(
                     fmt_duration(run.get("wall_time", 0)),
                     deltas.get("wall_time"),
