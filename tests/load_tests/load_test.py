@@ -61,6 +61,7 @@ from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.reporting.cross_run_comparison import CrossRunComparison
+from tests.load_tests.reporting.rebuild_results import ResultsRebuilder
 from tests.load_tests.reporting.disconnection_reporter import DisconnectionReporter
 from tests.load_tests.reporting.json_metadata import JsonMetadata
 from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
@@ -329,6 +330,15 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                  "with at least N requests. The smallest "
                  "remaining run becomes the baseline for "
                  "percentage deltas.",
+        )
+        parser.add_argument(
+            "--rebuild",
+            type=str,
+            default=None,
+            metavar="DIR",
+            help="Reconstruct raw_results.json from the "
+                 "request output files in DIR. Useful for "
+                 "runs interrupted by Ctrl+C.",
         )
         args = parser.parse_args()
         # Track which args the user explicitly provided so
@@ -1498,6 +1508,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     def main() -> None:
         """Entry point for the load test script."""
         args = LoadTestOrchestrator.parse_args()
+        if args.rebuild:
+            ResultsRebuilder(args.rebuild).run()
+            return
         if args.compare:
             agent_filter = None
             if args.compare_agent:
