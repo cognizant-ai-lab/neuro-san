@@ -248,8 +248,7 @@ class Heartbeat:
         Prints the tick number (comma-separated) in between.
         """
         if tick_count == 1 or tick_count % CONSOLE_TICK_INTERVAL == 0:
-            if tick_count > 1:
-                sys.stdout.write("\n")
+            sys.stdout.write("\n")
             logger.info("%s", line)
         else:
             position = tick_count % CONSOLE_TICK_INTERVAL
