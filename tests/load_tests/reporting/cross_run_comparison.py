@@ -32,11 +32,16 @@ class CrossRunComparison:
     """Scans a base directory for raw_results.json files and logs
     a comparison table across runs."""
 
-    def __init__(self, base_dir, *, agent_filter=None) -> None:
+    def __init__(
+        self, base_dir, *,
+        agent_filter=None,
+        baseline_requests=0,
+    ) -> None:
         self._base_dir = base_dir
         self._agent_filter: set = (
             set(agent_filter) if agent_filter else set()
         )
+        self._baseline_requests = baseline_requests
 
     def run(self) -> None:
         """Scan for runs and log comparison tables by agent."""
@@ -50,9 +55,17 @@ class CrossRunComparison:
         groups = self._group_by_agent(all_runs)
         for agent_name in sorted(groups):
             runs = self._deduplicate(groups[agent_name])
+            if self._baseline_requests > 0:
+                runs = [
+                    r for r in runs
+                    if r.get("num_requests", 0)
+                    >= self._baseline_requests
+                ]
             runs.sort(
                 key=lambda r: r.get("num_requests", 0),
             )
+            if not runs:
+                continue
             self._log_table(runs, agent_name)
 
     def _collect_runs(self):

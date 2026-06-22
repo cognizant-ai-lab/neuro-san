@@ -317,7 +317,18 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             metavar="NAME",
             help="When used with --compare, show only runs "
                  "for this agent (e.g. hello_world). "
+                 "Comma-separated for multiple agents. "
                  "Without this, tables are grouped by agent.",
+        )
+        parser.add_argument(
+            "--compare-baseline",
+            type=int,
+            default=0,
+            metavar="N",
+            help="When used with --compare, only show runs "
+                 "with at least N requests. The smallest "
+                 "remaining run becomes the baseline for "
+                 "percentage deltas.",
         )
         args = parser.parse_args()
         # Track which args the user explicitly provided so
@@ -1472,6 +1483,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             CrossRunComparison(
                 args.compare,
                 agent_filter=agent_filter,
+                baseline_requests=args.compare_baseline,
             ).run()
             return
         orchestrator = LoadTestOrchestrator(args)
