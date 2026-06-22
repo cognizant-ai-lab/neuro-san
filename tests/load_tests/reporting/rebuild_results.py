@@ -41,7 +41,7 @@ _CONFIG_AGENT_RE = re.compile(
 )
 
 _CONFIG_NUM_REQ_RE = re.compile(
-    r"max_requests=(\d+)",
+    r"Requests:\s*(\d+)",
 )
 
 
@@ -61,14 +61,21 @@ class ResultsRebuilder:
         raw_results.json.
         """
         requests_dir = os.path.join(self._output_dir, "requests")
+        json_path = os.path.join(
+            self._output_dir, "raw_results.json",
+        )
         if os.path.isdir(requests_dir):
-            self._rebuild_single()
+            if os.path.isfile(json_path) and self._force:
+                self._reclassify(json_path, requests_dir)
+            else:
+                self._rebuild_single()
             return
         self._rebuild_all()
 
     def _rebuild_all(self) -> None:
-        """Scan subdirectories and rebuild any missing results."""
+        """Scan subdirectories and rebuild or reclassify."""
         rebuilt = 0
+        reclassified = 0
         skipped = 0
         for entry in sorted(os.listdir(self._output_dir)):
             sub_dir = os.path.join(self._output_dir, entry)
@@ -78,16 +85,23 @@ class ResultsRebuilder:
             json_path = os.path.join(sub_dir, "raw_results.json")
             if not os.path.isdir(requests_dir):
                 continue
-            if os.path.isfile(json_path) and not self._force:
-                skipped += 1
+            if os.path.isfile(json_path):
+                if self._force:
+                    logger.info("Reclassifying: %s", entry)
+                    ResultsRebuilder(
+                        sub_dir, force=True,
+                    ).run()
+                    reclassified += 1
+                else:
+                    skipped += 1
                 continue
             logger.info("Rebuilding: %s", entry)
             ResultsRebuilder(sub_dir).run()
             rebuilt += 1
         logger.info(
-            "Done: %s rebuilt, %s skipped (already have "
-            "raw_results.json)",
-            rebuilt, skipped,
+            "Done: %s rebuilt, %s reclassified, "
+            "%s skipped",
+            rebuilt, reclassified, skipped,
         )
 
     def _rebuild_single(self) -> None:
@@ -246,20 +260,24 @@ class ResultsRebuilder:
         status = ResultsRebuilder._resolve_status(
             timing_info, parsed_fields,
         )
-        failure_reason = ResultsRebuilder._diagnose(
-            status, stdout, parsed_fields,
-        )
 
-        token_data = CliBuilder.parse_token_accounting(stdout)
         result = {
             "request_id": f"request-{req_id}",
             "status": status,
             "elapsed": elapsed,
             "ttft": elapsed,
-            "failure_reason": failure_reason,
+            "failure_reason": ResultsRebuilder._diagnose(
+                status, stdout, parsed_fields,
+            ),
         }
         result.update(parsed_fields)
+        ResultsRebuilder._attach_tokens(result, stdout)
+        return result
 
+    @staticmethod
+    def _attach_tokens(result, stdout):
+        """Add token accounting fields to a result dict."""
+        token_data = CliBuilder.parse_token_accounting(stdout)
         if token_data:
             result.update({
                 "total_tokens": token_data.get(
@@ -276,7 +294,68 @@ class ResultsRebuilder:
                 ),
             })
 
-        return result
+    @staticmethod
+    def _load_stdout_cache(requests_dir):
+        """Load all request stdout files into a dict keyed by id."""
+        cache = {}
+        for filename in os.listdir(requests_dir):
+            if not filename.endswith("_stdout.txt"):
+                continue
+            match = re.search(
+                r"request_(\d+)_stdout", filename,
+            )
+            if not match:
+                continue
+            req_id = int(match.group(1))
+            path = os.path.join(requests_dir, filename)
+            with open(
+                path, "r", encoding="utf-8",
+            ) as fh:
+                cache[req_id] = fh.read()
+        return cache
+
+    @staticmethod
+    def _reclassify(json_path, requests_dir):
+        """Update failure_reason in existing raw_results.json."""
+        with open(json_path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+
+        stdout_cache = ResultsRebuilder._load_stdout_cache(
+            requests_dir,
+        )
+
+        updated = 0
+        for stage in data.get("stage_summaries", []):
+            for result in stage.get("results", []):
+                if result.get("status") == STATUS_CREATED:
+                    continue
+                rid = result.get("request_id", "")
+                match = re.search(r"(\d+)$", rid)
+                if not match:
+                    continue
+                stdout = stdout_cache.get(
+                    int(match.group(1)), "",
+                )
+                parsed = {
+                    "reservation_id": result.get(
+                        "reservation_id",
+                    ),
+                    "agent_network_name": result.get(
+                        "agent_network_name",
+                    ),
+                }
+                reason = ResultsRebuilder._diagnose(
+                    result.get("status"), stdout, parsed,
+                )
+                if reason != result.get("failure_reason"):
+                    result["failure_reason"] = reason
+                    updated += 1
+
+        with open(json_path, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=2, default=str)
+        logger.info(
+            "  Updated %s failure reason(s)", updated,
+        )
 
     @staticmethod
     def _resolve_status(timing_info, parsed_fields):
