@@ -99,9 +99,6 @@ class CrossRunComparison:
             "wall_time": aggregates.get(
                 "total_elapsed_seconds", 0,
             ),
-            "avg_per_req": CrossRunComparison._avg(
-                all_results, "elapsed",
-            ),
             "avg_success": CrossRunComparison._avg(
                 [
                     r for r in all_results
@@ -140,14 +137,14 @@ class CrossRunComparison:
 
         header = [
             "Folder", "Requests", "Wall Time",
-            "Avg duration", "Avg success",
+            "Avg success (duration)",
             "TTFR avg", "Peak RSS",
             "Failed requests",
         ]
         rows = []
         metric_keys = [
             "num_requests", "wall_time",
-            "avg_per_req", "avg_success",
+            "avg_success",
             "ttfr_avg", "peak_rss",
             "failed",
         ]
@@ -166,10 +163,6 @@ class CrossRunComparison:
                 CrossRunComparison._val_with_delta(
                     fmt_duration(run.get("wall_time", 0)),
                     deltas.get("wall_time"),
-                ),
-                CrossRunComparison._val_with_delta(
-                    fmt_duration(run.get("avg_per_req", 0)),
-                    deltas.get("avg_per_req"),
                 ),
                 CrossRunComparison._fmt_optional(
                     run.get("avg_success", 0),
