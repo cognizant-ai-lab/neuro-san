@@ -22,6 +22,7 @@ import os
 from tests.load_tests.config import fmt_duration
 from tests.load_tests.config import format_rss
 from tests.load_tests.config import SEPARATOR_WIDTH
+from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
 logger = logging.getLogger(__name__)
@@ -101,6 +102,13 @@ class CrossRunComparison:
             "avg_per_req": CrossRunComparison._avg(
                 all_results, "elapsed",
             ),
+            "avg_success": CrossRunComparison._avg(
+                [
+                    r for r in all_results
+                    if r.get("status") == STATUS_CREATED
+                ],
+                "elapsed",
+            ),
             "ttfr_avg": CrossRunComparison._avg(
                 all_results, "ttft",
             ),
@@ -132,13 +140,15 @@ class CrossRunComparison:
 
         header = [
             "Folder", "Requests", "Wall Time",
-            "Avg duration", "TTFR avg", "Peak RSS",
+            "Avg duration", "Avg success",
+            "TTFR avg", "Peak RSS",
             "Failed requests",
         ]
         rows = []
         metric_keys = [
             "num_requests", "wall_time",
-            "avg_per_req", "ttfr_avg", "peak_rss",
+            "avg_per_req", "avg_success",
+            "ttfr_avg", "peak_rss",
             "failed",
         ]
         prev = None
@@ -159,6 +169,10 @@ class CrossRunComparison:
                 CrossRunComparison._val_with_delta(
                     fmt_duration(run.get("avg_per_req", 0)),
                     deltas.get("avg_per_req"),
+                ),
+                CrossRunComparison._fmt_optional(
+                    run.get("avg_success", 0),
+                    deltas.get("avg_success"),
                 ),
                 CrossRunComparison._fmt_ttfr(
                     run.get("ttfr_avg", 0),
@@ -198,6 +212,15 @@ class CrossRunComparison:
             return formatted_val
         sign = "+" if delta_pct >= 0 else ""
         return f"{formatted_val} ({sign}{delta_pct:.0f}%)"
+
+    @staticmethod
+    def _fmt_optional(value, delta_pct):
+        """Format a duration, showing a dash when data is missing."""
+        if value <= 0:
+            return "\u2014"
+        return CrossRunComparison._val_with_delta(
+            fmt_duration(value), delta_pct,
+        )
 
     @staticmethod
     def _fmt_ttfr(value, delta_pct):
