@@ -250,7 +250,7 @@ class CrossRunComparison:
                 ),
                 CrossRunComparison._fmt_failed(
                     run.get("failed", 0),
-                    deltas.get("failed"),
+                    run.get("num_requests", 0),
                     run.get("fail_breakdown", {}),
                 ),
             ))
@@ -307,10 +307,13 @@ class CrossRunComparison:
         )
 
     @staticmethod
-    def _fmt_failed(count, _delta_pct, breakdown):
+    def _fmt_failed(count, total, breakdown):
         """Format failed count with optional breakdown."""
-        base = str(count)
-        if count == 0 or not breakdown:
+        if count == 0:
+            return "0"
+        pct = (count * 100 // total) if total else 0
+        base = f"{count} ({pct}%)"
+        if not breakdown:
             return base
         labels = (
             ("empty_llm", "empty LLM"),
@@ -326,4 +329,4 @@ class CrossRunComparison:
                 parts.append(f"{val} {label}")
         if not parts:
             return base
-        return f"{base} ({', '.join(parts)})"
+        return f"{base}: {', '.join(parts)}"
