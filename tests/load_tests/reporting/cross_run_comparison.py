@@ -111,7 +111,7 @@ class CrossRunComparison:
 
     @staticmethod
     def _log_table(runs):
-        """Log the comparison table."""
+        """Log the comparison table with pct change from prior row."""
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         logger.info("  CROSS-RUN COMPARISON")
         logger.info("=" * SEPARATOR_WIDTH)
@@ -121,13 +121,60 @@ class CrossRunComparison:
             "Avg/req", "TTFR avg", "Failed",
         ]
         rows = []
+        metric_keys = [
+            "num_requests", "wall_time",
+            "avg_per_req", "ttfr_avg", "failed",
+        ]
+        prev = None
         for run in runs:
+            deltas = CrossRunComparison._compute_deltas(
+                prev, run, metric_keys,
+            )
             rows.append((
                 run.get("folder", ""),
-                str(run.get("num_requests", 0)),
-                fmt_duration(run.get("wall_time", 0)),
-                fmt_duration(run.get("avg_per_req", 0)),
-                fmt_duration(run.get("ttfr_avg", 0)),
-                str(run.get("failed", 0)),
+                CrossRunComparison._val_with_delta(
+                    str(run.get("num_requests", 0)),
+                    deltas.get("num_requests"),
+                ),
+                CrossRunComparison._val_with_delta(
+                    fmt_duration(run.get("wall_time", 0)),
+                    deltas.get("wall_time"),
+                ),
+                CrossRunComparison._val_with_delta(
+                    fmt_duration(run.get("avg_per_req", 0)),
+                    deltas.get("avg_per_req"),
+                ),
+                CrossRunComparison._val_with_delta(
+                    fmt_duration(run.get("ttfr_avg", 0)),
+                    deltas.get("ttfr_avg"),
+                ),
+                CrossRunComparison._val_with_delta(
+                    str(run.get("failed", 0)),
+                    deltas.get("failed"),
+                ),
             ))
+            prev = run
         TableFormatter.log_table(header, rows)
+
+    @staticmethod
+    def _compute_deltas(prev, current, keys):
+        """Compute percentage change from prev to current for each key."""
+        if prev is None:
+            return {}
+        deltas = {}
+        for key in keys:
+            prev_val = prev.get(key, 0)
+            curr_val = current.get(key, 0)
+            if prev_val > 0:
+                deltas[key] = (
+                    (curr_val - prev_val) / prev_val * 100
+                )
+        return deltas
+
+    @staticmethod
+    def _val_with_delta(formatted_val, delta_pct):
+        """Append percentage change suffix if available."""
+        if delta_pct is None:
+            return formatted_val
+        sign = "+" if delta_pct >= 0 else ""
+        return f"{formatted_val} ({sign}{delta_pct:.0f}%)"
