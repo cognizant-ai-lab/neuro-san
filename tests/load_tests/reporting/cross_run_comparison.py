@@ -144,6 +144,31 @@ class CrossRunComparison:
                 default=0,
             ),
             "failed": aggregates.get("failed", 0),
+            "fail_breakdown": CrossRunComparison._classify_failures(
+                all_results,
+            ),
+        }
+
+    @staticmethod
+    def _classify_failures(all_results):
+        """Categorize failed requests by failure reason."""
+        empty_llm = 0
+        validation = 0
+        other = 0
+        for result in all_results:
+            if result.get("status") == STATUS_CREATED:
+                continue
+            reason = result.get("failure_reason", "") or ""
+            if "empty LLM response" in reason:
+                empty_llm += 1
+            elif "validation fix cycle" in reason:
+                validation += 1
+            else:
+                other += 1
+        return {
+            "empty_llm": empty_llm,
+            "validation": validation,
+            "other": other,
         }
 
     @staticmethod
@@ -216,9 +241,10 @@ class CrossRunComparison:
                     run.get("peak_rss", 0),
                     deltas.get("peak_rss"),
                 ),
-                CrossRunComparison._val_with_delta(
-                    str(run.get("failed", 0)),
+                CrossRunComparison._fmt_failed(
+                    run.get("failed", 0),
                     deltas.get("failed"),
+                    run.get("fail_breakdown", {}),
                 ),
             ))
         TableFormatter.log_table(header, rows)
@@ -272,3 +298,25 @@ class CrossRunComparison:
         return CrossRunComparison._val_with_delta(
             format_rss(value), delta_pct,
         )
+
+    @staticmethod
+    def _fmt_failed(count, delta_pct, breakdown):
+        """Format failed count with optional breakdown."""
+        base = CrossRunComparison._val_with_delta(
+            str(count), delta_pct,
+        )
+        if count == 0 or not breakdown:
+            return base
+        parts = []
+        empty_llm = breakdown.get("empty_llm", 0)
+        validation = breakdown.get("validation", 0)
+        other = breakdown.get("other", 0)
+        if empty_llm:
+            parts.append(f"{empty_llm} empty LLM")
+        if validation:
+            parts.append(f"{validation} validation")
+        if other:
+            parts.append(f"{other} other")
+        if not parts:
+            return base
+        return f"{base} ({', '.join(parts)})"
