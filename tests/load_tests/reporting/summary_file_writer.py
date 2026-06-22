@@ -22,6 +22,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from tests.load_tests.config import format_rss
 from tests.load_tests.config import STATUS_CREATED
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,20 @@ class SummaryFileWriter:
         )
         lines.append(f"  Workers:     {workers} (concurrent)")
         lines.append(f"  Total wall time: {total_elapsed:.1f}s")
+        ttfr_values = [
+            r.get("ttft", 0)
+            for s in self._summaries
+            for r in s.get("results", [])
+            if r.get("ttft", 0) > 0
+        ]
+        if ttfr_values:
+            avg_ttfr = sum(ttfr_values) / len(ttfr_values)
+            lines.append(
+                f"  Time to first response:"
+                f" {min(ttfr_values):.0f}s min"
+                f" / {avg_ttfr:.0f}s avg"
+                f" / {max(ttfr_values):.0f}s max"
+            )
         durations = [
             r.get("elapsed", 0)
             for s in self._summaries
@@ -107,7 +122,33 @@ class SummaryFileWriter:
                 f" / {avg_calls} avg"
                 f" / {max(llm_calls)} max"
             )
+        self._write_rss_trajectory(lines)
         lines.append("")
+
+    def _write_rss_trajectory(self, lines) -> None:
+        """Write server RSS start/peak/end if available."""
+        start_rss = None
+        end_rss = None
+        peak_rss = None
+        for summary in self._summaries:
+            before = summary.get("before_server_rss")
+            after = summary.get("after_server_rss")
+            peak = summary.get("peak_server_rss")
+            if before is not None and start_rss is None:
+                start_rss = before
+            if after is not None:
+                end_rss = after
+            if peak is not None:
+                if peak_rss is None or peak > peak_rss:
+                    peak_rss = peak
+        if peak_rss is None:
+            return
+        lines.append(
+            f"  Server RSS:"
+            f" {format_rss(start_rss or 0)} start"
+            f" \u2192 {format_rss(peak_rss)} peak"
+            f" \u2192 {format_rss(end_rss or 0)} end"
+        )
 
     def _write_request_results(self, lines) -> None:
         """Write per-request result table."""

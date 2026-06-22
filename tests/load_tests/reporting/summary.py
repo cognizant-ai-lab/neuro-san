@@ -123,6 +123,33 @@ class SummaryReporter:
         logger.info("    Timed out: %s", total_timeout)
         logger.info("    Killed:    %s", total_killed)
         logger.info("  Total wall time: %.2fs", total_time)
+        self._log_performance_stats()
+
+        if total_retries > 0:
+            total_requests = sum(
+                s.get("concurrent", 0)
+                for s in self._summaries
+            )
+            amplification = (
+                (total_requests + total_retries) / total_requests
+                if total_requests > 0 else 1.0
+            )
+            logger.info("\n  Overall max_attempts retry totals:")
+            logger.info("    Total retries:   %s", total_retries)
+            logger.info(
+                "    Amplification:   %.2fx", amplification,
+            )
+
+    def _log_performance_stats(self) -> None:
+        """Log TTFR, duration, LLM calls, and RSS trajectory."""
+        ttfr = self._ttfr_stats()
+        if ttfr is not None:
+            logger.info(
+                "  Time to first response: %.0fs min"
+                " / %.0fs avg / %.0fs max",
+                ttfr["min"], ttfr["avg"], ttfr["max"],
+            )
+
         duration = self._request_duration_stats()
         if duration is not None:
             logger.info(
@@ -140,25 +167,14 @@ class SummaryReporter:
                 llm_stats["max"],
             )
 
-        peak_rss = self._find_peak_server_rss()
-        if peak_rss is not None:
+        rss_trajectory = self._rss_trajectory()
+        if rss_trajectory is not None:
             logger.info(
-                "  Peak server RSS: %s", format_rss(peak_rss),
-            )
-
-        if total_retries > 0:
-            total_requests = sum(
-                s.get("concurrent", 0)
-                for s in self._summaries
-            )
-            amplification = (
-                (total_requests + total_retries) / total_requests
-                if total_requests > 0 else 1.0
-            )
-            logger.info("\n  Overall max_attempts retry totals:")
-            logger.info("    Total retries:   %s", total_retries)
-            logger.info(
-                "    Amplification:   %.2fx", amplification,
+                "  Server RSS: %s start \u2192 %s peak"
+                " \u2192 %s end",
+                format_rss(rss_trajectory["start"]),
+                format_rss(rss_trajectory["peak"]),
+                format_rss(rss_trajectory["end"]),
             )
 
     def _request_duration_stats(self):
@@ -191,12 +207,42 @@ class SummaryReporter:
             "max": max(calls),
         }
 
-    def _find_peak_server_rss(self):
-        """Find the highest peak_server_rss across all stages."""
-        peak = None
+    def _ttfr_stats(self):
+        """Compute min/avg/max time-to-first-response."""
+        values = []
         for summary in self._summaries:
-            rss = summary.get("peak_server_rss")
-            if rss is not None:
-                if peak is None or rss > peak:
-                    peak = rss
-        return peak
+            for result in summary.get("results", []):
+                ttfr = result.get("ttft", 0)
+                if ttfr > 0:
+                    values.append(ttfr)
+        if not values:
+            return None
+        return {
+            "min": min(values),
+            "avg": sum(values) / len(values),
+            "max": max(values),
+        }
+
+    def _rss_trajectory(self):
+        """Find start, peak, and end RSS across all stages."""
+        start_rss = None
+        end_rss = None
+        peak_rss = None
+        for summary in self._summaries:
+            before = summary.get("before_server_rss")
+            after = summary.get("after_server_rss")
+            peak = summary.get("peak_server_rss")
+            if before is not None and start_rss is None:
+                start_rss = before
+            if after is not None:
+                end_rss = after
+            if peak is not None:
+                if peak_rss is None or peak > peak_rss:
+                    peak_rss = peak
+        if peak_rss is None:
+            return None
+        return {
+            "start": start_rss or 0,
+            "peak": peak_rss,
+            "end": end_rss or 0,
+        }

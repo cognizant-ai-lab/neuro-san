@@ -171,10 +171,11 @@ class Heartbeat:
                 ts = time.strftime("%H:%M:%S", time.localtime())
                 pct = done * 100 // total if total > 0 else 0
                 suffix = ""
+                in_flight = total - done
                 if done == last_done and done < total:
                     stall = int(time.time() - last_change)
                     suffix = (
-                        "  !! no new completions in "
+                        f"  !! {in_flight} request(s) stalled for "
                         f"{Heartbeat._fmt_elapsed(stall)}"
                     )
                 if done > last_done:

@@ -836,9 +836,15 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 summary_entry["before_threads"] = (
                     before_server.get("threads")
                 )
+                summary_entry["before_server_rss"] = (
+                    before_server.get("rss")
+                )
             if after_server:
                 summary_entry["after_threads"] = (
                     after_server.get("threads")
+                )
+                summary_entry["after_server_rss"] = (
+                    after_server.get("rss")
                 )
         if peak_threads.value is not None:
             summary_entry["peak_threads"] = (

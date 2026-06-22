@@ -142,6 +142,8 @@ class StageSummary(TypedDict, total=False):
     before_threads: Optional[int]
     after_threads: Optional[int]
     peak_threads: Optional[int]
+    before_server_rss: Optional[float]
+    after_server_rss: Optional[float]
     peak_server_rss: Optional[float]
 
 
