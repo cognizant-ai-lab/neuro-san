@@ -32,21 +32,26 @@ class CrossRunComparison:
     """Scans a base directory for raw_results.json files and logs
     a comparison table across runs."""
 
-    def __init__(self, base_dir) -> None:
+    def __init__(self, base_dir, *, agent_filter=None) -> None:
         self._base_dir = base_dir
+        self._agent_filter = agent_filter
 
     def run(self) -> None:
-        """Scan for runs and log the comparison table."""
-        runs = self._collect_runs()
-        if not runs:
+        """Scan for runs and log comparison tables by agent."""
+        all_runs = self._collect_runs()
+        if not all_runs:
             logger.info(
                 "No raw_results.json files found in %s",
                 self._base_dir,
             )
             return
-        runs = self._deduplicate(runs)
-        runs.sort(key=lambda r: r.get("num_requests", 0))
-        self._log_table(runs)
+        groups = self._group_by_agent(all_runs)
+        for agent_name in sorted(groups):
+            runs = self._deduplicate(groups[agent_name])
+            runs.sort(
+                key=lambda r: r.get("num_requests", 0),
+            )
+            self._log_table(runs, agent_name)
 
     def _collect_runs(self):
         """Walk subdirectories for raw_results.json and extract metrics."""
@@ -90,7 +95,12 @@ class CrossRunComparison:
         for stage in stages:
             all_results.extend(stage.get("results", []))
 
+        agent = data.get("config", {}).get(
+            "agent", "unknown",
+        )
+
         return {
+            "agent": agent,
             "folder": folder_name,
             "num_requests": data.get("config", {}).get(
                 "num_requests",
@@ -132,11 +142,22 @@ class CrossRunComparison:
             return 0
         return sum(values) / len(values)
 
+    def _group_by_agent(self, runs):
+        """Group runs by agent name, applying filter if set."""
+        groups = {}
+        for run in runs:
+            agent = run.get("agent", "unknown")
+            if (self._agent_filter
+                    and agent != self._agent_filter):
+                continue
+            groups.setdefault(agent, []).append(run)
+        return groups
+
     @staticmethod
-    def _log_table(runs):
+    def _log_table(runs, agent_name):
         """Log the comparison table with pct change from baseline."""
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
-        logger.info("  CROSS-RUN COMPARISON")
+        logger.info("  CROSS-RUN COMPARISON: %s", agent_name)
         logger.info("=" * SEPARATOR_WIDTH)
 
         header = [

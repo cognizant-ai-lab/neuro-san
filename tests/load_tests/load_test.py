@@ -310,6 +310,15 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                  "raw_results.json files and print a "
                  "cross-run comparison table.",
         )
+        parser.add_argument(
+            "--compare-agent",
+            type=str,
+            default=None,
+            metavar="NAME",
+            help="When used with --compare, show only runs "
+                 "for this agent (e.g. hello_world). "
+                 "Without this, tables are grouped by agent.",
+        )
         args = parser.parse_args()
         # Track which args the user explicitly provided so
         # level-based defaults do not override them.
@@ -1454,7 +1463,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         """Entry point for the load test script."""
         args = LoadTestOrchestrator.parse_args()
         if args.compare:
-            CrossRunComparison(args.compare).run()
+            CrossRunComparison(
+                args.compare,
+                agent_filter=args.compare_agent,
+            ).run()
             return
         orchestrator = LoadTestOrchestrator(args)
         sys.exit(orchestrator.run())
