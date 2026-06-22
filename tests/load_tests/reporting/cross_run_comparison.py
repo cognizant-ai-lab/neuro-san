@@ -107,7 +107,11 @@ class CrossRunComparison:
                 "elapsed",
             ),
             "ttfr_avg": CrossRunComparison._avg(
-                all_results, "ttft",
+                [
+                    r for r in all_results
+                    if r.get("status") == STATUS_CREATED
+                ],
+                "ttft",
             ),
             "peak_rss": max(
                 (s.get("peak_server_rss", 0) or 0
