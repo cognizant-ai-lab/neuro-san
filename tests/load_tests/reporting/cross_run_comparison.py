@@ -34,7 +34,9 @@ class CrossRunComparison:
 
     def __init__(self, base_dir, *, agent_filter=None) -> None:
         self._base_dir = base_dir
-        self._agent_filter = agent_filter
+        self._agent_filter: set = (
+            set(agent_filter) if agent_filter else set()
+        )
 
     def run(self) -> None:
         """Scan for runs and log comparison tables by agent."""
@@ -148,7 +150,7 @@ class CrossRunComparison:
         for run in runs:
             agent = run.get("agent", "unknown")
             if (self._agent_filter
-                    and agent != self._agent_filter):
+                    and agent not in self._agent_filter):
                 continue
             groups.setdefault(agent, []).append(run)
         return groups

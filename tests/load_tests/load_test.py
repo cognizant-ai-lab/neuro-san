@@ -1463,9 +1463,15 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         """Entry point for the load test script."""
         args = LoadTestOrchestrator.parse_args()
         if args.compare:
+            agent_filter = None
+            if args.compare_agent:
+                agent_filter = [
+                    a.strip()
+                    for a in args.compare_agent.split(",")
+                ]
             CrossRunComparison(
                 args.compare,
-                agent_filter=args.compare_agent,
+                agent_filter=agent_filter,
             ).run()
             return
         orchestrator = LoadTestOrchestrator(args)
