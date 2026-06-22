@@ -255,7 +255,7 @@ class Heartbeat:
             logger.info("%s", line)
         else:
             position = tick_count % CONSOLE_TICK_INTERVAL
-            if position == 2:
+            if position == 1:
                 sys.stdout.write("  ")
             else:
                 sys.stdout.write(",")
