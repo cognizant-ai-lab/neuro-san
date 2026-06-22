@@ -133,7 +133,7 @@ class CrossRunComparison:
 
     @staticmethod
     def _log_table(runs):
-        """Log the comparison table with pct change from prior row."""
+        """Log the comparison table with pct change from baseline."""
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         logger.info("  CROSS-RUN COMPARISON")
         logger.info("=" * SEPARATOR_WIDTH)
@@ -151,10 +151,11 @@ class CrossRunComparison:
             "ttfr_avg", "peak_rss",
             "failed",
         ]
-        prev = None
+        baseline = runs[0] if runs else None
         for run in runs:
+            ref = baseline if run is not baseline else None
             deltas = CrossRunComparison._compute_deltas(
-                prev, run, metric_keys,
+                ref, run, metric_keys,
             )
             rows.append((
                 run.get("folder", ""),
@@ -187,7 +188,6 @@ class CrossRunComparison:
                     deltas.get("failed"),
                 ),
             ))
-            prev = run
         TableFormatter.log_table(header, rows)
 
     @staticmethod
