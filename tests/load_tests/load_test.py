@@ -332,6 +332,15 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                  "percentage deltas.",
         )
         parser.add_argument(
+            "--compare-runs",
+            type=str,
+            default=None,
+            metavar="FOLDERS",
+            help="When used with --compare, show only "
+                 "these specific run folders. "
+                 "Comma-separated folder names.",
+        )
+        parser.add_argument(
             "--rebuild",
             type=str,
             default=None,
@@ -1529,10 +1538,17 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     a.strip()
                     for a in args.compare_agent.split(",")
                 ]
+            run_filter = None
+            if args.compare_runs:
+                run_filter = [
+                    r.strip()
+                    for r in args.compare_runs.split(",")
+                ]
             CrossRunComparison(
                 args.compare,
                 agent_filter=agent_filter,
                 baseline_requests=args.compare_baseline,
+                run_filter=run_filter,
             ).run()
             return
         orchestrator = LoadTestOrchestrator(args)

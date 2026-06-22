@@ -36,12 +36,16 @@ class CrossRunComparison:
         self, base_dir, *,
         agent_filter=None,
         baseline_requests=0,
+        run_filter=None,
     ) -> None:
         self._base_dir = base_dir
         self._agent_filter: set = (
             set(agent_filter) if agent_filter else set()
         )
         self._baseline_requests = baseline_requests
+        self._run_filter: set = (
+            set(run_filter) if run_filter else set()
+        )
 
     def run(self) -> None:
         """Scan for runs and log comparison tables by agent."""
@@ -72,6 +76,9 @@ class CrossRunComparison:
         """Walk subdirectories for raw_results.json and extract metrics."""
         runs = []
         for entry in os.listdir(self._base_dir):
+            if (self._run_filter
+                    and entry not in self._run_filter):
+                continue
             json_path = os.path.join(
                 self._base_dir, entry, "raw_results.json",
             )
