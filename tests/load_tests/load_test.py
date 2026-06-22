@@ -60,6 +60,7 @@ from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.prompts.agent_profile import AgentProfile
+from tests.load_tests.reporting.cross_run_comparison import CrossRunComparison
 from tests.load_tests.reporting.disconnection_reporter import DisconnectionReporter
 from tests.load_tests.reporting.json_metadata import JsonMetadata
 from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
@@ -299,6 +300,15 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             default=None,
             help="Base directory for test output. Defaults to "
                  "/tmp/load_test/{level}/{timestamp}.",
+        )
+        parser.add_argument(
+            "--compare",
+            type=str,
+            default=None,
+            metavar="DIR",
+            help="Skip load test; scan DIR for previous "
+                 "raw_results.json files and print a "
+                 "cross-run comparison table.",
         )
         args = parser.parse_args()
         # Track which args the user explicitly provided so
@@ -1443,6 +1453,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     def main() -> None:
         """Entry point for the load test script."""
         args = LoadTestOrchestrator.parse_args()
+        if args.compare:
+            CrossRunComparison(args.compare).run()
+            return
         orchestrator = LoadTestOrchestrator(args)
         sys.exit(orchestrator.run())
 
