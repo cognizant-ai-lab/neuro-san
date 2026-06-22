@@ -981,8 +981,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         base = self.args.output_dir or os.path.join(
             tempfile.gettempdir(), "load_test",
         )
+        folder_name = (
+            f"{timestamp}_{self.args.num_requests}"
+        )
         self._output_dir = os.path.join(
-            base, self.args.level, timestamp,
+            base, self.args.level, folder_name,
         )
         os.makedirs(self._output_dir, exist_ok=True)
         self._test_log_path = os.path.join(self._output_dir, "load_test.log")
