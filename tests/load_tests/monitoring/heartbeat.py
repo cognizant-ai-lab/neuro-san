@@ -55,6 +55,7 @@ class Heartbeat:
         self._output_dir = output_dir
         self._total_system_ram = psutil.virtual_memory().total
         self._oom_warned = False
+        self._swap_warned = False
 
     def _sample_client_rss(self, peak_rss, peak_ref) -> float:
         """Sample client RSS and update peak if higher.
@@ -74,17 +75,20 @@ class Heartbeat:
             pass
         return peak_rss
 
-    def _sample_server_rss(self) -> Optional[float]:
-        """Sample server RSS in MB. Returns None if unavailable."""
+    def _sample_server_memory(self):
+        """Sample server RSS and swap in MB.
+
+        Returns (rss_mb, swap_mb) or (None, None) if unavailable.
+        """
         if self._server_proc is None:
-            return None
+            return None, None
         try:
-            return (
-                self._server_proc.memory_info().rss
-                / (1024 * 1024)
-            )
+            info = self._server_proc.memory_full_info()
+            rss_mb = info.rss / (1024 * 1024)
+            swap_mb = info.swap / (1024 * 1024)
+            return rss_mb, swap_mb
         except (psutil.NoSuchProcess, psutil.AccessDenied):
-            return None
+            return None, None
 
     def _check_server_alive(self) -> bool:
         """Return True if the server process is still running."""
@@ -95,18 +99,29 @@ class Heartbeat:
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             return False
 
-    def _check_oom_risk(self, rss_mb, progress_file) -> None:
-        """Warn if server RSS exceeds OOM threshold."""
-        if self._oom_warned:
-            return
-        total_mb = self._total_system_ram / (1024 * 1024)
-        if rss_mb / total_mb >= OOM_WARNING_THRESHOLD:
-            self._oom_warned = True
+    def _check_memory_warnings(
+            self, rss_mb, swap_mb, progress_file,
+    ) -> None:
+        """Warn if server RSS or swap exceeds thresholds."""
+        if not self._oom_warned:
+            total_mb = self._total_system_ram / (1024 * 1024)
+            if rss_mb / total_mb >= OOM_WARNING_THRESHOLD:
+                self._oom_warned = True
+                warning = (
+                    f"  WARNING: Server RSS"
+                    f" {format_rss(rss_mb)}"
+                    f" / {format_rss(total_mb)}"
+                    f" ({rss_mb * 100 / total_mb:.0f}%)"
+                    " — risk of OOM kill"
+                )
+                logger.warning("%s", warning)
+                self._write_to_file(progress_file, warning)
+        if not self._swap_warned and swap_mb > 0:
+            self._swap_warned = True
             warning = (
-                f"  WARNING: Server RSS {format_rss(rss_mb)}"
-                f" / {format_rss(total_mb)}"
-                f" ({rss_mb * 100 / total_mb:.0f}%)"
-                " — risk of OOM kill"
+                f"  WARNING: Server has"
+                f" {format_rss(swap_mb)} swapped to disk"
+                " — severe performance impact"
             )
             logger.warning("%s", warning)
             self._write_to_file(progress_file, warning)
@@ -217,14 +232,19 @@ class Heartbeat:
                 "Heartbeat thread count unavailable: %s",
                 exc,
             )
-        rss_mb = self._sample_server_rss()
+        rss_mb, swap_mb = self._sample_server_memory()
         if rss_mb is not None:
+            swap_info = ""
+            if swap_mb > 0:
+                swap_info = f" swap: {format_rss(swap_mb)}"
             server_rss_info = (
-                f"  RSS: {format_rss(rss_mb)}"
+                f"  RSS: {format_rss(rss_mb)}{swap_info}"
             )
             if rss_mb > peak_server_rss:
                 peak_server_rss_ref.value = rss_mb
-            self._check_oom_risk(rss_mb, progress_file)
+            self._check_memory_warnings(
+                rss_mb, swap_mb, progress_file,
+            )
         return thread_info, server_rss_info
 
     def _open_progress_file(self):
