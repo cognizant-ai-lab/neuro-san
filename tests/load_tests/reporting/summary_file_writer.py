@@ -430,8 +430,13 @@ class SummaryFileWriter:
     @staticmethod
     def _extract_detail(result) -> str:
         """Extract a human-readable detail from parsed fields."""
+        parts = []
         for key in ("agent_network_name", "reservation_id"):
             val = result.get(key, "")
             if val:
-                return str(val)
-        return ""
+                parts.append(str(val))
+                break
+        reason = result.get("failure_reason")
+        if reason:
+            parts.append(f"reason: {reason}")
+        return "  ".join(parts)

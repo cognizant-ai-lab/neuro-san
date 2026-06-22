@@ -106,6 +106,7 @@ class TrafficRunner:
                 "start_time": start,
                 "end_time": start + elapsed,
                 "prompt": prompt,
+                "failure_reason": failure_reason,
                 "error": (
                     CliBuilder.last_stderr_line(stderr)
                     if status != STATUS_CREATED else None

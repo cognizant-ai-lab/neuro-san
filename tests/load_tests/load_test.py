@@ -319,6 +319,30 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         return int(match.group(1)) if match else 0
 
     @staticmethod
+    def _enrich_failure_reasons(results, validation_events):
+        """Append validation fix cycle info to failure reasons."""
+        if not validation_events:
+            return
+        by_rid = {
+            e.get("request_id"): e
+            for e in validation_events
+        }
+        for result in results:
+            rid = result.get("request_id", "")
+            event = by_rid.get(rid)
+            if event is None:
+                continue
+            fix_cycles = event.get("fix_cycles", 0)
+            if fix_cycles <= 0:
+                continue
+            existing = result.get("failure_reason") or ""
+            suffix = (
+                f" ({fix_cycles} validation fix"
+                f" cycle(s))"
+            )
+            result["failure_reason"] = existing + suffix
+
+    @staticmethod
     def _attach_token_data(results, token_data) -> None:
         """Attach token accounting data to request results.
 
@@ -911,6 +935,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 self.log_monitor.parse_validation_events_since(
                     log_pos,
                 )
+            )
+            LoadTestOrchestrator._enrich_failure_reasons(
+                results, validation_events,
             )
             if token_data:
                 logger.info(
