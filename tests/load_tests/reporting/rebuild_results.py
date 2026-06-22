@@ -314,11 +314,12 @@ class ResultsRebuilder:
                 cache[req_id] = fh.read()
         return cache
 
-    @staticmethod
-    def _reclassify(json_path, requests_dir):
-        """Update failure_reason in existing raw_results.json."""
+    def _reclassify(self, json_path, requests_dir):
+        """Update failure_reason and config in existing JSON."""
         with open(json_path, "r", encoding="utf-8") as fh:
             data = json.load(fh)
+
+        self._fix_config(data)
 
         stdout_cache = ResultsRebuilder._load_stdout_cache(
             requests_dir,
@@ -356,6 +357,20 @@ class ResultsRebuilder:
         logger.info(
             "  Updated %s failure reason(s)", updated,
         )
+
+    def _fix_config(self, data):
+        """Repair config.num_requests from log if needed."""
+        _agent, num_requests = self._parse_config()
+        if num_requests <= 0:
+            return
+        config = data.get("config", {})
+        old_val = config.get("num_requests", 0)
+        if old_val != num_requests:
+            config["num_requests"] = num_requests
+            logger.info(
+                "  Fixed num_requests: %s -> %s",
+                old_val, num_requests,
+            )
 
     @staticmethod
     def _resolve_status(timing_info, parsed_fields):
