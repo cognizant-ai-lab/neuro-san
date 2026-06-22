@@ -20,6 +20,7 @@ import logging
 import os
 
 from tests.load_tests.config import fmt_duration
+from tests.load_tests.config import format_rss
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
@@ -82,46 +83,45 @@ class CrossRunComparison:
         except (json.JSONDecodeError, OSError):
             return None
 
-        config = data.get("config", {})
         aggregates = data.get("aggregates", {})
-        num_requests = config.get(
-            "num_requests",
-            aggregates.get("total_requests", 0),
-        )
-        total_elapsed = aggregates.get(
-            "total_elapsed_seconds", 0,
-        )
-        failed = aggregates.get("failed", 0)
-
+        stages = data.get("stage_summaries", [])
         all_results = []
-        for stage in data.get("stage_summaries", []):
+        for stage in stages:
             all_results.extend(stage.get("results", []))
-
-        ttfr_values = [
-            r.get("ttft", 0) for r in all_results
-            if r.get("ttft", 0) > 0
-        ]
-        avg_ttfr = (
-            sum(ttfr_values) / len(ttfr_values)
-            if ttfr_values else 0
-        )
-
-        durations = [
-            r.get("elapsed", 0) for r in all_results
-        ]
-        avg_duration = (
-            sum(durations) / len(durations)
-            if durations else 0
-        )
 
         return {
             "folder": folder_name,
-            "num_requests": num_requests,
-            "wall_time": total_elapsed,
-            "avg_per_req": avg_duration,
-            "ttfr_avg": avg_ttfr,
-            "failed": failed,
+            "num_requests": data.get("config", {}).get(
+                "num_requests",
+                aggregates.get("total_requests", 0),
+            ),
+            "wall_time": aggregates.get(
+                "total_elapsed_seconds", 0,
+            ),
+            "avg_per_req": CrossRunComparison._avg(
+                all_results, "elapsed",
+            ),
+            "ttfr_avg": CrossRunComparison._avg(
+                all_results, "ttft",
+            ),
+            "peak_rss": max(
+                (s.get("peak_server_rss", 0) or 0
+                 for s in stages),
+                default=0,
+            ),
+            "failed": aggregates.get("failed", 0),
         }
+
+    @staticmethod
+    def _avg(results, key):
+        """Compute average of a result field, ignoring zeros."""
+        values = [
+            r.get(key, 0) for r in results
+            if r.get(key, 0) > 0
+        ]
+        if not values:
+            return 0
+        return sum(values) / len(values)
 
     @staticmethod
     def _log_table(runs):
@@ -132,12 +132,14 @@ class CrossRunComparison:
 
         header = [
             "Folder", "Requests", "Wall Time",
-            "Avg/req", "TTFR avg", "Failed",
+            "Avg/req", "TTFR avg", "Peak RSS",
+            "Failed",
         ]
         rows = []
         metric_keys = [
             "num_requests", "wall_time",
-            "avg_per_req", "ttfr_avg", "failed",
+            "avg_per_req", "ttfr_avg", "peak_rss",
+            "failed",
         ]
         prev = None
         for run in runs:
@@ -161,6 +163,10 @@ class CrossRunComparison:
                 CrossRunComparison._fmt_ttfr(
                     run.get("ttfr_avg", 0),
                     deltas.get("ttfr_avg"),
+                ),
+                CrossRunComparison._fmt_rss(
+                    run.get("peak_rss", 0),
+                    deltas.get("peak_rss"),
                 ),
                 CrossRunComparison._val_with_delta(
                     str(run.get("failed", 0)),
@@ -200,4 +206,13 @@ class CrossRunComparison:
             return "\u2014"
         return CrossRunComparison._val_with_delta(
             fmt_duration(value), delta_pct,
+        )
+
+    @staticmethod
+    def _fmt_rss(value, delta_pct):
+        """Format peak RSS, showing a dash when data is missing."""
+        if value <= 0:
+            return "\u2014"
+        return CrossRunComparison._val_with_delta(
+            format_rss(value), delta_pct,
         )
