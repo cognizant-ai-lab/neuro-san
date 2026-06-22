@@ -261,7 +261,9 @@ class ResultsRebuilder:
             if not parsed_fields.get(field):
                 reasons.append(f"missing {field}")
         tokens = CliBuilder.parse_token_accounting(stdout)
-        if tokens:
+        if not tokens:
+            reasons.append("no token data")
+        else:
             empty = tokens.get("empty_responses", 0)
             completion = tokens.get("completion_tokens", 0)
             if empty > 0:
@@ -270,4 +272,6 @@ class ResultsRebuilder:
                     f"({completion} completion tokens, "
                     f"{empty} empty response(s))"
                 )
+            else:
+                reasons.append("incomplete response")
         return "; ".join(reasons) if reasons else None

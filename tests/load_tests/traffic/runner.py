@@ -353,7 +353,7 @@ class TrafficRunner:
         """Check token accounting for signs of an empty LLM response."""
         tokens = CliBuilder.parse_token_accounting(stdout)
         if not tokens:
-            return None
+            return "no token data"
         empty = tokens.get("empty_responses", 0)
         completion = tokens.get("completion_tokens", 0)
         if empty > 0:
@@ -362,7 +362,7 @@ class TrafficRunner:
                 f"({completion} completion tokens, "
                 f"{empty} empty response(s))"
             )
-        return None
+        return "incomplete response"
 
     def _log_request_result(self, request_id, status, elapsed, *,
                             parsed_fields, failure_reason,

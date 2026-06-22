@@ -152,24 +152,28 @@ class CrossRunComparison:
     @staticmethod
     def _classify_failures(all_results):
         """Categorize failed requests by failure reason."""
-        empty_llm = 0
-        validation = 0
-        other = 0
+        counts = {
+            "empty_llm": 0,
+            "validation": 0,
+            "incomplete": 0,
+            "no_token_data": 0,
+        }
         for result in all_results:
             if result.get("status") == STATUS_CREATED:
                 continue
             reason = result.get("failure_reason", "") or ""
             if "empty LLM response" in reason:
-                empty_llm += 1
+                counts["empty_llm"] += 1
             elif "validation fix cycle" in reason:
-                validation += 1
+                counts["validation"] += 1
+            elif "incomplete response" in reason:
+                counts["incomplete"] += 1
+            elif "no token data" in reason:
+                counts["no_token_data"] += 1
             else:
-                other += 1
-        return {
-            "empty_llm": empty_llm,
-            "validation": validation,
-            "other": other,
-        }
+                counts.setdefault("other", 0)
+                counts["other"] += 1
+        return counts
 
     @staticmethod
     def _avg(results, key):
@@ -305,16 +309,18 @@ class CrossRunComparison:
         base = str(count)
         if count == 0 or not breakdown:
             return base
+        labels = (
+            ("empty_llm", "empty LLM"),
+            ("validation", "validation"),
+            ("incomplete", "incomplete"),
+            ("no_token_data", "no token data"),
+            ("other", "other"),
+        )
         parts = []
-        empty_llm = breakdown.get("empty_llm", 0)
-        validation = breakdown.get("validation", 0)
-        other = breakdown.get("other", 0)
-        if empty_llm:
-            parts.append(f"{empty_llm} empty LLM")
-        if validation:
-            parts.append(f"{validation} validation")
-        if other:
-            parts.append(f"{other} other")
+        for key, label in labels:
+            val = breakdown.get(key, 0)
+            if val:
+                parts.append(f"{val} {label}")
         if not parts:
             return base
         return f"{base} ({', '.join(parts)})"
