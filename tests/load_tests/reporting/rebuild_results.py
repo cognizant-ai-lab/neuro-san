@@ -48,11 +48,50 @@ _CONFIG_NUM_REQ_RE = re.compile(
 class ResultsRebuilder:
     """Reconstructs raw_results.json from per-request files."""
 
-    def __init__(self, output_dir) -> None:
+    def __init__(self, output_dir, *, force=False) -> None:
         self._output_dir = output_dir
+        self._force = force
 
     def run(self) -> None:
-        """Scan files and write raw_results.json."""
+        """Rebuild raw_results.json for one or many run directories.
+
+        If the path contains a requests/ subdirectory, rebuild that
+        single run.  Otherwise treat it as a parent directory and
+        rebuild every subdirectory that has requests/ but is missing
+        raw_results.json.
+        """
+        requests_dir = os.path.join(self._output_dir, "requests")
+        if os.path.isdir(requests_dir):
+            self._rebuild_single()
+            return
+        self._rebuild_all()
+
+    def _rebuild_all(self) -> None:
+        """Scan subdirectories and rebuild any missing results."""
+        rebuilt = 0
+        skipped = 0
+        for entry in sorted(os.listdir(self._output_dir)):
+            sub_dir = os.path.join(self._output_dir, entry)
+            if not os.path.isdir(sub_dir):
+                continue
+            requests_dir = os.path.join(sub_dir, "requests")
+            json_path = os.path.join(sub_dir, "raw_results.json")
+            if not os.path.isdir(requests_dir):
+                continue
+            if os.path.isfile(json_path) and not self._force:
+                skipped += 1
+                continue
+            logger.info("Rebuilding: %s", entry)
+            ResultsRebuilder(sub_dir).run()
+            rebuilt += 1
+        logger.info(
+            "Done: %s rebuilt, %s skipped (already have "
+            "raw_results.json)",
+            rebuilt, skipped,
+        )
+
+    def _rebuild_single(self) -> None:
+        """Rebuild raw_results.json for a single run directory."""
         requests_dir = os.path.join(self._output_dir, "requests")
         if not os.path.isdir(requests_dir):
             logger.error(

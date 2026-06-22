@@ -340,6 +340,14 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                  "request output files in DIR. Useful for "
                  "runs interrupted by Ctrl+C.",
         )
+        parser.add_argument(
+            "--rebuild-all",
+            action="store_true",
+            default=False,
+            help="When used with --rebuild on a parent "
+                 "directory, rebuild ALL runs including "
+                 "those that already have raw_results.json.",
+        )
         args = parser.parse_args()
         # Track which args the user explicitly provided so
         # level-based defaults do not override them.
@@ -1509,7 +1517,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         """Entry point for the load test script."""
         args = LoadTestOrchestrator.parse_args()
         if args.rebuild:
-            ResultsRebuilder(args.rebuild).run()
+            ResultsRebuilder(
+                args.rebuild,
+                force=args.rebuild_all,
+            ).run()
             return
         if args.compare:
             agent_filter = None
