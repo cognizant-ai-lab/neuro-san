@@ -164,7 +164,7 @@ class TrafficRunner:
         status = STATUS_CREATED if passed else STATUS_FAILED
         if status == STATUS_FAILED and not failure_reason:
             failure_reason = self._diagnose_failure(
-                returncode, parsed_fields,
+                returncode, parsed_fields, stdout,
             )
         return status, failure_reason
 
@@ -332,7 +332,8 @@ class TrafficRunner:
                 results_list.append(fut.result())
         return killed
 
-    def _diagnose_failure(self, returncode, parsed_fields) -> str:
+    def _diagnose_failure(self, returncode, parsed_fields,
+                           stdout) -> str:
         """Return a human-readable reason why a request was marked FAILED."""
         reasons = []
         if returncode != 0:
@@ -342,7 +343,26 @@ class TrafficRunner:
                 continue
             if not parsed_fields.get(field):
                 reasons.append(f"missing {field}")
+        token_hint = self._detect_empty_llm_response(stdout)
+        if token_hint:
+            reasons.append(token_hint)
         return "; ".join(reasons) if reasons else "unknown"
+
+    @staticmethod
+    def _detect_empty_llm_response(stdout) -> Optional[str]:
+        """Check token accounting for signs of an empty LLM response."""
+        tokens = CliBuilder.parse_token_accounting(stdout)
+        if not tokens:
+            return None
+        empty = tokens.get("empty_responses", 0)
+        completion = tokens.get("completion_tokens", 0)
+        if empty > 0:
+            return (
+                f"empty LLM response "
+                f"({completion} completion tokens, "
+                f"{empty} empty response(s))"
+            )
+        return None
 
     def _log_request_result(self, request_id, status, elapsed, *,
                             parsed_fields, failure_reason,
