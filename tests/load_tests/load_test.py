@@ -1319,6 +1319,15 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             self._maybe_write_summary(
                 stage_summaries, server_chat_timing,
             )
+        except KeyboardInterrupt:
+            logger.info(
+                "\n  Interrupted — saving partial results...",
+            )
+            self._export_raw_json(
+                stage_summaries, exit_code=2,
+            )
+            self._rename_interrupted()
+            exit_code = 2
         finally:
             self._finalize_test_log(stage_summaries)
 
@@ -1411,6 +1420,22 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         json_path = os.path.join(self._output_dir, "raw_results.json")
         with open(json_path, "w", encoding="utf-8") as fh:
             json.dump(raw_data, fh, indent=2, default=str)
+
+    def _rename_interrupted(self) -> None:
+        """Append _interrupted to the output directory name."""
+        if self._output_dir is None:
+            return
+        new_path = self._output_dir + "_interrupted"
+        try:
+            os.rename(self._output_dir, new_path)
+            self._output_dir = new_path
+            logger.info(
+                "  Renamed output to: %s", new_path,
+            )
+        except OSError as exc:
+            logger.warning(
+                "  Could not rename output dir: %s", exc,
+            )
 
     def _maybe_write_summary(
             self, stage_summaries, server_chat_timing,
