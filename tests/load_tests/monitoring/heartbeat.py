@@ -134,6 +134,7 @@ class Heartbeat:
                            peak_threads_ref: SharedRef,
                            peak_client_rss_ref: SharedRef,
                            peak_server_rss_ref: SharedRef,
+                           failed_ref: SharedRef,
                            server_dead_event: threading.Event,
                            ) -> None:
         """Log periodic progress while requests are in-flight.
@@ -192,9 +193,16 @@ class Heartbeat:
                 if peak_server_rss_ref.value is not None:
                     peak_server_rss = peak_server_rss_ref.value
                 tick_count += 1
+                failed = failed_ref.value or 0
+                fail_info = ""
+                if failed > 0:
+                    fail_pct = failed * 100 // done if done else 0
+                    fail_info = (
+                        f", {failed} failed {fail_pct}%"
+                    )
                 line = (
                     f"  [progress] {done} of {total} completed"
-                    f" ({pct}%) --"
+                    f" ({pct}%{fail_info}) --"
                     f" {Heartbeat._fmt_elapsed(elapsed)}"
                     f" elapsed [{ts}]{suffix}{thread_info}"
                     f"{server_rss_info}"

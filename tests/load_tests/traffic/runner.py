@@ -54,6 +54,16 @@ class TrafficRunner:
         self._args = args
         self._profile = profile
 
+    def _run_one_tracked(self, request_id, global_request_id,
+                         output_dir, failed_ref) -> RequestResult:
+        """Run one request and increment failed_ref on failure."""
+        result = self.run_one(
+            request_id, global_request_id, output_dir,
+        )
+        if result.get("status") != STATUS_CREATED:
+            failed_ref.value = (failed_ref.value or 0) + 1
+        return result
+
     # pylint: disable=too-many-locals
     def run_one(self, request_id, global_request_id,
                 output_dir=None) -> RequestResult:
@@ -222,6 +232,8 @@ class TrafficRunner:
         peak_threads_ref = SharedRef()
         peak_client_rss_ref = SharedRef()
         peak_server_rss_ref = SharedRef()
+        failed_ref = SharedRef()
+        failed_ref.value = 0
         server_dead_event = threading.Event()
         start = time.time()
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -240,6 +252,7 @@ class TrafficRunner:
                     "peak_threads_ref": peak_threads_ref,
                     "peak_client_rss_ref": peak_client_rss_ref,
                     "peak_server_rss_ref": peak_server_rss_ref,
+                    "failed_ref": failed_ref,
                     "server_dead_event": server_dead_event,
                 },
                 daemon=True,
@@ -248,9 +261,9 @@ class TrafficRunner:
             heartbeat_ready.wait()
             futures_ref.extend(
                 pool.submit(
-                    self.run_one,
+                    self._run_one_tracked,
                     i + 1, global_offset + i,
-                    output_dir,
+                    output_dir, failed_ref,
                 )
                 for i in range(num_requests)
             )
