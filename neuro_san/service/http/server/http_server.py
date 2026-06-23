@@ -56,6 +56,7 @@ from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.service.mcp.handlers.mcp_root_handler import McpRootHandler
 from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.service.utils.server_status import ServerStatus
+from neuro_san.internals.utils.event_loop_lag_monitor import EventLoopLagMonitor
 
 
 DEFAULT_SERVER_NAME: str = 'neuro-san.Agent'
@@ -191,7 +192,18 @@ class HttpServer(AgentStateListener):
                             {}, "Failed to start %s: %s",
                             startable.__class__.__name__, str(exception))
 
-        tornado.ioloop.IOLoop.current().start()
+        main_loop = tornado.ioloop.IOLoop.current()
+
+        event_loop_monitor: Startable = \
+            EventLoopLagMonitor(
+                sample_interval_seconds=1.0,
+                report_every_n_samples=50,
+                break_between_reports_seconds=20,
+                logger=self.logger
+            )
+        main_loop.spawn_callback(event_loop_monitor.run)
+
+        main_loop.start()
         self.logger.info({}, "Http server stopped.")
 
     def make_app(self, requests_limit: int, concurrent_requests_limit: int, logger: EventLoopLogger):
