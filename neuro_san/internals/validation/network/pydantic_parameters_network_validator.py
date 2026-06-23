@@ -108,6 +108,8 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
 
         return errors
 
+    # --- Private helpers (not overrides) ---
+
     @classmethod
     def _pre_validate_properties(cls, agent_name: str, params: Dict[str, Any],
                                  path: str = "parameters") -> List[str]:

@@ -94,16 +94,57 @@ class TestPydanticParametersNetworkValidator(TestCase, AbstractNetworkValidatorT
         self.assertIn("agent_b", errors[0])
         self.assertIn("pydantic model conversion failed", errors[0])
 
-    def test_unrecognized_type_caught_by_pydantic(self):
+    def test_unrecognized_type_caught_by_preflight(self):
         """
         A type string not in BaseModelDictionaryConverter.TYPE_LOOKUP is
-        caught by the pydantic conversion phase.
+        caught by the pre-flight validation with a clear message.
         """
         config: Dict[str, Any] = self._restore_fixture("unrecognized_type.hocon")
         errors = self.validator.validate(config)
         self.assertEqual(len(errors), 1)
         self.assertIn("agent_e", errors[0])
-        self.assertIn("pydantic model conversion failed", errors[0])
+        self.assertIn("unrecognized type", errors[0])
+        self.assertIn("integer", errors[0])
+
+    def test_array_missing_items_caught_by_preflight(self):
+        """An array property without 'items' is caught with a clear message."""
+        config: Dict[str, Any] = self._restore_fixture("array_missing_items.hocon")
+        errors = self.validator.validate(config)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("agent_f", errors[0])
+        self.assertIn("missing 'items'", errors[0])
+
+    def test_null_property_value_caught_by_preflight(self):
+        """A null property value is caught with a clear message."""
+        config: Dict[str, Any] = self._restore_fixture("null_property_value.hocon")
+        errors = self.validator.validate(config)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("agent_g", errors[0])
+        self.assertIn("is null", errors[0])
+
+    def test_non_dict_property_caught_by_preflight(self):
+        """A property whose value is a scalar instead of a dict is caught."""
+        config: Dict[str, Any] = self._restore_fixture("non_dict_property.hocon")
+        errors = self.validator.validate(config)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("agent_h", errors[0])
+        self.assertIn("must be an object", errors[0])
+
+    def test_missing_type_key_caught_by_preflight(self):
+        """A property schema without a 'type' key is caught."""
+        config: Dict[str, Any] = self._restore_fixture("missing_type_key.hocon")
+        errors = self.validator.validate(config)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("agent_i", errors[0])
+        self.assertIn("missing 'type'", errors[0])
+
+    def test_non_dict_items_caught_by_preflight(self):
+        """An array whose 'items' is not a dict is caught."""
+        config: Dict[str, Any] = self._restore_fixture("non_dict_items.hocon")
+        errors = self.validator.validate(config)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("agent_j", errors[0])
+        self.assertIn("items must be", errors[0])
 
     def test_string_items_commondef_resolved_before_pydantic(self):
         """
