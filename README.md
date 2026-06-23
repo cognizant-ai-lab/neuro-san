@@ -42,7 +42,8 @@ Neuro SAN also offers:
     * an Assessor app which classifies the modes of failure for your agents, given a data-driven test case
 * MCP protocol API - Every Neuro SAN server can be an MCP Server.
 * per-user authorization for Agent Networks - optional implementations include: OpenFGA
-* Secure Bring-Your-Own-Key (BYOK) support for client-provided API keys so your deployments do not have to shoulder everyone else's token costs.
+* Secure Bring-Your-Own-Key (BYOK) support for client-provided API keys so your deployments do not have to
+  shoulder everyone else's token costs.
 
 ## Quick Start
 
