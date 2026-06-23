@@ -21,6 +21,7 @@ from typing import Dict
 from typing import List
 from typing import Literal
 from typing import Optional
+from typing import Set
 from typing import Tuple
 from typing import Union
 
@@ -37,6 +38,7 @@ class AgentFrameworkMessage(TracedMessage):
     structure: Optional[Dict[str, Any]] = None
     sly_data: Optional[Dict[str, Any]] = None
     chat_context: Optional[Dict[str, Any]] = None
+    allowed_sly_data_keys: Optional[Set[str]] = None
 
     type: Literal["agent-framework"] = "agent-framework"
 
@@ -46,6 +48,7 @@ class AgentFrameworkMessage(TracedMessage):
                  sly_data: Dict[str, Any] = None,
                  structure: Dict[str, Any] = None,
                  trace_source: AgentFrameworkMessage = None,
+                 allowed_sly_data_keys: Set[str] = None,
                  **kwargs: Any) -> None:
         """
         Pass in content as positional arg.
@@ -60,6 +63,8 @@ class AgentFrameworkMessage(TracedMessage):
                         The idea is to have the server do the hard parsing so the
                         multitude of clients do not have to rediscover how to best do it.
         :param trace_source: A message of the same type to prepare for tracing display
+        :param allowed_sly_data_keys: A set of sly_data keys that are allowed to be reported
+                            for tracing reporting.
         :param kwargs: Additional fields to pass to the superclass
         """
         super().__init__(content=content, trace_source=trace_source, **kwargs)
@@ -102,10 +107,19 @@ class AgentFrameworkMessage(TracedMessage):
         # The intent here is to not transmit any sensitive information
         # that might make it to some other host.
         if new_key == "sly_data":
+
+            allow_sly_data_keys = self.allowed_sly_data_keys
+            if allow_sly_data_keys is None:
+                allow_sly_data_keys = set()
+
             # Shallow copy the original sly_data dictionary
             new_value = copy(value)
-            for sly_data_key in new_value:
-                # Keep the keys but redact the values
-                new_value[sly_data_key] = "<redacted>"
+            for sly_data_key, sly_data_value in new_value.items():
+                if sly_data_key in allow_sly_data_keys:
+                    # Keep the keys and values
+                    new_value[sly_data_key] = sly_data_value
+                else:
+                    # Keep the keys but redact the values
+                    new_value[sly_data_key] = "<redacted>"
 
         return new_key, new_value
