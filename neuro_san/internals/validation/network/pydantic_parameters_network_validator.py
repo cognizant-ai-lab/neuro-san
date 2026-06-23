@@ -86,6 +86,13 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
                 # flat param maps. Pydantic expects properties.items(), so skip.
                 continue
 
+            preflight_errors: List[str] = self._pre_validate_properties(
+                agent_name, params,
+            )
+            if preflight_errors:
+                errors.extend(preflight_errors)
+                continue
+
             try:
                 converter = BaseModelDictionaryConverter("parameters")
                 converter.from_dict(params)
@@ -98,5 +105,100 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
                 # exception types on severely malformed input.
                 detail = " ".join(str(exc).split())
                 errors.append(f"{agent_name}: pydantic model conversion failed - {detail}")
+
+        return errors
+
+    @classmethod
+    def _pre_validate_properties(cls, agent_name: str, params: Dict[str, Any],
+                                 path: str = "parameters") -> List[str]:
+        """
+        Walk the properties tree looking for shapes that will crash
+        BaseModelDictionaryConverter, reporting exactly which property
+        is malformed and what to fix. Runs before from_dict() so that
+        all property-level errors are reported in one pass with a clear
+        UI, rather than crashing on the first bad property with an opaque
+        Pydantic error.
+
+        :param agent_name: Display name for error messages
+        :param params: The schema dict to inspect
+        :param path: Dotted path for contextual error messages
+        :return: A list of actionable error messages
+        """
+        errors: List[str] = []
+        if not isinstance(params, dict):
+            return errors
+
+        properties: Any = params.get("properties")
+        if not isinstance(properties, dict):
+            return errors
+
+        for prop_name, prop_schema in properties.items():
+            prop_path: str = f"{path}.properties.{prop_name}"
+
+            # Check 1: property value must not be null
+            if prop_schema is None:
+                errors.append(
+                    f"{agent_name}: {prop_path} is null"
+                    f" - define it as an object or remove the key"
+                )
+                continue
+
+            # Check 2: property value must be a dict (object), not a scalar
+            if not isinstance(prop_schema, dict):
+                errors.append(
+                    f"{agent_name}: {prop_path} must be an object,"
+                    f" got {type(prop_schema).__name__}"
+                )
+                continue
+
+            # Check 3: every property schema must declare a 'type' key
+            prop_type: Any = prop_schema.get("type")
+            if prop_type is None:
+                errors.append(
+                    f"{agent_name}: {prop_path} is missing 'type'"
+                )
+                continue
+
+            # Check 4: the declared type must be one the converter knows how to handle
+            if prop_type not in BaseModelDictionaryConverter.TYPE_LOOKUP:
+                valid_types: str = ", ".join(
+                    sorted(BaseModelDictionaryConverter.TYPE_LOOKUP.keys())
+                )
+                errors.append(
+                    f"{agent_name}: {prop_path} has unrecognized type"
+                    f" '{prop_type}'"
+                    f" - valid types are: {valid_types}"
+                )
+                continue
+
+            # Check 5: array properties must have a valid 'items' schema; recurse into it
+            if prop_type == "array":
+                items: Any = prop_schema.get("items")
+                if items is None:
+                    errors.append(
+                        f"{agent_name}: {prop_path} is 'array'"
+                        f" but missing 'items'"
+                        f' - add "items": {{"type": "string"}} or similar'
+                    )
+                    continue
+                if not isinstance(items, dict):
+                    errors.append(
+                        f"{agent_name}: {prop_path}.items must be"
+                        f" an object, got {type(items).__name__}"
+                    )
+                    continue
+                errors.extend(
+                    cls._pre_validate_properties(
+                        agent_name, items, f"{prop_path}.items",
+                    )
+                )
+
+            # Check 6: object properties may have nested properties; recurse into them
+            elif prop_type == "object":
+                errors.extend(
+                    cls._pre_validate_properties(
+                        agent_name, prop_schema, prop_path,
+                    )
+                )
 
         return errors
