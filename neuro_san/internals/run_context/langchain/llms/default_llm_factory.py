@@ -326,6 +326,10 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 # If we have a value in the sly_data.llm_config dictionary, use it,
                 new_value: Any = use_api_keys.get(key)
                 if new_value is not None:
+                    if isinstance(new_value, str):
+                        # Remove leading and trailing whitespace because often these values
+                        # are going into http headers which don't like the extra whitespace.
+                        new_value = new_value.strip()
                     config[key] = new_value
                 else:
                     # Add to the list of complaints about what is missing.
