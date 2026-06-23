@@ -119,6 +119,7 @@ class LangChainRunContext(RunContext):
         self.tracing_context: TracingContext = tracing_context
 
         self.capsule: ActivationCapsule = None
+
         if self.tool_caller is not None:
             agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
             # DEF: This is perhaps too brave a usage/cast, but it is indeed an AgentToolFactory
@@ -500,14 +501,27 @@ class LangChainRunContext(RunContext):
         if self.capsule:
             await self.capsule.close_of_work()
 
-        self.tools = []
+        # In order of appearance from the constructor
+
         self.chat_history = []
-        self.agent_chain = None
-        self.recent_human_message = None
-        self.llm_resources = None
-        self.capsule = None
+        # middleware_config comes from the agent spec
         self.journal = None
         self.interceptor = None
+        self.llm_resources = None
+        self.agent_chain = None
+        # llm_config comes from the agent spec
+        self.run_id_base = None
+        self.tools = []
+        self.error_detector = None
+        self.recent_human_message = None
+        # tool_caller comes from the caller 
+        # invocation_context comes from the caller 
+        self.chat_context = None
+        self.origin = []
+        self.resources_created = False
+        self.tracing_context = None
+        # Don't need to clear logger
+        self.capsule = None
 
     def get_agent_tool_spec(self) -> Dict[str, Any]:
         """
