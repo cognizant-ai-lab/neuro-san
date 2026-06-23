@@ -539,6 +539,10 @@ class TrafficRunner:
                 f" / {result.get('completion_tokens', 0):,}"
                 f" completion)\n"
             )
+        elif not agents and not agent:
+            fh.write(
+                "  (agent data not found in server log)\n"
+            )
         for ag_entry in agents:
             net = ag_entry.get("network", "?")
             a_calls = ag_entry.get("llm_calls", 0)
