@@ -979,6 +979,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             disconnections = (
                 self.log_monitor.scan_disconnections_since(
                     log_pos,
+                    primary_start_pattern=(
+                        self.profile.primary_start_pattern
+                    ),
                 )
             )
             token_data = (

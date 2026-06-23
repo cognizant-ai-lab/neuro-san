@@ -176,9 +176,14 @@ class OutputValidator:
         for disc in disconnections:
             agent = disc.get("agent", "unknown")
             req_id = disc.get("request_id", "unknown")
+            client_req = disc.get("client_request")
+            label = (
+                f"{client_req}/{req_id}" if client_req
+                else req_id
+            )
             logger.warning(
                 "    %s: %s still running at disconnect",
-                req_id, agent,
+                label, agent,
             )
 
     @staticmethod

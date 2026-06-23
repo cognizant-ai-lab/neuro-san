@@ -419,24 +419,36 @@ class ServerLogMonitor:
         return results
 
     def scan_disconnections_since(
-            self, position,
+            self, position, primary_start_pattern=None,
     ) -> List[Dict[str, str]]:
         """Scan server log for client disconnections since the given position.
 
-        Returns a list of dicts with request_id and the agent that was
-        still running when the client disconnected.
+        Returns a list of dicts with request_id, agent, and
+        client_request (the originating client request ordinal).
         """
         if self._server_log is None or position is None:
             return []
         lines = self._read_lines_since(position, "disconnections")
         if not lines:
             return []
+
+        pri_re = (
+            re.compile(primary_start_pattern)
+            if primary_start_pattern else None
+        )
+        primary_request_ids = []
         disconnections = {}
         context_request_id = None
+
         for line in lines:
             req_match = STREAM_CLOSED_REQUEST_PATTERN.search(line)
             if req_match:
                 context_request_id = req_match.group(1)
+            if pri_re and pri_re.search(line) and context_request_id:
+                if context_request_id not in primary_request_ids:
+                    primary_request_ids.append(
+                        context_request_id,
+                    )
             if CLIENT_DISCONNECT_PATTERN.search(line):
                 req_id = context_request_id or "unknown"
                 if req_id not in disconnections:
@@ -450,7 +462,43 @@ class ServerLogMonitor:
                 disc = disconnections.get(context_request_id)
                 if disc is not None:
                     disc.update({"agent": agent})
+
+        self._map_to_client_requests(
+            disconnections, primary_request_ids,
+        )
         return list(disconnections.values())
+
+    @staticmethod
+    def _map_to_client_requests(disconnections, primary_request_ids):
+        """Map each disconnected sub-request to its parent client request.
+
+        Uses sequential server request_id ordering: a sub-request
+        belongs to the nearest preceding primary request.
+        """
+        if not primary_request_ids:
+            return
+
+        def _extract_num(rid):
+            match = re.search(r"(\d+)$", rid)
+            return int(match.group(1)) if match else -1
+
+        primary_nums = [
+            _extract_num(rid) for rid in primary_request_ids
+        ]
+
+        for disc in disconnections.values():
+            rid = disc.get("request_id", "")
+            rid_num = _extract_num(rid)
+            parent_idx = None
+            for idx, pnum in enumerate(primary_nums):
+                if pnum <= rid_num:
+                    parent_idx = idx
+                else:
+                    break
+            if parent_idx is not None:
+                disc["client_request"] = (
+                    f"request-{parent_idx + 1}"
+                )
 
     # pylint: disable=too-many-arguments
     def start_log_monitor(self, position,
