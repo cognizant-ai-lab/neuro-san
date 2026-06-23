@@ -18,12 +18,23 @@
 import json
 import logging
 import os
+import re
 
 from tests.load_tests.config import fmt_duration
 from tests.load_tests.config import format_rss
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.config import STATUS_CREATED
+from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.reporting.table_formatter import TableFormatter
+
+_NORMAL_LLM_CALLS = 4
+_LOOP_THRESHOLD = 10
+_SERVER_TOKEN_RE = re.compile(
+    r"(request-\d+):\s*([\d,]+)\s*tokens"
+    r"\s*\(([\d,]+)\s*prompt\s*\+\s*([\d,]+)\s*completion\),"
+    r"\s*(\d+)\s*LLM call\(s\),"
+    r"\s*model=([^\s]+)",
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +82,7 @@ class CrossRunComparison:
             if not runs:
                 continue
             self._log_table(runs, agent_name)
+            self._log_validation_loops(runs)
 
     def _collect_runs(self):
         """Walk subdirectories for raw_results.json and extract metrics."""
@@ -262,6 +274,93 @@ class CrossRunComparison:
                 ),
             ))
         TableFormatter.log_table(header, rows)
+
+    def _log_validation_loops(self, runs):
+        """Log validation loop summary for runs that have them."""
+        for run in runs:
+            folder = run.get("folder", "")
+            log_path = os.path.join(
+                self._base_dir, folder, "server_tokens.log",
+            )
+            loops = self._parse_validation_loops(log_path)
+            if not loops:
+                continue
+            self._print_loop_summary(folder, loops)
+
+    @staticmethod
+    def _parse_validation_loops(log_path):
+        """Parse server_tokens.log for validation loop requests."""
+        if not os.path.isfile(log_path):
+            return []
+        loops = []
+        with open(log_path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                match = _SERVER_TOKEN_RE.search(line)
+                if not match:
+                    continue
+                llm_calls = int(match.group(5))
+                if llm_calls < _LOOP_THRESHOLD:
+                    continue
+                prompt = int(
+                    match.group(3).replace(",", ""),
+                )
+                completion = int(
+                    match.group(4).replace(",", ""),
+                )
+                model = match.group(6)
+                retries = llm_calls - _NORMAL_LLM_CALLS
+                cost = CostEstimator.estimate(
+                    prompt, completion, model,
+                )
+                loops.append({
+                    "request_id": match.group(1),
+                    "llm_calls": llm_calls,
+                    "retries": retries,
+                    "prompt_tokens": prompt,
+                    "completion_tokens": completion,
+                    "total_tokens": prompt + completion,
+                    "model": model,
+                    "cost_usd": cost,
+                })
+        return loops
+
+    @staticmethod
+    def _print_loop_summary(folder, loops):
+        """Print aggregated validation loop stats."""
+        total_retries = sum(
+            lp["retries"] for lp in loops
+        )
+        total_tokens = sum(
+            lp["total_tokens"] for lp in loops
+        )
+        total_cost = sum(
+            lp["cost_usd"] for lp in loops
+        )
+        logger.info("")
+        logger.info(
+            "  Validation loops in %s "
+            "(%s request(s)):",
+            folder, len(loops),
+        )
+        logger.info(
+            "    Total: %s retries, %s tokens, "
+            "$%.2f",
+            total_retries,
+            f"{total_tokens:,}",
+            total_cost,
+        )
+        for lp in sorted(
+            loops, key=lambda x: x["retries"],
+            reverse=True,
+        ):
+            logger.info(
+                "    %s: %s retries, %s tokens "
+                "($%.2f)",
+                lp["request_id"],
+                lp["retries"],
+                f"{lp['total_tokens']:,}",
+                lp["cost_usd"],
+            )
 
     @staticmethod
     def _compute_deltas(prev, current, keys):
