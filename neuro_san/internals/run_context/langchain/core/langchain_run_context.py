@@ -153,6 +153,10 @@ class LangChainRunContext(RunContext):
             self.capsule = ActivationCapsule(self)
 
     def update_from_parent_run_context(self, parent_run_context: RunContext):
+        """
+        Update from parent run context
+        :param parent_run_context: The parent RunContext
+        """
         if parent_run_context is None:
             return
 
