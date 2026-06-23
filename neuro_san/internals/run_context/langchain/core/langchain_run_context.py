@@ -110,7 +110,7 @@ class LangChainRunContext(RunContext):
         self.invocation_context: InvocationContext = invocation_context
         self.chat_context: Dict[str, Any] = chat_context
         self.origin: List[Dict[str, Any]] = []
-        # Have we already created resources for this RunContext:
+        # Have we already created resources for this RunContext?
         self.resources_created: bool = False
         # Default logger
         self.logger: Logger = getLogger(self.__class__.__name__)
@@ -120,6 +120,26 @@ class LangChainRunContext(RunContext):
 
         self.capsule: ActivationCapsule = None
 
+        # If you add more members here, be sure to clear them out in close_of_work() below.
+
+        # Now that we have initialized all the members, some procedural initialization
+        self.create_capsule()
+        self.update_from_parent_run_context(parent_run_context)
+        self.update_from_chat_context(self.chat_context)
+
+        # Set up so local logging gives origin info.
+        if self.origin is not None and len(self.origin) > 0:
+            full_name: str = Origination.get_full_name_from_origin(self.origin)
+            self.logger = getLogger(full_name)
+
+        if self.invocation_context is not None:
+            # Sets up self.journal
+            self.update_invocation_context(self.invocation_context)
+
+    def create_capsule(self):
+        """
+        Create the ActivationCapsule
+        """
         if self.tool_caller is not None:
             agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
             # DEF: This is perhaps too brave a usage/cast, but it is indeed an AgentToolFactory
@@ -132,33 +152,23 @@ class LangChainRunContext(RunContext):
             # to look for tools specified in the middleware.
             self.capsule = ActivationCapsule(self)
 
-        parent_origin: List[Dict[str, Any]] = []
-        if parent_run_context is not None:
+    def update_from_parent_run_context(self, parent_run_context: RunContext):
+        if parent_run_context is None:
+            return
 
-            # Get other stuff from parent if not specified
-            if self.invocation_context is None:
-                self.invocation_context = parent_run_context.get_invocation_context()
-            if self.chat_context is None:
-                self.chat_context = parent_run_context.get_chat_context()
+        # Get other stuff from parent if not specified
+        if self.invocation_context is None:
+            self.invocation_context = parent_run_context.get_invocation_context()
+        if self.chat_context is None:
+            self.chat_context = parent_run_context.get_chat_context()
 
-            self.tracing_context = parent_run_context.get_tracing_context().clone()
-            parent_origin = parent_run_context.get_origin()
+        self.tracing_context = parent_run_context.get_tracing_context().clone()
+        parent_origin: List[Dict[str, Any]] = parent_run_context.get_origin()
 
-            # Initialize the origin.
-            agent_name: str = tool_caller.get_name()
-            origination: Origination = self.invocation_context.get_origination()
-            self.origin = origination.add_spec_name_to_origin(parent_origin, agent_name)
-
-        self.update_from_chat_context(self.chat_context)
-
-        # Set up so local logging gives origin info.
-        if self.origin is not None and len(self.origin) > 0:
-            full_name: str = Origination.get_full_name_from_origin(self.origin)
-            self.logger = getLogger(full_name)
-
-        if self.invocation_context is not None:
-            # Sets up self.journal
-            self.update_invocation_context(self.invocation_context)
+        # Initialize the origin.
+        agent_name: str = self.tool_caller.get_name()
+        origination: Origination = self.invocation_context.get_origination()
+        self.origin = origination.add_spec_name_to_origin(parent_origin, agent_name)
 
     async def create_resources(self, agent_name: str,
                                instructions: str,
@@ -514,8 +524,8 @@ class LangChainRunContext(RunContext):
         self.tools = []
         self.error_detector = None
         self.recent_human_message = None
-        # tool_caller comes from the caller 
-        # invocation_context comes from the caller 
+        # tool_caller comes from the caller
+        # invocation_context comes from the caller
         self.chat_context = None
         self.origin = []
         self.resources_created = False
