@@ -428,6 +428,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 "completion_tokens": entry.get("completion_tokens"),
                 "llm_calls": entry.get("llm_calls"),
                 "model": entry.get("model"),
+                "reporting_agent": entry.get("reporting_agent"),
+                "server_request_id": entry.get("request_id"),
                 "cost_usd": CostEstimator.estimate(
                     entry.get("prompt_tokens", 0),
                     entry.get("completion_tokens", 0),

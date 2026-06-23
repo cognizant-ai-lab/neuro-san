@@ -161,7 +161,7 @@ class ServerLogMonitor:
 
         Returns a dict of request_id -> token data, where each entry has:
             total_tokens, prompt_tokens, completion_tokens,
-            successful_requests, model
+            successful_requests, model, reporting_agent
         """
         if self._server_log is None or position is None:
             return {}
@@ -176,6 +176,11 @@ class ServerLogMonitor:
             if entry:
                 rid = entry.get("request_id")
                 if rid is not None:
+                    agent = self._find_network_after(
+                        lines, block.get("end_idx", 0),
+                    )
+                    if agent:
+                        entry["reporting_agent"] = agent
                     results[rid] = entry
         return results
 

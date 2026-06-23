@@ -512,31 +512,46 @@ class TrafficRunner:
         total = result.get("total_tokens", 0)
         llm_calls = result.get("llm_calls", 0)
         model = result.get("model", "unknown")
+        agent = result.get("reporting_agent", "")
         elapsed = result.get("elapsed", 0)
         status = result.get("status", "?")
+        agent_suffix = f", agent={agent}" if agent else ""
         fh.write(
             f"{rid}: {total:,} tokens, "
             f"{llm_calls} LLM call(s), "
-            f"model={model}"
+            f"model={model}{agent_suffix}"
             f"  [{elapsed:.1f}s {status}]\n"
         )
         TrafficRunner._write_validation_detail(
             fh, rid, by_validation,
         )
-        agents = by_request.get(rid, [])
-        for agent in agents:
-            net = agent.get("network", "?")
-            a_calls = agent.get("llm_calls", 0)
-            a_total = agent.get("total_tokens", 0)
-            a_prompt = agent.get("prompt_tokens", 0)
-            a_comp = agent.get("completion_tokens", 0)
+        server_rid = result.get("server_request_id", rid)
+        agents = (
+            by_request.get(server_rid)
+            or by_request.get(rid)
+            or []
+        )
+        if not agents and agent:
+            fh.write(
+                f"  {agent}: {llm_calls} call(s)"
+                f"  {total:,} tokens"
+                f" ({result.get('prompt_tokens', 0):,} prompt"
+                f" / {result.get('completion_tokens', 0):,}"
+                f" completion)\n"
+            )
+        for ag_entry in agents:
+            net = ag_entry.get("network", "?")
+            a_calls = ag_entry.get("llm_calls", 0)
+            a_total = ag_entry.get("total_tokens", 0)
+            a_prompt = ag_entry.get("prompt_tokens", 0)
+            a_comp = ag_entry.get("completion_tokens", 0)
             fh.write(
                 f"  {net}: {a_calls} call(s)"
                 f"  {a_total:,} tokens"
                 f" ({a_prompt:,} prompt"
                 f" / {a_comp:,} completion)\n"
             )
-        if agents or rid in by_validation:
+        if agents or agent or rid in by_validation:
             fh.write("\n")
 
     @staticmethod
