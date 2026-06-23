@@ -333,7 +333,7 @@ class TrafficRunner:
         return killed
 
     def _diagnose_failure(self, returncode, parsed_fields,
-                           stdout) -> str:
+                          stdout) -> str:
         """Return a human-readable reason why a request was marked FAILED."""
         reasons = []
         if returncode != 0:
