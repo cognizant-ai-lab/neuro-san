@@ -69,7 +69,11 @@ class CrossRunComparison:
             return
         groups = self._group_by_agent(all_runs)
         for agent_name in sorted(groups):
-            runs = self._deduplicate(groups[agent_name])
+            runs = (
+                groups[agent_name]
+                if self._run_filter
+                else self._deduplicate(groups[agent_name])
+            )
             if self._baseline_requests > 0:
                 runs = [
                     r for r in runs
