@@ -518,17 +518,17 @@ class LangChainRunContext(RunContext):
         # In order of appearance from the constructor
 
         self.chat_history = []
-        # middleware_config comes from the agent spec
+        self.middleware_config = None
         self.journal = None
         self.interceptor = None
         self.llm_resources = None
         self.agent_chain = None
-        # llm_config comes from the agent spec
+        self.llm_config = None
         self.run_id_base = None
         self.tools = []
         self.error_detector = None
         self.recent_human_message = None
-        # tool_caller comes from the caller
+        self.tool_caller = None
         # invocation_context comes from the caller
         self.chat_context = None
         self.origin = []
