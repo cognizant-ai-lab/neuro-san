@@ -667,7 +667,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             )
             total_retries = sum(retries.values())
             amplification = compute_amplification(
-                actual_requests, total_retries,
+                stage_requests, total_retries,
             )
 
         OutputValidator.log_stage_results(
@@ -712,7 +712,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         if has_server_log:
             OutputValidator.log_retry_activity(
-                retries, total_retries, actual_requests,
+                retries, total_retries, stage_requests,
             )
         elif monitor_resources:
             logger.info(
@@ -730,6 +730,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     before_client=before_client,
                     peak_client=peak_client,
                     settled_client=settled_client,
+                    server_log_requests=stage_requests,
                 )
             )
 
@@ -816,6 +817,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             log_pos, results, *,
             before_server, before_client,
             peak_client, settled_client,
+            server_log_requests=None,
     ) -> Tuple[
         ServerCounts, List[Dict[str, str]],
         List[NetworkTokenEntry], Optional[ResourceSnapshot],
@@ -862,7 +864,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     has_server_log,
                     log_pos,
                     results=results,
-                    actual_requests=actual_requests,
+                    actual_requests=(
+                        server_log_requests
+                        if server_log_requests is not None
+                        else actual_requests
+                    ),
                 )
             )
 
@@ -980,8 +986,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     log_pos,
                 )
             )
+            stage_results = [
+                r for r in results
+                if r.get("request_id") != "request-0"
+            ]
             LoadTestOrchestrator._attach_token_data(
-                results, token_data,
+                stage_results, token_data,
             )
             network_tokens = (
                 self.log_monitor.parse_per_network_tokens_since(

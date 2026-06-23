@@ -77,7 +77,7 @@ class InputValidator:
         if self._args.ramp:
             if self._args.stages is not None:
                 try:
-                    return [
+                    stages = [
                         int(s.strip())
                         for s in self._args.stages.split(",")
                         if s.strip()
@@ -89,7 +89,21 @@ class InputValidator:
                         self._args.stages,
                     )
                     sys.exit(1)
+                if not stages or any(s <= 0 for s in stages):
+                    logger.error(
+                        "--stages values must be positive integers. "
+                        "Got: '%s'",
+                        self._args.stages,
+                    )
+                    sys.exit(1)
+                return stages
             return list(DEFAULT_STAGES)
+        if self._args.num_requests <= 0:
+            logger.error(
+                "--num-requests must be a positive integer. Got: %s",
+                self._args.num_requests,
+            )
+            sys.exit(1)
         return [self._args.num_requests]
 
     def resolve_max_requests(self, stages) -> int:
