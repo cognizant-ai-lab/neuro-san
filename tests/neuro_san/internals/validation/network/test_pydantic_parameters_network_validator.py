@@ -146,6 +146,16 @@ class TestPydanticParametersNetworkValidator(TestCase, AbstractNetworkValidatorT
         self.assertIn("agent_j", errors[0])
         self.assertIn("items must be", errors[0])
 
+    def test_nested_array_missing_items_caught_by_preflight(self):
+        """An array-of-arrays where the inner array lacks 'items' is caught."""
+        config: Dict[str, Any] = self._restore_fixture(
+            "nested_array_missing_items.hocon",
+        )
+        errors = self.validator.validate(config)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("agent_k", errors[0])
+        self.assertIn("missing 'items'", errors[0])
+
     def test_string_items_commondef_resolved_before_pydantic(self):
         """
         String ``items`` commondef references are resolved to their actual
