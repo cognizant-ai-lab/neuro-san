@@ -179,7 +179,6 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
                                                             sly_data=sly_data,
                                                             redactor=redactor)
 
-
         # Make a copy of the input message for use in the tracing context
         # We can't use the same object as original_input_message because
         # the tracing infrastructure ends up transforming the message for display.
@@ -267,13 +266,18 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
                                    allow_empty_dict=False)
         return_sly_data: Dict[str, Any] = redactor.filter_config(self.sly_data)
 
+        tracing_redactor = SlyDataRedactor(front_man_spec,
+                                           config_keys=["allow.to_tracing.sly_data"],
+                                           allow_empty_dict=False)
+
         # Stream over chat state as the last message
         # Use the interceptor to write the message.
         # This guy wraps the journal from the invocation context and listens to the
         # messages coming across, which allows us to report to the tracing infrastructure
         # at the end of the tracing context.
         message = AgentFrameworkMessage(content=answer, chat_context=return_chat_context,
-                                        sly_data=return_sly_data, structure=structure)
+                                        sly_data=return_sly_data, structure=structure,
+                                        redactor=tracing_redactor)
         await self.finalize_request(message)
 
         # Bogus output, but need something for interface
