@@ -114,7 +114,8 @@ Return verbatim whatever real_calculator returns.
                 "to_upstream": {
                     "sly_data": ["equals"]
                 },
-                # Only allow "x" and "equals" to tracing. This is arbitrary for this example.
+                # Only allow "x" and "equals" to tracing.
+                # This is arbitrary for this example to show how to_tracing works.
                 "to_tracing": {
                     "sly_data": ["x", "equals"]
                 }
