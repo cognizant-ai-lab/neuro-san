@@ -27,7 +27,10 @@ from typing import Union
 
 from copy import copy
 
+from pydantic import ConfigDict
+
 from neuro_san.internals.messages.traced_message import TracedMessage
+from neuro_san.internals.graph.activations.sly_data_redactor import SlyDataRedactor
 
 
 class AgentFrameworkMessage(TracedMessage):
@@ -38,9 +41,13 @@ class AgentFrameworkMessage(TracedMessage):
     structure: Optional[Dict[str, Any]] = None
     sly_data: Optional[Dict[str, Any]] = None
     chat_context: Optional[Dict[str, Any]] = None
-    allowed_sly_data_keys: Optional[Set[str]] = None
+    redactor: Optional[SlyDataRedactor] = None
 
     type: Literal["agent-framework"] = "agent-framework"
+
+    # This guy needs to be a pydantic class and in order to have
+    # a non-pydantic SlyDataRedactor as a member, we need to do this.
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     def __init__(self, content: Union[str, List[Union[str, Dict]]] = "",
@@ -48,7 +55,7 @@ class AgentFrameworkMessage(TracedMessage):
                  sly_data: Dict[str, Any] = None,
                  structure: Dict[str, Any] = None,
                  trace_source: AgentFrameworkMessage = None,
-                 allowed_sly_data_keys: Set[str] = None,
+                 redactor: SlyDataRedactor = None,
                  **kwargs: Any) -> None:
         """
         Pass in content as positional arg.
@@ -63,8 +70,7 @@ class AgentFrameworkMessage(TracedMessage):
                         The idea is to have the server do the hard parsing so the
                         multitude of clients do not have to rediscover how to best do it.
         :param trace_source: A message of the same type to prepare for tracing display
-        :param allowed_sly_data_keys: A set of sly_data keys that are allowed to be reported
-                            for tracing reporting.
+        :param redactor: An optional SlyDataRedactor to use. Default is None.
         :param kwargs: Additional fields to pass to the superclass
         """
         super().__init__(content=content, trace_source=trace_source, **kwargs)
@@ -108,9 +114,11 @@ class AgentFrameworkMessage(TracedMessage):
         # that might make it to some other host.
         if new_key == "sly_data":
 
-            allow_sly_data_keys = self.allowed_sly_data_keys
-            if allow_sly_data_keys is None:
-                allow_sly_data_keys = set()
+            allow_sly_data_keys: Set[str] = set()
+            if self.redactor is not None:
+                redacted: Dict[str, Any] = self.redactor.filter_config(new_value)
+                if redacted is not None:
+                    allow_sly_data_keys = set(redacted.keys())
 
             # Shallow copy the original sly_data dictionary
             new_value = copy(value)

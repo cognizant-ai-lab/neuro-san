@@ -75,6 +75,8 @@ Items in ***bold*** are essentials. Try to understand these first.
             - [messages](#messages)
         - [to_upstream](#to_upstream)
             - [sly_data](#sly_data-2)
+        - [to_tracing](#to_tracing)
+            - [sly_data](#sly_data-3)
     - [display_as](#display_as)
     - [max_message_history](#max_message_history)
     - [verbose](#verbose-1)
@@ -92,7 +94,7 @@ Items in ***bold*** are essentials. Try to understand these first.
             - [origin](#origin)
             - [origin_str](#origin_str)
             - [progress_reporter](#progress_reporter)
-            - [sly_data](#sly_data-3)
+            - [sly_data](#sly_data-4)
 
 <!--TOC-->
 
@@ -959,6 +961,26 @@ To transmit sly_data to its upstream caller, you _must_ specificaly enable it.
 A dictionary value whose keys represent keys in the sly_data dictionary.
 Boolean values for each key tell whether or not that data internal to the agent network
 is allowed to go back to the client in the final message.
+A string value in the dictionary represents a translation to a new key.
+
+The same dictionary/list specification described in [to_downstream](#sly_data) also applies here.
+
+#### to_tracing
+
+_Front Man only_
+Dictionary which specifies security policy for information going to tracing applications.
+
+This has no effect on any information flowing between agents internal to the network.
+
+<!--- pyml disable-next-line no-duplicate-heading -->
+##### sly_data
+
+By default sly_data keys appear in messages going to tracing applications, but the values are "<redacted>".
+To transmit sly_data values to a tracing application, you _must_ specificaly enable it.
+
+A dictionary value whose keys represent keys in the sly_data dictionary.
+Boolean values for each key tell whether or not that data internal to the agent network
+is allowed to go to the tracing application in the message that is reported there.
 A string value in the dictionary represents a translation to a new key.
 
 The same dictionary/list specification described in [to_downstream](#sly_data) also applies here.
