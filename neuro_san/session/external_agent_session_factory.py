@@ -80,11 +80,16 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
         because in the general case this might involve querying external storage, which is potentially slow.
         """
         networks_order: List[str] = []
+        if network_storage_dict is None:
+            return networks_order
+
         for storage_name in network_storage_dict.keys():
             if storage_name != StorageClass.TEMP:
                 networks_order.append(storage_name)
+
         if StorageClass.TEMP in network_storage_dict:
             networks_order.append(StorageClass.TEMP)
+
         return networks_order
 
     def create_session_from_location_dict(self, agent_location: Dict[str, str],
@@ -129,9 +134,10 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
                 if agent_network_provider.get_agent_network() is not None:
                     break
 
-            agent_network: AgentNetwork = agent_network_provider.get_agent_network()
-            safe_invocation_context: InvocationContext = invocation_context.safe_shallow_copy(invocation)
-            session = AsyncDirectAgentSession(agent_network, safe_invocation_context, metadata=metadata)
+            if agent_network_provider is not None:
+                agent_network: AgentNetwork = agent_network_provider.get_agent_network()
+                safe_invocation_context: InvocationContext = invocation_context.safe_shallow_copy(invocation)
+                session = AsyncDirectAgentSession(agent_network, safe_invocation_context, metadata=metadata)
 
         if session is None:
             # When creating a session for external agents, specifically use None for the

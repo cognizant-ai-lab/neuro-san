@@ -210,6 +210,13 @@ class SessionInvocationContext(InvocationContext):
         for resource in self.resources:
             await resource.close_of_work()
 
+        # Now that we are done, tell the Reservationist that we used for this request
+        # that there will be no more Reservations to corral.
+        if not self.is_cloned and \
+                self.reservationist is not None and \
+                isinstance(self.reservationist, LingeringResource):
+            await self.reservationist.close_of_work()
+
     def get_request_reporting(self) -> Dict[str, Any]:
         """
         :return: The request reporting dictionary
