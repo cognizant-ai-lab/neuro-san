@@ -38,7 +38,6 @@ from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.chat.chat_history_message_processor import ChatHistoryMessageProcessor
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.registry.agent_tool_registry import AgentToolRegistry
-from neuro_san.internals.graph.activations.sly_data_redactor import SlyDataRedactor
 from neuro_san.internals.interfaces.context_type_tracing_context_factory import ContextTypeTracingContextFactory
 from neuro_san.internals.interfaces.front_man import FrontMan
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
@@ -49,6 +48,7 @@ from neuro_san.internals.journals.intercepting_journal import InterceptingJourna
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.messages.agent_framework_message import AgentFrameworkMessage
 from neuro_san.internals.messages.base_message_dictionary_converter import BaseMessageDictionaryConverter
+from neuro_san.internals.messages.sly_data_redactor import SlyDataRedactor
 from neuro_san.internals.run_context.factory.run_context_factory import RunContextFactory
 from neuro_san.internals.run_context.factory.master_tracing_context_factory import MasterTracingContextFactory
 from neuro_san.internals.run_context.interfaces.run_context import RunContext

@@ -30,7 +30,7 @@ from copy import copy
 from pydantic import ConfigDict
 
 from neuro_san.internals.messages.traced_message import TracedMessage
-from neuro_san.internals.graph.activations.sly_data_redactor import SlyDataRedactor
+from neuro_san.internals.messages.sly_data_redactor import SlyDataRedactor
 
 
 class AgentFrameworkMessage(TracedMessage):
