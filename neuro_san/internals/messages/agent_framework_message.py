@@ -115,6 +115,7 @@ class AgentFrameworkMessage(TracedMessage):
         # that might make it to some other host.
         if new_key == "sly_data":
 
+            # Get the set of keys whose values are allow through.
             allow_sly_data_keys: Set[str] = set()
             if self.redactor is not None:
                 redacted: Dict[str, Any] = self.redactor.filter_config(new_value)
