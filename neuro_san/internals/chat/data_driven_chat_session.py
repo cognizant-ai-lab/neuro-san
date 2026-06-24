@@ -164,13 +164,6 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         journal: Journal = self.invocation_context.get_journal()
         self.interceptor = InterceptingJournal(journal, origin=None)
 
-        # Set up an input message that will show up in an Observability/tracing app
-        # We keep this guy around for the duration of the chat session so that this class
-        # has a pristine copy of what the inputs for use within run_it().
-        self.original_input_message = AgentFrameworkMessage(content=user_input,
-                                                            chat_context=chat_context,
-                                                            sly_data=sly_data)
-
         # Find the front man spec to set up a SlyDataRedactor for use in the tracing context
         front_man_name: str = self.registry.find_front_man()
         front_man_spec: Dict[str, Any] = self.registry.get_agent_tool_spec(front_man_name)
@@ -178,11 +171,19 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
                                    config_keys=["allow.to_tracing.sly_data"],
                                    allow_empty_dict=False)
 
+        # Set up an input message that will show up in an Observability/tracing app
+        # We keep this guy around for the duration of the chat session so that this class
+        # has a pristine copy of what the inputs for use within run_it().
+        self.original_input_message = AgentFrameworkMessage(content=user_input,
+                                                            chat_context=chat_context,
+                                                            sly_data=sly_data,
+                                                            redactor=redactor)
+
+
         # Make a copy of the input message for use in the tracing context
         # We can't use the same object as original_input_message because
         # the tracing infrastructure ends up transforming the message for display.
-        input_message_for_show = AgentFrameworkMessage(trace_source=self.original_input_message,
-                                                       redactor=redactor)
+        input_message_for_show = AgentFrameworkMessage(trace_source=self.original_input_message)
 
         # Set up configuration for creating the tracing context.
         # These are the bare minimum required to get output and metadata correct

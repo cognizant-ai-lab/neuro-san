@@ -112,6 +112,9 @@ Return verbatim whatever real_calculator returns.
             "allow": {
                 "to_upstream": {
                     "sly_data": ["equals"]
+                },
+                "to_tracing": {
+                    "sly_data": ["x", "equals"]
                 }
             },
             "tools": ["real_calculator"],

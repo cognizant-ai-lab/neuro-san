@@ -83,6 +83,7 @@ class AgentFrameworkMessage(TracedMessage):
 
         self.sly_data: Dict[str, Any] = sly_data
         self.structure: Dict[str, Any] = structure
+        self.redactor: SlyDataRedactor = redactor
 
     @property
     def lc_kwargs(self) -> Dict[str, Any]:
