@@ -23,10 +23,8 @@ import statistics
 import time
 from typing import List
 
-from neuro_san.internals.interfaces.startable import Startable
 
-
-class EventLoopLagMonitor(Startable):
+class EventLoopLagMonitor:
     """
     Periodically samples asyncio event-loop responsiveness by scheduling a
     sleep at fixed intervals and measuring how much actual wake-up time

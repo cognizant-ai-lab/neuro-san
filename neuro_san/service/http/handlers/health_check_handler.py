@@ -17,6 +17,7 @@
 """
 See class comment for details
 """
+import time
 from typing import Any
 from typing import Dict
 from typing import List
@@ -73,6 +74,7 @@ class HealthCheckHandler(RequestHandler):
         Implementation of GET request handler for API health check.
         """
 
+        start_time = time.monotonic()
         try:
             if self.status:
                 versions: Dict[str, Any] = self.determine_versions()
@@ -93,6 +95,8 @@ class HealthCheckHandler(RequestHandler):
             self.write({"error": "Internal server error"})
         finally:
             self.finish()
+            exec_time = (time.monotonic() - start_time) * 1000  # Convert to milliseconds
+            self.logger.info({}, f"Health-check request processed in {exec_time:.2f} ms")
 
     def get_metadata(self) -> Dict[str, Any]:
         """

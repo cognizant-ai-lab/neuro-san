@@ -194,11 +194,11 @@ class HttpServer(AgentStateListener):
 
         main_loop = tornado.ioloop.IOLoop.current()
 
-        event_loop_monitor: Startable = \
+        event_loop_monitor = \
             EventLoopLagMonitor(
                 sample_interval_seconds=1.0,
                 report_every_n_samples=50,
-                break_between_reports_seconds=20,
+                break_between_reports_seconds=15,
                 logger=self.logger
             )
         main_loop.spawn_callback(event_loop_monitor.run)

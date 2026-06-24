@@ -86,6 +86,7 @@ class StreamingChatHandler(BaseRequestHandler):
         Implementation of POST request handler for streaming chat API call.
         """
 
+        start_time = time.monotonic()
         metadata: Dict[str, Any] = self.get_metadata()
         service: AsyncAgentService = await self.get_service(agent_name, metadata)
         if service is None:
@@ -142,6 +143,13 @@ class StreamingChatHandler(BaseRequestHandler):
             # Now process the result stream
             async with asyncio.timeout(request_timeout):
                 result_generator = service.streaming_chat(request_dict, metadata)
+
+                # This is where we finished up preparing the request
+                # and are now ready to start streaming results back to the client.
+                # Up to this point, we are occupying server main event loop.
+                diff_time = (time.monotonic() - start_time) * 1000  # Convert to milliseconds
+                self.logger.info(metadata, "Chat request prepared in %f ms", diff_time)
+                
                 async for result_dict in result_generator:
                     result_str: str = json.dumps(result_dict) + "\n"
                     async with self.lock:
