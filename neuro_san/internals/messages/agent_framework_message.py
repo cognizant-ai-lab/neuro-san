@@ -118,6 +118,8 @@ class AgentFrameworkMessage(TracedMessage):
             # Get the set of keys whose values are allow through.
             allow_sly_data_keys: Set[str] = set()
             if self.redactor is not None:
+                # Note: The redactor allows for translation of keys.
+                #       This might not yet be fully accounted for here.
                 redacted: Dict[str, Any] = self.redactor.filter_config(new_value)
                 if redacted is not None:
                     allow_sly_data_keys = set(redacted.keys())
