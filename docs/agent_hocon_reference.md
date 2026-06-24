@@ -975,7 +975,7 @@ This has no effect on any information flowing between agents internal to the net
 <!--- pyml disable-next-line no-duplicate-heading -->
 ##### sly_data
 
-By default sly_data keys appear in messages going to tracing applications, but the values are "<redacted>".
+By default sly_data keys appear in messages going to tracing applications, but the values are `<redacted>`.
 To transmit sly_data values to a tracing application, you _must_ specificaly enable it.
 
 A dictionary value whose keys represent keys in the sly_data dictionary.
