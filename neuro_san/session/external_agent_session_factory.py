@@ -121,7 +121,7 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
             metadata = invocation_context.get_metadata()
 
         session: AsyncAgentSession = None
-        if self.use_direct and (host is None or len(host) == 0 or host == "localhost"):
+        if self.is_use_direct() and (host is None or len(host) == 0 or host == "localhost"):
 
             # Optimization: We want to create a different kind of session to minimize socket usage
             # and potentially relieve the direct user of the burden of having to start a server
