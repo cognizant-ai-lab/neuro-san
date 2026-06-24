@@ -976,7 +976,7 @@ This has no effect on any information flowing between agents internal to the net
 ##### sly_data
 
 By default sly_data keys appear in messages going to tracing applications, but the values are `<redacted>`.
-To transmit sly_data values to a tracing application, you _must_ specificaly enable it.
+To transmit sly_data values to a tracing application, you _must_ specifically enable it.
 
 A dictionary value whose keys represent keys in the sly_data dictionary.
 Boolean values for each key tell whether or not that data internal to the agent network
