@@ -33,7 +33,6 @@ from langchain_core.messages.base import BaseMessage
 
 from leaf_common.config.resolver_util import ResolverUtil
 
-from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.chat.chat_history_message_processor import ChatHistoryMessageProcessor
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -422,12 +421,6 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
 
         :param parent_resource: The parent resource, if any
         """
-        # Now that we are done, tell the Reservationist that we used for this request
-        # that there will be no more Reservations to corral.
-        reservationist: Reservationist = self.invocation_context.get_reservationist()
-        if reservationist is not None and isinstance(reservationist, LingeringResource):
-            await reservationist.close_of_work()
-
         # Close any objects on sly data that can be closed.
         await self.close_sly_data()
 
