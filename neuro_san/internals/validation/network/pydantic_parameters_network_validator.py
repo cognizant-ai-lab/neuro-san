@@ -86,7 +86,7 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
                 # flat param maps. Pydantic expects properties.items(), so skip.
                 continue
 
-            preflight_errors: List[str] = PydanticParametersNetworkValidator._pre_validate_properties(
+            preflight_errors: List[str] = self._pre_validate_properties(
                 agent_name, params,
             )
             if preflight_errors:
@@ -139,7 +139,7 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
             )
             return errors
 
-        if not isinstance(properties, dict):
+        if properties is None:
             return errors
 
         for prop_name, prop_schema in properties.items():
