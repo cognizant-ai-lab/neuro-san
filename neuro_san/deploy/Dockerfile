@@ -212,6 +212,7 @@ ENV AGENT_FORWARDED_REQUEST_METADATA="request_id user_id"
 ENV AGENT_HTTP_PORT="8080"
 
 # Maximm number of requests that can be served at the same time
+# A value of 0 indicates unlimited requests are handled.
 ENV AGENT_MAX_CONCURRENT_REQUESTS="50"
 
 # Number of requests served before the server shuts down in an orderly fashion.
