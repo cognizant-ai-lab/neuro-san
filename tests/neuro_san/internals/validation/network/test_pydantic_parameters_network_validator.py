@@ -84,7 +84,7 @@ class TestPydanticParametersNetworkValidator(TestCase, AbstractNetworkValidatorT
     def test_nested_object_property_bad_properties_type(self):
         """
         A nested object with properties that is not a dict is flagged
-        by the pydantic conversion phase.
+        by the preflight validation.
         """
         config: Dict[str, Any] = self._restore_fixture(
             "nested_object_bad_properties.hocon",
@@ -92,7 +92,7 @@ class TestPydanticParametersNetworkValidator(TestCase, AbstractNetworkValidatorT
         errors = self.validator.validate(config)
         self.assertEqual(len(errors), 1)
         self.assertIn("agent_b", errors[0])
-        self.assertIn("pydantic model conversion failed", errors[0])
+        self.assertIn("properties must be an object", errors[0])
 
     def test_unrecognized_type_caught_by_preflight(self):
         """
@@ -155,6 +155,14 @@ class TestPydanticParametersNetworkValidator(TestCase, AbstractNetworkValidatorT
         self.assertEqual(len(errors), 1)
         self.assertIn("agent_k", errors[0])
         self.assertIn("missing 'items'", errors[0])
+
+    def test_non_string_type_caught_by_preflight(self):
+        """A 'type' value that is not a string (e.g. a list) is caught."""
+        config: Dict[str, Any] = self._restore_fixture("non_string_type.hocon")
+        errors = self.validator.validate(config)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("agent_h", errors[0])
+        self.assertIn("'type' must be a string", errors[0])
 
     def test_string_items_commondef_resolved_before_pydantic(self):
         """

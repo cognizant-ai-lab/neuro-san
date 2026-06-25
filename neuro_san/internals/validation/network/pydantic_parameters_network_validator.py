@@ -130,7 +130,15 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
         if not isinstance(params, dict):
             return errors
 
+        # Guard: 'properties' must be a dict when present
         properties: Any = params.get("properties")
+        if properties is not None and not isinstance(properties, dict):
+            errors.append(
+                f"{agent_name}: {path}.properties must be an object,"
+                f" got {type(properties).__name__}"
+            )
+            return errors
+
         if not isinstance(properties, dict):
             return errors
 
@@ -180,7 +188,14 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
             )
             return errors
 
-        # Check 4: 'type' value must be recognized
+        # Check 4: 'type' value must be a recognized string
+        if not isinstance(schema_type, str):
+            errors.append(
+                f"{agent_name}: {path} 'type' must be a string,"
+                f" got {type(schema_type).__name__}"
+            )
+            return errors
+
         if schema_type not in BaseModelDictionaryConverter.TYPE_LOOKUP:
             valid_types: str = ", ".join(
                 sorted(BaseModelDictionaryConverter.TYPE_LOOKUP.keys())
