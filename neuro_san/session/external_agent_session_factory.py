@@ -128,9 +128,13 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
 
             agent_network_provider: AgentNetworkProvider = None
             for network_storage_name in self.get_networks_order(self.network_storage_dict):
+
                 network_storage = self.network_storage_dict.get(network_storage_name)
                 # Be sure we have something
                 agent_network_provider = network_storage.get_agent_network_provider(agent_name)
+                if agent_network_provider is None:
+                    continue
+
                 if agent_network_provider.get_agent_network() is not None:
                     break
 
