@@ -156,6 +156,7 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
         """
         errors: List[str] = []
 
+        # Check 1: null property definition
         if schema is None:
             errors.append(
                 f"{agent_name}: {path} is null"
@@ -163,6 +164,7 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
             )
             return errors
 
+        # Check 2: property definition must be a dict
         if not isinstance(schema, dict):
             errors.append(
                 f"{agent_name}: {path} must be an object,"
@@ -170,6 +172,7 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
             )
             return errors
 
+        # Check 3: 'type' key must be present
         schema_type: Any = schema.get("type")
         if schema_type is None:
             errors.append(
@@ -177,6 +180,7 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
             )
             return errors
 
+        # Check 4: 'type' value must be recognized
         if schema_type not in BaseModelDictionaryConverter.TYPE_LOOKUP:
             valid_types: str = ", ".join(
                 sorted(BaseModelDictionaryConverter.TYPE_LOOKUP.keys())
@@ -188,6 +192,7 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
             )
             return errors
 
+        # Check 5: array nodes must have a valid 'items' dict
         if schema_type == "array":
             items: Any = schema.get("items")
             if items is None:
@@ -208,6 +213,7 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
                     )
                 )
 
+        # Check 6: object nodes — validate their nested properties
         elif schema_type == "object":
             errors.extend(
                 cls._pre_validate_properties(
