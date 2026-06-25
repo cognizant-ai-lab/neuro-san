@@ -110,8 +110,14 @@ by some other means, and just pass the name of the operator to the real_calculat
 Return verbatim whatever real_calculator returns.
 """,
             "allow": {
+                # Only allow "equals" back to the client. This is functional.
                 "to_upstream": {
                     "sly_data": ["equals"]
+                },
+                # Only allow "x" and "equals" to tracing.
+                # This is arbitrary for this example to show how to_tracing works.
+                "to_tracing": {
+                    "sly_data": ["x", "equals"]
                 }
             },
             "tools": ["real_calculator"],

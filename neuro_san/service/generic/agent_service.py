@@ -110,6 +110,7 @@ class AgentService:
 
         self.request_timeout_seconds: float = agent_network.get_request_timeout_seconds()
         self.event_work_queue: AsyncCollatingQueue = server_context.get_event_work_queue()
+        self.network_storage_dict: Dict[str, Any] = server_context.get_network_storage_dict()
 
         # Load once
         self.llm_factory.load()
@@ -261,7 +262,7 @@ class AgentService:
             self.queues.sync_q.put(reservationist.get_queue())
 
         # Prepare
-        factory = ExternalAgentSessionFactory(use_direct=False)
+        factory = ExternalAgentSessionFactory(use_direct=True, network_storage_dict=self.network_storage_dict)
         invocation_context = SessionInvocationContext(
             self.agent_name,
             factory,

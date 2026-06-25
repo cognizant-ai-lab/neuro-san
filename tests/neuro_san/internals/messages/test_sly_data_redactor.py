@@ -19,7 +19,7 @@ from typing import Dict
 
 from unittest import TestCase
 
-from neuro_san.internals.graph.activations.sly_data_redactor import SlyDataRedactor
+from neuro_san.internals.messages.sly_data_redactor import SlyDataRedactor
 
 
 class TestSlyDataRedactor(TestCase):
