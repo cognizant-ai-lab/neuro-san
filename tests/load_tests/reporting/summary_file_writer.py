@@ -323,10 +323,10 @@ class SummaryFileWriter:
         """Write completion times at round-number request counts."""
         total = len(sorted_latencies)
         step = 50
-        if total < step:
+        if total <= step:
             return
         milestones = list(range(step, total, step))
-        if milestones[-1] != total:
+        if not milestones or milestones[-1] != total:
             milestones.append(total)
         lines.append("")
         lines.append("  Completion by count:")
