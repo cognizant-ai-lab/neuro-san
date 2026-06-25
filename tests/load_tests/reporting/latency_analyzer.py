@@ -108,7 +108,7 @@ class LatencyAnalyzer:
     def _log_count_milestones(sorted_latencies) -> None:
         """Log completion times at round-number request counts."""
         total = len(sorted_latencies)
-        if total < COUNT_MILESTONE_STEP:
+        if total <= COUNT_MILESTONE_STEP:
             return
         milestones = list(
             range(
@@ -116,7 +116,7 @@ class LatencyAnalyzer:
                 COUNT_MILESTONE_STEP,
             ),
         )
-        if milestones[-1] != total:
+        if not milestones or milestones[-1] != total:
             milestones.append(total)
         logger.info("\n  Completion by count:")
         for count in milestones:
