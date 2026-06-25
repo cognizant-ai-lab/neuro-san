@@ -265,9 +265,11 @@ class RunContextRunnable(NeuroSanRunnable):
                     message = f"Retrying from ValueError: {value_error}"
                     sensitive_logger.warning(message)
 
-                    # Write the error message to the journal
-                    error_message = AgentFrameworkMessage(content=message)
-                    await self.journal.write_message(error_message)
+                    if sensitive_logger._should_log():
+                        # Also write the error message to the journal under the same env var setting
+                        # as the SensitiveLogger.
+                        error_message = AgentFrameworkMessage(content=message)
+                        await self.journal.write_message(error_message)
 
                     attempts = attempts - 1
                     exception = value_error
