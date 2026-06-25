@@ -102,20 +102,8 @@ class Heartbeat:
     def _check_memory_warnings(
             self, rss_mb, swap_mb, progress_file,
     ) -> None:
-        """Warn if server RSS or swap exceeds thresholds."""
-        if not self._oom_warned:
-            total_mb = self._total_system_ram / (1024 * 1024)
-            if rss_mb / total_mb >= OOM_WARNING_THRESHOLD:
-                self._oom_warned = True
-                warning = (
-                    f"  WARNING: Server RSS"
-                    f" {format_rss(rss_mb)}"
-                    f" / {format_rss(total_mb)}"
-                    f" ({rss_mb * 100 / total_mb:.0f}%)"
-                    " — risk of OOM kill"
-                )
-                logger.warning("%s", warning)
-                self._write_to_file(progress_file, warning)
+        """Warn if system memory or swap exceeds thresholds."""
+        self._check_system_memory_warning(progress_file)
         if not self._swap_warned and swap_mb > 0:
             self._swap_warned = True
             warning = (
@@ -125,6 +113,40 @@ class Heartbeat:
             )
             logger.warning("%s", warning)
             self._write_to_file(progress_file, warning)
+
+    def _check_system_memory_warning(
+            self, progress_file,
+    ) -> None:
+        """Warn when total system memory usage exceeds threshold."""
+        if self._oom_warned:
+            return
+        mem = psutil.virtual_memory()
+        used_pct = mem.percent / 100.0
+        if used_pct >= OOM_WARNING_THRESHOLD:
+            self._oom_warned = True
+            total_gb = mem.total / (1024 ** 3)
+            avail_gb = mem.available / (1024 ** 3)
+            warning = (
+                f"  WARNING: System memory at"
+                f" {mem.percent:.0f}%"
+                f" ({avail_gb:.1f}G free"
+                f" / {total_gb:.1f}G total)"
+                " — risk of OOM kill"
+            )
+            logger.warning("%s", warning)
+            self._write_to_file(progress_file, warning)
+            swap = psutil.swap_memory()
+            if swap.total > 0 and swap.used > 0:
+                swap_gb = swap.used / (1024 ** 3)
+                swap_warning = (
+                    f"  WARNING: System swap in use:"
+                    f" {swap_gb:.1f}G"
+                    " — severe performance impact"
+                )
+                logger.warning("%s", swap_warning)
+                self._write_to_file(
+                    progress_file, swap_warning,
+                )
 
     # pylint: disable=too-many-locals,too-many-arguments
     def progress_heartbeat(self, futures, total, start_time,
@@ -200,18 +222,29 @@ class Heartbeat:
                     fail_info = (
                         f", {failed} failed {fail_pct}%"
                     )
+                sys_mem_info = self._format_system_memory()
                 line = (
                     f"  [progress] {done} of {total} completed"
                     f" ({pct}%{fail_info}) --"
                     f" {Heartbeat._fmt_elapsed(elapsed)}"
                     f" elapsed [{ts}]{suffix}{thread_info}"
-                    f"{server_rss_info}"
+                    f"{server_rss_info}{sys_mem_info}"
                 )
                 self._write_to_file(progress_file, line)
                 self._write_to_console(tick_count, line)
         finally:
             if progress_file is not None:
                 progress_file.close()
+
+    @staticmethod
+    def _format_system_memory() -> str:
+        """Format total system memory usage for the progress line."""
+        mem = psutil.virtual_memory()
+        avail_gb = mem.available / (1024 ** 3)
+        return (
+            f"  sysmem: {mem.percent:.0f}%"
+            f" ({avail_gb:.1f}G free)"
+        )
 
     @staticmethod
     def _fmt_elapsed(seconds) -> str:
