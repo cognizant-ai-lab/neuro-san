@@ -38,9 +38,11 @@ from langchain_core.runnables.utils import Input
 from langchain_core.runnables.utils import Output
 
 from leaf_common.config.resolver_util import ResolverUtil
+from leaf_common.logging.sensitive_logger import SensitiveLogger
 
 from neuro_san.internals.errors.error_detector import ErrorDetector
 from neuro_san.internals.journals.journal import Journal
+from neuro_san.internals.messages.agent_framework_message import AgentFrameworkMessage
 from neuro_san.internals.messages.origination import Origination
 from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
 from neuro_san.internals.run_context.langchain.journaling.journaling_callback_handler import JournalingCallbackHandler
@@ -258,17 +260,23 @@ class RunContextRunnable(NeuroSanRunnable):
                         "output": response.removeprefix(find_string).removesuffix("`")
                     }
                 else:
-                    self.logger.warning("retrying from ValueError")
+                    # Log the ValueError, respecting server log sensitivity settings
+                    sensitive_logger = SensitiveLogger(self.logger)
+                    message = f"Retrying from ValueError: {value_error}"
+                    sensitive_logger.warning(message)
+
+                    # Write the error message to the journal
+                    error_message = AgentFrameworkMessage(content=message)
+                    await self.journal.write_message(error_message)
+
                     attempts = attempts - 1
                     exception = value_error
                     backtrace = traceback.format_exc()
             # pylint: disable=broad-exception-caught
             except Exception as exception_error:
                 # This catches any errors from running middlewares and also error form exceeding the recursion_limit.
-                self.logger.error("Got exception in  %s. Error: %s",
-                                  self.__class__.__name__,
-                                  exception_error,
-                                  )
+                sensitive_logger = SensitiveLogger(self.logger)
+                sensitive_logger.error("Got exception in  %s. Error: %s", self.__class__.__name__, exception_error)
                 # These are likely real issues and non-retryable.
                 attempts = 0
                 exception = exception_error
