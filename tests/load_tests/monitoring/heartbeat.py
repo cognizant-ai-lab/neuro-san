@@ -34,7 +34,7 @@ from tests.load_tests.config import SharedRef
 
 logger = logging.getLogger(__name__)
 
-CONSOLE_TICK_INTERVAL = 10
+CONSOLE_TICK_INTERVAL = 1
 OOM_WARNING_THRESHOLD = 0.80
 
 
