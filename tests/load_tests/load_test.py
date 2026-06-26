@@ -804,6 +804,15 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     before_client.get("rss"),
                     before_client.get("cpu"),
                 )
+
+            mem = psutil.virtual_memory()
+            total_gb = mem.total / (1024 ** 3)
+            avail_gb = mem.available / (1024 ** 3)
+            logger.info(
+                "  System BEFORE: %.0f%% used"
+                " (%.1fG free / %.1fG total)",
+                mem.percent, avail_gb, total_gb,
+            )
         return before_server, before_client, client_proc
 
     def _log_fire_info(self, actual_requests,
