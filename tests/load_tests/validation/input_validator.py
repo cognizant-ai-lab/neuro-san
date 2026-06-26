@@ -240,8 +240,9 @@ class InputValidator:
         total_gb = mem.total / (1024 ** 3)
         avail_gb = mem.available / (1024 ** 3)
         logger.info(
-            "  System RAM: %.1fG (%.1fG available)",
-            total_gb, avail_gb,
+            "  System RAM: %.1fG (%.1fG available,"
+            " %.0f%% used)",
+            total_gb, avail_gb, mem.percent,
         )
 
     def _estimate_stage_duration(
