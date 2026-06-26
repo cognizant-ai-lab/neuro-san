@@ -620,8 +620,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if probe_used:
             stage_requests = max(actual_requests - 1, 0)
 
+        before_sys_mem_pct = psutil.virtual_memory().percent
+
         (elapsed, results, peak_threads, peak_client_rss,
-         peak_server_rss, server_died) = (
+         peak_server_rss, peak_sys_mem_pct, server_died) = (
             self.runner.run_stage(
                 stage_requests, stage_workers,
                 global_offset + (1 if probe_used else 0),
@@ -688,6 +690,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if not should_abort:
             should_abort = OutputValidator.check_timeout_abort(counts)
         if should_abort:
+            after_sys_mem_pct = (
+                psutil.virtual_memory().percent
+            )
             summary_entry = self._build_stage_summary(
                 stage_num=stage_num,
                 round_num=round_num,
@@ -709,6 +714,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 after_server=None,
                 peak_threads=peak_threads,
                 peak_server_rss=peak_server_rss,
+                before_client=before_client,
+                peak_client=peak_client,
+                settled_client=settled_client,
+                before_sys_mem_pct=before_sys_mem_pct,
+                after_sys_mem_pct=after_sys_mem_pct,
+                peak_sys_mem_pct=peak_sys_mem_pct,
             )
             return summary_entry, probe_used, True
 
@@ -736,6 +747,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 )
             )
 
+        after_sys_mem_pct = psutil.virtual_memory().percent
+
         summary_entry = self._build_stage_summary(
             stage_num=stage_num,
             round_num=round_num,
@@ -757,6 +770,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             after_server=after_server,
             peak_threads=peak_threads,
             peak_server_rss=peak_server_rss,
+            before_client=before_client,
+            peak_client=peak_client,
+            settled_client=settled_client,
+            before_sys_mem_pct=before_sys_mem_pct,
+            after_sys_mem_pct=after_sys_mem_pct,
+            peak_sys_mem_pct=peak_sys_mem_pct,
         )
         return summary_entry, probe_used, False
 
@@ -906,6 +925,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             monitor_resources, before_server,
             after_server, peak_threads,
             peak_server_rss,
+            before_client=None,
+            peak_client=None,
+            settled_client=None,
+            before_sys_mem_pct=None,
+            after_sys_mem_pct=None,
+            peak_sys_mem_pct=None,
     ) -> StageSummary:
         """Assemble the stage summary dict."""
         summary_entry: StageSummary = {
@@ -950,6 +975,35 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if peak_server_rss.value is not None:
             summary_entry["peak_server_rss"] = (
                 peak_server_rss.value
+            )
+        if before_client:
+            summary_entry["before_client_rss"] = (
+                before_client.get("rss")
+            )
+        if settled_client:
+            summary_entry["after_client_rss"] = (
+                settled_client.get("rss")
+            )
+        if peak_client:
+            summary_entry["peak_client_rss"] = (
+                peak_client.get("rss")
+            )
+        if before_sys_mem_pct is not None:
+            summary_entry["before_sys_mem_pct"] = (
+                before_sys_mem_pct
+            )
+        if after_sys_mem_pct is not None:
+            summary_entry["after_sys_mem_pct"] = (
+                after_sys_mem_pct
+            )
+        if (peak_sys_mem_pct is not None
+                and peak_sys_mem_pct.value is not None):
+            peak_data = peak_sys_mem_pct.value
+            summary_entry["peak_sys_mem_pct"] = (
+                peak_data["pct"]
+            )
+            summary_entry["peak_sys_mem_avail_gb"] = (
+                peak_data["avail_gb"]
             )
         return summary_entry
 

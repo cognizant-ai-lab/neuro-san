@@ -19,6 +19,8 @@ import logging
 
 from collections import Counter
 
+import psutil
+
 from tests.load_tests.config import fmt_duration
 from tests.load_tests.config import format_rss
 from tests.load_tests.config import SEPARATOR_WIDTH
@@ -186,6 +188,34 @@ class SummaryReporter:
                 format_rss(rss_trajectory["end"]),
             )
 
+        client_rss = self._client_rss_trajectory()
+        if client_rss is not None:
+            logger.info(
+                "  Client RSS: %s start \u2192 %s peak"
+                " \u2192 %s end",
+                format_rss(client_rss["start"]),
+                format_rss(client_rss["peak"]),
+                format_rss(client_rss["end"]),
+            )
+
+        sys_mem = self._sys_mem_trajectory()
+        if sys_mem is not None:
+            total_gb = (
+                psutil.virtual_memory().total / (1024 ** 3)
+            )
+            peak_detail = (
+                f"{sys_mem['peak']:.0f}% peak"
+                f" ({sys_mem['peak_avail_gb']:.1f}G free"
+                f" / {total_gb:.1f}G)"
+            )
+            logger.info(
+                "  System memory: %s start \u2192 %s"
+                " \u2192 %s end",
+                f"{sys_mem['start']:.0f}%",
+                peak_detail,
+                f"{sys_mem['end']:.0f}%",
+            )
+
         self._log_validation_summary()
 
     def _request_duration_stats(self):
@@ -256,6 +286,58 @@ class SummaryReporter:
             "start": start_rss or 0,
             "peak": peak_rss,
             "end": end_rss or 0,
+        }
+
+    def _client_rss_trajectory(self):
+        """Find start, peak, and end client RSS across stages."""
+        start_rss = None
+        end_rss = None
+        peak_rss = None
+        for summary in self._summaries:
+            before = summary.get("before_client_rss")
+            after = summary.get("after_client_rss")
+            peak = summary.get("peak_client_rss")
+            if before is not None and start_rss is None:
+                start_rss = before
+            if after is not None:
+                end_rss = after
+            if peak is not None:
+                if peak_rss is None or peak > peak_rss:
+                    peak_rss = peak
+        if peak_rss is None:
+            return None
+        return {
+            "start": start_rss or 0,
+            "peak": peak_rss,
+            "end": end_rss or 0,
+        }
+
+    def _sys_mem_trajectory(self):
+        """Find start, peak, and end system memory % across stages."""
+        start_pct = None
+        end_pct = None
+        peak_pct = None
+        peak_avail_gb = None
+        for summary in self._summaries:
+            before = summary.get("before_sys_mem_pct")
+            after = summary.get("after_sys_mem_pct")
+            peak = summary.get("peak_sys_mem_pct")
+            avail = summary.get("peak_sys_mem_avail_gb")
+            if before is not None and start_pct is None:
+                start_pct = before
+            if after is not None:
+                end_pct = after
+            if peak is not None:
+                if peak_pct is None or peak > peak_pct:
+                    peak_pct = peak
+                    peak_avail_gb = avail
+        if peak_pct is None:
+            return None
+        return {
+            "start": start_pct or 0,
+            "peak": peak_pct,
+            "peak_avail_gb": peak_avail_gb or 0,
+            "end": end_pct or 0,
         }
 
     def _log_validation_summary(self) -> None:

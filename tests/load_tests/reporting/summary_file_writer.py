@@ -24,6 +24,8 @@ from typing import Optional
 
 from collections import Counter
 
+import psutil
+
 from tests.load_tests.config import fmt_duration
 from tests.load_tests.config import format_rss
 from tests.load_tests.config import STATUS_CREATED
@@ -130,6 +132,8 @@ class SummaryFileWriter:
                 f" / {max(llm_calls)} max"
             )
         self._write_rss_trajectory(lines)
+        self._write_client_rss_trajectory(lines)
+        self._write_sys_mem_trajectory(lines)
         self._write_validation_summary(lines)
         lines.append("")
 
@@ -156,6 +160,67 @@ class SummaryFileWriter:
             f" {format_rss(start_rss or 0)} start"
             f" \u2192 {format_rss(peak_rss)} peak"
             f" \u2192 {format_rss(end_rss or 0)} end"
+        )
+
+    def _write_client_rss_trajectory(self, lines) -> None:
+        """Write client RSS start/peak/end if available."""
+        start_rss = None
+        end_rss = None
+        peak_rss = None
+        for summary in self._summaries:
+            before = summary.get("before_client_rss")
+            after = summary.get("after_client_rss")
+            peak = summary.get("peak_client_rss")
+            if before is not None and start_rss is None:
+                start_rss = before
+            if after is not None:
+                end_rss = after
+            if peak is not None:
+                if peak_rss is None or peak > peak_rss:
+                    peak_rss = peak
+        if peak_rss is None:
+            return
+        lines.append(
+            f"  Client RSS:"
+            f" {format_rss(start_rss or 0)} start"
+            f" \u2192 {format_rss(peak_rss)} peak"
+            f" \u2192 {format_rss(end_rss or 0)} end"
+        )
+
+    def _write_sys_mem_trajectory(self, lines) -> None:
+        """Write system memory start/peak/end if available."""
+        start_pct = None
+        end_pct = None
+        peak_pct = None
+        peak_avail_gb = None
+        for summary in self._summaries:
+            before = summary.get("before_sys_mem_pct")
+            after = summary.get("after_sys_mem_pct")
+            peak = summary.get("peak_sys_mem_pct")
+            avail = summary.get("peak_sys_mem_avail_gb")
+            if before is not None and start_pct is None:
+                start_pct = before
+            if after is not None:
+                end_pct = after
+            if peak is not None:
+                if peak_pct is None or peak > peak_pct:
+                    peak_pct = peak
+                    peak_avail_gb = avail
+        if peak_pct is None:
+            return
+        total_gb = (
+            psutil.virtual_memory().total / (1024 ** 3)
+        )
+        peak_detail = (
+            f"{peak_pct:.0f}% peak"
+            f" ({peak_avail_gb or 0:.1f}G free"
+            f" / {total_gb:.1f}G)"
+        )
+        lines.append(
+            f"  System memory:"
+            f" {start_pct or 0:.0f}% start"
+            f" \u2192 {peak_detail}"
+            f" \u2192 {end_pct or 0:.0f}% end"
         )
 
     def _write_validation_summary(self, lines) -> None:

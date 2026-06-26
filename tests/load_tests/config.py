@@ -155,6 +155,13 @@ class StageSummary(TypedDict, total=False):
     before_server_rss: Optional[float]
     after_server_rss: Optional[float]
     peak_server_rss: Optional[float]
+    before_client_rss: Optional[float]
+    after_client_rss: Optional[float]
+    peak_client_rss: Optional[float]
+    before_sys_mem_pct: Optional[float]
+    after_sys_mem_pct: Optional[float]
+    peak_sys_mem_pct: Optional[float]
+    peak_sys_mem_avail_gb: Optional[float]
 
 
 # Load test levels

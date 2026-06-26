@@ -221,17 +221,19 @@ class TrafficRunner:
                   stage_timeout=None,
                   ) -> Tuple[
         float, List[RequestResult], SharedRef, SharedRef,
-        SharedRef, bool,
+        SharedRef, SharedRef, bool,
     ]:
         """Fire num_requests concurrent requests using a thread pool.
 
         Returns (elapsed, results, peak_threads_ref,
-        peak_client_rss_ref, peak_server_rss_ref, server_died).
+        peak_client_rss_ref, peak_server_rss_ref,
+        peak_sys_mem_pct_ref, server_died).
         """
         results_list: List[RequestResult] = []
         peak_threads_ref = SharedRef()
         peak_client_rss_ref = SharedRef()
         peak_server_rss_ref = SharedRef()
+        peak_sys_mem_pct_ref = SharedRef()
         failed_ref = SharedRef()
         failed_ref.value = 0
         server_dead_event = threading.Event()
@@ -252,6 +254,7 @@ class TrafficRunner:
                     "peak_threads_ref": peak_threads_ref,
                     "peak_client_rss_ref": peak_client_rss_ref,
                     "peak_server_rss_ref": peak_server_rss_ref,
+                    "peak_sys_mem_pct_ref": peak_sys_mem_pct_ref,
                     "failed_ref": failed_ref,
                     "server_dead_event": server_dead_event,
                 },
@@ -284,7 +287,8 @@ class TrafficRunner:
         return (
             total_time, results_list,
             peak_threads_ref, peak_client_rss_ref,
-            peak_server_rss_ref, server_dead_event.is_set(),
+            peak_server_rss_ref, peak_sys_mem_pct_ref,
+            server_dead_event.is_set(),
         )
 
     @staticmethod

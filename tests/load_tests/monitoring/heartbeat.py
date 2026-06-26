@@ -156,6 +156,7 @@ class Heartbeat:
                            peak_threads_ref: SharedRef,
                            peak_client_rss_ref: SharedRef,
                            peak_server_rss_ref: SharedRef,
+                           peak_sys_mem_pct_ref: SharedRef,
                            failed_ref: SharedRef,
                            server_dead_event: threading.Event,
                            ) -> None:
@@ -170,6 +171,7 @@ class Heartbeat:
         last_change = start_time
         peak_threads = 0
         peak_server_rss = 0.0
+        peak_sys_mem_pct = 0.0
         tick_count = 0
         peak_rss = self._sample_client_rss(0.0, peak_client_rss_ref)
         ready_event.set()
@@ -222,7 +224,15 @@ class Heartbeat:
                     fail_info = (
                         f", {failed} failed {fail_pct}%"
                     )
-                sys_mem_info = self._format_system_memory()
+                sys_mem_info, cur_pct, cur_avail = (
+                    self._format_system_memory()
+                )
+                if cur_pct > peak_sys_mem_pct:
+                    peak_sys_mem_pct = cur_pct
+                    peak_sys_mem_pct_ref.value = {
+                        "pct": cur_pct,
+                        "avail_gb": cur_avail,
+                    }
                 line = (
                     f"  [progress] {done} of {total} completed"
                     f" ({pct}%{fail_info}) --"
@@ -237,13 +247,19 @@ class Heartbeat:
                 progress_file.close()
 
     @staticmethod
-    def _format_system_memory() -> str:
-        """Format total system memory usage for the progress line."""
+    def _format_system_memory():
+        """Format total system memory usage for the progress line.
+
+        Returns (formatted_string, current_percent,
+        available_gb).
+        """
         mem = psutil.virtual_memory()
         avail_gb = mem.available / (1024 ** 3)
         return (
             f"  sysmem: {mem.percent:.0f}%"
-            f" ({avail_gb:.1f}G free)"
+            f" ({avail_gb:.1f}G free)",
+            mem.percent,
+            avail_gb,
         )
 
     @staticmethod
