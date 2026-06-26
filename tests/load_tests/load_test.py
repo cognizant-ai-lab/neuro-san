@@ -21,12 +21,14 @@ usage examples.
 """
 
 import argparse
+import gzip
 import importlib.metadata as _pkg_meta
 import json
 import logging
 import os
 import platform
 import re
+import shutil
 import socket
 import sys
 import tempfile
@@ -245,6 +247,14 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             help="Enable server log analysis.  Without a path, "
                  "auto-detects the log from the server process.  "
                  "With a path, uses the given file.",
+        )
+        parser.add_argument(
+            "--archive-server-log",
+            action="store_true",
+            default=False,
+            help="Gzip and copy the server log into the "
+                 "output directory after the test completes. "
+                 "Requires --server-log.",
         )
         parser.add_argument(
             "--level",
@@ -1138,6 +1148,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             self._test_log_handler.close()
         if self._output_dir is None:
             return
+        self._archive_server_log()
         has_failures = any(
             summary.get("counts", {}).get(STATUS_FAILED, 0) > 0
             or summary.get("counts", {}).get(STATUS_TIMEOUT, 0) > 0
@@ -1157,6 +1168,35 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
         if os.path.isfile(json_path):
             logger.info("  Raw results: %s", json_path)
+        gz_path = os.path.join(
+            self._output_dir, "server.log.gz",
+        )
+        if os.path.isfile(gz_path):
+            size_mb = os.path.getsize(gz_path) / (1024 * 1024)
+            logger.info(
+                "  Server log:  %s (%.1fM)",
+                gz_path, size_mb,
+            )
+
+    def _archive_server_log(self) -> None:
+        """Gzip the server log into the output directory."""
+        if not self.args.archive_server_log:
+            return
+        if not self.server_log or not os.path.isfile(
+            self.server_log,
+        ):
+            logger.warning(
+                "  --archive-server-log: no server log to"
+                " archive (missing --server-log or file"
+                " not found)",
+            )
+            return
+        gz_path = os.path.join(
+            self._output_dir, "server.log.gz",
+        )
+        with open(self.server_log, "rb") as f_in, \
+                gzip.open(gz_path, "wb") as f_out:
+            shutil.copyfileobj(f_in, f_out)
 
     def _validate_server_log(self) -> Optional[int]:
         """Validate --server-log path when provided.
