@@ -1325,7 +1325,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             level != LEVEL_MIN or self.args.monitor_resources
         )
         needs_server_proc = (
-            (monitor_resources and is_local)
+            (monitor_resources and is_local
+             and level != LEVEL_MIN)
             or self.args.server_log is not None
         )
 
@@ -1333,6 +1334,16 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             self.server_proc = (
                 EnvironmentValidator.find_local_server(self.args)
             )
+        elif (monitor_resources and is_local
+              and level == LEVEL_MIN):
+            if EnvironmentValidator.is_port_open(
+                self.args.host, self.args.port,
+            ):
+                self.server_proc = (
+                    EnvironmentValidator.find_local_server(
+                        self.args,
+                    )
+                )
 
         if self.args.server_log == "auto":
             self.args.server_log = (
