@@ -24,6 +24,8 @@ import os
 import re
 import threading
 import time
+
+import psutil
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -643,3 +645,11 @@ class ServerLogMonitor:
                 snap.get("rss"), snap.get("cpu"),
             )
             peak_client_ref.value = snap
+        mem = psutil.virtual_memory()
+        total_gb = mem.total / (1024 ** 3)
+        avail_gb = mem.available / (1024 ** 3)
+        logger.info(
+            "  System AFTER: %.0f%% used"
+            " (%.1fG free / %.1fG total)",
+            mem.percent, avail_gb, total_gb,
+        )

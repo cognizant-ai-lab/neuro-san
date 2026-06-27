@@ -669,6 +669,14 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     "  Client SETTLED: RSS %.1fM (%+.1fM from before)",
                     rss_settled, rss_delta,
                 )
+            mem = psutil.virtual_memory()
+            total_gb = mem.total / (1024 ** 3)
+            avail_gb = mem.available / (1024 ** 3)
+            logger.info(
+                "  System SETTLED: %.0f%% used"
+                " (%.1fG free / %.1fG total)",
+                mem.percent, avail_gb, total_gb,
+            )
 
         counts = OutputValidator.count_results(results)
 
@@ -803,6 +811,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 ResourceMonitor.log_snapshot(
                     "Server BEFORE", before_server,
                 )
+            else:
+                logger.info(
+                    "  Server BEFORE: not available"
+                    " (server not running)",
+                )
 
             client_proc = psutil.Process()
             before_client = ResourceMonitor.snapshot(
@@ -896,6 +909,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             if after_server:
                 ResourceMonitor.log_snapshot(
                     "Server SETTLED", after_server,
+                )
+            else:
+                logger.info(
+                    "  Server SETTLED: not available"
+                    " (server not running)",
                 )
 
         server_counts, disconnections, network_tokens, \
