@@ -650,7 +650,7 @@ class ServerLogMonitor:
         avail_gb = mem.available / (1024 ** 3)
         total_gb = mem.total / (1024 ** 3)
         logger.info(
-            "  System AFTER: %.0f%% used"
+            "  System RECEIVED: %.0f%% used"
             " (%.0fM used / %.1fG free / %.1fG total)",
             mem.percent, used_mb, avail_gb, total_gb,
         )

@@ -666,7 +666,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 rss_settled = settled_client.get("rss", 0)
                 rss_delta = rss_settled - rss_before
                 logger.info(
-                    "\n  Client SETTLED: RSS %.1fM"
+                    "\n  Client AFTER: RSS %.1fM"
                     " (%+.1fM from before)",
                     rss_settled, rss_delta,
                 )
@@ -675,7 +675,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             avail_gb = mem.available / (1024 ** 3)
             total_gb = mem.total / (1024 ** 3)
             logger.info(
-                "  System SETTLED: %.0f%% used"
+                "  System AFTER: %.0f%% used"
                 " (%.0fM used / %.1fG free / %.1fG total)",
                 mem.percent, used_mb, avail_gb, total_gb,
             )
@@ -911,11 +911,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             )
             if after_server:
                 ResourceMonitor.log_snapshot(
-                    "Server SETTLED", after_server,
+                    "Server AFTER", after_server,
                 )
             else:
                 logger.info(
-                    "  Server SETTLED: not available"
+                    "  Server AFTER: not available"
                     " (server not running)",
                 )
 

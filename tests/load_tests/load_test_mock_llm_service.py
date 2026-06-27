@@ -548,7 +548,7 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             after_server = self._snapshot(self.server_proc) if self.server_proc else None
             after_mock = self._snapshot(self.mock_proc) if self.mock_proc else None
             if after_server:
-                self._log_snapshot("Server SETTLED", after_server)
+                self._log_snapshot("Server AFTER", after_server)
 
             if before_server and after_server:
                 server_rows.append(
