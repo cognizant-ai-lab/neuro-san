@@ -666,16 +666,18 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 rss_settled = settled_client.get("rss", 0)
                 rss_delta = rss_settled - rss_before
                 logger.info(
-                    "  Client SETTLED: RSS %.1fM (%+.1fM from before)",
+                    "\n  Client SETTLED: RSS %.1fM"
+                    " (%+.1fM from before)",
                     rss_settled, rss_delta,
                 )
             mem = psutil.virtual_memory()
-            total_gb = mem.total / (1024 ** 3)
+            used_mb = (mem.total - mem.available) / (1024 ** 2)
             avail_gb = mem.available / (1024 ** 3)
+            total_gb = mem.total / (1024 ** 3)
             logger.info(
                 "  System SETTLED: %.0f%% used"
-                " (%.1fG free / %.1fG total)",
-                mem.percent, avail_gb, total_gb,
+                " (%.0fM used / %.1fG free / %.1fG total)",
+                mem.percent, used_mb, avail_gb, total_gb,
             )
 
         counts = OutputValidator.count_results(results)
@@ -829,12 +831,13 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 )
 
             mem = psutil.virtual_memory()
-            total_gb = mem.total / (1024 ** 3)
+            used_mb = (mem.total - mem.available) / (1024 ** 2)
             avail_gb = mem.available / (1024 ** 3)
+            total_gb = mem.total / (1024 ** 3)
             logger.info(
                 "  System BEFORE: %.0f%% used"
-                " (%.1fG free / %.1fG total)",
-                mem.percent, avail_gb, total_gb,
+                " (%.0fM used / %.1fG free / %.1fG total)",
+                mem.percent, used_mb, avail_gb, total_gb,
             )
         return before_server, before_client, client_proc
 

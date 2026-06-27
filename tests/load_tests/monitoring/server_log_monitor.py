@@ -646,10 +646,11 @@ class ServerLogMonitor:
             )
             peak_client_ref.value = snap
         mem = psutil.virtual_memory()
-        total_gb = mem.total / (1024 ** 3)
+        used_mb = (mem.total - mem.available) / (1024 ** 2)
         avail_gb = mem.available / (1024 ** 3)
+        total_gb = mem.total / (1024 ** 3)
         logger.info(
             "  System AFTER: %.0f%% used"
-            " (%.1fG free / %.1fG total)",
-            mem.percent, avail_gb, total_gb,
+            " (%.0fM used / %.1fG free / %.1fG total)",
+            mem.percent, used_mb, avail_gb, total_gb,
         )

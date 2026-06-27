@@ -254,10 +254,11 @@ class Heartbeat:
         available_gb).
         """
         mem = psutil.virtual_memory()
+        used_mb = (mem.total - mem.available) / (1024 ** 2)
         avail_gb = mem.available / (1024 ** 3)
         return (
             f"  sysmem: {mem.percent:.0f}%"
-            f" ({avail_gb:.1f}G free)",
+            f" ({used_mb:.0f}M used / {avail_gb:.1f}G free)",
             mem.percent,
             avail_gb,
         )
