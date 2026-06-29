@@ -57,6 +57,7 @@ from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
+from tests.load_tests.config import HEARTBEAT_INTERVAL_SECONDS
 from tests.load_tests.config import THREAD_JOIN_TIMEOUT
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
@@ -255,6 +256,26 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             help="Gzip and copy the server log into the "
                  "output directory after the test completes. "
                  "Requires --server-log.",
+        )
+        parser.add_argument(
+            "--client-only",
+            action="store_true",
+            default=False,
+            help="Client-only mode for split-machine testing. "
+                 "Fires requests and monitors client RSS and "
+                 "system memory. Skips server process "
+                 "detection and server log analysis. "
+                 "Mutually exclusive with --server-only.",
+        )
+        parser.add_argument(
+            "--server-only",
+            action="store_true",
+            default=False,
+            help="Server-only mode for split-machine testing. "
+                 "Monitors the server process and reads the "
+                 "server log while a remote client fires "
+                 "requests. Does not fire requests itself. "
+                 "Mutually exclusive with --client-only.",
         )
         parser.add_argument(
             "--level",
@@ -813,6 +834,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 ResourceMonitor.log_snapshot(
                     "Server BEFORE", before_server,
                 )
+            elif self.args.client_only:
+                logger.info(
+                    "  Server BEFORE: not available"
+                    " (remote)",
+                )
             else:
                 logger.info(
                     "  Server BEFORE: not available"
@@ -912,6 +938,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             if after_server:
                 ResourceMonitor.log_snapshot(
                     "Server AFTER", after_server,
+                )
+            elif self.args.client_only:
+                logger.info(
+                    "  Server AFTER: not available"
+                    " (remote)",
                 )
             else:
                 logger.info(
@@ -1309,18 +1340,605 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if args.total_timeout > 0:
             args.total_timeout *= factor
 
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def _server_only_heartbeat(
+            self, count, expected, elapsed, now,
+            snap, cur_mem,
+    ) -> None:
+        """Log a periodic heartbeat during server-only monitoring."""
+        cur_used_mb = (
+            (cur_mem.total - cur_mem.available)
+            / (1024 ** 2)
+        )
+        cur_avail_gb = cur_mem.available / (1024 ** 3)
+        rss_str = ""
+        threads_str = ""
+        if snap:
+            rss_str = (
+                f"  RSS: {snap.get('rss', 0):.0f}M"
+            )
+            threads_str = (
+                f"  threads: "
+                f"{snap.get('threads', 0)}"
+            )
+        ts = time.strftime(
+            "%H:%M:%S", time.localtime(now),
+        )
+        if elapsed < 60:
+            fmt_elapsed = f"{elapsed:.0f}s"
+        else:
+            mins = int(elapsed) // 60
+            fmt_elapsed = f"{elapsed:.0f}s ({mins}m)"
+        logger.info(
+            "  [progress] %d of %d received"
+            " -- %s elapsed [%s]%s%s"
+            "  sysmem: %.0f%% (%.0fM used"
+            " / %.1fG free)",
+            count, expected, fmt_elapsed, ts,
+            threads_str, rss_str,
+            cur_mem.percent, cur_used_mb,
+            cur_avail_gb,
+        )
+
+    def _run_server_only_monitor(self) -> int:
+        """Interactive server-only monitoring loop.
+
+        Prompts the user for the expected request count, then
+        monitors the server log until all requests arrive (or
+        timeout / Ctrl-C).  After each round, reports results,
+        writes raw_results.json, archives the server log, and
+        loops back for another round.  Only exits on Ctrl-C
+        at the prompt.
+        """
+        primary_start_pattern = (
+            self.profile.primary_start_pattern
+        )
+        pri_start_re = re.compile(primary_start_pattern)
+        round_num = 0
+
+        while True:
+            try:
+                answer = input(
+                    "\nHow many requests will the"
+                    " client send? ",
+                )
+            except (KeyboardInterrupt, EOFError):
+                logger.info(
+                    "\n  Exiting server-only monitor.",
+                )
+                return 0
+
+            answer = answer.strip()
+            if not answer:
+                continue
+            try:
+                expected = int(answer)
+            except ValueError:
+                logger.error(
+                    "  Invalid number: %s", answer,
+                )
+                continue
+            if expected <= 0:
+                logger.error(
+                    "  Number must be positive.",
+                )
+                continue
+
+            round_num += 1
+            self._run_server_only_round(
+                expected, round_num, pri_start_re,
+            )
+
+    def _setup_round_output_dir(
+            self, expected, round_num,
+    ) -> str:
+        """Create an output directory for a server-only round."""
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        base = self.args.output_dir or os.path.join(
+            tempfile.gettempdir(), "load_test",
+        )
+        folder_name = f"{timestamp}_{expected}"
+        round_dir = os.path.join(
+            base, "server_only", folder_name,
+        )
+        os.makedirs(round_dir, exist_ok=True)
+        return round_dir
+
+    # pylint: disable=too-many-locals
+    def _run_server_only_round(
+            self, expected, round_num, pri_start_re,
+    ) -> None:
+        """Execute one round of server-only monitoring."""
+        round_dir = self._setup_round_output_dir(
+            expected, round_num,
+        )
+        log_pos = self.log_monitor.read_position()
+
+        logger.info(
+            "\n%s", "=" * 60,
+        )
+        logger.info(
+            "  Round %d: expecting %d request(s)",
+            round_num, expected,
+        )
+        logger.info("=" * 60)
+
+        before_server = (
+            ResourceMonitor.snapshot(self.server_proc)
+            if self.server_proc else None
+        )
+        if before_server:
+            ResourceMonitor.log_snapshot(
+                "Server BEFORE", before_server,
+            )
+        logger.info(
+            "  Client BEFORE: not available (remote)",
+        )
+        mem = psutil.virtual_memory()
+        used_mb = (mem.total - mem.available) / (1024 ** 2)
+        avail_gb = mem.available / (1024 ** 3)
+        total_gb = mem.total / (1024 ** 3)
+        logger.info(
+            "  System BEFORE: %.0f%% used"
+            " (%.0fM used / %.1fG free / %.1fG total)",
+            mem.percent, used_mb, avail_gb, total_gb,
+        )
+        before_sys_mem_pct = mem.percent
+        before_kernel = self._read_kernel_memory()
+
+        logger.info(
+            "\nWaiting for %d request(s) in server"
+            " log...\n"
+            "  Start the client on the remote"
+            " machine now.",
+            expected,
+        )
+
+        count, peak_server, peak_sys_mem_pct, \
+            elapsed, interrupted = (
+                self._tail_server_log(
+                    expected, log_pos, pri_start_re,
+                    before_server, before_sys_mem_pct,
+                )
+            )
+
+        logger.info(
+            "\n  Monitoring complete: %d/%d requests"
+            " received in %.1fs",
+            count, expected, elapsed,
+        )
+
+        after_server = (
+            ResourceMonitor.snapshot(self.server_proc)
+            if self.server_proc else None
+        )
+        if after_server:
+            ResourceMonitor.log_snapshot(
+                "Server AFTER", after_server,
+            )
+        logger.info(
+            "  Client AFTER: not available (remote)",
+        )
+        mem = psutil.virtual_memory()
+        used_mb = (mem.total - mem.available) / (1024 ** 2)
+        avail_gb = mem.available / (1024 ** 3)
+        total_gb = mem.total / (1024 ** 3)
+        logger.info(
+            "  System AFTER: %.0f%% used"
+            " (%.0fM used / %.1fG free / %.1fG total)",
+            mem.percent, used_mb, avail_gb, total_gb,
+        )
+        after_kernel = self._read_kernel_memory()
+
+        if before_server and after_server:
+            rss_before = before_server.get("rss", 0)
+            rss_after = after_server.get("rss", 0)
+            peak_rss = (
+                peak_server.get("rss", 0)
+                if peak_server else rss_before
+            )
+            logger.info(
+                "\n  Server RSS: %.0fM start"
+                " \u2192 %.0fM peak \u2192 %.0fM end",
+                rss_before, peak_rss, rss_after,
+            )
+        logger.info(
+            "  System memory: %.0f%% start"
+            " \u2192 %.0f%% peak \u2192 %.0f%% end",
+            before_sys_mem_pct,
+            peak_sys_mem_pct, mem.percent,
+        )
+
+        peak_rss_for_breakdown = 0.0
+        if peak_server:
+            peak_rss_for_breakdown = (
+                peak_server.get("rss", 0)
+            )
+        elif after_server:
+            peak_rss_for_breakdown = (
+                after_server.get("rss", 0)
+            )
+        kernel_breakdown = self._log_kernel_breakdown(
+            before_kernel, after_kernel,
+            peak_rss_for_breakdown,
+        )
+
+        if count > 0:
+            sys_used_mb = (
+                (mem.total - mem.available) / (1024 ** 2)
+            )
+            before_used_mb = (
+                before_kernel.get("MemTotal", 0)
+                - before_kernel.get("MemAvailable", 0)
+            ) if before_kernel else 0
+            delta = sys_used_mb - before_used_mb
+            per_req = delta / count
+            logger.info(
+                "  Per-request system cost:"
+                " %.0fM avg"
+                " ((%.0fM - %.0fM) / %d)",
+                per_req, sys_used_mb,
+                before_used_mb, count,
+            )
+
+        self._export_server_only_json(
+            round_dir, expected, count, elapsed,
+            before_server, after_server, peak_server,
+            before_sys_mem_pct, peak_sys_mem_pct,
+            mem.percent, interrupted,
+            kernel_breakdown,
+        )
+
+        self._archive_server_log_to(round_dir)
+
+        logger.info("\n%s", "=" * 60)
+        logger.info("  OUTPUT FILES")
+        logger.info("=" * 60)
+        logger.info("  Directory:   %s", round_dir)
+        json_path = os.path.join(
+            round_dir, "raw_results.json",
+        )
+        if os.path.isfile(json_path):
+            logger.info(
+                "  Raw results: %s", json_path,
+            )
+        gz_path = os.path.join(
+            round_dir, "server.log.gz",
+        )
+        if os.path.isfile(gz_path):
+            size_mb = (
+                os.path.getsize(gz_path) / (1024 * 1024)
+            )
+            logger.info(
+                "  Server log:  %s (%.1fM)",
+                gz_path, size_mb,
+            )
+
+        logger.info(
+            "\n%s", "\u2500" * 45,
+        )
+        logger.info(
+            "  Round %d complete. Ready for next"
+            " round.", round_num,
+        )
+        logger.info("%s", "\u2500" * 45)
+
+    def _tail_server_log(
+            self, expected, log_pos, pri_start_re,
+            before_server, before_sys_mem_pct,
+    ):
+        """Tail the server log counting request arrivals.
+
+        Returns (count, peak_server, peak_sys_mem_pct,
+        elapsed, interrupted).
+        """
+        start_time = time.time()
+        count = 0
+        last_heartbeat = start_time
+        heartbeat_interval = HEARTBEAT_INTERVAL_SECONDS
+        peak_server = before_server
+        peak_sys_mem_pct = before_sys_mem_pct
+        interrupted = False
+
+        try:
+            with open(
+                    self.server_log, "r",
+                    encoding="utf-8",
+            ) as log_fh:
+                log_fh.seek(log_pos)
+                while count < expected:
+                    line = log_fh.readline()
+                    if line:
+                        if pri_start_re.search(line):
+                            count += 1
+                            now = time.time()
+                            ts = time.strftime(
+                                "%H:%M:%S",
+                                time.localtime(now),
+                            )
+                            elapsed = now - start_time
+                            logger.info(
+                                "  [server] request"
+                                " %d/%d received [%s]"
+                                " (+%.1fs)",
+                                count, expected,
+                                ts, elapsed,
+                            )
+                    else:
+                        time.sleep(0.5)
+
+                    now = time.time()
+                    elapsed = now - start_time
+
+                    snap = ResourceMonitor.snapshot(
+                        self.server_proc,
+                    )
+                    if snap:
+                        if (peak_server is None
+                                or snap.get("rss", 0)
+                                > peak_server.get(
+                                    "rss", 0)):
+                            peak_server = snap
+                    cur_mem = psutil.virtual_memory()
+                    if cur_mem.percent > peak_sys_mem_pct:
+                        peak_sys_mem_pct = (
+                            cur_mem.percent
+                        )
+
+                    if (now - last_heartbeat
+                            >= heartbeat_interval):
+                        self._server_only_heartbeat(
+                            count, expected, elapsed,
+                            now, snap, cur_mem,
+                        )
+                        last_heartbeat = now
+
+                    if elapsed > self.args.stage_timeout:
+                        logger.warning(
+                            "  Stage timeout (%.0fs)"
+                            " reached with %d/%d"
+                            " requests received.",
+                            self.args.stage_timeout,
+                            count, expected,
+                        )
+                        break
+        except KeyboardInterrupt:
+            interrupted = True
+            logger.info(
+                "\n  Interrupted \u2014 reporting"
+                " partial results...",
+            )
+
+        elapsed = time.time() - start_time
+        return (
+            count, peak_server, peak_sys_mem_pct,
+            elapsed, interrupted,
+        )
+
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def _export_server_only_json(
+            self, round_dir, expected, count,
+            elapsed, before_server, after_server,
+            peak_server, before_sys_pct, peak_sys_pct,
+            after_sys_pct, interrupted,
+            kernel_breakdown=None,
+    ) -> None:
+        """Write raw_results.json for a server-only round."""
+        raw_data = {
+            "test_metadata": {
+                "timestamp": time.strftime(
+                    "%Y-%m-%dT%H:%M:%S%z",
+                ),
+                "hostname": socket.gethostname(),
+                "python_version": (
+                    platform.python_version()
+                ),
+                "platform": platform.platform(),
+                "mode": "server-only",
+                "agent": self.args.agent,
+            },
+            "round": {
+                "expected_requests": expected,
+                "received_requests": count,
+                "elapsed_seconds": round(elapsed, 2),
+                "interrupted": interrupted,
+            },
+            "server_resources": {
+                "before": before_server,
+                "after": after_server,
+                "peak": peak_server,
+            },
+            "system_memory": {
+                "before_pct": before_sys_pct,
+                "peak_pct": peak_sys_pct,
+                "after_pct": after_sys_pct,
+            },
+        }
+        if kernel_breakdown:
+            raw_data["kernel_memory_breakdown"] = (
+                kernel_breakdown
+            )
+        json_path = os.path.join(
+            round_dir, "raw_results.json",
+        )
+        with open(
+                json_path, "w", encoding="utf-8",
+        ) as fh:
+            json.dump(raw_data, fh, indent=2)
+
+    @staticmethod
+    def _read_kernel_memory() -> Optional[Dict[str, float]]:
+        """Read kernel memory breakdown from /proc/meminfo.
+
+        Returns a dict with values in MB, or None if not on
+        Linux.
+        """
+        if not os.path.isfile("/proc/meminfo"):
+            return None
+        result = {}
+        try:
+            with open(
+                    "/proc/meminfo", "r", encoding="utf-8",
+            ) as fh:
+                for line in fh:
+                    parts = line.split()
+                    if len(parts) < 2:
+                        continue
+                    key = parts[0].rstrip(":")
+                    val_kb = int(parts[1])
+                    result[key] = val_kb / 1024.0
+        except (OSError, ValueError):
+            return None
+
+        tcp_mem_mb = 0.0
+        try:
+            with open(
+                    "/proc/net/sockstat", "r",
+                    encoding="utf-8",
+            ) as fh:
+                for line in fh:
+                    if line.startswith("TCP:"):
+                        parts = line.split()
+                        idx = parts.index("mem")
+                        pages = int(parts[idx + 1])
+                        tcp_mem_mb = (pages * 4) / 1024.0
+                        break
+        except (OSError, ValueError, IndexError):
+            pass
+        result["TcpMem"] = tcp_mem_mb
+        return result
+
+    @staticmethod
+    def _log_kernel_breakdown(
+            before_kernel, after_kernel, server_rss_peak,
+    ) -> Dict[str, float]:
+        """Log kernel memory breakdown (delta)."""
+        if not after_kernel:
+            return {}
+
+        rss_mb = server_rss_peak or 0.0
+        kern_stacks = after_kernel.get(
+            "KernelStack", 0,
+        )
+        page_tables = after_kernel.get(
+            "PageTables", 0,
+        )
+        slab = after_kernel.get("Slab", 0)
+        cached = (
+            after_kernel.get("Cached", 0)
+            + after_kernel.get("Buffers", 0)
+        )
+        tcp_mem = after_kernel.get("TcpMem", 0)
+        mem_total = after_kernel.get("MemTotal", 0)
+        mem_free = after_kernel.get("MemFree", 0)
+        sys_used = mem_total - mem_free
+
+        accounted = (
+            rss_mb + kern_stacks + page_tables
+            + slab + cached + tcp_mem
+        )
+        unaccounted = max(0, sys_used - accounted)
+
+        logger.info(
+            "\n  Kernel memory breakdown:",
+        )
+        logger.info(
+            "    Server RSS:       %.0fM", rss_mb,
+        )
+        logger.info(
+            "    Kernel stacks:    %.0fM", kern_stacks,
+        )
+        logger.info(
+            "    Page tables:      %.0fM", page_tables,
+        )
+        logger.info(
+            "    Slab cache:       %.0fM", slab,
+        )
+        logger.info(
+            "    Page cache:       %.0fM", cached,
+        )
+        logger.info(
+            "    TCP buffers:      %.0fM", tcp_mem,
+        )
+        logger.info(
+            "    %s", "\u2500" * 30,
+        )
+        logger.info(
+            "    Accounted:        %.0fM", accounted,
+        )
+        logger.info(
+            "    Unaccounted:      %.0fM", unaccounted,
+        )
+        logger.info(
+            "    System total:     %.0fM"
+            " (used + cache)",
+            sys_used,
+        )
+
+        return {
+            "server_rss_mb": rss_mb,
+            "kernel_stacks_mb": kern_stacks,
+            "page_tables_mb": page_tables,
+            "slab_mb": slab,
+            "page_cache_mb": cached,
+            "tcp_buffers_mb": tcp_mem,
+            "accounted_mb": accounted,
+            "unaccounted_mb": unaccounted,
+            "system_total_mb": sys_used,
+        }
+
+    def _archive_server_log_to(
+            self, target_dir,
+    ) -> None:
+        """Gzip the server log into the given directory."""
+        if not self.server_log or not os.path.isfile(
+            self.server_log,
+        ):
+            return
+        gz_path = os.path.join(
+            target_dir, "server.log.gz",
+        )
+        with open(self.server_log, "rb") as f_in, \
+                gzip.open(gz_path, "wb") as f_out:
+            shutil.copyfileobj(f_in, f_out)
+
     def run(self) -> int:
         """Execute the full load test workflow."""
         level = self.args.level
         self.args.include_tokens = not self.args.no_tokens
+        split_mode = (
+            self.args.client_only or self.args.server_only
+        )
+        if split_mode:
+            level = LEVEL_MIN
+            self.args.level = LEVEL_MIN
+            self.args.monitor_resources = True
         if self.args.yes and level != LEVEL_ADV:
+            if not split_mode:
+                logger.error(
+                    "--yes is only supported at adv level. "
+                    "At %s level, the cost confirmation "
+                    "prompt is required.",
+                    level,
+                )
+                raise SystemExit(1)
+        if (self.args.client_only
+                and self.args.server_only):
             logger.error(
-                "--yes is only supported at adv level. "
-                "At %s level, the cost confirmation prompt "
-                "is required.",
-                level,
+                "--client-only and --server-only are "
+                "mutually exclusive.",
             )
             raise SystemExit(1)
+        if (self.args.client_only
+                and self.args.server_log is not None):
+            logger.error(
+                "--client-only cannot be used with "
+                "--server-log (server log is remote).",
+            )
+            raise SystemExit(1)
+        if (self.args.server_only
+                and self.args.server_log is None):
+            self.args.server_log = "auto"
         explicit = getattr(self.args, "_explicit", set())
         self._apply_level_defaults(self.args, explicit)
         self._apply_scale(self.args)
@@ -1334,37 +1952,55 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
 
         self._setup_test_log()
-        self.probe_result = self.input_validator.confirm_cost(
-            stages, total_cap,
-            runner=self.runner,
-            output_dir=self._output_dir,
-            stale_log_age=stale_log_age,
-        )
+        if not self.args.server_only:
+            self.probe_result = (
+                self.input_validator.confirm_cost(
+                    stages, total_cap,
+                    runner=self.runner,
+                    output_dir=self._output_dir,
+                    stale_log_age=stale_log_age,
+                )
+            )
 
         is_local = self.args.host in LOCAL_HOSTS
         monitor_resources = (
             level != LEVEL_MIN or self.args.monitor_resources
-        )
-        needs_server_proc = (
-            (monitor_resources and is_local
-             and level != LEVEL_MIN)
-            or self.args.server_log is not None
+            or split_mode
         )
 
-        if needs_server_proc and is_local:
-            self.server_proc = (
-                EnvironmentValidator.find_local_server(self.args)
+        if self.args.client_only:
+            logger.info(
+                "Client-only mode: skipping server "
+                "process detection.",
             )
-        elif (monitor_resources and is_local
-              and level == LEVEL_MIN):
-            if EnvironmentValidator.is_port_open(
-                self.args.host, self.args.port,
-            ):
+        elif self.args.server_only:
+            self.server_proc = (
+                EnvironmentValidator.find_local_server(
+                    self.args,
+                )
+            )
+        else:
+            needs_server_proc = (
+                (monitor_resources and is_local
+                 and level != LEVEL_MIN)
+                or self.args.server_log is not None
+            )
+            if needs_server_proc and is_local:
                 self.server_proc = (
                     EnvironmentValidator.find_local_server(
                         self.args,
                     )
                 )
+            elif (monitor_resources and is_local
+                  and level == LEVEL_MIN):
+                if EnvironmentValidator.is_port_open(
+                    self.args.host, self.args.port,
+                ):
+                    self.server_proc = (
+                        EnvironmentValidator.find_local_server(
+                            self.args,
+                        )
+                    )
 
         if self.args.server_log == "auto":
             self.args.server_log = (
@@ -1376,6 +2012,21 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         self.server_log = self.args.server_log
         if self.server_log:
             self.log_monitor = ServerLogMonitor(self.server_log)
+
+        if self.args.server_only:
+            logger.info(
+                "\nConfig: agent=%s, mode=server-only, "
+                "num_requests=%s, host=%s, port=%s, "
+                "stage_timeout=%ss",
+                self.args.agent, self.args.num_requests,
+                self.args.host, self.args.port,
+                self.args.stage_timeout,
+            )
+            if self.server_log:
+                logger.info(
+                    "  server_log=%s", self.server_log,
+                )
+            return self._run_server_only_monitor()
 
         if not monitor_resources:
             logger.info(
