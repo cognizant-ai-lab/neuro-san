@@ -38,6 +38,7 @@ from tests.load_tests.config import THREAD_JOIN_TIMEOUT
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.traffic.cli_builder import CliBuilder
+from tests.load_tests.traffic.http_client import HttpClient
 from tests.load_tests.traffic.process_monitor import ProcessMonitor
 
 logger = logging.getLogger(__name__)
@@ -57,9 +58,14 @@ class TrafficRunner:
     def _run_one_tracked(self, request_id, global_request_id,
                          output_dir, failed_ref) -> RequestResult:
         """Run one request and increment failed_ref on failure."""
-        result = self.run_one(
-            request_id, global_request_id, output_dir,
-        )
+        if getattr(self._args, "http_client", False):
+            result = self.run_one_http(
+                request_id, global_request_id, output_dir,
+            )
+        else:
+            result = self.run_one(
+                request_id, global_request_id, output_dir,
+            )
         if result.get("status") != STATUS_CREATED:
             failed_ref.value = (failed_ref.value or 0) + 1
         return result
@@ -130,6 +136,85 @@ class TrafficRunner:
             return result
         finally:
             CliBuilder.cleanup_prompt_file(prompt_file)
+
+    # pylint: disable=too-many-locals
+    def run_one_http(self, request_id, global_request_id,
+                     output_dir=None) -> RequestResult:
+        """Execute a single request via direct HTTP.
+
+        Uses thread-based HTTP POST instead of spawning a
+        subprocess, reducing per-request memory from ~96 MB
+        to ~1-2 MB.
+        """
+        prompt = self._profile.get_prompt(
+            global_request_id,
+            same_prompt=self._args.same_prompt,
+        )
+        start = time.time()
+        status, parsed_fields, response_text, ttft = (
+            HttpClient.execute_request(
+                self._args.host, self._args.port,
+                self._args.agent, prompt,
+                timeout=self._args.request_timeout,
+                idle_timeout=self._args.idle_timeout,
+            )
+        )
+        elapsed = time.time() - start
+
+        failure_reason = None
+        if status == STATUS_CREATED:
+            for pattern in self._profile.failure_patterns:
+                if pattern in response_text:
+                    status = STATUS_FAILED
+                    failure_reason = (
+                        "response matched failure pattern: "
+                        + pattern
+                    )
+                    break
+            if status == STATUS_CREATED:
+                if self._args.skip_reservation_check:
+                    required = [
+                        f for f in self._profile.success_fields
+                        if f != "reservation_id"
+                    ]
+                else:
+                    required = self._profile.success_fields
+                missing = [
+                    f for f in required
+                    if not parsed_fields.get(f)
+                ]
+                if missing:
+                    status = STATUS_FAILED
+                    failure_reason = (
+                        "missing " + ", ".join(missing)
+                    )
+        elif status == STATUS_FAILED and not response_text:
+            failure_reason = "empty response from agent"
+
+        self._log_request_result(
+            request_id, status, elapsed,
+            parsed_fields=parsed_fields,
+            failure_reason=failure_reason,
+            stderr="",
+            output_dir=output_dir,
+        )
+
+        result = {
+            "request_id": f"request-{request_id}",
+            "status": status,
+            "elapsed": elapsed,
+            "ttft": ttft,
+            "start_time": start,
+            "end_time": start + elapsed,
+            "prompt": prompt,
+            "failure_reason": failure_reason,
+            "error": (
+                failure_reason
+                if status != STATUS_CREATED else None
+            ),
+        }
+        result.update(parsed_fields)
+        return result
 
     def _validate_result(self, status, returncode, stdout,
                          parsed_fields,

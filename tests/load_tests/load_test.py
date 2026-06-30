@@ -268,6 +268,16 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                  "Mutually exclusive with --server-only.",
         )
         parser.add_argument(
+            "--http-client",
+            action="store_true",
+            default=False,
+            help="Use direct HTTP requests instead of "
+                 "spawning agent_cli subprocesses. "
+                 "Drastically reduces client memory "
+                 "(~1 MB vs ~96 MB per concurrent request). "
+                 "Implies --client-only.",
+        )
+        parser.add_argument(
             "--server-only",
             action="store_true",
             default=False,
@@ -1332,8 +1342,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _server_only_heartbeat(
-            self, count, expected, elapsed, now,
-            snap, cur_mem,
+            self, received, expected, completed,
+            elapsed, now, snap, cur_mem,
     ) -> None:
         """Log a periodic heartbeat during server-only monitoring."""
         cur_used_mb = (
@@ -1359,13 +1369,22 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         else:
             mins = int(elapsed) // 60
             fmt_elapsed = f"{elapsed:.0f}s ({mins}m)"
+        if received >= expected:
+            progress_str = (
+                f" {expected} recv"
+                f"  {completed}/{expected} done"
+            )
+        else:
+            progress_str = (
+                f" {received}/{expected} recv"
+                f"  {completed} done"
+            )
         logger.info(
-            "  [heartbeat] %s [%s]"
-            " %d/%d done%s%s"
+            "  [heartbeat] %s [%s]%s%s%s"
             "  sysmem: %.0f%% (%.0fM used"
             " / %.1fG free)",
             fmt_elapsed, ts,
-            count, expected,
+            progress_str,
             threads_str, rss_str,
             cur_mem.percent, cur_used_mb,
             cur_avail_gb,
@@ -1766,18 +1785,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
                         if (now - last_heartbeat
                                 >= heartbeat_interval):
-                            if phase == 1:
-                                self._server_only_heartbeat(
-                                    count, expected,
-                                    elapsed, now,
-                                    snap, cur_mem,
-                                )
-                            else:
-                                self._server_only_heartbeat(
-                                    completed, count,
-                                    elapsed, now,
-                                    snap, cur_mem,
-                                )
+                            self._server_only_heartbeat(
+                                count, expected,
+                                completed,
+                                elapsed, now,
+                                snap, cur_mem,
+                            )
                             last_heartbeat = now
 
                     if (elapsed
@@ -2007,6 +2020,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         """Execute the full load test workflow."""
         level = self.args.level
         self.args.include_tokens = not self.args.no_tokens
+        if self.args.http_client:
+            self.args.client_only = True
         split_mode = (
             self.args.client_only or self.args.server_only
         )
@@ -2070,10 +2085,16 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
 
         if self.args.client_only:
-            logger.info(
-                "Client-only mode: skipping server "
-                "process detection.",
-            )
+            if self.args.http_client:
+                logger.info(
+                    "Client-only mode (HTTP threads): "
+                    "skipping server process detection.",
+                )
+            else:
+                logger.info(
+                    "Client-only mode: skipping server "
+                    "process detection.",
+                )
         elif self.args.server_only:
             self.server_proc = (
                 EnvironmentValidator.find_local_server(

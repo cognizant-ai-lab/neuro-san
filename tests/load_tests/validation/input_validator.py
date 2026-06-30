@@ -312,14 +312,21 @@ class InputValidator:
                 f"(last modified {stale_log_age}m ago)"
             )
 
-        mem_warning = self._check_memory_headroom(capped)
+        mem_warning = self._check_memory_headroom(
+            capped,
+            http_client=getattr(
+                self._args, "http_client", False,
+            ),
+        )
         if mem_warning:
             warnings.append(mem_warning)
 
         return warnings
 
     @staticmethod
-    def _check_memory_headroom(num_requests) -> Optional[str]:
+    def _check_memory_headroom(
+            num_requests, *, http_client=False,
+    ) -> Optional[str]:
         """Warn if available memory looks insufficient.
 
         Uses a conservative per-request estimate based on
@@ -327,7 +334,7 @@ class InputValidator:
         """
         mem = psutil.virtual_memory()
         avail_gb = mem.available / (1024 ** 3)
-        per_request_mb = 50
+        per_request_mb = 2 if http_client else 50
         needed_gb = (num_requests * per_request_mb) / 1024
         if needed_gb > avail_gb * 0.8:
             return (
