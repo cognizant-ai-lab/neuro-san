@@ -1333,7 +1333,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _server_only_heartbeat(
             self, count, expected, elapsed, now,
-            snap, cur_mem, phase_label="received",
+            snap, cur_mem,
     ) -> None:
         """Log a periodic heartbeat during server-only monitoring."""
         cur_used_mb = (
@@ -1360,12 +1360,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             mins = int(elapsed) // 60
             fmt_elapsed = f"{elapsed:.0f}s ({mins}m)"
         logger.info(
-            "  [progress] %d of %d %s"
-            " -- %s elapsed [%s]%s%s"
+            "  [heartbeat] %s [%s]"
+            " %d/%d done%s%s"
             "  sysmem: %.0f%% (%.0fM used"
             " / %.1fG free)",
-            count, expected, phase_label,
             fmt_elapsed, ts,
+            count, expected,
             threads_str, rss_str,
             cur_mem.percent, cur_used_mb,
             cur_avail_gb,
@@ -1661,8 +1661,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         interrupted = False
         phase = 1
         log_limit = 5
-        recv_times = []
-        done_times = []
 
         try:
             with open(
@@ -1703,34 +1701,14 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                             elapsed = (
                                 now - start_time
                             )
-                            recv_times.append(elapsed)
-                            if count <= log_limit:
+                            if (count <= log_limit
+                                    or count == expected):
                                 logger.info(
                                     "  [server] request"
                                     " %d/%d received"
                                     " [%s] (+%.1fs)",
                                     count, expected,
                                     ts, elapsed,
-                                )
-                            elif count == expected:
-                                skipped = (
-                                    count - log_limit
-                                )
-                                avg_t = sum(
-                                    recv_times,
-                                ) / len(recv_times)
-                                logger.info(
-                                    "  ... %d more"
-                                    " received ...",
-                                    skipped,
-                                )
-                                logger.info(
-                                    "  [server] request"
-                                    " %d/%d received"
-                                    " [%s] (+%.1fs"
-                                    " avg)",
-                                    count, expected,
-                                    ts, avg_t,
                                 )
                         if pri_finish_re.search(line):
                             completed += 1
@@ -1742,39 +1720,19 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                             elapsed = (
                                 now - start_time
                             )
-                            done_times.append(elapsed)
                             total = (
                                 count if phase == 2
                                 else expected
                             )
-                            if completed <= log_limit:
+                            if (completed <= log_limit
+                                    or completed
+                                    == total):
                                 logger.info(
                                     "  [server] request"
                                     " %d/%d completed"
                                     " [%s] (+%.1fs)",
                                     completed, total,
                                     ts, elapsed,
-                                )
-                            elif completed == total:
-                                skipped = (
-                                    completed
-                                    - log_limit
-                                )
-                                avg_t = sum(
-                                    done_times,
-                                ) / len(done_times)
-                                logger.info(
-                                    "  ... %d more"
-                                    " completed ...",
-                                    skipped,
-                                )
-                                logger.info(
-                                    "  [server] request"
-                                    " %d/%d completed"
-                                    " [%s] (+%.1fs"
-                                    " avg)",
-                                    completed, total,
-                                    ts, avg_t,
                                 )
                         continue
                     pos = log_fh.tell()
@@ -1813,14 +1771,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                                     count, expected,
                                     elapsed, now,
                                     snap, cur_mem,
-                                    "received",
                                 )
                             else:
                                 self._server_only_heartbeat(
                                     completed, count,
                                     elapsed, now,
                                     snap, cur_mem,
-                                    "completed",
                                 )
                             last_heartbeat = now
 
