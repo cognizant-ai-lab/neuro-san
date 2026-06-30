@@ -13,24 +13,27 @@
 # limitations under the License.
 #
 
-"""Direct HTTP client for load testing without subprocess overhead.
+"""In-thread HTTP client for load testing without subprocess overhead.
 
 Instead of spawning a separate ``python -m neuro_san.client.agent_cli``
-process per request (~96 MB each), this module makes HTTP POST calls
-directly from the calling thread.  Memory cost drops from ~96 MB per
-concurrent request to ~1-2 MB per thread, allowing a single client
-machine to drive 1000+ concurrent requests.
+process per request (~96 MB each), this module instantiates
+``HttpServiceAgentSession`` and ``StreamingInputProcessor`` directly
+in the calling thread.  Memory cost drops from ~96 MB per concurrent
+request to ~1-2 MB per thread.
 """
 
-import json
 import logging
 import time
 from typing import Any
 from typing import Dict
-from typing import Optional
 from typing import Tuple
 
-import requests
+from neuro_san.client.streaming_input_processor import (
+    StreamingInputProcessor,
+)
+from neuro_san.session.http_service_agent_session import (
+    HttpServiceAgentSession,
+)
 
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
@@ -43,151 +46,76 @@ _CONNECT_TIMEOUT = 30
 
 
 class HttpClient:
-    """Sends streaming_chat requests over HTTP without subprocesses."""
+    """Runs agent_cli logic in-thread via HttpServiceAgentSession."""
 
     @staticmethod
     def execute_request(
             host, port, agent, prompt, *,
             timeout, idle_timeout,
     ) -> Tuple[str, Dict[str, str], str, float]:
-        """Send one streaming_chat request and consume the response.
+        """Send one streaming_chat request using the agent_cli
+        client stack in-thread.
+
+        Creates an ``HttpServiceAgentSession`` and a
+        ``StreamingInputProcessor`` (the same objects that
+        ``agent_cli`` uses), then calls ``process_once()``
+        to send the request, consume the streaming response,
+        and extract sly_data fields.
 
         Returns (status, parsed_fields, response_text, ttft).
-          * status: STATUS_CREATED | STATUS_FAILED | STATUS_TIMEOUT
-          * parsed_fields: dict of field_name -> value extracted
-            from sly_data (e.g. reservation_id, agent_network_name)
-          * response_text: concatenated answer text from the stream
-          * ttft: time-to-first-token in seconds (0.0 if none)
         """
-        url = (
-            f"http://{host}:{port}"
-            f"/api/v1/{agent}/streaming_chat"
+        start = time.time()
+
+        session = HttpServiceAgentSession(
+            host=host,
+            port=str(port),
+            agent_name=agent,
+            timeout_in_seconds=_CONNECT_TIMEOUT,
+            streaming_timeout_in_seconds=idle_timeout,
         )
-        body: Dict[str, Any] = {
-            "user_message": {
-                "type": "HUMAN",
-                "text": prompt,
-            }
+
+        processor = StreamingInputProcessor(
+            default_input="DEFAULT",
+            thinking_file=None,
+            session=session,
+            thinking_dir=None,
+        )
+
+        state: Dict[str, Any] = {
+            "last_chat_response": None,
+            "num_input": 0,
+            "user_input": prompt,
+            "sly_data": None,
+            "chat_filter": {
+                "chat_filter_type": "MAXIMAL",
+            },
         }
 
-        start = time.time()
-        ttft = 0.0
-        answer_text = ""
-        sly_data: Dict[str, Any] = {}
-
         try:
-            with requests.post(
-                url,
-                json=body,
-                stream=True,
-                timeout=(_CONNECT_TIMEOUT, idle_timeout),
-            ) as resp:
-                resp.raise_for_status()
-                answer_text, sly_data, ttft = (
-                    HttpClient._consume_stream(
-                        resp, start, timeout,
-                    )
-                )
-        except requests.exceptions.Timeout:
-            return (STATUS_TIMEOUT, {}, "", 0.0)
-        except requests.exceptions.ConnectionError as exc:
-            logger.debug("Connection error: %s", exc)
-            return (STATUS_FAILED, {}, "", 0.0)
+            state = processor.process_once(state)
         except Exception as exc:  # pylint: disable=broad-exception-caught
+            elapsed = time.time() - start
+            if elapsed >= timeout:
+                return (STATUS_TIMEOUT, {}, "", 0.0)
             logger.debug("HTTP request failed: %s", exc)
             return (STATUS_FAILED, {}, str(exc), 0.0)
 
+        elapsed = time.time() - start
+        if elapsed >= timeout:
+            return (STATUS_TIMEOUT, {}, "", 0.0)
+
+        answer_text = state.get("last_chat_response") or ""
+        returned_sly_data = state.get(
+            "returned_sly_data",
+        ) or {}
+
         parsed_fields: Dict[str, str] = {}
-        if sly_data:
-            for key, value in sly_data.items():
-                if isinstance(value, str):
-                    parsed_fields[key] = value
+        for key, value in returned_sly_data.items():
+            if isinstance(value, str):
+                parsed_fields[key] = value
 
         status = (
             STATUS_CREATED if answer_text
             else STATUS_FAILED
         )
-        return (status, parsed_fields, answer_text, ttft)
-
-    @staticmethod
-    def _consume_stream(
-            resp, start, timeout,
-    ) -> Tuple[str, Dict[str, Any], float]:
-        """Read a newline-delimited JSON stream.
-
-        Returns (answer_text, sly_data, ttft).
-        """
-        separator = b"\n"
-        max_chunk = 64 * 1024
-        ttft = 0.0
-        answer_text = ""
-        sly_data: Dict[str, Any] = {}
-        accumulator = bytearray()
-
-        for data in resp.iter_content(chunk_size=max_chunk):
-            if time.time() - start > timeout:
-                return (answer_text, sly_data, ttft)
-
-            accumulator.extend(data)
-            index = accumulator.find(separator)
-            while index >= 0:
-                line = accumulator[:index].decode(
-                    "utf-8", errors="replace",
-                ).strip()
-                del accumulator[:index + len(separator)]
-                if line:
-                    if not ttft:
-                        ttft = time.time() - start
-                    text, sly = HttpClient._process_line(
-                        line, answer_text, sly_data,
-                    )
-                    if text is not None:
-                        answer_text = text
-                    if sly is not None:
-                        sly_data = sly
-                index = accumulator.find(separator)
-
-        if accumulator:
-            line = accumulator.decode(
-                "utf-8", errors="replace",
-            ).strip()
-            if line:
-                text, sly = HttpClient._process_line(
-                    line, answer_text, sly_data,
-                )
-                if text is not None:
-                    answer_text = text
-                if sly is not None:
-                    sly_data = sly
-
-        return (answer_text, sly_data, ttft)
-
-    @staticmethod
-    def _process_line(
-            line, current_answer, current_sly,
-    ) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
-        """Parse one JSON line and extract answer/sly_data.
-
-        Returns (new_answer_or_None, new_sly_or_None).
-        """
-        try:
-            result_dict = json.loads(line)
-        except (json.JSONDecodeError, ValueError):
-            return (None, None)
-
-        response = result_dict.get("response", {})
-        if not isinstance(response, dict):
-            return (None, None)
-
-        new_answer = None
-        new_sly = None
-
-        text = response.get("text")
-        if text:
-            new_answer = text
-
-        sly = response.get("sly_data")
-        if sly and isinstance(sly, dict):
-            new_sly = sly
-
-        return (new_answer, new_sly)
+        return (status, parsed_fields, answer_text, 0.0)
