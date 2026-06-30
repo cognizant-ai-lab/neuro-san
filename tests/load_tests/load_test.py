@@ -1370,7 +1370,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             mins = int(elapsed) // 60
             fmt_elapsed = f"{elapsed:.0f}s ({mins}m)"
         logger.info(
-            "  [progress] %d of %d received"
+            "  [progress] %d of %d"
             " -- %s elapsed [%s]%s%s"
             "  sysmem: %.0f%% (%.0fM used"
             " / %.1fG free)",
@@ -1394,6 +1394,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             self.profile.primary_start_pattern
         )
         pri_start_re = re.compile(primary_start_pattern)
+        primary_finish_pattern = (
+            self.profile.primary_finish_pattern
+        )
+        pri_finish_re = re.compile(
+            primary_finish_pattern,
+        )
         round_num = 0
 
         while True:
@@ -1426,7 +1432,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
             round_num += 1
             self._run_server_only_round(
-                expected, round_num, pri_start_re,
+                expected, round_num,
+                pri_start_re, pri_finish_re,
             )
 
     def _setup_round_output_dir(
@@ -1446,7 +1453,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
     # pylint: disable=too-many-locals
     def _run_server_only_round(
-            self, expected, round_num, pri_start_re,
+            self, expected, round_num,
+            pri_start_re, pri_finish_re,
     ) -> None:
         """Execute one round of server-only monitoring."""
         round_dir = self._setup_round_output_dir(
@@ -1494,18 +1502,20 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             expected,
         )
 
-        count, peak_server, peak_sys_mem_pct, \
-            elapsed, interrupted = (
+        count, completed, peak_server, \
+            peak_sys_mem_pct, elapsed, interrupted = (
                 self._tail_server_log(
-                    expected, log_pos, pri_start_re,
+                    expected, log_pos,
+                    pri_start_re, pri_finish_re,
                     before_server, before_sys_mem_pct,
                 )
             )
 
         logger.info(
-            "\n  Monitoring complete: %d/%d requests"
-            " received in %.1fs",
-            count, expected, elapsed,
+            "\n  Monitoring complete: %d/%d received,"
+            " %d/%d processed in %.1fs",
+            count, expected, completed,
+            count, elapsed,
         )
 
         after_server = (
@@ -1623,22 +1633,30 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
         logger.info("%s", "\u2500" * 45)
 
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _tail_server_log(
-            self, expected, log_pos, pri_start_re,
+            self, expected, log_pos,
+            pri_start_re, pri_finish_re,
             before_server, before_sys_mem_pct,
     ):
-        """Tail the server log counting request arrivals.
+        """Tail the server log in two phases.
 
-        Returns (count, peak_server, peak_sys_mem_pct,
-        elapsed, interrupted).
+        Phase 1: count Start patterns until all requests
+        received.  Phase 2: count Finish patterns until all
+        requests processed.
+
+        Returns (count, completed, peak_server,
+        peak_sys_mem_pct, elapsed, interrupted).
         """
         start_time = time.time()
         count = 0
+        completed = 0
         last_heartbeat = start_time
         heartbeat_interval = HEARTBEAT_INTERVAL_SECONDS
         peak_server = before_server
         peak_sys_mem_pct = before_sys_mem_pct
         interrupted = False
+        phase = 1
 
         try:
             with open(
@@ -1646,22 +1664,61 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     encoding="utf-8",
             ) as log_fh:
                 log_fh.seek(log_pos)
-                while count < expected:
+                while True:
+                    if phase == 1 and count >= expected:
+                        now = time.time()
+                        elapsed = now - start_time
+                        logger.info(
+                            "\n  All %d request(s)"
+                            " received (%.1fs)."
+                            " Monitoring until"
+                            " processing completes"
+                            "...",
+                            expected, elapsed,
+                        )
+                        phase = 2
+                    if (phase == 2
+                            and completed >= count):
+                        break
+
                     line = log_fh.readline()
                     if line:
-                        if pri_start_re.search(line):
+                        if (phase == 1
+                                and pri_start_re.search(
+                                    line)):
                             count += 1
                             now = time.time()
                             ts = time.strftime(
                                 "%H:%M:%S",
                                 time.localtime(now),
                             )
-                            elapsed = now - start_time
+                            elapsed = (
+                                now - start_time
+                            )
                             logger.info(
                                 "  [server] request"
-                                " %d/%d received [%s]"
-                                " (+%.1fs)",
+                                " %d/%d received"
+                                " [%s] (+%.1fs)",
                                 count, expected,
+                                ts, elapsed,
+                            )
+                        if pri_finish_re.search(line):
+                            completed += 1
+                            now = time.time()
+                            ts = time.strftime(
+                                "%H:%M:%S",
+                                time.localtime(now),
+                            )
+                            elapsed = (
+                                now - start_time
+                            )
+                            logger.info(
+                                "  [server] request"
+                                " %d/%d completed"
+                                " [%s] (+%.1fs)",
+                                completed, count
+                                if phase == 2
+                                else expected,
                                 ts, elapsed,
                             )
                     else:
@@ -1680,27 +1737,50 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                                     "rss", 0)):
                             peak_server = snap
                     cur_mem = psutil.virtual_memory()
-                    if cur_mem.percent > peak_sys_mem_pct:
+                    if (cur_mem.percent
+                            > peak_sys_mem_pct):
                         peak_sys_mem_pct = (
                             cur_mem.percent
                         )
 
                     if (now - last_heartbeat
                             >= heartbeat_interval):
-                        self._server_only_heartbeat(
-                            count, expected, elapsed,
-                            now, snap, cur_mem,
-                        )
+                        if phase == 1:
+                            self._server_only_heartbeat(
+                                count, expected,
+                                elapsed, now,
+                                snap, cur_mem,
+                            )
+                        else:
+                            self._server_only_heartbeat(
+                                completed, count,
+                                elapsed, now,
+                                snap, cur_mem,
+                            )
                         last_heartbeat = now
 
-                    if elapsed > self.args.stage_timeout:
-                        logger.warning(
-                            "  Stage timeout (%.0fs)"
-                            " reached with %d/%d"
-                            " requests received.",
-                            self.args.stage_timeout,
-                            count, expected,
-                        )
+                    if (elapsed
+                            > self.args.stage_timeout):
+                        if phase == 1:
+                            logger.warning(
+                                "  Stage timeout"
+                                " (%.0fs) reached"
+                                " with %d/%d"
+                                " requests"
+                                " received.",
+                                self.args.stage_timeout,
+                                count, expected,
+                            )
+                        else:
+                            logger.warning(
+                                "  Stage timeout"
+                                " (%.0fs) reached"
+                                " with %d/%d"
+                                " requests"
+                                " processed.",
+                                self.args.stage_timeout,
+                                completed, count,
+                            )
                         break
         except KeyboardInterrupt:
             interrupted = True
@@ -1711,8 +1791,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         elapsed = time.time() - start_time
         return (
-            count, peak_server, peak_sys_mem_pct,
-            elapsed, interrupted,
+            count, completed, peak_server,
+            peak_sys_mem_pct, elapsed, interrupted,
         )
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
