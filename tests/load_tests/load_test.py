@@ -1539,8 +1539,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             )
             logger.info(
                 "\n  Server RSS: %.0fM start"
-                " \u2192 %.0fM peak \u2192 %.0fM end",
-                rss_before, peak_rss, rss_after,
+                " \u2192 %.0fM peak (%+.0fM)"
+                " \u2192 %.0fM end (%+.0fM)",
+                rss_before, peak_rss,
+                peak_rss - rss_before,
+                rss_after,
+                rss_after - rss_before,
             )
         peak_used_mb = (
             peak_sys_mem_pct / 100.0
@@ -1548,11 +1552,13 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
         logger.info(
             "  System memory: %.0f%% (%.0fM) start"
-            " \u2192 %.0f%% (%.0fM) peak"
-            " \u2192 %.0f%% (%.0fM) end",
+            " \u2192 %.0f%% (%.0fM) peak (%+.0fM)"
+            " \u2192 %.0f%% (%.0fM) end (%+.0fM)",
             before_sys_mem_pct, before_used_mb,
             peak_sys_mem_pct, peak_used_mb,
+            peak_used_mb - before_used_mb,
             mem.percent, after_used_mb,
+            after_used_mb - before_used_mb,
         )
 
         peak_rss_for_breakdown = 0.0
