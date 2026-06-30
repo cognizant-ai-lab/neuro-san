@@ -1718,6 +1718,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                                 ts, elapsed,
                             )
                     else:
+                        pos = log_fh.tell()
+                        log_fh.seek(pos)
                         time.sleep(0.5)
 
                     now = time.time()
