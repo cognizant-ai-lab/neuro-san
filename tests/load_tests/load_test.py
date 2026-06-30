@@ -1660,6 +1660,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         peak_sys_mem_pct = before_sys_mem_pct
         interrupted = False
         phase = 1
+        log_limit = 5
+        recv_times = []
+        done_times = []
 
         try:
             with open(
@@ -1700,13 +1703,35 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                             elapsed = (
                                 now - start_time
                             )
-                            logger.info(
-                                "  [server] request"
-                                " %d/%d received"
-                                " [%s] (+%.1fs)",
-                                count, expected,
-                                ts, elapsed,
-                            )
+                            recv_times.append(elapsed)
+                            if count <= log_limit:
+                                logger.info(
+                                    "  [server] request"
+                                    " %d/%d received"
+                                    " [%s] (+%.1fs)",
+                                    count, expected,
+                                    ts, elapsed,
+                                )
+                            elif count == expected:
+                                skipped = (
+                                    count - log_limit
+                                )
+                                avg_t = sum(
+                                    recv_times,
+                                ) / len(recv_times)
+                                logger.info(
+                                    "  ... %d more"
+                                    " received ...",
+                                    skipped,
+                                )
+                                logger.info(
+                                    "  [server] request"
+                                    " %d/%d received"
+                                    " [%s] (+%.1fs"
+                                    " avg)",
+                                    count, expected,
+                                    ts, avg_t,
+                                )
                         if pri_finish_re.search(line):
                             completed += 1
                             now = time.time()
@@ -1717,15 +1742,40 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                             elapsed = (
                                 now - start_time
                             )
-                            logger.info(
-                                "  [server] request"
-                                " %d/%d completed"
-                                " [%s] (+%.1fs)",
-                                completed, count
-                                if phase == 2
-                                else expected,
-                                ts, elapsed,
+                            done_times.append(elapsed)
+                            total = (
+                                count if phase == 2
+                                else expected
                             )
+                            if completed <= log_limit:
+                                logger.info(
+                                    "  [server] request"
+                                    " %d/%d completed"
+                                    " [%s] (+%.1fs)",
+                                    completed, total,
+                                    ts, elapsed,
+                                )
+                            elif completed == total:
+                                skipped = (
+                                    completed
+                                    - log_limit
+                                )
+                                avg_t = sum(
+                                    done_times,
+                                ) / len(done_times)
+                                logger.info(
+                                    "  ... %d more"
+                                    " completed ...",
+                                    skipped,
+                                )
+                                logger.info(
+                                    "  [server] request"
+                                    " %d/%d completed"
+                                    " [%s] (+%.1fs"
+                                    " avg)",
+                                    completed, total,
+                                    ts, avg_t,
+                                )
                         continue
                     pos = log_fh.tell()
                     log_fh.seek(pos)
