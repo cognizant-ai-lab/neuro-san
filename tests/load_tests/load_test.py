@@ -834,12 +834,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 ResourceMonitor.log_snapshot(
                     "Server BEFORE", before_server,
                 )
-            elif self.args.client_only:
-                logger.info(
-                    "  Server BEFORE: not available"
-                    " (remote)",
-                )
-            else:
+            elif not self.args.client_only:
                 logger.info(
                     "  Server BEFORE: not available"
                     " (server not running)",
@@ -939,12 +934,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 ResourceMonitor.log_snapshot(
                     "Server AFTER", after_server,
                 )
-            elif self.args.client_only:
-                logger.info(
-                    "  Server AFTER: not available"
-                    " (remote)",
-                )
-            else:
+            elif not self.args.client_only:
                 logger.info(
                     "  Server AFTER: not available"
                     " (server not running)",
@@ -1479,17 +1469,17 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             ResourceMonitor.log_snapshot(
                 "Server BEFORE", before_server,
             )
-        logger.info(
-            "  Client BEFORE: not available (remote)",
-        )
         mem = psutil.virtual_memory()
-        used_mb = (mem.total - mem.available) / (1024 ** 2)
+        before_used_mb = (
+            (mem.total - mem.available) / (1024 ** 2)
+        )
         avail_gb = mem.available / (1024 ** 3)
         total_gb = mem.total / (1024 ** 3)
         logger.info(
             "  System BEFORE: %.0f%% used"
             " (%.0fM used / %.1fG free / %.1fG total)",
-            mem.percent, used_mb, avail_gb, total_gb,
+            mem.percent, before_used_mb,
+            avail_gb, total_gb,
         )
         before_sys_mem_pct = mem.percent
         before_kernel = self._read_kernel_memory()
@@ -1526,17 +1516,17 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             ResourceMonitor.log_snapshot(
                 "Server AFTER", after_server,
             )
-        logger.info(
-            "  Client AFTER: not available (remote)",
-        )
         mem = psutil.virtual_memory()
-        used_mb = (mem.total - mem.available) / (1024 ** 2)
+        after_used_mb = (
+            (mem.total - mem.available) / (1024 ** 2)
+        )
         avail_gb = mem.available / (1024 ** 3)
         total_gb = mem.total / (1024 ** 3)
         logger.info(
             "  System AFTER: %.0f%% used"
             " (%.0fM used / %.1fG free / %.1fG total)",
-            mem.percent, used_mb, avail_gb, total_gb,
+            mem.percent, after_used_mb,
+            avail_gb, total_gb,
         )
         after_kernel = self._read_kernel_memory()
 
@@ -1552,11 +1542,17 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 " \u2192 %.0fM peak \u2192 %.0fM end",
                 rss_before, peak_rss, rss_after,
             )
+        peak_used_mb = (
+            peak_sys_mem_pct / 100.0
+            * mem.total / (1024 ** 2)
+        )
         logger.info(
-            "  System memory: %.0f%% start"
-            " \u2192 %.0f%% peak \u2192 %.0f%% end",
-            before_sys_mem_pct,
-            peak_sys_mem_pct, mem.percent,
+            "  System memory: %.0f%% (%.0fM) start"
+            " \u2192 %.0f%% (%.0fM) peak"
+            " \u2192 %.0f%% (%.0fM) end",
+            before_sys_mem_pct, before_used_mb,
+            peak_sys_mem_pct, peak_used_mb,
+            mem.percent, after_used_mb,
         )
 
         peak_rss_for_breakdown = 0.0
