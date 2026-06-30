@@ -1333,7 +1333,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _server_only_heartbeat(
             self, count, expected, elapsed, now,
-            snap, cur_mem,
+            snap, cur_mem, phase_label="received",
     ) -> None:
         """Log a periodic heartbeat during server-only monitoring."""
         cur_used_mb = (
@@ -1360,11 +1360,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             mins = int(elapsed) // 60
             fmt_elapsed = f"{elapsed:.0f}s ({mins}m)"
         logger.info(
-            "  [progress] %d of %d"
+            "  [progress] %d of %d %s"
             " -- %s elapsed [%s]%s%s"
             "  sysmem: %.0f%% (%.0fM used"
             " / %.1fG free)",
-            count, expected, fmt_elapsed, ts,
+            count, expected, phase_label,
+            fmt_elapsed, ts,
             threads_str, rss_str,
             cur_mem.percent, cur_used_mb,
             cur_avail_gb,
@@ -1754,12 +1755,14 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                                 count, expected,
                                 elapsed, now,
                                 snap, cur_mem,
+                                "received",
                             )
                         else:
                             self._server_only_heartbeat(
                                 completed, count,
                                 elapsed, now,
                                 snap, cur_mem,
+                                "completed",
                             )
                         last_heartbeat = now
 
