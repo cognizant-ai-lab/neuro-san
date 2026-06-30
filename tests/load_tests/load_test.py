@@ -1667,6 +1667,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     encoding="utf-8",
             ) as log_fh:
                 log_fh.seek(log_pos)
+                last_monitor = start_time
+                monitor_interval = 1.0
                 while True:
                     if phase == 1 and count >= expected:
                         now = time.time()
@@ -1724,47 +1726,53 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                                 else expected,
                                 ts, elapsed,
                             )
-                    else:
-                        pos = log_fh.tell()
-                        log_fh.seek(pos)
-                        time.sleep(0.5)
+                        continue
+                    pos = log_fh.tell()
+                    log_fh.seek(pos)
+                    time.sleep(0.5)
 
                     now = time.time()
                     elapsed = now - start_time
 
-                    snap = ResourceMonitor.snapshot(
-                        self.server_proc,
-                    )
-                    if snap:
-                        if (peak_server is None
-                                or snap.get("rss", 0)
-                                > peak_server.get(
-                                    "rss", 0)):
-                            peak_server = snap
-                    cur_mem = psutil.virtual_memory()
-                    if (cur_mem.percent
-                            > peak_sys_mem_pct):
-                        peak_sys_mem_pct = (
-                            cur_mem.percent
+                    if (now - last_monitor
+                            >= monitor_interval):
+                        snap = ResourceMonitor.snapshot(
+                            self.server_proc,
                         )
+                        if snap:
+                            if (peak_server is None
+                                    or snap.get(
+                                        "rss", 0,
+                                    ) > peak_server.get(
+                                        "rss", 0)):
+                                peak_server = snap
+                        cur_mem = (
+                            psutil.virtual_memory()
+                        )
+                        if (cur_mem.percent
+                                > peak_sys_mem_pct):
+                            peak_sys_mem_pct = (
+                                cur_mem.percent
+                            )
+                        last_monitor = now
 
-                    if (now - last_heartbeat
-                            >= heartbeat_interval):
-                        if phase == 1:
-                            self._server_only_heartbeat(
-                                count, expected,
-                                elapsed, now,
-                                snap, cur_mem,
-                                "received",
-                            )
-                        else:
-                            self._server_only_heartbeat(
-                                completed, count,
-                                elapsed, now,
-                                snap, cur_mem,
-                                "completed",
-                            )
-                        last_heartbeat = now
+                        if (now - last_heartbeat
+                                >= heartbeat_interval):
+                            if phase == 1:
+                                self._server_only_heartbeat(
+                                    count, expected,
+                                    elapsed, now,
+                                    snap, cur_mem,
+                                    "received",
+                                )
+                            else:
+                                self._server_only_heartbeat(
+                                    completed, count,
+                                    elapsed, now,
+                                    snap, cur_mem,
+                                    "completed",
+                                )
+                            last_heartbeat = now
 
                     if (elapsed
                             > self.args.stage_timeout):
