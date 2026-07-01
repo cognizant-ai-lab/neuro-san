@@ -23,8 +23,10 @@ from typing import Set
 from typing import Type
 from typing import Tuple
 
+from copy import copy as shallow_copy
 from logging import Logger
 from logging import getLogger
+from random import shuffle
 
 import os
 
@@ -589,13 +591,15 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
     # pylint: disable=too-many-branches
     def create_llm_with_fallbacks(self, config: Dict[str, Any],
                                   sly_data: Dict[str, Any] = None,
-                                  num_fallbacks: int = None) -> LangChainLlmResources | Dict[str, Any]:
+                                  num_fallbacks: int = None,
+                                  randomize_peers: bool = False) -> LangChainLlmResources | Dict[str, Any]:
         """
         :param config: A dictionary which describes which LLM to use, perhaps with fallbacks specified.
         :param sly_data: A user-provided dictionary of private data,
                 from which we might extract API keys to use for user billing.
                 Can be None indicating no API keys are provided at all and the system defaults will be used.
         :param num_fallbacks: The number of fallbacks to try. Default value of None implies all.
+        :param randomize_peers: If True, randomize the order of the fallbacks within the group.
         :return: A LangChainLlmResources instance or if no valid llm was found or
                 a dictionary whose keys are error types and whose values are lists of error strings
                 for that type.  If there were valid and useable fallbacks specified,
@@ -629,9 +633,25 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             # Create a model we might use.
             # If construction fails (e.g. missing API key in env), record the error and
             # try the next fallback rather than aborting the whole loop.
-            one_llm_resources: LangChainLlmResources | Set[str] = None
+            one_llm_resources: LangChainLlmResources | Set[str] | Dict[str, Any] = None
+
+            if isinstance(fallback, list):
+                # Fallback lists grouped by further lists of fallbacks are peers for randomization.
+                sub_config: Dict[str, Any] = {
+                    "fallbacks": fallback
+                }
+                one_llm_resources = self.create_llm_with_fallbacks(sub_config, sly_data, num_fallbacks,
+                                                                   randomize_peers=True)
+                if isinstance(one_llm_resources, dict):
+                    # It was a bust. Update our own error sets
+                    api_key_errors.update(one_llm_resources.get("api_key_errors", []))
+                    construction_errors.update(one_llm_resources.get("construction_errors", []))
+                    required_sly_data.update(one_llm_resources.get("required_sly_data_errors", []))
+                    continue
+
             try:
-                one_llm_resources = self.create_llm(fallback, sly_data)
+                if one_llm_resources is None:
+                    one_llm_resources = self.create_llm(fallback, sly_data)
             except ValueError as exception:
                 # API Key errors get thrown as ValueErrors but have their
                 # "from" __cause__ set as the original exception.
@@ -676,6 +696,21 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             }
 
         if len(fallback_llm_resources) > 0:
+
+            if randomize_peers:
+                # Prepare a list of all LlmResources to be randomized, including the main one
+                randomized: List[LangChainLlmResources] = shallow_copy(fallback_llm_resources)
+                randomized.append(main_llm_resources)
+
+                # Randomize the list in place
+                shuffle(randomized)
+
+                # Take one as the main one. Doesn't matter which.
+                main_llm_resources = randomized.pop()
+
+                # Take the rest as fallbacks in the order that remains
+                fallback_llm_resources = randomized
+
             # Set up fallbacks.
             # See https://python.langchain.com/docs/how_to/tools_error/#tryexcept-tool-call
             main_llm_resources.add_fallback_resources(fallback_llm_resources)
