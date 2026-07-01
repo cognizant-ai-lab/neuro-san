@@ -1369,15 +1369,18 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         else:
             mins = int(elapsed) // 60
             fmt_elapsed = f"{elapsed:.0f}s ({mins}m)"
+        in_flight = received - completed
         if received >= expected:
             progress_str = (
                 f" {expected} recv"
                 f"  {completed}/{expected} done"
+                f"  {in_flight} in-flight"
             )
         else:
             progress_str = (
                 f" {received}/{expected} recv"
                 f"  {completed} done"
+                f"  {in_flight} in-flight"
             )
         logger.info(
             "  [heartbeat] %s [%s]%s%s%s"
