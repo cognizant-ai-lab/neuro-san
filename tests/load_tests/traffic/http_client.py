@@ -52,7 +52,7 @@ class HttpClient:
     def execute_request(
             host, port, agent, prompt, *,
             timeout, idle_timeout,
-    ) -> Tuple[str, Dict[str, str], str, float]:
+    ) -> Tuple[str, Dict[str, str], str, float, Dict]:
         """Send one streaming_chat request using the agent_cli
         client stack in-thread.
 
@@ -62,7 +62,8 @@ class HttpClient:
         to send the request, consume the streaming response,
         and extract sly_data fields.
 
-        Returns (status, parsed_fields, response_text, ttft).
+        Returns (status, parsed_fields, response_text, ttft,
+        token_accounting).
         """
         start = time.time()
 
@@ -96,17 +97,20 @@ class HttpClient:
         except Exception as exc:  # pylint: disable=broad-exception-caught
             elapsed = time.time() - start
             if elapsed >= timeout:
-                return (STATUS_TIMEOUT, {}, "", 0.0)
+                return (STATUS_TIMEOUT, {}, "", 0.0, {})
             logger.debug("HTTP request failed: %s", exc)
-            return (STATUS_FAILED, {}, str(exc), 0.0)
+            return (STATUS_FAILED, {}, str(exc), 0.0, {})
 
         elapsed = time.time() - start
         if elapsed >= timeout:
-            return (STATUS_TIMEOUT, {}, "", 0.0)
+            return (STATUS_TIMEOUT, {}, "", 0.0, {})
 
         answer_text = state.get("last_chat_response") or ""
         returned_sly_data = state.get(
             "returned_sly_data",
+        ) or {}
+        token_accounting = state.get(
+            "token_accounting",
         ) or {}
 
         parsed_fields: Dict[str, str] = {}
@@ -118,7 +122,10 @@ class HttpClient:
             STATUS_CREATED if answer_text
             else STATUS_FAILED
         )
-        return (status, parsed_fields, answer_text, 0.0)
+        return (
+            status, parsed_fields, answer_text,
+            0.0, token_accounting,
+        )
 
     @staticmethod
     def _extract_string_fields(

@@ -178,6 +178,8 @@ class SummaryReporter:
                 llm_stats["max"],
             )
 
+        self._log_model_distribution()
+
         rss_trajectory = self._rss_trajectory()
         if rss_trajectory is not None:
             logger.info(
@@ -247,6 +249,42 @@ class SummaryReporter:
             "avg": round(sum(calls) / len(calls)),
             "max": max(calls),
         }
+
+    def _log_model_distribution(self) -> None:
+        """Log LLM model usage and flag fallback models.
+
+        Collects model names from all results and reports
+        how many requests used each model.  When multiple
+        models appear, highlights the non-primary ones as
+        potential fallbacks.
+        """
+        model_counts: Counter = Counter()
+        fallback_requests = 0
+        for summary in self._summaries:
+            for result in summary.get("results", []):
+                all_models = result.get("all_models", [])
+                model = result.get("model")
+                if all_models:
+                    for m in all_models:
+                        model_counts[m] += 1
+                    if len(all_models) > 1:
+                        fallback_requests += 1
+                elif model and model != "unknown":
+                    model_counts[model] += 1
+        if not model_counts:
+            return
+        logger.info(
+            "  LLM models: %s",
+            ", ".join(
+                f"{m} ({c})" for m, c in
+                model_counts.most_common()
+            ),
+        )
+        if fallback_requests > 0:
+            logger.info(
+                "    Fallback LLM used: %s request(s)",
+                fallback_requests,
+            )
 
     def _ttfr_stats(self):
         """Compute min/avg/max time-to-first-response."""

@@ -152,7 +152,7 @@ class TrafficRunner:
             same_prompt=self._args.same_prompt,
         )
         start = time.time()
-        status, parsed_fields, response_text, ttft = (
+        status, parsed_fields, response_text, ttft, token_data = (
             HttpClient.execute_request(
                 self._args.host, self._args.port,
                 self._args.agent, prompt,
@@ -228,6 +228,8 @@ class TrafficRunner:
             ),
         }
         result.update(parsed_fields)
+        if token_data:
+            self._attach_http_token_data(result, token_data)
         return result
 
     def _validate_result(self, status, returncode, stdout,
@@ -283,8 +285,10 @@ class TrafficRunner:
         token_data = CliBuilder.parse_token_accounting(stdout)
         if not token_data:
             return
-        model = TrafficRunner._extract_model(
-            token_data.get("models", {}),
+        models_dict = token_data.get("models", {})
+        model = TrafficRunner._extract_model(models_dict)
+        all_models = TrafficRunner._extract_all_models(
+            models_dict,
         )
         prompt_tok = token_data.get("prompt_tokens", 0)
         completion_tok = token_data.get("completion_tokens", 0)
@@ -294,6 +298,7 @@ class TrafficRunner:
             "completion_tokens": completion_tok,
             "llm_calls": token_data.get("successful_requests", 0),
             "model": model,
+            "all_models": all_models,
             "cost_usd": CostEstimator.estimate(
                 prompt_tok, completion_tok, model,
             ),
@@ -311,6 +316,51 @@ class TrafficRunner:
                 for model_name in provider_models:
                     return model_name
         return "unknown"
+
+    @staticmethod
+    def _extract_all_models(models_dict) -> list:
+        """Extract all model names from the nested models dict.
+
+        Returns a list of all model names across all providers,
+        useful for detecting fallback LLM usage when multiple
+        models responded within a single request.
+        """
+        all_models = []
+        for provider_models in models_dict.values():
+            if isinstance(provider_models, dict):
+                all_models.extend(provider_models.keys())
+        return all_models
+
+    @staticmethod
+    def _attach_http_token_data(result, token_data) -> None:
+        """Attach token accounting from HTTP response to result.
+
+        Same logic as _attach_token_data but accepts the
+        token_accounting dict directly instead of parsing from
+        stdout.
+        """
+        if not token_data:
+            return
+        models_dict = token_data.get("models", {})
+        model = TrafficRunner._extract_model(models_dict)
+        all_models = TrafficRunner._extract_all_models(
+            models_dict,
+        )
+        prompt_tok = token_data.get("prompt_tokens", 0)
+        completion_tok = token_data.get("completion_tokens", 0)
+        result.update({
+            "total_tokens": token_data.get("total_tokens", 0),
+            "prompt_tokens": prompt_tok,
+            "completion_tokens": completion_tok,
+            "llm_calls": token_data.get(
+                "successful_requests", 0,
+            ),
+            "model": model,
+            "all_models": all_models,
+            "cost_usd": CostEstimator.estimate(
+                prompt_tok, completion_tok, model,
+            ),
+        })
 
     # pylint: disable=too-many-locals,too-many-arguments
     def run_stage(self, num_requests,
