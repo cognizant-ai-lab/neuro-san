@@ -60,11 +60,13 @@ class AgentCli:
         self.session: AgentSession = None
         self.thinking_dir: str = None
 
-    def main(self):
+    def main(self, args: List[str] = None):
         """
         Main entry point for command line user interaction
+        :param args: Optional explicit command line arguments.
+                    If omitted, sys.argv will be used.
         """
-        self.parse_args()
+        self.parse_args(args)
 
         # See if we are doing a list operation
         if self.args.list or self.args.tags or self.args.tag:
@@ -223,9 +225,11 @@ Some suggestions:
                     output_file.write(state["last_chat_response"])
                     output_file.write("\n")
 
-    def parse_args(self):
+    def parse_args(self, args: List[str] = None):
         """
         Parse command line arguments into member variables
+        :param args: Optional explicit command line arguments.
+                    If omitted, sys.argv will be used.
         """
 
         arg_parser = argparse.ArgumentParser()
@@ -236,7 +240,7 @@ Some suggestions:
         # See destination in file_of_class.py for exception explanation.
         # Incorrectly flagged as source of Trust Boundary Violation 1, 2
         # See destination in agent_session_factory.py for exception explanation.
-        self.args = arg_parser.parse_args()
+        self.args = arg_parser.parse_args(args)
 
         # Check some arguments to prevent PathTraversal scans lighting up.
         # Since this is a command-line tool not intended to be used inside a
