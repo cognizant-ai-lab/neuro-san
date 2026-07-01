@@ -640,7 +640,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 sub_config: Dict[str, Any] = {
                     "fallbacks": fallback
                 }
-                one_llm_resources = self.create_llm_with_fallbacks(sub_config, sly_data, num_fallbacks,
+                one_llm_resources = self.create_llm_with_fallbacks(sub_config, sly_data=sly_data, num_fallbacks=None,
                                                                    randomize_peers=True)
                 if isinstance(one_llm_resources, dict):
                     # It was a bust. Update our own error sets
