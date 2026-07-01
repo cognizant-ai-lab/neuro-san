@@ -110,12 +110,39 @@ class HttpClient:
         ) or {}
 
         parsed_fields: Dict[str, str] = {}
-        for key, value in returned_sly_data.items():
-            if isinstance(value, str):
-                parsed_fields[key] = value
+        HttpClient._extract_string_fields(
+            returned_sly_data, parsed_fields,
+        )
 
         status = (
             STATUS_CREATED if answer_text
             else STATUS_FAILED
         )
         return (status, parsed_fields, answer_text, 0.0)
+
+    @staticmethod
+    def _extract_string_fields(
+            obj, parsed_fields,
+    ):
+        """Recursively extract string-valued fields.
+
+        The subprocess mode prints sly_data as JSON and then
+        regex-searches the entire stdout.  Fields like
+        ``reservation_id`` may be nested inside lists (e.g.
+        ``sly_data["agent_reservations"][0]["reservation_id"]``).
+        A flat top-level scan misses them, so we recurse.
+        """
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                if isinstance(value, str):
+                    parsed_fields.setdefault(key, value)
+                elif isinstance(value, (dict, list)):
+                    HttpClient._extract_string_fields(
+                        value, parsed_fields,
+                    )
+        elif isinstance(obj, list):
+            for item in obj:
+                if isinstance(item, (dict, list)):
+                    HttpClient._extract_string_fields(
+                        item, parsed_fields,
+                    )
