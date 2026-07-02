@@ -208,9 +208,6 @@ class RunContextRunnable(NeuroSanRunnable):
             try:
                 chain_result: Dict[str, Any] = await self.agent_chain.ainvoke(input=inputs, config=runnable_config)
             except RATE_LIMIT_ERROR_TYPES as rate_limit_error:
-                self.logger.warning("retrying from RateLimit error %s(%s)",
-                                    rate_limit_error.__class__.__name__,
-                                    str(rate_limit_error))
                 await self.journal_retry_reason(rate_limit_error, "the LLM provider rate-limited the request")
                 attempts = attempts - 1
                 exception = rate_limit_error
@@ -237,12 +234,10 @@ class RunContextRunnable(NeuroSanRunnable):
                                       ApiKeyErrorCheck.get_safe_log_message(api_error))
                     break
                 # Continue with regular retry logic:
-                self.logger.warning("retrying from %s", api_error.__class__.__name__)
                 await self.journal_retry_reason(api_error, "the LLM API returned an error")
                 attempts = attempts - 1
                 exception = api_error
             except KeyError as key_error:
-                self.logger.warning("retrying from KeyError")
                 await self.journal_retry_reason(key_error, "the response was missing an expected field")
                 attempts = attempts - 1
                 exception = key_error
@@ -262,7 +257,6 @@ class RunContextRunnable(NeuroSanRunnable):
                         "output": response.removeprefix(find_string).removesuffix("`")
                     }
                 else:
-                    self.logger.warning("retrying from ValueError")
                     await self.journal_retry_reason(value_error, "the model's output could not be parsed")
                     attempts = attempts - 1
                     exception = value_error
@@ -270,10 +264,7 @@ class RunContextRunnable(NeuroSanRunnable):
             # pylint: disable=broad-exception-caught
             except Exception as exception_error:
                 # This catches any errors from running middlewares and also error form exceeding the recursion_limit.
-                self.logger.error("Got exception in  %s. Error: %s",
-                                  self.__class__.__name__,
-                                  exception_error,
-                                  )
+                self.sensitive_logger.error("Got exception in  %s. Error: %s", self.__class__.__name__, exception_error)
                 # These are likely real issues and non-retryable.
                 attempts = 0
                 exception = exception_error
@@ -297,8 +288,15 @@ class RunContextRunnable(NeuroSanRunnable):
         :param error: The recoverable exception triggering the retry.
         :param reason: A concise, client-facing description of what went wrong.
         """
-        text: str = f"Retrying: {reason} ({error.__class__.__name__})"
-        await self.journal.write_message(AgentFrameworkMessage(content=text))
+        text: str = f"Retrying: {reason} ({error.__class__.__name__}) - {error}"
+
+        # Log the Exception as a warning, respecting server log sensitivity settings
+        self.sensitive_logger.warning(text)
+
+        # Also write the error message to the journal under the same
+        # LEAF_LOG_SENSITIVE env var setting as the SensitiveLogger uses.
+        if self.sensitive_logger.should_log():
+            await self.journal.write_message(AgentFrameworkMessage(content=text))
 
     def parse_chain_result(self, chain_result: Union[Dict[str, Any], AgentFinish, AIMessage],
                            exception: Exception, backtrace: str) -> str:
