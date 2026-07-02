@@ -41,15 +41,20 @@ class TestRunContextRunnable:
         written = []
         mock_journal = MagicMock()
         mock_journal.write_message = AsyncMock(side_effect=lambda msg, *_a, **_k: written.append(msg))
+        sensitive_logger = MagicMock()
+        sensitive_logger.should_log = MagicMock(return_value=True)
 
-        runnable = RunContextRunnable.model_construct(journal=mock_journal)
+        runnable = RunContextRunnable.model_construct(
+            journal=mock_journal,
+            sensitive_logger=sensitive_logger
+        )
 
         await runnable.journal_retry_reason(ValueError("bad json"), "the model's output could not be parsed")
 
         assert len(written) == 1
         message = written[0]
         assert isinstance(message, AgentFrameworkMessage)
-        assert message.content == "Retrying: the model's output could not be parsed (ValueError)"
+        assert message.content == "Retrying: the model's output could not be parsed (ValueError) - bad json"
 
     @pytest.mark.asyncio
     async def test_invoke_agent_chain_surfaces_retry_reason_before_final_message(self):
@@ -61,6 +66,8 @@ class TestRunContextRunnable:
         written = []
         mock_journal = MagicMock()
         mock_journal.write_message = AsyncMock(side_effect=lambda msg, *_a, **_k: written.append(msg))
+        sensitive_logger = MagicMock()
+        sensitive_logger.should_log = MagicMock(return_value=True)
 
         # A non-parse ValueError exercises the retry branch on every attempt.
         agent_chain = MagicMock()
@@ -72,6 +79,7 @@ class TestRunContextRunnable:
 
         runnable = RunContextRunnable.model_construct(
             journal=mock_journal,
+            sensitive_logger=sensitive_logger,
             agent_chain=agent_chain,
             error_detector=error_detector,
             logger=MagicMock(),
@@ -81,9 +89,7 @@ class TestRunContextRunnable:
 
         # Two retries -> two diagnostics, then the final AIMessage.
         assert len(written) == 3
-        assert all(isinstance(msg, AgentFrameworkMessage) for msg in written[:2])
-        assert all(
-            msg.content == "Retrying: the model's output could not be parsed (ValueError)"
-            for msg in written[:2]
-        )
+        for msg in written[:2]:
+            assert isinstance(msg, AgentFrameworkMessage)
+            assert msg.content == "Retrying: the model's output could not be parsed (ValueError) - not a parsing error"
         assert isinstance(written[-1], AIMessage)
