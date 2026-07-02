@@ -65,7 +65,7 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
 
     # Default logger
     logger: Optional[Logger] = None
-    senstive_logger: Optional[SensitiveLogger] = None
+    sensitive_logger: Optional[SensitiveLogger] = None
 
     run_target: Optional[RunTarget] = None
 
