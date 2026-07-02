@@ -96,8 +96,8 @@ jobs:
 
       - name: Notify Slack
         if: ${{ !cancelled() }}
-        # 1.0.7
-        uses: cognizant-ai-lab/build-common/actions/slack-notify@3ead7f681f92044709ffc3a533f41c3f48230cfd
+        # 1.0.8
+        uses: cognizant-ai-lab/build-common/actions/slack-notify@30321843331e00848309b34e08b839e1f6490ba2
         with:
           status: ${{ job.status }}
           details: ${{ steps.smoke.outputs.summary }}
