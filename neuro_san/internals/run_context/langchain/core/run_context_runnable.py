@@ -212,6 +212,7 @@ class RunContextRunnable(NeuroSanRunnable):
                 self.logger.warning("retrying from RateLimit error %s(%s)",
                                     rate_limit_error.__class__.__name__,
                                     str(rate_limit_error))
+                await self.journal_retry_reason(rate_limit_error, "the LLM provider rate-limited the request")
                 attempts = attempts - 1
                 exception = rate_limit_error
             except API_ERROR_TYPES as api_error:
@@ -238,10 +239,12 @@ class RunContextRunnable(NeuroSanRunnable):
                     break
                 # Continue with regular retry logic:
                 self.logger.warning("retrying from %s", api_error.__class__.__name__)
+                await self.journal_retry_reason(api_error, "the LLM API returned an error")
                 attempts = attempts - 1
                 exception = api_error
             except KeyError as key_error:
                 self.logger.warning("retrying from KeyError")
+                await self.journal_retry_reason(key_error, "the response was missing an expected field")
                 attempts = attempts - 1
                 exception = key_error
                 backtrace = traceback.format_exc()
@@ -268,9 +271,7 @@ class RunContextRunnable(NeuroSanRunnable):
                     if sensitive_logger.should_log():
                         # Also write the error message to the journal under the same
                         # LEAF_LOG_SENSITIVE env var setting as the SensitiveLogger uses.
-                        error_message = AgentFrameworkMessage(content=message)
-                        await self.journal.write_message(error_message)
-
+                        await self.journal_retry_reason(value_error, "the model's output could not be parsed")
                     attempts = attempts - 1
                     exception = value_error
                     backtrace = traceback.format_exc()
@@ -289,6 +290,21 @@ class RunContextRunnable(NeuroSanRunnable):
 
         # Chat history is updated in write_message
         await self.journal.write_message(return_message)
+
+    async def journal_retry_reason(self, error: Exception, reason: str):
+        """
+        Surface the reason for a recoverable-error retry on the journal so clients
+        see *why* a step is being retried instead of an unexplained stall. The reason
+        is written as an AgentFrameworkMessage: it carries this agent's origin (so it
+        is never mistaken for the final answer) and is excluded from chat history (so
+        it does not bloat the tokens sent back to the LLM). Backtraces stay in the
+        server log only.
+
+        :param error: The recoverable exception triggering the retry.
+        :param reason: A concise, client-facing description of what went wrong.
+        """
+        text: str = f"Retrying: {reason} ({error.__class__.__name__})"
+        await self.journal.write_message(AgentFrameworkMessage(content=text))
 
     def parse_chain_result(self, chain_result: Union[Dict[str, Any], AgentFinish, AIMessage],
                            exception: Exception, backtrace: str) -> str:

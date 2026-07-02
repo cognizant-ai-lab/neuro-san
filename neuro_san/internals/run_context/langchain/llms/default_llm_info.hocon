@@ -476,7 +476,7 @@
         "use_model_name": "claude-haiku-4-5-20251001"
     },
     "claude-sonnet": {
-        "use_model_name": "claude-sonnet-4-6"
+        "use_model_name": "claude-sonnet-5"
     },
     "claude-opus": {
         "use_model_name": "claude-opus-4-8"
@@ -550,7 +550,6 @@
         "model_launch_date": "2025-09-30",
         "model_retirement_date": "2026-09-29",
     },
-
     "claude-sonnet-4-6": {
         "class": "anthropic",
         "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
@@ -568,6 +567,25 @@
         "price_per_1k_output_tokens": 0.015,
         "model_launch_date": "2026-02-17",
         "model_retirement_date": "2027-02-17",
+    },
+    "claude-sonnet-5": {
+        "class": "anthropic",
+        "model_info_url": "https://platform.claude.com/docs/en/about-claude/models/overview",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "01/2026",
+        # https://platform.claude.com/docs/en/about-claude/pricing
+        # Standard pricing shown. Introductory pricing of $2 / $10 per MTok applies through 2026-08-31.
+        "price_per_1k_input_tokens": 0.003,
+        "price_per_1k_output_tokens": 0.015,
+        "model_launch_date": "2026-06-30",
+        "model_retirement_date": null,
     },
 
     "claude-opus-4-5": {
@@ -668,6 +686,7 @@
     # which is invitation-only. Thus, we are not including it in the default LLM info at this time.
     # If it becomes generally available, we will add it to the registry with the appropriate details.
 
+
     # Anthropic Claude via AWS Bedrock (class: "anthropic-bedrock")
     #
     # Recommendation: for Anthropic Claude on Bedrock, prefer this class over the
@@ -712,7 +731,19 @@
         "knowledge_cutoff": "01/2026",
     },
     "bedrock-claude-sonnet": {
-        "use_model_name": "global.anthropic.claude-sonnet-4-6"
+        "use_model_name": "global.anthropic.claude-sonnet-5"
+    },
+    "global.anthropic.claude-sonnet-5": {
+        "class": "anthropic-bedrock",
+        "model_info_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-5.html",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "01/2026",
     },
     "global.anthropic.claude-sonnet-4-6": {
         "class": "anthropic-bedrock",
