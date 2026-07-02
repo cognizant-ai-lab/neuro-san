@@ -1528,6 +1528,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
 
         count, completed, peak_server, \
+            peak_threads, \
             peak_sys_mem_pct, elapsed, interrupted = (
                 self._tail_server_log(
                     expected, log_pos,
@@ -1631,6 +1632,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         self._export_server_only_json(
             round_dir, expected, count, elapsed,
             before_server, after_server, peak_server,
+            peak_threads,
             before_sys_mem_pct, peak_sys_mem_pct,
             mem.percent, interrupted,
             kernel_breakdown,
@@ -1683,7 +1685,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         requests processed.
 
         Returns (count, completed, peak_server,
-        peak_sys_mem_pct, elapsed, interrupted).
+        peak_threads, peak_sys_mem_pct, elapsed,
+        interrupted).
         """
         start_time = time.time()
         count = 0
@@ -1691,6 +1694,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         last_heartbeat = start_time
         heartbeat_interval = HEARTBEAT_INTERVAL_SECONDS
         peak_server = before_server
+        peak_threads = 0
         peak_sys_mem_pct = before_sys_mem_pct
         interrupted = False
         phase = 1
@@ -1788,6 +1792,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                                     ) > peak_server.get(
                                         "rss", 0)):
                                 peak_server = snap
+                            cur_threads = snap.get(
+                                "threads", 0,
+                            )
+                            if cur_threads > peak_threads:
+                                peak_threads = cur_threads
                         cur_mem = (
                             psutil.virtual_memory()
                         )
@@ -1841,6 +1850,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         elapsed = time.time() - start_time
         return (
             count, completed, peak_server,
+            peak_threads,
             peak_sys_mem_pct, elapsed, interrupted,
         )
 
@@ -1848,7 +1858,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     def _export_server_only_json(
             self, round_dir, expected, count,
             elapsed, before_server, after_server,
-            peak_server, before_sys_pct, peak_sys_pct,
+            peak_server, peak_threads,
+            before_sys_pct, peak_sys_pct,
             after_sys_pct, interrupted,
             kernel_breakdown=None,
     ) -> None:
@@ -1876,6 +1887,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 "before": before_server,
                 "after": after_server,
                 "peak": peak_server,
+                "peak_threads": peak_threads,
             },
             "system_memory": {
                 "before_pct": before_sys_pct,
