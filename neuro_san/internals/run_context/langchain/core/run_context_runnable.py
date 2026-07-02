@@ -38,7 +38,6 @@ from langchain_core.runnables.utils import Input
 from langchain_core.runnables.utils import Output
 
 from leaf_common.config.resolver_util import ResolverUtil
-from leaf_common.logging.sensitive_logger import SensitiveLogger
 
 from neuro_san.internals.errors.error_detector import ErrorDetector
 from neuro_san.internals.journals.journal import Journal
@@ -264,11 +263,10 @@ class RunContextRunnable(NeuroSanRunnable):
                     }
                 else:
                     # Log the ValueError, respecting server log sensitivity settings
-                    sensitive_logger = SensitiveLogger(self.logger)
                     message = f"Retrying from ValueError: {value_error}"
-                    sensitive_logger.warning(message)
+                    self.sensitive_logger.warning(message)
 
-                    if sensitive_logger.should_log():
+                    if self.sensitive_logger.should_log():
                         # Also write the error message to the journal under the same
                         # LEAF_LOG_SENSITIVE env var setting as the SensitiveLogger uses.
                         await self.journal_retry_reason(value_error, "the model's output could not be parsed")
@@ -278,8 +276,7 @@ class RunContextRunnable(NeuroSanRunnable):
             # pylint: disable=broad-exception-caught
             except Exception as exception_error:
                 # This catches any errors from running middlewares and also error form exceeding the recursion_limit.
-                sensitive_logger = SensitiveLogger(self.logger)
-                sensitive_logger.error("Got exception in  %s. Error: %s", self.__class__.__name__, exception_error)
+                self.sensitive_logger.error("Got exception in  %s. Error: %s", self.__class__.__name__, exception_error)
                 # These are likely real issues and non-retryable.
                 attempts = 0
                 exception = exception_error
