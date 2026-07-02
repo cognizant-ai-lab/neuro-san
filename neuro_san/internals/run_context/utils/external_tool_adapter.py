@@ -17,9 +17,6 @@
 from typing import Any
 from typing import Dict
 
-from grpc import StatusCode
-from grpc.aio import AioRpcError
-
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
@@ -57,13 +54,18 @@ class ExternalToolAdapter:
             request_dict: Dict[str, Any] = {}
 
             # Get the function spec so we can call it as a tool later.
+            #
+            # HTTP-based AsyncAgentSession implementations wrap any transport-level
+            # or JSON-decoding error as a ValueError (see AsyncHttpServiceAgentSession.function),
+            # and AsyncDirectAgentSession bypasses the network entirely -- so ValueError is
+            # the only failure surface we need to translate into a user-facing hint.
             try:
                 function_response: Dict[str, Any] = await session.function(request_dict)
                 self.function_json = function_response.get("function")
-            except (AioRpcError, ValueError) as exception:
-                message: str = f"Problem accessing external agent {self.agent_url}.\n"
-                if not isinstance(exception, AioRpcError) or exception.code() == StatusCode.UNIMPLEMENTED:
-                    message += """
+            except ValueError as exception:
+                message: str = (
+                    f"Problem accessing external agent {self.agent_url}.\n"
+                    """
 The server (which could be your own localhost) is currently not serving up
 an agent network by that name. Try these hints:
 1. Check to see that you do not have a typo in your reference to the external agent
@@ -83,6 +85,7 @@ an agent network by that name. Try these hints:
        "function" definition, which includes a description, and at least one parameter
        defined.  These are how calling agents know how to interact with the agent network.
 """
+                )
                 raise ValueError(message) from exception
 
         return self.function_json
