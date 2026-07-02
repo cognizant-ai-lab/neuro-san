@@ -1185,7 +1185,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             base, self.args.level, folder_name,
         )
         os.makedirs(self._output_dir, exist_ok=True)
-        self._test_log_path = os.path.join(self._output_dir, "load_test.log")
+        self._test_log_path = os.path.join(self._output_dir, "stdout.log")
         self._test_log_handler = logging.FileHandler(
             self._test_log_path, encoding="utf-8",
         )
@@ -1194,11 +1194,13 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         logging.getLogger().addHandler(self._test_log_handler)
 
     def _finalize_test_log(self, stage_summaries) -> None:
-        """Close the log handler and report the output directory."""
-        if self._test_log_handler is not None:
-            logging.getLogger().removeHandler(self._test_log_handler)
-            self._test_log_handler.close()
+        """Report the output directory and close the log handler."""
         if self._output_dir is None:
+            if self._test_log_handler is not None:
+                logging.getLogger().removeHandler(
+                    self._test_log_handler,
+                )
+                self._test_log_handler.close()
             return
         self._archive_server_log()
         has_failures = any(
@@ -1229,6 +1231,16 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 "  Server log:  %s (%.1fM)",
                 gz_path, size_mb,
             )
+        if self._test_log_path is not None:
+            logger.info(
+                "  Stdout log:  %s", self._test_log_path,
+            )
+        # Close handler last so OUTPUT FILES is captured
+        if self._test_log_handler is not None:
+            logging.getLogger().removeHandler(
+                self._test_log_handler,
+            )
+            self._test_log_handler.close()
 
     def _archive_server_log(self) -> None:
         """Gzip the server log into the output directory."""
