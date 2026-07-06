@@ -31,20 +31,22 @@ logger = logging.getLogger(__name__)
 class CliBuilder:
     """Builds agent_cli subprocess commands and manages prompt files."""
 
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     @staticmethod
     def build_cli_command(
             host, port, agent_name, prompt_file,
-            include_tokens=False,
+            include_tokens=False, use_https=False,
     ) -> List[str]:
         """Build the agent_cli subprocess command list.
 
         Uses --no_thinking_file to avoid race conditions under
         concurrency.  When include_tokens is True, adds --tokens
-        for inline token accounting.
+        for inline token accounting.  When use_https is True,
+        connects over HTTPS/TLS instead of plain HTTP.
         """
         cmd = [
             "python", "-m", "neuro_san.client.agent_cli",
-            "--http",
+            "--https" if use_https else "--http",
             "--host", host,
             "--port", str(port),
             "--agent", agent_name,

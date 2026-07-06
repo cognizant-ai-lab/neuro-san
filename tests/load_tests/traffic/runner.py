@@ -91,6 +91,7 @@ class TrafficRunner:
                         self._args.host, self._args.port,
                         self._args.agent, prompt_file,
                         include_tokens=self._args.include_tokens,
+                        use_https=getattr(self._args, "https", False),
                     ),
                     self._args.request_timeout, self._args.idle_timeout,
                 )
@@ -158,6 +159,7 @@ class TrafficRunner:
                 self._args.agent, prompt,
                 timeout=self._args.request_timeout,
                 idle_timeout=self._args.idle_timeout,
+                use_https=getattr(self._args, "https", False),
             )
         )
         elapsed = time.time() - start

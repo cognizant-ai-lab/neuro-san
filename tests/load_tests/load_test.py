@@ -183,7 +183,16 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "--port",
             type=int,
             default=8080,
-            help="Neuro-san server port (default: 8080)",
+            help="Neuro-san server port (default: 8080 for "
+                 "http, 443 for https unless overridden)",
+        )
+        parser.add_argument(
+            "--https",
+            action="store_true",
+            default=False,
+            help="Use HTTPS/TLS to reach the server. "
+                 "Default is plain HTTP. When set and --port "
+                 "is not given, the port defaults to 443.",
         )
         parser.add_argument(
             "--request-timeout",
@@ -408,6 +417,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     explicit.add(action.dest)
                     break
         args._explicit = explicit  # pylint: disable=protected-access
+        # When targeting https and no explicit port was given,
+        # default to the standard TLS port.
+        if args.https and "port" not in explicit:
+            args.port = 443
         return args
 
     @staticmethod

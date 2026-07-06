@@ -51,7 +51,7 @@ class HttpClient:
     @staticmethod
     def execute_request(
             host, port, agent, prompt, *,
-            timeout, idle_timeout,
+            timeout, idle_timeout, use_https=False,
     ) -> Tuple[str, Dict[str, str], str, float, Dict]:
         """Send one streaming_chat request using the agent_cli
         client stack in-thread.
@@ -60,17 +60,21 @@ class HttpClient:
         ``StreamingInputProcessor`` (the same objects that
         ``agent_cli`` uses), then calls ``process_once()``
         to send the request, consume the streaming response,
-        and extract sly_data fields.
+        and extract sly_data fields.  When ``use_https`` is True,
+        a ``security_cfg`` is supplied so the session connects
+        over HTTPS/TLS instead of plain HTTP.
 
         Returns (status, parsed_fields, response_text, ttft,
         token_accounting).
         """
         start = time.time()
 
+        security_cfg: Dict[str, Any] = {} if use_https else None
         session = HttpServiceAgentSession(
             host=host,
             port=str(port),
             agent_name=agent,
+            security_cfg=security_cfg,
             timeout_in_seconds=_CONNECT_TIMEOUT,
             streaming_timeout_in_seconds=idle_timeout,
         )
