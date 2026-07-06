@@ -1394,7 +1394,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         else:
             mins = int(elapsed) // 60
             fmt_elapsed = f"{elapsed:.0f}s ({mins}m)"
-        in_flight = received - completed
+        in_flight = max(0, received - completed)
         if received >= expected:
             progress_str = (
                 f" {expected} recv"
@@ -1710,6 +1710,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         peak_threads = 0
         peak_sys_mem_pct = before_sys_mem_pct
         interrupted = False
+        warned_missing_starts = False
         phase = 1
         log_limit = 5
 
@@ -1737,6 +1738,29 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     if (phase == 2
                             and completed >= count):
                         break
+                    # Guard: completions arriving without
+                    # matching starts means the monitor was
+                    # started after the client fired, so the
+                    # Start lines predate our read position and
+                    # were skipped. Warn and finish gracefully
+                    # instead of hanging with negative in-flight.
+                    if completed > count:
+                        if not warned_missing_starts:
+                            logger.warning(
+                                "\n  %d completion(s) seen with"
+                                " only %d start(s). The"
+                                " server-only monitor was"
+                                " likely started after the"
+                                " client; Start lines predate"
+                                " its read position and were"
+                                " missed. Received counts are"
+                                " unreliable -- start the"
+                                " monitor before the client.",
+                                completed, count,
+                            )
+                            warned_missing_starts = True
+                        if completed >= expected:
+                            break
 
                     line = log_fh.readline()
                     if line:
