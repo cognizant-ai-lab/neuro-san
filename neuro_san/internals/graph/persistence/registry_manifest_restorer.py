@@ -78,10 +78,10 @@ class RegistryManifestRestorer(Restorer):
                 manifest_file = REGISTRIES_DIR.get_file_in_basis("manifest.hocon")
 
             # Add what was found above
-            use_files: List[str] = manifest_file.split(" ")
+            use_files: List[str] = manifest_file.split(os.pathsep)
             self.manifest_files.extend(use_files)
         elif isinstance(manifest_files, str):
-            use_files: List[str] = manifest_files.split(" ")
+            use_files: List[str] = manifest_files.split(os.pathsep)
             self.manifest_files.extend(use_files)
         else:
             self.manifest_files = manifest_files
