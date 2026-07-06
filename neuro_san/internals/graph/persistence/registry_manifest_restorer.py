@@ -155,6 +155,7 @@ class RegistryManifestRestorer(Restorer):
 
         if not raw_manifest:
             # Return early if no file and/or nothing in file
+            self.logger.warning("Manifest file %s did not exist or was essentially empty.", manifest_file)
             return agent_networks
 
         # By the end of the filter chain, only served entries will be included.
