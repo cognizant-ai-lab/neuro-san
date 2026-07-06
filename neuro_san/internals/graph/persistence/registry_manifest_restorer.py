@@ -153,6 +153,11 @@ class RegistryManifestRestorer(Restorer):
         raw_restorer = RawManifestRestorer()
         raw_manifest: Dict[str, Any] = raw_restorer.restore(file_reference=manifest_file)
 
+        if not raw_manifest:
+            # Return early if no file and/or nothing in file
+            self.logger.warning("Manifest file %s did not exist or was essentially empty.", manifest_file)
+            return agent_networks
+
         # By the end of the filter chain, only served entries will be included.
         manifest_filter = ManifestFilterChain(manifest_file)
         one_manifest: Dict[str, Dict[str, Any]] = manifest_filter.filter_config(raw_manifest)
