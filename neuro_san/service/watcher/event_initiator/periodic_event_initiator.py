@@ -55,13 +55,24 @@ class PeriodicEventInitiator(WatcherThread):
         """
         super().__init__(server_context)
         self.verbose: bool = False
-        self.executor = AsyncioExecutor()
+        # NB: do NOT construct the AsyncioExecutor here. When Tornado is
+        # configured for multiple worker processes (AGENT_HTTP_SERVER_INSTANCES
+        # > 1), the server forks *after* this instance is created but before
+        # run() is invoked. asyncio event loops -- and their kqueue/epoll
+        # selectors -- do not survive fork; a pre-fork loop yields
+        # "I/O operation on closed kqueue object" the moment a child tries to
+        # run it. Construct the executor in run() below so each worker gets
+        # its own fresh loop after fork.
+        self.executor: AsyncioExecutor = None
         # Probably need to set up logging in this guy
 
     def run(self):
         """
         Main loop
         """
+        # Construct the executor here, after fork(), so this worker's loop
+        # is fresh and its selector fds are valid. See __init__ note.
+        self.executor = AsyncioExecutor()
         # Start the executor so our async event initiators have someplace to run
         self.executor.start()
 
