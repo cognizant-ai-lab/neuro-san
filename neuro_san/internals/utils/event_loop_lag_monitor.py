@@ -103,7 +103,7 @@ class EventLoopLagMonitor:
         """
         Return the latest computed metrics as a dictionary.
         """
-        return self.metrics_dict
+        return dict(self.metrics_dict)
 
     def _report(self) -> None:
         """
