@@ -46,10 +46,10 @@ class EventLoopLagMonitor:
         :param sample_interval_seconds: Time between samples. Smaller = finer
                                   resolution but more CPU. 0.05-0.1s is typical.
         :param report_every_n_samples: How many samples to aggregate before
-                                  emitting a report.
-        :param break_between_reports_seconds: Optional sleep after each report to
-                                  reduce logging clutter.
-        :param logger: Optional logger; falls back to print().
+                                  updating the exported metrics.
+        :param break_between_reports_seconds: Optional sleep after each metrics update.
+                                  Note this introduces a gap in sampling.
+        :param logger: Optional logger (currently unused; this class only updates metrics).
         """
         self.interval: float = sample_interval_seconds
         self.batch_size: int = report_every_n_samples
