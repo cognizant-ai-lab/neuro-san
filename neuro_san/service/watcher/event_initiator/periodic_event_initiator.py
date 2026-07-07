@@ -63,7 +63,7 @@ class PeriodicEventInitiator(WatcherThread):
         # "I/O operation on closed kqueue object" the moment a child tries to
         # run it. Construct the executor in run() below so each worker gets
         # its own fresh loop after fork.
-        self.executor: AsyncioExecutor = None
+        self.executor: AsyncioExecutor | None = None
         # Probably need to set up logging in this guy
 
     def run(self):
