@@ -81,6 +81,7 @@ class StreamingChatHandler(BaseRequestHandler):
 
     # pylint: disable=too-many-statements
     # pylint: disable=too-many-branches
+    # pylint: disable=too-many-locals
     async def post(self, agent_name: str):
         """
         Implementation of POST request handler for streaming chat API call.
@@ -149,7 +150,7 @@ class StreamingChatHandler(BaseRequestHandler):
                 # Up to this point, we are occupying server main event loop.
                 diff_time = (time.monotonic() - start_time) * 1000  # Convert to milliseconds
                 self.logger.info(metadata, "Chat request prepared in %f ms", diff_time)
-                
+
                 async for result_dict in result_generator:
                     result_str: str = json.dumps(result_dict) + "\n"
                     async with self.lock:

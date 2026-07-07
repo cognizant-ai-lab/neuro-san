@@ -21,6 +21,8 @@ See class comment for details
 import asyncio
 import statistics
 import time
+from typing import Any
+from typing import Dict
 from typing import List
 
 
@@ -35,6 +37,7 @@ class EventLoopLagMonitor:
     Run with create_task(monitor.run()); cancel the task to stop.
     """
 
+    # pylint: disable=too-many-instance-attributes
     def __init__(self, sample_interval_seconds: float = 0.1,
                  report_every_n_samples: int = 50,
                  break_between_reports_seconds: float = 0.0,
@@ -58,6 +61,8 @@ class EventLoopLagMonitor:
         self.max_p95_ms: float = 0.0
         self.max_mean_ms: float = 0.0
         self.max_max_ms: float = 0.0
+        # Metrics dictionary to store the computed metrics for external access
+        self.metrics_dict: Dict[str, Any] = {}
 
     async def run(self) -> None:
         """
@@ -87,13 +92,22 @@ class EventLoopLagMonitor:
         self.task = asyncio.create_task(self.run())
 
     def stop(self) -> None:
+        """
+        Stop the monitoring loop and cancel the background task.
+        """
         if self.task:
             self.task.cancel()
             self.task = None
 
+    def get_metrics(self) -> Dict[str, Any]:
+        """
+        Return the latest computed metrics as a dictionary.
+        """
+        return self.metrics_dict
+
     def _report(self) -> None:
         """
-        Compute and emit a report of the collected lag samples,
+        Compute and save a report of the collected lag samples,
         including percentiles and mean.
         """
         samples = self._samples
@@ -109,13 +123,14 @@ class EventLoopLagMonitor:
         max_samples_ms = max(samples_ms)
         self.max_mean_ms = max(self.max_mean_ms, mean_ms)
         self.max_max_ms = max(self.max_max_ms, max_samples_ms)
-        msg = (f"Event loop lag (n={n}, interval={self.interval * 1000:.0f}ms): "
-               f"p50={p50:.2f}ms p95={p95:.2f}ms p99={p99:.2f}ms "
-               f"max={max_samples_ms:.2f}ms mean={mean_ms:.2f}ms "
-               f"max_p50={self.max_p50_ms:.2f}ms max_p95={self.max_p95_ms:.2f}ms "
-               f"max_max={self.max_max_ms:.2f}ms max_mean={self.max_mean_ms:.2f}ms")
-        if self.logger:
-            self.logger.info({}, msg)
-        else:
-            # Fall back to print if no logger provided.
-            print(msg)
+        self.metrics_dict = {
+            "p50_ms": p50,
+            "p95_ms": p95,
+            "p99_ms": p99,
+            "max_ms": max_samples_ms,
+            "mean_ms": mean_ms,
+            "max_p50_ms": self.max_p50_ms,
+            "max_p95_ms": self.max_p95_ms,
+            "max_mean_ms": self.max_mean_ms,
+            "max_max_ms": self.max_max_ms,
+        }

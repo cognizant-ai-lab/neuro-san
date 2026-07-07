@@ -22,6 +22,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+import os
 import json
 import random
 import threading
@@ -55,6 +56,7 @@ from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
 from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.service.mcp.handlers.mcp_root_handler import McpRootHandler
 from neuro_san.service.utils.server_context import ServerContext
+from neuro_san.service.utils.service_resources import ServiceResources
 from neuro_san.service.utils.server_status import ServerStatus
 from neuro_san.internals.utils.event_loop_lag_monitor import EventLoopLagMonitor
 
@@ -194,14 +196,16 @@ class HttpServer(AgentStateListener):
 
         main_loop = tornado.ioloop.IOLoop.current()
 
-        event_loop_monitor = \
-            EventLoopLagMonitor(
-                sample_interval_seconds=1.0,
-                report_every_n_samples=50,
-                break_between_reports_seconds=15,
-                logger=self.logger
-            )
-        main_loop.spawn_callback(event_loop_monitor.run)
+        # Enable event loop lag monitor if requested by environment variable.
+        if os.getenv("ENABLE_EVENT_LOOP_STATISTICS", "false").lower() == "true":
+            event_loop_monitor = \
+                EventLoopLagMonitor(
+                    sample_interval_seconds=1.0,
+                    report_every_n_samples=30,
+                    break_between_reports_seconds=30
+                )
+            ServiceResources.set_event_loop_monitor(event_loop_monitor)
+            main_loop.spawn_callback(event_loop_monitor.run)
 
         main_loop.start()
         self.logger.info({}, "Http server stopped.")
