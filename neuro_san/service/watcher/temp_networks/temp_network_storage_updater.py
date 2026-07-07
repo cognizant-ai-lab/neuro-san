@@ -81,14 +81,6 @@ class TempNetworkStorageUpdater(Startable):
                 self.temp_storage.set_base_storage(external_storage)
             self.reservationist = AbstractAgentReservationist({self.temp_storage})
 
-            # We use an AsyncioExecutor and its event loop to process the collection of tasks
-            # this TempNetworkStorageUpdater instance is responsible for:
-            # 1. Checking for new queues to process coming in self.incoming "main" queue
-            # 2. Processing the individual queues that come in,
-            #    which involves processing the items that come in on those queues
-            #    and deploying reservations to the temp storage, which is done by self.reservationist.
-            self.executor = AsyncioExecutor()
-
             self.incoming: Queue[AsyncCollatingQueue] = queues
         else:
             # We don't have a temp storage, so we won't be doing any processing,
@@ -105,6 +97,15 @@ class TempNetworkStorageUpdater(Startable):
             return
 
         self.logger.info("Starting TempNetworkStorageUpdater")
+
+        # We use an AsyncioExecutor and its event loop to process the collection of tasks
+        # this TempNetworkStorageUpdater instance is responsible for:
+        # 1. Checking for new queues to process coming in self.incoming "main" queue
+        # 2. Processing the individual queues that come in,
+        #    which involves processing the items that come in on those queues
+        #    and deploying reservations to the temp storage, which is done by self.reservationist.
+        self.executor = AsyncioExecutor()
+
         # Start any Startables
         if isinstance(self.temp_storage, Startable):
             self.temp_storage.start()
