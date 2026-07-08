@@ -200,6 +200,36 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                 time.sleep(sleep)
                 attempt += 1
 
+    async def _async_do_with_retries(self, fn, *, max_attempts: int = 8, base_sleep: float = 0.25):
+        """
+        Generic retry wrapper for boto3 calls.
+        boto3/botocore already retries, but this adds a bit of extra resilience and backoff for batch operations.
+
+        """
+        attempt: int = 1
+        while True:
+            try:
+                return await fn()
+            except ClientError as err:
+                if attempt >= max_attempts or not self._is_retryable_client_error(err):
+                    raise
+                # Compute exponential backoff with jitter
+                sleep = base_sleep * (2 ** (attempt - 1))
+                sleep = sleep * (0.5 + random.random())  # sleep time jitter
+                self.logger.warning("%s: Retryable ClientError (%s). attempt=%d", self._name, err, attempt)
+                await asyncio.sleep(sleep)
+                attempt += 1
+            except BotoCoreError as err:
+                # Often transient network/serialization issues
+                if attempt >= max_attempts:
+                    raise
+                # Compute exponential backoff with jitter
+                sleep = base_sleep * (2 ** (attempt - 1))
+                sleep = sleep * (0.5 + random.random())
+                self.logger.warning("%s: Retryable BotoCoreError (%s). attempt=%d", self._name, err, attempt)
+                await asyncio.sleep(sleep)
+                attempt += 1
+
     def get_obj_key_for_reservation(self, reservation_id: str) -> str:
         """
         Helper method to construct the S3 object key for a given reservation ID.
@@ -270,12 +300,13 @@ class S3ReservationsStorage(AbstractReservationsStorage):
             # Store as JSON object in S3 with proper content type
             json_body: str = dumps(agent_spec, indent=4)  # Pretty-printed JSON
 
+            # DEF: Need async client here
             put_function = partial(self.s3_client.put_object,
                                    Bucket=self.bucket_name,
                                    Key=key,
                                    Body=json_body,
                                    ContentType="application/json")
-            self._do_with_retries(put_function)
+            await self._async_do_with_retries(put_function)
 
             self.logger.debug("%s: Successfully stored reservation %s in S3", self._name, reservation_id)
 
