@@ -48,6 +48,18 @@ class FakeAsyncS3Client:
         """
         self.objects: Dict[str, bytes] = {}
 
+    async def __aenter__(self):
+        """
+        Async Context Manager protocol enter method.
+        """
+        return self
+
+    async def __aexit__(self, exception_type, exception_value, traceback):
+        """
+        Async Context Manager protocol exit method.
+        """
+        return self
+
     async def head_bucket(self, Bucket: str):
         """
         Stand-in for boto3's head_bucket. Real boto3 returns a response dict
