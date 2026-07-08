@@ -20,8 +20,8 @@ _do_with_retries. This module exercises the happy retry path: a
 transient ThrottlingException on the first attempt is retried, the
 retry succeeds, and S3 ends up consistent.
 """
-import pytest
 from unittest.mock import patch
+import pytest
 
 from botocore.exceptions import ClientError
 

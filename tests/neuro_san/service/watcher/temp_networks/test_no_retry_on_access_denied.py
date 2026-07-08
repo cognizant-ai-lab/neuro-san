@@ -22,8 +22,9 @@ This module exercises the non-retryable branch: an AccessDenied
 ClientError must propagate immediately, with no S3 mutation and
 nothing retrievable through the public read path.
 """
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 from botocore.exceptions import ClientError
 

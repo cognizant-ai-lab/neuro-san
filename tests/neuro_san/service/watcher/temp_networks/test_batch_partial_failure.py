@@ -20,8 +20,8 @@ time in a Python for-loop with no atomic-batch semantics. This module
 exercises the partial-failure case: if a later entry's put_object
 fails, earlier successful writes remain in S3 (no automatic rollback).
 """
-import pytest
 from unittest.mock import patch
+import pytest
 
 from botocore.exceptions import ClientError
 
