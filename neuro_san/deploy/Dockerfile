@@ -273,7 +273,7 @@ ENV AGENT_HTTP_IDLE_CONNECTIONS_TIMEOUT="3600"
 # The developer-oriented default is 1, but we set to 0 here to allow pod CPU configuration
 # to dictate the number of server instance processes.
 # Note 7/7/2026: If your installation requires temporary agent networks (aka Reservations),
-# this server systems in place are not yet suitable for the multi-process operation
+# the server systems in place are not yet suitable for the multi-process operation
 # that is implied by a value that is not 1.
 ENV AGENT_HTTP_SERVER_INSTANCES="0"
 
