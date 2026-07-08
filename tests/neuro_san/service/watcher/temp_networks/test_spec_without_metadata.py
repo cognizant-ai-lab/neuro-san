@@ -29,6 +29,7 @@ This module exercises the storage's defensive init branch:
     agent_spec["metadata"].update(new_metadata)
 """
 from json import loads
+import pytest
 
 from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
@@ -42,7 +43,8 @@ class TestSpecWithoutMetadata(S3ReservationsStorageTestBase):
     branch: input specs that arrive without a "metadata" key.
     """
 
-    def test_add_initializes_metadata_when_spec_lacks_key(self):
+    @pytest.mark.asyncio
+    async def test_add_initializes_metadata_when_spec_lacks_key(self):
         """
         When the input agent_spec has no "metadata" key,
         add_reservations should:
@@ -89,7 +91,7 @@ class TestSpecWithoutMetadata(S3ReservationsStorageTestBase):
 
         # The call should NOT raise. If it does, the is-None guard
         # has been removed and KeyError fires on .update().
-        self.storage.add_reservations({reservation: spec_without_metadata})
+        await self.storage.add_reservations({reservation: spec_without_metadata})
 
         # Exactly one S3 object was written. Catches a regression
         # where the missing-metadata path silently no-ops the write.

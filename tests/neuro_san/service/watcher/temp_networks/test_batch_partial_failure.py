@@ -20,6 +20,7 @@ time in a Python for-loop with no atomic-batch semantics. This module
 exercises the partial-failure case: if a later entry's put_object
 fails, earlier successful writes remain in S3 (no automatic rollback).
 """
+import pytest
 from unittest.mock import patch
 
 from botocore.exceptions import ClientError
@@ -38,7 +39,8 @@ class TestBatchPartialFailure(S3ReservationsStorageTestBase):
     code review rather than letting it slip in silently.
     """
 
-    def test_add_preserves_earlier_successes_when_later_entry_fails(self):
+    @pytest.mark.asyncio
+    async def test_add_preserves_earlier_successes_when_later_entry_fails(self):
         """
         With a batch of 3 reservations where the 3rd put_object raises
         AccessDenied, add_reservations propagates the error and leaves
@@ -102,7 +104,7 @@ class TestBatchPartialFailure(S3ReservationsStorageTestBase):
             "s3_reservations_storage.time.sleep"
         ):
             with self.assertRaises(ClientError) as ctx:
-                self.storage.add_reservations(
+                await self.storage.add_reservations(
                     {res_a: spec_a, res_b: spec_b, res_c: spec_c}
                 )
 

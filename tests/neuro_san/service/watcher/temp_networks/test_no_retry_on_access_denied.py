@@ -22,6 +22,7 @@ This module exercises the non-retryable branch: an AccessDenied
 ClientError must propagate immediately, with no S3 mutation and
 nothing retrievable through the public read path.
 """
+import pytest
 from unittest.mock import patch
 
 from botocore.exceptions import ClientError
@@ -37,7 +38,8 @@ class TestNoRetryOnAccessDenied(S3ReservationsStorageTestBase):
     they document the storage's full retry policy.
     """
 
-    def test_add_does_not_retry_on_access_denied(self):
+    @pytest.mark.asyncio
+    async def test_add_does_not_retry_on_access_denied(self):
         """
         On AccessDenied (HTTP 403 with error code AccessDenied -
         what real S3 returns for permission errors), add_reservations
@@ -75,7 +77,7 @@ class TestNoRetryOnAccessDenied(S3ReservationsStorageTestBase):
             "s3_reservations_storage.time.sleep"
         ):
             with self.assertRaises(ClientError) as ctx:
-                self.storage.add_reservations({reservation: agent_spec})
+                await self.storage.add_reservations({reservation: agent_spec})
 
         # The original error code is preserved on the way up. Catches
         # bugs where the storage swallows or wraps the error in a

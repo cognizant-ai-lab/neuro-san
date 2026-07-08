@@ -23,6 +23,8 @@ migration. This module verifies that add_reservations writes objects
 under the configured prefix - catching regressions where the prefix
 is hardcoded or otherwise dropped.
 """
+import pytest
+
 from neuro_san.service.watcher.temp_networks.s3_reservations_storage \
     import S3ReservationsStorage
 
@@ -39,7 +41,8 @@ class TestCustomPrefix(S3ReservationsStorageTestBase):
     prefix to surface that class of bug.
     """
 
-    def test_add_uses_configured_prefix_for_object_keys(self):
+    @pytest.mark.asyncio
+    async def test_add_uses_configured_prefix_for_object_keys(self):
         """
         A storage configured with a non-default prefix writes objects
         under that prefix and not under the default. Catches
@@ -62,7 +65,7 @@ class TestCustomPrefix(S3ReservationsStorageTestBase):
         reservation = self._make_reservation(reservation_id, lifetime_seconds=600.0)
         agent_spec = self._make_agent_spec("copy_cat")
 
-        custom_storage.add_reservations({reservation: agent_spec})
+        await custom_storage.add_reservations({reservation: agent_spec})
 
         # Exactly one object in S3. Catches accidental no-op writes and
         # any "writes to multiple keys" regression that splatters the

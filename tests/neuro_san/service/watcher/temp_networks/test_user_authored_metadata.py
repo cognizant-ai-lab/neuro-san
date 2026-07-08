@@ -22,6 +22,8 @@ survive the round-trip.
 from typing import Any
 from typing import Dict
 
+import pytest
+
 from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
 
@@ -33,7 +35,8 @@ class TestUserAuthoredMetadata(S3ReservationsStorageTestBase):
     must preserve those keys when injecting its own reservation/stored_at.
     """
 
-    def test_add_does_not_clobber_user_authored_metadata(self):
+    @pytest.mark.asyncio
+    async def test_add_does_not_clobber_user_authored_metadata(self):
         """
         When the input agent_spec already has a user-authored 'metadata'
         dict, add_reservations must merge its own 'reservation' and
@@ -68,7 +71,7 @@ class TestUserAuthoredMetadata(S3ReservationsStorageTestBase):
         }
 
         # Write
-        self.storage.add_reservations({reservation: agent_spec})
+        await self.storage.add_reservations({reservation: agent_spec})
 
         # Read
         _, returned_network = self.storage.get_one_reservation(reservation_id)
