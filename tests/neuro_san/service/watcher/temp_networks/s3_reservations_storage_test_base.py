@@ -31,10 +31,9 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
-from neuro_san.service.watcher.temp_networks.s3_reservations_storage \
-    import S3ReservationsStorage
-from tests.neuro_san.service.watcher.temp_networks.fake_s3_client \
-    import FakeS3Client
+from neuro_san.service.watcher.temp_networks.s3_reservations_storage import S3ReservationsStorage
+from tests.neuro_san.service.watcher.temp_networks.fake_s3_client import FakeS3Client
+from tests.neuro_san.service.watcher.temp_networks.fake_async_s3_client import FakeAsyncS3Client
 
 
 class S3ReservationsStorageTestBase(TestCase):
@@ -77,14 +76,26 @@ class S3ReservationsStorageTestBase(TestCase):
         # Patch boto3_client at the import boundary in s3_reservations_storage
         # so storage.start() receives our fake instead of a real boto3 client.
         boto3_patcher = patch(
-            "neuro_san.service.watcher.temp_networks."
-            "s3_reservations_storage.boto3_client",
+            "neuro_san.service.watcher.temp_networks.s3_reservations_storage.boto3_client",
             return_value=self.fake_s3,
         )
         boto3_patcher.start()
         # Restores the real boto3_client symbol after the test completes,
         # regardless of pass/fail.
         self.addCleanup(boto3_patcher.stop)
+
+        self.fake_async_s3: FakeAsyncS3Client = FakeAsyncS3Client()
+
+        # Patch aiobotocore_client at the import boundary in s3_reservations_storage
+        # so storage.start() receives our fake instead of a real aiobotocore client.
+        aiobotocore_patcher = patch(
+            "neuro_san.service.watcher.temp_networks.s3_reservations_storage.AioSession.create_client",
+            return_value=self.fake_async_s3,
+        )
+        aiobotocore_patcher.start()
+        # Restores the real aiobotocore symbol after the test completes,
+        # regardless of pass/fail.
+        self.addCleanup(aiobotocore_patcher.stop)
 
         self.storage: S3ReservationsStorage = S3ReservationsStorage(
             bucket_name="test-bucket",
