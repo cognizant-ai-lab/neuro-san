@@ -15,11 +15,14 @@
 #
 # END COPYRIGHT
 
+from typing import Dict
+
 from janus import Queue
 
 from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
 
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
+from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 
 
 class ServerContextLite:
@@ -48,5 +51,11 @@ class ServerContextLite:
     def get_event_work_queue(self) -> AsyncCollatingQueue:
         """
         :return: The event work queue
+        """
+        raise NotImplementedError
+
+    def get_network_storage_dict(self) -> Dict[str, AgentNetworkStorage]:
+        """
+        :return: The Network Storage dictionary
         """
         raise NotImplementedError

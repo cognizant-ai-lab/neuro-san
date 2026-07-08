@@ -78,8 +78,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
                                                  "AZURE_OPENAI_ENDPOINT"),
             azure_deployment=self.get_value_or_env(config, "deployment_name",
                                                    "AZURE_OPENAI_DEPLOYMENT_NAME"),
-            api_version=self.get_value_or_env(config, "openai_api_version",
-                                              "OPENAI_API_VERSION"),
+            api_version=self.get_value_or_env(config, "openai_api_version", "OPENAI_API_VERSION"),
             api_key=openai_api_key,
             # AD here means "ActiveDirectory"
             azure_ad_token=self.get_value_or_env(config, "azure_ad_token",
@@ -174,12 +173,10 @@ class AzureLlmPolicy(OpenAILlmPolicy):
             verbose=False,
 
             # Azure-specific group that should be None if we have an client
-            azure_endpoint=self.get_value_or_env(config, "azure_endpoint",
-                                                 "AZURE_OPENAI_ENDPOINT", client),
+            azure_endpoint=self.get_value_or_env(config, "azure_endpoint", "AZURE_OPENAI_ENDPOINT"),
             deployment_name=self.get_value_or_env(config, "deployment_name",
                                                   "AZURE_OPENAI_DEPLOYMENT_NAME", client),
-            openai_api_version=self.get_value_or_env(config, "openai_api_version",
-                                                     "OPENAI_API_VERSION", client),
+            openai_api_version=self.get_value_or_env(config, "openai_api_version", "OPENAI_API_VERSION"),
             # AD here means "ActiveDirectory"
             azure_ad_token=self.get_value_or_env(config, "azure_ad_token",
                                                  "AZURE_OPENAI_AD_TOKEN", client),

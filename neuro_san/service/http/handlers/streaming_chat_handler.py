@@ -27,8 +27,10 @@ import asyncio
 import contextlib
 import json
 from json.decoder import JSONDecodeError
+import time
 import tornado
 
+from neuro_san.internals.messages.chat_message_type import ChatMessageType
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
 
@@ -37,6 +39,45 @@ class StreamingChatHandler(BaseRequestHandler):
     """
     Handler class for neuro-san streaming chat API call.
     """
+
+    # pylint: disable=attribute-defined-outside-init
+    def initialize(self, **kwargs):
+        """
+        This method is called by Tornado framework to allow
+        injecting service-specific data into local handler context.
+        :param kwargs: dictionary of named parameters, including:
+            "heartbeat_interval_seconds" - heartbeat protocol message interval
+                in seconds. The heartbeat payload itself is fixed (see
+                _build_heartbeat_frame()); only the interval is configurable.
+        """
+        super().initialize(**kwargs)
+        self.keep_alive_interval_seconds = kwargs.get("keep_alive_interval_seconds", 0)
+        # Build the on-the-wire heartbeat frame once at initialize() time so
+        # each tick only needs to write bytes -- no per-tick JSON serialization.
+        self.keep_alive_frame: str = self._build_keep_alive_frame()
+        self.last_send_ts = 0.0
+        self.keep_alive_task: asyncio.Task = None
+        self.lock: asyncio.Lock = asyncio.Lock()  # protects request writes to output stream and last_send_ts updates
+
+    @staticmethod
+    def _build_keep_alive_frame() -> str:
+        """
+        Build the exact wire frame to write for each heartbeat tick: an empty
+        AGENT_PROGRESS ChatMessage wrapped in the standard ChatResponse
+        envelope -- {"response": <chat-message>} -- so clients see the same
+        shape as real chat responses. A newline is appended so JSON-Lines
+        parsers see a clean frame boundary even when the heartbeat lands
+        between two real messages.
+
+        The contents are not user-configurable; only the heartbeat interval is.
+
+        :return: The exact string to write per heartbeat tick.
+        """
+        chat_message: Dict[str, Any] = {
+            "type": ChatMessageType.to_string(ChatMessageType.AGENT_PROGRESS),
+            "text": "",
+        }
+        return json.dumps({"response": chat_message}) + "\n"
 
     # pylint: disable=too-many-statements
     # pylint: disable=too-many-branches
@@ -90,13 +131,23 @@ class StreamingChatHandler(BaseRequestHandler):
                 # Raise accordingly - we will handle this exception:
                 raise tornado.iostream.StreamClosedError()
 
+            # We are now ready to start processing the request and streaming results back to the client.
+            # If heartbeat is enabled, time to start it here:
+            if self.keep_alive_interval_seconds > 0:
+                # If heartbeat is enabled,
+                # start the heartbeat task in the background,
+                # so it can run concurrently with the main request processing.
+                self.keep_alive_task = asyncio.create_task(self.run_heartbeat())
+
             # Now process the result stream
             async with asyncio.timeout(request_timeout):
                 result_generator = service.streaming_chat(request_dict, metadata)
                 async for result_dict in result_generator:
                     result_str: str = json.dumps(result_dict) + "\n"
-                    self.write(result_str)
-                    flush_ok = await self.do_flush()
+                    async with self.lock:
+                        self.write(result_str)
+                        flush_ok = await self.do_flush()
+                        self.last_send_ts = time.monotonic()
                     if flush_ok:
                         # Some flush was successful. This is good.
                         flushed_first_result = True
@@ -133,7 +184,48 @@ class StreamingChatHandler(BaseRequestHandler):
                 self.process_exception(exc)
 
         finally:
+            # If we started a heartbeat task, cancel it now to clean up resources.
+            if self.keep_alive_task is not None:
+                self.keep_alive_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self.keep_alive_task
             await self._finish_request(result_generator, metadata, agent_name)
+
+    async def run_heartbeat(self):
+        """
+        Background task driving the HTTP heartbeat: every
+        heartbeat_interval_seconds (and only when no real traffic has been
+        flushed within that window), write the pre-built heartbeat frame
+        to keep proxies/clients from dropping the streaming connection.
+        Exits when the request finishes or the client disconnects.
+        """
+        metadata: Dict[str, Any] = self.get_metadata()
+        self.logger.info(metadata, "Starting heartbeat generator with interval %d seconds",
+                         self.keep_alive_interval_seconds)
+        time_to_sleep: float = self.keep_alive_interval_seconds
+        while True:
+            await asyncio.sleep(time_to_sleep)
+            time_now: float = time.monotonic()
+            time_to_sleep = self.keep_alive_interval_seconds - (time_now - self.last_send_ts)
+            if time_to_sleep > 0.5:
+                # We have seen some request traffic recently, so we can delay our heartbeat a bit.
+                # Time to sleep is long enough - so go sleep
+                continue
+            try:
+                # self.heartbeat_frame already includes the ChatResponse envelope
+                # and a trailing newline (see _build_heartbeat_frame()).
+                async with self.lock:
+                    self.write(self.keep_alive_frame)
+                    flush_ok = await self.do_flush()
+                    self.last_send_ts = time.monotonic()
+                if not flush_ok:
+                    # We tried flushing the heartbeat with no success
+                    # (most probably because connection is closed by a client).
+                    # Finish heartbeat task
+                    return
+                time_to_sleep = self.keep_alive_interval_seconds
+            except tornado.iostream.StreamClosedError:
+                return  # client gone; main loop's next flush will see it too
 
     def _is_client_close_a_problem(self, is_event: bool, flushed_first_result: bool) -> bool:
         """

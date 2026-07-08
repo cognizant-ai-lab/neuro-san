@@ -36,6 +36,8 @@ from langchain_core.runnables.passthrough import RunnablePassthrough
 from langchain_core.runnables.utils import Input
 from langchain_core.runnables.utils import Output
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.run_target import RunTarget
 from neuro_san.internals.interfaces.tracing_context import TracingContext
@@ -63,6 +65,7 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
 
     # Default logger
     logger: Optional[Logger] = None
+    sensitive_logger: Optional[SensitiveLogger] = None
 
     run_target: Optional[RunTarget] = None
 
@@ -86,6 +89,7 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
         super().__init__(afunc=run_target.run_it, **kwargs)
 
         self.logger: Logger = getLogger(self.__class__.__name__)
+        self.sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
 
     # pylint: disable=redefined-builtin
     @override

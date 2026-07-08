@@ -156,9 +156,9 @@ ENV NVIDIA_API_KEY=""
 
 # Where to find the tool registry manifest file which lists all the agent hocon
 # files to serve up from this server instance.  To specify multiple manifest files,
-# simply use a space-separated list of manifest files.  Manifest dictionaries will
-# effectively be merged, where content coming from manifests later in the list
-# have precedence.
+# simply use a delimited list of manifest files approriate to the OS
+# (delimiter is ':' on linux, ';' on Windows).  Manifest dictionaries will then effectively
+# be merged, where content coming from manifests later in the list have precedence.
 ENV AGENT_MANIFEST_FILE="${APP_SOURCE}/registries/manifest.hocon"
 
 # An llm_info hocon file with user-provided llm descriptions that are to be used
@@ -212,6 +212,7 @@ ENV AGENT_FORWARDED_REQUEST_METADATA="request_id user_id"
 ENV AGENT_HTTP_PORT="8080"
 
 # Maximm number of requests that can be served at the same time
+# A value of 0 indicates unlimited requests are handled.
 ENV AGENT_MAX_CONCURRENT_REQUESTS="50"
 
 # Number of requests served before the server shuts down in an orderly fashion.
@@ -267,9 +268,11 @@ ENV AGENT_HTTP_IDLE_CONNECTIONS_TIMEOUT="3600"
 # Allows utilization of multiple CPU cores.
 # Improves concurrency without blocking a single IOLoop.
 # Typical Usage:
-# start(0) → Automatically spawns one process per CPU core.
-# start(N) → Manually specifies number of worker processes.
-ENV AGENT_HTTP_SERVER_INSTANCES="1"
+#   Value of 0 → Automatically spawns one process per CPU core.
+#   Positive integer (N) → Manually specifies number of worker processes.
+# The developer-oriented default is 1, but we set to 0 here to allow pod CPU configuration
+# to dictate the number of server instance processes.
+ENV AGENT_HTTP_SERVER_INSTANCES="0"
 
 # If set to a value>0, will start periodic logging of currently used
 # run-time server resources:
@@ -277,6 +280,16 @@ ENV AGENT_HTTP_SERVER_INSTANCES="1"
 # open connections for server port.
 # Logging period is specified in seconds.
 ENV AGENT_HTTP_RESOURCES_MONITOR_INTERVAL="0"
+
+# Interval in seconds between HTTP keep-alive messages sent to streaming clients
+# to keep the connection alive during long quiet periods. This is important
+# when intermediaries (nginx, load balancers, AWS ALB) or clients would otherwise
+# drop an idle HTTP connection (commonly after ~60s) before the agent produces
+# its next streamed message. The keep-alive message only fires when the stream has been
+# quiet for approximately the full interval; real message traffic suppresses it.
+# A value of 0 (the default) disables the keep-alive messages entirely.
+# Typical production value is 25-30 (under the 60s defaults of common proxies).
+ENV AGENT_STREAM_KEEP_ALIVE_WITH_PROGRESS_INTERVAL_SECONDS=0
 
 # Optional URL describing how the server is to be referenced by the outside world.
 # This is useful when a server is behind a load-balancer as part of a larger cluster.
