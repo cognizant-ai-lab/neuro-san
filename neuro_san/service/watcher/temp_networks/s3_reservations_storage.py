@@ -104,7 +104,8 @@ class S3ReservationsStorage(AbstractReservationsStorage):
 
         # Set up S3 key prefix and initialize sync target
         self.prefix: str = prefix
-        self.s3_client: BaseClient = None
+        self.read_s3_client: BaseClient = None
+        self.delete_s3_client: BaseClient = None
 
         # Track last sync timestamp for incremental syncing (0.0 means sync all)
         self.last_sync_timestamp: float = 0.0
@@ -119,10 +120,11 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         """
         try:
             # Initialize S3 client using default AWS credential chain
-            self.s3_client = boto3_client("s3")
+            self.read_s3_client = boto3_client("s3")
+            self.delete_s3_client = boto3_client("s3")
 
             # Validate bucket exists and we have access by performing a head operation
-            self.s3_client.head_bucket(Bucket=self.bucket_name)
+            self.read_s3_client.head_bucket(Bucket=self.bucket_name)
             self.logger.info("%s: Successfully connected to S3 bucket: %s", self._name, self.bucket_name)
 
         except NoCredentialsError as exception:
@@ -329,7 +331,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         :raises: ClientError if the object cannot be retrieved after retries
                  JSONDecodeError if the content cannot be parsed as JSON
         """
-        get_function = partial(self.s3_client.get_object, Bucket=self.bucket_name, Key=obj_key)
+        get_function = partial(self.read_s3_client.get_object, Bucket=self.bucket_name, Key=obj_key)
         obj_response: Dict[str, Any] = self._do_with_retries(get_function)
         # Parse JSON content from S3 object body
         json_content: str = obj_response["Body"].read().decode("utf-8")
@@ -399,7 +401,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
             if current_time > expiration_time:
                 # Reservation has expired - remove it from S3 storage
                 try:
-                    delete_function = partial(self.s3_client.delete_object, Bucket=self.bucket_name, Key=obj_key)
+                    delete_function = partial(self.delete_s3_client.delete_object, Bucket=self.bucket_name, Key=obj_key)
                     self._do_with_retries(delete_function)
                     reservation_id: str = reservation_data.get("id")
                     self.logger.debug("%s: Deleted expired reservation %s from S3", self._name, reservation_id)
@@ -455,7 +457,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
             if continuation_token:
                 kwargs["ContinuationToken"] = continuation_token
             response = self._do_with_retries(
-                partial(self.s3_client.list_objects_v2, **kwargs)
+                partial(self.delete_s3_client.list_objects_v2, **kwargs)
             )
             for obj in response.get("Contents", []):
                 yield obj["Key"]
