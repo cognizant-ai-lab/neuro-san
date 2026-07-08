@@ -27,7 +27,7 @@ import time
 from typing import Any
 from typing import Dict
 
-from unittest import TestCase
+from unittest import IsolatedAsyncioTestCase
 from unittest.mock import patch
 
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
@@ -36,7 +36,7 @@ from tests.neuro_san.service.watcher.temp_networks.fake_s3_client import FakeS3C
 from tests.neuro_san.service.watcher.temp_networks.fake_async_s3_client import FakeAsyncS3Client
 
 
-class S3ReservationsStorageTestBase(TestCase):
+class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
     """
     Base TestCase that exercises the reservation feature through
     S3ReservationsStorage by injecting an in-memory FakeS3Client. No real
