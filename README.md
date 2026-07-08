@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/cognizant-ai-lab-neuro-san-badge.png)](https://mseep.ai/app/cognizant-ai-lab-neuro-san)
+
 # Neuro SAN Data-Driven Agents
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/cognizant-ai-lab/neuro-san)
