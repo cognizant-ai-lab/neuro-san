@@ -181,7 +181,6 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         """
         Generic retry wrapper for boto3 calls.
         boto3/botocore already retries, but this adds a bit of extra resilience and backoff for batch operations.
-
         """
         attempt: int = 1
         while True:
@@ -211,7 +210,6 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         """
         Generic retry wrapper for boto3 calls.
         boto3/botocore already retries, but this adds a bit of extra resilience and backoff for batch operations.
-
         """
         attempt: int = 1
         while True:
