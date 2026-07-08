@@ -208,8 +208,8 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         """
         return f"{self.prefix}{reservation_id}.json"
 
-    def add_reservations(self, reservations_dict: Dict[Reservation, Any],
-                         source: str = None):
+    async def add_reservations(self, reservations_dict: Dict[Reservation, Any],
+                               source: str = None):
         """
         Add reservations to S3 storage.
 
