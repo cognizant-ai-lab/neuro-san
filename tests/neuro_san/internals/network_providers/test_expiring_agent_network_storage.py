@@ -14,10 +14,10 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-import pytest
 import time
-
 from unittest import TestCase
+
+import pytest
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.network_providers.expiring_agent_network_storage \
@@ -92,7 +92,7 @@ class TestExpiringAgentNetworkStorage(TestCase):
         self.assertIn("agent_a", storage.access_times)
 
     @pytest.mark.asyncio
-    def test_add_reservations_replaces_existing(self):
+    async def test_add_reservations_replaces_existing(self):
         """
         Test that adding a reservation with the same name replaces it.
         """
