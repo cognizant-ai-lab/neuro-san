@@ -205,6 +205,10 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                 self.logger.warning("%s: Retryable BotoCoreError (%s). attempt=%d", self._name, err, attempt)
                 time.sleep(sleep)
                 attempt += 1
+            except Exception as err:  # pylint: disable=broad-except
+                # Catch-all for unexpected exceptions; log and re-raise
+                self.logger.error("%s: Unexpected error (%s). attempt=%d", self._name, err, attempt)
+                raise
 
     async def _async_do_with_retries(self, fn, *, max_attempts: int = 8, base_sleep: float = 0.25):
         """
@@ -234,6 +238,10 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                 self.logger.warning("%s: Retryable BotoCoreError (%s). attempt=%d", self._name, err, attempt)
                 await asyncio.sleep(sleep)
                 attempt += 1
+            except Exception as err:  # pylint: disable=broad-except
+                # Catch-all for unexpected exceptions; log and re-raise
+                self.logger.error("%s: Unexpected error (%s). attempt=%d", self._name, err, attempt)
+                raise
 
     def get_obj_key_for_reservation(self, reservation_id: str) -> str:
         """
