@@ -76,7 +76,7 @@ class DirectAgentReservationist(AbstractAgentReservationist):
                 max_lifetime_in_seconds = self.max_lifetime_in_seconds
 
                 # Do the deployment
-                self.deploy_together(deployment_dict, source, max_lifetime_in_seconds)
+                await self.deploy_together(deployment_dict, source, max_lifetime_in_seconds)
 
                 # The key can be either a string or an asyncio.Event.
                 # We don't care so much about the string,

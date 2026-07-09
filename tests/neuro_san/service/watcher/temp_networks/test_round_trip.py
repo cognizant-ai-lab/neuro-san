@@ -17,6 +17,8 @@
 """
 Round-trip a single reservation through S3ReservationsStorage.
 """
+import pytest
+
 from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
 
@@ -28,7 +30,8 @@ class TestRoundTrip(S3ReservationsStorageTestBase):
     Reservation and an AgentNetwork carrying the original agent spec.
     """
 
-    def test_add_then_get_returns_equivalent_reservation(self):
+    @pytest.mark.asyncio
+    async def test_add_then_get_returns_equivalent_reservation(self):
         """
         Uses a reservation id and an authored network name that are
         deliberately different strings so each assertion below exercises
@@ -55,7 +58,7 @@ class TestRoundTrip(S3ReservationsStorageTestBase):
         agent_spec = self._make_agent_spec(agent_spec_name)
 
         # Write
-        self.storage.add_reservations({reservation: agent_spec})
+        await self.storage.add_reservations({reservation: agent_spec})
 
         # Read. Capture the lookup id in its own variable so the assertion
         # messages below always reflect the exact value passed to
