@@ -67,7 +67,7 @@ class TestNoRetryOnAccessDenied(S3ReservationsStorageTestBase):
         )
 
         # pylint: disable=invalid-name,unused-argument
-        async def denied_put(Bucket, Key, Body, ContentType):
+        def denied_put(Bucket, Key, Body, ContentType):
             call_log["count"] += 1
             raise template_error
 
@@ -78,25 +78,15 @@ class TestNoRetryOnAccessDenied(S3ReservationsStorageTestBase):
         with patch(
             "neuro_san.service.watcher.temp_networks.s3_reservations_storage.asyncio.sleep"
         ):
-            one_error = None
-            try:
+            with self.assertRaises(ClientError) as ctx:
                 await self.storage.add_reservations({reservation: agent_spec})
-            except ClientError as ctx:
-                one_error = ctx
-
-        # Not sure why the exception does not fire. Passing for now.
-        one_error = template_error
-        self.assertIsNotNone(
-            one_error,
-            "Expected exactly one error from add_reservations; got none.",
-        )
 
         # The original error code is preserved on the way up. Catches
         # bugs where the storage swallows or wraps the error in a
         # different exception type, hiding the real cause from callers.
         self.assertEqual(
             "AccessDenied",
-            template_error.response["Error"]["Code"],
+            ctx.exception.response["Error"]["Code"],
             "AccessDenied error code was not preserved on propagation; "
             "the original cause is being hidden from callers.",
         )
