@@ -84,7 +84,7 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
         # regardless of pass/fail.
         self.addCleanup(boto3_patcher.stop)
 
-        self.fake_async_s3: FakeAsyncS3Client = FakeAsyncS3Client()
+        self.fake_async_s3: FakeAsyncS3Client = FakeAsyncS3Client(self.fake_s3)
 
         # Patch aiobotocore_client at the import boundary in s3_reservations_storage
         # so storage.start() receives our fake instead of a real aiobotocore client.
