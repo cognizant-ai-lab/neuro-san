@@ -39,9 +39,14 @@ class ProcessMonitor:
 
     @staticmethod
     def execute_with_idle_detection(
-            cmd, timeout, idle_timeout,
+            cmd, timeout, idle_timeout, cancel_event=None,
     ) -> Tuple[str, str, str, int, float]:
         """Run a subprocess with idle-timeout and hard-timeout detection.
+
+        When ``cancel_event`` is supplied and becomes set (e.g. after a
+        Ctrl-C), the subprocess is killed promptly and reported as
+        KILLED so the caller can salvage completed requests instead of
+        hanging on stalled ones.
 
         Returns (status, stdout, stderr, returncode, ttft).
         ttft is time-to-first-token in seconds (0.0 if no stdout).
@@ -65,7 +70,7 @@ class ProcessMonitor:
             monitor_status = ProcessMonitor._monitor_process(
                 proc, stdout_chunks, stderr_chunks,
                 timeout=timeout, idle_timeout=idle_timeout,
-                ttft_ref=ttft_ref,
+                ttft_ref=ttft_ref, cancel_event=cancel_event,
             )
             if monitor_status is not None:
                 status = monitor_status
@@ -104,7 +109,7 @@ class ProcessMonitor:
     def _monitor_process(proc, stdout_chunks,
                          stderr_chunks, *,
                          timeout, idle_timeout,
-                         ttft_ref) -> Optional[str]:
+                         ttft_ref, cancel_event=None) -> Optional[str]:
         """Monitor a running process for output, idle timeout, and hard timeout.
 
         Returns STATUS_TIMEOUT or STATUS_KILLED for abnormal exits,
@@ -119,7 +124,7 @@ class ProcessMonitor:
         return ProcessMonitor._monitor_process_unix(
             proc, stdout_chunks, stderr_chunks,
             timeout=timeout, idle_timeout=idle_timeout,
-            ttft_ref=ttft_ref,
+            ttft_ref=ttft_ref, cancel_event=cancel_event,
         )
 
     @staticmethod
@@ -127,7 +132,7 @@ class ProcessMonitor:
     def _monitor_process_unix(proc, stdout_chunks,
                               stderr_chunks, *,
                               timeout, idle_timeout,
-                              ttft_ref) -> Optional[str]:
+                              ttft_ref, cancel_event=None) -> Optional[str]:
         """Unix implementation using select() for idle-timeout detection."""
         import select  # pylint: disable=import-outside-toplevel
         start = time.time()
@@ -135,6 +140,11 @@ class ProcessMonitor:
         while proc.poll() is None:
             elapsed = time.time() - start
             idle_elapsed = time.time() - last_activity
+
+            if cancel_event is not None and cancel_event.is_set():
+                proc.kill()
+                proc.wait()
+                return STATUS_KILLED
 
             if elapsed >= timeout:
                 proc.kill()

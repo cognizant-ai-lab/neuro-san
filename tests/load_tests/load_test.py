@@ -29,9 +29,11 @@ import os
 import platform
 import re
 import shutil
+import signal
 import socket
 import sys
 import tempfile
+import threading
 import time
 from typing import Dict
 from typing import List
@@ -511,6 +513,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         self._test_log_path = None
         self._test_log_handler = None
         self._aborted = False
+        self._interrupted = False
+        self._cancel_event = threading.Event()
 
     # pylint: disable=too-many-locals
     def _run_all_stages(self, stages, total_cap) -> List[StageSummary]:
@@ -677,7 +681,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         before_sys_mem_pct = psutil.virtual_memory().percent
 
         (elapsed, results, peak_threads, peak_client_rss,
-         peak_server_rss, peak_sys_mem_pct, server_died) = (
+         peak_server_rss, peak_sys_mem_pct, server_died,
+         interrupted) = (
             self.runner.run_stage(
                 stage_requests, stage_workers,
                 global_offset + (1 if probe_used else 0),
@@ -685,8 +690,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 client_proc=client_proc,
                 output_dir=self._output_dir,
                 stage_timeout=self.args.stage_timeout,
+                cancel_event=self._cancel_event,
             )
         )
+        if interrupted:
+            self._interrupted = True
 
         if probe_used:
             results.insert(0, probe_result)
@@ -746,7 +754,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 self.args.skip_reservation_check
             ),
         )
-        should_abort = server_died
+        should_abort = server_died or interrupted
         if not should_abort:
             should_abort = OutputValidator.check_permission_failures(
                 results, self.args.agent,
@@ -2260,6 +2268,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             self.log_monitor.read_position()
             if self.server_log else None
         )
+        prev_sigint_handler = self._install_interrupt_handler()
         try:
             stage_summaries = self._run_all_stages(
                 stages, total_cap,
@@ -2267,6 +2276,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
             if self._aborted:
                 exit_code = 1
+            if self._interrupted:
+                logger.warning(
+                    "\n  Test interrupted (Ctrl-C) — the results "
+                    "below cover only the requests that completed "
+                    "before the interrupt.",
+                )
 
             summary_reporter = SummaryReporter(stage_summaries)
             if len(stage_summaries) > 1:
@@ -2325,7 +2340,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                         "not available (no --server-log)",
                     )
 
-            if not self._aborted:
+            if self._interrupted:
+                exit_code = 2
+            elif not self._aborted:
                 exit_code = self._check_results(stage_summaries)
             self._export_raw_json(
                 stage_summaries, exit_code=exit_code,
@@ -2333,6 +2350,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             self._maybe_write_summary(
                 stage_summaries, server_chat_timing,
             )
+            if self._interrupted:
+                self._rename_interrupted()
         except KeyboardInterrupt:
             logger.info(
                 "\n  Interrupted — saving partial results...",
@@ -2343,9 +2362,43 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             self._rename_interrupted()
             exit_code = 2
         finally:
+            if prev_sigint_handler is not None:
+                signal.signal(signal.SIGINT, prev_sigint_handler)
             self._finalize_test_log(stage_summaries)
 
         return exit_code
+
+    def was_interrupted(self) -> bool:
+        """Return True if the run was stopped early by Ctrl-C."""
+        return self._interrupted
+
+    def _install_interrupt_handler(self):
+        """Install a SIGINT handler that requests a graceful stop.
+
+        The first Ctrl-C sets a cancel event so in-flight requests are
+        killed and the completed ones are still summarized.  A second
+        Ctrl-C restores the previous handler so the interpreter exits
+        immediately.  Returns the previous handler (or None if it could
+        not be installed, e.g. not on the main thread).
+        """
+        def _handle_sigint(_signum, _frame):
+            if not self._cancel_event.is_set():
+                self._cancel_event.set()
+                self._interrupted = True
+                logger.warning(
+                    "\n  Ctrl-C received — stopping and gathering "
+                    "results for completed requests (press Ctrl-C "
+                    "again to force-quit)...",
+                )
+            elif prev_handler is not None:
+                signal.signal(signal.SIGINT, prev_handler)
+
+        try:
+            prev_handler = signal.getsignal(signal.SIGINT)
+            signal.signal(signal.SIGINT, _handle_sigint)
+            return prev_handler
+        except (ValueError, OSError):
+            return None
 
     def _export_raw_json(self, stage_summaries, *,
                          exit_code) -> None:
@@ -2539,7 +2592,16 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             ).run()
             return
         orchestrator = LoadTestOrchestrator(args)
-        sys.exit(orchestrator.run())
+        exit_code = orchestrator.run()
+        if orchestrator.was_interrupted():
+            # After Ctrl-C some worker threads (e.g. un-killable
+            # in-thread HTTP requests) may still be blocked.  Results
+            # are already printed and saved, so exit hard rather than
+            # hang joining those threads at interpreter shutdown.
+            sys.stdout.flush()
+            sys.stderr.flush()
+            os._exit(exit_code)  # pylint: disable=protected-access
+        sys.exit(exit_code)
 
 
 if __name__ == "__main__":

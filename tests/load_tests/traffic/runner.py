@@ -22,7 +22,9 @@ import sys
 import threading
 import time
 from concurrent.futures import as_completed
+from concurrent.futures import CancelledError
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -35,6 +37,7 @@ from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
+from tests.load_tests.config import POLL_INTERVAL_SECONDS
 from tests.load_tests.config import THREAD_JOIN_TIMEOUT
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.monitoring.heartbeat import Heartbeat
@@ -43,6 +46,11 @@ from tests.load_tests.traffic.http_client import HttpClient
 from tests.load_tests.traffic.process_monitor import ProcessMonitor
 
 logger = logging.getLogger(__name__)
+
+# Grace period after Ctrl-C for in-flight requests to wind down before
+# they are recorded as KILLED.  Sized above the subprocess poll interval
+# so killed subprocess requests have time to resolve.
+INTERRUPT_GRACE_SECONDS = 2 * POLL_INTERVAL_SECONDS + 2.0
 
 
 class TrafficRunner:
@@ -56,8 +64,10 @@ class TrafficRunner:
         self._args = args
         self._profile = profile
 
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _run_one_tracked(self, request_id, global_request_id,
-                         output_dir, failed_ref) -> RequestResult:
+                         output_dir, failed_ref,
+                         cancel_event=None) -> RequestResult:
         """Run one request and increment failed_ref on failure."""
         if getattr(self._args, "http_client", False):
             result = self.run_one_http(
@@ -66,6 +76,7 @@ class TrafficRunner:
         else:
             result = self.run_one(
                 request_id, global_request_id, output_dir,
+                cancel_event=cancel_event,
             )
         if result.get("status") != STATUS_CREATED:
             failed_ref.value = (failed_ref.value or 0) + 1
@@ -73,7 +84,7 @@ class TrafficRunner:
 
     # pylint: disable=too-many-locals
     def run_one(self, request_id, global_request_id,
-                output_dir=None) -> RequestResult:
+                output_dir=None, cancel_event=None) -> RequestResult:
         """Execute a single request with idle-timeout detection.
 
         Returns a result dict with status, elapsed, prompt, and parsed fields.
@@ -94,6 +105,7 @@ class TrafficRunner:
                         use_https=getattr(self._args, "https", False),
                     ),
                     self._args.request_timeout, self._args.idle_timeout,
+                    cancel_event,
                 )
             )
             elapsed = time.time() - start
@@ -370,15 +382,20 @@ class TrafficRunner:
                   server_proc=None, client_proc=None,
                   output_dir=None,
                   stage_timeout=None,
+                  cancel_event=None,
                   ) -> Tuple[
         float, List[RequestResult], SharedRef, SharedRef,
-        SharedRef, SharedRef, bool,
+        SharedRef, SharedRef, bool, bool,
     ]:
         """Fire num_requests concurrent requests using a thread pool.
 
         Returns (elapsed, results, peak_threads_ref,
         peak_client_rss_ref, peak_server_rss_ref,
-        peak_sys_mem_pct_ref, server_died).
+        peak_sys_mem_pct_ref, server_died, interrupted).
+
+        When ``cancel_event`` becomes set (Ctrl-C), in-flight
+        subprocess requests are killed and the stage returns early
+        with whatever completed so far, marking the remainder KILLED.
         """
         results_list: List[RequestResult] = []
         peak_threads_ref = SharedRef()
@@ -389,8 +406,14 @@ class TrafficRunner:
         failed_ref.value = 0
         server_dead_event = threading.Event()
         start = time.time()
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            heartbeat_stop = threading.Event()
+        interrupted = False
+        heartbeat_thread = None
+        heartbeat_stop = threading.Event()
+        # Not using ``with`` so that on Ctrl-C we can shut the pool
+        # down without blocking on stalled worker threads (e.g.
+        # in-thread HTTP requests that cannot be force-killed).
+        pool = ThreadPoolExecutor(max_workers=max_workers)
+        try:
             heartbeat_ready = threading.Event()
             fires_done_event = threading.Event()
             futures_ref: list = []
@@ -417,75 +440,114 @@ class TrafficRunner:
                 pool.submit(
                     self._run_one_tracked,
                     i + 1, global_offset + i,
-                    output_dir, failed_ref,
+                    output_dir, failed_ref, cancel_event,
                 )
                 for i in range(num_requests)
             )
             fires_done_event.set()
-            killed_count = self._collect_with_timeout(
+            killed_count, interrupted = self._collect_with_timeout(
                 futures_ref, results_list,
                 start=start, stage_timeout=stage_timeout,
+                cancel_event=cancel_event,
             )
-            if killed_count:
+            if killed_count and not interrupted:
                 logger.warning(
                     "  Stage timeout (%ss) reached — "
                     "%s request(s) killed.",
                     stage_timeout, killed_count,
                 )
+            elif interrupted:
+                logger.warning(
+                    "  Interrupted (Ctrl-C) — %s request(s) still "
+                    "in flight were dropped; reporting completed ones.",
+                    killed_count,
+                )
+        finally:
             heartbeat_stop.set()
-            heartbeat_thread.join(timeout=THREAD_JOIN_TIMEOUT)
+            if heartbeat_thread is not None:
+                heartbeat_thread.join(timeout=THREAD_JOIN_TIMEOUT)
+            pool.shutdown(wait=not interrupted, cancel_futures=True)
         total_time = time.time() - start
         return (
             total_time, results_list,
             peak_threads_ref, peak_client_rss_ref,
             peak_server_rss_ref, peak_sys_mem_pct_ref,
-            server_dead_event.is_set(),
+            server_dead_event.is_set(), interrupted,
         )
 
     @staticmethod
+    # pylint: disable=too-many-branches
     def _collect_with_timeout(
             futures, results_list, *,
-            start, stage_timeout,
-    ) -> int:
-        """Collect future results, cancelling stragglers on timeout.
+            start, stage_timeout, cancel_event=None,
+    ) -> Tuple[int, bool]:
+        """Collect future results, cancelling stragglers on timeout/Ctrl-C.
 
-        Returns the number of futures that were killed.
+        Polls in short slices so a set ``cancel_event`` (Ctrl-C) is
+        noticed promptly: the event tells in-flight subprocesses to
+        die, then their futures resolve as KILLED.  Returns
+        (num_killed, interrupted).
         """
-        if stage_timeout is None:
-            for fut in futures:
-                results_list.append(fut.result())
-            return 0
-
         pending = set(futures)
         killed = 0
+        interrupted = False
         while pending:
-            elapsed = time.time() - start
-            remaining = max(0, stage_timeout - elapsed)
-            if remaining <= 0:
+            if cancel_event is not None and cancel_event.is_set():
+                interrupted = True
                 break
+            elapsed = time.time() - start
+            if stage_timeout is not None:
+                remaining = stage_timeout - elapsed
+                if remaining <= 0:
+                    break
+                wait_slice = min(1.0, remaining)
+            else:
+                wait_slice = 1.0
             try:
-                for fut in as_completed(pending, timeout=remaining):
+                for fut in as_completed(pending, timeout=wait_slice):
                     results_list.append(fut.result())
                     pending.discard(fut)
-            except TimeoutError:
+            except FutureTimeoutError:
                 pass
 
+        reason = (
+            "Killed by Ctrl-C interrupt" if interrupted
+            else "Killed by --stage-timeout"
+        )
         for fut in pending:
             fut.cancel()
+        if interrupted:
+            # Give in-flight requests a short grace to wind down:
+            # subprocess requests are killed via cancel_event and
+            # resolve within a poll interval.  Anything still stuck
+            # after the grace (e.g. an un-killable in-thread HTTP
+            # request) is recorded as KILLED without blocking on it.
+            grace_deadline = time.time() + INTERRUPT_GRACE_SECONDS
+            for fut in list(pending):
+                remaining = max(0.0, grace_deadline - time.time())
+                try:
+                    results_list.append(fut.result(timeout=remaining))
+                    pending.discard(fut)
+                    killed += 1
+                except FutureTimeoutError:
+                    pass
+                except CancelledError:
+                    pending.discard(fut)
+
         for fut in pending:
-            if fut.cancelled():
-                killed += 1
+            killed += 1
+            if fut.cancelled() or not fut.done():
                 results_list.append({
                     "request_id": "unknown",
                     "status": STATUS_KILLED,
                     "stdout": "",
-                    "stderr": "Killed by --stage-timeout",
+                    "stderr": reason,
                     "returncode": -1,
                     "duration": time.time() - start,
                 })
             else:
                 results_list.append(fut.result())
-        return killed
+        return killed, interrupted
 
     def _diagnose_failure(self, returncode, parsed_fields,
                           stdout) -> str:
