@@ -15,7 +15,7 @@
 #
 # END COPYRIGHT
 import time
-from unittest import TestCase
+from unittest import IsolatedAsyncioTestCase
 
 import pytest
 
@@ -28,7 +28,7 @@ from tests.neuro_san.internals.network_providers.recording_listener \
 
 
 # pylint: disable=too-many-public-methods
-class TestExpiringAgentNetworkStorage(TestCase):
+class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
     """
     Unit tests for ExpiringAgentNetworkStorage LRU eviction and access tracking functionality.
     """
