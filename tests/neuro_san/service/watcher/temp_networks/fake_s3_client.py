@@ -33,7 +33,6 @@ from typing import Dict
 from botocore.exceptions import ClientError
 
 
-# pylint: disable=invalid-name,unused-argument
 class FakeS3Client:
     """
     Minimal in-memory stand-in for a boto3 S3 client. Only implements the
@@ -48,18 +47,21 @@ class FakeS3Client:
         """
         self.objects: Dict[str, bytes] = {}
 
+    # pylint: disable=invalid-name
     def head_bucket(self, Bucket: str):
         """
         Stand-in for boto3's head_bucket. Real boto3 returns a response dict
         on success and raises ClientError otherwise. For tests we treat any
         configured bucket as existing.
         """
+        _ = Bucket
         return {}
 
     def put_object(self, Bucket: str, Key: str, Body, ContentType: str):
         """
         Store the given Body bytes (or str, encoded as utf-8) at Key.
         """
+        _ = Bucket, ContentType
         if isinstance(Body, str):
             Body = Body.encode("utf-8")
         self.objects[Key] = Body
@@ -70,6 +72,7 @@ class FakeS3Client:
         Return the stored bytes for Key wrapped in a Body stream, or raise
         a NoSuchKey ClientError if the key is not present.
         """
+        _ = Bucket
         if Key not in self.objects:
             raise ClientError(
                 {"Error": {"Code": "NoSuchKey", "Message": "Not Found"}},
