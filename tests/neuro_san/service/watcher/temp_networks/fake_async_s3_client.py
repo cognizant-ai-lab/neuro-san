@@ -53,8 +53,9 @@ class FakeAsyncS3Client:
     async def __aexit__(self, exception_type, exception_value, traceback):
         """
         Async Context Manager protocol exit method.
+        :return: True to suppress exception. False to propagate exception.
         """
-        return self
+        return False
 
     # pylint: disable=invalid-name
     async def head_bucket(self, Bucket: str):
