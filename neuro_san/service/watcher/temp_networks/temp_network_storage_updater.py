@@ -213,6 +213,10 @@ class TempNetworkStorageUpdater(Startable):
 
         except Exception:  # pylint: disable=broad-except
 
+            if deployment_dict is None:
+                self.logger.warning("Deployment dictionary was None")
+                deployment_dict = {}
+
             # Gather info about who will be effected by this failure
             reservation_ids: List[str] = []
             for reservation in deployment_dict.keys():
