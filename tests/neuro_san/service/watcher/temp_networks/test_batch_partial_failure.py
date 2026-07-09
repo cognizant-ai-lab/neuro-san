@@ -83,7 +83,7 @@ class TestBatchPartialFailure(S3ReservationsStorageTestBase):
             "PutObject",
         )
 
-        # pylint: disable=invalid-name-argument
+        # pylint: disable=invalid-name
         async def fail_on_third(Bucket, Key, Body, ContentType):
             call_log["count"] += 1
             if call_log["count"] == 3:
