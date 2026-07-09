@@ -77,11 +77,10 @@ class TestRetryOnThrottling(S3ReservationsStorageTestBase):
         self.fake_s3.put_object = flaky_put
 
         # Skip the real exponential-backoff sleep so the test stays
-        # fast. Patches the module-local time.sleep symbol that
+        # fast. Patches the module-local asyncio.sleep symbol that
         # _do_with_retries uses.
         with patch(
-            "neuro_san.service.watcher.temp_networks."
-            "s3_reservations_storage.time.sleep"
+            "neuro_san.service.watcher.temp_networks.s3_reservations_storage.asyncio.sleep"
         ):
             await self.storage.add_reservations({reservation: agent_spec})
 
