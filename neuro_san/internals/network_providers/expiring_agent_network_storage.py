@@ -127,8 +127,8 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         """
         return time.time() > reservation.get_expiration_time_in_seconds()
 
-    def add_reservations(self, reservations_dict: Dict[Reservation, Dict[str, Any]],
-                         source: str = None):
+    async def add_reservations(self, reservations_dict: Dict[Reservation, Dict[str, Any]],
+                               source: str = None):
         """
         Add a set of reservations for agent networks en-masse
 
@@ -141,7 +141,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
 
         if self.base_storage is not None:
             # If we have a source storage, then we need to add these reservations there first:
-            self.base_storage.add_reservations(reservations_dict, source=source)
+            await self.base_storage.add_reservations(reservations_dict, source=source)
 
         # Figure out what's new vs what's not.
         # Need to do this while holding the lock

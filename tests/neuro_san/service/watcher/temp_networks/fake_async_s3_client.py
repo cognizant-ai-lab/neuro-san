@@ -26,56 +26,54 @@ Pytest's default test-file pattern is test_*.py, so this file
 (which does not start with "test_") is not collected as a test
 module.
 """
-import io
 
-from typing import Dict
-
-from botocore.exceptions import ClientError
+from tests.neuro_san.service.watcher.temp_networks.fake_s3_client import FakeS3Client
 
 
-class FakeS3Client:
+class FakeAsyncS3Client:
     """
-    Minimal in-memory stand-in for a boto3 S3 client. Only implements the
+    Minimal in-memory stand-in for a aiobotocore S3 client. Only implements the
     methods that S3ReservationsStorage actually calls, storing object bodies
     in a dict keyed by S3 object key. Method signatures use boto3's PascalCase
     keyword arguments so the storage's call sites work unchanged.
     """
 
-    def __init__(self):
+    def __init__(self, fake_s3_client: FakeS3Client):
         """
         Initialize an empty in-memory bucket.
         """
-        self.objects: Dict[str, bytes] = {}
+        self.fake_s3_client: FakeS3Client = fake_s3_client
+
+    async def __aenter__(self):
+        """
+        Async Context Manager protocol enter method.
+        """
+        return self
+
+    async def __aexit__(self, exception_type, exception_value, traceback):
+        """
+        Async Context Manager protocol exit method.
+        """
+        return self
 
     # pylint: disable=invalid-name
-    def head_bucket(self, Bucket: str):
+    async def head_bucket(self, Bucket: str):
         """
         Stand-in for boto3's head_bucket. Real boto3 returns a response dict
         on success and raises ClientError otherwise. For tests we treat any
         configured bucket as existing.
         """
-        _ = Bucket
-        return {}
+        return self.fake_s3_client.head_bucket(Bucket)
 
-    def put_object(self, Bucket: str, Key: str, Body, ContentType: str):
+    async def put_object(self, Bucket: str, Key: str, Body, ContentType: str):
         """
         Store the given Body bytes (or str, encoded as utf-8) at Key.
         """
-        _ = Bucket, ContentType
-        if isinstance(Body, str):
-            Body = Body.encode("utf-8")
-        self.objects[Key] = Body
-        return {}
+        return self.fake_s3_client.put_object(Bucket, Key, Body, ContentType)
 
-    def get_object(self, Bucket: str, Key: str):
+    async def get_object(self, Bucket: str, Key: str):
         """
         Return the stored bytes for Key wrapped in a Body stream, or raise
         a NoSuchKey ClientError if the key is not present.
         """
-        _ = Bucket
-        if Key not in self.objects:
-            raise ClientError(
-                {"Error": {"Code": "NoSuchKey", "Message": "Not Found"}},
-                "GetObject",
-            )
-        return {"Body": io.BytesIO(self.objects[Key])}
+        return self.fake_s3_client.get_object(Bucket, Key)

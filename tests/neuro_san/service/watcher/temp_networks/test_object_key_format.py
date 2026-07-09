@@ -18,6 +18,8 @@
 S3ReservationsStorage.add_reservations writes each reservation to a
 specific S3 object key. This module pins that key format as a contract.
 """
+import pytest
+
 from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
 
@@ -32,7 +34,8 @@ class TestObjectKeyFormat(S3ReservationsStorageTestBase):
     asserting against a hardcoded literal path.
     """
 
-    def test_add_writes_at_expected_object_key(self):
+    @pytest.mark.asyncio
+    async def test_add_writes_at_expected_object_key(self):
         """
         After add_reservations, the S3 bucket contains exactly one object,
         and that object's key matches the documented "{prefix}{id}.json"
@@ -46,7 +49,7 @@ class TestObjectKeyFormat(S3ReservationsStorageTestBase):
         agent_spec = self._make_agent_spec("copy_cat")
 
         # Write
-        self.storage.add_reservations({reservation: agent_spec})
+        await self.storage.add_reservations({reservation: agent_spec})
 
         # Hardcoded literal of the expected path. Constructing this from
         # the storage's own helper would defeat the purpose of pinning

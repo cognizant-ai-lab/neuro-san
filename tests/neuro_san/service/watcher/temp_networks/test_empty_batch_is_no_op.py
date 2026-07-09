@@ -21,6 +21,8 @@ pass {} when pre-filtering yields no new reservations; the storage
 must handle that without crashing, without writing placeholder
 objects, and without making any S3 calls.
 """
+import pytest
+
 from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
 
@@ -33,7 +35,8 @@ class TestEmptyBatchIsNoOp(S3ReservationsStorageTestBase):
     none of them touch this path.
     """
 
-    def test_add_with_empty_dict_is_a_no_op(self):
+    @pytest.mark.asyncio
+    async def test_add_with_empty_dict_is_a_no_op(self):
         """
         add_reservations({}) returns normally, makes zero put_object
         calls, and leaves the bucket exactly as it was. Catches
@@ -62,7 +65,7 @@ class TestEmptyBatchIsNoOp(S3ReservationsStorageTestBase):
         # The call should return normally - no exception. If this
         # raises, the no-op contract is broken and the call site needs
         # defensive guards it should not need.
-        self.storage.add_reservations({})
+        await self.storage.add_reservations({})
 
         # No put_object call was made. Catches a regression where the
         # storage attempts to write a placeholder for an empty input,

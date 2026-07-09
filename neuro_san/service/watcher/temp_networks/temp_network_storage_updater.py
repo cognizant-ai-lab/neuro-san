@@ -190,9 +190,9 @@ class TempNetworkStorageUpdater(Startable):
                 return
 
             # Now: we have an item to process from this queue.
-            self.process_one_queued_item(queued_item)
+            await self.process_one_queued_item(queued_item)
 
-    def process_one_queued_item(self, queued_item: Dict[str, Any]):
+    async def process_one_queued_item(self, queued_item: Dict[str, Any]):
         """
         Process a single item from one of the queues
 
@@ -206,7 +206,7 @@ class TempNetworkStorageUpdater(Startable):
         max_lifetime_in_seconds: float = queued_item.get("max_lifetime_in_seconds")
 
         # Do the deployment
-        self.reservationist.deploy_together(deployment_dict, source, max_lifetime_in_seconds)
+        await self.reservationist.deploy_together(deployment_dict, source, max_lifetime_in_seconds)
 
         # Maybe notify the deployer.
         event: Event = queued_item.get("event")

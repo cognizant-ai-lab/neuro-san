@@ -20,6 +20,7 @@ from typing import Dict
 from typing import Iterable
 from typing import Tuple
 
+import asyncio
 import os
 import random
 import time
@@ -30,6 +31,10 @@ from json import loads
 from json.decoder import JSONDecodeError
 from logging import getLogger
 from logging import Logger
+
+from aiobotocore.session import get_session
+from aiobotocore.session import AioSession
+from aiobotocore.session import ClientCreatorContext
 
 from boto3 import client as boto3_client
 from botocore.client import BaseClient
@@ -99,7 +104,8 @@ class S3ReservationsStorage(AbstractReservationsStorage):
 
         # Set up S3 key prefix and initialize sync target
         self.prefix: str = prefix
-        self.s3_client: BaseClient = None
+        self.read_s3_client: BaseClient = None
+        self.delete_s3_client: BaseClient = None
 
         # Track last sync timestamp for incremental syncing (0.0 means sync all)
         self.last_sync_timestamp: float = 0.0
@@ -114,10 +120,11 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         """
         try:
             # Initialize S3 client using default AWS credential chain
-            self.s3_client = boto3_client("s3")
+            self.read_s3_client = boto3_client("s3")
+            self.delete_s3_client = boto3_client("s3")
 
             # Validate bucket exists and we have access by performing a head operation
-            self.s3_client.head_bucket(Bucket=self.bucket_name)
+            self.read_s3_client.head_bucket(Bucket=self.bucket_name)
             self.logger.info("%s: Successfully connected to S3 bucket: %s", self._name, self.bucket_name)
 
         except NoCredentialsError as exception:
@@ -174,7 +181,6 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         """
         Generic retry wrapper for boto3 calls.
         boto3/botocore already retries, but this adds a bit of extra resilience and backoff for batch operations.
-
         """
         attempt: int = 1
         while True:
@@ -200,6 +206,35 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                 time.sleep(sleep)
                 attempt += 1
 
+    async def _async_do_with_retries(self, fn, *, max_attempts: int = 8, base_sleep: float = 0.25):
+        """
+        Generic retry wrapper for boto3 calls.
+        boto3/botocore already retries, but this adds a bit of extra resilience and backoff for batch operations.
+        """
+        attempt: int = 1
+        while True:
+            try:
+                return await fn()
+            except ClientError as err:
+                if attempt >= max_attempts or not self._is_retryable_client_error(err):
+                    raise
+                # Compute exponential backoff with jitter
+                sleep = base_sleep * (2 ** (attempt - 1))
+                sleep = sleep * (0.5 + random.random())  # sleep time jitter
+                self.logger.warning("%s: Retryable ClientError (%s). attempt=%d", self._name, err, attempt)
+                await asyncio.sleep(sleep)
+                attempt += 1
+            except BotoCoreError as err:
+                # Often transient network/serialization issues
+                if attempt >= max_attempts:
+                    raise
+                # Compute exponential backoff with jitter
+                sleep = base_sleep * (2 ** (attempt - 1))
+                sleep = sleep * (0.5 + random.random())
+                self.logger.warning("%s: Retryable BotoCoreError (%s). attempt=%d", self._name, err, attempt)
+                await asyncio.sleep(sleep)
+                attempt += 1
+
     def get_obj_key_for_reservation(self, reservation_id: str) -> str:
         """
         Helper method to construct the S3 object key for a given reservation ID.
@@ -208,8 +243,8 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         """
         return f"{self.prefix}{reservation_id}.json"
 
-    def add_reservations(self, reservations_dict: Dict[Reservation, Any],
-                         source: str = None):
+    async def add_reservations(self, reservations_dict: Dict[Reservation, Any],
+                               source: str = None):
         """
         Add reservations to S3 storage.
 
@@ -246,38 +281,45 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         :param source: A string describing where the deployment was coming from
         """
         self.logger.info("%s: Adding %d reservations to S3", self._name, len(reservations_dict))
+        if len(reservations_dict) == 0:
+            return
 
-        # Process each reservation/agent spec pair individually
-        reservation: Reservation = None
-        agent_spec: Dict[str, Any] = None
-        for reservation, agent_spec in reservations_dict.items():
+        # Create an aiobotocore client for async operations
+        session: AioSession = get_session()
+        async_s3_client: ClientCreatorContext = None
+        async with session.create_client("s3") as async_s3_client:
 
-            # Build complete data structure containing reservation metadata,
-            # the associated agent_spec, source information, and storage timestamp
-            current_time: float = time.time()
-            new_metadata: Dict[str, Any] = {
-                "reservation": self.converter.to_dict(reservation),  # Serialized reservation object
-                "stored_at": current_time              # When stored in S3
-            }
-            if agent_spec.get("metadata") is None:
-                agent_spec["metadata"] = {}
-            agent_spec["metadata"].update(new_metadata)
+            # Process each reservation/agent spec pair individually
+            reservation: Reservation = None
+            agent_spec: Dict[str, Any] = None
+            for reservation, agent_spec in reservations_dict.items():
 
-            # Generate S3 key using prefix and reservation ID for easy lookup
-            reservation_id: str = reservation.get_reservation_id()
-            key: str = self.get_obj_key_for_reservation(reservation_id)
+                # Build complete data structure containing reservation metadata,
+                # the associated agent_spec, source information, and storage timestamp
+                current_time: float = time.time()
+                new_metadata: Dict[str, Any] = {
+                    "reservation": self.converter.to_dict(reservation),  # Serialized reservation object
+                    "stored_at": current_time              # When stored in S3
+                }
+                if agent_spec.get("metadata") is None:
+                    agent_spec["metadata"] = {}
+                agent_spec["metadata"].update(new_metadata)
 
-            # Store as JSON object in S3 with proper content type
-            json_body: str = dumps(agent_spec, indent=4)  # Pretty-printed JSON
+                # Generate S3 key using prefix and reservation ID for easy lookup
+                reservation_id: str = reservation.get_reservation_id()
+                key: str = self.get_obj_key_for_reservation(reservation_id)
 
-            put_function = partial(self.s3_client.put_object,
-                                   Bucket=self.bucket_name,
-                                   Key=key,
-                                   Body=json_body,
-                                   ContentType="application/json")
-            self._do_with_retries(put_function)
+                # Store as JSON object in S3 with proper content type
+                json_body: str = dumps(agent_spec, indent=4)  # Pretty-printed JSON
 
-            self.logger.debug("%s: Successfully stored reservation %s in S3", self._name, reservation_id)
+                put_function = partial(async_s3_client.put_object,
+                                       Bucket=self.bucket_name,
+                                       Key=key,
+                                       Body=json_body,
+                                       ContentType="application/json")
+                await self._async_do_with_retries(put_function)
+
+                self.logger.debug("%s: Successfully stored reservation %s in S3", self._name, reservation_id)
 
     def _retrieve_object_with_retries(self, obj_key: str) -> Dict[str, Any]:
         """
@@ -287,7 +329,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         :raises: ClientError if the object cannot be retrieved after retries
                  JSONDecodeError if the content cannot be parsed as JSON
         """
-        get_function = partial(self.s3_client.get_object, Bucket=self.bucket_name, Key=obj_key)
+        get_function = partial(self.read_s3_client.get_object, Bucket=self.bucket_name, Key=obj_key)
         obj_response: Dict[str, Any] = self._do_with_retries(get_function)
         # Parse JSON content from S3 object body
         json_content: str = obj_response["Body"].read().decode("utf-8")
@@ -357,7 +399,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
             if current_time > expiration_time:
                 # Reservation has expired - remove it from S3 storage
                 try:
-                    delete_function = partial(self.s3_client.delete_object, Bucket=self.bucket_name, Key=obj_key)
+                    delete_function = partial(self.delete_s3_client.delete_object, Bucket=self.bucket_name, Key=obj_key)
                     self._do_with_retries(delete_function)
                     reservation_id: str = reservation_data.get("id")
                     self.logger.debug("%s: Deleted expired reservation %s from S3", self._name, reservation_id)
@@ -413,7 +455,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
             if continuation_token:
                 kwargs["ContinuationToken"] = continuation_token
             response = self._do_with_retries(
-                partial(self.s3_client.list_objects_v2, **kwargs)
+                partial(self.delete_s3_client.list_objects_v2, **kwargs)
             )
             for obj in response.get("Contents", []):
                 yield obj["Key"]
