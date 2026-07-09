@@ -16,6 +16,7 @@
 # END COPYRIGHT
 from typing import Any
 from typing import Dict
+from typing import List
 
 from os import environ
 
@@ -206,9 +207,19 @@ class TempNetworkStorageUpdater(Startable):
         max_lifetime_in_seconds: float = queued_item.get("max_lifetime_in_seconds")
 
         # Do the deployment
-        await self.reservationist.deploy_together(deployment_dict, source, max_lifetime_in_seconds)
+        try:
+            await self.reservationist.deploy_together(deployment_dict, source, max_lifetime_in_seconds)
+
+        # pylint: disable=broad-except
+        except Exception as exception:
+            # We are failing to process a queued item, so we should log it.
+            reservations: List[AgentReservation] = list(deployment_dict.keys())
+            reservation_ids: List[str] = [reservation.get_reservation_id() for reservation in reservations]
+            self.logger.error("Exception %s while processing queued item for the following reservations: %s",
+                              str(exception), str(reservation_ids))
 
         # Maybe notify the deployer.
+        # Note if there is a failure, the deployer will not be notified (yet).
         event: Event = queued_item.get("event")
         if event is not None:
             event_loop: AbstractEventLoop = queued_item.get("event_loop")
