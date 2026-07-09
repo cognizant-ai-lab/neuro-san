@@ -226,7 +226,7 @@ class TempNetworkStorageUpdater(Startable):
             sensitive_logger.exception("Exception while processing queued item for reservations: %s", reservation_ids)
 
         # Maybe notify the deployer.
-        # Note if there is a failure, the deployer will not be notified (yet).
+        # Note: even if deployment fails, we still notify (set the event) to avoid callers waiting indefinitely.
         event: Event = queued_item.get("event")
         if event is not None:
             event_loop: AbstractEventLoop = queued_item.get("event_loop")
