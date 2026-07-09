@@ -32,8 +32,9 @@ import queue as queue_mod
 from janus import Queue
 from janus import SyncQueueShutDown
 
-from leaf_common.config.resolver_util import ResolverUtil
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
+from leaf_common.config.resolver_util import ResolverUtil
+from leaf_common.logging.sensitive_logger import SensitiveLogger
 
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
@@ -210,10 +211,15 @@ class TempNetworkStorageUpdater(Startable):
         try:
             await self.reservationist.deploy_together(deployment_dict, source, max_lifetime_in_seconds)
 
-        # pylint: disable=broad-except
         except Exception:  # pylint: disable=broad-except
-            reservation_ids: List[str] = [r.get_reservation_id() for r in (deployment_dict or {}).keys()]
-            self.logger.exception("Exception while processing queued item for reservations: %s", reservation_ids)
+
+            # Gather info about who will be effected by this failure
+            reservation_ids: List[str] = []
+            for reservation in deployment_dict.keys():
+                reservation_ids.append(reservation.get_reservation_id())
+
+            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger.exception("Exception while processing queued item for reservations: %s", reservation_ids)
 
         # Maybe notify the deployer.
         # Note if there is a failure, the deployer will not be notified (yet).
