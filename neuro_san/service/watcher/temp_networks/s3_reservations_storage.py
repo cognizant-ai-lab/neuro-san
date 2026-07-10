@@ -20,23 +20,14 @@ from typing import Dict
 from typing import Iterable
 from typing import Tuple
 
-import asyncio
 import os
 import time
-from time import perf_counter
 from functools import partial
 
-from json import dumps
 from json import loads
 from json.decoder import JSONDecodeError
 from logging import getLogger
 from logging import Logger
-from threading import Lock
-
-from aiobotocore.client import AioBaseClient
-from aiobotocore.session import get_session
-from aiobotocore.session import AioSession
-from aiobotocore.session import ClientCreatorContext
 
 from boto3 import client as boto3_client
 from botocore.client import BaseClient
@@ -48,6 +39,7 @@ from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.abstract_reservations_storage \
     import AbstractReservationsStorage
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
+from neuro_san.service.watcher.temp_networks.s3_reservations_writer import S3ReservationsWriter
 from neuro_san.service.watcher.temp_networks.s3_retry_util import S3RetryUtil
 
 
@@ -76,6 +68,8 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         super().__init__(storage_name="s3_storage",
                          check_expirations_interval_seconds=check_expirations_interval_seconds)
         self.logger: Logger = getLogger(self.__class__.__name__)
+
+        self.writer = S3ReservationsWriter(bucket_name=bucket_name, prefix=prefix)
 
         # Check if expiration interval is set by environment variable,
         # and adjust it if so (overriding the constructor parameter)
@@ -107,8 +101,6 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         # Set up S3 key prefix and initialize sync target
         self.prefix: str = prefix
 
-        self.sync_lock: Lock = Lock()
-        self.async_s3_client_lock: asyncio.Lock = None
         self.read_s3_client: BaseClient = None
         self.delete_s3_client: BaseClient = None
 
@@ -150,8 +142,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         # let's start underlying logic:
         super().start()
 
-    async def add_reservations(self, reservations_dict: Dict[Reservation, Any],
-                               source: str = None):
+    async def add_reservations(self, reservations_dict: Dict[Reservation, Any], source: str = None):
         """
         Add reservations to S3 storage.
 
@@ -187,114 +178,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         :param reservations_dict: A mapping of Reservation -> some deployable agent spec
         :param source: A string describing where the deployment was coming from
         """
-        self.logger.info("%s: Adding %d reservations to S3", self._name, len(reservations_dict))
-        if len(reservations_dict) == 0:
-            return
-
-        # Be sure we have an asyncio Lock to get our sessions.
-        if self.async_s3_client_lock is None:
-            with self.sync_lock:
-                # Be sure everyone has the same lock
-                if self.async_s3_client_lock is None:
-                    self.async_s3_client_lock = asyncio.Lock()
-
-        # Create an aiobotocore client for async operations.
-        async_s3_client: AioBaseClient = None
-
-        async_s3_client_creator_context: ClientCreatorContext = None
-        lock_released: bool = False
-        acquired_lock: bool = False
-
-        start_time: float = perf_counter()
-        lock_aquired_time: float = 0.0
-        session_created_time: float = 0.0
-        lock_released_time: float = 0.0
-        try:
-            # Serialize creation of the ClientCreatorContext with the lock to avoid credential-chain races.
-            await self.async_s3_client_lock.acquire()
-            lock_aquired_time = perf_counter()
-            acquired_lock = True
-
-            # Note: We can probably do better than doing this block every single time.
-            #       Many articles hint at frozen-credentials caching, but that will require
-            #       an extra layer of retry complexity at this level.
-            session: AioSession = get_session()
-            async_s3_client_creator_context = session.create_client("s3")
-            session_created_time = perf_counter()
-
-            # Normally this is done in a python ContextManager using a with-statement,
-            # but we want to be holding the lock while we create the client to avoid
-            # credential-chain races like NoCredentialsError.
-
-            async with async_s3_client_creator_context as async_s3_client:
-
-                # Release the lock while we process, allowing other tasks to work on
-                # getting their own async_s3_client. (Not an async method)
-                self.async_s3_client_lock.release()
-                lock_released_time = perf_counter()
-                lock_released = True
-
-                # Process each reservation/agent spec pair individually
-                reservation: Reservation = None
-                agent_spec: Dict[str, Any] = None
-                for reservation, agent_spec in reservations_dict.items():
-                    await self.add_one_reservation(async_s3_client, reservation, agent_spec, source)
-
-        finally:
-            # Always release the lock if we successfully acquired it and have not already done so,
-            # in case there was an error getting/entering the context manager.
-            if acquired_lock and not lock_released:
-                self.async_s3_client_lock.release()
-
-        finish_time: float = perf_counter()
-
-        self.logger.info("Lock acquisition in: %fs. Session creation after: %fs. "
-                         "Lock release after: %fs. Finish after: %fs",
-                         lock_aquired_time - start_time,
-                         session_created_time - start_time,
-                         lock_released_time - start_time,
-                         finish_time - start_time)
-
-    async def add_one_reservation(self, async_s3_client: AioBaseClient,
-                                  reservation: Reservation,
-                                  agent_spec: Dict[str, Any],
-                                  source: str = None):
-        """
-        Add a single reservation to S3 storage.
-        :param async_s3_client: An aiobotocore S3 client to use for the put_object call
-        :param reservation: The reservation to add
-        :param agent_spec: The agent spec to add
-        :param source: A string describing where the deployment was coming from
-        """
-        # Build complete data structure containing reservation metadata,
-        # the associated agent_spec, source information, and storage timestamp
-        current_time: float = time.time()
-        new_metadata: Dict[str, Any] = {
-            "reservation": self.converter.to_dict(reservation),  # Serialized reservation object
-            "stored_at": current_time              # When stored in S3
-        }
-        if agent_spec.get("metadata") is None:
-            agent_spec["metadata"] = {}
-        agent_spec["metadata"].update(new_metadata)
-
-        # Generate S3 key using prefix and reservation ID for easy lookup
-        reservation_id: str = reservation.get_reservation_id()
-        key: str = S3RetryUtil.get_obj_key_for_reservation(self.prefix, reservation_id)
-
-        # Store as JSON object in S3 with proper content type
-        json_body: str = dumps(agent_spec, indent=4)  # Pretty-printed JSON
-
-        put_function = partial(async_s3_client.put_object,
-                               Bucket=self.bucket_name,
-                               Key=key,
-                               Body=json_body,
-                               ContentType="application/json")
-
-        if source is None:
-            source = self._name
-        await S3RetryUtil.async_do_with_retries(source, put_function)
-
-        self.logger.debug("%s: Successfully stored reservation %s in S3", self._name, reservation_id)
+        await self.writer.add_reservations(reservations_dict, source)
 
     def _retrieve_object_with_retries(self, obj_key: str, source: str = None) -> Dict[str, Any]:
         """
