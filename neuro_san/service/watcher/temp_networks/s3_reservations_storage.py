@@ -24,6 +24,7 @@ import asyncio
 import os
 import random
 import time
+from time import perf_counter
 from functools import partial
 
 from json import dumps
@@ -316,12 +317,17 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         async_s3_client: AioBaseClient = None
 
         async_s3_client_creator_context: ClientCreatorContext = None
-
         lock_released: bool = False
         acquired_lock: bool = False
+
+        start_time: float = perf_counter()
+        lock_aquired_time: float = 0.0
+        session_created_time: float = 0.0
+        lock_released_time: float = 0.0
         try:
             # Serialize creation of the ClientCreatorContext with the lock to avoid credential-chain races.
             await self.async_s3_client_lock.acquire()
+            lock_aquired_time = perf_counter()
             acquired_lock = True
 
             # Note: We can probably do better than doing this block every single time.
@@ -329,6 +335,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
             #       an extra layer of retry complexity at this level.
             session: AioSession = get_session()
             async_s3_client_creator_context = session.create_client("s3")
+            session_created_time = perf_counter()
 
             # Normally this is done in a python ContextManager using a with-statement,
             # but we want to be holding the lock while we create the client to avoid
@@ -339,6 +346,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                 # Release the lock while we process, allowing other tasks to work on
                 # getting their own async_s3_client. (Not an async method)
                 self.async_s3_client_lock.release()
+                lock_released_time = perf_counter()
                 lock_released = True
 
                 # Process each reservation/agent spec pair individually
@@ -352,6 +360,15 @@ class S3ReservationsStorage(AbstractReservationsStorage):
             # in case there was an error getting/entering the context manager.
             if acquired_lock and not lock_released:
                 self.async_s3_client_lock.release()
+
+        finish_time: float = perf_counter()
+
+        self.logger.info("Lock acquisition in: %fs. Session creation after: %fs. "
+                         "Lock release after: %fs. Finish after: %fs",
+                         lock_aquired_time - start_time,
+                         session_created_time - start_time,
+                         lock_released_time - start_time,
+                         finish_time - start_time)
 
     async def add_one_reservation(self, async_s3_client: AioBaseClient,
                                   reservation: Reservation,
