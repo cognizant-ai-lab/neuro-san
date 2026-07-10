@@ -312,23 +312,36 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                 if self.async_s3_client_lock is None:
                     self.async_s3_client_lock = asyncio.Lock()
 
+        # Ultimately, we need an aiobotocore client to write our objects
+        async_s3_client: AioBaseClient = None
+
         # Create an aiobotocore client for async operations.
         # Serialize creation of the ClientCreatorContext to avoid credential-chain races.
-        # Note: entering the context manager happens below, after this lock is released.
+        # Note: Entering the context manager happens below, after this lock is released.
+        #   We can probably do better than doing this block every single time.
+        #   Many articles hint at frozen-credentials caching, but that will require
+        #   an extra layer of retry complexity at this level.
         async_s3_client_creator_context: ClientCreatorContext = None
         async with self.async_s3_client_lock:
             session: AioSession = get_session()
             async_s3_client_creator_context = session.create_client("s3")
 
-        async_s3_client: AioBaseClient = None
-        async with async_s3_client_creator_context as async_s3_client:
+            # Normally this is done in a python ContextManager using a with-statement,
+            # but we want to be holding the lock while we create the client to avoid
+            # credential-chain races like NoCredentialsError.
+            async_s3_client = await async_s3_client_creator_context.__aenter__()
 
+        try:
             # Process each reservation/agent spec pair individually
             reservation: Reservation = None
             agent_spec: Dict[str, Any] = None
             for reservation, agent_spec in reservations_dict.items():
 
                 await self.add_one_reservation(async_s3_client, reservation, agent_spec, source)
+
+        finally:
+            if async_s3_client is not None:
+                await async_s3_client_creator_context.__aexit__(None, None, None)
 
     async def add_one_reservation(self, async_s3_client: AioBaseClient,
                                   reservation: Reservation,
