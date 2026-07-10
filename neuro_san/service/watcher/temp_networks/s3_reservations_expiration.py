@@ -145,7 +145,7 @@ class S3ReservationsExpiration:
                 # Reservation has expired - remove it from S3 storage
                 try:
                     s3_client: BaseClient = self.retriever.get_client()
-                    delete_function = partial(s3_client, Bucket=self.retriever.get_bucket_name(), Key=obj_key)
+                    delete_function = partial(s3_client.delete_object, Bucket=self.retriever.get_bucket_name(), Key=obj_key)
                     S3RetryUtil.do_with_retries(source, delete_function)
                     reservation_id: str = reservation_data.get("id")
                     self.logger.debug("%s: Deleted expired reservation %s from S3", self.name, reservation_id)
