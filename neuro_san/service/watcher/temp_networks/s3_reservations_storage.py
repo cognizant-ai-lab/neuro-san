@@ -356,6 +356,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                                   agent_spec: Dict[str, Any]):
         """
         Add a single reservation to S3 storage.
+        :param async_s3_client: An aiobotocore S3 client to use for the put_object call
         :param reservation: The reservation to add
         :param agent_spec: The agent spec to add
         """
