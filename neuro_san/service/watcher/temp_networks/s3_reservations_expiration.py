@@ -35,10 +35,10 @@ from neuro_san.service.watcher.temp_networks.s3_retry_util import S3RetryUtil
 
 class S3ReservationsExpiration:
     """
-    AWS S3-based implementation of ReservationsStorage.
+    Handles expiration of Reservations from S3 storage.
 
-    Stores reservations as JSON objects in an S3 bucket, with each reservation
-    stored in its associated agent spec as metadata.
+    The main entry point to this guy is expire_reservations() which gets called as part of
+    S3ReservationsStorage watcher loop.
     """
 
     def __init__(self, name: str = "S3ReservationsExpiration", bucket_name: str = "", prefix: str = "reservations/"):

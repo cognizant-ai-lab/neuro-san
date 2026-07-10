@@ -34,10 +34,10 @@ from neuro_san.service.watcher.temp_networks.s3_retry_util import S3RetryUtil
 
 class S3ReservationsReader:
     """
-    AWS S3-based implementation of ReservationsStorage.
+    Handles reading of Reservations from AWS S3.
 
-    Stores reservations as JSON objects in an S3 bucket, with each reservation
-    stored in its associated agent spec as metadata.
+    The main entry point here is get_one_reservation(), which eventually gets called from
+    ExpiringAgentNetworkStorage.get_agent_network_provider() as part of a request query.
     """
 
     def __init__(self, name: str = "S3ReservationsReader", bucket_name: str = "", prefix: str = "reservations/"):
