@@ -170,11 +170,12 @@ class AccumulatingAgentReservationist(Reservationist):
 
         return event
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
         """
         Python context manager protocol exit point.
         This is what gets called when you exit a with-statement.
         This triggers the initiation of the deployment.
+        :return: True to suppress exception. False or None to propagate exception.
         """
         # Initiate the deployments
         await self._supporting_reservationist.deploy_one(self._supporting_reservation, self.deployments)
