@@ -50,10 +50,10 @@ class FakeAsyncS3Client:
         """
         return self
 
-    async def __aexit__(self, exception_type, exception_value, traceback):
+    async def __aexit__(self, exception_type, exception_value, traceback) -> bool:
         """
         Async Context Manager protocol exit method.
-        :return: True to suppress exception. False to propagate exception.
+        :return: True to suppress exception. False or None to propagate exception.
         """
         return False
 
