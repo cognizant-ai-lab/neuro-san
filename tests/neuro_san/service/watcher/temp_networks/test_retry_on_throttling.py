@@ -80,7 +80,7 @@ class TestRetryOnThrottling(S3ReservationsStorageTestBase):
         # fast. Patches the module-local asyncio.sleep symbol that
         # _do_with_retries uses.
         with patch(
-            "neuro_san.service.watcher.temp_networks.s3_reservations_storage.asyncio.sleep"
+            "neuro_san.service.watcher.temp_networks.s3_retry_util.async_sleep"
         ):
             await self.storage.add_reservations({reservation: agent_spec})
 

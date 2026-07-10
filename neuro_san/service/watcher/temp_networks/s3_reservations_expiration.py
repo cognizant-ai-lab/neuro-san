@@ -1,0 +1,181 @@
+
+# Copyright © 2023-2026 Cognizant Technology Solutions Corp, www.cognizant.com.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# END COPYRIGHT
+
+from typing import Any
+from typing import Dict
+from typing import Iterable
+
+from time import time
+from functools import partial
+
+from json.decoder import JSONDecodeError
+from logging import getLogger
+from logging import Logger
+
+from botocore.client import BaseClient
+from botocore.exceptions import ClientError
+
+from neuro_san.service.watcher.temp_networks.s3_reservations_retriever import S3ReservationsRetriever
+from neuro_san.service.watcher.temp_networks.s3_retry_util import S3RetryUtil
+
+
+class S3ReservationsExpiration:
+    """
+    Handles expiration of Reservations from S3 storage.
+
+    The main entry point to this guy is expire_reservations() which gets called as part of
+    S3ReservationsStorage watcher loop.
+    """
+
+    def __init__(self, name: str = "S3ReservationsExpiration", bucket_name: str = "", prefix: str = "reservations/"):
+        """
+        Initialize S3 reservations storage.
+
+        :param bucket_name: S3 bucket name (defaults to AGENT_RESERVATIONS_S3_BUCKET env var)
+        :param prefix: S3 key prefix for reservation objects
+        """
+        # Our default for check_expirations_interval_seconds is 0
+        # because S3 expiration check is generally a significant execution load,
+        # and we may want to run it externally on demand rather than on a fixed schedule inside the service.
+        self.name: str = name
+        self.logger: Logger = getLogger(self.__class__.__name__)
+
+        self.retriever = S3ReservationsRetriever(name=self.name, bucket_name=bucket_name, prefix=prefix)
+        self.max_keys_per_page: int = 1000  # Max allowed by S3 API for ListObjectsV2
+
+    def start(self):
+        """
+        Initialize the S3 client and validate connection to the bucket.
+
+        This method can be called to re-initialize the connection if needed.
+        """
+        self.retriever.start()
+
+    def expire_reservations(self):
+        """
+        Remove expired reservations from S3 storage.
+        """
+        self.logger.debug("%s: Starting expiration process for S3 reservations", self.name)
+
+        # Track how many reservations we expire for reporting
+        expired_count: int = 0
+        # Get current timestamp once for consistent expiration checking
+        current_time: float = time()
+
+        for reservation_key in self.iter_reservation_keys():
+            # Attempt to expire this reservation and increment counter if successful
+            if self.expire_one_reservation(reservation_key, current_time):
+                expired_count += 1
+
+        if expired_count > 0:
+            self.logger.info("%s: Expiration complete: removed %d expired reservations from S3",
+                             self.name, expired_count)
+        else:
+            self.logger.debug("%s: Expiration complete: removed no expired reservations from S3", self.name)
+
+    def iter_reservation_keys(self) -> Iterable[str]:
+        """
+        Lists ALL objects under the current S3 bucket prefix and yields their
+        object keys.
+
+        Pages through results by calling list_objects_v2 directly with
+        ContinuationToken rather than using a boto3 Paginator. Each
+        list_objects_v2 call is a single, eager HTTP request, so wrapping it
+        in S3RetryUtil.do_with_retries gives correct per-page retry semantics for
+        transient ClientError/BotoCoreError: each page fetch is retried in
+        isolation, and the ContinuationToken from the previous successful
+        response is only consulted after that response has actually arrived.
+        """
+        continuation_token = None
+        while True:
+            kwargs = {
+                "Bucket": self.retriever.get_bucket_name(),
+                "Prefix": self.retriever.get_prefix(),
+                "MaxKeys": self.max_keys_per_page,
+            }
+            if continuation_token:
+                kwargs["ContinuationToken"] = continuation_token
+
+            s3_client: BaseClient = self.retriever.get_client()
+            response = S3RetryUtil.do_with_retries(
+                self.name,
+                partial(s3_client.list_objects_v2, **kwargs)
+            )
+            for obj in response.get("Contents", []):
+                yield obj["Key"]
+            if not response.get("IsTruncated"):
+                # This was the last page - exit loop
+                break
+            continuation_token = response["NextContinuationToken"]
+
+    def expire_one_reservation(self, obj_key: str, current_time: float, source: str = None) -> bool:
+        """
+        Check and expire a single reservation if it's expired.
+
+        :param obj_key: S3 object key for the reservation
+        :param current_time: Current timestamp to compare against
+        :return: True if reservation was expired and deleted, False otherwise
+        """
+        if source is None:
+            source = self.name
+        expired: bool = False
+        try:
+            # Retrieve the reservation object from S3
+            agent_spec: Dict[str, Any] = self.retriever.retrieve_object_with_retries(obj_key)
+            metadata: Dict[str, Any] = agent_spec.get("metadata")
+            reservation_data: Dict[str, Any] = metadata.get("reservation")
+
+            # Compare current time against reservation's expiration timestamp
+            expiration_time: float = reservation_data.get("expiration_time_in_seconds")
+            if current_time > expiration_time:
+                # Reservation has expired - remove it from S3 storage
+                try:
+                    s3_client: BaseClient = self.retriever.get_client()
+                    delete_function = partial(s3_client.delete_object,
+                                              Bucket=self.retriever.get_bucket_name(),
+                                              Key=obj_key)
+                    S3RetryUtil.do_with_retries(source, delete_function)
+                    reservation_id: str = reservation_data.get("id")
+                    self.logger.debug("%s: Deleted expired reservation %s from S3", self.name, reservation_id)
+                    expired = True
+                except ClientError as delete_error:
+                    # Handle case where another process already deleted the object
+                    if delete_error.response["Error"]["Code"] != "NoSuchKey":
+                        # Re-raise other delete errors
+                        raise delete_error
+
+                    self.logger.debug("%s: Reservation %s was already deleted by another process", self.name, obj_key)
+                    expired = True  # Consider this a successful expiration
+
+            # Reservation is still active - no action needed
+
+        except ClientError as exception:
+            # Handle case where another process already removed the object before we could read it
+            if exception.response["Error"]["Code"] == "NoSuchKey":
+                self.logger.debug("%s: Reservation %s was already removed by another process", self.name, obj_key)
+                expired = True  # Object is gone, which is the desired outcome for expiration
+            else:
+                # Log other S3 errors but don't raise - allows expiration to continue
+                self.logger.error("%s: S3 error processing reservation object %s: %s",
+                                  self.name, obj_key, str(exception))
+
+        except JSONDecodeError as exception:
+            # Log JSON errors but don't raise - allows expiration process to continue
+            self.logger.error("%s: JSON error processing reservation object %s during expire: %s",
+                              self.name, obj_key, str(exception))
+
+        return expired

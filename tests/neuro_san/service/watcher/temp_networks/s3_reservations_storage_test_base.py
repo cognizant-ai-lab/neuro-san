@@ -76,7 +76,7 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
         # Patch boto3_client at the import boundary in s3_reservations_storage
         # so storage.start() receives our fake instead of a real boto3 client.
         boto3_patcher = patch(
-            "neuro_san.service.watcher.temp_networks.s3_reservations_storage.boto3_client",
+            "neuro_san.service.watcher.temp_networks.s3_reservations_retriever.boto3_client",
             return_value=self.fake_s3,
         )
         boto3_patcher.start()
@@ -89,7 +89,7 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
         # Patch aiobotocore_client at the import boundary in s3_reservations_storage
         # so storage.start() receives our fake instead of a real aiobotocore client.
         aiobotocore_patcher = patch(
-            "neuro_san.service.watcher.temp_networks.s3_reservations_storage.AioSession.create_client",
+            "neuro_san.service.watcher.temp_networks.s3_reservations_writer.AioSession.create_client",
             return_value=self.fake_async_s3,
         )
         aiobotocore_patcher.start()
