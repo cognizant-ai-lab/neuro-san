@@ -43,6 +43,8 @@ from botocore.exceptions import BotoCoreError
 from botocore.exceptions import ClientError
 from botocore.exceptions import NoCredentialsError
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.abstract_reservations_storage \
@@ -187,6 +189,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         Generic retry wrapper for boto3 calls.
         boto3/botocore already retries, but this adds a bit of extra resilience and backoff for batch operations.
         """
+        logger: SensitiveLogger = SensitiveLogger(self.logger)
         attempt: int = 1
         while True:
             try:
@@ -197,7 +200,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                 # Compute exponential backoff with jitter
                 sleep = base_sleep * (2 ** (attempt - 1))
                 sleep = sleep * (0.5 + random.random())  # sleep time jitter
-                self.logger.warning("%s: Retryable ClientError (%s). attempt=%d", self._name, err, attempt)
+                logger.warning("%s: Retryable ClientError (%s). attempt=%d", self._name, err, attempt)
                 time.sleep(sleep)
                 attempt += 1
             except BotoCoreError as err:
@@ -207,15 +210,20 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                 # Compute exponential backoff with jitter
                 sleep = base_sleep * (2 ** (attempt - 1))
                 sleep = sleep * (0.5 + random.random())
-                self.logger.warning("%s: Retryable BotoCoreError (%s). attempt=%d", self._name, err, attempt)
+                logger.warning("%s: Retryable BotoCoreError (%s). attempt=%d", self._name, err, attempt)
                 time.sleep(sleep)
                 attempt += 1
+            except Exception as err:  # pylint: disable=broad-except
+                # Catch-all for unexpected exceptions; log and re-raise
+                logger.error("%s: Unexpected error (%s). attempt=%d", self._name, err, attempt)
+                raise
 
     async def _async_do_with_retries(self, fn, *, max_attempts: int = 8, base_sleep: float = 0.25):
         """
         Generic retry wrapper for boto3 calls.
         boto3/botocore already retries, but this adds a bit of extra resilience and backoff for batch operations.
         """
+        logger: SensitiveLogger = SensitiveLogger(self.logger)
         attempt: int = 1
         while True:
             try:
@@ -226,7 +234,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                 # Compute exponential backoff with jitter
                 sleep = base_sleep * (2 ** (attempt - 1))
                 sleep = sleep * (0.5 + random.random())  # sleep time jitter
-                self.logger.warning("%s: Retryable ClientError (%s). attempt=%d", self._name, err, attempt)
+                logger.warning("%s: Retryable ClientError (%s). attempt=%d", self._name, err, attempt)
                 await asyncio.sleep(sleep)
                 attempt += 1
             except BotoCoreError as err:
@@ -236,9 +244,16 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                 # Compute exponential backoff with jitter
                 sleep = base_sleep * (2 ** (attempt - 1))
                 sleep = sleep * (0.5 + random.random())
-                self.logger.warning("%s: Retryable BotoCoreError (%s). attempt=%d", self._name, err, attempt)
+                logger.warning("%s: Retryable BotoCoreError (%s). attempt=%d", self._name, err, attempt)
                 await asyncio.sleep(sleep)
                 attempt += 1
+            except asyncio.CancelledError:
+                self.logger.info("%s: Task was cancelled.", self._name)
+                raise
+            except Exception as err:  # pylint: disable=broad-except
+                # Catch-all for unexpected exceptions; log and re-raise
+                logger.error("%s: Unexpected error (%s). attempt=%d", self._name, err, attempt)
+                raise
 
     def get_obj_key_for_reservation(self, reservation_id: str) -> str:
         """
