@@ -20,6 +20,8 @@ specific S3 object key. This module pins that key format as a contract.
 """
 import pytest
 
+from neuro_san.service.watcher.temp_networks.s3_retry_utils import S3RetryUtil
+
 from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
 
@@ -77,7 +79,7 @@ class TestObjectKeyFormat(S3ReservationsStorageTestBase):
         # (e.g., the writer is refactored but the helper is not).
         self.assertEqual(
             expected_key,
-            self.storage.get_obj_key_for_reservation(reservation_id),
+            S3RetryUtil.get_obj_key_for_reservation(self.storage.prefix, reservation_id),
             "get_obj_key_for_reservation does not produce the same key "
             "the storage wrote to; read and write would disagree.",
         )

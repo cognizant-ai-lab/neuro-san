@@ -312,7 +312,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         json_content: str = obj_response["Body"].read().decode("utf-8")
         return loads(json_content)
 
-    def get_one_reservation(self, reservation_id: str) -> Tuple[Reservation, Any]:
+    def get_one_reservation(self, obj_key: str) -> Tuple[Reservation, Any]:
         """
         Sync a single reservation from S3.
 
@@ -320,6 +320,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         :return: Tuple of (reservation, agent_spec) if successful and not expired,
                  (None, None) otherwise
         """
+        reservation_id: str = obj_key
         reservation: Reservation = None
         agent_network: AgentNetwork = None
         # Construct the S3 object key for this reservation ID
