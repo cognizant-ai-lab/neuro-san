@@ -79,7 +79,7 @@ class TestObjectKeyFormat(S3ReservationsStorageTestBase):
         # (e.g., the writer is refactored but the helper is not).
         self.assertEqual(
             expected_key,
-            S3RetryUtil.get_obj_key_for_reservation(self.storage.prefix, reservation_id),
+            S3RetryUtil.get_obj_key_for_reservation(self.storage.reader.get_prefix(), reservation_id),
             "get_obj_key_for_reservation does not produce the same key "
             "the storage wrote to; read and write would disagree.",
         )
