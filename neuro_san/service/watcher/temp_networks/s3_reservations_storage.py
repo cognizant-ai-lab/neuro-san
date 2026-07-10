@@ -31,6 +31,7 @@ from json import loads
 from json.decoder import JSONDecodeError
 from logging import getLogger
 from logging import Logger
+from threading import Lock
 
 from aiobotocore.session import get_session
 from aiobotocore.session import AioSession
@@ -104,6 +105,9 @@ class S3ReservationsStorage(AbstractReservationsStorage):
 
         # Set up S3 key prefix and initialize sync target
         self.prefix: str = prefix
+
+        self.sync_lock: Lock = Lock()
+        self.async_s3_client_lock: asyncio.Lock = None
         self.read_s3_client: BaseClient = None
         self.delete_s3_client: BaseClient = None
 
@@ -120,6 +124,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         """
         try:
             # Initialize S3 client using default AWS credential chain
+            # DEF - these are long-lived. What if credentials expire?
             self.read_s3_client = boto3_client("s3")
             self.delete_s3_client = boto3_client("s3")
 
@@ -295,10 +300,22 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         if len(reservations_dict) == 0:
             return
 
-        # Create an aiobotocore client for async operations
-        session: AioSession = get_session()
-        async_s3_client: ClientCreatorContext = None
-        async with session.create_client("s3") as async_s3_client:
+        # Be sure we have an asyncio Lock to get our sessions.
+        if self.async_s3_client_lock is None:
+            with self.sync_lock:
+                # Be sure everyone has the same lock
+                if self.async_s3_client_lock is None:
+                    self.async_s3_client_lock = asyncio.Lock()
+
+        # Create an aiobotocore client for async operations.
+        # Serialize creation of the ClientCreatorContext to avoid credential-chain races.
+        # Note: entering the context manager happens below, after this lock is released.
+        async_s3_client_creator_context: ClientCreatorContext = None
+        async with self.async_s3_client_lock:
+            session: AioSession = get_session()
+            async_s3_client_creator_context = session.create_client("s3")
+
+        async with async_s3_client_creator_context as async_s3_client:
 
             # Process each reservation/agent spec pair individually
             reservation: Reservation = None
