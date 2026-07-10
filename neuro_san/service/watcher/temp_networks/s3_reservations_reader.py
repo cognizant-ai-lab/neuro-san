@@ -61,15 +61,14 @@ class S3ReservationsReader:
         """
         self.retriever.start()
 
-    def get_one_reservation(self, obj_key: str) -> Tuple[Reservation, Any]:
+    def get_one_reservation(self, reservation_id: str) -> Tuple[Reservation, AgentNetwork]:
         """
         Sync a single reservation from S3.
 
-        :param reservation_id: reservation ID to retrieve (used to construct S3 object key)
-        :return: Tuple of (reservation, agent_spec) if successful and not expired,
+        :param reservation_id: Reservation ID to retrieve (used to construct S3 object key)
+        :return: Tuple of (reservation, agent_network) if successful and not expired,
                  (None, None) otherwise
         """
-        reservation_id: str = obj_key
         reservation: Reservation = None
         agent_network: AgentNetwork = None
         # Construct the S3 object key for this reservation ID
