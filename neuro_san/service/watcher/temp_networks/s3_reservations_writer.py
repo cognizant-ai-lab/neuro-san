@@ -41,10 +41,17 @@ from neuro_san.service.watcher.temp_networks.s3_retry_util import S3RetryUtil
 
 class S3ReservationsWriter:
     """
-    AWS S3-based class that writes reservations out to persistent store.
+    AWS S3-based class that writes reservations out to persistent store
+    managed by S3ReservationsStorage.
 
     Stores reservations as JSON objects in an S3 bucket, with each reservation
     stored in its associated agent spec as metadata.
+
+    The main entry point here is add_reservations(), which eventually gets called from the
+    TempNetworkStorageUpdater.process_one_queued_item() method via the
+    AbstractAgentReservationist.deploy_together() method.
+    These calls happen from their own asyncio EventLoop, very separate from the reads and expirations
+    also managed by S3ReservationsStorage.
     """
 
     def __init__(self, name: str = "S3ReservationsWriter", bucket_name: str = "", prefix: str = "reservations/"):
