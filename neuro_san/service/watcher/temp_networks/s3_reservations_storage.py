@@ -323,7 +323,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         #   an extra layer of retry complexity at this level.
         async_s3_client_creator_context: ClientCreatorContext = None
 
-        released_lock: bool = False
+        lock_released: bool = False
         try:
             await self.async_s3_client_lock.acquire()
 
@@ -338,9 +338,9 @@ class S3ReservationsStorage(AbstractReservationsStorage):
             async with async_s3_client_creator_context as async_s3_client:
 
                 # Release the lock while we process, allowing other tasks to work on
-                # getting their own async_s3_client.
-                released_lock = True
-                await self.async_s3_client_lock.release()
+                # getting their own async_s3_client. (Not an async method)
+                self.async_s3_client_lock.release()
+                lock_released = True
 
                 # Process each reservation/agent spec pair individually
                 reservation: Reservation = None
@@ -349,8 +349,10 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                     await self.add_one_reservation(async_s3_client, reservation, agent_spec)
 
         finally:
-            if not released_lock:
-                await self.async_s3_client_lock.release()
+            # Always release the lock if we have not already done so
+            # in case there was an error getting the context manager.
+            if not lock_released and self.async_s3_client_lock.locked():
+                self.async_s3_client_lock.release()
 
     async def add_one_reservation(self, async_s3_client: AioBaseClient,
                                   reservation: Reservation,
