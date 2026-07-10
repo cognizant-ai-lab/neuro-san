@@ -15,10 +15,10 @@
 #
 # END COPYRIGHT
 
-from asyncio import async_sleep
+from asyncio import sleep as async_sleep
 from asyncio import CancelledError
 from random import random
-from time import sync_sleep
+from time import sleep as sync_sleep
 
 from logging import getLogger
 from logging import Logger
