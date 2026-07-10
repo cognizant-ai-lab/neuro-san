@@ -296,10 +296,10 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                 if self.async_s3_client_lock is None:
                     self.async_s3_client_lock = asyncio.Lock()
 
-        # Create an aiobotocore client for async operations
         # Create an aiobotocore client for async operations.
         # Serialize creation of the ClientCreatorContext to avoid credential-chain races.
         # Note: entering the context manager happens below, after this lock is released.
+        async_s3_client_creator_context: ClientCreatorContext = None
         async with self.async_s3_client_lock:
             session: AioSession = get_session()
             async_s3_client_creator_context = session.create_client("s3")
