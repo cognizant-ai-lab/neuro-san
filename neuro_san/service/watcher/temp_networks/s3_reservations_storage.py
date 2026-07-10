@@ -134,7 +134,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         """
         Sync a single reservation from S3.
 
-        :param reservation_id: reservation ID to retrieve (used to construct S3 object key)
+        :param obj_key: reservation ID to retrieve (used to construct S3 object key)
         :return: Tuple of (reservation, agent_spec) if successful and not expired,
                  (None, None) otherwise
         """
