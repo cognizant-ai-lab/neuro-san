@@ -21,9 +21,11 @@ monitoring and telemetry when those features become available.
 
 import logging
 import os
+import re
 import sys
 import threading
 import time
+from typing import List
 from typing import Optional
 
 import psutil
@@ -38,17 +40,21 @@ CONSOLE_TICK_INTERVAL = 1
 OOM_WARNING_THRESHOLD = 0.80
 
 
-class Heartbeat:
+class Heartbeat:  # pylint: disable=too-many-instance-attributes
     """Logs periodic progress while requests are in-flight.
 
     Holds the server process handle so the heartbeat thread can
     read thread counts without the caller passing it each time.
     """
 
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(
             self, server_proc: Optional[psutil.Process],
             client_proc: Optional[psutil.Process] = None,
             output_dir: Optional[str] = None,
+            log_monitor=None,
+            log_start_pos=None,
+            primary_start_pattern: Optional[str] = None,
     ) -> None:
         self._server_proc = server_proc
         self._client_proc = client_proc
@@ -56,6 +62,16 @@ class Heartbeat:
         self._total_system_ram = psutil.virtual_memory().total
         self._oom_warned = False
         self._swap_warned = False
+        # Optional server-log source for per-request server-side
+        # timing.  When set, the heartbeat parses primary
+        # streaming_chat Start/Finish pairs to report cumulative
+        # server-side min/avg/max durations.
+        self._log_monitor = log_monitor
+        self._log_start_pos = log_start_pos
+        self._primary_start_re = (
+            re.compile(primary_start_pattern)
+            if primary_start_pattern else None
+        )
 
     def _sample_client_rss(self, peak_rss, peak_ref) -> float:
         """Sample client RSS and update peak if higher.
@@ -149,6 +165,7 @@ class Heartbeat:
                 )
 
     # pylint: disable=too-many-locals,too-many-arguments
+    # pylint: disable=too-many-statements
     def progress_heartbeat(self, futures, total, start_time,
                            stop_event, *,
                            ready_event: threading.Event,
@@ -233,11 +250,24 @@ class Heartbeat:
                         "pct": cur_pct,
                         "avail_gb": cur_avail,
                     }
+                dur_info = (
+                    "  dur/client: "
+                    + Heartbeat.format_dur_stats(
+                        Heartbeat._client_durations(futures),
+                    )
+                )
+                server_durs = self._server_durations()
+                if server_durs is not None:
+                    dur_info += (
+                        "  dur/server: "
+                        + Heartbeat.format_dur_stats(server_durs)
+                    )
                 line = (
                     f"  [progress] {done} of {total} completed"
                     f" ({pct}%{fail_info}) --"
                     f" {Heartbeat._fmt_elapsed(elapsed)}"
-                    f" elapsed [{ts}]{suffix}{thread_info}"
+                    f" elapsed [{ts}]{suffix}  {dur_info.strip()}"
+                    f"{thread_info}"
                     f"{server_rss_info}{sys_mem_info}"
                 )
                 self._write_to_file(progress_file, line)
@@ -269,6 +299,75 @@ class Heartbeat:
         if seconds >= 60:
             return f"{seconds}s ({seconds // 60}m)"
         return f"{seconds}s"
+
+    @staticmethod
+    def format_dur_stats(durations: List[float]) -> str:
+        """Format cumulative min/avg/max over durations (seconds).
+
+        Returns "n/a" when there are no durations yet.
+        """
+        if not durations:
+            return "n/a"
+        lo = int(min(durations))
+        hi = int(max(durations))
+        avg = int(sum(durations) / len(durations))
+        return (
+            f"{Heartbeat._fmt_elapsed(lo)} min /"
+            f" {Heartbeat._fmt_elapsed(avg)} avg /"
+            f" {Heartbeat._fmt_elapsed(hi)} max"
+        )
+
+    @staticmethod
+    def _client_durations(futures) -> List[float]:
+        """Collect per-request wall-time for completed futures.
+
+        Reads only already-done futures (non-blocking) and skips
+        cancelled ones or ones that raised, so a failed request
+        can never break the heartbeat line.
+        """
+        durations: List[float] = []
+        for fut in futures:
+            if not fut.done() or fut.cancelled():
+                continue
+            try:
+                if fut.exception() is not None:
+                    continue
+                result = fut.result()
+            except Exception:  # pylint: disable=broad-exception-caught
+                continue
+            dur = result.get("elapsed", result.get("duration"))
+            if isinstance(dur, (int, float)) and dur > 0:
+                durations.append(float(dur))
+        return durations
+
+    def _server_durations(self) -> Optional[List[float]]:
+        """Collect cumulative server-side per-request durations.
+
+        Parses primary streaming_chat Start/Finish pairs from the
+        server log since the stage start position.  Returns None
+        when no server log is available (so the caller can render
+        ``n/a`` and distinguish "no data source" from "no requests
+        yet").
+        """
+        if self._log_monitor is None or self._log_start_pos is None:
+            return None
+        try:
+            pairs = self._log_monitor.parse_streaming_chat_timing_since(
+                self._log_start_pos,
+            )
+        except (OSError, ValueError):
+            return []
+        durations: List[float] = []
+        for pair in pairs:
+            if self._primary_start_re is not None:
+                agent = pair.get("agent", "")
+                start_line = f"Start {agent}/streaming_chat"
+                if not self._primary_start_re.search(start_line):
+                    continue
+            dur = pair.get("duration")
+            if isinstance(dur, (int, float)) and dur > 0:
+                durations.append(float(dur))
+        return durations
 
     # pylint: disable=too-many-positional-arguments
     def _sample_server_metrics(

@@ -383,6 +383,8 @@ class TrafficRunner:
                   output_dir=None,
                   stage_timeout=None,
                   cancel_event=None,
+                  log_monitor=None,
+                  primary_start_pattern=None,
                   ) -> Tuple[
         float, List[RequestResult], SharedRef, SharedRef,
         SharedRef, SharedRef, bool, bool,
@@ -417,7 +419,16 @@ class TrafficRunner:
             heartbeat_ready = threading.Event()
             fires_done_event = threading.Event()
             futures_ref: list = []
-            hb = Heartbeat(server_proc, client_proc, output_dir)
+            log_start_pos = (
+                log_monitor.read_position()
+                if log_monitor is not None else None
+            )
+            hb = Heartbeat(
+                server_proc, client_proc, output_dir,
+                log_monitor=log_monitor,
+                log_start_pos=log_start_pos,
+                primary_start_pattern=primary_start_pattern,
+            )
             heartbeat_thread = threading.Thread(
                 target=hb.progress_heartbeat,
                 args=(futures_ref, num_requests, start,

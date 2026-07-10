@@ -62,6 +62,7 @@ from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.config import HEARTBEAT_INTERVAL_SECONDS
 from tests.load_tests.config import THREAD_JOIN_TIMEOUT
 from tests.load_tests.cost_estimator import CostEstimator
+from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.prompts.agent_profile import AgentProfile
@@ -691,6 +692,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 output_dir=self._output_dir,
                 stage_timeout=self.args.stage_timeout,
                 cancel_event=self._cancel_event,
+                log_monitor=self.log_monitor,
+                primary_start_pattern=(
+                    self.profile.primary_start_pattern
+                ),
             )
         )
         if interrupted:
@@ -1374,9 +1379,40 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             args.total_timeout *= factor
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def _server_only_dur_stats(
+            self, log_pos, pri_start_re,
+    ) -> str:
+        """Cumulative server-side min/avg/max for the primary agent.
+
+        Parses primary streaming_chat Start/Finish pairs seen since
+        the round's log position and formats them.  Returns "n/a"
+        until at least one request has completed.
+        """
+        if self.log_monitor is None:
+            return "n/a"
+        try:
+            pairs = (
+                self.log_monitor
+                .parse_streaming_chat_timing_since(log_pos)
+            )
+        except (OSError, ValueError):
+            return "n/a"
+        durations = []
+        for pair in pairs:
+            agent = pair.get("agent", "")
+            start_line = f"Start {agent}/streaming_chat"
+            if not pri_start_re.search(start_line):
+                continue
+            dur = pair.get("duration")
+            if isinstance(dur, (int, float)) and dur > 0:
+                durations.append(float(dur))
+        return Heartbeat.format_dur_stats(durations)
+
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _server_only_heartbeat(
             self, received, expected, completed,
             elapsed, now, snap, cur_mem,
+            dur_stats="n/a",
     ) -> None:
         """Log a periodic heartbeat during server-only monitoring."""
         cur_used_mb = (
@@ -1416,11 +1452,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 f"  {in_flight} in-flight"
             )
         logger.info(
-            "  [heartbeat] %s [%s]%s%s%s"
+            "  [heartbeat] %s [%s]%s  dur/server: %s%s%s"
             "  sysmem: %.0f%% (%.0fM used"
             " / %.1fG free)",
             fmt_elapsed, ts,
             progress_str,
+            dur_stats,
             threads_str, rss_str,
             cur_mem.percent, cur_used_mb,
             cur_avail_gb,
@@ -1854,11 +1891,17 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
                         if (now - last_heartbeat
                                 >= heartbeat_interval):
+                            dur_stats = (
+                                self._server_only_dur_stats(
+                                    log_pos, pri_start_re,
+                                )
+                            )
                             self._server_only_heartbeat(
                                 count, expected,
                                 completed,
                                 elapsed, now,
                                 snap, cur_mem,
+                                dur_stats,
                             )
                             last_heartbeat = now
 
