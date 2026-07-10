@@ -322,27 +322,35 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         #   Many articles hint at frozen-credentials caching, but that will require
         #   an extra layer of retry complexity at this level.
         async_s3_client_creator_context: ClientCreatorContext = None
-        async with self.async_s3_client_lock:
+
+        released_lock: bool = False
+        try:
+            await self.async_s3_client_lock.acquire()
+
+            # Note: These are not async methods
             session: AioSession = get_session()
             async_s3_client_creator_context = session.create_client("s3")
 
             # Normally this is done in a python ContextManager using a with-statement,
             # but we want to be holding the lock while we create the client to avoid
             # credential-chain races like NoCredentialsError.
-            # pylint: disable=unnecessary-dunder-call
-            async_s3_client = await async_s3_client_creator_context.__aenter__()
 
-        try:
-            # Process each reservation/agent spec pair individually
-            reservation: Reservation = None
-            agent_spec: Dict[str, Any] = None
-            for reservation, agent_spec in reservations_dict.items():
+            async with async_s3_client_creator_context as async_s3_client:
 
-                await self.add_one_reservation(async_s3_client, reservation, agent_spec)
+                # Release the lock while we process, allowing other tasks to work on
+                # getting their own async_s3_client.
+                released_lock = True
+                await self.async_s3_client_lock.release()
+
+                # Process each reservation/agent spec pair individually
+                reservation: Reservation = None
+                agent_spec: Dict[str, Any] = None
+                for reservation, agent_spec in reservations_dict.items():
+                    await self.add_one_reservation(async_s3_client, reservation, agent_spec)
 
         finally:
-            if async_s3_client is not None:
-                await async_s3_client_creator_context.__aexit__(None, None, None)
+            if not released_lock:
+                await self.async_s3_client_lock.release()
 
     async def add_one_reservation(self, async_s3_client: AioBaseClient,
                                   reservation: Reservation,
