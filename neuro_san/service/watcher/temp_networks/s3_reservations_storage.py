@@ -329,6 +329,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
             # Normally this is done in a python ContextManager using a with-statement,
             # but we want to be holding the lock while we create the client to avoid
             # credential-chain races like NoCredentialsError.
+            # pylint: disable=unnecessary-dunder-call
             async_s3_client = await async_s3_client_creator_context.__aenter__()
 
         try:
@@ -337,7 +338,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
             agent_spec: Dict[str, Any] = None
             for reservation, agent_spec in reservations_dict.items():
 
-                await self.add_one_reservation(async_s3_client, reservation, agent_spec, source)
+                await self.add_one_reservation(async_s3_client, reservation, agent_spec)
 
         finally:
             if async_s3_client is not None:
@@ -345,13 +346,11 @@ class S3ReservationsStorage(AbstractReservationsStorage):
 
     async def add_one_reservation(self, async_s3_client: AioBaseClient,
                                   reservation: Reservation,
-                                  agent_spec: Dict[str, Any],
-                                  source: str):
+                                  agent_spec: Dict[str, Any]):
         """
         Add a single reservation to S3 storage.
         :param reservation: The reservation to add
         :param agent_spec: The agent spec to add
-        :param source: A string describing where the deployment was coming from
         """
         # Build complete data structure containing reservation metadata,
         # the associated agent_spec, source information, and storage timestamp
