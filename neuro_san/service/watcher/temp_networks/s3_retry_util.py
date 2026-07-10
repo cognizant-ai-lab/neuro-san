@@ -35,7 +35,7 @@ class S3RetryUtil:
     """
 
     @staticmethod
-    def _is_retryable_client_error(err: ClientError) -> bool:
+    def is_retryable_client_error(err: ClientError) -> bool:
         """
         Determine if a ClientError is worth retrying based on its error code and HTTP status.
         :param err: The ClientError exception to evaluate
@@ -69,7 +69,7 @@ class S3RetryUtil:
         return False
 
     @staticmethod
-    def _do_with_retries(source: str, fn, *, max_attempts: int = 8, base_sleep: float = 0.25):
+    def do_with_retries(source: str, fn, *, max_attempts: int = 8, base_sleep: float = 0.25):
         """
         Generic retry wrapper for boto3 calls.
         boto3/botocore already retries, but this adds a bit of extra resilience and backoff for batch operations.
@@ -82,7 +82,7 @@ class S3RetryUtil:
             try:
                 return fn()
             except ClientError as err:
-                if attempt >= max_attempts or not S3RetryUtil._is_retryable_client_error(err):
+                if attempt >= max_attempts or not S3RetryUtil.is_retryable_client_error(err):
                     raise
                 sleep = S3RetryUtil.exponential_backoff_with_jitter(base_sleep, attempt)
                 sensitive_logger.warning("%s: Retryable sync ClientError (%s). attempt=%d", source, err, attempt)
@@ -102,7 +102,7 @@ class S3RetryUtil:
                 raise
 
     @staticmethod
-    async def _async_do_with_retries(source: str, fn, *, max_attempts: int = 8, base_sleep: float = 0.25):
+    async def async_do_with_retries(source: str, fn, *, max_attempts: int = 8, base_sleep: float = 0.25):
         """
         Generic retry wrapper for boto3 calls.
         boto3/botocore already retries, but this adds a bit of extra resilience and backoff for batch operations.
@@ -116,7 +116,7 @@ class S3RetryUtil:
             try:
                 return await fn()
             except ClientError as err:
-                if attempt >= max_attempts or not S3RetryUtil._is_retryable_client_error(err):
+                if attempt >= max_attempts or not S3RetryUtil.is_retryable_client_error(err):
                     raise
 
                 sleep = S3RetryUtil.exponential_backoff_with_jitter(base_sleep, attempt)

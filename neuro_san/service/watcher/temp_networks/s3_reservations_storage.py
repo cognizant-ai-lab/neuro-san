@@ -300,7 +300,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
 
         if source is None:
             source = self._name
-        await S3RetryUtil._async_do_with_retries(source, put_function)
+        await S3RetryUtil.async_do_with_retries(source, put_function)
 
         self.logger.debug("%s: Successfully stored reservation %s in S3", self._name, reservation_id)
 
@@ -315,7 +315,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         get_function = partial(self.read_s3_client.get_object, Bucket=self.bucket_name, Key=obj_key)
         if source is None:
             source = self._name
-        obj_response: Dict[str, Any] = S3RetryUtil._do_with_retries(source, get_function)
+        obj_response: Dict[str, Any] = S3RetryUtil.do_with_retries(source, get_function)
         # Parse JSON content from S3 object body
         json_content: str = obj_response["Body"].read().decode("utf-8")
         return loads(json_content)
@@ -387,7 +387,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                 # Reservation has expired - remove it from S3 storage
                 try:
                     delete_function = partial(self.delete_s3_client.delete_object, Bucket=self.bucket_name, Key=obj_key)
-                    S3RetryUtil._do_with_retries(source, delete_function)
+                    S3RetryUtil.do_with_retries(source, delete_function)
                     reservation_id: str = reservation_data.get("id")
                     self.logger.debug("%s: Deleted expired reservation %s from S3", self._name, reservation_id)
                     expired = True
@@ -441,7 +441,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
             }
             if continuation_token:
                 kwargs["ContinuationToken"] = continuation_token
-            response = S3RetryUtil._do_with_retries(
+            response = S3RetryUtil.do_with_retries(
                 self._name,
                 partial(self.delete_s3_client.list_objects_v2, **kwargs)
             )
