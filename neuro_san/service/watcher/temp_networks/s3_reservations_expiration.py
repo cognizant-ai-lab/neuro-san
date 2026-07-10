@@ -95,7 +95,7 @@ class S3ReservationsExpiration:
         Pages through results by calling list_objects_v2 directly with
         ContinuationToken rather than using a boto3 Paginator. Each
         list_objects_v2 call is a single, eager HTTP request, so wrapping it
-        in _do_with_retries gives correct per-page retry semantics for
+        in S3RetryUtil.do_with_retries gives correct per-page retry semantics for
         transient ClientError/BotoCoreError: each page fetch is retried in
         isolation, and the ContinuationToken from the previous successful
         response is only consulted after that response has actually arrived.
