@@ -312,22 +312,19 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                 if self.async_s3_client_lock is None:
                     self.async_s3_client_lock = asyncio.Lock()
 
-        # Ultimately, we need an aiobotocore client to write our objects
+        # Create an aiobotocore client for async operations.
         async_s3_client: AioBaseClient = None
 
-        # Create an aiobotocore client for async operations.
-        # Serialize creation of the ClientCreatorContext to avoid credential-chain races.
-        # Note: Entering the context manager happens below, after this lock is released.
-        #   We can probably do better than doing this block every single time.
-        #   Many articles hint at frozen-credentials caching, but that will require
-        #   an extra layer of retry complexity at this level.
         async_s3_client_creator_context: ClientCreatorContext = None
 
         lock_released: bool = False
         try:
+            # Serialize creation of the ClientCreatorContext with the lock to avoid credential-chain races.
             await self.async_s3_client_lock.acquire()
 
-            # Note: These are not async methods
+            # Note: We can probably do better than doing this block every single time.
+            #       Many articles hint at frozen-credentials caching, but that will require
+            #       an extra layer of retry complexity at this level.
             session: AioSession = get_session()
             async_s3_client_creator_context = session.create_client("s3")
 
