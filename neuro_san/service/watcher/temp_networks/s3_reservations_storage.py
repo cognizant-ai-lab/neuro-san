@@ -33,6 +33,7 @@ from logging import getLogger
 from logging import Logger
 from threading import Lock
 
+from aiobotocore.client import AioBaseClient
 from aiobotocore.session import get_session
 from aiobotocore.session import AioSession
 from aiobotocore.session import ClientCreatorContext
@@ -319,6 +320,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
             session: AioSession = get_session()
             async_s3_client_creator_context = session.create_client("s3")
 
+        async_s3_client: AioBaseClient = None
         async with async_s3_client_creator_context as async_s3_client:
 
             # Process each reservation/agent spec pair individually
@@ -326,32 +328,44 @@ class S3ReservationsStorage(AbstractReservationsStorage):
             agent_spec: Dict[str, Any] = None
             for reservation, agent_spec in reservations_dict.items():
 
-                # Build complete data structure containing reservation metadata,
-                # the associated agent_spec, source information, and storage timestamp
-                current_time: float = time.time()
-                new_metadata: Dict[str, Any] = {
-                    "reservation": self.converter.to_dict(reservation),  # Serialized reservation object
-                    "stored_at": current_time              # When stored in S3
-                }
-                if agent_spec.get("metadata") is None:
-                    agent_spec["metadata"] = {}
-                agent_spec["metadata"].update(new_metadata)
+                await self.add_one_reservation(async_s3_client, reservation, agent_spec, source)
 
-                # Generate S3 key using prefix and reservation ID for easy lookup
-                reservation_id: str = reservation.get_reservation_id()
-                key: str = self.get_obj_key_for_reservation(reservation_id)
+    async def add_one_reservation(self, async_s3_client: AioBaseClient,
+                                  reservation: Reservation,
+                                  agent_spec: Dict[str, Any],
+                                  source: str):
+        """
+        Add a single reservation to S3 storage.
+        :param reservation: The reservation to add
+        :param agent_spec: The agent spec to add
+        :param source: A string describing where the deployment was coming from
+        """
+        # Build complete data structure containing reservation metadata,
+        # the associated agent_spec, source information, and storage timestamp
+        current_time: float = time.time()
+        new_metadata: Dict[str, Any] = {
+            "reservation": self.converter.to_dict(reservation),  # Serialized reservation object
+            "stored_at": current_time              # When stored in S3
+        }
+        if agent_spec.get("metadata") is None:
+            agent_spec["metadata"] = {}
+        agent_spec["metadata"].update(new_metadata)
 
-                # Store as JSON object in S3 with proper content type
-                json_body: str = dumps(agent_spec, indent=4)  # Pretty-printed JSON
+        # Generate S3 key using prefix and reservation ID for easy lookup
+        reservation_id: str = reservation.get_reservation_id()
+        key: str = self.get_obj_key_for_reservation(reservation_id)
 
-                put_function = partial(async_s3_client.put_object,
-                                       Bucket=self.bucket_name,
-                                       Key=key,
-                                       Body=json_body,
-                                       ContentType="application/json")
-                await self._async_do_with_retries(put_function)
+        # Store as JSON object in S3 with proper content type
+        json_body: str = dumps(agent_spec, indent=4)  # Pretty-printed JSON
 
-                self.logger.debug("%s: Successfully stored reservation %s in S3", self._name, reservation_id)
+        put_function = partial(async_s3_client.put_object,
+                               Bucket=self.bucket_name,
+                               Key=key,
+                               Body=json_body,
+                               ContentType="application/json")
+        await self._async_do_with_retries(put_function)
+
+        self.logger.debug("%s: Successfully stored reservation %s in S3", self._name, reservation_id)
 
     def _retrieve_object_with_retries(self, obj_key: str) -> Dict[str, Any]:
         """
