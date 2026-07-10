@@ -22,7 +22,6 @@ from typing import Tuple
 
 import asyncio
 import os
-import random
 import time
 from time import perf_counter
 from functools import partial
@@ -41,17 +40,15 @@ from aiobotocore.session import ClientCreatorContext
 
 from boto3 import client as boto3_client
 from botocore.client import BaseClient
-from botocore.exceptions import BotoCoreError
 from botocore.exceptions import ClientError
 from botocore.exceptions import NoCredentialsError
-
-from leaf_common.logging.sensitive_logger import SensitiveLogger
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.abstract_reservations_storage \
     import AbstractReservationsStorage
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
+from neuro_san.service.watcher.temp_networks.s3_retry_util import S3RetryUtil
 
 
 class S3ReservationsStorage(AbstractReservationsStorage):
@@ -153,110 +150,6 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         # let's start underlying logic:
         super().start()
 
-    def _is_retryable_client_error(self, err: ClientError) -> bool:
-        """
-        Determine if a ClientError is worth retrying based on its error code and HTTP status.
-        :param err: The ClientError exception to evaluate
-        :return: True if the error is likely transient and worth retrying, False otherwise
-        """
-        client_error = err.response.get("Error")
-        if not client_error:
-            client_error = {}
-        code = client_error.get("Code", "")
-        error_response = err.response.get("ResponseMetadata")
-        if not error_response:
-            error_response = {}
-        status = error_response.get("HTTPStatusCode", 0)
-
-        # Common codes for transient situations
-        retryable_codes = {
-            "SlowDown",
-            "Throttling",
-            "ThrottlingException",
-            "RequestTimeout",
-            "RequestTimeoutException",
-            "InternalError",
-            "ServiceUnavailable",
-            "503",
-        }
-        if code in retryable_codes:
-            return True
-        # Retry on some 5xx
-        if isinstance(status, int) and 500 <= status < 600:
-            return True
-        return False
-
-    def _do_with_retries(self, fn, *, max_attempts: int = 8, base_sleep: float = 0.25):
-        """
-        Generic retry wrapper for boto3 calls.
-        boto3/botocore already retries, but this adds a bit of extra resilience and backoff for batch operations.
-        """
-        logger: SensitiveLogger = SensitiveLogger(self.logger)
-        attempt: int = 1
-        while True:
-            try:
-                return fn()
-            except ClientError as err:
-                if attempt >= max_attempts or not self._is_retryable_client_error(err):
-                    raise
-                # Compute exponential backoff with jitter
-                sleep = base_sleep * (2 ** (attempt - 1))
-                sleep = sleep * (0.5 + random.random())  # sleep time jitter
-                logger.warning("%s: Retryable ClientError (%s). attempt=%d", self._name, err, attempt)
-                time.sleep(sleep)
-                attempt += 1
-            except BotoCoreError as err:
-                # Often transient network/serialization issues
-                if attempt >= max_attempts:
-                    raise
-                # Compute exponential backoff with jitter
-                sleep = base_sleep * (2 ** (attempt - 1))
-                sleep = sleep * (0.5 + random.random())
-                logger.warning("%s: Retryable BotoCoreError (%s). attempt=%d", self._name, err, attempt)
-                time.sleep(sleep)
-                attempt += 1
-            except Exception as err:  # pylint: disable=broad-except
-                # Catch-all for unexpected exceptions; log and re-raise
-                logger.error("%s: Unexpected error (%s). attempt=%d", self._name, err, attempt)
-                raise
-
-    async def _async_do_with_retries(self, fn, *, max_attempts: int = 8, base_sleep: float = 0.25):
-        """
-        Generic retry wrapper for boto3 calls.
-        boto3/botocore already retries, but this adds a bit of extra resilience and backoff for batch operations.
-        """
-        logger: SensitiveLogger = SensitiveLogger(self.logger)
-        attempt: int = 1
-        while True:
-            try:
-                return await fn()
-            except ClientError as err:
-                if attempt >= max_attempts or not self._is_retryable_client_error(err):
-                    raise
-                # Compute exponential backoff with jitter
-                sleep = base_sleep * (2 ** (attempt - 1))
-                sleep = sleep * (0.5 + random.random())  # sleep time jitter
-                logger.warning("%s: Retryable ClientError (%s). attempt=%d", self._name, err, attempt)
-                await asyncio.sleep(sleep)
-                attempt += 1
-            except BotoCoreError as err:
-                # Often transient network/serialization issues
-                if attempt >= max_attempts:
-                    raise
-                # Compute exponential backoff with jitter
-                sleep = base_sleep * (2 ** (attempt - 1))
-                sleep = sleep * (0.5 + random.random())
-                logger.warning("%s: Retryable BotoCoreError (%s). attempt=%d", self._name, err, attempt)
-                await asyncio.sleep(sleep)
-                attempt += 1
-            except asyncio.CancelledError:
-                self.logger.info("%s: Task was cancelled.", self._name)
-                raise
-            except Exception as err:  # pylint: disable=broad-except
-                # Catch-all for unexpected exceptions; log and re-raise
-                logger.error("%s: Unexpected error (%s). attempt=%d", self._name, err, attempt)
-                raise
-
     def get_obj_key_for_reservation(self, reservation_id: str) -> str:
         """
         Helper method to construct the S3 object key for a given reservation ID.
@@ -353,7 +246,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                 reservation: Reservation = None
                 agent_spec: Dict[str, Any] = None
                 for reservation, agent_spec in reservations_dict.items():
-                    await self.add_one_reservation(async_s3_client, reservation, agent_spec)
+                    await self.add_one_reservation(async_s3_client, reservation, agent_spec, source)
 
         finally:
             # Always release the lock if we successfully acquired it and have not already done so,
@@ -372,12 +265,14 @@ class S3ReservationsStorage(AbstractReservationsStorage):
 
     async def add_one_reservation(self, async_s3_client: AioBaseClient,
                                   reservation: Reservation,
-                                  agent_spec: Dict[str, Any]):
+                                  agent_spec: Dict[str, Any],
+                                  source: str = None):
         """
         Add a single reservation to S3 storage.
         :param async_s3_client: An aiobotocore S3 client to use for the put_object call
         :param reservation: The reservation to add
         :param agent_spec: The agent spec to add
+        :param source: A string describing where the deployment was coming from
         """
         # Build complete data structure containing reservation metadata,
         # the associated agent_spec, source information, and storage timestamp
@@ -402,11 +297,14 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                                Key=key,
                                Body=json_body,
                                ContentType="application/json")
-        await self._async_do_with_retries(put_function)
+
+        if source is None:
+            source = self._name
+        await S3RetryUtil._async_do_with_retries(source, put_function)
 
         self.logger.debug("%s: Successfully stored reservation %s in S3", self._name, reservation_id)
 
-    def _retrieve_object_with_retries(self, obj_key: str) -> Dict[str, Any]:
+    def _retrieve_object_with_retries(self, obj_key: str, source: str = None) -> Dict[str, Any]:
         """
         Helper method to retrieve an S3 object with retries.
         :param obj_key: S3 object key to retrieve
@@ -415,7 +313,9 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                  JSONDecodeError if the content cannot be parsed as JSON
         """
         get_function = partial(self.read_s3_client.get_object, Bucket=self.bucket_name, Key=obj_key)
-        obj_response: Dict[str, Any] = self._do_with_retries(get_function)
+        if source is None:
+            source = self._name
+        obj_response: Dict[str, Any] = S3RetryUtil._do_with_retries(source, get_function)
         # Parse JSON content from S3 object body
         json_content: str = obj_response["Body"].read().decode("utf-8")
         return loads(json_content)
@@ -464,7 +364,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
 
         return reservation, agent_network
 
-    def expire_one_reservation(self, obj_key: str, current_time: float) -> bool:
+    def expire_one_reservation(self, obj_key: str, current_time: float, source: str = None) -> bool:
         """
         Check and expire a single reservation if it's expired.
 
@@ -472,6 +372,8 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         :param current_time: Current timestamp to compare against
         :return: True if reservation was expired and deleted, False otherwise
         """
+        if source is None:
+            source = self._name
         expired: bool = False
         try:
             # Retrieve the reservation object from S3
@@ -485,7 +387,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                 # Reservation has expired - remove it from S3 storage
                 try:
                     delete_function = partial(self.delete_s3_client.delete_object, Bucket=self.bucket_name, Key=obj_key)
-                    self._do_with_retries(delete_function)
+                    S3RetryUtil._do_with_retries(source, delete_function)
                     reservation_id: str = reservation_data.get("id")
                     self.logger.debug("%s: Deleted expired reservation %s from S3", self._name, reservation_id)
                     expired = True
@@ -539,7 +441,8 @@ class S3ReservationsStorage(AbstractReservationsStorage):
             }
             if continuation_token:
                 kwargs["ContinuationToken"] = continuation_token
-            response = self._do_with_retries(
+            response = S3RetryUtil._do_with_retries(
+                self._name,
                 partial(self.delete_s3_client.list_objects_v2, **kwargs)
             )
             for obj in response.get("Contents", []):
