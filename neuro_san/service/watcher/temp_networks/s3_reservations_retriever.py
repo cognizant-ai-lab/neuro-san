@@ -45,16 +45,11 @@ class S3ReservationsRetriever:
 
     def __init__(self, name: str = "S3ReservationsRetriever", bucket_name: str = "", prefix: str = "reservations/"):
         """
-        Initialize S3 reservations storage.
+        Initialize the S3 reservations retriever.
 
         :param bucket_name: S3 bucket name (defaults to AGENT_RESERVATIONS_S3_BUCKET env var)
         :param prefix: S3 key prefix for reservation objects
-        :param check_expirations_interval_seconds: How often to check for expired reservations.
-                                    If 0 or negative, expiration checks are disabled.
         """
-        # Our default for check_expirations_interval_seconds is 0
-        # because S3 expiration check is generally a significant execution load,
-        # and we may want to run it externally on demand rather than on a fixed schedule inside the service.
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.name: str = name
 
