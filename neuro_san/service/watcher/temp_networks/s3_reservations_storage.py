@@ -348,9 +348,9 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                     await self.add_one_reservation(async_s3_client, reservation, agent_spec)
 
         finally:
-            # Always release the lock if we have not already done so
-            # in case there was an error getting the context manager.
-            if not lock_released and self.async_s3_client_lock.locked():
+            # Always release the lock if we successfully acquired it and have not already done so,
+            # in case there was an error getting/entering the context manager.
+            if acquired_lock and not lock_released:
                 self.async_s3_client_lock.release()
 
     async def add_one_reservation(self, async_s3_client: AioBaseClient,
