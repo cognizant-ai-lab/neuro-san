@@ -151,3 +151,13 @@ class S3RetryUtil:
         sleep: float = base_sleep * (2 ** (attempt - 1))
         sleep = sleep * (0.5 + random())  # sleep time jitter
         return sleep
+
+    @staticmethod
+    def get_obj_key_for_reservation(prefix: str, reservation_id: str) -> str:
+        """
+        Helper method to construct the S3 object key for a given reservation ID.
+        :param prefix: The path prefix in the S3 bucket
+        :param reservation_id: The ID of the reservation
+        :return: The corresponding S3 object key
+        """
+        return f"{prefix}{reservation_id}.json"
