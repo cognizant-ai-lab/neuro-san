@@ -318,9 +318,11 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         async_s3_client_creator_context: ClientCreatorContext = None
 
         lock_released: bool = False
+        acquired_lock: bool = False
         try:
             # Serialize creation of the ClientCreatorContext with the lock to avoid credential-chain races.
             await self.async_s3_client_lock.acquire()
+            acquired_lock = True
 
             # Note: We can probably do better than doing this block every single time.
             #       Many articles hint at frozen-credentials caching, but that will require
