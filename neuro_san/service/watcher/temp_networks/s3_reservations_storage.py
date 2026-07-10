@@ -238,6 +238,9 @@ class S3ReservationsStorage(AbstractReservationsStorage):
                 self.logger.warning("%s: Retryable BotoCoreError (%s). attempt=%d", self._name, err, attempt)
                 await asyncio.sleep(sleep)
                 attempt += 1
+            except asyncio.CancelledError:
+                self.logger.info("%s: Task was cancelled.", self._name)
+                raise
             except Exception as err:  # pylint: disable=broad-except
                 # Catch-all for unexpected exceptions; log and re-raise
                 self.logger.error("%s: Unexpected error (%s). attempt=%d", self._name, err, attempt)
