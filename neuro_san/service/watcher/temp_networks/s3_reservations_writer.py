@@ -256,7 +256,7 @@ class S3ReservationsWriter:
     async def get_frozen_credentials(self) -> ReadOnlyCredentials:
         """
         Get the frozen credentials for the current session.
-        We are asssuming that we already have the async_s3_client_lock.
+        We are assuming that we already have the async_s3_client_lock.
         """
 
         # If we already have some credentials, use them
