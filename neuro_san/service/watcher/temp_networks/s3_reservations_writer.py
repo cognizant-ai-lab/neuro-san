@@ -178,7 +178,7 @@ class S3ReservationsWriter:
                                                source: str,
                                                attempt: int = 1):
         """
-        This method separates the machinactions of obtaining a proper S3 client
+        This method separates the machinations of obtaining a proper S3 client
         from add_all_reservations() which does all the actual work.
 
         :param reservations_dict: A mapping of Reservation -> some deployable agent spec
