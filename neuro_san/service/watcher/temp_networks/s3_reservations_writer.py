@@ -266,7 +266,7 @@ class S3ReservationsWriter:
         # Create the session if needed
         # We should only need one for the lifetime of the object
         if self.session is None:
-            self.session: AioSession = get_session()
+            self.session = get_session()
 
         credentials: Credentials = await self.session.get_credentials()
         self.frozen_credentials = await credentials.get_frozen_credentials()
