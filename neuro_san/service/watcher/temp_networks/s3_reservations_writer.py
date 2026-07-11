@@ -215,7 +215,8 @@ class S3ReservationsWriter:
                 "s3",
                 aws_access_key_id=frozen_creds.access_key,
                 aws_secret_access_key=frozen_creds.secret_key,
-                aws_session_token=frozen_creds.token
+                aws_session_token=frozen_creds.token,
+                aws_account_id=frozen_creds.account_id
             )
             client_created_time = perf_counter()
 
