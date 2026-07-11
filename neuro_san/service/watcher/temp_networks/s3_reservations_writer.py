@@ -145,6 +145,7 @@ class S3ReservationsWriter:
                                                                   source: str):
         """
         Retries adding the reservations when client credentials can expire.
+
         :param reservations_dict: A mapping of Reservation -> some deployable agent spec
         :param source: A string describing where the deployment was coming from
         """
@@ -156,10 +157,18 @@ class S3ReservationsWriter:
             try:
                 await self.add_reservations_with_new_client(reservations_dict, source, attempts)
                 success = True
+
             except NoCredentialsError:
+
+                # Background: Certain IAM Instance Roles, ECS Task Roles or AWS SSO/IAM Identity Center
+                #             profiles have token-based credentials that may expire.
+                #             See: https://docs.aws.amazon.com/boto3/latest/guide/configuration.html
+
                 # Reset the cached credentials as they are likely expired and try again.
                 self.frozen_credentials = None
-                self.logger.warning("%s (%d): S3 credentials seem to have expired. Retrying.", source, attempts)
+                self.logger.warning("%s (%d): S3 credentials seem to have expired. Retrying."
+                                    "If you believe you have non-expiring S3 credentials, be sure they are correct.",
+                                    source, attempts)
 
     async def add_reservations_with_new_client(self,
                                                reservations_dict: Dict[Reservation, Any],
