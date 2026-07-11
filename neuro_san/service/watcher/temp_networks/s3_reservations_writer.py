@@ -36,6 +36,7 @@ from aiobotocore.session import ClientCreatorContext
 
 from botocore.credentials import Credentials
 from botocore.credentials import ReadOnlyCredentials
+from botocore.exceptions import NoCredentialsError
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
@@ -139,10 +140,38 @@ class S3ReservationsWriter:
 
         await self.add_reservations_with_new_client(reservations_dict, source)
 
-    async def add_reservations_with_new_client(self, reservations_dict: Dict[Reservation, Any], source: str):
+    async def add_reservations_with_new_client_credential_retries(self,
+                                                                  reservations_dict: Dict[Reservation, Any],
+                                                                  source: str):
+        """
+        Retries adding the reservations when client credentials can expire.
+        :param reservations_dict: A mapping of Reservation -> some deployable agent spec
+        :param source: A string describing where the deployment was coming from
+        """
+
+        attempts: int = 0
+        success: bool = False
+        while not success:
+            attempts += 1
+            try:
+                await self.add_reservations_with_new_client(reservations_dict, source, attempts)
+                success = True
+            except NoCredentialsError:
+                # Reset the cached credentials as they are likely expired and try again.
+                self.frozen_credentials = None
+                self.logger.warning("%s (%d): S3 credentials seem to have expired. Retrying.", source, attempts)
+
+    async def add_reservations_with_new_client(self,
+                                               reservations_dict: Dict[Reservation, Any],
+                                               source: str,
+                                               attempt: int = 1):
         """
         This method separates the machinactions of obtaining a proper S3 client
         from add_all_reservations() which does all the actual work.
+
+        :param reservations_dict: A mapping of Reservation -> some deployable agent spec
+        :param source: A string describing where the deployment was coming from
+        :param attempt: Attempt number
         """
 
         # Create an aiobotocore client for async operations.
@@ -193,10 +222,9 @@ class S3ReservationsWriter:
                 self.async_s3_client_lock.release()
 
         finish_time: float = perf_counter()
-
-        self.logger.info("%s: Lock acquisition in: %fs. Client creation after: %fs. "
+        self.logger.info("%s (%d): Lock acquisition in: %fs. Client creation after: %fs. "
                          "Lock release after: %fs. Finish after: %fs",
-                         self.name,
+                         self.name, attempt,
                          lock_aquired_time - start_time,
                          client_created_time - start_time,
                          lock_released_time - start_time,
@@ -224,6 +252,7 @@ class S3ReservationsWriter:
             return self.frozen_credentials
 
         # Create the session if needed
+        # We should only need one for the lifetime of the object
         if self.session is None:
             self.session: AioSession = get_session()
 
