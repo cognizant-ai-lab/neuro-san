@@ -123,8 +123,19 @@ class S3ReservationsWriter:
         if len(reservations_dict) == 0:
             return
 
+        if source is None:
+            source = self.name
+
         # Aync lock has to be created in the thread that uses it.
         self.ensure_async_lock_exists()
+
+        await self.add_reservations_with_new_client(reservations_dict, source)
+
+    async def add_reservations_with_new_client(self, reservations_dict: Dict[Reservation, Any], source: str):
+        """
+        This method separates the machinactions of obtaining a proper S3 client
+        from add_all_reservations() which does all the actual work.
+        """
 
         # Create an aiobotocore client for async operations.
         async_s3_client: AioBaseClient = None
@@ -183,6 +194,7 @@ class S3ReservationsWriter:
         """
         Be sure we have an asyncio Lock to get our sessions.
         """
+        # Note that none of this is async in and of itself.
         if self.async_s3_client_lock is None:
             with self.sync_lock:
                 # Be sure everyone has the same lock
@@ -191,7 +203,7 @@ class S3ReservationsWriter:
 
     async def add_all_reservations(self, async_s3_client: AioBaseClient,
                                    reservations_dict: Dict[Reservation, Dict[str, Any]],
-                                   source: str = None):
+                                   source: str):
         """
         Add all reservations to S3 storage.
         :param async_s3_client: An aiobotocore S3 client to use for the put_object call
@@ -207,7 +219,7 @@ class S3ReservationsWriter:
     async def add_one_reservation(self, async_s3_client: AioBaseClient,
                                   reservation: Reservation,
                                   agent_spec: Dict[str, Any],
-                                  source: str = None):
+                                  source: str):
         """
         Add a single reservation to S3 storage.
         :param async_s3_client: An aiobotocore S3 client to use for the put_object call
@@ -239,8 +251,6 @@ class S3ReservationsWriter:
                                Body=json_body,
                                ContentType="application/json")
 
-        if source is None:
-            source = self.name
         await S3RetryUtil.async_do_with_retries(source, put_function)
 
         self.logger.debug("%s: Successfully stored reservation %s in S3", self.name, reservation_id)
