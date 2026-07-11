@@ -155,18 +155,19 @@ class S3ReservationsWriter:
         """
 
         max_attempts: int = 8
-        attempts: int = 0
-        success: bool = False
-        while not success and attempts < max_attempts:
-            attempts += 1
+        last_err = None
+
+        for attempt in range(1, max_attempts + 1):
             try:
-                await self.add_reservations_with_new_client(reservations_dict, source, attempts)
-                success = True
+                await self.add_reservations_with_new_client(reservations_dict, source, attempt)
+                return
 
             except ClientError as err:
                 extractor = DictionaryExtractor(err.response)
                 if "ExpiredToken" not in extractor.get("Error.Code", ""):
                     raise
+
+                last_err = err
 
                 # Background: Certain IAM Instance Roles, ECS Task Roles or AWS SSO/IAM Identity Center
                 #             profiles have token-based credentials that may expire.
@@ -174,9 +175,17 @@ class S3ReservationsWriter:
 
                 # Reset the cached credentials as they are likely expired and try again.
                 self.frozen_credentials = None
-                self.logger.warning("%s (%d): S3 credentials seem to have expired. Retrying."
-                                    "If you believe you have non-expiring S3 credentials, be sure they are correct.",
-                                    source, attempts)
+                self.logger.warning(
+                    "%s (%d): S3 credentials seem to have expired. Retrying. "
+                    "If you believe you have non-expiring S3 credentials, be sure they are correct.",
+                    source,
+                    attempt,
+                )
+
+        # Exhausted retries
+        if last_err is not None:
+            raise last_err
+        raise RuntimeError("S3 credential retries exhausted without capturing an error")
 
     async def add_reservations_with_new_client(self,
                                                reservations_dict: Dict[Reservation, Any],
