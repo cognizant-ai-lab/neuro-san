@@ -141,7 +141,7 @@ class S3ReservationsWriter:
         # Aync lock has to be created in the thread that uses it.
         self.ensure_async_lock_exists()
 
-        await self.add_reservations_with_new_client_retries(reservations_dict, source)
+        await self.add_reservations_with_new_client_credential_retries(reservations_dict, source)
 
     async def add_reservations_with_new_client_credential_retries(self,
                                                                   reservations_dict: Dict[Reservation, Any],
