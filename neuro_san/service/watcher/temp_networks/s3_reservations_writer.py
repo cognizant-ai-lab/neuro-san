@@ -38,7 +38,7 @@ from botocore.credentials import Credentials
 from botocore.credentials import ReadOnlyCredentials
 from botocore.exceptions import ClientError
 
-from leaf_common.parser.dictionary_extractor import DictionaryExtractor
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
