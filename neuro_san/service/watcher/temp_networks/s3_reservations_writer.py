@@ -266,7 +266,7 @@ class S3ReservationsWriter:
             self.session: AioSession = get_session()
 
         credentials: Credentials = await self.session.get_credentials()
-        self.frozen_credentials = credentials.get_frozen_credentials()
+        self.frozen_credentials = await credentials.get_frozen_credentials()
 
         return self.frozen_credentials
 
