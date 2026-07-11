@@ -42,6 +42,7 @@ from neuro_san.internals.reservations.reservation_dictionary_converter import Re
 from neuro_san.service.watcher.temp_networks.s3_retry_util import S3RetryUtil
 
 
+# pylint: disable=too-many-instance-attributes
 class S3ReservationsWriter:
     """
     AWS S3-based class that writes reservations out to persistent store
@@ -86,7 +87,7 @@ class S3ReservationsWriter:
 
         # Boto Machinations
         self.session: AioSession = None
-        self.frozen_creds: ReadOnlyCredentials = None
+        self.frozen_credentials: ReadOnlyCredentials = None
 
     async def add_reservations(self, reservations_dict: Dict[Reservation, Any],
                                source: str = None):
@@ -161,9 +162,7 @@ class S3ReservationsWriter:
             lock_aquired_time = perf_counter()
             acquired_lock = True
 
-            # Note: We can probably do better than doing this block every single time.
-            #       Many articles hint at frozen-credentials caching, but that will require
-            #       an extra layer of retry complexity at this level.
+            # Get the current notion of frozen credentials.
             frozen_creds: ReadOnlyCredentials = await self.get_frozen_credentials()
             async_s3_client_creator_context = self.session.create_client(
                 "s3",
