@@ -138,7 +138,7 @@ class S3ReservationsWriter:
         if source is None:
             source = self.name
 
-        # Aync lock has to be created in the thread that uses it.
+        # Async lock has to be created in the thread that uses it.
         self.ensure_async_lock_exists()
 
         await self.add_reservations_with_new_client_credential_retries(reservations_dict, source)
