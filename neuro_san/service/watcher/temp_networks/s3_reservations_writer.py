@@ -34,6 +34,9 @@ from aiobotocore.session import get_session
 from aiobotocore.session import AioSession
 from aiobotocore.session import ClientCreatorContext
 
+from botocore.credentials import Credentials
+from botocore.credentials import ReadOnlyCredentials
+
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
 from neuro_san.service.watcher.temp_networks.s3_retry_util import S3RetryUtil
@@ -80,6 +83,10 @@ class S3ReservationsWriter:
         self.async_s3_client_lock: AsyncLock = None
 
         self.converter = ReservationDictionaryConverter()
+
+        # Boto Machinations
+        self.session: AioSession = None
+        self.frozen_creds: ReadOnlyCredentials = None
 
     async def add_reservations(self, reservations_dict: Dict[Reservation, Any],
                                source: str = None):
@@ -146,7 +153,7 @@ class S3ReservationsWriter:
 
         start_time: float = perf_counter()
         lock_aquired_time: float = 0.0
-        session_created_time: float = 0.0
+        client_created_time: float = 0.0
         lock_released_time: float = 0.0
         try:
             # Serialize creation of the ClientCreatorContext with the lock to avoid credential-chain races.
@@ -157,9 +164,14 @@ class S3ReservationsWriter:
             # Note: We can probably do better than doing this block every single time.
             #       Many articles hint at frozen-credentials caching, but that will require
             #       an extra layer of retry complexity at this level.
-            session: AioSession = get_session()
-            async_s3_client_creator_context = session.create_client("s3")
-            session_created_time = perf_counter()
+            frozen_creds: ReadOnlyCredentials = await self.get_frozen_credentials()
+            async_s3_client_creator_context = self.session.create_client(
+                "s3",
+                aws_access_key_id=frozen_creds.access_key,
+                aws_secret_access_key=frozen_creds.secret_key,
+                aws_session_token=frozen_creds.token
+            )
+            client_created_time = perf_counter()
 
             # Normally this is done in a python ContextManager using a with-statement,
             # but we want to be holding the lock while we create the client to avoid
@@ -183,10 +195,11 @@ class S3ReservationsWriter:
 
         finish_time: float = perf_counter()
 
-        self.logger.info("Lock acquisition in: %fs. Session creation after: %fs. "
+        self.logger.info("%s: Lock acquisition in: %fs. Client creation after: %fs. "
                          "Lock release after: %fs. Finish after: %fs",
+                         self.name,
                          lock_aquired_time - start_time,
-                         session_created_time - start_time,
+                         client_created_time - start_time,
                          lock_released_time - start_time,
                          finish_time - start_time)
 
@@ -200,6 +213,25 @@ class S3ReservationsWriter:
                 # Be sure everyone has the same lock
                 if self.async_s3_client_lock is None:
                     self.async_s3_client_lock = AsyncLock()
+
+    async def get_frozen_credentials(self) -> ReadOnlyCredentials:
+        """
+        Get the frozen credentials for the current session.
+        We are asssuming that we already have the async_s3_client_lock.
+        """
+
+        # If we already have some credentials, use them
+        if self.frozen_credentials is not None:
+            return self.frozen_credentials
+
+        # Create the session if needed
+        if self.session is None:
+            self.session: AioSession = get_session()
+
+        credentials: Credentials = self.session.get_credentials()
+        self.frozen_credentials = credentials.get_frozen_credentials()
+
+        return self.frozen_credentials
 
     async def add_all_reservations(self, async_s3_client: AioBaseClient,
                                    reservations_dict: Dict[Reservation, Dict[str, Any]],
