@@ -155,9 +155,10 @@ class S3ReservationsWriter:
         :param source: A string describing where the deployment was coming from
         """
 
+        max_attempts: int = 8
         attempts: int = 0
         success: bool = False
-        while not success:
+        while not success and attempts < max_attempts:
             attempts += 1
             try:
                 await self.add_reservations_with_new_client(reservations_dict, source, attempts)
