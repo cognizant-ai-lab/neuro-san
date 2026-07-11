@@ -99,11 +99,14 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
         # regardless of pass/fail.
         self.addCleanup(aiobotocore_patcher.stop)
 
-        # Patch AioSession at the import boundary in s3_reservations_storage
-        # so storage.start() receives our fake credentials.
+        # Patch AioSession.get_credentials at the import boundary in s3_reservations_writer
+        # so storage.start() receives deterministic fake credentials.
+        async def _fake_get_credentials(*_args, **_kwargs):
+            return AioCredentials("bogus", "bogus")
+
         credentials_patcher = patch(
             "neuro_san.service.watcher.temp_networks.s3_reservations_writer.AioSession.get_credentials",
-            return_value=AioCredentials("bogus", "bogus")
+            new=_fake_get_credentials,
         )
         credentials_patcher.start()
         # Restores the real AioSession symbol after the test completes, regardless of pass/fail.
