@@ -85,6 +85,7 @@ class S3ReservationsWriter:
                                source: str = None):
         """
         Add reservations to S3 storage.
+        Main entry point.
 
         On-disk JSON schema written per reservation
         (key = "<prefix><reservation_id>.json"):
