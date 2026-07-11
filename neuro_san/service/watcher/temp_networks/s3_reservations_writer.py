@@ -284,9 +284,13 @@ class S3ReservationsWriter:
             self.session = get_session()
 
         credentials: Credentials = await self.session.get_credentials()
-        self.frozen_credentials = await credentials.get_frozen_credentials()
 
-        return self.frozen_credentials
+        # Avoid a small race condition with the ClientError retry block
+        # by always returning a local copy
+        local_frozen: ReadOnlyCredentials = await credentials.get_frozen_credentials()
+        self.frozen_credentials = local_frozen
+
+        return local_frozen
 
     async def add_all_reservations(self, async_s3_client: AioBaseClient,
                                    reservations_dict: Dict[Reservation, Dict[str, Any]],
