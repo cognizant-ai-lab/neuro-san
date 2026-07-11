@@ -122,12 +122,7 @@ class S3ReservationsWriter:
         if len(reservations_dict) == 0:
             return
 
-        # Be sure we have an asyncio Lock to get our sessions.
-        if self.async_s3_client_lock is None:
-            with self.sync_lock:
-                # Be sure everyone has the same lock
-                if self.async_s3_client_lock is None:
-                    self.async_s3_client_lock = AsyncLock()
+        self.ensure_asnync_lock_exists()
 
         # Create an aiobotocore client for async operations.
         async_s3_client: AioBaseClient = None
@@ -165,11 +160,7 @@ class S3ReservationsWriter:
                 lock_released_time = perf_counter()
                 lock_released = True
 
-                # Process each reservation/agent spec pair individually
-                reservation: Reservation = None
-                agent_spec: Dict[str, Any] = None
-                for reservation, agent_spec in reservations_dict.items():
-                    await self.add_one_reservation(async_s3_client, reservation, agent_spec, source)
+                await self.add_all_reservations(async_s3_client, reservations_dict, source)
 
         finally:
             # Always release the lock if we successfully acquired it and have not already done so,
@@ -185,6 +176,31 @@ class S3ReservationsWriter:
                          session_created_time - start_time,
                          lock_released_time - start_time,
                          finish_time - start_time)
+
+    def ensure_asnync_lock_exists(self):
+        """
+        Be sure we have an asyncio Lock to get our sessions.
+        """
+        if self.async_s3_client_lock is None:
+            with self.sync_lock:
+                # Be sure everyone has the same lock
+                if self.async_s3_client_lock is None:
+                    self.async_s3_client_lock = AsyncLock()
+
+    async def add_all_reservations(self, async_s3_client: AioBaseClient,
+                                   reservations_dict: Dict[Reservation, Dict[str, Any]],
+                                   source: str = None):
+        """
+        Add all reservations to S3 storage.
+        :param async_s3_client: An aiobotocore S3 client to use for the put_object call
+        :param reservations_dict: A mapping of Reservation -> some deployable agent spec
+        :param source: A string describing where the deployment was coming from
+        """
+        # Process each reservation/agent spec pair individually
+        reservation: Reservation = None
+        agent_spec: Dict[str, Any] = None
+        for reservation, agent_spec in reservations_dict.items():
+            await self.add_one_reservation(async_s3_client, reservation, agent_spec, source)
 
     async def add_one_reservation(self, async_s3_client: AioBaseClient,
                                   reservation: Reservation,
