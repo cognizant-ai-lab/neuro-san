@@ -93,6 +93,7 @@ class S3ReservationsWriter:
         self.session: AioSession = None
 
         # Cached frozen credentials which can be invalidated should they expire
+        self.frozen_credentials: ReadOnlyCredentials = None
 
     async def add_reservations(self, reservations_dict: Dict[Reservation, Any],
                                source: str = None):
