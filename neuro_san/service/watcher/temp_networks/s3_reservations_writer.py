@@ -92,8 +92,7 @@ class S3ReservationsWriter:
         # We should be able to have a single Session for the lifetime of this object
         self.session: AioSession = None
 
-        # Cached frozed credentials which can be invalidated should they expire
-        self.frozen_credentials: ReadOnlyCredentials = None
+        # Cached frozen credentials which can be invalidated should they expire
 
     async def add_reservations(self, reservations_dict: Dict[Reservation, Any],
                                source: str = None):
