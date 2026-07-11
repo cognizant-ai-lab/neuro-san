@@ -250,7 +250,7 @@ class S3ReservationsWriter:
                 self.async_s3_client_lock.release()
 
         finish_time: float = perf_counter()
-        self.logger.info("%s (%d): Lock acquisition in: %fs. Client creation after: %fs. "
+        self.logger.info("%s (%d): Lock acquisition in: %fs. Client context creation after: %fs. "
                          "Lock release after: %fs. Finish after: %fs",
                          self.name, attempt,
                          lock_aquired_time - start_time,
