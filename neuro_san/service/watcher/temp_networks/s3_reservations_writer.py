@@ -36,7 +36,9 @@ from aiobotocore.session import ClientCreatorContext
 
 from botocore.credentials import Credentials
 from botocore.credentials import ReadOnlyCredentials
-from botocore.exceptions import NoCredentialsError
+from botocore.exceptions import ClientError
+
+from leaf_common.parser.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
@@ -161,7 +163,10 @@ class S3ReservationsWriter:
                 await self.add_reservations_with_new_client(reservations_dict, source, attempts)
                 success = True
 
-            except NoCredentialsError:
+            except ClientError as err:
+                extractor = DictionaryExtractor(err.response)
+                if "ExpiredToken" not in extractor.get("Error.Code", ""):
+                    raise
 
                 # Background: Certain IAM Instance Roles, ECS Task Roles or AWS SSO/IAM Identity Center
                 #             profiles have token-based credentials that may expire.
