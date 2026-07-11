@@ -123,6 +123,7 @@ class S3ReservationsWriter:
         if len(reservations_dict) == 0:
             return
 
+        # Aync lock has to be created in the thread that uses it.
         self.ensure_asnync_lock_exists()
 
         # Create an aiobotocore client for async operations.
