@@ -124,7 +124,7 @@ class S3ReservationsWriter:
             return
 
         # Aync lock has to be created in the thread that uses it.
-        self.ensure_asnync_lock_exists()
+        self.ensure_async_lock_exists()
 
         # Create an aiobotocore client for async operations.
         async_s3_client: AioBaseClient = None
@@ -179,7 +179,7 @@ class S3ReservationsWriter:
                          lock_released_time - start_time,
                          finish_time - start_time)
 
-    def ensure_asnync_lock_exists(self):
+    def ensure_async_lock_exists(self):
         """
         Be sure we have an asyncio Lock to get our sessions.
         """
