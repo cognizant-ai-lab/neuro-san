@@ -155,7 +155,7 @@ class S3ReservationsWriter:
         """
 
         max_attempts: int = 8
-        last_err = None
+        last_err: Exception = None
 
         for attempt in range(1, max_attempts + 1):
             try:
@@ -185,7 +185,7 @@ class S3ReservationsWriter:
         # Exhausted retries
         if last_err is not None:
             raise last_err
-        raise RuntimeError("S3 credential retries exhausted without capturing an error")
+        raise RuntimeError("S3 credential retries exhausted without capturing an error") from last_err
 
     async def add_reservations_with_new_client(self,
                                                reservations_dict: Dict[Reservation, Any],
