@@ -274,9 +274,12 @@ class S3ReservationsWriter:
         We are assuming that we already have the async_s3_client_lock.
         """
 
+        # Use a local copy to avoid a race with the ClientError retry block
+        local_frozen: ReadOnlyCredentials = self.frozen_credentials
+
         # If we already have some credentials, use them
-        if self.frozen_credentials is not None:
-            return self.frozen_credentials
+        if local_frozen is not None:
+            return local_frozen
 
         # Create the session if needed
         # We should only need one for the lifetime of the object
@@ -287,7 +290,7 @@ class S3ReservationsWriter:
 
         # Avoid a small race condition with the ClientError retry block
         # by always returning a local copy
-        local_frozen: ReadOnlyCredentials = await credentials.get_frozen_credentials()
+        local_frozen = await credentials.get_frozen_credentials()
         self.frozen_credentials = local_frozen
 
         return local_frozen
