@@ -200,10 +200,11 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         fires_done_event.wait()
         progress_file = self._open_progress_file()
         try:
-            while not stop_event.wait(
-                timeout=HEARTBEAT_INTERVAL_SECONDS,
-            ):
-                if not self._check_server_alive():
+            while True:
+                stopped = stop_event.wait(
+                    timeout=HEARTBEAT_INTERVAL_SECONDS,
+                )
+                if not stopped and not self._check_server_alive():
                     logger.error(
                         "\n  ABORT: Server process is no longer"
                         " running. Possible OOM kill.",
@@ -277,7 +278,11 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                     f"{server_rss_info}{sys_mem_info}{sys_cpu_info}"
                 )
                 self._write_to_file(progress_file, line)
-                self._write_to_console(tick_count, line)
+                self._write_to_console(
+                    tick_count, line, force=stopped,
+                )
+                if stopped:
+                    break
         finally:
             if progress_file is not None:
                 progress_file.close()
@@ -449,12 +454,15 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         progress_file.flush()
 
     @staticmethod
-    def _write_to_console(tick_count, line) -> None:
+    def _write_to_console(tick_count, line, force=False) -> None:
         """Write progress to console with reduced verbosity.
 
         Prints the full line on tick 1 and every 10th tick.
         Silent in between to avoid overlapping receipt dots.
+        When ``force`` is set (e.g. the final line once all
+        requests are done) the line is always printed.
         """
-        if tick_count == 1 or tick_count % CONSOLE_TICK_INTERVAL == 0:
+        if (force or tick_count == 1
+                or tick_count % CONSOLE_TICK_INTERVAL == 0):
             sys.stdout.write("\n")
             logger.info("%s", line)
