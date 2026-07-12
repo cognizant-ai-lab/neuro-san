@@ -219,6 +219,10 @@ class TrafficRunner:
         elif status == STATUS_FAILED and not response_text:
             failure_reason = "empty response from agent"
 
+        self._save_request_output(
+            output_dir, request_id, response_text or "", "",
+        )
+
         self._log_request_result(
             request_id, status, elapsed,
             parsed_fields=parsed_fields,
