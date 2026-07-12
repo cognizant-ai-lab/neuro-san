@@ -67,6 +67,7 @@ class ResourceMonitor:
                 fds = proc.num_fds()
             except AttributeError:
                 fds = proc.num_handles()
+            cpu_times = proc.cpu_times()
             return {
                 "rss": mem.rss / 1024 / 1024,
                 "fds": fds,
@@ -74,6 +75,7 @@ class ResourceMonitor:
                 "connections": len(proc.net_connections()),
                 "children": len(proc.children()),
                 "cpu": proc.cpu_percent(interval=0.1),
+                "cpu_seconds": cpu_times.user + cpu_times.system,
             }
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             return None

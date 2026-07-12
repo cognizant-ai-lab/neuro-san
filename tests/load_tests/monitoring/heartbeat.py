@@ -62,6 +62,11 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         self._total_system_ram = psutil.virtual_memory().total
         self._oom_warned = False
         self._swap_warned = False
+        self._peak_sys_cpu = 0.0
+        # Prime the non-blocking system CPU counter so the first real
+        # sample reflects usage since the heartbeat started rather
+        # than returning 0.0.
+        psutil.cpu_percent(interval=None)
         # Optional server-log source for per-request server-side
         # timing.  When set, the heartbeat parses primary
         # streaming_chat Start/Finish pairs to report cumulative
@@ -262,13 +267,14 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                         "  dur/server: "
                         + Heartbeat.format_dur_stats(server_durs)
                     )
+                sys_cpu_info = self._format_system_cpu()
                 line = (
                     f"  [progress] {done} of {total} completed"
                     f" ({pct}%{fail_info}) --"
                     f" {Heartbeat._fmt_elapsed(elapsed)}"
                     f" elapsed [{ts}]{suffix}  {dur_info.strip()}"
                     f"{thread_info}"
-                    f"{server_rss_info}{sys_mem_info}"
+                    f"{server_rss_info}{sys_mem_info}{sys_cpu_info}"
                 )
                 self._write_to_file(progress_file, line)
                 self._write_to_console(tick_count, line)
@@ -292,6 +298,18 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
             mem.percent,
             avail_gb,
         )
+
+    def _format_system_cpu(self) -> str:
+        """Format whole-box CPU utilization with peak-so-far.
+
+        Uses non-blocking ``cpu_percent`` (usage since the previous
+        sample) and tracks the peak across the run.  0-100% across
+        all cores.
+        """
+        cur = psutil.cpu_percent(interval=None)
+        if cur > self._peak_sys_cpu:
+            self._peak_sys_cpu = cur
+        return f"  syscpu: {cur:.0f}% (peak {self._peak_sys_cpu:.0f}%)"
 
     @staticmethod
     def _fmt_elapsed(seconds) -> str:

@@ -1413,6 +1413,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             self, received, expected, completed,
             elapsed, now, snap, cur_mem,
             dur_stats="n/a",
+            cur_sys_cpu=None, peak_sys_cpu=None,
     ) -> None:
         """Log a periodic heartbeat during server-only monitoring."""
         cur_used_mb = (
@@ -1451,16 +1452,28 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 f"  {completed} done"
                 f"  {in_flight} in-flight"
             )
+        sys_cpu_str = ""
+        if cur_sys_cpu is not None:
+            peak_val = (
+                peak_sys_cpu
+                if peak_sys_cpu is not None
+                else cur_sys_cpu
+            )
+            sys_cpu_str = (
+                f"  syscpu: {cur_sys_cpu:.0f}%"
+                f" (peak {peak_val:.0f}%)"
+            )
         logger.info(
             "  [heartbeat] %s [%s]%s  dur/server: %s%s%s"
             "  sysmem: %.0f%% (%.0fM used"
-            " / %.1fG free)",
+            " / %.1fG free)%s",
             fmt_elapsed, ts,
             progress_str,
             dur_stats,
             threads_str, rss_str,
             cur_mem.percent, cur_used_mb,
             cur_avail_gb,
+            sys_cpu_str,
         )
 
     def _run_server_only_monitor(self) -> int:
@@ -1587,7 +1600,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         count, completed, peak_server, \
             peak_threads, \
-            peak_sys_mem_pct, elapsed, interrupted = (
+            peak_sys_mem_pct, elapsed, interrupted, \
+            peak_sys_cpu, avg_sys_cpu = (
                 self._tail_server_log(
                     expected, log_pos,
                     pri_start_re, pri_finish_re,
@@ -1655,6 +1669,28 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             after_used_mb - before_used_mb,
         )
 
+        logger.info(
+            "  System CPU: %.0f%% avg / %.0f%% peak"
+            " (across all cores)",
+            avg_sys_cpu, peak_sys_cpu,
+        )
+        if (before_server and after_server
+                and count > 0):
+            cpu_before = before_server.get(
+                "cpu_seconds",
+            )
+            cpu_after = after_server.get("cpu_seconds")
+            if (cpu_before is not None
+                    and cpu_after is not None):
+                cpu_delta = cpu_after - cpu_before
+                logger.info(
+                    "  Server CPU time: %.1f CPU-s total"
+                    " \u2192 %.2f CPU-s/request"
+                    " (%.1f / %d)",
+                    cpu_delta, cpu_delta / count,
+                    cpu_delta, count,
+                )
+
         peak_rss_for_breakdown = 0.0
         if peak_server:
             peak_rss_for_breakdown = (
@@ -1694,6 +1730,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             before_sys_mem_pct, peak_sys_mem_pct,
             mem.percent, interrupted,
             kernel_breakdown,
+            avg_sys_cpu=avg_sys_cpu,
+            peak_sys_cpu=peak_sys_cpu,
         )
 
         self._archive_server_log_to(round_dir)
@@ -1754,10 +1792,15 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         peak_server = before_server
         peak_threads = 0
         peak_sys_mem_pct = before_sys_mem_pct
+        peak_sys_cpu = 0.0
+        sys_cpu_sum = 0.0
+        sys_cpu_n = 0
         interrupted = False
         warned_missing_starts = False
         phase = 1
         log_limit = 5
+        # Prime the non-blocking system CPU counter.
+        psutil.cpu_percent(interval=None)
 
         try:
             with open(
@@ -1887,6 +1930,13 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                             peak_sys_mem_pct = (
                                 cur_mem.percent
                             )
+                        cur_sys_cpu = psutil.cpu_percent(
+                            interval=None,
+                        )
+                        sys_cpu_sum += cur_sys_cpu
+                        sys_cpu_n += 1
+                        if cur_sys_cpu > peak_sys_cpu:
+                            peak_sys_cpu = cur_sys_cpu
                         last_monitor = now
 
                         if (now - last_heartbeat
@@ -1902,6 +1952,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                                 elapsed, now,
                                 snap, cur_mem,
                                 dur_stats,
+                                cur_sys_cpu, peak_sys_cpu,
                             )
                             last_heartbeat = now
 
@@ -1936,10 +1987,14 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             )
 
         elapsed = time.time() - start_time
+        avg_sys_cpu = (
+            sys_cpu_sum / sys_cpu_n if sys_cpu_n else 0.0
+        )
         return (
             count, completed, peak_server,
             peak_threads,
             peak_sys_mem_pct, elapsed, interrupted,
+            peak_sys_cpu, avg_sys_cpu,
         )
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -1950,8 +2005,16 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             before_sys_pct, peak_sys_pct,
             after_sys_pct, interrupted,
             kernel_breakdown=None,
+            avg_sys_cpu=None, peak_sys_cpu=None,
     ) -> None:
         """Write raw_results.json for a server-only round."""
+        server_cpu_seconds = None
+        if before_server and after_server:
+            cpu_before = before_server.get("cpu_seconds")
+            cpu_after = after_server.get("cpu_seconds")
+            if (cpu_before is not None
+                    and cpu_after is not None):
+                server_cpu_seconds = cpu_after - cpu_before
         raw_data = {
             "test_metadata": {
                 "timestamp": time.strftime(
@@ -1981,6 +2044,17 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 "before_pct": before_sys_pct,
                 "peak_pct": peak_sys_pct,
                 "after_pct": after_sys_pct,
+            },
+            "system_cpu": {
+                "avg_pct": avg_sys_cpu,
+                "peak_pct": peak_sys_cpu,
+                "server_cpu_seconds_total": server_cpu_seconds,
+                "server_cpu_seconds_per_request": (
+                    server_cpu_seconds / count
+                    if (server_cpu_seconds is not None
+                        and count > 0)
+                    else None
+                ),
             },
         }
         if kernel_breakdown:
