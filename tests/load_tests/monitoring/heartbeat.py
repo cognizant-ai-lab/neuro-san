@@ -63,6 +63,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         self._oom_warned = False
         self._swap_warned = False
         self._peak_sys_cpu = 0.0
+        self._console_started = False
         # Prime the non-blocking system CPU counter so the first real
         # sample reflects usage since the heartbeat started rather
         # than returning 0.0.
@@ -453,16 +454,19 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         progress_file.write(line + "\n")
         progress_file.flush()
 
-    @staticmethod
-    def _write_to_console(tick_count, line, force=False) -> None:
+    def _write_to_console(self, tick_count, line, force=False) -> None:
         """Write progress to console with reduced verbosity.
 
         Prints the full line on tick 1 and every 10th tick.
         Silent in between to avoid overlapping receipt dots.
         When ``force`` is set (e.g. the final line once all
-        requests are done) the line is always printed.
+        requests are done) the line is always printed.  A single
+        blank separator is emitted only before the first console
+        line so the heartbeats are single-spaced thereafter.
         """
         if (force or tick_count == 1
                 or tick_count % CONSOLE_TICK_INTERVAL == 0):
-            sys.stdout.write("\n")
+            if not self._console_started:
+                sys.stdout.write("\n")
+                self._console_started = True
             logger.info("%s", line)

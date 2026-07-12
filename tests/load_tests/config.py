@@ -187,6 +187,9 @@ DEFAULT_TIMEOUT_SECONDS = 1200
 DEFAULT_IDLE_TIMEOUT_SECONDS = 900
 NETWORK_LOOKAHEAD_LINES = 10
 TOKENS_PER_MILLION = 1_000_000
+# Max per-request failure blocks printed to the console before the rest
+# are suppressed (full detail always remains in raw_results.json).
+FAILURE_LOG_LIMIT = 10
 
 # Timeouts for short-lived operations (seconds)
 SOCKET_CHECK_TIMEOUT = 2

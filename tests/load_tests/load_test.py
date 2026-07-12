@@ -526,6 +526,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
         has_server_log = self.server_log is not None
         probe_result = self.probe_result
+        only_stage = (
+            len(stages) == 1 and self.args.num_rounds == 1
+        )
 
         stage_summaries: List[StageSummary] = []
         global_offset = 0
@@ -568,6 +571,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                         monitor_resources=monitor_resources,
                         has_server_log=has_server_log,
                         probe_result=probe_result,
+                        only_stage=only_stage,
                     )
                 )
 
@@ -607,7 +611,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             self, *, actual_requests, num_concurrent,
             stage_num, round_num, global_offset,
             monitor_resources, has_server_log,
-            probe_result,
+            probe_result, only_stage=False,
     ) -> Tuple[StageSummary, bool, bool]:
         """Execute one stage of the load test.
 
@@ -758,6 +762,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             skip_reservation_check=(
                 self.args.skip_reservation_check
             ),
+            show_counts=not only_stage,
         )
         should_abort = server_died or interrupted
         if not should_abort:
@@ -803,11 +808,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if has_server_log:
             OutputValidator.log_retry_activity(
                 retries, total_retries, stage_requests,
-            )
-        elif monitor_resources:
-            logger.info(
-                "\n  Retry activity: not available "
-                "(no --server-log)",
             )
 
         server_counts, disconnections, network_tokens, \
@@ -946,20 +946,13 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         after_server = None
 
         if monitor_resources or has_server_log:
-            settle_start = time.strftime(
-                "%H:%M:%S", time.localtime(time.time()),
-            )
-            logger.info(
-                "\n  Settle: waiting %ss for server cleanup... "
-                "[%s]",
-                self.args.settle_time, settle_start,
-            )
             time.sleep(self.args.settle_time)
             settle_end = time.strftime(
                 "%H:%M:%S", time.localtime(time.time()),
             )
             logger.info(
-                "  Settle: done [%s]", settle_end,
+                "\n  Settle: waited %ss for server cleanup [%s]",
+                self.args.settle_time, settle_end,
             )
 
             after_server = (

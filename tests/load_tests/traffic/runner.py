@@ -30,6 +30,7 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
+from tests.load_tests.config import FAILURE_LOG_LIMIT
 from tests.load_tests.config import fmt_duration
 from tests.load_tests.config import RequestResult
 from tests.load_tests.config import SharedRef
@@ -63,6 +64,8 @@ class TrafficRunner:
     def __init__(self, args, profile) -> None:
         self._args = args
         self._profile = profile
+        self._failure_log_lock = threading.Lock()
+        self._failures_logged = 0
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _run_one_tracked(self, request_id, global_request_id,
@@ -613,6 +616,25 @@ class TrafficRunner:
                 parsed_fields=parsed_fields,
             )
             return
+        if is_failure:
+            with self._failure_log_lock:
+                self._failures_logged += 1
+                rank = self._failures_logged
+            if rank > FAILURE_LOG_LIMIT:
+                return
+            if rank == FAILURE_LOG_LIMIT:
+                sys.stdout.write("\n")
+                sys.stdout.flush()
+                logger.info(
+                    "Request %s: %s (%s)",
+                    request_id, status,
+                    fmt_duration(elapsed, precision=2),
+                )
+                logger.info(
+                    "  ... further per-request failures suppressed"
+                    " (see totals below and raw_results.json)",
+                )
+                return
         sys.stdout.write("\n")
         sys.stdout.flush()
         logger.info(
@@ -628,7 +650,9 @@ class TrafficRunner:
         if failure_reason:
             logger.info("  reason: %s", failure_reason)
         if is_failure:
-            logger.info("  stderr: %s", CliBuilder.last_stderr_line(stderr))
+            last_err = CliBuilder.last_stderr_line(stderr)
+            if last_err and last_err.strip():
+                logger.info("  stderr: %s", last_err)
 
     @staticmethod
     def _write_result_to_file(output_dir, request_id, status,

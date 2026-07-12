@@ -60,29 +60,36 @@ class OutputValidator:
     @staticmethod
     def log_stage_results(actual_requests, counts, elapsed, *,
                           timeout, idle_timeout,
-                          skip_reservation_check=False) -> None:
-        """Log per-stage summary of request results."""
-        logger.info("\n  Requests: %s", actual_requests)
-        if skip_reservation_check:
-            confirm_label = "output fields confirmed"
-        else:
-            confirm_label = "success criteria met"
-        logger.info(
-            "    Created: %s  (%s)",
-            counts.get(STATUS_CREATED, 0), confirm_label,
-        )
-        logger.info(
-            "    Failed:  %s  (error or crash)",
-            counts.get(STATUS_FAILED, 0),
-        )
-        logger.info(
-            "    Timed out: %s  (hit %ss hard cap)",
-            counts.get(STATUS_TIMEOUT, 0), timeout,
-        )
-        logger.info(
-            "    Killed:  %s  (no output for %ss, presumed hanging)",
-            counts.get(STATUS_KILLED, 0), idle_timeout,
-        )
+                          skip_reservation_check=False,
+                          show_counts=True) -> None:
+        """Log per-stage summary of request results.
+
+        When ``show_counts`` is False (single-stage runs, where the
+        counts are repeated verbatim in OVERALL RESULTS), only the
+        Duration/Avg line is printed to avoid duplication.
+        """
+        if show_counts:
+            logger.info("\n  Requests: %s", actual_requests)
+            if skip_reservation_check:
+                confirm_label = "output fields confirmed"
+            else:
+                confirm_label = "success criteria met"
+            logger.info(
+                "    Created: %s  (%s)",
+                counts.get(STATUS_CREATED, 0), confirm_label,
+            )
+            logger.info(
+                "    Failed:  %s  (error or crash)",
+                counts.get(STATUS_FAILED, 0),
+            )
+            logger.info(
+                "    Timed out: %s  (hit %ss hard cap)",
+                counts.get(STATUS_TIMEOUT, 0), timeout,
+            )
+            logger.info(
+                "    Killed:  %s  (no output for %ss, presumed hanging)",
+                counts.get(STATUS_KILLED, 0), idle_timeout,
+            )
         avg_per = (
             elapsed / actual_requests
             if actual_requests else 0
