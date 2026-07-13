@@ -28,6 +28,7 @@ import threading
 from langchain_core.tools import BaseTool
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from neuro_san.internals.run_context.langchain.mcp.mcp_servers_info_restorer import McpServersInfoRestorer
+from neuro_san.internals.run_context.langchain.mcp.mcp_tool_error_handler import McpToolErrorHandler
 
 
 class LangChainMcpAdapter:
@@ -126,5 +127,18 @@ class LangChainMcpAdapter:
             # Add "langchain_tool" tags so journal callback can idenitify it.
             # These MCP tools are treated as Langchain tools and can be reported in the thinking file.
             tool.tags = ["langchain_tool"]
+            # Not all BaseTool subclasses have a coroutine to wrap, but the
+            # StructuredTools from langchain-mcp-adapters do: their async
+            # implementation (the function that opens the MCP session and calls
+            # the server) is held in their "coroutine" attribute.
+            if getattr(tool, "coroutine", None) is not None:
+                # Swap that attribute for a McpToolErrorHandler so that MCP call
+                # failures come back to the LLM as concise "Error: ..." tool
+                # output instead of raw exceptions that abort the whole agent
+                # chain. The handler captures the original coroutine at
+                # construction, which is why it must be created before the
+                # assignment overwrites the attribute. See McpToolErrorHandler
+                # for a full explanation of the mechanism.
+                tool.coroutine = McpToolErrorHandler(tool)
 
         return mcp_tools
