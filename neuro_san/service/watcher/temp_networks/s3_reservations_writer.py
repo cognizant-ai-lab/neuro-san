@@ -31,7 +31,7 @@ from aiobotocore.client import AioBaseClient
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
-from neuro_san.service.watcher.temp_networks.s3_async_client_worker import S3AsyncClientWorker
+from neuro_san.service.watcher.temp_networks.aws_async_client_worker import AwsAsyncClientWorker
 from neuro_san.service.watcher.temp_networks.s3_retry_util import S3RetryUtil
 
 
@@ -74,7 +74,7 @@ class S3ReservationsWriter:
         self.prefix: str = prefix
         self.converter = ReservationDictionaryConverter()
 
-        self.s3_async_client_worker = S3AsyncClientWorker(self.name)
+        self.s3_async_client_worker = AwsAsyncClientWorker(self.name, "s3")
 
     async def add_reservations(self, reservations_dict: Dict[Reservation, Any],
                                source: str = None):
@@ -127,26 +127,26 @@ class S3ReservationsWriter:
     async def add_all_reservations(self,
                                    reservations_dict: Dict[Reservation, Dict[str, Any]],
                                    source: str,
-                                   async_s3_client: AioBaseClient = None):
+                                   async_aws_client: AioBaseClient = None):
         """
         Add all reservations to S3 storage.
         :param reservations_dict: A mapping of Reservation -> some deployable agent spec
         :param source: A string describing where the deployment was coming from
-        :param async_s3_client: An aiobotocore S3 client to use for the put_object call
+        :param async_aws_client: An aiobotocore S3 client to use for the put_object call
         """
         # Process each reservation/agent spec pair individually
         reservation: Reservation = None
         agent_spec: Dict[str, Any] = None
         for reservation, agent_spec in reservations_dict.items():
-            await self.add_one_reservation(async_s3_client, reservation, agent_spec, source)
+            await self.add_one_reservation(async_aws_client, reservation, agent_spec, source)
 
-    async def add_one_reservation(self, async_s3_client: AioBaseClient,
+    async def add_one_reservation(self, async_aws_client: AioBaseClient,
                                   reservation: Reservation,
                                   agent_spec: Dict[str, Any],
                                   source: str):
         """
         Add a single reservation to S3 storage.
-        :param async_s3_client: An aiobotocore S3 client to use for the put_object call
+        :param async_aws_client: An aiobotocore S3 client to use for the put_object call
         :param reservation: The reservation to add
         :param agent_spec: The agent spec to add
         :param source: A string describing where the deployment was coming from
@@ -169,7 +169,7 @@ class S3ReservationsWriter:
         # Store as JSON object in S3 with proper content type
         json_body: str = dumps(agent_spec, indent=4)  # Pretty-printed JSON
 
-        put_function: Awaitable = partial(async_s3_client.put_object,
+        put_function: Awaitable = partial(async_aws_client.put_object,
                                           Bucket=self.bucket_name,
                                           Key=key,
                                           Body=json_body,

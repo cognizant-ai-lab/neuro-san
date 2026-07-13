@@ -44,24 +44,28 @@ from neuro_san.service.watcher.temp_networks.s3_retry_util import S3RetryUtil
 
 
 # pylint: disable=too-many-instance-attributes
-class S3AsyncClientWorker:
+class AwsAsyncClientWorker:
     """
-    AWS S3-based class that manages a particular async work_function (from functools.partial)
-    that has async_s3_client as an argument whose credentials are properly handled for
-    short-lived async S3 clients.
+    Class that manages a particular AWS boto async work_function (from functools.partial)
+    that has async_aws_client as an argument whose credentials are properly handled for
+    short-lived async boto clients.
     """
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, aws_service: str = "s3"):
         """
-        Initialize S3 reservations storage.
+        Constructor
 
         :param name: Name for logging as to whose behalf this class is operating.
+        :param aws_service: Name of the AWS service to initialize the boto client
         """
         self.name: str = name
+        self.aws_service: str = aws_service
         self.logger: Logger = getLogger(self.__class__.__name__)
 
+        # Sync lock is only needed to properly create the async lock
+        # at the right time in the right thread.
         self.sync_lock: SyncLock = SyncLock()
-        self.async_s3_client_lock: AsyncLock = None
+        self.async_aws_client_lock: AsyncLock = None
 
         # Boto Machinations
         # We should be able to have a single Session for the lifetime of this object
@@ -123,11 +127,11 @@ class S3AsyncClientWorker:
         Be sure we have an asyncio Lock to get our sessions.
         """
         # Note that none of this is async in and of itself.
-        if self.async_s3_client_lock is None:
+        if self.async_aws_client_lock is None:
             with self.sync_lock:
                 # Be sure everyone has the same lock
-                if self.async_s3_client_lock is None:
-                    self.async_s3_client_lock = AsyncLock()
+                if self.async_aws_client_lock is None:
+                    self.async_aws_client_lock = AsyncLock()
 
     async def do_work_with_new_client(self, work_function: Awaitable, *, attempt: int = 1) -> Any:
         """
@@ -143,9 +147,9 @@ class S3AsyncClientWorker:
         retval: Any = None
 
         # Create an aiobotocore client for async operations.
-        async_s3_client: AioBaseClient = None
+        async_aws_client: AioBaseClient = None
 
-        async_s3_client_creator_context: ClientCreatorContext = None
+        async_aws_client_creator_context: ClientCreatorContext = None
         lock_released: bool = False
         acquired_lock: bool = False
 
@@ -155,14 +159,14 @@ class S3AsyncClientWorker:
         lock_released_time: float = 0.0
         try:
             # Serialize creation of the ClientCreatorContext with the lock to avoid credential-chain races.
-            await self.async_s3_client_lock.acquire()
+            await self.async_aws_client_lock.acquire()
             lock_aquired_time = perf_counter()
             acquired_lock = True
 
             # Get the current notion of frozen credentials.
             frozen_creds: ReadOnlyCredentials = await self.get_frozen_credentials()
-            async_s3_client_creator_context = self.session.create_client(
-                "s3",
+            async_aws_client_creator_context = self.session.create_client(
+                self.aws_service,
                 aws_access_key_id=frozen_creds.access_key,
                 aws_secret_access_key=frozen_creds.secret_key,
                 aws_session_token=frozen_creds.token,
@@ -173,21 +177,21 @@ class S3AsyncClientWorker:
             # but we want to be holding the lock while we create the client to avoid
             # credential-chain races like NoCredentialsError.
 
-            async with async_s3_client_creator_context as async_s3_client:
+            async with async_aws_client_creator_context as async_aws_client:
 
                 # Release the lock while we process, allowing other tasks to work on
-                # getting their own async_s3_client. (Not an async method)
-                self.async_s3_client_lock.release()
+                # getting their own async_aws_client. (Not an async method)
+                self.async_aws_client_lock.release()
                 lock_released_time = perf_counter()
                 lock_released = True
 
-                retval = await work_function(async_s3_client=async_s3_client)
+                retval = await work_function(async_aws_client=async_aws_client)
 
         finally:
             # Always release the lock if we successfully acquired it and have not already done so,
             # in case there was an error getting/entering the context manager.
             if acquired_lock and not lock_released:
-                self.async_s3_client_lock.release()
+                self.async_aws_client_lock.release()
 
         finish_time: float = perf_counter()
         self.logger.info("%s (%d): Lock acquisition in: %fs. Client context creation after: %fs. "
@@ -202,7 +206,7 @@ class S3AsyncClientWorker:
     async def get_frozen_credentials(self) -> ReadOnlyCredentials:
         """
         Get the frozen credentials for the current session.
-        We are assuming that we already have the async_s3_client_lock.
+        We are assuming that we already have the async_aws_client_lock.
         """
 
         # Use a local copy to avoid a race with the ClientError retry block
