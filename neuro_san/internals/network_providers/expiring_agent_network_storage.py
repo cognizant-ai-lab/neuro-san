@@ -164,15 +164,19 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
                 else:
                     replaced.append(agent_name)
 
+        agent_size_in_bytes: int = agent_network.get_size_in_bytes()
+
         # Notify listeners about this state change:
         # do it outside of internal lock
         for listener in self.listeners:
             for agent_name in added:
                 listener.agent_added(agent_name, self)
-                self.logger.info("%s: ADDED network for agent %s from %s", self._name, agent_name, source)
+                self.logger.info("%s: ADDED network for agent %s (%d bytes) from %s",
+                                 self._name, agent_name, agent_size_in_bytes, source)
             for agent_name in replaced:
                 listener.agent_modified(agent_name, self)
-                self.logger.info("%s: REPLACED network for agent %s from %s", self._name, agent_name, source)
+                self.logger.info("%s: REPLACED network for agent %s (%d bytes) from %s",
+                                 self._name, agent_name, agent_size_in_bytes, source)
 
         # Evict least recently used items if we exceeded the limit
         self.evict_lru_agent_networks()
@@ -299,11 +303,15 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
                     self.reservations_table[agent_name] = reservation
                     self.agents_table[agent_name] = agent_network
                     self.access_times[agent_name] = now
+
+                agent_size_in_bytes: int = agent_network.get_size_in_bytes()
+
                 # Notify listeners about this state change:
                 # do it outside of internal lock
                 for listener in self.listeners:
                     listener.agent_added(agent_name, self)
-                    self.logger.info("ADDED network for agent %s from %s", agent_name, "base storage")
+                    self.logger.info("ADDED network for agent %s (%d bytes) from %s",
+                                     agent_name, agent_size_in_bytes, "base storage")
 
                 # Evict least recently used items if we exceeded the limit
                 self.evict_lru_agent_networks()
