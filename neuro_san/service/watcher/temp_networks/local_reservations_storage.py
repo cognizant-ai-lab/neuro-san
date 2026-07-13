@@ -320,8 +320,17 @@ class LocalReservationsStorage(AbstractReservationsStorage):
             return False
 
         metadata: Dict[str, Any] = agent_spec.get("metadata") or {}
-        reservation_data: Dict[str, Any] = metadata.get("reservation") or {}
-        expiration_time: float = reservation_data.get("expiration_time_in_seconds", 0.0)
+        reservation_data = metadata.get("reservation")
+        if not isinstance(reservation_data, dict):
+            self.logger.debug("%s: skipping non-reservation json file during expiration: %s",
+                              self._name, path)
+            return False
+        try:
+            expiration_time: float = float(reservation_data["expiration_time_in_seconds"])
+        except (KeyError, TypeError, ValueError) as exc:
+            self.logger.error("%s: invalid expiration_time_in_seconds in %s: %s",
+                              self._name, path, exc)
+            return False
         if current_time <= expiration_time:
             return False
 
