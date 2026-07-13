@@ -30,8 +30,8 @@ from neuro_san.internals.utils.exception_util import ExceptionUtil
 
 class McpToolErrorHandler:
     """
-    Async callable that stands in for an MCP tool's coroutine in order to catch
-    errors raised while calling the MCP server.
+    Holder of an async_invoke bound method that stands in for an MCP tool's
+    coroutine in order to catch errors raised while calling the MCP server.
     See https://github.com/cognizant-ai-lab/neuro-san/issues/1097
 
     Background:
@@ -46,14 +46,22 @@ class McpToolErrorHandler:
     instead of an answer.
 
     The fix:
-    LangChainMcpAdapter replaces each MCP tool's coroutine attribute with an
-    instance of this class. The instance captures the original coroutine at
-    construction time and is a drop-in replacement for it: defining __call__
-    as "async def" makes the instance callable and awaitable-returning, which
-    is the entire contract the coroutine attribute has to satisfy.
+    LangChainMcpAdapter replaces each MCP tool's coroutine attribute with the
+    async_invoke *bound method* of an instance of this class. The instance
+    captures the original coroutine at construction time, and the bound method
+    is a drop-in replacement for it: calling it returns an awaitable, which is
+    the entire contract the coroutine attribute has to satisfy.
 
-    When the tool is invoked, __call__ awaits the original coroutine inside a
-    try/except. Success passes through untouched. On failure, the exception is
+    It must be a real (bound) method rather than the instance itself with an
+    async __call__: when building the agent, langgraph's ToolNode passes the
+    tool's coroutine to typing.get_type_hints() while scanning for injected
+    arguments, and get_type_hints() only accepts modules, classes, methods,
+    or functions. A callable instance makes agent construction raise
+    "TypeError: ... is not a module, class, method, or function"
+    (observed with langgraph 1.2.9; langgraph 1.2.4 did not do this scan).
+
+    When the tool is invoked, async_invoke awaits the original coroutine inside
+    a try/except. Success passes through untouched. On failure, the exception is
     converted into a normal "Error: <message>" *return value*, so from
     langgraph's point of view the tool ran fine and simply reported an error.
     The agent chain keeps running, and the LLM can react to the failure
@@ -69,9 +77,9 @@ class McpToolErrorHandler:
         Constructor
 
         Captures the tool's original coroutine, so instances must be created
-        *before* being assigned as the tool's coroutine. If the assignment
-        happened first, self.original_coroutine would refer to this handler
-        itself and __call__ would recurse forever.
+        *before* their async_invoke method is assigned as the tool's coroutine.
+        If the assignment happened first, self.original_coroutine would refer
+        back to async_invoke itself and recurse forever.
 
         :param tool: The MCP-backed LangChain tool whose coroutine is to be wrapped.
                 The tool itself is kept (not just its coroutine) because error
@@ -81,7 +89,7 @@ class McpToolErrorHandler:
         self.original_coroutine: Callable[..., Awaitable[Any]] = tool.coroutine
         self.logger: Logger = getLogger(self.__class__.__name__)
 
-    async def __call__(self, *args, **kwargs) -> Any:
+    async def async_invoke(self, *args, **kwargs) -> Any:
         """
         Invoke the original tool coroutine, converting any exception into
         a concise "Error: ..." tool output.
