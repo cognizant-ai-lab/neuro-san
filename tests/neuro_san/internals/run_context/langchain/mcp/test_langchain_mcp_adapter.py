@@ -213,7 +213,6 @@ class TestLangChainMcpAdapter:
         for tool in result:
             assert "langchain_tool" in tool.tags
 
-    @pytest.mark.skip(reason="CONTROL EXPERIMENT: coroutine wrapping disabled")
     @pytest.mark.asyncio
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
     async def test_get_mcp_tools_wraps_tool_errors(self, mock_client_class, adapter, caplog):
@@ -244,7 +243,6 @@ class TestLangChainMcpAdapter:
         # The full traceback is preserved in the server log for debugging.
         assert "RuntimeError" in caplog.text
 
-    @pytest.mark.skip(reason="CONTROL EXPERIMENT: coroutine wrapping disabled")
     @pytest.mark.asyncio
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
     async def test_get_mcp_tools_unwraps_exception_groups(self, mock_client_class, adapter):
@@ -274,7 +272,6 @@ class TestLangChainMcpAdapter:
         # The real cause is in the output, not just the TaskGroup summary.
         assert "ConnectionError: All connection attempts failed" in result
 
-    @pytest.mark.skip(reason="CONTROL EXPERIMENT: coroutine wrapping disabled")
     @pytest.mark.asyncio
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
     async def test_get_mcp_tools_wrapped_tools_pass_through_results(self, mock_client_class, adapter):
