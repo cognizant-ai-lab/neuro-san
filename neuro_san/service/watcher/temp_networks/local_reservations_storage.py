@@ -87,7 +87,7 @@ class LocalReservationsStorage(AbstractReservationsStorage):
     # saturates at ~10-20 concurrent writes on most hardware.
     MAX_CONCURRENT_WRITES: int = 16
 
-    def __init__(self, base_path: str = None, check_expirations_interval_seconds: float = 0.0):
+    def __init__(self, base_path: str = "", check_expirations_interval_seconds: float = 0.0):
         """
         :param base_path: Local directory where reservation JSON files will be stored.
                           Created on start() if it doesn't exist.
