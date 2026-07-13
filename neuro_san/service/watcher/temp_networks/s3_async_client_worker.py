@@ -18,7 +18,9 @@
 from typing import Any
 from typing import Awaitable
 
+from asyncio import CancelledError
 from asyncio import Lock as AsyncLock
+from asyncio import sleep as async_sleep
 from time import perf_counter
 
 from logging import getLogger
@@ -30,11 +32,15 @@ from aiobotocore.session import get_session
 from aiobotocore.session import AioSession
 from aiobotocore.session import ClientCreatorContext
 
+from botocore.exceptions import BotoCoreError
 from botocore.credentials import Credentials
 from botocore.credentials import ReadOnlyCredentials
 from botocore.exceptions import ClientError
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
+
+from neuro_san.service.watcher.temp_networks.s3_retry_util import S3RetryUtil
 
 
 # pylint: disable=too-many-instance-attributes
@@ -112,6 +118,17 @@ class S3AsyncClientWorker:
 
         raise RuntimeError("S3 credential retries exhausted without capturing an error") from last_err
 
+    def ensure_async_lock_exists(self):
+        """
+        Be sure we have an asyncio Lock to get our sessions.
+        """
+        # Note that none of this is async in and of itself.
+        if self.async_s3_client_lock is None:
+            with self.sync_lock:
+                # Be sure everyone has the same lock
+                if self.async_s3_client_lock is None:
+                    self.async_s3_client_lock = AsyncLock()
+
     async def do_work_with_new_client(self, work_function: Awaitable, *, attempt: int = 1) -> Any:
         """
         This method separates the machinations of obtaining a proper S3 client
@@ -182,17 +199,6 @@ class S3AsyncClientWorker:
                          finish_time - start_time)
         return retval
 
-    def ensure_async_lock_exists(self):
-        """
-        Be sure we have an asyncio Lock to get our sessions.
-        """
-        # Note that none of this is async in and of itself.
-        if self.async_s3_client_lock is None:
-            with self.sync_lock:
-                # Be sure everyone has the same lock
-                if self.async_s3_client_lock is None:
-                    self.async_s3_client_lock = AsyncLock()
-
     async def get_frozen_credentials(self) -> ReadOnlyCredentials:
         """
         Get the frozen credentials for the current session.
@@ -219,3 +225,41 @@ class S3AsyncClientWorker:
         self.frozen_credentials = local_frozen
 
         return local_frozen
+
+    @staticmethod
+    async def do_with_retries(source: str, fn, *, max_attempts: int = 8, base_sleep: float = 0.25):
+        """
+        Generic retry wrapper for boto3 calls.
+        boto3/botocore already retries, but this adds a bit of extra resilience and backoff for batch operations.
+        """
+        logger: Logger = getLogger(__name__)
+        sensitive_logger: SensitiveLogger = SensitiveLogger(logger)
+        sleep: float = 0.0
+        attempt: int = 1
+        while True:
+            try:
+                return await fn()
+            except ClientError as err:
+                if attempt >= max_attempts or not S3RetryUtil.is_retryable_client_error(err):
+                    raise
+
+                sleep = S3RetryUtil.exponential_backoff_with_jitter(base_sleep, attempt)
+                sensitive_logger.warning("%s: Retryable async ClientError (%s). attempt=%d", source, err, attempt)
+                await async_sleep(sleep)
+                attempt += 1
+            except BotoCoreError as err:
+                # Often transient network/serialization issues
+                if attempt >= max_attempts:
+                    raise
+
+                sleep = S3RetryUtil.exponential_backoff_with_jitter(base_sleep, attempt)
+                sensitive_logger.warning("%s: Retryable async BotoCoreError (%s). attempt=%d", source, err, attempt)
+                await async_sleep(sleep)
+                attempt += 1
+            except CancelledError:
+                logger.info("%s: async Task was cancelled.", source)
+                raise
+            except Exception as err:  # pylint: disable=broad-except
+                # Catch-all for unexpected exceptions; log and re-raise
+                sensitive_logger.error("%s: Unexpected async error (%s). attempt=%d", source, err, attempt)
+                raise

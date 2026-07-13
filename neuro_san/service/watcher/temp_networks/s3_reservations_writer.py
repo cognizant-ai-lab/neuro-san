@@ -175,6 +175,6 @@ class S3ReservationsWriter:
                                           Body=json_body,
                                           ContentType="application/json")
 
-        await S3RetryUtil.async_do_with_retries(source, put_function)
+        await self.s3_async_client_worker.do_with_retries(source, put_function)
 
         self.logger.debug("%s: Successfully stored reservation %s in S3", self.name, reservation_id)

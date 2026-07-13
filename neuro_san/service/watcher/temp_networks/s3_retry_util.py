@@ -15,8 +15,6 @@
 #
 # END COPYRIGHT
 
-from asyncio import sleep as async_sleep
-from asyncio import CancelledError
 from random import random
 from time import sleep as sync_sleep
 
@@ -99,45 +97,6 @@ class S3RetryUtil:
             except Exception as err:  # pylint: disable=broad-except
                 # Catch-all for unexpected exceptions; log and re-raise
                 sensitive_logger.error("%s: Unexpected sync error (%s). attempt=%d", source, err, attempt)
-                raise
-
-    @staticmethod
-    async def async_do_with_retries(source: str, fn, *, max_attempts: int = 8, base_sleep: float = 0.25):
-        """
-        Generic retry wrapper for boto3 calls.
-        boto3/botocore already retries, but this adds a bit of extra resilience and backoff for batch operations.
-        """
-        logger: Logger = getLogger(__name__)
-        sensitive_logger: SensitiveLogger = SensitiveLogger(logger)
-        sleep: float = 0.0
-        attempt: int = 1
-
-        while True:
-            try:
-                return await fn()
-            except ClientError as err:
-                if attempt >= max_attempts or not S3RetryUtil.is_retryable_client_error(err):
-                    raise
-
-                sleep = S3RetryUtil.exponential_backoff_with_jitter(base_sleep, attempt)
-                sensitive_logger.warning("%s: Retryable async ClientError (%s). attempt=%d", source, err, attempt)
-                await async_sleep(sleep)
-                attempt += 1
-            except BotoCoreError as err:
-                # Often transient network/serialization issues
-                if attempt >= max_attempts:
-                    raise
-
-                sleep = S3RetryUtil.exponential_backoff_with_jitter(base_sleep, attempt)
-                sensitive_logger.warning("%s: Retryable async BotoCoreError (%s). attempt=%d", source, err, attempt)
-                await async_sleep(sleep)
-                attempt += 1
-            except CancelledError:
-                logger.info("%s: async Task was cancelled.", source)
-                raise
-            except Exception as err:  # pylint: disable=broad-except
-                # Catch-all for unexpected exceptions; log and re-raise
-                sensitive_logger.error("%s: Unexpected async error (%s). attempt=%d", source, err, attempt)
                 raise
 
     @staticmethod
