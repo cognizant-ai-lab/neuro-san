@@ -347,4 +347,14 @@ class LocalReservationsStorage(AbstractReservationsStorage):
         """
         Local-file analog of S3RetryUtil.get_obj_key_for_reservation.
         """
-        return os.path.join(self.base_path, f"{reservation_id}{self.RESERVATION_FILE_SUFFIX}")
+        if not isinstance(reservation_id, str) or not reservation_id.strip():
+            raise ValueError("reservation_id must be a non-empty string")
+
+        base_path = os.path.abspath(self.base_path)
+        candidate = os.path.abspath(
+            os.path.join(base_path, f"{reservation_id}{self.RESERVATION_FILE_SUFFIX}")
+        )
+        if os.path.commonpath([base_path, candidate]) != base_path:
+            raise ValueError(f"Invalid reservation_id {reservation_id!r}: resolves outside base_path")
+
+        return candidate
