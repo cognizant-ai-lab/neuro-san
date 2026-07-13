@@ -16,32 +16,22 @@
 # END COPYRIGHT
 
 from typing import Any
+from typing import Awaitable
 from typing import Dict
 
-from asyncio import Lock as AsyncLock
 from os import getenv
-from time import perf_counter
 from time import time
 from functools import partial
 
 from json import dumps
 from logging import getLogger
 from logging import Logger
-from threading import Lock as SyncLock
 
 from aiobotocore.client import AioBaseClient
-from aiobotocore.session import get_session
-from aiobotocore.session import AioSession
-from aiobotocore.session import ClientCreatorContext
-
-from botocore.credentials import Credentials
-from botocore.credentials import ReadOnlyCredentials
-from botocore.exceptions import ClientError
-
-from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
+from neuro_san.service.watcher.temp_networks.s3_async_client_worker import S3AsyncClientWorker
 from neuro_san.service.watcher.temp_networks.s3_retry_util import S3RetryUtil
 
 
@@ -82,18 +72,9 @@ class S3ReservationsWriter:
 
         # Set up S3 key prefix and initialize sync target
         self.prefix: str = prefix
-
-        self.sync_lock: SyncLock = SyncLock()
-        self.async_s3_client_lock: AsyncLock = None
-
         self.converter = ReservationDictionaryConverter()
 
-        # Boto Machinations
-        # We should be able to have a single Session for the lifetime of this object
-        self.session: AioSession = None
-
-        # Cached frozen credentials which can be invalidated should they expire
-        self.frozen_credentials: ReadOnlyCredentials = None
+        self.s3_async_client_worker = S3AsyncClientWorker(self.name)
 
     async def add_reservations(self, reservations_dict: Dict[Reservation, Any],
                                source: str = None):
@@ -140,169 +121,18 @@ class S3ReservationsWriter:
         if source is None:
             source = self.name
 
-        # Async lock has to be created in the thread that uses it.
-        self.ensure_async_lock_exists()
+        work_function: Awaitable = partial(self.add_all_reservations, reservations_dict, source)
+        await self.s3_async_client_worker.retry_with_new_client(work_function)
 
-        await self.add_reservations_with_new_client_credential_retries(reservations_dict, source)
-
-    async def add_reservations_with_new_client_credential_retries(self,
-                                                                  reservations_dict: Dict[Reservation, Any],
-                                                                  source: str):
-        """
-        Retries adding the reservations when client credentials can expire.
-
-        :param reservations_dict: A mapping of Reservation -> some deployable agent spec
-        :param source: A string describing where the deployment was coming from
-        """
-
-        max_attempts: int = 8
-        last_err: Exception = None
-
-        for attempt in range(1, max_attempts + 1):
-            try:
-                await self.add_reservations_with_new_client(reservations_dict, source, attempt)
-                return
-
-            except ClientError as err:
-                extractor = DictionaryExtractor(err.response)
-                if "ExpiredToken" not in extractor.get("Error.Code", ""):
-                    raise
-
-                last_err = err
-
-                # Background: Certain IAM Instance Roles, ECS Task Roles or AWS SSO/IAM Identity Center
-                #             profiles have token-based credentials that may expire.
-                #             See: https://docs.aws.amazon.com/boto3/latest/guide/configuration.html
-
-                # Reset the cached credentials as they are likely expired and try again.
-                self.frozen_credentials = None
-                self.logger.warning(
-                    "%s (%d): S3 credentials seem to have expired. Retrying. "
-                    "If you believe you have non-expiring S3 credentials, be sure they are correct.",
-                    source,
-                    attempt,
-                )
-
-        # Exhausted retries
-        if last_err is not None:
-            raise last_err
-        raise RuntimeError("S3 credential retries exhausted without capturing an error") from last_err
-
-    async def add_reservations_with_new_client(self,
-                                               reservations_dict: Dict[Reservation, Any],
-                                               source: str,
-                                               attempt: int = 1):
-        """
-        This method separates the machinations of obtaining a proper S3 client
-        from add_all_reservations() which does all the actual work.
-
-        :param reservations_dict: A mapping of Reservation -> some deployable agent spec
-        :param source: A string describing where the deployment was coming from
-        :param attempt: Attempt number
-        """
-
-        # Create an aiobotocore client for async operations.
-        async_s3_client: AioBaseClient = None
-
-        async_s3_client_creator_context: ClientCreatorContext = None
-        lock_released: bool = False
-        acquired_lock: bool = False
-
-        start_time: float = perf_counter()
-        lock_aquired_time: float = 0.0
-        client_created_time: float = 0.0
-        lock_released_time: float = 0.0
-        try:
-            # Serialize creation of the ClientCreatorContext with the lock to avoid credential-chain races.
-            await self.async_s3_client_lock.acquire()
-            lock_aquired_time = perf_counter()
-            acquired_lock = True
-
-            # Get the current notion of frozen credentials.
-            frozen_creds: ReadOnlyCredentials = await self.get_frozen_credentials()
-            async_s3_client_creator_context = self.session.create_client(
-                "s3",
-                aws_access_key_id=frozen_creds.access_key,
-                aws_secret_access_key=frozen_creds.secret_key,
-                aws_session_token=frozen_creds.token,
-            )
-            client_created_time = perf_counter()
-
-            # Normally this is done in a python ContextManager using a with-statement,
-            # but we want to be holding the lock while we create the client to avoid
-            # credential-chain races like NoCredentialsError.
-
-            async with async_s3_client_creator_context as async_s3_client:
-
-                # Release the lock while we process, allowing other tasks to work on
-                # getting their own async_s3_client. (Not an async method)
-                self.async_s3_client_lock.release()
-                lock_released_time = perf_counter()
-                lock_released = True
-
-                await self.add_all_reservations(async_s3_client, reservations_dict, source)
-
-        finally:
-            # Always release the lock if we successfully acquired it and have not already done so,
-            # in case there was an error getting/entering the context manager.
-            if acquired_lock and not lock_released:
-                self.async_s3_client_lock.release()
-
-        finish_time: float = perf_counter()
-        self.logger.info("%s (%d): Lock acquisition in: %fs. Client context creation after: %fs. "
-                         "Lock release after: %fs. Finish after: %fs",
-                         self.name, attempt,
-                         lock_aquired_time - start_time,
-                         client_created_time - start_time,
-                         lock_released_time - start_time,
-                         finish_time - start_time)
-
-    def ensure_async_lock_exists(self):
-        """
-        Be sure we have an asyncio Lock to get our sessions.
-        """
-        # Note that none of this is async in and of itself.
-        if self.async_s3_client_lock is None:
-            with self.sync_lock:
-                # Be sure everyone has the same lock
-                if self.async_s3_client_lock is None:
-                    self.async_s3_client_lock = AsyncLock()
-
-    async def get_frozen_credentials(self) -> ReadOnlyCredentials:
-        """
-        Get the frozen credentials for the current session.
-        We are assuming that we already have the async_s3_client_lock.
-        """
-
-        # Use a local copy to avoid a race with the ClientError retry block
-        local_frozen: ReadOnlyCredentials = self.frozen_credentials
-
-        # If we already have some credentials, use them
-        if local_frozen is not None:
-            return local_frozen
-
-        # Create the session if needed
-        # We should only need one for the lifetime of the object
-        if self.session is None:
-            self.session = get_session()
-
-        credentials: Credentials = await self.session.get_credentials()
-
-        # Avoid a small race condition with the ClientError retry block
-        # by always returning a local copy
-        local_frozen = await credentials.get_frozen_credentials()
-        self.frozen_credentials = local_frozen
-
-        return local_frozen
-
-    async def add_all_reservations(self, async_s3_client: AioBaseClient,
+    async def add_all_reservations(self,
                                    reservations_dict: Dict[Reservation, Dict[str, Any]],
-                                   source: str):
+                                   source: str,
+                                   async_s3_client: AioBaseClient = None):
         """
         Add all reservations to S3 storage.
-        :param async_s3_client: An aiobotocore S3 client to use for the put_object call
         :param reservations_dict: A mapping of Reservation -> some deployable agent spec
         :param source: A string describing where the deployment was coming from
+        :param async_s3_client: An aiobotocore S3 client to use for the put_object call
         """
         # Process each reservation/agent spec pair individually
         reservation: Reservation = None
@@ -339,11 +169,11 @@ class S3ReservationsWriter:
         # Store as JSON object in S3 with proper content type
         json_body: str = dumps(agent_spec, indent=4)  # Pretty-printed JSON
 
-        put_function = partial(async_s3_client.put_object,
-                               Bucket=self.bucket_name,
-                               Key=key,
-                               Body=json_body,
-                               ContentType="application/json")
+        put_function: Awaitable = partial(async_s3_client.put_object,
+                                          Bucket=self.bucket_name,
+                                          Key=key,
+                                          Body=json_body,
+                                          ContentType="application/json")
 
         await S3RetryUtil.async_do_with_retries(source, put_function)
 
