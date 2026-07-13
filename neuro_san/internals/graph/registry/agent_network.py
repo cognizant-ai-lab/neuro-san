@@ -18,6 +18,8 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from objsize import get_deep_size
+
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import \
@@ -51,6 +53,8 @@ class AgentNetwork(AgentNetworkInspector):
         if agent_specs is not None:
             for agent_spec in agent_specs:
                 self.register(agent_spec)
+
+        self.size_in_bytes: int = get_deep_size(self, "bytes")
 
     def get_config(self) -> Dict[str, Any]:
         """
@@ -179,3 +183,9 @@ However, the front man must not be:
         if timeout is None:
             return 0.0
         return float(timeout)
+
+    def get_size_in_bytes(self) -> int:
+        """
+        :return: The size in bytes of this AgentNetwork
+        """
+        return self.size_in_bytes

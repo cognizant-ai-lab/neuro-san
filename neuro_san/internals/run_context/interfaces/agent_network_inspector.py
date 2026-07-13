@@ -52,3 +52,9 @@ class AgentNetworkInspector:
                  an exception will be raised.
         """
         raise NotImplementedError
+
+    def get_size_in_bytes(self) -> int:
+        """
+        :return: The size in bytes of this AgentNetwork
+        """
+        raise NotImplementedError
