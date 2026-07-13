@@ -37,6 +37,7 @@ from neuro_san.internals.run_context.langchain.core.langchain_openai_function_to
 from neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter import LangChainMcpAdapter
 from neuro_san.internals.run_context.utils.external_agent_parsing import ExternalAgentParsing
 from neuro_san.internals.run_context.utils.external_tool_adapter import ExternalToolAdapter
+from neuro_san.internals.utils.exception_util import ExceptionUtil
 
 
 class BaseToolFactory:
@@ -175,7 +176,7 @@ class BaseToolFactory:
         except ExceptionGroup as nested_exception:
             # Could not reach the MCP server
             message: str = f"The URL {server_url} was unreachable. Not including it as a tool.\n"
-            message += self.get_exception_details(nested_exception)
+            message += ExceptionUtil.get_exception_details(nested_exception)
             agent_message = AgentMessage(content=message)
             await self.journal.write_message(agent_message)
             self.logger.info(message)
@@ -193,54 +194,6 @@ class BaseToolFactory:
             self.logger.info(message)
 
         return mcp_tools
-
-    def get_exception_details(self, exception, indent=0) -> str:
-        """
-        Recursively extract detailed information from nested exceptions.
-
-        This function handles both regular exceptions and ExceptionGroup instances
-        (introduced in Python 3.11) which can contain multiple nested exceptions.
-        It creates a human-readable, hierarchical representation of all exceptions
-        in the error chain.
-
-        :param exception: The exception to analyze. Can be any Exception type,
-                            including ExceptionGroup instances that contain multiple
-                            nested exceptions.
-        :parm indent: The current indentation level for formatting.
-                                Each recursive call increases this by 1 to create
-                                a visual hierarchy. Defaults to 0.
-
-        :return: A formatted string containing the exception type, message, and
-                any nested sub-exceptions with proper indentation to show the
-                hierarchy. Each line ends with a newline character.
-
-        Note:
-            This function is particularly useful for debugging MCP (Model Context Protocol)
-            errors and other complex exception scenarios where multiple errors can occur
-            simultaneously and get wrapped in ExceptionGroup containers.
-        """
-
-        # Create indentation string based on current nesting level
-        # Each level adds 2 spaces for visual hierarchy
-        spaces: str = "  " * indent
-
-        # Start building the message with exception type and description
-        # Format: "ExceptionType: exception message"
-        message: str = f"{spaces}{type(exception).__name__}: {exception}\n"
-
-        # Check if this exception is an ExceptionGroup (Python 3.11+ feature)
-        # ExceptionGroup can contain multiple exceptions that occurred simultaneously
-        if isinstance(exception, ExceptionGroup):
-            # Iterate through each sub-exception in the group
-            for i, sub_exc in enumerate(exception.exceptions):
-                # Add a header for each sub-exception with 1-based numbering
-                message += f"{spaces}Sub-exception {i+1}:\n"
-
-                # Recursively process the sub-exception with increased indentation
-                # This handles cases where sub-exceptions might themselves be ExceptionGroups
-                message += self.get_exception_details(sub_exc, indent + 1)
-
-        return message
 
     async def create_toolbox_tool(self, toolbox: str, agent_spec: Dict[str, Any], name: str) -> BaseTool:
         """Create tool from toolbox"""
