@@ -30,6 +30,8 @@ from typing import Dict
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import patch
 
+from aiobotocore.credentials import AioCredentials
+
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
 from neuro_san.service.watcher.temp_networks.s3_reservations_storage import S3ReservationsStorage
 from tests.neuro_san.service.watcher.temp_networks.fake_s3_client import FakeS3Client
@@ -96,6 +98,19 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
         # Restores the real aiobotocore symbol after the test completes,
         # regardless of pass/fail.
         self.addCleanup(aiobotocore_patcher.stop)
+
+        # Patch AioSession.get_credentials at the import boundary in s3_reservations_writer
+        # so storage.start() receives deterministic fake credentials.
+        async def _fake_get_credentials(*_args, **_kwargs):
+            return AioCredentials("bogus", "bogus")
+
+        credentials_patcher = patch(
+            "neuro_san.service.watcher.temp_networks.s3_reservations_writer.AioSession.get_credentials",
+            new=_fake_get_credentials,
+        )
+        credentials_patcher.start()
+        # Restores the real AioSession symbol after the test completes, regardless of pass/fail.
+        self.addCleanup(credentials_patcher.stop)
 
         self.storage: S3ReservationsStorage = S3ReservationsStorage(
             bucket_name="test-bucket",
