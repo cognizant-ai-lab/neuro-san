@@ -286,6 +286,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
 
                 # Our agent network no longer exists.
                 return None
+
             # Reservation is still valid, so we can return the AgentNetworkProvider for this agent.
             agent_network: AgentNetwork = self.agents_table.get(agent_name, None)
             if agent_network is not None:
@@ -293,11 +294,13 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
                     self.access_times[agent_name] = time.time()
                 return FixedAgentNetworkProvider(agent_network)
             return None
+
         # We don't have a reservation for this agent,
         # so check the source storage if we have one:
         if self.base_storage is not None:
             reservation, agent_network = self.base_storage.get_one_reservation(agent_name)
             if reservation is not None and not self.is_expired(reservation):
+                agent_size_in_bytes: int = agent_network.get_size_in_bytes()
                 # We have a valid reservation for this agent in the source storage,
                 # so return the AgentNetworkProvider for this agent.
                 # Also cache this reservation and agent network locally:
@@ -306,8 +309,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
                     self.reservations_table[agent_name] = reservation
                     self.agents_table[agent_name] = agent_network
                     self.access_times[agent_name] = now
-
-                agent_size_in_bytes: int = agent_network.get_size_in_bytes()
+                    self.sizes[agent_name] = agent_size_in_bytes
 
                 # Notify listeners about this state change:
                 # do it outside of internal lock
