@@ -102,6 +102,7 @@ class LocalReservationsStorage(AbstractReservationsStorage):
 
         env_path: str = os.getenv("AGENT_RESERVATIONS_LOCAL_PATH", "")
         self.base_path = base_path
+
         if not self.base_path or self.base_path.strip() == "":
             self.base_path = env_path
         if not self.base_path:
@@ -110,7 +111,7 @@ class LocalReservationsStorage(AbstractReservationsStorage):
                 "AGENT_RESERVATIONS_LOCAL_PATH environment variable"
             )
 
-        self.base_path: str = os.path.abspath(base_path)
+        self.base_path: str = os.path.abspath(self.base_path)
         self.converter: ReservationDictionaryConverter = ReservationDictionaryConverter()
 
     def start(self):
