@@ -21,6 +21,7 @@ from typing import List
 from typing import Optional
 
 import copy
+from datetime import timedelta
 from logging import Logger
 from logging import getLogger
 import threading
@@ -36,6 +37,16 @@ class LangChainMcpAdapter:
     Adapter class to fetch tools from a Multi-Client Protocol (MCP) server and return them as
     LangChain-compatible tools. This class provides static methods for interacting with MCP servers.
     """
+
+    # Default timeout for each MCP HTTP request (tools/list and tools/call).
+    # The MCP SDK default of 30 seconds is too tight: a neuro-san MCP server
+    # answers tools/list by enumerating every agent network it serves (roughly
+    # one second per agent), so a server with a few dozen agents takes ~30
+    # seconds to reply and a slow machine lands just over the SDK default.
+    # Worse, when the timeout fires mid-response against a server in the same
+    # process, the request can deadlock silently instead of erroring.
+    # Can be overridden per server with "timeout_in_seconds" in mcp_info.hocon.
+    DEFAULT_TIMEOUT_IN_SECONDS: float = 120.0
 
     _mcp_info_lock: threading.Lock = threading.Lock()
     _mcp_servers_info: Dict[str, Any] = None
@@ -86,9 +97,15 @@ class LangChainMcpAdapter:
         if self._mcp_servers_info is None:
             self._load_mcp_servers_info()
 
+        # Look up an optional per-server timeout from the MCP servers info,
+        # falling back to our more generous default. See DEFAULT_TIMEOUT_IN_SECONDS.
+        timeout_in_seconds: float = self._mcp_servers_info.get(server_url, {}).get(
+            "timeout_in_seconds", self.DEFAULT_TIMEOUT_IN_SECONDS)
+
         mcp_tool_dict: Dict[str, Any] = {
             "url": server_url,
             "transport": "streamable_http",
+            "timeout": timedelta(seconds=timeout_in_seconds),
         }
         # Try to look up authentication details first from the sly data then from the MCP servers info.
         headers_dict: Dict[str, Any] = headers or self._mcp_servers_info.get(server_url, {}).get("http_headers")
