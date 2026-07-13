@@ -59,6 +59,7 @@ from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.abstract_reservations_storage import AbstractReservationsStorage
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
 
+
 class LocalReservationsStorage(AbstractReservationsStorage):
     """
     Local-filesystem implementation of ReservationsStorage.
@@ -86,7 +87,7 @@ class LocalReservationsStorage(AbstractReservationsStorage):
     # saturates at ~10-20 concurrent writes on most hardware.
     MAX_CONCURRENT_WRITES: int = 16
 
-    def __init__(self, base_path: str = ".", check_expirations_interval_seconds: float = 0.0):
+    def __init__(self, base_path: str = None, check_expirations_interval_seconds: float = 0.0):
         """
         :param base_path: Local directory where reservation JSON files will be stored.
                           Created on start() if it doesn't exist.
@@ -288,7 +289,7 @@ class LocalReservationsStorage(AbstractReservationsStorage):
                         yield entry.path
         except FileNotFoundError:
             # Directory not yet created -- nothing to expire.
-            return
+            pass
 
     def _expire_one_file(self, path: str, current_time: float) -> bool:
         """
@@ -299,6 +300,7 @@ class LocalReservationsStorage(AbstractReservationsStorage):
         to expire" (log + move on) rather than an aborting error. That matches
         the S3 expiration path's tolerance for concurrent writers.
         """
+        # pylint: disable=too-many-return-statements
         try:
             with open(path, "r", encoding="utf-8") as fh:
                 agent_spec: Dict[str, Any] = json.load(fh)
