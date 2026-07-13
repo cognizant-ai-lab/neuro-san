@@ -22,7 +22,8 @@ from typing import Tuple
 from typing import Type
 from typing import Union
 
-import copy
+from copy import deepcopy
+from os import environ
 import traceback
 
 from logging import getLogger
@@ -74,9 +75,14 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
 
         :param agent_network: The AgentNetwork to use.
         """
+        agent_network_copy: AgentNetwork = agent_network
+
         # We make a copy of the AgentNetwork at this level to allow for interactions
         # within this scope to modify the network topology.
-        agent_network_copy: AgentNetwork = copy.deepcopy(agent_network)
+        protect_original_copy: bool = environ.get("AGENT_PROTECT_ORIGINAL_COPY", "true").lower() == "true"
+        if protect_original_copy:
+            agent_network_copy = deepcopy(agent_network)
+
         self.registry: AgentToolRegistry = AgentToolRegistry(agent_network_copy)
 
         self.front_man: FrontMan = None
@@ -122,7 +128,7 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         if self.sly_data.get("request_metadata") is None:
             # Make a deep copy so the server's idea of the original metadata doesn't get modified
             # should any CodedTool somehow get the idea to modify it.
-            self.sly_data["request_metadata"] = copy.deepcopy(invocation_context.get_metadata())
+            self.sly_data["request_metadata"] = deepcopy(invocation_context.get_metadata())
 
         run_context: RunContext = RunContextFactory.create_run_context(None, None,
                                                                        invocation_context=invocation_context,
