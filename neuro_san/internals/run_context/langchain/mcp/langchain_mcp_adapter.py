@@ -149,13 +149,10 @@ class LangChainMcpAdapter:
             # implementation (the function that opens the MCP session and calls
             # the server) is held in their "coroutine" attribute.
             if getattr(tool, "coroutine", None) is not None:
-                # Swap that attribute for a McpToolErrorHandler so that MCP call
-                # failures come back to the LLM as concise "Error: ..." tool
-                # output instead of raw exceptions that abort the whole agent
-                # chain. The handler captures the original coroutine at
-                # construction, which is why it must be created before the
-                # assignment overwrites the attribute. See McpToolErrorHandler
-                # for a full explanation of the mechanism.
-                tool.coroutine = McpToolErrorHandler(tool)
+                # CONTROL EXPERIMENT: construct the handler but do NOT swap it in.
+                # If CI passes with this, the hang is triggered specifically by
+                # assigning the handler as the tool's coroutine; if CI hangs,
+                # the trigger is elsewhere in this branch (imports/construction).
+                _ = McpToolErrorHandler(tool)
 
         return mcp_tools
