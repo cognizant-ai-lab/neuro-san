@@ -25,6 +25,8 @@ from logging import getLogger
 
 from langchain_core.tools.base import BaseTool
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
@@ -62,6 +64,10 @@ class BaseToolFactory:
         self.invocation_context: InvocationContext = invocation_context
         self.journal: Journal = journal
         self.logger: Logger = getLogger(self.__class__.__name__)
+        # Exception messages can carry sensitive request data, so log them
+        # through a SensitiveLogger, which respects the LEAF_LOG_SENSITIVE
+        # env var setting.
+        self.sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
 
     async def create_base_tool(self, name: str) -> Union[BaseTool, List[BaseTool]]:
         """
@@ -115,7 +121,7 @@ class BaseToolFactory:
             message += str(exception)
             agent_message = AgentMessage(content=message)
             await self.journal.write_message(agent_message)
-            self.logger.info(message)
+            self.sensitive_logger.info(message)
             return None
 
     async def create_internal_tool(self, name: str, agent_spec: Dict[str, Any]) -> BaseTool:
@@ -179,7 +185,7 @@ class BaseToolFactory:
             message += ExceptionUtil.get_exception_details(nested_exception)
             agent_message = AgentMessage(content=message)
             await self.journal.write_message(agent_message)
-            self.logger.info(message)
+            self.sensitive_logger.info(message)
             return None
 
         # The allowed tools list might have been updated by the MCP adapter
@@ -217,7 +223,7 @@ class BaseToolFactory:
             message: str = f"Failed to create Agent/tool '{name}': {tool_creation_exception}"
             agent_message = AgentMessage(content=message)
             await self.journal.write_message(agent_message)
-            self.logger.warning(message)
+            self.sensitive_logger.warning(message)
             return None
 
     def create_function_tool(self, function_json: Dict[str, Any], name: str) -> BaseTool:
