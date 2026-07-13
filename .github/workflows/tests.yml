@@ -28,12 +28,21 @@ jobs:
       run-hadolint: true
       dockerfile-path: 'neuro_san/deploy/Dockerfile'
       check-readme-pypi: true
+      # Diagnostics for the hanging needs_server hocon tests:
+      # --timeout kills any test stuck past 10 minutes and dumps the stacks of
+      # all threads (naming the hung test and its blocking line), and the
+      # agent.log tail shows what the shared server was doing at that moment.
       test-command-override: >-
         export AGENT_TOOL_PATH="./neuro_san/coded_tools" &&
         export PYTHONPATH="${PYTHONPATH:+$PYTHONPATH:}." &&
         build_scripts/server_start.sh &&
         pytest --verbose -m "not integration and not smoke"
         --timer-top-n 10 -n auto --cov-config=.coveragerc --cov
+        --timeout=600 --timeout-method=thread;
+        status=$?;
+        echo "===== agent.log tail =====";
+        tail -n 300 agent.log;
+        exit $status
     secrets:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
