@@ -87,7 +87,7 @@ class LocalReservationsStorage(AbstractReservationsStorage):
     # saturates at ~10-20 concurrent writes on most hardware.
     MAX_CONCURRENT_WRITES: int = 16
 
-    def __init__(self, base_path: str = "", check_expirations_interval_seconds: float = 0.0):
+    def __init__(self, base_path: str = None, check_expirations_interval_seconds: float = 0.0):
         """
         :param base_path: Local directory where reservation JSON files will be stored.
                           Created on start() if it doesn't exist.
@@ -101,7 +101,9 @@ class LocalReservationsStorage(AbstractReservationsStorage):
         self.logger: logging.Logger = logging.getLogger(self.__class__.__name__)
 
         env_path: str = os.getenv("AGENT_RESERVATIONS_LOCAL_PATH", "")
-        self.base_path: str = base_path or env_path
+        self.base_path = base_path
+        if not self.base_path:
+            self.base_path = env_path
         if not self.base_path:
             raise ValueError(
                 "Local path for reservations must be non-empty string provided via base_path parameter or "
