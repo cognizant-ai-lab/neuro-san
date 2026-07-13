@@ -186,7 +186,7 @@ class LocalReservationsStorage(AbstractReservationsStorage):
         # Write to a temp file in the same directory so os.replace() is atomic.
         # A distinct temp filename per attempt avoids collisions on retries or
         # concurrent overwrites.
-        tmp_path: str = f"{final_path}.{os.getpid()}.tmp"
+        tmp_path: str = f"{final_path}.{os.getpid()}.{time.time_ns()}.tmp"
         try:
             with open(tmp_path, "w", encoding="utf-8") as fh:
                 fh.write(body)
