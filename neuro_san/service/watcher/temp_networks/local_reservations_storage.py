@@ -173,7 +173,10 @@ class LocalReservationsStorage(AbstractReservationsStorage):
 
         # Shallow-copy so we do not mutate the caller's agent_spec.
         spec_to_write: Dict[str, Any] = dict(agent_spec)
-        existing_metadata: Dict[str, Any] = spec_to_write.get("metadata") or {}
+        existing_metadata: Any = spec_to_write.get("metadata") or {}
+        if not isinstance(existing_metadata, dict):
+            self.logger.warning("%s: reservation %s has non-dict metadata; overwriting it", source, reservation_id)
+            existing_metadata = {}
         spec_to_write["metadata"] = {
             **existing_metadata,
             "reservation": self.converter.to_dict(reservation),
