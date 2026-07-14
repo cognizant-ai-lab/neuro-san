@@ -23,7 +23,6 @@ non-mutation of the caller's agent_spec. Uses a tmp_path fixture so each
 test runs in an isolated directory; no server, no threads, no shared state.
 """
 import json
-import os
 import time
 from typing import Any
 from typing import Dict
