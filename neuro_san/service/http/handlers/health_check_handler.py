@@ -25,10 +25,6 @@ import http
 import os
 
 from http import HTTPStatus
-from threading import Lock
-
-from importlib.metadata import version as library_version
-from importlib.metadata import PackageNotFoundError
 
 from tornado.web import RequestHandler
 from neuro_san.service.http.logging.http_logger import HttpLogger
@@ -40,18 +36,14 @@ class HealthCheckHandler(RequestHandler):
     Handler class for API endpoint health check.
     """
 
-    # Current service versions are cached in a class variable to avoid repeated lookups.
-    # Note that we cannot do it in the handler initialization
-    # because the handler is created new for each request
-    service_versions: Dict[str, Any] | None = None
-    versions_lock: Lock = Lock()
-
     # pylint: disable=attribute-defined-outside-init
+    # pylint: disable=too-many-positional-arguments,too-many-arguments
     def initialize(self,
                    forwarded_request_metadata: List[str],
                    server_status: ServerStatus,
                    op: str,
-                   logging_config: Dict[str, Any]):
+                   logging_config: Dict[str, Any],
+                   versions: Dict[str, Any]):
         """
         This method is called by Tornado framework to allow
         injecting service-specific data into local handler context.
@@ -62,6 +54,10 @@ class HealthCheckHandler(RequestHandler):
                    "ready" for /readyz query
                    "live" for /livez query
         :param logging_config: logging configuration dictionary
+        :param versions: pre-computed library version dict returned in the
+                   "versions" field of a successful health response. Supplied
+                   from ServerStatus.get_versions() so per-request handlers
+                   do not have to re-resolve importlib metadata on every probe.
         """
         self.logger = HttpLogger(forwarded_request_metadata, logging_config)
         if op == "ready":
@@ -69,6 +65,7 @@ class HealthCheckHandler(RequestHandler):
         else:
             self.status = server_status.is_server_live()
         self.server_name = server_status.get_server_name()
+        self.versions = versions
 
         if os.environ.get("AGENT_ALLOW_CORS_HEADERS") is not None:
             self.set_header("Access-Control-Allow-Origin", "*")
@@ -82,14 +79,10 @@ class HealthCheckHandler(RequestHandler):
 
         try:
             if self.status:
-                if HealthCheckHandler.service_versions is None:
-                    with HealthCheckHandler.versions_lock:
-                        if HealthCheckHandler.service_versions is None:
-                            HealthCheckHandler.service_versions = HealthCheckHandler.determine_versions()
                 result_dict: Dict[str, Any] = {
                     "service": self.server_name,
                     "status": "ok",
-                    "versions": HealthCheckHandler.service_versions
+                    "versions": self.versions,
                 }
                 self.set_header("Content-Type", "application/json")
                 self.write(result_dict)
@@ -124,54 +117,3 @@ class HealthCheckHandler(RequestHandler):
         # No body needed. Just return a 204 No Content
         self.set_status(http.HTTPStatus.NO_CONTENT)
         self.finish()
-
-    @classmethod
-    def determine_versions(cls) -> Dict[str, Any]:
-        """
-        Allow for a list of libraries to report versioning.
-        We have a static list that we always support, but also look at the
-        AGENT_VERSION_LIBS env var (if set) to potentially report more.
-        :return: A dictionary whose keys are libraries and whose values are the
-                 versions installed for those libraries.
-        """
-        versions: Dict[str, Any] = {}
-
-        # Start with a static list of libs we always support
-        versioned_libs: List[str] = ["neuro-san"]
-
-        # Try to incorporate libs from the env var.
-        env_var_libs: str = os.environ.get("AGENT_VERSION_LIBS")
-        if env_var_libs is not None:
-            for env_var_lib in env_var_libs.split(" "):
-                if env_var_lib is None:
-                    # Skip anything with nothing in it
-                    continue
-
-                env_var_lib = env_var_lib.strip()
-                if len(env_var_lib) == 0:
-                    # Skip anything with nothing in it
-                    continue
-
-                if ":" not in env_var_lib:
-                    # Look for the library in the versioning loop below
-                    versioned_libs.append(env_var_lib)
-                    continue
-
-                # We have a version coming in from the env var
-                version: str = env_var_lib.split(":")[1]
-                env_var_lib = env_var_lib.split(":")[0]
-                versions[env_var_lib] = version
-
-        for lib in versioned_libs:
-            # Did we already find a version from the env var?
-            version: str = versions.get(lib)
-            if version is None:
-                try:
-                    # Try getting the pip-installed version from the system
-                    version = str(library_version(lib))
-                except PackageNotFoundError:
-                    # Don't know what to do, so report a shrug.
-                    version = "unknown"
-                versions[lib] = version
-
-        return versions
