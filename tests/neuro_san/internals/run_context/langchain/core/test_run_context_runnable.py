@@ -75,7 +75,7 @@ class TestRunContextRunnable:
 
         # error_detector.handle_error is a pass-through for this test.
         error_detector = MagicMock()
-        error_detector.handle_error = MagicMock(side_effect=lambda output, _backtrace: output)
+        error_detector.handle_error = MagicMock(side_effect=lambda output: output)
 
         runnable = RunContextRunnable.model_construct(
             journal=mock_journal,
@@ -93,3 +93,47 @@ class TestRunContextRunnable:
             assert isinstance(msg, AgentFrameworkMessage)
             assert msg.content == "Retrying: the model's output could not be parsed (ValueError) - not a parsing error"
         assert isinstance(written[-1], AIMessage)
+
+    @pytest.mark.asyncio
+    async def test_invoke_agent_chain_keeps_backtrace_out_of_client_output(self):
+        """
+        When the agent chain dies with an unhandled exception (e.g. an MCP tool
+        transport error), the client-facing message must carry only the exception
+        message: the full backtrace goes to the server log, not to the
+        ErrorDetector as client-facing details.
+        See https://github.com/cognizant-ai-lab/neuro-san/issues/1097
+        """
+        written = []
+        mock_journal = MagicMock()
+        mock_journal.write_message = AsyncMock(side_effect=lambda msg, *_a, **_k: written.append(msg))
+        sensitive_logger = MagicMock()
+        sensitive_logger.should_log = MagicMock(return_value=True)
+
+        # A RuntimeError exercises the non-retryable broad-exception branch.
+        agent_chain = MagicMock()
+        agent_chain.ainvoke = AsyncMock(side_effect=RuntimeError("Server error '504 Gateway Time-out'"))
+
+        # error_detector.handle_error is a pass-through for this test.
+        error_detector = MagicMock()
+        error_detector.handle_error = MagicMock(side_effect=lambda output: output)
+
+        runnable = RunContextRunnable.model_construct(
+            journal=mock_journal,
+            sensitive_logger=sensitive_logger,
+            agent_chain=agent_chain,
+            error_detector=error_detector,
+            logger=MagicMock(),
+        )
+
+        await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=3)
+
+        # Unhandled exceptions are not retried: a single final AIMessage.
+        assert len(written) == 1
+        final = written[-1]
+        assert isinstance(final, AIMessage)
+        assert final.content == "Agent stopped due to exception Server error '504 Gateway Time-out'"
+        # The ErrorDetector must not receive the backtrace as client-facing details.
+        error_detector.handle_error.assert_called_once_with(
+            "Agent stopped due to exception Server error '504 Gateway Time-out'")
+        # The backtrace is logged server-side instead.
+        assert any("Traceback" in str(call) for call in sensitive_logger.error.call_args_list)
