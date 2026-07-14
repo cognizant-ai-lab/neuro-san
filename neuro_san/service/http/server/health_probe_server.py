@@ -188,17 +188,22 @@ class HealthProbeServer(Startable):
         responses look identical to the main port's.
         """
         server_status = self.server_context.get_server_status()
+        # get_versions() is cached on ServerStatus; the same dict lands in
+        # every probe response so we do not re-run importlib.metadata per hit.
+        versions: Dict[str, Any] = server_status.get_versions()
         live_data: Dict[str, Any] = {
             "forwarded_request_metadata": self.forwarded_request_metadata,
             "server_status": server_status,
             "op": "live",
             "logging_config": self.logging_config,
+            "versions": versions,
         }
         ready_data: Dict[str, Any] = {
             "forwarded_request_metadata": self.forwarded_request_metadata,
             "server_status": server_status,
             "op": "ready",
             "logging_config": self.logging_config,
+            "versions": versions,
         }
         handlers: List[Any] = [
             ("/", HealthCheckHandler, ready_data),

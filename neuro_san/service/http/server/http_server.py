@@ -165,6 +165,12 @@ class HttpServer(AgentStateListener):
         # a dedicated thread -- so probes stay fast even when the main
         # Tornado loop is saturated by request work.
         probe_port: int = self.resolve_health_probe_port()
+        if probe_port == self.http_port:
+            self.logger.warning({},
+                                "Health probe port %d is the same as main HTTP port; "
+                                "dedicated probe server is not started, "
+                                "but /healthz, /readyz, /livez remain registered on the main port", probe_port)
+            probe_port = -1
         if probe_port > 0:
             startables.append(HealthProbeServer(
                 port=probe_port,
@@ -239,17 +245,24 @@ class HttpServer(AgentStateListener):
         enable_http_handlers: bool = self.server_context.get_server_status().http_service.is_requested()
 
         request_initialize_data: Dict[str, Any] = self.build_request_data()
+        # Resolve library versions once here; the same dict is passed to every
+        # health handler on both the main port and the isolated probe server so
+        # per-request probes never re-run importlib.metadata lookups.
+        server_status = self.server_context.get_server_status()
+        versions: Dict[str, Any] = server_status.get_versions()
         live_request_initialize_data: Dict[str, Any] = {
             "forwarded_request_metadata": self.forwarded_request_metadata,
-            "server_status": self.server_context.get_server_status(),
+            "server_status": server_status,
             "op": "live",
-            "logging_config": self.logging_config
+            "logging_config": self.logging_config,
+            "versions": versions,
         }
         ready_request_initialize_data: Dict[str, Any] = {
             "forwarded_request_metadata": self.forwarded_request_metadata,
-            "server_status": self.server_context.get_server_status(),
+            "server_status": server_status,
             "op": "ready",
-            "logging_config": self.logging_config
+            "logging_config": self.logging_config,
+            "versions": versions,
         }
         handlers = []
         # Health check handlers are enabled always
