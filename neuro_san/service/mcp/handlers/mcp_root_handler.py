@@ -184,7 +184,7 @@ class McpRootHandler(BaseRequestHandler):
                 if validation_errors:
                     extra_error: str = "; ".join(validation_errors)
                     error_msg: Dict[str, Any] = \
-                        McpErrorsUtil.get_protocol_error(request_id, McpError.InvalidRequest, extra_error)
+                        McpErrorsUtil.get_protocol_error(request_id, McpError.InvalidRequest)
                     self.set_status(HTTPStatus.BAD_REQUEST)
                     self.write(error_msg)
                     self.logger.error(self.get_metadata(), f"Error: Invalid tool call request: {extra_error}")
