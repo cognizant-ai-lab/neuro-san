@@ -63,6 +63,13 @@ The value for each key is a dictionary describing the tool's properties. The sch
 
 These tools extend from the Langchain's `BaseTool` class.
 
+> [!WARNING]
+> The [langchain-community](https://github.com/langchain-ai/langchain-community/issues/674) package has been sunset
+> and its repository archived. The default request tools in `toolbox_info.hocon`, which are built on
+> `langchain_community` classes (as in the examples below), will be removed in a future release.
+> Prefer tools from maintained, dedicated integration packages — see the
+> [LangChain tool integrations](https://docs.langchain.com/oss/python/integrations/tools) for what is available.
+
 #### `class`
 
 Fully qualified class name of the tool. It must exist in the server's `PYTHONPATH`.

@@ -24,10 +24,11 @@ from typing import Optional
 from typing import Type
 from typing import Union
 
+import logging
 import os
 
 from langchain_core.tools.base import BaseTool
-from langchain_community.agent_toolkits.base import BaseToolkit
+from langchain_core.tools.base import BaseToolkit
 from pydantic import BaseModel
 
 from leaf_common.config.dictionary_overlay import DictionaryOverlay
@@ -152,8 +153,8 @@ class ToolboxFactory(ContextTypeToolboxFactory):
                 "Missing required key: 'class'.\n"
                 "Each tool must include a 'class' key:\n"
                 "- For Langchain base tools: use the full class path "
-                "(e.g., 'langchain_community.tools.bing_search.BingSearchResults')\n"
-                "- For shared CodedTools: use 'module.Class' format (e.g., 'websearch.WebSearch')"
+                "(e.g., 'some_package.some_module.SomeTool')\n"
+                "- For shared CodedTools: use 'module.Class' format (e.g., 'some_module.SomeCodedTool')"
             )
 
         # If "description" in the tool info, then it is a shared coded tool.
@@ -161,8 +162,18 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         if "description" in tool_info:
             return tool_info
 
+        tool_class_name: str = tool_info.get("class")
+        if tool_class_name.startswith("langchain_community."):
+            logging.warning(
+                "Tool '%s' uses a class from langchain-community, which has been sunset "
+                "(https://github.com/langchain-ai/langchain-community/issues/674). "
+                "Tools based on langchain-community will be removed from the default toolbox "
+                "in a future release.",
+                tool_name
+            )
+
         # Instantiate the main tool or toolkit class
-        tool_class: Type[Any] = self._resolve_class(tool_info.get("class"))
+        tool_class: Type[Any] = self._resolve_class(tool_class_name)
         # Recursively resolve arguments (including wrapper dependencies)
         resolved_args: Dict[str, Any] = self._resolve_args(tool_info.get("args", empty))
         # Merge with user arguments where user_args get the priority
