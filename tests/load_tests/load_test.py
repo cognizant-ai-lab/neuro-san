@@ -1197,8 +1197,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         base = self.args.output_dir or os.path.join(
             tempfile.gettempdir(), "load_test",
         )
-        folder_name = (
-            f"{timestamp}_{self.args.num_requests}"
+        folder_name = self._run_folder_name(
+            timestamp, self.args.num_requests,
         )
         self._output_dir = os.path.join(
             base, self.args.level, folder_name,
@@ -1533,7 +1533,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         base = self.args.output_dir or os.path.join(
             tempfile.gettempdir(), "load_test",
         )
-        folder_name = f"{timestamp}_{expected}"
+        folder_name = self._run_folder_name(timestamp, expected)
         round_dir = os.path.join(
             base, "server_only", folder_name,
         )
@@ -2704,6 +2704,35 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             return _pkg_meta.version(package_name)
         except _pkg_meta.PackageNotFoundError:
             return None
+
+    def _host_tag(self) -> str:
+        """Return the ``--host`` value as a folder-name segment."""
+        return re.sub(r"[^0-9A-Za-z.+-]", "-", str(self.args.host))
+
+    @staticmethod
+    def _version_tag() -> str:
+        """Return a folder-name segment for the neuro-san version.
+
+        E.g. ``ns0.6.72`` when neuro-san is installed, or ``""`` when
+        the version can't be determined.  This is the *client*-side
+        installed version (matches the server when co-located).
+        """
+        version = LoadTestOrchestrator._get_package_version(
+            "neuro-san",
+        )
+        if not version:
+            return ""
+        safe = re.sub(r"[^0-9A-Za-z.+-]", "-", version)
+        return f"ns{safe}"
+
+    def _run_folder_name(self, timestamp, count) -> str:
+        """Build ``<timestamp>_<host>[_ns<version>]_<count>``."""
+        parts = [timestamp, self._host_tag()]
+        vtag = self._version_tag()
+        if vtag:
+            parts.append(vtag)
+        parts.append(str(count))
+        return "_".join(parts)
 
     @staticmethod
     def main() -> None:
