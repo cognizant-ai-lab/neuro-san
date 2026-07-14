@@ -155,8 +155,8 @@ class HealthProbeServer(Startable):
         server: tornado.httpserver.HTTPServer = tornado.httpserver.HTTPServer(app)
         try:
             server.bind(self.port, reuse_port=True)
-        except OSError as exc:
-            self.logger.error("HealthProbeServer failed to bind port %d: %s",
+        except (OSError, ValueError, NotImplementedError) as exc:
+            self.logger.error("HealthProbeServer failed to bind port %d (reuse_port=True): %s",
                               self.port, exc)
             asyncio.set_event_loop(None)
             with contextlib.suppress(Exception):
