@@ -159,6 +159,9 @@ class HealthProbeServer(Startable):
         except OSError as exc:
             self.logger.error("HealthProbeServer failed to bind port %d: %s",
                               self.port, exc)
+            asyncio.set_event_loop(None)
+            with contextlib.suppress(Exception):
+                loop.close()
             return
         # start(1) attaches to the current IOLoop without forking (the
         # fork parameter only kicks in for N > 1).
