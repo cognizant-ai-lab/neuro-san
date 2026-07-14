@@ -173,6 +173,11 @@ The `llm_info_file` key allows you to specify a custom HOCON file that extends t
 by agents in a neuro-san network. This is especially useful if you're using models or providers that are not included in
 the default configuration (e.g., newly released models or organization-specific endpoints).
 
+This file is also the only source of model prices for token-cost reporting: set
+[price_per_1k_input_tokens](./llm_info_hocon_reference.md#price_per_1k_input_tokens) and
+[price_per_1k_output_tokens](./llm_info_hocon_reference.md#price_per_1k_output_tokens) for your models,
+otherwise their reported cost defaults to 0 and a warning is logged.
+
 For more information on selecting and customizing models, see the [model_name](#model_name) and [class](#class) section below.
 
 ### toolbox_info_file

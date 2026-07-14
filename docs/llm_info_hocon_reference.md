@@ -171,7 +171,9 @@ the price fields in the default file for the relevant URL). Providers change pri
 periodically, so this number should be treated as a snapshot at the time the entry was
 authored.
 
-This key is optional. If present, neuro-san will use it for token-cost estimation in the token callback handler.
+This key is optional, but the prices in the LLM info file are the only source used for token-cost
+estimation in the token callback handler. If no price information is found for a model, the
+reported cost defaults to 0 and a warning is logged.
 If a model has tiered or context-dependent pricing, the value here should be the standard published rate.
 
 #### `price_per_1k_output_tokens`
@@ -182,8 +184,9 @@ from the model. Output tokens are the tokens the model produces in its response.
 For most providers, output tokens are billed at a higher rate than input tokens.
 
 This key is optional and follows the same caveats as
-[`price_per_1k_input_tokens`](#price_per_1k_input_tokens). If present, neuro-san will use it
-for token-cost estimation in the token callback handler.
+[`price_per_1k_input_tokens`](#price_per_1k_input_tokens): prices in the LLM info file are the
+only source used for token-cost estimation, and a model without price information reports a
+cost of 0 with a logged warning.
 
 #### `model_launch_date`
 
