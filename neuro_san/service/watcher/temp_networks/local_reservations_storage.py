@@ -101,10 +101,11 @@ class LocalReservationsStorage(AbstractReservationsStorage):
         self.logger: logging.Logger = logging.getLogger(self.__class__.__name__)
 
         env_path: str = os.getenv("AGENT_RESERVATIONS_LOCAL_PATH", "")
-        self.base_path = base_path
+        self.base_path = base_path.strip() if isinstance(base_path, str) else ""
 
-        if not self.base_path or self.base_path.strip() == "":
-            self.base_path = env_path
+        if not self.base_path:
+            self.base_path = env_path.strip()
+
         if not self.base_path:
             raise ValueError(
                 "Local path for reservations must be non-empty string provided via base_path parameter or "
