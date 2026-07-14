@@ -119,7 +119,6 @@ class HealthProbeServer(Startable):
             daemon=True,
         )
         self._thread.start()
-        self.logger.info("HealthProbeServer started on port %d", self.port)
 
     def stop(self):
         """
@@ -168,6 +167,8 @@ class HealthProbeServer(Startable):
         server.start(1)
 
         self._ioloop = tornado.ioloop.IOLoop.current()
+        # Now we have really started the probe server. The thread will run until process exit.
+        self.logger.info("HealthProbeServer started on port %d", self.port)
         try:
             self._ioloop.start()
         finally:
