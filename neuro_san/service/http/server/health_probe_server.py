@@ -176,6 +176,9 @@ class HealthProbeServer(Startable):
             # here -- shutdown is best-effort.
             with contextlib.suppress(OSError):
                 server.stop()
+            asyncio.set_event_loop(None)
+            with contextlib.suppress(Exception):
+                loop.close()
 
     def make_probe_app(self) -> tornado.web.Application:
         """
