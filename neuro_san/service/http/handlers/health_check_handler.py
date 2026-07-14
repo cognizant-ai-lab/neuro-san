@@ -25,6 +25,7 @@ import http
 import os
 
 from http import HTTPStatus
+from threading import Lock
 
 from importlib.metadata import version as library_version
 from importlib.metadata import PackageNotFoundError
@@ -38,6 +39,12 @@ class HealthCheckHandler(RequestHandler):
     """
     Handler class for API endpoint health check.
     """
+
+    # Current service versions are cached in a class variable to avoid repeated lookups.
+    # Note that we cannot do it in the handler initialization
+    # because the handler is created new for each request
+    service_versions: Dict[str, Any] = None
+    versions_lock: Lock = Lock()
 
     # pylint: disable=attribute-defined-outside-init
     def initialize(self,
@@ -75,11 +82,14 @@ class HealthCheckHandler(RequestHandler):
 
         try:
             if self.status:
-                versions: Dict[str, Any] = self.determine_versions()
+                if HealthCheckHandler.service_versions is None:
+                    with HealthCheckHandler.versions_lock:
+                        if HealthCheckHandler.service_versions is None:
+                            HealthCheckHandler.service_versions = HealthCheckHandler.determine_versions()
                 result_dict: Dict[str, Any] = {
                     "service": self.server_name,
                     "status": "ok",
-                    "versions": versions
+                    "versions": HealthCheckHandler.service_versions
                 }
                 self.set_header("Content-Type", "application/json")
                 self.write(result_dict)
@@ -115,7 +125,8 @@ class HealthCheckHandler(RequestHandler):
         self.set_status(http.HTTPStatus.NO_CONTENT)
         self.finish()
 
-    def determine_versions(self) -> Dict[str, Any]:
+    @classmethod
+    def determine_versions(cls) -> Dict[str, Any]:
         """
         Allow for a list of libraries to report versioning.
         We have a static list that we always support, but also look at the

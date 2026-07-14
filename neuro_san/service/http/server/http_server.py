@@ -29,12 +29,6 @@ import threading
 
 import tornado
 
-# Env var: dedicated port for the isolated health-probe server. 0 disables it,
-# in which case k8s/LB probes must hit the main server port's handlers (which
-# remain registered for backward compatibility).
-_ENV_HEALTH_PROBE_PORT: str = "AGENT_HEALTH_PROBE_PORT"
-_DEFAULT_HEALTH_PROBE_PORT: int = 8081
-
 from leaf_common.serialization.util.text_file_reader import TextFileReader
 
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
