@@ -225,10 +225,14 @@ class LocalReservationsStorage(AbstractReservationsStorage):
         reservation: Reservation = None
         agent_network: AgentNetwork = None
 
-        path: str = self._path_for(reservation_id)
         try:
+            path: str = self._path_for(reservation_id)
             with open(path, "r", encoding="utf-8") as fh:
                 agent_spec: Dict[str, Any] = json.load(fh)
+        except ValueError as exc:
+            self.logger.debug("%s: invalid reservation_id %r: %s",
+                              self._name, reservation_id, exc)
+            return None, None
         except FileNotFoundError:
             self.logger.debug("%s: reservation %s not found (path=%s)",
                               self._name, reservation_id, path)
