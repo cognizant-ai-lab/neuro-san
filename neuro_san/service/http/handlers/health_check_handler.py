@@ -43,7 +43,7 @@ class HealthCheckHandler(RequestHandler):
     # Current service versions are cached in a class variable to avoid repeated lookups.
     # Note that we cannot do it in the handler initialization
     # because the handler is created new for each request
-    service_versions: Dict[str, Any] = None
+    service_versions: Dict[str, Any] | None = None
     versions_lock: Lock = Lock()
 
     # pylint: disable=attribute-defined-outside-init
