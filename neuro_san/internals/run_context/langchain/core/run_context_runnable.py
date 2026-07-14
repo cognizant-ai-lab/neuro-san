@@ -18,6 +18,7 @@ from asyncio import TimeoutError as AsyncTimeout
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Tuple
 from typing import Type
 from typing import Union
@@ -303,8 +304,8 @@ class RunContextRunnable(NeuroSanRunnable):
         if self.sensitive_logger.should_log():
             await self.journal.write_message(AgentFrameworkMessage(content=text))
 
-    def parse_chain_result(self, chain_result: Union[Dict[str, Any], AgentFinish, AIMessage],
-                           exception: Exception) -> str:
+    def parse_chain_result(self, chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]],
+                           exception: Optional[Exception]) -> str:
         """
         Parse the result from the langchain chain.
 
@@ -315,7 +316,9 @@ class RunContextRunnable(NeuroSanRunnable):
                             "output" - the actual output to use
                             "messages" - effectively a chat history
                         * An AIMessage whose content is the output to use
-        :param exception: Any exception that happened along the way
+                        * None, when every attempt to invoke the chain failed
+        :param exception: Any exception that happened along the way,
+                        or None if the chain invocation succeeded
         :return: A string value to return as the result of the run.
         """
 
