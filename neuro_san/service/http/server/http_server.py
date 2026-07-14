@@ -226,6 +226,8 @@ class HttpServer(AgentStateListener):
         try:
             value: int = int(raw)
         except ValueError:
+            self.logger.warning({}, "Invalid %s=%r; falling back to default probe port %d",
+                                ENV_HEALTH_PROBE_PORT, raw, self.server_config.http_probe_port)
             return self.server_config.http_probe_port
         return max(value, 0)
 
