@@ -360,6 +360,11 @@ class LocalReservationsStorage(AbstractReservationsStorage):
         if not isinstance(reservation_id, str) or not reservation_id.strip():
             raise ValueError("reservation_id must be a non-empty string")
 
+        reservation_id = reservation_id.strip()
+        for sep in (os.sep, os.altsep):
+            if sep and sep in reservation_id:
+                raise ValueError("reservation_id must not contain path separators")
+
         base_path = os.path.abspath(self.base_path)
         candidate = os.path.abspath(
             os.path.join(base_path, f"{reservation_id}{self.RESERVATION_FILE_SUFFIX}")
