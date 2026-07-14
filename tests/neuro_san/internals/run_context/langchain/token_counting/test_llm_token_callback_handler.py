@@ -15,6 +15,8 @@
 #
 # END COPYRIGHT
 
+import logging
+
 from time import time
 from typing import Dict
 
@@ -75,15 +77,22 @@ class TestLlmTokenCallbackHandler:
         # Expected: (1000/1000 * 0.002) + 0.0 = 0.002
         assert cost == 0.002
 
-    def test_calculate_token_costs_no_info_available(self, handler_with_empty_infos):
+    def test_calculate_token_costs_no_info_available(self, handler_with_empty_infos, caplog):
         """Test when no cost information is available."""
         handler = handler_with_empty_infos
         handler.provider_class = "custom-provider"
 
-        cost = handler.calculate_token_costs("unknown-model", 1000, 2000)
+        with caplog.at_level(logging.WARNING):
+            cost = handler.calculate_token_costs("unknown-model", 1000, 2000)
 
         # Should return 0.0 when no cost information is available
         assert cost == 0.0
+
+        # Should log a warning that no price info was found for the model
+        assert any(
+            record.levelno == logging.WARNING and "No price info found for model unknown-model" in record.getMessage()
+            for record in caplog.records
+        )
 
     def test_calculate_token_costs_zero_tokens(self, handler_with_model_infos):
         """Test with zero tokens."""
