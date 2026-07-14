@@ -270,7 +270,12 @@ class RunContextRunnable(NeuroSanRunnable):
                 exception = exception_error
                 backtrace = traceback.format_exc()
 
-        output: str = self.parse_chain_result(chain_result, exception, backtrace)
+        if chain_result is None and backtrace is not None:
+            # Keep the full backtrace in the server logs only. Passing it
+            # through as error details would return raw stack traces to clients.
+            self.sensitive_logger.error("%s", backtrace)
+
+        output: str = self.parse_chain_result(chain_result, exception)
         return_message: BaseMessage = AIMessage(output)
 
         # Chat history is updated in write_message
@@ -299,7 +304,7 @@ class RunContextRunnable(NeuroSanRunnable):
             await self.journal.write_message(AgentFrameworkMessage(content=text))
 
     def parse_chain_result(self, chain_result: Union[Dict[str, Any], AgentFinish, AIMessage],
-                           exception: Exception, backtrace: str) -> str:
+                           exception: Exception) -> str:
         """
         Parse the result from the langchain chain.
 
@@ -311,7 +316,6 @@ class RunContextRunnable(NeuroSanRunnable):
                             "messages" - effectively a chat history
                         * An AIMessage whose content is the output to use
         :param exception: Any exception that happened along the way
-        :param backtrace: Any backtrace to the exception that happened along the way
         :return: A string value to return as the result of the run.
         """
 
@@ -325,7 +329,6 @@ class RunContextRunnable(NeuroSanRunnable):
             output = f"Agent stopped due to exception {exception}"
         else:
             # Set some stuff up for later
-            backtrace = None
             ai_message: AIMessage = None
 
             # Handle the AgentFinish case.
@@ -369,5 +372,5 @@ class RunContextRunnable(NeuroSanRunnable):
             output = text_output
 
         # See if we had some kind of error and format accordingly, if asked for.
-        output = self.error_detector.handle_error(output, backtrace)
+        output = self.error_detector.handle_error(output)
         return output
