@@ -87,13 +87,14 @@ class TestLocalReservationsStorageStart:
     """start() creates the storage directory if it does not exist."""
 
     def test_start_creates_missing_directory(self, tmp_path):
+        """start() creates the base directory when it does not yet exist."""
         target = tmp_path / "reservations_dir_that_does_not_exist_yet"
         assert not target.exists()
         LocalReservationsStorage(base_path=str(target)).start()
         assert target.is_dir()
 
     def test_start_is_idempotent_on_existing_directory(self, tmp_path):
-        # Pre-create; start() must not fail on an existing dir.
+        """start() must not fail when the base directory already exists."""
         target = tmp_path / "already_there"
         target.mkdir()
         LocalReservationsStorage(base_path=str(target)).start()
@@ -108,6 +109,7 @@ class TestLocalReservationsStorageWriteRead:
 
     @pytest.mark.asyncio
     async def test_write_then_read_round_trip(self, tmp_path):
+        """Write a reservation, then read it back and verify JSON shape."""
         storage = LocalReservationsStorage(base_path=str(tmp_path))
         storage.start()
 
@@ -163,9 +165,10 @@ class TestLocalReservationsStorageWriteRead:
 
         await storage.add_reservations({}, source="unit-test")
 
-        assert list(tmp_path.iterdir()) == []
+        assert not list(tmp_path.iterdir())
 
     def test_get_missing_reservation_returns_none(self, tmp_path):
+        """Reading a non-existent reservation id returns (None, None) rather than raising."""
         storage = LocalReservationsStorage(base_path=str(tmp_path))
         storage.start()
 
@@ -179,6 +182,7 @@ class TestLocalReservationsStorageExpiration:
 
     @pytest.mark.asyncio
     async def test_expire_removes_only_stale_files(self, tmp_path):
+        """expire_reservations() deletes only the reservation files whose deadline has passed."""
         storage = LocalReservationsStorage(base_path=str(tmp_path))
         storage.start()
 
