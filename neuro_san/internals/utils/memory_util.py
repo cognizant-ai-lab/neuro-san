@@ -40,7 +40,14 @@ class MemoryUtil:
         if obj_in is not None:
             usage["type"] = type(obj_in).__name__
             for key, value in vars(obj_in).items():
-                size: int = get_deep_size(value)
+
+                size: int = 0
+                try:
+                    size = get_deep_size(value)
+                except Exception:  # pylint: disable=broad-except
+                    # Ignore exceptions - these would come from methods as vars and other squirrely bits
+                    pass
+
                 if size > 0:
                     usage[key] = {
                         "type": type(value).__name__,
