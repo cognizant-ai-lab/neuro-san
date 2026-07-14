@@ -163,6 +163,9 @@ class ToolboxFactory(ContextTypeToolboxFactory):
             return tool_info
 
         tool_class_name: str = tool_info.get("class")
+        if not isinstance(tool_class_name, str) or not tool_class_name:
+            raise ValueError(f"Value for '{tool_name}.class' must be a non-empty string.")
+
         if tool_class_name.startswith("langchain_community."):
             logging.warning(
                 "Tool '%s' uses a class from langchain-community, which has been sunset "

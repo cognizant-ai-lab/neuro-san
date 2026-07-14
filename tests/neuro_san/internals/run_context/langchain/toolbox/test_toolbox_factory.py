@@ -78,6 +78,18 @@ class TestToolboxFactory:
             # Ensure the returned tool is an instance of the mocked class
             assert tool is mock_instance
 
+    @pytest.mark.parametrize("bad_class", [None, 123, ""])
+    def test_create_toolbox_with_invalid_class_value(self, factory, bad_class):
+        """Test that a non-string or empty 'class' value raises a clear ValueError."""
+        factory.toolbox_infos = {
+            "bad_tool": {
+                "class": bad_class
+            }
+        }
+
+        with pytest.raises(ValueError, match="must be a non-empty string"):
+            factory.create_tool_from_toolbox("bad_tool", {})
+
     def test_create_toolbox_with_toolkit_constructor(self, factory):
         """Test the toolkit instantiates with constructor."""
         factory.toolbox_infos = {
