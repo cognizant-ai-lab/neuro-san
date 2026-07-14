@@ -206,6 +206,10 @@ class RunContextRunnable(NeuroSanRunnable):
         exception: Exception = None
         backtrace: str = None
         while chain_result is None and attempts > 0:
+            # Reset any backtrace from a previous attempt so that whatever is
+            # logged after the loop always corresponds to the exception that
+            # ended it (not every branch below captures a backtrace).
+            backtrace = None
             try:
                 chain_result: Dict[str, Any] = await self.agent_chain.ainvoke(input=inputs, config=runnable_config)
             except RATE_LIMIT_ERROR_TYPES as rate_limit_error:
