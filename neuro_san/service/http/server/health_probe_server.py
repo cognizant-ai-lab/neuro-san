@@ -71,6 +71,7 @@ class HealthProbeServer(Startable):
     registered for backward compatibility.
     """
 
+    # pylint: disable=too-many-instance-attributes
     def __init__(self,
                  port: int,
                  server_context: ServerContext,
