@@ -1540,17 +1540,48 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         os.makedirs(round_dir, exist_ok=True)
         return round_dir
 
-    # pylint: disable=too-many-locals
     def _run_server_only_round(
             self, expected, round_num,
             pri_start_re, pri_finish_re,
     ) -> None:
-        """Execute one round of server-only monitoring."""
+        """Execute one round of server-only monitoring.
+
+        Wraps the round body with a per-round ``stdout.log`` file
+        handler so each server-only round captures its own console
+        output (heartbeats + summary) in its output directory.
+        """
         round_dir = self._setup_round_output_dir(
             expected, round_num,
         )
         log_pos = self.log_monitor.read_position()
+        round_log_path = os.path.join(round_dir, "stdout.log")
+        round_handler = logging.FileHandler(
+            round_log_path, encoding="utf-8",
+        )
+        round_handler.setLevel(logging.INFO)
+        round_handler.setFormatter(
+            logging.Formatter("%(message)s"),
+        )
+        root_logger = logging.getLogger()
+        root_logger.addHandler(round_handler)
+        try:
+            self._server_only_round_body(
+                expected, round_num,
+                pri_start_re, pri_finish_re,
+                round_dir, log_pos, round_log_path,
+            )
+        finally:
+            root_logger.removeHandler(round_handler)
+            round_handler.close()
 
+    # pylint: disable=too-many-locals,too-many-arguments
+    # pylint: disable=too-many-positional-arguments
+    def _server_only_round_body(
+            self, expected, round_num,
+            pri_start_re, pri_finish_re,
+            round_dir, log_pos, round_log_path,
+    ) -> None:
+        """Execute one round of server-only monitoring."""
         logger.info(
             "\n%s", "=" * 60,
         )
@@ -1751,6 +1782,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 "  Server log:  %s (%.1fM)",
                 gz_path, size_mb,
             )
+        logger.info(
+            "  Stdout log:  %s", round_log_path,
+        )
 
         logger.info(
             "\n%s", "\u2500" * 45,
