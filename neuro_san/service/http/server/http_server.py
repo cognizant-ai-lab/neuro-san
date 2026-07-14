@@ -23,6 +23,7 @@ from typing import Dict
 from typing import List
 
 import json
+import os
 import random
 import threading
 
@@ -36,6 +37,7 @@ from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSour
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
+from neuro_san.service.http.config.http_server_config import ENV_HEALTH_PROBE_PORT
 from neuro_san.service.http.config.http_server_config import HttpServerConfig
 from neuro_san.service.http.handlers.concierge_handler import ConciergeHandler
 from neuro_san.service.http.handlers.connectivity_handler import ConnectivityHandler
@@ -47,6 +49,7 @@ from neuro_san.service.http.handlers.profiler_control_handler import ProfilerCon
 from neuro_san.service.http.handlers.snapshot_handler import SnapshotHandler
 from neuro_san.service.http.logging.http_logger import HttpLogger
 from neuro_san.service.http.server.agent_authorization_policy import AgentAuthorizationPolicy
+from neuro_san.service.http.server.health_probe_server import HealthProbeServer
 from neuro_san.service.http.server.http_server_app import HttpServerApp
 from neuro_san.service.http.server.resources_usage_logger import ResourcesUsageLogger
 from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
@@ -156,6 +159,26 @@ class HttpServer(AgentStateListener):
                     self.server_config.http_server_monitor_interval_seconds, self.http_port, self.logger)
             startables.append(resources_logger)
 
+        # Add the isolated health-probe server. It binds a dedicated port
+        # (default 8081, configurable via AGENT_HEALTH_PROBE_PORT; 0 disables)
+        # and serves /, /healthz, /readyz, /livez on its own asyncio loop in
+        # a dedicated thread -- so probes stay fast even when the main
+        # Tornado loop is saturated by request work.
+        probe_port: int = self.resolve_health_probe_port()
+        if probe_port == self.http_port:
+            self.logger.warning({},
+                                "Health probe port %d is the same as main HTTP port; "
+                                "dedicated probe server is not started, "
+                                "but /healthz, /readyz, /livez remain registered on the main port", probe_port)
+            probe_port = -1
+        if probe_port > 0:
+            startables.append(HealthProbeServer(
+                port=probe_port,
+                server_context=self.server_context,
+                forwarded_request_metadata=self.forwarded_request_metadata,
+                logging_config=self.logging_config,
+            ))
+
         # Bind the socket with a custom backlog
         server.bind(self.http_port, backlog=self.server_config.http_connections_backlog)
 
@@ -194,6 +217,26 @@ class HttpServer(AgentStateListener):
         tornado.ioloop.IOLoop.current().start()
         self.logger.info({}, "Http server stopped.")
 
+    def resolve_health_probe_port(self) -> int:
+        """
+        Resolve the port for the isolated HealthProbeServer.
+
+        Reads the AGENT_HEALTH_PROBE_PORT env var. Non-numeric values fall
+        back to the default (8081), and a value of 0 (or negative) disables
+        the separate probe server, in which case k8s / LB probes should hit
+        the main port's registered health handlers.
+
+        :return: A non-negative int. 0 disables the probe server.
+        """
+        raw: str = os.environ.get(ENV_HEALTH_PROBE_PORT, str(self.server_config.http_probe_port))
+        try:
+            value: int = int(raw)
+        except ValueError:
+            self.logger.warning({}, "Invalid %s=%r; falling back to default probe port %d",
+                                ENV_HEALTH_PROBE_PORT, raw, self.server_config.http_probe_port)
+            return self.server_config.http_probe_port
+        return max(value, 0)
+
     def make_app(self, requests_limit: int, concurrent_requests_limit: int, logger: EventLoopLogger):
         """
         Construct tornado HTTP "application" to run.
@@ -202,17 +245,24 @@ class HttpServer(AgentStateListener):
         enable_http_handlers: bool = self.server_context.get_server_status().http_service.is_requested()
 
         request_initialize_data: Dict[str, Any] = self.build_request_data()
+        # Resolve library versions once here; the same dict is passed to every
+        # health handler on both the main port and the isolated probe server so
+        # per-request probes never re-run importlib.metadata lookups.
+        server_status = self.server_context.get_server_status()
+        versions: Dict[str, Any] = server_status.get_versions()
         live_request_initialize_data: Dict[str, Any] = {
             "forwarded_request_metadata": self.forwarded_request_metadata,
-            "server_status": self.server_context.get_server_status(),
+            "server_status": server_status,
             "op": "live",
-            "logging_config": self.logging_config
+            "logging_config": self.logging_config,
+            "versions": versions,
         }
         ready_request_initialize_data: Dict[str, Any] = {
             "forwarded_request_metadata": self.forwarded_request_metadata,
-            "server_status": self.server_context.get_server_status(),
+            "server_status": server_status,
             "op": "ready",
-            "logging_config": self.logging_config
+            "logging_config": self.logging_config,
+            "versions": versions,
         }
         handlers = []
         # Health check handlers are enabled always
