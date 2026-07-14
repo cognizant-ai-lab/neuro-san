@@ -41,20 +41,27 @@ class MemoryUtil:
             usage["type"] = type(obj_in).__name__
             for key, value in vars(obj_in).items():
 
-                size: int = 0
+                member_size: int = 0
                 try:
-                    size = get_deep_size(value)
+                    member_size = get_deep_size(value)
                 except Exception:  # pylint: disable=broad-except
                     # Ignore exceptions - these would come from methods as vars and other squirrely bits
                     pass
 
-                if size > 0:
+                if member_size > 0:
+                    member_type: str = "Unknown"
+                    try:
+                        member_type = type(value).__name__
+                    except Exception:  # pylint: disable=broad-except
+                        # Ignore exceptions - these would come from methods as vars and other squirrely bits
+                        pass
+
                     usage[key] = {
-                        "type": type(value).__name__,
-                        "size": size
+                        "type": member_type,
+                        "size": member_size
                     }
                 else:
-                    usage[key] = size
+                    usage[key] = member_size
         return usage
 
     @staticmethod
