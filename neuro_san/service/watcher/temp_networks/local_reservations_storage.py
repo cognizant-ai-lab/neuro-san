@@ -209,6 +209,7 @@ class LocalReservationsStorage(AbstractReservationsStorage):
     # Read path
     # ---------------------------------------------------------------------
 
+    # pylint: disable=too-many-return-statements
     def get_one_reservation(self, obj_key: str) -> Tuple[Reservation, AgentNetwork]:
         """
         Retrieve a single reservation by its reservation_id.
@@ -246,12 +247,26 @@ class LocalReservationsStorage(AbstractReservationsStorage):
                                   self._name, reservation_id)
                 return None, None
             reservation = self.converter.from_dict(reservation_dict)
+            if time.time() > reservation.get_expiration_time_in_seconds():
+                self.logger.debug("%s: reservation %s is expired", self._name, reservation_id)
+                return None, None
             agent_network = AgentNetwork(agent_spec, reservation.get_reservation_id())
         except Exception as exc:  # pylint: disable=broad-exception-caught
             # Any shape error during reconstruction -- treat as "not present"
             # rather than crashing the caller. Matches the S3 reader's behavior.
             self.logger.error("%s: failed to reconstruct reservation %s: %s",
                               self._name, reservation_id, exc)
+            return None, None
+
+        # Enforce the documented expiration contract: an expired reservation
+        # is reported as "not present" to the reader. The file itself stays
+        # on disk -- expire_reservations() is responsible for the eventual
+        # cleanup sweep -- but readers must not observe a deadline that has
+        # already passed.
+        expiration_time: float = reservation.get_expiration_time_in_seconds()
+        if expiration_time and time.time() > expiration_time:
+            self.logger.debug("%s: reservation %s has expired (deadline=%s)",
+                              self._name, reservation_id, expiration_time)
             return None, None
 
         return reservation, agent_network

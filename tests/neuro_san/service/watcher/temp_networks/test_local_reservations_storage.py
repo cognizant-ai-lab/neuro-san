@@ -176,6 +176,40 @@ class TestLocalReservationsStorageWriteRead:
         assert got_reservation is None
         assert got_network is None
 
+    @pytest.mark.asyncio
+    async def test_get_expired_reservation_returns_none(self, tmp_path):
+        """
+        get_one_reservation() is documented to return (None, None) for
+        already-expired entries. Write a reservation whose deadline is in
+        the past, then verify the reader does not surface it -- independent
+        of the expiration sweep, which is what removes the on-disk file.
+
+        The file may still exist on disk immediately after the read; only
+        expire_reservations() deletes it. The point of this test is the
+        read-path contract, not the eventual file cleanup.
+        """
+        storage = LocalReservationsStorage(base_path=str(tmp_path))
+        storage.start()
+
+        # Deadline 60 seconds in the past.
+        stale = _make_reservation(prefix="stale-read", lifetime_s=60.0,
+                                  expires_offset_s=-60.0)
+        await storage.add_reservations({stale: _make_spec()}, source="unit-test")
+
+        # File was written -- read path should NOT surface it as valid.
+        assert (tmp_path / f"{stale.get_reservation_id()}.json").is_file(), (
+            "Expected the writer to persist the file regardless of expiration; "
+            "test setup would be wrong otherwise."
+        )
+
+        got_reservation, got_network = storage.get_one_reservation(
+            stale.get_reservation_id())
+        assert got_reservation is None, (
+            "get_one_reservation() must not return an expired reservation; "
+            "got a non-None reservation from a file with deadline in the past."
+        )
+        assert got_network is None
+
 
 class TestLocalReservationsStorageExpiration:
     """expire_reservations() removes only files whose expiration is in the past."""
