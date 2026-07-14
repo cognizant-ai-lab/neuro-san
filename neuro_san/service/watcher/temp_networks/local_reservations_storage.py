@@ -265,17 +265,6 @@ class LocalReservationsStorage(AbstractReservationsStorage):
                               self._name, reservation_id, exc)
             return None, None
 
-        # Enforce the documented expiration contract: an expired reservation
-        # is reported as "not present" to the reader. The file itself stays
-        # on disk -- expire_reservations() is responsible for the eventual
-        # cleanup sweep -- but readers must not observe a deadline that has
-        # already passed.
-        expiration_time: float = reservation.get_expiration_time_in_seconds()
-        if expiration_time and time.time() > expiration_time:
-            self.logger.debug("%s: reservation %s has expired (deadline=%s)",
-                              self._name, reservation_id, expiration_time)
-            return None, None
-
         return reservation, agent_network
 
     # ---------------------------------------------------------------------
