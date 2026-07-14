@@ -23,7 +23,7 @@
     # Overview:
     # - This file defines configurations for langchain's tools and toolkits as well as shared coded tools.
     # - More details about LangChain tools and toolkits can be found at:
-    #   https://python.langchain.com/docs/integrations/tools/
+    #   https://docs.langchain.com/oss/python/integrations/tools
     # - See https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md for more informations on coded tools.
     #
     # Customization via Agent HOCON File:
@@ -37,7 +37,16 @@
     # - The specified class must be available in the server's PYTHONPATH.
     # - Additional dependencies (outside of langchain_community) must be installed separately.
 
-    # NOTE on Request tools and toolkit: 
+    # DEPRECATION WARNING:
+    # The langchain-community package has been sunset and its repository archived
+    # (https://github.com/langchain-ai/langchain-community/issues/674).
+    # The request tools and toolkit below are built on langchain_community classes and will be
+    # removed from this default toolbox in a future release.
+    # Tools from maintained, dedicated integration packages can be configured here instead;
+    # browse the available integrations at:
+    #   https://docs.langchain.com/oss/python/integrations/tools
+
+    # NOTE on Request tools and toolkit:
     # There are inherent risks in giving models discretion to execute real-world actions.
     # Users must "opt-in" to these risks by setting allow_dangerous_request=True to use these tools.
 
