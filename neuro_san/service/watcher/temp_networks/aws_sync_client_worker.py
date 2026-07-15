@@ -105,7 +105,7 @@ class AwsSyncClientWorker:
         if last_err is not None:
             raise last_err
 
-        raise RuntimeError("S3 credential retries exhausted without capturing an error") from last_err
+        raise RuntimeError(f"{self.aws_service} credential retries exhausted without capturing an error") from last_err
 
     def do_work_with_new_client(self, work_function: Callable, *, attempt: int = 1) -> Any:
         """
