@@ -131,6 +131,8 @@ class S3ReservationsExpiration:
 
             list_objects_function = partial(sync_aws_client.list_objects_v2, **kwargs)
             response = client_worker.do_with_retries(self.name, list_objects_function)
+            if response is None:
+                response = {}
             for obj in response.get("Contents", []):
                 yield obj.get("Key")
             if not response.get("IsTruncated"):
@@ -155,6 +157,8 @@ class S3ReservationsExpiration:
         try:
             # Retrieve the reservation object from S3
             agent_spec: Dict[str, Any] = self.retriever.retrieve_object_with_retries(obj_key)
+            if agent_spec is None:
+                agent_spec = empty
 
             extractor = DictionaryExtractor(agent_spec)
             reservation_data: Dict[str, Any] = extractor.get("metadata.reservation", empty)
