@@ -79,7 +79,7 @@ class S3ReservationsExpiration:
         expire_function = partial(self.expire_any_reservations)
 
         client_worker: AwsSyncClientWorker = self.retriever.get_sync_client_worker()
-client_worker.retry_with_new_client(expire_function, source=self.name)
+        client_worker.retry_with_new_client(expire_function, source=self.name)
 
     def expire_any_reservations(self, sync_aws_client: BaseClient = None):
         """
@@ -157,7 +157,11 @@ client_worker.retry_with_new_client(expire_function, source=self.name)
         expired: bool = False
         try:
             # Retrieve the reservation object from S3
-agent_spec: Dict[str, Any] = self.retriever.retrieve_object_with_retries(obj_key=obj_key, source=source, sync_aws_client=sync_aws_client)
+            agent_spec: Dict[str, Any] = self.retriever.retrieve_object_with_retries(
+                obj_key=obj_key,
+                source=source,
+                sync_aws_client=sync_aws_client
+            )
             if agent_spec is None:
                 agent_spec = empty
 
