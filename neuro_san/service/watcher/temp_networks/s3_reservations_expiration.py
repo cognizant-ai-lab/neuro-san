@@ -95,7 +95,7 @@ class S3ReservationsExpiration:
             if not reservation_key:
                 continue
             # Attempt to expire this reservation and increment counter if successful
-            if self.expire_one_reservation(reservation_key, current_time, sync_aws_client):
+            if self.expire_one_reservation(reservation_key, current_time, sync_aws_client=sync_aws_client):
                 expired_count += 1
 
         if expired_count > 0:
