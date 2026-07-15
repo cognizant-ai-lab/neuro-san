@@ -38,8 +38,23 @@ class MemoryUtil:
         usage: Dict[str, int] = {}
         usage["self"] = get_deep_size(obj_in)
         if obj_in is not None:
-            usage["type"] = type(obj_in).__name__
-            for key, value in vars(obj_in).items():
+
+            type_to_use: str = type(obj_in).__name__
+            usage["type"] = type_to_use
+
+            # Figure out how to show detail
+            items: Dict[str, Any] = {}
+            if hasattr(obj_in, "__dict__"):
+                items = vars(obj_in)
+            elif isinstance(obj_in, list):
+                for index, item in enumerate(obj_in):
+                    key = f"{index}"
+                    items[key] = item
+            else:
+                items = {type_to_use: obj_in}
+
+            # Show detail
+            for key, value in items.items():
 
                 member_size: int = 0
                 try:
