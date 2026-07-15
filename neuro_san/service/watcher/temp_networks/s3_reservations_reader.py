@@ -98,9 +98,8 @@ class S3ReservationsReader:
 
             reservation = self.converter.from_dict(reservation_dict)
             if not reservation:
-                self.logger.error("%s: Failed to get contents of reservation %s",
-                                  self.name, reservation.get_reservation_id())
-                return reservation, agent_network
+                self.logger.error("%s: Failed to parse reservation payload for %s", self.name, reservation_id)
+                return None, None
 
             # Reconstruct the AgentNetwork object using the agent spec dictionary
             # and reservation ID - which is our agent name in this design
