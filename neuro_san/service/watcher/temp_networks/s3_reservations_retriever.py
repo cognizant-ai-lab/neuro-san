@@ -30,6 +30,7 @@ from botocore.exceptions import ClientError
 from botocore.exceptions import NoCredentialsError
 
 from neuro_san.service.watcher.temp_networks.aws_sync_client_worker import AwsSyncClientWorker
+from neuro_san.service.watcher.temp_networks.s3_util import S3Util
 
 
 class S3ReservationsRetriever:
@@ -42,7 +43,8 @@ class S3ReservationsRetriever:
     This guy is used by the S3ReservationsReader and S3ReservationsExpiration.
     """
 
-    def __init__(self, name: str = "S3ReservationsRetriever", bucket_name: str = "", prefix: str = "reservations/"):
+    def __init__(self, name: str = "S3ReservationsRetriever", bucket_name: str = "",
+                 prefix: str = S3Util.DEFAULT_RESERVATIONS_PREFIX):
         """
         Initialize the S3 reservations retriever.
 
