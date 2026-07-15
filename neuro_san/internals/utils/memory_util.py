@@ -44,12 +44,14 @@ class MemoryUtil:
 
             # Figure out how to show detail
             items: Dict[str, Any] = {}
-            if hasattr(obj_in, "__dict__"):
-                items = vars(obj_in)
+            if isinstance(obj_in, dict):
+                items = obj_in
             elif isinstance(obj_in, list):
                 for index, item in enumerate(obj_in):
                     key = f"{index}"
                     items[key] = item
+            elif hasattr(obj_in, "__dict__"):
+                items = vars(obj_in)
             else:
                 items = {type_to_use: obj_in}
 
