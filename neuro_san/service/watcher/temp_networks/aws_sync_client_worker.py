@@ -99,12 +99,7 @@ class AwsSyncClientWorker:
                 self.frozen_credentials = None
                 if source is None:
                     source = self.name
-                self.logger.warning(
-                    "%s (%d): S3 credentials seem to have expired. Retrying. "
-                    "If you believe you have non-expiring S3 credentials, be sure they are correct.",
-                    source,
-                    attempt,
-                )
+                self.logger.warning("%s (%d): %s credentials seem to have expired. Retrying. If you believe you have non-expiring %s credentials, be sure they are correct.", source, attempt, self.aws_service, self.aws_service)
 
         # Exhausted retries
         if last_err is not None:
