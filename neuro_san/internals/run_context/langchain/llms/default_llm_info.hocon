@@ -42,6 +42,9 @@
         "context_window_size": 200000,
         "max_output_tokens": 100000,
         "knowledge_cutoff": "09/30/2023",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.0011,
+        "price_per_1k_output_tokens": 0.0044,
         "model_launch_date": "2025-01-31",
         "model_retirement_date": "2026-10-23",
     },
@@ -60,6 +63,9 @@
         "context_window_size": 200000,
         "max_output_tokens": 100000,
         "knowledge_cutoff": "09/30/2023",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.015,
+        "price_per_1k_output_tokens": 0.060,
         "model_launch_date": "2024-12-17",
         "model_retirement_date": "2026-10-23",
     },
@@ -203,6 +209,9 @@
         "context_window_size": 400000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "08/31/2025",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.00075,
+        "price_per_1k_output_tokens": 0.0045,
         "model_launch_date": "2026-03-17",
         "model_retirement_date": null,
     },
@@ -220,6 +229,9 @@
         "context_window_size": 400000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "08/31/2025",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.0002,
+        "price_per_1k_output_tokens": 0.00125,
         "model_launch_date": "2026-03-17",
         "model_retirement_date": null,
     },
@@ -257,6 +269,9 @@
         "context_window_size": 400000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "09/30/2024",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.0015,
+        "price_per_1k_output_tokens": 0.01,
         "model_launch_date": "2025-11-13",
         "model_retirement_date": null,
     },
@@ -274,6 +289,9 @@
         "context_window_size": 400000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "09/30/2024",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.00125,
+        "price_per_1k_output_tokens": 0.01,
         "model_launch_date": "2025-08-07",
         "model_retirement_date": null,
     },
@@ -291,6 +309,9 @@
         "context_window_size": 400000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "05/30/2024",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.00025,
+        "price_per_1k_output_tokens": 0.02,
         "model_launch_date": "2025-08-07",
         "model_retirement_date": null,
     },
@@ -308,6 +329,9 @@
         "context_window_size": 1047576,
         "max_output_tokens": 32768,
         "knowledge_cutoff": "05/31/2024",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.002,
+        "price_per_1k_output_tokens": 0.008,
         "model_launch_date": "2025-04-14",
         "model_retirement_date": null,
     },
@@ -325,6 +349,9 @@
         "context_window_size": 128000,
         "max_output_tokens": 4096,
         "knowledge_cutoff": "09/30/2023",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.005,
+        "price_per_1k_output_tokens": 0.015,
         "model_launch_date": "2024-05-13",
         "model_retirement_date": "2026-10-23",
     },
@@ -339,6 +366,9 @@
         "context_window_size": 128000,
         "max_output_tokens": 16384,
         "knowledge_cutoff": "09/30/2023",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.0025,
+        "price_per_1k_output_tokens": 0.01,
         "model_launch_date": "2024-08-06",
         "model_retirement_date": null,
     },
@@ -353,6 +383,9 @@
         "context_window_size": 128000,
         "max_output_tokens": 16384,
         "knowledge_cutoff": "09/30/2023",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.0025,
+        "price_per_1k_output_tokens": 0.01,
         "model_launch_date": "2024-11-20",
         "model_retirement_date": null,
     },
@@ -371,6 +404,9 @@
         "context_window_size": 128000,
         "max_output_tokens": 16384,
         "knowledge_cutoff": "09/30/2023",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.00015,
+        "price_per_1k_output_tokens": 0.00060,
         "model_launch_date": "2024-07-18",
         "model_retirement_date": null,
     },
@@ -389,6 +425,9 @@
         "context_window_size": 128000,
         "max_output_tokens": 4096,
         "knowledge_cutoff": "11/30/2023",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.010,
+        "price_per_1k_output_tokens": 0.030,
         "model_launch_date": "2024-04-09",
         "model_retirement_date": "2026-10-23",
     },
@@ -409,6 +448,9 @@
         "context_window_size": 8192,
         "max_output_tokens": 8192,
         "knowledge_cutoff": "11/30/2023",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.030,
+        "price_per_1k_output_tokens": 0.060,
         "model_launch_date": "2023-06-13",
         "model_retirement_date": "2026-10-23",
     },
@@ -433,6 +475,9 @@
         "context_window_size": 16384,
         "max_output_tokens": 4096,
         "knowledge_cutoff": "08/31/2021",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.0005,
+        "price_per_1k_output_tokens": 0.0015,
         "model_launch_date": "2024-01-25",
         "model_retirement_date": "2026-10-23",
     },
@@ -448,6 +493,9 @@
         "context_window_size": 16384,
         "max_output_tokens": 4096,
         "knowledge_cutoff": "08/31/2021",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.001,
+        "price_per_1k_output_tokens": 0.002,
         "model_launch_date": "2023-11-06",
         "model_retirement_date": "2026-09-28",
     },
