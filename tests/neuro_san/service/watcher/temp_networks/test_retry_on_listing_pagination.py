@@ -92,7 +92,7 @@ class TestRetryOnListingPagination(S3ReservationsStorageTestBase):
         with patch(
             "neuro_san.service.watcher.temp_networks.s3_retry_util.sync_sleep"
         ):
-            keys = list(self.storage.expiration.iter_reservation_keys())
+            keys = list(self.storage.expiration.iter_reservation_keys(self.fake_s3))
 
         # Every configured key is yielded exactly once, in page order.
         # Under the original (paginator-based) implementation a mid-listing
