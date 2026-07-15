@@ -29,6 +29,8 @@ from logging import Logger
 from botocore.client import BaseClient
 from botocore.exceptions import ClientError
 
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
+
 from neuro_san.service.watcher.temp_networks.aws_sync_client_worker import AwsSyncClientWorker
 from neuro_san.service.watcher.temp_networks.s3_reservations_retriever import S3ReservationsRetriever
 from neuro_san.service.watcher.temp_networks.s3_util import S3Util
@@ -90,6 +92,8 @@ class S3ReservationsExpiration:
         current_time: float = time()
 
         for reservation_key in self.iter_reservation_keys(sync_aws_client):
+            if not reservation_key:
+                continue
             # Attempt to expire this reservation and increment counter if successful
             if self.expire_one_reservation(reservation_key, current_time, sync_aws_client):
                 expired_count += 1
@@ -128,11 +132,11 @@ class S3ReservationsExpiration:
             list_objects_function = partial(sync_aws_client.list_objects_v2, **kwargs)
             response = client_worker.do_with_retries(self.name, list_objects_function)
             for obj in response.get("Contents", []):
-                yield obj["Key"]
+                yield obj.get("Key")
             if not response.get("IsTruncated"):
                 # This was the last page - exit loop
                 break
-            continuation_token = response["NextContinuationToken"]
+            continuation_token = response.get("NextContinuationToken")
 
     def expire_one_reservation(self, obj_key: str, current_time: float,
                                source: str = None, sync_aws_client: BaseClient = None) -> bool:
@@ -145,17 +149,20 @@ class S3ReservationsExpiration:
         """
         if source is None:
             source = self.name
+
+        empty: Dict[str, Any] = {}
         expired: bool = False
         try:
             # Retrieve the reservation object from S3
             agent_spec: Dict[str, Any] = self.retriever.retrieve_object_with_retries(obj_key)
-            metadata: Dict[str, Any] = agent_spec.get("metadata")
-            reservation_data: Dict[str, Any] = metadata.get("reservation")
+
+            extractor = DictionaryExtractor(agent_spec)
+            reservation_data: Dict[str, Any] = extractor.get("metadata.reservation", empty)
 
             client_worker: AwsSyncClientWorker = self.retriever.get_sync_client_worker()
 
             # Compare current time against reservation's expiration timestamp
-            expiration_time: float = reservation_data.get("expiration_time_in_seconds")
+            expiration_time: float = reservation_data.get("expiration_time_in_seconds", 0)
             if current_time > expiration_time:
                 # Reservation has expired - remove it from S3 storage
                 try:
@@ -163,12 +170,13 @@ class S3ReservationsExpiration:
                                               Bucket=self.retriever.get_bucket_name(),
                                               Key=obj_key)
                     client_worker.do_with_retries(source, delete_function)
-                    reservation_id: str = reservation_data.get("id")
+                    reservation_id: str = reservation_data.get("id", "<unknown>")
                     self.logger.debug("%s: Deleted expired reservation %s from S3", self.name, reservation_id)
                     expired = True
                 except ClientError as delete_error:
+                    extractor = DictionaryExtractor(delete_error.response)
                     # Handle case where another process already deleted the object
-                    if delete_error.response["Error"]["Code"] != "NoSuchKey":
+                    if extractor.get("Error.Code") != "NoSuchKey":
                         # Re-raise other delete errors
                         raise delete_error
 
@@ -179,7 +187,8 @@ class S3ReservationsExpiration:
 
         except ClientError as exception:
             # Handle case where another process already removed the object before we could read it
-            if exception.response["Error"]["Code"] == "NoSuchKey":
+            extractor = DictionaryExtractor(exception.response)
+            if extractor.get("Error.Code") == "NoSuchKey":
                 self.logger.debug("%s: Reservation %s was already removed by another process", self.name, obj_key)
                 expired = True  # Object is gone, which is the desired outcome for expiration
             else:
