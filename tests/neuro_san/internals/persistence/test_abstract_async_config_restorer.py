@@ -441,6 +441,7 @@ class TestAbstractAsyncConfigRestorer:
         subclass/instance, so tests that opt into it must not leak entries to
         (or inherit entries from) any other test.
         """
+        # pylint: disable=protected-access
         AbstractAsyncConfigRestorer._deserialization_cache.clear()
         yield
         AbstractAsyncConfigRestorer._deserialization_cache.clear()
@@ -505,4 +506,5 @@ class TestAbstractAsyncConfigRestorer:
             path: str = self.write_hocon_file(tmp_path, f'key = "value{i}"\n', filename=f"config{i}.hocon")
             r.deserialize_file_contents(path, Path(path).read_bytes())
 
+        # pylint: disable=protected-access
         assert len(AbstractAsyncConfigRestorer._deserialization_cache) == 3
