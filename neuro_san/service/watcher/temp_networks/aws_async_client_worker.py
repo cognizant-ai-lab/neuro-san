@@ -115,7 +115,7 @@ class AwsAsyncClientWorker:
         if last_err is not None:
             raise last_err
 
-        raise RuntimeError("S3 credential retries exhausted without capturing an error") from last_err
+        raise RuntimeError(f"{self.aws_service} credential retries exhausted without capturing an error") from last_err
 
     def ensure_async_lock_exists(self):
         """
