@@ -16,15 +16,8 @@
 # END COPYRIGHT
 
 from random import random
-from time import sleep as sync_sleep
 
-from logging import getLogger
-from logging import Logger
-
-from botocore.exceptions import BotoCoreError
 from botocore.exceptions import ClientError
-
-from leaf_common.logging.sensitive_logger import SensitiveLogger
 
 
 class S3RetryUtil:
@@ -65,39 +58,6 @@ class S3RetryUtil:
         if isinstance(status, int) and 500 <= status < 600:
             return True
         return False
-
-    @staticmethod
-    def do_with_retries(source: str, fn, *, max_attempts: int = 8, base_sleep: float = 0.25):
-        """
-        Generic retry wrapper for boto3 calls.
-        boto3/botocore already retries, but this adds a bit of extra resilience and backoff for batch operations.
-        """
-        logger: Logger = getLogger(__name__)
-        sensitive_logger: SensitiveLogger = SensitiveLogger(logger)
-        sleep: float = 0.0
-        attempt: int = 1
-        while True:
-            try:
-                return fn()
-            except ClientError as err:
-                if attempt >= max_attempts or not S3RetryUtil.is_retryable_client_error(err):
-                    raise
-                sleep = S3RetryUtil.exponential_backoff_with_jitter(base_sleep, attempt)
-                sensitive_logger.warning("%s: Retryable sync ClientError (%s). attempt=%d", source, err, attempt)
-                sync_sleep(sleep)
-                attempt += 1
-            except BotoCoreError as err:
-                # Often transient network/serialization issues
-                if attempt >= max_attempts:
-                    raise
-                sleep = S3RetryUtil.exponential_backoff_with_jitter(base_sleep, attempt)
-                sensitive_logger.warning("%s: Retryable sync BotoCoreError (%s). attempt=%d", source, err, attempt)
-                sync_sleep(sleep)
-                attempt += 1
-            except Exception as err:  # pylint: disable=broad-except
-                # Catch-all for unexpected exceptions; log and re-raise
-                sensitive_logger.error("%s: Unexpected sync error (%s). attempt=%d", source, err, attempt)
-                raise
 
     @staticmethod
     def exponential_backoff_with_jitter(base_sleep: float, attempt: int) -> float:
