@@ -84,4 +84,4 @@ class FakeS3Client:
         """
         Close the in-memory bucket.
         """
-        self.objects = {}
+        # Do nothing
