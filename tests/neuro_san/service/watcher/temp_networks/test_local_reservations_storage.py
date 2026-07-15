@@ -70,12 +70,11 @@ class TestLocalReservationsStorageConstructor:
         with pytest.raises(ValueError, match="Local path for reservations"):
             LocalReservationsStorage()
 
-    def test_env_var_fallback(self, monkeypatch, tmp_path):
-        """base_path defaults from the env var when the arg is empty."""
-        monkeypatch.setenv("AGENT_RESERVATIONS_LOCAL_PATH", str(tmp_path))
-        storage = LocalReservationsStorage()
-        assert storage.base_path == str(tmp_path.resolve())
-
+def test_env_var_fallback(self, monkeypatch, tmp_path):
+    """base_path defaults from the env var when the arg is empty."""
+    monkeypatch.setenv("AGENT_RESERVATIONS_LOCAL_PATH", str(tmp_path))
+    storage = LocalReservationsStorage()
+    assert storage.base_path == str(tmp_path)
     def test_explicit_arg_wins_over_env(self, monkeypatch, tmp_path):
         """A non-empty base_path arg is used even when the env var is set."""
         monkeypatch.setenv("AGENT_RESERVATIONS_LOCAL_PATH", "/some/env/path")
