@@ -331,7 +331,17 @@ class LocalReservationsStorage(AbstractReservationsStorage):
                               self._name, path, exc)
             return False
 
-        metadata: Dict[str, Any] = agent_spec.get("metadata") or {}
+        if not isinstance(agent_spec, dict):
+            self.logger.debug("%s: skipping non-dict json file during expiration: %s",
+                              self._name, path)
+            return False
+
+        metadata: Any = agent_spec.get("metadata") or {}
+        if not isinstance(metadata, dict):
+            self.logger.debug("%s: skipping json file with non-dict metadata during expiration: %s",
+                              self._name, path)
+            return False
+
         reservation_data = metadata.get("reservation")
         if not isinstance(reservation_data, dict):
             self.logger.debug("%s: skipping non-reservation json file during expiration: %s",
