@@ -157,7 +157,7 @@ class S3ReservationsExpiration:
         expired: bool = False
         try:
             # Retrieve the reservation object from S3
-            agent_spec: Dict[str, Any] = self.retriever.retrieve_object_with_retries(obj_key)
+agent_spec: Dict[str, Any] = self.retriever.retrieve_object_with_retries(obj_key=obj_key, source=source, sync_aws_client=sync_aws_client)
             if agent_spec is None:
                 agent_spec = empty
 
