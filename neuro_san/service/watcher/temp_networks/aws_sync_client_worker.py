@@ -36,7 +36,7 @@ from botocore.session import Session
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
-from neuro_san.service.watcher.temp_networks.s3_retry_util import S3RetryUtil
+from neuro_san.service.watcher.temp_networks.s3_util import S3Util
 
 
 # pylint: disable=too-many-instance-attributes
@@ -224,10 +224,10 @@ class AwsSyncClientWorker:
             try:
                 return fn()
             except ClientError as err:
-                if attempt >= max_attempts or not S3RetryUtil.is_retryable_client_error(err):
+                if attempt >= max_attempts or not S3Util.is_retryable_client_error(err):
                     raise
 
-                sleep = S3RetryUtil.exponential_backoff_with_jitter(base_sleep, attempt)
+                sleep = S3Util.exponential_backoff_with_jitter(base_sleep, attempt)
                 sensitive_logger.warning("%s: Retryable sync ClientError (%s). attempt=%d", source, err, attempt)
                 sync_sleep(sleep)
                 attempt += 1
@@ -236,7 +236,7 @@ class AwsSyncClientWorker:
                 if attempt >= max_attempts:
                     raise
 
-                sleep = S3RetryUtil.exponential_backoff_with_jitter(base_sleep, attempt)
+                sleep = S3Util.exponential_backoff_with_jitter(base_sleep, attempt)
                 sensitive_logger.warning("%s: Retryable sync BotoCoreError (%s). attempt=%d", source, err, attempt)
                 sync_sleep(sleep)
                 attempt += 1

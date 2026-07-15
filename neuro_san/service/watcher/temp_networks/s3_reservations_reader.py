@@ -33,7 +33,7 @@ from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
 from neuro_san.service.watcher.temp_networks.aws_sync_client_worker import AwsSyncClientWorker
 from neuro_san.service.watcher.temp_networks.s3_reservations_retriever import S3ReservationsRetriever
-from neuro_san.service.watcher.temp_networks.s3_retry_util import S3RetryUtil
+from neuro_san.service.watcher.temp_networks.s3_util import S3Util
 
 
 class S3ReservationsReader:
@@ -44,7 +44,8 @@ class S3ReservationsReader:
     ExpiringAgentNetworkStorage.get_agent_network_provider() as part of a request query.
     """
 
-    def __init__(self, name: str = "S3ReservationsReader", bucket_name: str = "", prefix: str = "reservations/"):
+    def __init__(self, name: str = "S3ReservationsReader", bucket_name: str = "",
+                 prefix: str = S3Util.DEFAULT_RESERVATIONS_PREFIX):
         """
         Initialize the S3 reservations reader.
 
@@ -77,7 +78,7 @@ class S3ReservationsReader:
         agent_network: AgentNetwork = None
 
         # Construct the S3 object key for this reservation ID
-        s3_obj_key: str = S3RetryUtil.get_obj_key_for_reservation(self.retriever.get_prefix(), reservation_id)
+        s3_obj_key: str = S3Util.get_obj_key_for_reservation(self.retriever.get_prefix(), reservation_id)
 
         client_worker: AwsSyncClientWorker = self.retriever.get_sync_client_worker()
         get_function = partial(self.retriever.retrieve_object_with_retries, obj_key=s3_obj_key, source=self.name)

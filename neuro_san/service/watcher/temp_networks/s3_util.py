@@ -19,11 +19,15 @@ from random import random
 
 from botocore.exceptions import ClientError
 
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
-class S3RetryUtil:
+
+class S3Util:
     """
-    Utilities for retrying AWS S3 operations.
+    Utilities for AWS S3 operations.
     """
+
+    DEFAULT_RESERVATIONS_PREFIX: str = "reservations/"
 
     @staticmethod
     def is_retryable_client_error(err: ClientError) -> bool:
@@ -32,14 +36,9 @@ class S3RetryUtil:
         :param err: The ClientError exception to evaluate
         :return: True if the error is likely transient and worth retrying, False otherwise
         """
-        client_error = err.response.get("Error")
-        if not client_error:
-            client_error = {}
-        code = client_error.get("Code", "")
-        error_response = err.response.get("ResponseMetadata")
-        if not error_response:
-            error_response = {}
-        status = error_response.get("HTTPStatusCode", 0)
+        extractor = DictionaryExtractor(err.response)
+        code = extractor.get("Error.Code", "")
+        status = extractor.get("ResponseMetadata.HTTPStatusCode", 0)
 
         # Common codes for transient situations
         retryable_codes = {

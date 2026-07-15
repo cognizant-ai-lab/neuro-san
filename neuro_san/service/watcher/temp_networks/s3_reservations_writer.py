@@ -32,7 +32,7 @@ from aiobotocore.client import AioBaseClient
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
 from neuro_san.service.watcher.temp_networks.aws_async_client_worker import AwsAsyncClientWorker
-from neuro_san.service.watcher.temp_networks.s3_retry_util import S3RetryUtil
+from neuro_san.service.watcher.temp_networks.s3_util import S3Util
 
 
 # pylint: disable=too-many-instance-attributes
@@ -51,10 +51,12 @@ class S3ReservationsWriter:
     also managed by S3ReservationsStorage.
     """
 
-    def __init__(self, name: str = "S3ReservationsWriter", bucket_name: str = "", prefix: str = "reservations/"):
+    def __init__(self, name: str = "S3ReservationsWriter", bucket_name: str = "",
+                 prefix: str = S3Util.DEFAULT_RESERVATIONS_PREFIX):
         """
         Initialize S3 reservations storage.
 
+        :param name: Name of this writer
         :param bucket_name: S3 bucket name (defaults to AGENT_RESERVATIONS_S3_BUCKET env var)
         :param prefix: S3 key prefix for reservation objects
         """
@@ -164,7 +166,7 @@ class S3ReservationsWriter:
 
         # Generate S3 key using prefix and reservation ID for easy lookup
         reservation_id: str = reservation.get_reservation_id()
-        key: str = S3RetryUtil.get_obj_key_for_reservation(self.prefix, reservation_id)
+        key: str = S3Util.get_obj_key_for_reservation(self.prefix, reservation_id)
 
         # Store as JSON object in S3 with proper content type
         json_body: str = dumps(agent_spec, indent=4)  # Pretty-printed JSON

@@ -31,6 +31,7 @@ from botocore.exceptions import ClientError
 
 from neuro_san.service.watcher.temp_networks.aws_sync_client_worker import AwsSyncClientWorker
 from neuro_san.service.watcher.temp_networks.s3_reservations_retriever import S3ReservationsRetriever
+from neuro_san.service.watcher.temp_networks.s3_util import S3Util
 
 
 class S3ReservationsExpiration:
@@ -41,10 +42,12 @@ class S3ReservationsExpiration:
     S3ReservationsStorage watcher loop.
     """
 
-    def __init__(self, name: str = "S3ReservationsExpiration", bucket_name: str = "", prefix: str = "reservations/"):
+    def __init__(self, name: str = "S3ReservationsExpiration", bucket_name: str = "",
+                 prefix: str = S3Util.DEFAULT_RESERVATIONS_PREFIX):
         """
         Initialize S3 reservations storage.
 
+        :param name: Name of this writer
         :param bucket_name: S3 bucket name (defaults to AGENT_RESERVATIONS_S3_BUCKET env var)
         :param prefix: S3 key prefix for reservation objects
         """
