@@ -25,6 +25,7 @@ no stand-alone functions.
 import time
 from typing import Any
 from typing import Dict
+from typing import Optional
 
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
 
@@ -37,7 +38,7 @@ class LocalReservationsTestHelpers:
 
     @staticmethod
     def make_reservation(prefix: str, lifetime_s: float,
-                         expires_offset_s: float = None) -> AgentReservation:
+                         expires_offset_s: Optional[float] = None) -> AgentReservation:
         """
         Build an AgentReservation with a deterministic expiration.
 
