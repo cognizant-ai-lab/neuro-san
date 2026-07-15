@@ -129,8 +129,9 @@ self.s3_sync_client_worker.retry_with_new_client(initialize_function, source=sel
         """
         if obj_key is None:
             raise ValueError(f"{self.name}: S3 object key must be provided")
+        if sync_aws_client is None:
+            raise ValueError(f"{self.name}: S3 client must be provided")
         get_function = partial(sync_aws_client.get_object, Bucket=self.bucket_name, Key=obj_key)
-        if source is None:
             source = self.name
         obj_response: Dict[str, Any] = self.s3_sync_client_worker.do_with_retries(source, get_function)
         # Parse JSON content from S3 object body
