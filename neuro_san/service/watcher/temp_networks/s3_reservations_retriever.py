@@ -90,7 +90,7 @@ class S3ReservationsRetriever:
         Initialize the S3 client and validate connection to the bucket.
         """
         initialize_function = partial(self.initialize)
-        self.s3_sync_client_worker.do_work_with_new_client(initialize_function)
+self.s3_sync_client_worker.retry_with_new_client(initialize_function, source=self.name)
 
     def initialize(self, sync_aws_client: BaseClient = None):
         """
