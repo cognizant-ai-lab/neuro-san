@@ -79,7 +79,7 @@ class S3ReservationsExpiration:
         expire_function = partial(self.expire_any_reservations)
 
         client_worker: AwsSyncClientWorker = self.retriever.get_sync_client_worker()
-        client_worker.do_work_with_new_client(expire_function)
+client_worker.retry_with_new_client(expire_function, source=self.name)
 
     def expire_any_reservations(self, sync_aws_client: BaseClient = None):
         """
