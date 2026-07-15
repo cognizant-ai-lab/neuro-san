@@ -140,6 +140,7 @@ class S3ReservationsExpiration:
                 break
             continuation_token = response.get("NextContinuationToken")
 
+    # pylint: disable=too-many-locals
     def expire_one_reservation(self, obj_key: str, current_time: float,
                                source: str = None, sync_aws_client: BaseClient = None) -> bool:
         """
