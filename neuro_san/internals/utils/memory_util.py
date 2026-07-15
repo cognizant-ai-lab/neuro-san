@@ -46,7 +46,7 @@ class MemoryUtil:
             items: Dict[str, Any] = {}
             if isinstance(obj_in, dict):
                 items = obj_in
-            elif isinstance(obj_in, list):
+            elif isinstance(obj_in, (list, set)):
                 for index, item in enumerate(obj_in):
                     key = f"{index}"
                     items[key] = item
