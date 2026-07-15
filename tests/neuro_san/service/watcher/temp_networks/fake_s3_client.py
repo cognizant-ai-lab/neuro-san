@@ -79,3 +79,9 @@ class FakeS3Client:
                 "GetObject",
             )
         return {"Body": io.BytesIO(self.objects[Key])}
+
+    def close(self):
+        """
+        Close the in-memory bucket.
+        """
+        self.objects = {}

@@ -105,7 +105,7 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
             return AioCredentials("bogus", "bogus")
 
         credentials_patcher = patch(
-            "neuro_san.service.watcher.temp_networks.s3_reservations_writer.AioSession.get_credentials",
+            "neuro_san.service.watcher.temp_networks.aws_async_client_worker.AioSession.get_credentials",
             new=_fake_get_credentials,
         )
         credentials_patcher.start()
