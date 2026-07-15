@@ -429,3 +429,80 @@ class TestAbstractAsyncConfigRestorer:
         r: ConcreteRestorer = self.make_restorer()
         with pytest.raises(ValueError):
             self.run(r.async_restore(path))
+
+    # -----------------------------------------------------------------------
+    # deserialize_file_contents caching (NEURO_SAN_PARSE_CACHE)
+    # -----------------------------------------------------------------------
+
+    @pytest.fixture(autouse=True)
+    def clear_deserialization_cache(self):
+        """
+        The cache is a class-level dict shared by every AbstractAsyncConfigRestorer
+        subclass/instance, so tests that opt into it must not leak entries to
+        (or inherit entries from) any other test.
+        """
+        AbstractAsyncConfigRestorer._deserialization_cache.clear()
+        yield
+        AbstractAsyncConfigRestorer._deserialization_cache.clear()
+
+    def test_cache_hit_returns_a_copy_not_the_cached_object(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """
+        A caller that mutates what deserialize_file_contents() gives it back must
+        not corrupt what a later cache hit for the same key returns.
+        """
+        monkeypatch.setenv("NEURO_SAN_PARSE_CACHE", "1")
+        path: str = self.write_hocon_file(tmp_path, 'key = "value"\nnested { a = 1 }\n')
+        contents: bytes = Path(path).read_bytes()
+        r: ConcreteRestorer = self.make_restorer()
+
+        first: Dict[str, Any] = r.deserialize_file_contents(path, contents)
+        first["nested"]["a"] = "mutated in place"
+
+        second: Dict[str, Any] = r.deserialize_file_contents(path, contents)
+        assert second["nested"]["a"] == 1
+        assert second is not first
+
+    def test_cache_hit_returns_equivalent_config_without_reparsing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A cache hit still returns a dict equal to what a fresh parse would produce."""
+        monkeypatch.setenv("NEURO_SAN_PARSE_CACHE", "1")
+        path: str = self.copy_fixture(tmp_path, "valid.hocon")
+        contents: bytes = Path(path).read_bytes()
+        r: ConcreteRestorer = self.make_restorer()
+
+        first: Dict[str, Any] = r.deserialize_file_contents(path, contents)
+        second: Dict[str, Any] = r.deserialize_file_contents(path, contents)
+        assert first == VALID_DICT
+        assert second == VALID_DICT
+
+    def test_cache_disabled_by_default_still_reparses_correctly(self, tmp_path: Path) -> None:
+        """With the env var unset, repeated calls just reparse - no caching, no crash."""
+        path: str = self.copy_fixture(tmp_path, "valid.hocon")
+        contents: bytes = Path(path).read_bytes()
+        r: ConcreteRestorer = self.make_restorer()
+
+        first: Dict[str, Any] = r.deserialize_file_contents(path, contents)
+        first["nested"]["a"] = "mutated in place"
+
+        second: Dict[str, Any] = r.deserialize_file_contents(path, contents)
+        assert second["nested"]["a"] == 1
+
+    def test_cache_evicts_least_recently_used_beyond_max_entries(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The cache does not grow without bound across many distinct file versions."""
+        monkeypatch.setenv("NEURO_SAN_PARSE_CACHE", "1")
+        monkeypatch.setattr(
+            "neuro_san.internals.persistence.abstract_async_config_restorer._CACHE_MAX_ENTRIES", 3
+        )
+        r: ConcreteRestorer = self.make_restorer()
+
+        # Five distinct file contents -> five distinct cache keys, cap is 3.
+        for i in range(5):
+            path: str = self.write_hocon_file(tmp_path, f'key = "value{i}"\n', filename=f"config{i}.hocon")
+            r.deserialize_file_contents(path, Path(path).read_bytes())
+
+        assert len(AbstractAsyncConfigRestorer._deserialization_cache) == 3
