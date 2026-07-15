@@ -31,6 +31,7 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import patch
 
 from aiobotocore.credentials import AioCredentials
+from botocore.credentials import Credentials
 
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
 from neuro_san.service.watcher.temp_networks.s3_reservations_storage import S3ReservationsStorage
@@ -86,6 +87,19 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
         # regardless of pass/fail.
         self.addCleanup(boto3_patcher.stop)
 
+        # Patch Session.get_credentials at the import boundary in s3_reservations_writer
+        # so storage.start() receives deterministic fake credentials.
+        def _fake_get_credentials(*_args, **_kwargs):
+            return Credentials("bogus", "bogus")
+
+        credentials_patcher = patch(
+            "neuro_san.service.watcher.temp_networks.aws_sync_client_worker.Session.get_credentials",
+            new=_fake_get_credentials,
+        )
+        credentials_patcher.start()
+        # Restores the real AioSession symbol after the test completes, regardless of pass/fail.
+        self.addCleanup(credentials_patcher.stop)
+
         self.fake_async_s3: FakeAsyncS3Client = FakeAsyncS3Client(self.fake_s3)
 
         # Patch aiobotocore_client at the import boundary in s3_reservations_storage
@@ -101,12 +115,12 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
 
         # Patch AioSession.get_credentials at the import boundary in s3_reservations_writer
         # so storage.start() receives deterministic fake credentials.
-        async def _fake_get_credentials(*_args, **_kwargs):
+        async def _async_fake_get_credentials(*_args, **_kwargs):
             return AioCredentials("bogus", "bogus")
 
         credentials_patcher = patch(
             "neuro_san.service.watcher.temp_networks.aws_async_client_worker.AioSession.get_credentials",
-            new=_fake_get_credentials,
+            new=_async_fake_get_credentials,
         )
         credentials_patcher.start()
         # Restores the real AioSession symbol after the test completes, regardless of pass/fail.
