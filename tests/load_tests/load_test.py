@@ -1212,6 +1212,31 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         self._test_log_handler.setFormatter(logging.Formatter("%(message)s"))
         logging.getLogger().addHandler(self._test_log_handler)
 
+    def _preflight_server_check(self) -> None:
+        """Abort before firing if the target server is unreachable.
+
+        A quick TCP connect to --host:--port catches "server not
+        found" (connection refused / DNS failure / host down) so a
+        whole run's worth of requests is not fired at nothing.
+        """
+        host = self.args.host
+        port = self.args.port
+        if EnvironmentValidator.is_port_open(host, port):
+            logger.info(
+                "  Preflight: server %s:%s reachable.", host, port,
+            )
+            return
+        scheme = (
+            "https" if getattr(self.args, "https", False) else "http"
+        )
+        logger.error(
+            "ABORT: server %s:%s (%s) is unreachable — "
+            "not firing any requests.\n"
+            "  Check --host/--port/--https, or start the server.",
+            host, port, scheme,
+        )
+        raise SystemExit(1)
+
     def _finalize_test_log(self, stage_summaries) -> None:
         """Report the output directory and close the log handler."""
         if self._output_dir is None:
@@ -2285,6 +2310,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         self._setup_test_log()
         if not self.args.server_only:
+            self._preflight_server_check()
             self.probe_result = (
                 self.input_validator.confirm_cost(
                     stages, total_cap,

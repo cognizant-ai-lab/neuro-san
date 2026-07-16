@@ -15,6 +15,7 @@
 
 """Traffic runner — fires concurrent requests via a thread pool."""
 
+import json
 import logging
 import os
 import re
@@ -222,8 +223,15 @@ class TrafficRunner:
         elif status == STATUS_FAILED and not response_text:
             failure_reason = "empty response from agent"
 
+        saved_stdout = response_text or ""
+        if self._args.include_tokens and token_data:
+            saved_stdout += (
+                "\n\nToken Accounting:\n"
+                + json.dumps(token_data, indent=2)
+                + "\n"
+            )
         self._save_request_output(
-            output_dir, request_id, response_text or "", "",
+            output_dir, request_id, saved_stdout, "",
         )
 
         self._log_request_result(
