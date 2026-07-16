@@ -22,6 +22,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+import asyncio
 import json
 import os
 import random
@@ -216,6 +217,12 @@ class HttpServer(AgentStateListener):
                             {}, "Failed to start %s: %s",
                             startable.__class__.__name__, str(exception))
 
+        # Optionally enable asyncio debug mode + slow-callback warnings on the
+        # Tornado IOLoop's underlying asyncio loop. Off by default to avoid the
+        # ~5-10% debug-mode overhead in production. Done after server.start()
+        # forks so each worker enables it in its own loop.
+        self._maybe_enable_asyncio_debug()
+
         # Optionally install the sys.setprofile-based loop timeline tracer.
         # Must be done on the Tornado loop thread, so we install it here --
         # this method runs on that thread and IOLoop.current().start() below
@@ -224,6 +231,45 @@ class HttpServer(AgentStateListener):
 
         tornado.ioloop.IOLoop.current().start()
         self.logger.info({}, "Http server stopped.")
+
+    def _maybe_enable_asyncio_debug(self) -> None:
+        """
+        Enable asyncio debug mode and the slow-callback warning on the
+        current Tornado IOLoop's asyncio loop when requested via env vars.
+
+        Controls:
+          AGENT_ASYNCIO_DEBUG (bool, default false)
+              When truthy, enables loop.set_debug(True). This turns on
+              additional asyncio diagnostics including the slow-callback
+              warning. Adds ~5-10% loop overhead -- leave off in production
+              unless actively diagnosing.
+          AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS (int, default 100)
+              Threshold in milliseconds. Any callback running longer than
+              this on the Tornado loop will be logged at WARNING via the
+              "asyncio" logger, with the source location of the offending
+              callback.
+
+        Must be called after server.start() (i.e. after fork) so each
+        worker process configures its own loop.
+        """
+        if not ConfigUtil.get_bool(os.environ, "AGENT_ASYNCIO_DEBUG"):
+            return
+
+        try:
+            threshold_ms: int = int(os.environ.get(
+                "AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS", "100"))
+        except ValueError:
+            threshold_ms = 100
+
+        loop = asyncio.get_event_loop()
+        loop.set_debug(True)
+        loop.slow_callback_duration = max(threshold_ms, 1) / 1000.0
+        self.logger.info(
+            {},
+            "asyncio debug enabled on Tornado loop; "
+            "slow_callback_duration=%dms (warns via 'asyncio' logger)",
+            threshold_ms,
+        )
 
     # pylint: disable=attribute-defined-outside-init
     def _maybe_start_loop_timeline_tracer(self) -> None:

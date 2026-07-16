@@ -225,6 +225,21 @@ ENV AGENT_HTTP_PORT="8080"
 # best-case probe responsiveness under load.
 ENV AGENT_HEALTH_PROBE_PORT="8081"
 
+# Enable asyncio debug mode on the Tornado main event loop in each worker.
+# When set to "true"/"1"/"yes", the server calls loop.set_debug(True), which:
+#   - turns on additional asyncio diagnostics
+#   - logs a WARNING via the "asyncio" logger whenever any callback runs longer
+#     than AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS (see below). The warning
+#     includes the source location of the offending callback -- the diagnostic
+#     to use when /livez probe latency spikes under load.
+# Adds ~5-10% loop overhead. Leave off in production unless diagnosing.
+ENV AGENT_ASYNCIO_DEBUG="false"
+
+# Slow-callback threshold in milliseconds. Only consulted when
+# AGENT_ASYNCIO_DEBUG is enabled. Lower values surface smaller hogs but
+# create more log volume. 50-100ms is a good first pass.
+ENV AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS="100"
+
 # Enable the sys.setprofile-based loop timeline tracer on the Tornado
 # main event loop. When enabled, records a linear timeline of every
 # scheduled unit of work run by the loop -- task steps, done callbacks,
