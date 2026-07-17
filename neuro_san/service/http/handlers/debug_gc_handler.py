@@ -93,6 +93,13 @@ class DebugGcHandler(RequestHandler):
 
         report: Dict[str, Any] = self._force_gc_and_measure()
 
+        # X-Content-Type-Options: nosniff disables MIME sniffing on the
+        # response, so a browser cannot reinterpret text/plain output as
+        # HTML even if the body happened to look like HTML. Applied to
+        # both branches for defence in depth and to satisfy static
+        # analyzers (CodeQL / Bandit / Snyk) that taint-track user query
+        # args reaching response sinks.
+        self.set_header("X-Content-Type-Options", "nosniff")
         response_format: str = self.get_query_argument("format", default="json").lower()
         if response_format == "text":
             self.set_header("Content-Type", "text/plain; charset=utf-8")
