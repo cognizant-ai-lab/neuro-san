@@ -26,6 +26,7 @@ import logging
 import time
 from typing import Any
 from typing import Dict
+from typing import List
 from typing import Tuple
 
 from neuro_san.client.streaming_input_processor import (
@@ -79,6 +80,21 @@ class HttpClient:
             streaming_timeout_in_seconds=idle_timeout,
         )
 
+        # Time-to-first-response: wrap the session's streaming_chat so
+        # the first streamed chat message is timestamped, matching the
+        # subprocess mode's time-to-first-stdout metric. process_once()
+        # iterates this generator internally.
+        first_response: List[float] = []
+        original_streaming_chat = session.streaming_chat
+
+        def timed_streaming_chat(request_dict):
+            for chat_response in original_streaming_chat(request_dict):
+                if not first_response:
+                    first_response.append(time.time() - start)
+                yield chat_response
+
+        session.streaming_chat = timed_streaming_chat
+
         processor = StreamingInputProcessor(
             default_input="DEFAULT",
             thinking_file=None,
@@ -126,9 +142,10 @@ class HttpClient:
             STATUS_CREATED if answer_text
             else STATUS_FAILED
         )
+        ttft = first_response[0] if first_response else 0.0
         return (
             status, parsed_fields, answer_text,
-            0.0, token_accounting,
+            ttft, token_accounting,
         )
 
     @staticmethod
