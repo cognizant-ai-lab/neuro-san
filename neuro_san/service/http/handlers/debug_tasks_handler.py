@@ -99,10 +99,7 @@ class DebugTasksHandler(RequestHandler):
             self.write(ServerContext.format_task_dump(dump))
         else:
             self.set_header("Content-Type", "application/json")
-            self.write(json.dumps(dump, indent=2))
-
-        self.logger.info("Returned /_debug/tasks dump for %d executor(s)", len(dump))
-
+        self.logger.info("Returned /debug/tasks dump for %d executor(s)", len(dump))
     def data_received(self, chunk):
         """
         This method is required to be implemented as part of RequestHandler subclass,
