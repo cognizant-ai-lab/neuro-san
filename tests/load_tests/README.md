@@ -487,14 +487,14 @@ logs a warning but never fails the run.
 Each `--server-only` record:
 
 ```json
-{"timestamp": "2026-07-17T17:06:15+0000", "neuro_san_version": "0.6.79", "host": "localhost", "agent": "agent_network_designer", "mode": "server-only", "expected_requests": 100, "received_requests": 100, "peak_cpu_cores": 1.7, "peak_memory_gb": 0.93, "time_to_first_completed_s": 41.2, "avg_duration_s": 78.4, "wall_time_s": 430.0, "completed_within_70s": 42, "completed_within_300s": 100}
+{"timestamp": "2026-07-17T17:06:15+0000", "neuro_san_version": "0.6.79", "host": "localhost", "agent": "agent_network_designer", "mode": "server-only", "expected_requests": 100, "received_requests": 100, "peak_cpu_cores": 1.12, "peak_memory_gb": 0.93, "time_to_first_completed_s": 41.2, "avg_duration_s": 78.4, "wall_time_s": 430.0, "completed_within_70s": 42, "completed_within_300s": 100}
 ```
 
 | Field | Meaning |
 |-------|---------|
 | `mode` | Always `"server-only"` for these records |
 | `expected_requests` / `received_requests` | Requests the monitor was told to expect vs. actually saw in the server log |
-| `peak_cpu_cores` | Peak **system** CPU during the round, in cores (system CPU % ÷ 100, across all cores) |
+| `peak_cpu_cores` | Peak **system** CPU during the round, in cores (`psutil.cpu_percent` ÷ 100 × core count; e.g. 14% on an 8-core box → 1.12 cores) |
 | `peak_memory_gb` | Peak server-process RSS during the round, in GB (`null` if the server process wasn't found) |
 | `time_to_first_completed_s` | Server-side seconds from the first request's Start to the first request's Finish. **Not** the client's per-request TTFR (`avg_first_response_s`) — the server log has no first-token event, so that can't be measured server-side. |
 | `avg_duration_s` | Mean server-side processing duration (Finish − Start) of the primary agent's requests |

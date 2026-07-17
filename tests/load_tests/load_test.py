@@ -2753,7 +2753,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "mode": "server-only",
             "expected_requests": expected,
             "received_requests": received,
-            "peak_cpu_cores": round((peak_sys_cpu or 0.0) / 100, 2),
+            "peak_cpu_cores": round(
+                (peak_sys_cpu or 0.0) / 100
+                * (psutil.cpu_count() or 1), 2,
+            ),
             "peak_memory_gb": (
                 round(peak_server.get("rss", 0.0) / 1024, 2)
                 if peak_server else None
