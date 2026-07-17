@@ -237,7 +237,6 @@ class LoopTimelineTracer:
             self._logger.warning(
                 "LoopTimelineTracer atexit dump failed: %s", exc)
 
-
     def register_atexit_dump(self, path: str) -> None:
         """
         Convenience: wire dump_to_file(path) into atexit so the process
