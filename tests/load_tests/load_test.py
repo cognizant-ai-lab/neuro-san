@@ -1837,6 +1837,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             peak_sys_cpu=peak_sys_cpu,
         )
 
+        self._append_server_history_record(
+            expected, count, elapsed, peak_server, peak_sys_cpu,
+        )
+
         self._archive_server_log_to(round_dir)
 
         logger.info("\n%s", "=" * 60)
@@ -1864,6 +1868,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         logger.info(
             "  Stdout log:  %s", round_log_path,
         )
+        history_path = self._history_path()
+        if os.path.isfile(history_path):
+            logger.info("  History:     %s", history_path)
 
         logger.info(
             "\n%s", "\u2500" * 45,
@@ -2690,7 +2697,42 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             record[f"completed_within_{int(threshold)}s"] = sum(
                 1 for d in durations if d <= threshold
             )
+        self._write_history_record(record)
 
+    def _append_server_history_record(
+            self, expected, received, elapsed,
+            peak_server, peak_sys_cpu,
+    ) -> None:
+        """Append one server-only trend record for plotting later.
+
+        A server-only round has no per-request data, so it records
+        the server's resource peaks (CPU cores, RSS in GB) plus its
+        neuro-san version, keyed with ``mode="server-only"`` so it is
+        distinguishable from client records in the same file.
+        """
+        record = {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "neuro_san_version": self._fetch_server_version() or "unknown",
+            "host": self.args.host,
+            "agent": self.args.agent,
+            "mode": "server-only",
+            "expected_requests": expected,
+            "received_requests": received,
+            "peak_cpu_cores": round((peak_sys_cpu or 0.0) / 100, 2),
+            "peak_memory_gb": (
+                round(peak_server.get("rss", 0.0) / 1024, 2)
+                if peak_server else None
+            ),
+            "wall_time_s": round(elapsed, 2),
+        }
+        self._write_history_record(record)
+
+    def _write_history_record(self, record) -> None:
+        """Append one JSON record to the trend-history file.
+
+        Best-effort: any write failure is logged and swallowed so it
+        never fails the run.
+        """
         path = self._history_path()
         try:
             os.makedirs(os.path.dirname(path) or ".", exist_ok=True)

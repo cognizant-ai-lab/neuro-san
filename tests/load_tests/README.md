@@ -450,13 +450,19 @@ each subdirectory, extracts key metrics, and sorts by request count.
 
 ## Trend History
 
-Every **client** run (subprocess or `--http-client`; not `--server-only`)
-appends one JSON line to an append-only history file so throughput can
-be plotted over time as the server/model/version changes. The default
-location is `<output-base>/history.jsonl` (e.g. `/tmp/load_test/history.jsonl`);
-override with `--history-file PATH`.
+Every run appends one JSON line to an append-only history file so
+performance can be plotted over time as the server/model/version
+changes. The default location is `<output-base>/history.jsonl`
+(e.g. `/tmp/load_test/history.jsonl`); override with `--history-file PATH`.
 
-Each record:
+There are two record shapes, told apart by the `mode` field:
+
+- **Client runs** (subprocess or `--http-client`) record throughput and
+  latency. These have **no** `mode` field.
+- **`--server-only` rounds** record the server's resource peaks (one
+  record per round), keyed with `"mode": "server-only"`.
+
+Each client record:
 
 ```json
 {"timestamp": "2026-07-17T17:06:15+0000", "neuro_san_version": "0.6.79", "host": "172.32.1.20", "agent": "agent_network_designer", "transport": "http", "total_requests": 5, "completed": 4, "avg_first_response_s": 4.7, "avg_duration_s": 182.5, "wall_time_s": 430.0, "completed_within_70s": 1, "completed_within_300s": 3}
@@ -477,6 +483,22 @@ Each record:
 Thresholds are fixed at **70s and 300s** so every historical point stays
 comparable. Writing is best-effort — a failure to write the history file
 logs a warning but never fails the run.
+
+Each `--server-only` record:
+
+```json
+{"timestamp": "2026-07-17T17:06:15+0000", "neuro_san_version": "0.6.79", "host": "localhost", "agent": "agent_network_designer", "mode": "server-only", "expected_requests": 100, "received_requests": 100, "peak_cpu_cores": 1.7, "peak_memory_gb": 0.93, "wall_time_s": 430.0}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `mode` | Always `"server-only"` for these records |
+| `expected_requests` / `received_requests` | Requests the monitor was told to expect vs. actually saw in the server log |
+| `peak_cpu_cores` | Peak **system** CPU during the round, in cores (system CPU % ÷ 100, across all cores) |
+| `peak_memory_gb` | Peak server-process RSS during the round, in GB (`null` if the server process wasn't found) |
+
+The monitor runs on the server box, so `neuro_san_version` is fetched
+from `http://<host>:<port>/healthz` locally.
 
 ## Exit Codes
 
