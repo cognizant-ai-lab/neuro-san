@@ -117,6 +117,7 @@ class LoopTimelineTracer:
         if self._loop_thread_ident is not None:
             return
         self._loop_thread_ident = threading.get_ident()
+        self._previous_profile = sys.getprofile()
         sys.setprofile(self._profile)
         self._logger.info(
             "LoopTimelineTracer active on thread %d (buffer=%d events)",
