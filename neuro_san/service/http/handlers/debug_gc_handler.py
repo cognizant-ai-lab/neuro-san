@@ -44,7 +44,6 @@ class DebugGcHandler(RequestHandler):
       - Duration of the collection in milliseconds.
       - Process memory (RSS and VMS) before and after the sweep, plus the
         RSS delta (negative = memory freed).
-      - Per-generation gc counts before and after (via gc.get_count()).
 
     Response format is JSON. Pass ?format=text for a human-readable rendering.
 
@@ -110,7 +109,7 @@ class DebugGcHandler(RequestHandler):
     @staticmethod
     def _force_gc_and_measure() -> Dict[str, Any]:
         """
-        Sample process memory + gc counters, run gc.collect(), re-sample,
+        Sample process memory, run gc.collect(), re-sample,
         and return the structured report.
 
         Kept as a static helper so the mechanics are testable independent
