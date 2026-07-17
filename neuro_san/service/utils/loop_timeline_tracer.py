@@ -104,6 +104,7 @@ class LoopTimelineTracer:
         # matching by function name (string compare on every profile event).
         self._handle_run_code: Any = asyncio.events.Handle._run.__code__
         self._logger: logging.Logger = logging.getLogger(self.__class__.__name__)
+        self._registered_atexit: bool = False
 
     def start(self) -> None:
         """
@@ -221,6 +222,22 @@ class LoopTimelineTracer:
             # Anything unexpected: don't crash the profile callback.
             return cls._LABEL_UNKNOWN, ""
 
+    def _on_exit(self, path: str) -> None:
+        """
+        Internal atexit callback to dump the timeline to a file. Catches
+        and logs any exceptions so the process can exit cleanly.
+        :param path: Destination path for the JSONL dump.
+        """
+        try:
+            count: int = self.dump_to_file(path)
+            self._logger.info(
+                "LoopTimelineTracer wrote %d events to %s at shutdown",
+                count, path)
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            self._logger.warning(
+                "LoopTimelineTracer atexit dump failed: %s", exc)
+
+
     def register_atexit_dump(self, path: str) -> None:
         """
         Convenience: wire dump_to_file(path) into atexit so the process
@@ -229,15 +246,8 @@ class LoopTimelineTracer:
 
         :param path: Destination path for the JSONL dump.
         """
+        if self._registered_atexit:
+            return
 
-        def _on_exit():
-            try:
-                count: int = self.dump_to_file(path)
-                self._logger.info(
-                    "LoopTimelineTracer wrote %d events to %s at shutdown",
-                    count, path)
-            except Exception as exc:  # pylint: disable=broad-exception-caught
-                self._logger.warning(
-                    "LoopTimelineTracer atexit dump failed: %s", exc)
-
-        atexit.register(_on_exit)
+        atexit.register(self._on_exit, path)
+        self._registered_atexit = True
