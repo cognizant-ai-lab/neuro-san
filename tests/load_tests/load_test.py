@@ -1451,6 +1451,33 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             args.total_timeout *= factor
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def _server_only_primary_pairs(
+            self, log_pos, pri_start_re,
+    ) -> List[Dict]:
+        """Primary-agent streaming_chat Start/Finish pairs since log_pos.
+
+        Returns the subset of parsed pairs whose agent matches the
+        primary (front-man) agent, each with ``start_ts``,
+        ``finish_ts``, and ``duration``.  Empty on read error or when
+        no primary request has completed yet.
+        """
+        if self.log_monitor is None:
+            return []
+        try:
+            pairs = (
+                self.log_monitor
+                .parse_streaming_chat_timing_since(log_pos)
+            )
+        except (OSError, ValueError):
+            return []
+        primary = []
+        for pair in pairs:
+            agent = pair.get("agent", "")
+            start_line = f"Start {agent}/streaming_chat"
+            if pri_start_re.search(start_line):
+                primary.append(pair)
+        return primary
+
     def _server_only_dur_stats(
             self, log_pos, pri_start_re,
     ) -> str:
@@ -1460,24 +1487,14 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         the round's log position and formats them.  Returns "n/a"
         until at least one request has completed.
         """
-        if self.log_monitor is None:
-            return "n/a"
-        try:
-            pairs = (
-                self.log_monitor
-                .parse_streaming_chat_timing_since(log_pos)
+        durations = [
+            float(p["duration"])
+            for p in self._server_only_primary_pairs(
+                log_pos, pri_start_re,
             )
-        except (OSError, ValueError):
-            return "n/a"
-        durations = []
-        for pair in pairs:
-            agent = pair.get("agent", "")
-            start_line = f"Start {agent}/streaming_chat"
-            if not pri_start_re.search(start_line):
-                continue
-            dur = pair.get("duration")
-            if isinstance(dur, (int, float)) and dur > 0:
-                durations.append(float(dur))
+            if isinstance(p.get("duration"), (int, float))
+            and p["duration"] > 0
+        ]
         return Heartbeat.format_dur_stats(durations)
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -1839,6 +1856,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         self._append_server_history_record(
             expected, count, elapsed, peak_server, peak_sys_cpu,
+            self._server_only_primary_pairs(log_pos, pri_start_re),
         )
 
         self._archive_server_log_to(round_dir)
@@ -2699,17 +2717,34 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             )
         self._write_history_record(record)
 
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _append_server_history_record(
             self, expected, received, elapsed,
-            peak_server, peak_sys_cpu,
+            peak_server, peak_sys_cpu, primary_pairs=None,
     ) -> None:
         """Append one server-only trend record for plotting later.
 
-        A server-only round has no per-request data, so it records
-        the server's resource peaks (CPU cores, RSS in GB) plus its
-        neuro-san version, keyed with ``mode="server-only"`` so it is
-        distinguishable from client records in the same file.
+        Records the server's resource peaks (CPU cores, RSS in GB),
+        its neuro-san version, and — derived from the primary agent's
+        Start/Finish log pairs — server-side processing durations.
+        Keyed with ``mode="server-only"`` so it is distinguishable
+        from client records in the same file.
+
+        ``time_to_first_completed_s`` is the server-side time from the
+        first request's Start to the first request's Finish; it is not
+        the client's per-request time-to-first-response (TTFR), which
+        the server log has no way to measure.
         """
+        primary_pairs = primary_pairs or []
+        durations = [
+            float(p["duration"]) for p in primary_pairs
+            if isinstance(p.get("duration"), (int, float))
+            and p["duration"] > 0
+        ]
+        avg_duration = (
+            round(sum(durations) / len(durations), 2)
+            if durations else 0.0
+        )
         record = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
             "neuro_san_version": self._fetch_server_version() or "unknown",
@@ -2723,9 +2758,35 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 round(peak_server.get("rss", 0.0) / 1024, 2)
                 if peak_server else None
             ),
+            "time_to_first_completed_s": self._time_to_first_completed(
+                primary_pairs,
+            ),
+            "avg_duration_s": avg_duration,
             "wall_time_s": round(elapsed, 2),
         }
+        for threshold in HISTORY_THRESHOLDS_SECONDS:
+            record[f"completed_within_{int(threshold)}s"] = sum(
+                1 for d in durations if d <= threshold
+            )
         self._write_history_record(record)
+
+    @staticmethod
+    def _time_to_first_completed(primary_pairs) -> float:
+        """Seconds from the first request's Start to the first Finish.
+
+        Returns 0.0 when no primary request completed.
+        """
+        starts = [
+            p["start_ts"] for p in primary_pairs
+            if isinstance(p.get("start_ts"), (int, float))
+        ]
+        finishes = [
+            p["finish_ts"] for p in primary_pairs
+            if isinstance(p.get("finish_ts"), (int, float))
+        ]
+        if not starts or not finishes:
+            return 0.0
+        return round(min(finishes) - min(starts), 2)
 
     def _write_history_record(self, record) -> None:
         """Append one JSON record to the trend-history file.
