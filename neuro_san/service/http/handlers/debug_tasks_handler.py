@@ -32,8 +32,7 @@ from neuro_san.service.utils.server_context import ServerContext
 
 class DebugTasksHandler(RequestHandler):
     """
-    Handler class for the /_debug/tasks endpoint.
-
+    Handler class for the /debug/tasks endpoint.
     Returns a snapshot of the asyncio tasks currently living on every
     "used" AsyncioExecutor in this worker's pool. See
     ServerContext.dump_tasks_in_used_executors() for the underlying probe.
