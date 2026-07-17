@@ -35,6 +35,8 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.error
+import urllib.request
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -54,6 +56,7 @@ from tests.load_tests.config import LEVEL_ADV
 from tests.load_tests.config import LEVEL_MIN
 from tests.load_tests.config import LEVEL_NORM
 from tests.load_tests.config import LOCAL_HOSTS
+from tests.load_tests.config import SOCKET_CHECK_TIMEOUT
 from tests.load_tests.config import STALE_LOG_THRESHOLD_SECONDS
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
@@ -527,6 +530,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         self._aborted = False
         self._interrupted = False
         self._cancel_event = threading.Event()
+        self._server_ns_version = None
 
     # pylint: disable=too-many-locals
     def _run_all_stages(self, stages, total_cap) -> List[StageSummary]:
@@ -1236,6 +1240,17 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             logger.info(
                 "  Preflight: server %s:%s reachable.", host, port,
             )
+            self._server_ns_version = self._fetch_server_version()
+            if self._server_ns_version:
+                logger.info(
+                    "  Preflight: server neuro-san version %s.",
+                    self._server_ns_version,
+                )
+            else:
+                logger.info(
+                    "  Preflight: server version unavailable "
+                    "(no /healthz response).",
+                )
             return
         scheme = (
             "https" if getattr(self.args, "https", False) else "http"
@@ -1247,6 +1262,31 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             host, port, scheme,
         )
         raise SystemExit(1)
+
+    def _fetch_server_version(self) -> Optional[str]:
+        """Return the server's neuro-san version via its /healthz API.
+
+        Queries ``<scheme>://<host>:<port>/healthz`` (the same HTTP
+        endpoint the client already reaches, so it works remotely
+        without any access to the server machine) and reads
+        ``versions['neuro-san']``.  Returns None if the endpoint is
+        unreachable or unparseable (e.g. an older/gRPC-only server).
+        """
+        scheme = (
+            "https" if getattr(self.args, "https", False) else "http"
+        )
+        url = f"{scheme}://{self.args.host}:{self.args.port}/healthz"
+        try:
+            with urllib.request.urlopen(
+                url, timeout=SOCKET_CHECK_TIMEOUT,
+            ) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            return payload.get("versions", {}).get("neuro-san")
+        except (urllib.error.URLError, OSError, ValueError) as exc:
+            logger.debug(
+                "Could not fetch server version from %s: %s", url, exc,
+            )
+            return None
 
     def _finalize_test_log(self, stage_summaries) -> None:
         """Report the output directory and close the log handler."""
@@ -2620,7 +2660,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
         record = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-            "neuro_san_version": self._get_package_version("neuro-san"),
+            "neuro_san_version": self._server_ns_version or "unknown",
             "host": self.args.host,
             "agent": self.args.agent,
             "transport": (

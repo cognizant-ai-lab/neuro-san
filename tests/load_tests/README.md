@@ -465,7 +465,7 @@ Each record:
 | Field | Meaning |
 |-------|---------|
 | `timestamp` | Run start (ISO 8601), the plot x-axis |
-| `neuro_san_version` | Locally-installed neuro-san version (`null` if not pip-installed) |
+| `neuro_san_version` | The **server's** neuro-san version, fetched from its `/healthz` API during preflight (`"unknown"` if the endpoint is unreachable). Works remotely — only needs network access to the server, not the server machine. |
 | `host` / `agent` / `transport` | Target host, agent network, and client transport (`subprocess`/`http`) |
 | `total_requests` | Requests fired |
 | `completed` | Requests that succeeded (validity check: `< total_requests` means a degraded run) |
