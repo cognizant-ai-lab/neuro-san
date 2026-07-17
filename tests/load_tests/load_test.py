@@ -2658,6 +2658,14 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         avg_duration = (
             round(sum(durations) / completed, 2) if completed else 0.0
         )
+        ttfts = [
+            r.get("ttft", 0.0) for r in results
+            if r.get("status") == STATUS_CREATED
+            and r.get("ttft", 0.0) > 0
+        ]
+        avg_first_response = (
+            round(sum(ttfts) / len(ttfts), 2) if ttfts else 0.0
+        )
         record = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
             "neuro_san_version": self._server_ns_version or "unknown",
@@ -2669,6 +2677,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             ),
             "total_requests": len(results),
             "completed": completed,
+            "avg_first_response_s": avg_first_response,
             "avg_duration_s": avg_duration,
             "wall_time_s": round(
                 sum(s.get("elapsed", 0.0) for s in stage_summaries), 2,

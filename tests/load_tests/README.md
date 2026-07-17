@@ -459,7 +459,7 @@ override with `--history-file PATH`.
 Each record:
 
 ```json
-{"timestamp": "2026-07-17T17:06:15+0000", "neuro_san_version": "0.6.72", "host": "172.32.1.20", "agent": "agent_network_designer", "transport": "http", "total_requests": 5, "completed": 4, "completed_within_70s": 1, "completed_within_300s": 3, "avg_duration_s": 182.5, "wall_time_s": 430.0}
+{"timestamp": "2026-07-17T17:06:15+0000", "neuro_san_version": "0.6.79", "host": "172.32.1.20", "agent": "agent_network_designer", "transport": "http", "total_requests": 5, "completed": 4, "avg_first_response_s": 4.7, "avg_duration_s": 182.5, "wall_time_s": 430.0, "completed_within_70s": 1, "completed_within_300s": 3}
 ```
 
 | Field | Meaning |
@@ -469,6 +469,7 @@ Each record:
 | `host` / `agent` / `transport` | Target host, agent network, and client transport (`subprocess`/`http`) |
 | `total_requests` | Requests fired |
 | `completed` | Requests that succeeded (validity check: `< total_requests` means a degraded run) |
+| `avg_first_response_s` | Mean time-to-first-response (TTFR) of successful requests |
 | `completed_within_70s` / `completed_within_300s` | Successful requests that finished within each **fixed** threshold |
 | `avg_duration_s` | Mean duration of successful requests |
 | `wall_time_s` | Total run wall-clock time |
