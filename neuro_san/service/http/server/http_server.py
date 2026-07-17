@@ -41,6 +41,7 @@ from neuro_san.service.http.config.http_server_config import ENV_HEALTH_PROBE_PO
 from neuro_san.service.http.config.http_server_config import HttpServerConfig
 from neuro_san.service.http.handlers.concierge_handler import ConciergeHandler
 from neuro_san.service.http.handlers.connectivity_handler import ConnectivityHandler
+from neuro_san.service.http.handlers.debug_gc_handler import DebugGcHandler
 from neuro_san.service.http.handlers.debug_tasks_handler import DebugTasksHandler
 from neuro_san.service.http.handlers.function_handler import FunctionHandler
 from neuro_san.service.http.handlers.health_check_handler import HealthCheckHandler
@@ -281,6 +282,11 @@ class HttpServer(AgentStateListener):
         # Setup handler for on-demand asyncio-task dump across used AsyncioExecutors.
         # Gated behind ENABLE_RUN_TIME_STATISTICS (same as /profiler and /resources_utilization).
         handlers.append(("/debug/tasks", DebugTasksHandler, {"server_context": self.server_context}))
+
+        # Setup handler for on-demand full Python garbage collection.
+        # Reports collected object count + before/after process memory.
+        # Same env-var gate as the other /debug endpoints.
+        handlers.append(("/debug/gc", DebugGcHandler))
 
         if enable_http_handlers:
             handlers.append(("/api/v1/list", ConciergeHandler, request_initialize_data))

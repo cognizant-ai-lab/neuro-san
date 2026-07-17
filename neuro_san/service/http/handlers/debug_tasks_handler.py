@@ -79,14 +79,16 @@ class DebugTasksHandler(RequestHandler):
             self.logger.info("Run-time statistics collection is disabled.")
             return
 
-        # Parse per_loop_timeout (best effort; fall back to the default).
+        # Parse per_loop_timeout (the best effort; fall back to the default).
         per_loop_timeout_s: float = 2.0
         raw_timeout: str = self.get_query_argument("timeout", default="")
         if raw_timeout:
             try:
                 per_loop_timeout_s = float(raw_timeout)
             except ValueError:
-                # Ignore malformed values and use the default.
+                self.logger.info("Malformed timeout value '%s' in /debug/tasks request; using default %.1f",
+                                 raw_timeout, per_loop_timeout_s)
+                # Use the default.
                 pass
 
         dump: Dict[str, Any] = self.server_context.dump_tasks_in_used_executors(

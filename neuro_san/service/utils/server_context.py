@@ -132,62 +132,8 @@ class ServerContext(ServerContextLite):
             # Nothing has ever asked for an executor in this worker.
             return result
 
-        # Snapshot the "used" list under the pool's lock so we don't race
-        # with get_executor()/return_executor() while iterating.
-        with self.executor_pool.lock:
-            used_snapshot: List[AsyncioExecutor] = list(self.executor_pool.pool_used)
-
-        for executor in used_snapshot:
-            executor_key: str = str(id(executor))
-            loop: asyncio.AbstractEventLoop = executor.get_event_loop()
-            if loop is None or not loop.is_running():
-                result[executor_key] = {"loop_state": "not_running", "tasks": []}
-                continue
-
-            future: concurrent.futures.Future = asyncio.run_coroutine_threadsafe(
-                self._collect_tasks_on_current_loop(), loop)
-            try:
-                tasks = future.result(timeout=per_loop_timeout_s)
-                result[executor_key] = {"loop_state": "responded", "tasks": tasks}
-            except concurrent.futures.TimeoutError:
-                future.cancel()
-                result[executor_key] = {"loop_state": "unresponsive_timeout", "tasks": []}
-            except Exception as exc:  # pylint: disable=broad-exception-caught
-                result[executor_key] = {
-                    "loop_state": "probe_error",
-                    "error": f"{type(exc).__name__}: {exc}",
-                    "tasks": [],
-                }
+        result = self.executor_pool.dump_tasks_in_used_executors(per_loop_timeout_s=per_loop_timeout_s)
         return result
-
-    @staticmethod
-    async def _collect_tasks_on_current_loop() -> List[Dict[str, Any]]:
-        """
-        Probe coroutine scheduled onto each target loop. Runs inside that
-        loop's context so asyncio.all_tasks() sees every task on it; the
-        probe filters itself out of the result.
-        """
-        me: asyncio.Task = asyncio.current_task()
-        tasks_info: List[Dict[str, Any]] = []
-        for task in asyncio.all_tasks():
-            if task is me:
-                continue
-            coro = task.get_coro()
-            stack_frames: List[Dict[str, Any]] = []
-            for frame in task.get_stack():
-                stack_frames.append({
-                    "file": frame.f_code.co_filename,
-                    "line": frame.f_lineno,
-                    "func": frame.f_code.co_name,
-                })
-            tasks_info.append({
-                "name": task.get_name(),
-                "coro": getattr(coro, "__qualname__", repr(coro)),
-                "done": task.done(),
-                "cancelled": task.cancelled(),
-                "stack": stack_frames,
-            })
-        return tasks_info
 
     @staticmethod
     def format_task_dump(dump: Dict[str, Any]) -> str:
@@ -201,21 +147,7 @@ class ServerContext(ServerContextLite):
         """
         if not dump:
             return "(no used executors)"
-        lines: List[str] = []
-        for executor_key, entry in dump.items():
-            loop_state: str = entry.get("loop_state", "unknown")
-            tasks: List[Dict[str, Any]] = entry.get("tasks", [])
-            lines.append(f"== executor {executor_key}  loop_state={loop_state}  "
-                         f"tasks={len(tasks)} ==")
-            if loop_state == "probe_error":
-                lines.append(f"   probe_error: {entry.get('error')}")
-            for task in tasks:
-                lines.append(f"  - name={task['name']!r}  coro={task['coro']}  "
-                             f"done={task['done']}  cancelled={task['cancelled']}")
-                for frame in task.get("stack", []):
-                    lines.append(f"      File \"{frame['file']}\", "
-                                 f"line {frame['line']}, in {frame['func']}")
-        return "\n".join(lines)
+        return AsyncioExecutorPool.format_task_dump(dump)
 
     def set_server_status(self, server_status: ServerStatus):
         """
