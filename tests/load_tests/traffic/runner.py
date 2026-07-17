@@ -223,15 +223,9 @@ class TrafficRunner:
         elif status == STATUS_FAILED and not response_text:
             failure_reason = "empty response from agent"
 
-        saved_stdout = response_text or ""
-        if self._args.include_tokens and token_data:
-            saved_stdout += (
-                "\n\nToken Accounting:\n"
-                + json.dumps(token_data, indent=2)
-                + "\n"
-            )
         self._save_request_output(
-            output_dir, request_id, saved_stdout, "",
+            output_dir, request_id,
+            self._http_saved_stdout(response_text, token_data), "",
         )
 
         self._log_request_result(
@@ -359,6 +353,22 @@ class TrafficRunner:
             if isinstance(provider_models, dict):
                 all_models.extend(provider_models.keys())
         return all_models
+
+    def _http_saved_stdout(self, response_text, token_data) -> str:
+        """Final answer plus Token Accounting JSON (agent_cli parity).
+
+        In HTTP mode the client receives the answer and token
+        accounting on separate channels; join them so the saved
+        per-request file matches subprocess (agent_cli) output.
+        """
+        saved = response_text or ""
+        if self._args.include_tokens and token_data:
+            saved += (
+                "\n\nToken Accounting:\n"
+                + json.dumps(token_data, indent=2)
+                + "\n"
+            )
+        return saved
 
     @staticmethod
     def _attach_http_token_data(result, token_data) -> None:
