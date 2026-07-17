@@ -134,7 +134,9 @@ class LoopTimelineTracer:
             return
         if threading.get_ident() != self._loop_thread_ident:
             return
-        sys.setprofile(None)
+        prev_profile = getattr(self, "_previous_profile", None)
+        sys.setprofile(prev_profile)
+        self._previous_profile = None
         self._loop_thread_ident = None
 
     def snapshot(self) -> List[Tuple[int, str, str, str]]:
