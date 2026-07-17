@@ -197,6 +197,12 @@ THREAD_JOIN_TIMEOUT = 2
 PROCESS_WAIT_TIMEOUT = 10
 STALE_LOG_THRESHOLD_SECONDS = 300
 
+# Trend history: one append-only JSONL record per client run so
+# throughput can be plotted over time.  The thresholds are fixed (not
+# configurable) so data points stay comparable across every run.
+HISTORY_FILE_NAME = "history.jsonl"
+HISTORY_THRESHOLDS_SECONDS = (70, 300)
+
 
 class SharedRef:
     """Mutable container for passing a value between threads.

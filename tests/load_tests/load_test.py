@@ -60,6 +60,8 @@ from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.config import HEARTBEAT_INTERVAL_SECONDS
+from tests.load_tests.config import HISTORY_FILE_NAME
+from tests.load_tests.config import HISTORY_THRESHOLDS_SECONDS
 from tests.load_tests.config import THREAD_JOIN_TIMEOUT
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.monitoring.heartbeat import Heartbeat
@@ -354,6 +356,15 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             default=None,
             help="Base directory for test output. Defaults to "
                  "/tmp/load_test/{level}/{timestamp}.",
+        )
+        parser.add_argument(
+            "--history-file",
+            type=str,
+            default=None,
+            help="Append-only JSONL file recording one trend record "
+                 "per client run (completion counts under fixed time "
+                 "thresholds + neuro-san version) for plotting over "
+                 "time. Defaults to <output-base>/history.jsonl.",
         )
         parser.add_argument(
             "--compare",
@@ -2534,6 +2545,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         finally:
             if prev_sigint_handler is not None:
                 signal.signal(signal.SIGINT, prev_sigint_handler)
+            self._append_history_record(stage_summaries)
             self._finalize_test_log(stage_summaries)
 
         return exit_code
@@ -2569,6 +2581,75 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             return prev_handler
         except (ValueError, OSError):
             return None
+
+    def _history_path(self) -> str:
+        """Return the append-only trend-history JSONL path.
+
+        Honours ``--history-file`` and otherwise defaults to
+        ``<output-base>/history.jsonl`` so records accumulate outside
+        the per-run output directories.
+        """
+        if self.args.history_file:
+            return self.args.history_file
+        base = self.args.output_dir or os.path.join(
+            tempfile.gettempdir(), "load_test",
+        )
+        return os.path.join(base, HISTORY_FILE_NAME)
+
+    def _append_history_record(self, stage_summaries) -> None:
+        """Append one trend record per client run for plotting later.
+
+        Records how many requests completed under each fixed time
+        threshold, plus the neuro-san version, so throughput can be
+        tracked over time.  Best-effort: any write failure is logged
+        and swallowed so it never fails the test.
+        """
+        results = []
+        for summary in stage_summaries:
+            results.extend(summary.get("results", []))
+        if not results:
+            return
+
+        durations = [
+            r.get("elapsed", 0.0) for r in results
+            if r.get("status") == STATUS_CREATED
+        ]
+        completed = len(durations)
+        avg_duration = (
+            round(sum(durations) / completed, 2) if completed else 0.0
+        )
+        record = {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "neuro_san_version": self._get_package_version("neuro-san"),
+            "host": self.args.host,
+            "agent": self.args.agent,
+            "transport": (
+                "http" if getattr(self.args, "http_client", False)
+                else "subprocess"
+            ),
+            "total_requests": len(results),
+            "completed": completed,
+            "avg_duration_s": avg_duration,
+            "wall_time_s": round(
+                sum(s.get("elapsed", 0.0) for s in stage_summaries), 2,
+            ),
+        }
+        for threshold in HISTORY_THRESHOLDS_SECONDS:
+            record[f"completed_within_{int(threshold)}s"] = sum(
+                1 for d in durations if d <= threshold
+            )
+
+        path = self._history_path()
+        try:
+            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+            with open(path, "a", encoding="utf-8") as handle:
+                handle.write(json.dumps(record) + "\n")
+            logger.info("  Trend history appended: %s", path)
+        except OSError as exc:
+            logger.warning(
+                "  Could not write trend history to %s: %s",
+                path, exc,
+            )
 
     def _export_raw_json(self, stage_summaries, *,
                          exit_code) -> None:

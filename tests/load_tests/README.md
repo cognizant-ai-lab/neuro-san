@@ -19,6 +19,7 @@ supported: `agent_cli` subprocesses (default) or direct HTTP requests
 - [Code Quality](#code-quality)
 - [Architecture](#architecture)
 - [Cross-Run Comparison](#cross-run-comparison)
+- [Trend History](#trend-history)
 - [Notes](#notes)
 
 ## Quick Start
@@ -169,6 +170,7 @@ process monitoring, and system metrics together).
 | `--scale`                  | 1           | Multiply `--num-requests`, `--max-workers`, `--request-timeout`, `--idle-timeout`, `--stage-timeout`, `--total-timeout` by this factor. `--max-requests` auto-adjusts. |
 | `--skip-reservation-check` | off         | Skip reservation_id validation               |
 | `--output-dir`             | (none)      | Base directory for test output               |
+| `--history-file`           | `<base>/history.jsonl` | Append-only JSONL trend file: one record per client run (see [Trend History](#trend-history)) |
 | `--compare DIR`            | (none)      | Skip load test; scan DIR for previous runs and print a comparison table |
 | `--compare-agent`          | (none)      | With `--compare`: only show runs for this agent (comma-separated for several) |
 | `--compare-baseline`       | 0           | With `--compare`: only show runs with ≥ N requests; smallest remaining run is the delta baseline |
@@ -445,6 +447,35 @@ Output:
 
 No load test is executed — the command reads `raw_results.json` from
 each subdirectory, extracts key metrics, and sorts by request count.
+
+## Trend History
+
+Every **client** run (subprocess or `--http-client`; not `--server-only`)
+appends one JSON line to an append-only history file so throughput can
+be plotted over time as the server/model/version changes. The default
+location is `<output-base>/history.jsonl` (e.g. `/tmp/load_test/history.jsonl`);
+override with `--history-file PATH`.
+
+Each record:
+
+```json
+{"timestamp": "2026-07-17T17:06:15+0000", "neuro_san_version": "0.6.72", "host": "172.32.1.20", "agent": "agent_network_designer", "transport": "http", "total_requests": 5, "completed": 4, "completed_within_70s": 1, "completed_within_300s": 3, "avg_duration_s": 182.5, "wall_time_s": 430.0}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `timestamp` | Run start (ISO 8601), the plot x-axis |
+| `neuro_san_version` | Locally-installed neuro-san version (`null` if not pip-installed) |
+| `host` / `agent` / `transport` | Target host, agent network, and client transport (`subprocess`/`http`) |
+| `total_requests` | Requests fired |
+| `completed` | Requests that succeeded (validity check: `< total_requests` means a degraded run) |
+| `completed_within_70s` / `completed_within_300s` | Successful requests that finished within each **fixed** threshold |
+| `avg_duration_s` | Mean duration of successful requests |
+| `wall_time_s` | Total run wall-clock time |
+
+Thresholds are fixed at **70s and 300s** so every historical point stays
+comparable. Writing is best-effort — a failure to write the history file
+logs a warning but never fails the run.
 
 ## Exit Codes
 
