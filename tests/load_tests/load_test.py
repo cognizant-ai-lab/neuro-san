@@ -1330,6 +1330,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             logger.info(
                 "  Stdout log:  %s", self._test_log_path,
             )
+        history_path = self._history_path()
+        if os.path.isfile(history_path):
+            logger.info("  History:     %s", history_path)
         # Close handler last so OUTPUT FILES is captured
         if self._test_log_handler is not None:
             logging.getLogger().removeHandler(
