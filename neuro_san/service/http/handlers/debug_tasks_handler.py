@@ -90,8 +90,11 @@ class DebugTasksHandler(RequestHandler):
                 # Use the default.
                 pass
 
-        dump: Dict[str, Any] = self.server_context.dump_tasks_in_used_executors(
-            per_loop_timeout_s=per_loop_timeout_s)
+        import asyncio  # pylint: disable=import-outside-toplevel
+        dump: Dict[str, Any] = await asyncio.to_thread(
+            self.server_context.dump_tasks_in_used_executors,
+            per_loop_timeout_s=per_loop_timeout_s,
+        )
 
         response_format: str = self.get_query_argument("format", default="json").lower()
         if response_format == "text":
