@@ -261,9 +261,11 @@ class HttpServer(AgentStateListener):
         except ValueError:
             threshold_ms = 100
 
-        loop = asyncio.get_event_loop()
+        io_loop = tornado.ioloop.IOLoop.current()
+        loop = getattr(io_loop, "asyncio_loop", asyncio.get_event_loop())
+        threshold_ms = max(threshold_ms, 1)
         loop.set_debug(True)
-        loop.slow_callback_duration = max(threshold_ms, 1) / 1000.0
+        loop.slow_callback_duration = threshold_ms / 1000.0
         self.logger.info(
             {},
             "asyncio debug enabled on Tornado loop; "
