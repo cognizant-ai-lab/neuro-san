@@ -313,7 +313,7 @@ class HttpServer(AgentStateListener):
             self.logger.info(
                 {}, "LoopTimelineTracer will dump to %s on shutdown", dump_path)
 
-        # Start LAST so the tracer sees IOLoop.start() and everything after.
+        # Start LAST so the tracer captures all callbacks executed after the loop starts running.
         self._loop_timeline_tracer.start()
 
     def resolve_health_probe_port(self) -> int:
