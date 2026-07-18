@@ -262,7 +262,7 @@ class HttpServer(AgentStateListener):
             threshold_ms = 100
 
         io_loop = tornado.ioloop.IOLoop.current()
-        loop = getattr(io_loop, "asyncio_loop", asyncio.get_event_loop())
+        loop = getattr(io_loop, "asyncio_loop", None) or asyncio.get_event_loop()
         threshold_ms = max(threshold_ms, 1)
         loop.set_debug(True)
         loop.slow_callback_duration = threshold_ms / 1000.0
