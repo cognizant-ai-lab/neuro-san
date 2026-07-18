@@ -186,7 +186,7 @@ class LoopTimelineTracer:
         if frame.f_code is not self._handle_run_code:
             return
         # Only interested in call/return events (skip c_call/c_return, exception).
-        if event not in (self._EVENT_CALL, self._EVENT_RETURN):
+        if event != self._EVENT_CALL and event != self._EVENT_RETURN:
             return
         ts_ns: int = time.monotonic_ns()
         if event == self._EVENT_CALL:
