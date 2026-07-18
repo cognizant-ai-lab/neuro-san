@@ -105,6 +105,7 @@ class LoopTimelineTracer:
         self._handle_run_code: Any = asyncio.events.Handle._run.__code__
         self._logger: logging.Logger = logging.getLogger(self.__class__.__name__)
         self._registered_atexit: bool = False
+        self._previous_profile: Optional[Any] = None
 
     def start(self) -> None:
         """
