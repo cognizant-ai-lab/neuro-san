@@ -186,6 +186,7 @@ class LoopTimelineTracer:
         if frame.f_code is not self._handle_run_code:
             return
         # Only interested in call/return events (skip c_call/c_return, exception).
+        # pylint: disable=consider-using-in
         if event != self._EVENT_CALL and event != self._EVENT_RETURN:
             return
         ts_ns: int = time.monotonic_ns()
