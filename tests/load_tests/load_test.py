@@ -315,7 +315,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                  "min: traffic + validation only. "
                  "norm: adds resource monitoring and "
                  "server log analysis (if --server-log given). "
-                 "adv: adds JSON export and pool analysis "
+                 "adv: adds pool analysis "
                  "(defaults to 50 requests, 50 workers, "
                  "3 rounds unless overridden).",
         )
