@@ -89,6 +89,9 @@ class HttpClient:
         original_streaming_chat = session.streaming_chat
 
         def timed_streaming_chat(request_dict):
+            # Nested to close over original_streaming_chat, start, and
+            # first_response so the first streamed message is timed
+            # without threading that state through process_once().
             for chat_response in original_streaming_chat(request_dict):
                 if not first_response:
                     first_response.append(time.time() - start)

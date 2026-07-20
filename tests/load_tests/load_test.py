@@ -2640,6 +2640,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         not be installed, e.g. not on the main thread).
         """
         def _handle_sigint(_signum, _frame):
+            # Nested to close over self and prev_handler, which the
+            # signal callback needs to toggle graceful vs. forced stop;
+            # signal.signal() takes a bare callable, not a bound method.
             if not self._cancel_event.is_set():
                 self._cancel_event.set()
                 self._interrupted = True

@@ -487,6 +487,8 @@ class ServerLogMonitor:
             return
 
         def _extract_num(rid):
+            # Nested: tiny parse helper used only to order request_ids
+            # within this method; not needed elsewhere.
             match = re.search(r"(\d+)$", rid)
             return int(match.group(1)) if match else -1
 
