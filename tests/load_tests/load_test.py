@@ -64,6 +64,7 @@ from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.config import HEARTBEAT_INTERVAL_SECONDS
 from tests.load_tests.config import HISTORY_FILE_NAME
+from tests.load_tests.config import HISTORY_UNKNOWN_FILE_NAME
 from tests.load_tests.config import HISTORY_THRESHOLDS_SECONDS
 from tests.load_tests.config import THREAD_JOIN_TIMEOUT
 from tests.load_tests.cost_estimator import CostEstimator
@@ -1105,10 +1106,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 and peak_sys_mem_pct.value is not None):
             peak_data = peak_sys_mem_pct.value
             summary_entry["peak_sys_mem_pct"] = (
-                peak_data.get("pct", 0)
+                peak_data["pct"]
             )
             summary_entry["peak_sys_mem_avail_gb"] = (
-                peak_data.get("avail_gb", 0)
+                peak_data["avail_gb"]
             )
         return summary_entry
 
@@ -1330,9 +1331,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             logger.info(
                 "  Stdout log:  %s", self._test_log_path,
             )
-        history_path = self._history_path()
-        if os.path.isfile(history_path):
-            logger.info("  History:     %s", history_path)
+        for history_path in (
+            self._history_path(),
+            self._history_path(successful=False),
+        ):
+            if os.path.isfile(history_path):
+                logger.info("  History:     %s", history_path)
         # Close handler last so OUTPUT FILES is captured
         if self._test_log_handler is not None:
             logging.getLogger().removeHandler(
@@ -1488,12 +1492,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         until at least one request has completed.
         """
         durations = [
-            float(p.get("duration", 0))
+            float(p["duration"])
             for p in self._server_only_primary_pairs(
                 log_pos, pri_start_re,
             )
             if isinstance(p.get("duration"), (int, float))
-            and p.get("duration", 0) > 0
+            and p["duration"] > 0
         ]
         return Heartbeat.format_dur_stats(durations)
 
@@ -1886,9 +1890,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         logger.info(
             "  Stdout log:  %s", round_log_path,
         )
-        history_path = self._history_path()
-        if os.path.isfile(history_path):
-            logger.info("  History:     %s", history_path)
+        for history_path in (
+            self._history_path(),
+            self._history_path(successful=False),
+        ):
+            if os.path.isfile(history_path):
+                logger.info("  History:     %s", history_path)
 
         logger.info(
             "\n%s", "\u2500" * 45,
@@ -2650,19 +2657,32 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         except (ValueError, OSError):
             return None
 
-    def _history_path(self) -> str:
+    def _history_path(self, *, successful: bool = True) -> str:
         """Return the append-only trend-history JSONL path.
 
-        Honours ``--history-file`` and otherwise defaults to
-        ``<output-base>/history.jsonl`` so records accumulate outside
-        the per-run output directories.
+        Successful runs go to ``history.jsonl`` so the trend file stays
+        clean for plotting; runs that could not determine the server
+        version or completed no requests go to ``history_unknown.jsonl``
+        so they are kept for debugging without polluting the trend data.
+
+        Honours ``--history-file`` (the unknown records are written to a
+        sibling ``*_unknown`` file) and otherwise defaults to
+        ``<output-base>/history[_unknown].jsonl`` so records accumulate
+        outside the per-run output directories.
         """
         if self.args.history_file:
-            return self.args.history_file
+            if successful:
+                return self.args.history_file
+            root, ext = os.path.splitext(self.args.history_file)
+            return f"{root}_unknown{ext or '.jsonl'}"
         base = self.args.output_dir or os.path.join(
             tempfile.gettempdir(), "load_test",
         )
-        return os.path.join(base, HISTORY_FILE_NAME)
+        name = (
+            HISTORY_FILE_NAME if successful
+            else HISTORY_UNKNOWN_FILE_NAME
+        )
+        return os.path.join(base, name)
 
     def _append_history_record(self, stage_summaries) -> None:
         """Append one trend record per client run for plotting later.
@@ -2715,7 +2735,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             record[f"completed_within_{int(threshold)}s"] = sum(
                 1 for d in durations if d <= threshold
             )
-        self._write_history_record(record)
+        successful = (
+            completed > 0
+            and record.get("neuro_san_version") != "unknown"
+        )
+        self._write_history_record(record, successful=successful)
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _append_server_history_record(
@@ -2737,9 +2761,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         """
         primary_pairs = primary_pairs or []
         durations = [
-            float(p.get("duration", 0)) for p in primary_pairs
+            float(p["duration"]) for p in primary_pairs
             if isinstance(p.get("duration"), (int, float))
-            and p.get("duration", 0) > 0
+            and p["duration"] > 0
         ]
         avg_duration = (
             round(sum(durations) / len(durations), 2)
@@ -2771,7 +2795,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             record[f"completed_within_{int(threshold)}s"] = sum(
                 1 for d in durations if d <= threshold
             )
-        self._write_history_record(record)
+        successful = (
+            received > 0
+            and record.get("neuro_san_version") != "unknown"
+        )
+        self._write_history_record(record, successful=successful)
 
     @staticmethod
     def _time_to_first_completed(primary_pairs) -> float:
@@ -2780,24 +2808,28 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         Returns 0.0 when no primary request completed.
         """
         starts = [
-            p.get("start_ts") for p in primary_pairs
+            p["start_ts"] for p in primary_pairs
             if isinstance(p.get("start_ts"), (int, float))
         ]
         finishes = [
-            p.get("finish_ts") for p in primary_pairs
+            p["finish_ts"] for p in primary_pairs
             if isinstance(p.get("finish_ts"), (int, float))
         ]
         if not starts or not finishes:
             return 0.0
         return round(min(finishes) - min(starts), 2)
 
-    def _write_history_record(self, record) -> None:
+    def _write_history_record(
+            self, record, *, successful: bool = True,
+    ) -> None:
         """Append one JSON record to the trend-history file.
 
-        Best-effort: any write failure is logged and swallowed so it
-        never fails the run.
+        ``successful`` selects the destination: clean trend file for
+        good runs, ``history_unknown.jsonl`` otherwise.  Best-effort:
+        any write failure is logged and swallowed so it never fails the
+        run.
         """
-        path = self._history_path()
+        path = self._history_path(successful=successful)
         try:
             os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
             with open(path, "a", encoding="utf-8") as handle:

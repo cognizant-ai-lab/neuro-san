@@ -201,6 +201,7 @@ STALE_LOG_THRESHOLD_SECONDS = 300
 # throughput can be plotted over time.  The thresholds are fixed (not
 # configurable) so data points stay comparable across every run.
 HISTORY_FILE_NAME = "history.jsonl"
+HISTORY_UNKNOWN_FILE_NAME = "history_unknown.jsonl"
 HISTORY_THRESHOLDS_SECONDS = (70, 300)
 
 
