@@ -206,19 +206,41 @@ class AsyncDirectAgentSession(AsyncAgentSession):
             #    interrupted by caller-side "aclose" method.
             # 3. And we suppress all exceptions while deleting resources to keep things quieter.
             async for message in queue_generator:
-                response_dict: Dict[str, Any] = copy(template_response_dict)
-                if message_filter.allow(message):
-                    # We expect the message to be a dictionary form of chat.ChatMessage
-                    if message_processor is not None:
-                        message_type: ChatMessageType = message.get("type")
-                        # Can modify message
-                        await message_processor.async_process_message(message, message_type)
-                    response_dict["response"] = message
+                response_dict: Dict[str, Any] = await self._process_queue_message(message,
+                                                                                  template_response_dict,
+                                                                                  message_filter,
+                                                                                  message_processor)
+                if response_dict is not None:
                     yield response_dict
         finally:
             # Release resources without exceptions
             with suppress(Exception):
                 self.invocation_context.finish_request()
+
+    async def _process_queue_message(self, message: Dict[str, Any],
+                                     template_response_dict: Dict[str, Any],
+                                     message_filter: MessageFilter,
+                                     message_processor: MessageProcessor) -> Dict[str, Any]:
+        """
+        Process the message and return an appropriate response dictionary
+        :param message: A dictionary form of chat.ChatMessage
+        :param template_response_dict: A dictionary form of chat.ChatResponse
+        :param message_filter: An instance of MessageFilter
+        :param message_processor: An instance of MessageProcessor
+        :return: A dictionary form of chat.ChatResponse
+        """
+        if not message_filter.allow(message):
+            return None
+
+        # We expect the message to be a dictionary form of chat.ChatMessage
+        if message_processor is not None:
+            message_type: ChatMessageType = message.get("type")
+            # Can modify message
+            await message_processor.async_process_message(message, message_type)
+
+        response_dict: Dict[str, Any] = copy(template_response_dict)
+        response_dict["response"] = message
+        return response_dict
 
     def reset(self):
         """
