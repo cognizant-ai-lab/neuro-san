@@ -79,9 +79,9 @@ class LoopTimelineTracer:
 
     DEFAULT_MAX_EVENTS: int = 100_000
 
-    # sys.setprofile 'event' string values we care about. Assigned to
-    # module-level constants so the profile callback can do fast identity
-    # comparisons (each string literal is interned by Python).
+    # sys.setprofile 'event' string values we care about. Kept as constants so
+    # the profile callback can do fast equality checks against a small, fixed
+    # vocabulary.
     _EVENT_CALL: str = "call"
     _EVENT_RETURN: str = "return"
 
