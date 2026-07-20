@@ -20,6 +20,7 @@ Interim implementation. May be replaced by neuro-san built-in
 monitoring and telemetry when those features become available.
 """
 
+import concurrent.futures
 import logging
 import os
 import re
@@ -358,7 +359,10 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                 if fut.exception() is not None:
                     continue
                 result = fut.result()
-            except Exception:  # pylint: disable=broad-exception-caught
+            except (
+                concurrent.futures.CancelledError,
+                concurrent.futures.TimeoutError,
+            ):
                 continue
             dur = result.get("elapsed", result.get("duration"))
             if isinstance(dur, (int, float)) and dur > 0:

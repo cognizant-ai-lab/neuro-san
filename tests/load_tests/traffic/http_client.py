@@ -118,6 +118,11 @@ class HttpClient:
 
         try:
             state = processor.process_once(state)
+        # Broad by design: process_once() drives the third-party
+        # HTTP/streaming stack, whose failure surface (connection,
+        # decode, gRPC/transport errors) is not enumerable here.  This
+        # is a per-request isolation boundary — any single request must
+        # be recorded as FAILED/TIMEOUT without aborting the load test.
         except Exception as exc:  # pylint: disable=broad-exception-caught
             elapsed = time.time() - start
             if elapsed >= timeout:
