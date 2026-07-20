@@ -1,9 +1,8 @@
 # Load Test Framework
 
 Fire concurrent requests at a neuro-san server, monitor resource usage,
-and report results with real LLM calls. Two client transports are
-supported: `agent_cli` subprocesses (default) or direct HTTP requests
-(`--http-client`).
+and report results. Fires real LLM calls either via `agent_cli`
+subprocesses (default) or direct HTTP streaming (`--http-client`).
 
 ## Contents
 
@@ -19,7 +18,6 @@ supported: `agent_cli` subprocesses (default) or direct HTTP requests
 - [Code Quality](#code-quality)
 - [Architecture](#architecture)
 - [Cross-Run Comparison](#cross-run-comparison)
-- [Trend History](#trend-history)
 - [Notes](#notes)
 
 ## Quick Start
@@ -114,29 +112,6 @@ Flat mode output labels each iteration as a "round" (no stage numbers).
 stages. Each stage fires N concurrent requests, waits for completion,
 then moves to the next. Output labels each batch as `[STAGE N]`.
 
-### Client transport
-
-**Subprocess** (default): one `agent_cli --tokens` child process per
-request. Each `requests/request_<id>_stdout.txt` holds the full CLI
-stdout — final answer **and** the `Token Accounting` JSON block. Costs
-~96 MB per concurrent request, so it caps practical concurrency.
-
-**Direct HTTP** (`--http-client`): in-thread HTTP streaming, no
-subprocess (~1 MB per concurrent request) — use this for high
-concurrency. Implies `--client-only`.
-
-### Split-machine testing
-
-Run the client and server-side monitor on different boxes:
-
-- Server box: `--server-only` watches the server process + log and
-  prompts for the expected request count.
-- Client box: `--client-only --host <SERVER_IP>` fires requests and
-  monitors only client/system resources.
-
-Omit both flags to run everything co-located on one box (client, server
-process monitoring, and system metrics together).
-
 ## Flags
 
 | Flag                       | Default     | Description                                  |
@@ -144,16 +119,11 @@ process monitoring, and system metrics together).
 | `--agent`                  | hello_world | Agent name as registered in the server       |
 | `--level`                  | norm        | Test depth: min, norm, or adv                |
 | `--server-log [PATH]`      | (none)      | Enable server log analysis. Without a path, auto-detects from server process. With a path, uses the given file. |
-| `--archive-server-log`     | off         | Gzip and copy the server log into the output dir after the run (requires `--server-log`) |
 | `--monitor-resources`      | off         | Enable psutil monitoring at min level         |
 | `--no-tokens`              | off         | Disable per-request token accounting         |
 | `--profile-path`           | auto        | Directory containing profile JSON files (or `LOAD_TEST_PROFILE_PATH` env var) |
 | `--host`                   | localhost   | Neuro-san server host                        |
-| `--port`                   | 8080        | Neuro-san server port (defaults to 443 with `--https`) |
-| `--https`                  | off         | Reach the server over HTTPS/TLS instead of plain HTTP |
-| `--http-client`            | off         | Send requests via direct HTTP instead of spawning `agent_cli` subprocesses (~1 MB vs ~96 MB per concurrent request). Implies `--client-only` |
-| `--client-only`            | off         | Split-machine client: fire requests + monitor client/system resources only; skip local server detection and server-log analysis. Mutually exclusive with `--server-only` |
-| `--server-only`            | off         | Split-machine monitor: watch the server process + log while a remote client fires requests; fires nothing itself. Mutually exclusive with `--client-only` |
+| `--port`                   | 8080        | Neuro-san server port                        |
 | `--num-requests`           | 3           | Requests per round in flat mode              |
 | `--max-workers`            | 3             | Concurrent workers in flat mode. At adv + `--yes`, auto-matches `--num-requests` |
 | `--ramp`                   | off         | Enable ramp-up mode                          |
@@ -161,7 +131,7 @@ process monitoring, and system metrics together).
 | `--num-rounds`             | 1           | Repeat the full sequence N times             |
 | `--max-requests`           | sum(stages) * num_rounds | Hard cap on total requests |
 | `--request-timeout`        | 1200        | Hard timeout per request (seconds)           |
-| `--idle-timeout`           | 900         | Kill if no `agent_cli` output for N seconds (resets on activity) |
+| `--idle-timeout`           | 900         | Abort a request that is idle for N seconds (resets on activity). Subprocess mode: no `agent_cli` output; HTTP mode (`--http-client`): no next stream chunk |
 | `--stage-timeout`          | 1500        | Hard timeout for entire stage/round (seconds). Kills remaining in-flight requests |
 | `--total-timeout`          | 0 (disabled)| Hard timeout for entire load test (seconds). Kills run when exceeded |
 | `--settle-time`            | 15          | Wait after each stage for server cleanup     |
@@ -170,13 +140,7 @@ process monitoring, and system metrics together).
 | `--scale`                  | 1           | Multiply `--num-requests`, `--max-workers`, `--request-timeout`, `--idle-timeout`, `--stage-timeout`, `--total-timeout` by this factor. `--max-requests` auto-adjusts. |
 | `--skip-reservation-check` | off         | Skip reservation_id validation               |
 | `--output-dir`             | (none)      | Base directory for test output               |
-| `--history-file`           | `<base>/history.jsonl` | Append-only JSONL trend file: one record per client run (see [Trend History](#trend-history)) |
 | `--compare DIR`            | (none)      | Skip load test; scan DIR for previous runs and print a comparison table |
-| `--compare-agent`          | (none)      | With `--compare`: only show runs for this agent (comma-separated for several) |
-| `--compare-baseline`       | 0           | With `--compare`: only show runs with ≥ N requests; smallest remaining run is the delta baseline |
-| `--compare-runs`           | (none)      | With `--compare`: only show these specific run folders (comma-separated) |
-| `--rebuild DIR`            | (none)      | Reconstruct `raw_results.json` from the request output files in DIR (e.g. a run interrupted by Ctrl-C). No load test is run |
-| `--rebuild-all`            | off         | With `--rebuild` on a parent dir, rebuild ALL runs, including those that already have `raw_results.json` |
 | `--project-root`           | (none)      | Project root for profile discovery           |
 
 ### Abort on timeout
@@ -184,8 +148,9 @@ process monitoring, and system metrics together).
 Any timeout aborts the entire test immediately and reports results
 collected so far:
 
-- **`--idle-timeout`**: A request produces no output for N seconds →
-  abort.
+- **`--idle-timeout`**: A request is idle for N seconds → abort.
+  Idle means no `agent_cli` output (subprocess mode) or no next
+  stream chunk (HTTP mode, `--http-client`).
 - **`--request-timeout`**: A request exceeds its hard time limit →
   abort.
 - **`--stage-timeout`**: A stage/round exceeds its limit, remaining
@@ -291,34 +256,28 @@ HTTP, so keys are only needed on the server side.
 
 ## Output
 
-Results go to
-`{tempdir}/load_test/{level}/{timestamp}_{host}_ns{version}_{count}/` by
+Results go to `{tempdir}/load_test/{level}/{timestamp}_{requests}/` by
 default (where `{tempdir}` is the system temp directory, e.g. `/tmp` on
-Linux), or to the path specified by `--output-dir`. The target host, the
-locally-installed neuro-san version, and the request count are baked into
-the directory name for quick identification (the `ns<version>` segment is
-dropped if neuro-san is not pip-installed):
+Linux), or to the path specified by `--output-dir`. The request count is
+appended to the directory name for quick identification:
 
 ```
-/tmp/load_test/adv/20260622_151428_localhost_ns0.6.72_50/
-/tmp/load_test/adv/20260622_151531_172.32.1.20_ns0.6.72_100/
-/tmp/load_test/adv/20260622_151648_localhost_ns0.6.72_150/
+/tmp/load_test/adv/20260622_151428_50/
+/tmp/load_test/adv/20260622_151531_100/
+/tmp/load_test/adv/20260622_151648_150/
 ```
-
-`--server-only` writes a per-round directory instead:
-`{tempdir}/load_test/server_only/{timestamp}_{host}_ns{version}_{count}/`
-containing `raw_results.json`, `stdout.log`, and (gzipped) `server.log.gz`.
 
 At `adv` level this includes:
 
 | File                  | Contents                                         |
 |-----------------------|--------------------------------------------------|
 | `raw_results.json`    | All test data in a single JSON file              |
-| `stdout.log`          | Full terminal output                             |
+| `load_test.log`       | Full terminal output                             |
 | `progress.log`        | All progress ticks and per-request CREATED results |
+| `server_receipts.log` | Per-request server receipt details (with `--server-log`) |
 | `server_tokens.log`   | Per-request token breakdown (when token data available) |
 | `summary.txt`         | Human-readable summary (`adv` level only)        |
-| `requests/`           | Per-request stdout (and stderr when non-empty)   |
+| `requests/`           | Raw stdout/stderr per request                    |
 
 ### `raw_results.json`
 
@@ -448,63 +407,6 @@ Output:
 No load test is executed — the command reads `raw_results.json` from
 each subdirectory, extracts key metrics, and sorts by request count.
 
-## Trend History
-
-Every run appends one JSON line to an append-only history file so
-performance can be plotted over time as the server/model/version
-changes. The default location is `<output-base>/history.jsonl`
-(e.g. `/tmp/load_test/history.jsonl`); override with `--history-file PATH`.
-
-There are two record shapes, told apart by the `mode` field:
-
-- **Client runs** (subprocess or `--http-client`) record throughput and
-  latency. These have **no** `mode` field.
-- **`--server-only` rounds** record the server's resource peaks (one
-  record per round), keyed with `"mode": "server-only"`.
-
-Each client record:
-
-```json
-{"timestamp": "2026-07-17T17:06:15+0000", "neuro_san_version": "0.6.79", "host": "172.32.1.20", "agent": "agent_network_designer", "transport": "http", "total_requests": 5, "completed": 4, "avg_first_response_s": 4.7, "avg_duration_s": 182.5, "wall_time_s": 430.0, "completed_within_70s": 1, "completed_within_300s": 3}
-```
-
-| Field | Meaning |
-|-------|---------|
-| `timestamp` | Run start (ISO 8601), the plot x-axis |
-| `neuro_san_version` | The **server's** neuro-san version, fetched from its `/healthz` API during preflight (`"unknown"` if the endpoint is unreachable). Works remotely — only needs network access to the server, not the server machine. |
-| `host` / `agent` / `transport` | Target host, agent network, and client transport (`subprocess`/`http`) |
-| `total_requests` | Requests fired |
-| `completed` | Requests that succeeded (validity check: `< total_requests` means a degraded run) |
-| `avg_first_response_s` | Mean time-to-first-response (TTFR) of successful requests |
-| `completed_within_70s` / `completed_within_300s` | Successful requests that finished within each **fixed** threshold |
-| `avg_duration_s` | Mean duration of successful requests |
-| `wall_time_s` | Total run wall-clock time |
-
-Thresholds are fixed at **70s and 300s** so every historical point stays
-comparable. Writing is best-effort — a failure to write the history file
-logs a warning but never fails the run.
-
-Each `--server-only` record:
-
-```json
-{"timestamp": "2026-07-17T17:06:15+0000", "neuro_san_version": "0.6.79", "host": "localhost", "agent": "agent_network_designer", "mode": "server-only", "expected_requests": 100, "received_requests": 100, "peak_cpu_cores": 1.12, "peak_memory_gb": 0.93, "time_to_first_completed_s": 41.2, "avg_duration_s": 78.4, "wall_time_s": 430.0, "completed_within_70s": 42, "completed_within_300s": 100}
-```
-
-| Field | Meaning |
-|-------|---------|
-| `mode` | Always `"server-only"` for these records |
-| `expected_requests` / `received_requests` | Requests the monitor was told to expect vs. actually saw in the server log |
-| `peak_cpu_cores` | Peak **system** CPU during the round, in cores (`psutil.cpu_percent` ÷ 100 × core count; e.g. 14% on an 8-core box → 1.12 cores) |
-| `peak_memory_gb` | Peak server-process RSS during the round, in GB (`null` if the server process wasn't found) |
-| `time_to_first_completed_s` | Server-side seconds from the first request's Start to the first request's Finish. **Not** the client's per-request TTFR (`avg_first_response_s`) — the server log has no first-token event, so that can't be measured server-side. |
-| `avg_duration_s` | Mean server-side processing duration (Finish − Start) of the primary agent's requests |
-| `completed_within_70s` / `completed_within_300s` | Requests whose server-side duration finished within each **fixed** threshold |
-
-Durations come from the primary agent's `streaming_chat` Start/Finish
-pairs in the server log (the same data the round heartbeats use). The
-monitor runs on the server box, so `neuro_san_version` is fetched from
-`http://<host>:<port>/healthz` locally.
-
 ## Exit Codes
 
 - `0` — All requests completed successfully
@@ -569,7 +471,6 @@ tests/load_tests/
     resource_reporter.py       ResourceReporter
     summary.py                 SummaryReporter
     table_formatter.py         TableFormatter
-    rebuild_results.py         ResultsRebuilder (--rebuild)
 
   traffic/
     cli_builder.py             CliBuilder (agent_cli commands)
