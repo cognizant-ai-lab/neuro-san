@@ -16,6 +16,7 @@
 # END COPYRIGHT
 from typing import Any
 from typing import Dict
+from typing import List
 
 from os import environ
 
@@ -31,8 +32,9 @@ import queue as queue_mod
 from janus import Queue
 from janus import SyncQueueShutDown
 
-from leaf_common.config.resolver_util import ResolverUtil
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
+from leaf_common.config.resolver_util import ResolverUtil
+from leaf_common.logging.sensitive_logger import SensitiveLogger
 
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
@@ -190,9 +192,9 @@ class TempNetworkStorageUpdater(Startable):
                 return
 
             # Now: we have an item to process from this queue.
-            self.process_one_queued_item(queued_item)
+            await self.process_one_queued_item(queued_item)
 
-    def process_one_queued_item(self, queued_item: Dict[str, Any]):
+    async def process_one_queued_item(self, queued_item: Dict[str, Any]):
         """
         Process a single item from one of the queues
 
@@ -206,9 +208,25 @@ class TempNetworkStorageUpdater(Startable):
         max_lifetime_in_seconds: float = queued_item.get("max_lifetime_in_seconds")
 
         # Do the deployment
-        self.reservationist.deploy_together(deployment_dict, source, max_lifetime_in_seconds)
+        try:
+            await self.reservationist.deploy_together(deployment_dict, source, max_lifetime_in_seconds)
+
+        except Exception:  # pylint: disable=broad-except
+
+            if deployment_dict is None:
+                self.logger.warning("Deployment dictionary was None")
+                deployment_dict = {}
+
+            # Gather info about who will be effected by this failure
+            reservation_ids: List[str] = []
+            for reservation in deployment_dict.keys():
+                reservation_ids.append(reservation.get_reservation_id())
+
+            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger.exception("Exception while processing queued item for reservations: %s", reservation_ids)
 
         # Maybe notify the deployer.
+        # Note: even if deployment fails, we still notify (set the event) to avoid callers waiting indefinitely.
         event: Event = queued_item.get("event")
         if event is not None:
             event_loop: AbstractEventLoop = queued_item.get("event_loop")

@@ -30,8 +30,8 @@ class ReservationsStorage:
     as well as expiration of Reservations based on their lifetime.
     """
 
-    def add_reservations(self, reservations_dict: Dict[Reservation, Any],
-                         source: str = None):
+    async def add_reservations(self, reservations_dict: Dict[Reservation, Any],
+                               source: str = None):
         """
         Add a set of reservations for agent networks en-masse
 

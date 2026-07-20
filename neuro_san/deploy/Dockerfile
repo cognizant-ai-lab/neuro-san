@@ -211,6 +211,20 @@ ENV AGENT_FORWARDED_REQUEST_METADATA="request_id user_id"
 # for it on your docker run command line.
 ENV AGENT_HTTP_PORT="8080"
 
+# Dedicated port for the isolated health-probe server. Serves /, /healthz,
+# /readyz, /livez on its own asyncio event loop in a dedicated thread, so
+# probes stay fast even when the main Tornado loop is saturated by request
+# work. Uses SO_REUSEPORT so every worker process binds the same port and
+# the kernel distributes accepted connections across them.
+#
+# Set to 0 to disable the isolated probe server (in that case probes must
+# hit AGENT_HTTP_PORT, which continues to register the same handlers for
+# backward compatibility).
+#
+# Point your Kubernetes livenessProbe.httpGet.port at this port for
+# best-case probe responsiveness under load.
+ENV AGENT_HEALTH_PROBE_PORT="8081"
+
 # Maximm number of requests that can be served at the same time
 # A value of 0 indicates unlimited requests are handled.
 ENV AGENT_MAX_CONCURRENT_REQUESTS="50"
@@ -272,6 +286,9 @@ ENV AGENT_HTTP_IDLE_CONNECTIONS_TIMEOUT="3600"
 #   Positive integer (N) → Manually specifies number of worker processes.
 # The developer-oriented default is 1, but we set to 0 here to allow pod CPU configuration
 # to dictate the number of server instance processes.
+# Note 7/7/2026: If your installation requires temporary agent networks (aka Reservations),
+# the server systems in place are not yet suitable for the multi-process operation
+# that is implied by a value that is not 1.
 ENV AGENT_HTTP_SERVER_INSTANCES="0"
 
 # If set to a value>0, will start periodic logging of currently used

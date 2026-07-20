@@ -66,15 +66,19 @@ class AgentNetworkStorage(AgentStorageSource):
             is_new = self.agents_table.get(agent_name) is None
             self.agents_table[agent_name] = agent_network
 
+        agent_size_in_bytes: int = agent_network.get_size_in_bytes()
+
         # Notify listeners about this state change:
         # do it outside of internal lock
         for listener in self.listeners:
             if is_new:
                 listener.agent_added(agent_name, self)
-                self.logger.info("ADDED network for agent %s : %d", agent_name, id(agent_network))
+                self.logger.info("ADDED network for agent %s (%d bytes): %d",
+                                 agent_name, agent_size_in_bytes, id(agent_network))
             else:
                 listener.agent_modified(agent_name, self)
-                self.logger.info("REPLACED network for agent %s : %d", agent_name, id(agent_network))
+                self.logger.info("REPLACED network for agent %s (%d bytes): %d",
+                                 agent_name, agent_size_in_bytes, id(agent_network))
 
     def setup_agent_networks(self, agent_networks: Dict[str, AgentNetwork]):
         """

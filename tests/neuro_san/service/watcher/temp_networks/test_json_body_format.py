@@ -36,6 +36,7 @@ Encoding/line-ending properties (UTF-8, no BOM, no CRLF) are
 boto3+Python concerns and are intentionally NOT tested here.
 """
 from json import loads
+import pytest
 
 from jsonschema import validate
 
@@ -92,7 +93,8 @@ class TestJsonBodyFormat(S3ReservationsStorageTestBase):
     storage's read path.
     """
 
-    def test_add_writes_json_body_with_expected_top_level_shape(self):
+    @pytest.mark.asyncio
+    async def test_add_writes_json_body_with_expected_top_level_shape(self):
         """
         After add_reservations, the S3 object body should:
           - Decode as a JSON object (we chose JSON over
@@ -111,7 +113,7 @@ class TestJsonBodyFormat(S3ReservationsStorageTestBase):
         reservation = self._make_reservation(reservation_id, lifetime_seconds=600.0)
         agent_spec = self._make_agent_spec("copy_cat")
 
-        self.storage.add_reservations({reservation: agent_spec})
+        await self.storage.add_reservations({reservation: agent_spec})
 
         # The object must exist at the expected key (sanity guard;
         # the format assertions below would surface as a confusing

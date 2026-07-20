@@ -90,10 +90,9 @@ class TestRetryOnListingPagination(S3ReservationsStorageTestBase):
         # Patches the module-local time.sleep symbol that _do_with_retries
         # uses.
         with patch(
-            "neuro_san.service.watcher.temp_networks."
-            "s3_reservations_storage.time.sleep"
+            "neuro_san.service.watcher.temp_networks.aws_sync_client_worker.sync_sleep"
         ):
-            keys = list(self.storage.iter_reservation_keys())
+            keys = list(self.storage.expiration.iter_reservation_keys(self.fake_s3))
 
         # Every configured key is yielded exactly once, in page order.
         # Under the original (paginator-based) implementation a mid-listing
