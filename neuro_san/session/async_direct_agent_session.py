@@ -22,7 +22,6 @@ from typing import List
 
 from asyncio import Task
 from contextlib import suppress
-from copy import copy
 import logging
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
@@ -34,7 +33,6 @@ from neuro_san.internals.chat.data_driven_chat_session import DataDrivenChatSess
 from neuro_san.internals.filters.message_filter import MessageFilter
 from neuro_san.internals.filters.message_filter_factory import MessageFilterFactory
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
-from neuro_san.internals.messages.chat_message_type import ChatMessageType
 from neuro_san.message_processing.message_processor import MessageProcessor
 from neuro_san.session.session_invocation_context import SessionInvocationContext
 
@@ -198,6 +196,14 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         # above until there are no more from the input.
         queue_generator = self.invocation_context.get_queue()
         try:
+            async for message in queue_generator:
+                response_dict: Dict[str, Any] = await chat_session.process_queue_message(message,
+                                                                                         template_response_dict,
+                                                                                         message_filter,
+                                                                                         message_processor)
+                if response_dict is not None:
+                    yield response_dict
+        finally:
             # Logic of what is done here:
             # 1. We tell underlying chat_session to delete its resources since we are done with this request;
             # 2. We do this in "finally" block so this releasing of resources happens in any case,
@@ -205,42 +211,8 @@ class AsyncDirectAgentSession(AsyncAgentSession):
             #    (which is implicitly constructed by these code lines and returned by this method)
             #    interrupted by caller-side "aclose" method.
             # 3. And we suppress all exceptions while deleting resources to keep things quieter.
-            async for message in queue_generator:
-                response_dict: Dict[str, Any] = await self._process_queue_message(message,
-                                                                                  template_response_dict,
-                                                                                  message_filter,
-                                                                                  message_processor)
-                if response_dict is not None:
-                    yield response_dict
-        finally:
-            # Release resources without exceptions
             with suppress(Exception):
                 self.invocation_context.finish_request()
-
-    async def _process_queue_message(self, message: Dict[str, Any],
-                                     template_response_dict: Dict[str, Any],
-                                     message_filter: MessageFilter,
-                                     message_processor: MessageProcessor) -> Dict[str, Any]:
-        """
-        Process the message and return an appropriate response dictionary
-        :param message: A dictionary form of chat.ChatMessage
-        :param template_response_dict: A dictionary form of chat.ChatResponse
-        :param message_filter: An instance of MessageFilter
-        :param message_processor: An instance of MessageProcessor
-        :return: A dictionary form of chat.ChatResponse
-        """
-        if not message_filter.allow(message):
-            return None
-
-        # We expect the message to be a dictionary form of chat.ChatMessage
-        if message_processor is not None:
-            message_type: ChatMessageType = message.get("type")
-            # Can modify message
-            await message_processor.async_process_message(message, message_type)
-
-        response_dict: Dict[str, Any] = copy(template_response_dict)
-        response_dict["response"] = message
-        return response_dict
 
     def reset(self):
         """
