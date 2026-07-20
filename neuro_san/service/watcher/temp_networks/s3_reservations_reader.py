@@ -19,17 +19,21 @@ from typing import Any
 from typing import Dict
 from typing import Tuple
 
+from functools import partial
 from json.decoder import JSONDecodeError
 from logging import getLogger
 from logging import Logger
 
 from botocore.exceptions import ClientError
 
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
+
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
+from neuro_san.service.watcher.temp_networks.aws_sync_client_worker import AwsSyncClientWorker
 from neuro_san.service.watcher.temp_networks.s3_reservations_retriever import S3ReservationsRetriever
-from neuro_san.service.watcher.temp_networks.s3_retry_util import S3RetryUtil
+from neuro_san.service.watcher.temp_networks.s3_util import S3Util
 
 
 class S3ReservationsReader:
@@ -40,7 +44,8 @@ class S3ReservationsReader:
     ExpiringAgentNetworkStorage.get_agent_network_provider() as part of a request query.
     """
 
-    def __init__(self, name: str = "S3ReservationsReader", bucket_name: str = "", prefix: str = "reservations/"):
+    def __init__(self, name: str = "S3ReservationsReader", bucket_name: str = "",
+                 prefix: str = S3Util.DEFAULT_RESERVATIONS_PREFIX):
         """
         Initialize the S3 reservations reader.
 
@@ -71,16 +76,31 @@ class S3ReservationsReader:
         """
         reservation: Reservation = None
         agent_network: AgentNetwork = None
+
         # Construct the S3 object key for this reservation ID
-        s3_obj_key: str = S3RetryUtil.get_obj_key_for_reservation(self.retriever.get_prefix(), reservation_id)
+        s3_obj_key: str = S3Util.get_obj_key_for_reservation(self.retriever.get_prefix(), reservation_id)
+
+        client_worker: AwsSyncClientWorker = self.retriever.get_sync_client_worker()
+        get_function = partial(self.retriever.retrieve_object_with_retries, obj_key=s3_obj_key, source=self.name)
+
         try:
+            # Use empty in case we have malformed data
+            empty: Dict[str, Any] = {}
+
             # Retrieve the reservation object from S3
-            agent_spec: Dict[str, Any] = self.retriever.retrieve_object_with_retries(s3_obj_key)
-            metadata: Dict[str, Any] = agent_spec.get("metadata")
+            agent_spec: Dict[str, Any] = client_worker.retry_with_new_client(get_function)
+            if agent_spec is None:
+                agent_spec = empty
 
             # Reconstruct the Reservation object from stored dictionary
-            reservation_dict: Dict[str, Any] = metadata.get("reservation")
+            extractor = DictionaryExtractor(agent_spec)
+            reservation_dict: Dict[str, Any] = extractor.get("metadata.reservation", empty)
+
             reservation = self.converter.from_dict(reservation_dict)
+            if not reservation:
+                self.logger.error("%s: Failed to parse reservation payload for %s", self.name, reservation_id)
+                return None, None
+
             # Reconstruct the AgentNetwork object using the agent spec dictionary
             # and reservation ID - which is our agent name in this design
             agent_network: AgentNetwork = AgentNetwork(agent_spec, reservation.get_reservation_id())
