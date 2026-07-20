@@ -154,9 +154,9 @@ class SummaryReporter:
             logger.info(
                 "  Time to first response: %s min"
                 " / %s avg / %s max",
-                Formatters.fmt_duration(ttfr["min"]),
-                Formatters.fmt_duration(ttfr["avg"]),
-                Formatters.fmt_duration(ttfr["max"]),
+                Formatters.fmt_duration(ttfr.get("min", 0)),
+                Formatters.fmt_duration(ttfr.get("avg", 0)),
+                Formatters.fmt_duration(ttfr.get("max", 0)),
             )
 
         duration = self._request_duration_stats()
@@ -164,17 +164,17 @@ class SummaryReporter:
             logger.info(
                 "  Request duration: %s min / %s avg"
                 " / %s max",
-                Formatters.fmt_duration(duration["min"]),
-                Formatters.fmt_duration(duration["avg"]),
-                Formatters.fmt_duration(duration["max"]),
+                Formatters.fmt_duration(duration.get("min", 0)),
+                Formatters.fmt_duration(duration.get("avg", 0)),
+                Formatters.fmt_duration(duration.get("max", 0)),
             )
 
         llm_stats = self._llm_call_stats()
         if llm_stats is not None:
             logger.info(
                 "  LLM calls: %s min / %s avg / %s max",
-                llm_stats["min"], llm_stats["avg"],
-                llm_stats["max"],
+                llm_stats.get("min", 0), llm_stats.get("avg", 0),
+                llm_stats.get("max", 0),
             )
 
         self._log_model_distribution()
@@ -184,9 +184,9 @@ class SummaryReporter:
             logger.info(
                 "  Server RSS: %s start \u2192 %s peak"
                 " \u2192 %s end",
-                Formatters.format_rss(rss_trajectory["start"]),
-                Formatters.format_rss(rss_trajectory["peak"]),
-                Formatters.format_rss(rss_trajectory["end"]),
+                Formatters.format_rss(rss_trajectory.get("start", 0)),
+                Formatters.format_rss(rss_trajectory.get("peak", 0)),
+                Formatters.format_rss(rss_trajectory.get("end", 0)),
             )
 
         client_rss = self._client_rss_trajectory()
@@ -194,9 +194,9 @@ class SummaryReporter:
             logger.info(
                 "  Client RSS: %s start \u2192 %s peak"
                 " \u2192 %s end",
-                Formatters.format_rss(client_rss["start"]),
-                Formatters.format_rss(client_rss["peak"]),
-                Formatters.format_rss(client_rss["end"]),
+                Formatters.format_rss(client_rss.get("start", 0)),
+                Formatters.format_rss(client_rss.get("peak", 0)),
+                Formatters.format_rss(client_rss.get("end", 0)),
             )
 
         sys_mem = self._sys_mem_trajectory()
@@ -205,16 +205,16 @@ class SummaryReporter:
                 psutil.virtual_memory().total / (1024 ** 3)
             )
             peak_detail = (
-                f"{sys_mem['peak']:.0f}% peak"
-                f" ({sys_mem['peak_avail_gb']:.1f}G free"
+                f"{sys_mem.get('peak', 0):.0f}% peak"
+                f" ({sys_mem.get('peak_avail_gb', 0):.1f}G free"
                 f" / {total_gb:.1f}G)"
             )
             logger.info(
                 "  System memory: %s start \u2192 %s"
                 " \u2192 %s end",
-                f"{sys_mem['start']:.0f}%",
+                f"{sys_mem.get('start', 0):.0f}%",
                 peak_detail,
-                f"{sys_mem['end']:.0f}%",
+                f"{sys_mem.get('end', 0):.0f}%",
             )
 
         self._log_validation_summary()

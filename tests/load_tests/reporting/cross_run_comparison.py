@@ -331,13 +331,13 @@ class CrossRunComparison:
     def _print_loop_summary(folder, loops):
         """Print aggregated validation loop stats."""
         total_retries = sum(
-            lp["retries"] for lp in loops
+            lp.get("retries", 0) for lp in loops
         )
         total_tokens = sum(
-            lp["total_tokens"] for lp in loops
+            lp.get("total_tokens", 0) for lp in loops
         )
         total_cost = sum(
-            lp["cost_usd"] for lp in loops
+            lp.get("cost_usd", 0.0) for lp in loops
         )
         logger.info("")
         logger.info(
@@ -353,16 +353,16 @@ class CrossRunComparison:
             total_cost,
         )
         for lp in sorted(
-            loops, key=lambda x: x["retries"],
+            loops, key=lambda x: x.get("retries", 0),
             reverse=True,
         ):
             logger.info(
                 "    %s: %s retries, %s tokens "
                 "($%.2f)",
-                lp["request_id"],
-                lp["retries"],
-                f"{lp['total_tokens']:,}",
-                lp["cost_usd"],
+                lp.get("request_id", ""),
+                lp.get("retries", 0),
+                f"{lp.get('total_tokens', 0):,}",
+                lp.get("cost_usd", 0.0),
             )
 
     @staticmethod

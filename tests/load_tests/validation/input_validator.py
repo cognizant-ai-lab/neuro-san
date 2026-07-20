@@ -146,13 +146,13 @@ class InputValidator:
         )
 
         est_stage_duration = self._estimate_stage_duration(
-            probe_data["elapsed"],
+            probe_data.get("elapsed", 0),
         )
         logger.info(
             "  Estimated stage duration: ~%ss "
             "(%.1fs x %s requests)",
             int(est_stage_duration),
-            probe_data["elapsed"],
+            probe_data.get("elapsed", 0),
             self._args.num_requests,
         )
 
@@ -161,9 +161,9 @@ class InputValidator:
             total_planned=total_planned,
             stale_log_age=stale_log_age,
             est_stage_duration=est_stage_duration,
-            probe_tokens=probe_data["tokens"],
-            probe_cost=probe_data["cost"],
-            probe_model=probe_data["model"],
+            probe_tokens=probe_data.get("tokens", 0),
+            probe_cost=probe_data.get("cost", 0.0),
+            probe_model=probe_data.get("model", "unknown"),
         )
         self._print_warnings(warnings)
 

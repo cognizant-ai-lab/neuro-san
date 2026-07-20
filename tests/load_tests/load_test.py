@@ -1105,10 +1105,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 and peak_sys_mem_pct.value is not None):
             peak_data = peak_sys_mem_pct.value
             summary_entry["peak_sys_mem_pct"] = (
-                peak_data["pct"]
+                peak_data.get("pct", 0)
             )
             summary_entry["peak_sys_mem_avail_gb"] = (
-                peak_data["avail_gb"]
+                peak_data.get("avail_gb", 0)
             )
         return summary_entry
 
@@ -1488,12 +1488,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         until at least one request has completed.
         """
         durations = [
-            float(p["duration"])
+            float(p.get("duration", 0))
             for p in self._server_only_primary_pairs(
                 log_pos, pri_start_re,
             )
             if isinstance(p.get("duration"), (int, float))
-            and p["duration"] > 0
+            and p.get("duration", 0) > 0
         ]
         return Heartbeat.format_dur_stats(durations)
 
@@ -2737,9 +2737,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         """
         primary_pairs = primary_pairs or []
         durations = [
-            float(p["duration"]) for p in primary_pairs
+            float(p.get("duration", 0)) for p in primary_pairs
             if isinstance(p.get("duration"), (int, float))
-            and p["duration"] > 0
+            and p.get("duration", 0) > 0
         ]
         avg_duration = (
             round(sum(durations) / len(durations), 2)
@@ -2780,11 +2780,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         Returns 0.0 when no primary request completed.
         """
         starts = [
-            p["start_ts"] for p in primary_pairs
+            p.get("start_ts") for p in primary_pairs
             if isinstance(p.get("start_ts"), (int, float))
         ]
         finishes = [
-            p["finish_ts"] for p in primary_pairs
+            p.get("finish_ts") for p in primary_pairs
             if isinstance(p.get("finish_ts"), (int, float))
         ]
         if not starts or not finishes:
