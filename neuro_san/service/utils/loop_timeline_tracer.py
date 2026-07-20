@@ -96,6 +96,8 @@ class LoopTimelineTracer:
         :param max_events: Maximum number of events retained in the ring
                 buffer. Older events are dropped as newer ones arrive.
         """
+        if max_events <= 0:
+            raise ValueError("max_events must be a positive integer")
         self._events: Deque[Tuple[int, str, str, str]] = deque(maxlen=max_events)
         self._max_events: int = max_events
         self._loop_thread_ident: Optional[int] = None
