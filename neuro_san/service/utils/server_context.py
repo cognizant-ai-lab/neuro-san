@@ -17,6 +17,9 @@
 
 from typing import Any
 from typing import Dict
+from typing import Optional
+
+from threading import Lock
 
 from janus import Queue
 
@@ -45,7 +48,16 @@ class ServerContext(ServerContextLite):
         Constructor.
         """
         self.server_status: ServerStatus = None
-        self.executor_pool = AsyncioExecutorPool(reuse_mode=True, idle_timeout_seconds=30)
+        # NB: do NOT construct the AsyncioExecutorPool here. When Tornado is
+        # configured for multiple worker processes (AGENT_HTTP_SERVER_INSTANCES
+        # > 1), the server forks *after* this instance is created but before
+        # any request-path code runs. AsyncioExecutorPool starts a daemon GC
+        # thread in its constructor, and threads do not survive fork -- the
+        # child ends up with a _gc_thread reference to a thread that no longer
+        # exists, and stale executors are never reaped in the workers.
+        # Lazy-construct in get_executor_pool() so each worker builds its own.
+        self.executor_pool: Optional[AsyncioExecutorPool] = None
+        self._executor_pool_lock: Lock = Lock()
         self.queues: Queue[AsyncCollatingQueue] = Queue()
         self.mcp_server_context: McpServerContext = McpServerContext()
         self.server_port: int = AgentSessionConstants.DEFAULT_HTTP_PORT
@@ -72,8 +84,16 @@ class ServerContext(ServerContextLite):
 
     def get_executor_pool(self) -> AsyncioExecutorPool:
         """
-        :return: The AsyncioExecutorPool
+        :return: The AsyncioExecutorPool for the current worker process.
+                 Constructed on first access so that each post-fork worker
+                 gets its own pool (with its own live GC thread), rather
+                 than inheriting a dead reference from the parent.
         """
+        if self.executor_pool is None:
+            with self._executor_pool_lock:
+                if self.executor_pool is None:
+                    self.executor_pool = AsyncioExecutorPool(reuse_mode=True,
+                                                             idle_timeout_seconds=30)
         return self.executor_pool
 
     def set_server_status(self, server_status: ServerStatus):

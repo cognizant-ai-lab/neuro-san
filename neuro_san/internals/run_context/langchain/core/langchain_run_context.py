@@ -174,6 +174,44 @@ class LangChainRunContext(RunContext):
         origination: Origination = self.invocation_context.get_origination()
         self.origin = origination.add_spec_name_to_origin(parent_origin, agent_name)
 
+    def update_from_chat_context(self, chat_context: Dict[str, Any]):
+        """
+        :param chat_context: A ChatContext dictionary that contains all the state necessary
+                to carry on a previous conversation, possibly from a different server.
+        """
+        self.chat_context = chat_context
+
+        if self.chat_context is None:
+            return
+
+        # See if our origin appears in the chat histories.
+        # If so, get ours from there.
+        empty: List[Any] = []
+        chat_histories: List[Dict[str, Any]] = self.chat_context.get("chat_histories", empty)
+        our_origin_str: str = Origination.get_full_name_from_origin(self.origin)
+        for one_chat_history in chat_histories:
+
+            # See if the origin matches our own
+            test_origin: List[Dict[str, Any]] = one_chat_history.get("origin", empty)
+            test_origin_str: str = Origination.get_full_name_from_origin(test_origin)
+            if test_origin_str != our_origin_str:
+                continue
+
+            one_messages: List[Dict[str, Any]] = one_chat_history.get("messages", empty)
+            if not one_messages:
+                # Empty list - Nothing to convert. Use default empty list.
+                break
+
+            converter = BaseMessageDictionaryConverter()
+            self.chat_history = []
+            for chat_message in one_messages:
+                base_message: BaseMessage = converter.from_dict(chat_message)
+                if base_message is not None:
+                    self.chat_history.append(base_message)
+
+            # Nothing left to search for
+            break
+
     async def create_resources(self, agent_name: str,
                                instructions: str,
                                assignments: str,
@@ -268,7 +306,8 @@ class LangChainRunContext(RunContext):
                 for api_key_error in api_key_errors:
                     # Note: We are assuming the errors have already been filtered for
                     # not dispensing secrets with ApiKeyErrorCheck.get_safe_log_message()
-                    self.logger.error("API KEY error detected: %s", api_key_error)
+                    sensitive_logger = SensitiveLogger(self.logger)
+                    sensitive_logger.error("API KEY error detected: %s", api_key_error)
 
             raise ValueError(error)
 
@@ -590,44 +629,6 @@ class LangChainRunContext(RunContext):
             for message in old_interceptor.get_messages():
                 self.interceptor.write_unwrapped_message(message, self.origin)
         self.journal = OriginatingJournal(self.interceptor, self.origin, self.chat_history)
-
-    def update_from_chat_context(self, chat_context: Dict[str, Any]):
-        """
-        :param chat_context: A ChatContext dictionary that contains all the state necessary
-                to carry on a previous conversation, possibly from a different server.
-        """
-        self.chat_context = chat_context
-
-        if self.chat_context is None:
-            return
-
-        # See if our origin appears in the chat histories.
-        # If so, get ours from there.
-        empty: List[Any] = []
-        chat_histories: List[Dict[str, Any]] = self.chat_context.get("chat_histories", empty)
-        our_origin_str: str = Origination.get_full_name_from_origin(self.origin)
-        for one_chat_history in chat_histories:
-
-            # See if the origin matches our own
-            test_origin: List[Dict[str, Any]] = one_chat_history.get("origin", empty)
-            test_origin_str: str = Origination.get_full_name_from_origin(test_origin)
-            if test_origin_str != our_origin_str:
-                continue
-
-            one_messages: List[Dict[str, Any]] = one_chat_history.get("messages", empty)
-            if not one_messages:
-                # Empty list - Nothing to convert. Use default empty list.
-                break
-
-            converter = BaseMessageDictionaryConverter()
-            self.chat_history = []
-            for chat_message in one_messages:
-                base_message: BaseMessage = converter.from_dict(chat_message)
-                if base_message is not None:
-                    self.chat_history.append(base_message)
-
-            # Nothing left to search for
-            break
 
     def get_journal(self) -> Journal:
         """

@@ -78,10 +78,10 @@ class RegistryManifestRestorer(Restorer):
                 manifest_file = REGISTRIES_DIR.get_file_in_basis("manifest.hocon")
 
             # Add what was found above
-            use_files: List[str] = manifest_file.split(" ")
+            use_files: List[str] = manifest_file.split(os.pathsep)
             self.manifest_files.extend(use_files)
         elif isinstance(manifest_files, str):
-            use_files: List[str] = manifest_files.split(" ")
+            use_files: List[str] = manifest_files.split(os.pathsep)
             self.manifest_files.extend(use_files)
         else:
             self.manifest_files = manifest_files
@@ -152,6 +152,11 @@ class RegistryManifestRestorer(Restorer):
 
         raw_restorer = RawManifestRestorer()
         raw_manifest: Dict[str, Any] = raw_restorer.restore(file_reference=manifest_file)
+
+        if not raw_manifest:
+            # Return early if no file and/or nothing in file
+            self.logger.warning("Manifest file %s did not exist or was essentially empty.", manifest_file)
+            return agent_networks
 
         # By the end of the filter chain, only served entries will be included.
         manifest_filter = ManifestFilterChain(manifest_file)

@@ -21,6 +21,9 @@ from typing import List
 from typing import Tuple
 
 from asyncio import Event
+from logging import getLogger
+from logging import Logger
+from time import perf_counter
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.interfaces.reservationist import Reservationist
@@ -52,6 +55,7 @@ class ReservationUtil:
         """
         reservation: Reservation = None
         error: str = None
+        logger: Logger = getLogger(__name__)
 
         reservationist: Reservationist = args.get("reservationist")
         if reservationist is None:
@@ -75,14 +79,23 @@ Reservationist is None.  Make sure that temporary networks reservations
         # then set confirmation=False, and don't bother about waiting for the Event.
         deployed_event: Event = None
         try:
+            start_time: float = perf_counter()
             async with reservationist.validate_with(external_networks=external_networks, mcp_servers=mcp_servers):
                 deployed_event = await reservationist.deploy(deployments, confirmation=True)
+            end_time: float = perf_counter()
+            logger.info("Initiation of deployment of agent network %s took %f seconds.", prefix, end_time - start_time)
 
         except ValueError as exception:
             # Report exceptions from below as errors here.
             error = f"{exception}"
 
         if deployed_event is not None:
+
+            # Time how long we wait
+            start_time: float = perf_counter()
             await deployed_event.wait()
+            end_time: float = perf_counter()
+
+            logger.info("Deployment propagation of agent network %s took %f seconds.", prefix, end_time - start_time)
 
         return (reservation, error)

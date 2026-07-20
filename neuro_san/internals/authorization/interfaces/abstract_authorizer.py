@@ -44,9 +44,10 @@ class AbstractAuthorizer(Authorizer):
         """
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
         """
         Closes a scoped session with this Authorizer.
+        :return: True to suppress exception. False or None to propagate exception.
         """
         # Do nothing
 

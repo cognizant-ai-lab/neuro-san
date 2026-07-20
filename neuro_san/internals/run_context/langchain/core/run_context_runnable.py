@@ -18,6 +18,7 @@ from asyncio import TimeoutError as AsyncTimeout
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Tuple
 from typing import Type
 from typing import Union
@@ -205,12 +206,13 @@ class RunContextRunnable(NeuroSanRunnable):
         exception: Exception = None
         backtrace: str = None
         while chain_result is None and attempts > 0:
+            # Reset any backtrace from a previous attempt so that whatever is
+            # logged after the loop always corresponds to the exception that
+            # ended it (not every branch below captures a backtrace).
+            backtrace = None
             try:
                 chain_result: Dict[str, Any] = await self.agent_chain.ainvoke(input=inputs, config=runnable_config)
             except RATE_LIMIT_ERROR_TYPES as rate_limit_error:
-                self.logger.warning("retrying from RateLimit error %s(%s)",
-                                    rate_limit_error.__class__.__name__,
-                                    str(rate_limit_error))
                 await self.journal_retry_reason(rate_limit_error, "the LLM provider rate-limited the request")
                 attempts = attempts - 1
                 exception = rate_limit_error
@@ -237,12 +239,10 @@ class RunContextRunnable(NeuroSanRunnable):
                                       ApiKeyErrorCheck.get_safe_log_message(api_error))
                     break
                 # Continue with regular retry logic:
-                self.logger.warning("retrying from %s", api_error.__class__.__name__)
                 await self.journal_retry_reason(api_error, "the LLM API returned an error")
                 attempts = attempts - 1
                 exception = api_error
             except KeyError as key_error:
-                self.logger.warning("retrying from KeyError")
                 await self.journal_retry_reason(key_error, "the response was missing an expected field")
                 attempts = attempts - 1
                 exception = key_error
@@ -262,7 +262,6 @@ class RunContextRunnable(NeuroSanRunnable):
                         "output": response.removeprefix(find_string).removesuffix("`")
                     }
                 else:
-                    self.logger.warning("retrying from ValueError")
                     await self.journal_retry_reason(value_error, "the model's output could not be parsed")
                     attempts = attempts - 1
                     exception = value_error
@@ -270,16 +269,18 @@ class RunContextRunnable(NeuroSanRunnable):
             # pylint: disable=broad-exception-caught
             except Exception as exception_error:
                 # This catches any errors from running middlewares and also error form exceeding the recursion_limit.
-                self.logger.error("Got exception in  %s. Error: %s",
-                                  self.__class__.__name__,
-                                  exception_error,
-                                  )
+                self.sensitive_logger.error("Got exception in  %s. Error: %s", self.__class__.__name__, exception_error)
                 # These are likely real issues and non-retryable.
                 attempts = 0
                 exception = exception_error
                 backtrace = traceback.format_exc()
 
-        output: str = self.parse_chain_result(chain_result, exception, backtrace)
+        if chain_result is None and backtrace is not None:
+            # Keep the full backtrace in the server logs only. Passing it
+            # through as error details would return raw stack traces to clients.
+            self.sensitive_logger.error("%s", backtrace)
+
+        output: str = self.parse_chain_result(chain_result, exception)
         return_message: BaseMessage = AIMessage(output)
 
         # Chat history is updated in write_message
@@ -297,11 +298,18 @@ class RunContextRunnable(NeuroSanRunnable):
         :param error: The recoverable exception triggering the retry.
         :param reason: A concise, client-facing description of what went wrong.
         """
-        text: str = f"Retrying: {reason} ({error.__class__.__name__})"
-        await self.journal.write_message(AgentFrameworkMessage(content=text))
+        text: str = f"Retrying: {reason} ({error.__class__.__name__}) - {error}"
 
-    def parse_chain_result(self, chain_result: Union[Dict[str, Any], AgentFinish, AIMessage],
-                           exception: Exception, backtrace: str) -> str:
+        # Log the Exception as a warning, respecting server log sensitivity settings
+        self.sensitive_logger.warning(text)
+
+        # Also write the error message to the journal under the same
+        # LEAF_LOG_SENSITIVE env var setting as the SensitiveLogger uses.
+        if self.sensitive_logger.should_log():
+            await self.journal.write_message(AgentFrameworkMessage(content=text))
+
+    def parse_chain_result(self, chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]],
+                           exception: Optional[Exception]) -> str:
         """
         Parse the result from the langchain chain.
 
@@ -312,8 +320,9 @@ class RunContextRunnable(NeuroSanRunnable):
                             "output" - the actual output to use
                             "messages" - effectively a chat history
                         * An AIMessage whose content is the output to use
-        :param exception: Any exception that happened along the way
-        :param backtrace: Any backtrace to the exception that happened along the way
+                        * None, when every attempt to invoke the chain failed
+        :param exception: Any exception that happened along the way,
+                        or None if the chain invocation succeeded
         :return: A string value to return as the result of the run.
         """
 
@@ -327,7 +336,6 @@ class RunContextRunnable(NeuroSanRunnable):
             output = f"Agent stopped due to exception {exception}"
         else:
             # Set some stuff up for later
-            backtrace = None
             ai_message: AIMessage = None
 
             # Handle the AgentFinish case.
@@ -371,5 +379,5 @@ class RunContextRunnable(NeuroSanRunnable):
             output = text_output
 
         # See if we had some kind of error and format accordingly, if asked for.
-        output = self.error_detector.handle_error(output, backtrace)
+        output = self.error_detector.handle_error(output)
         return output

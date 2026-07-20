@@ -18,9 +18,11 @@
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
+import httpx
 import pytest
 
 from langchain_core.messages.ai import AIMessage
+from openai import RateLimitError
 
 from neuro_san.internals.messages.agent_framework_message import AgentFrameworkMessage
 from neuro_san.internals.run_context.langchain.core.run_context_runnable import RunContextRunnable
@@ -41,15 +43,20 @@ class TestRunContextRunnable:
         written = []
         mock_journal = MagicMock()
         mock_journal.write_message = AsyncMock(side_effect=lambda msg, *_a, **_k: written.append(msg))
+        sensitive_logger = MagicMock()
+        sensitive_logger.should_log = MagicMock(return_value=True)
 
-        runnable = RunContextRunnable.model_construct(journal=mock_journal)
+        runnable = RunContextRunnable.model_construct(
+            journal=mock_journal,
+            sensitive_logger=sensitive_logger
+        )
 
         await runnable.journal_retry_reason(ValueError("bad json"), "the model's output could not be parsed")
 
         assert len(written) == 1
         message = written[0]
         assert isinstance(message, AgentFrameworkMessage)
-        assert message.content == "Retrying: the model's output could not be parsed (ValueError)"
+        assert message.content == "Retrying: the model's output could not be parsed (ValueError) - bad json"
 
     @pytest.mark.asyncio
     async def test_invoke_agent_chain_surfaces_retry_reason_before_final_message(self):
@@ -61,6 +68,8 @@ class TestRunContextRunnable:
         written = []
         mock_journal = MagicMock()
         mock_journal.write_message = AsyncMock(side_effect=lambda msg, *_a, **_k: written.append(msg))
+        sensitive_logger = MagicMock()
+        sensitive_logger.should_log = MagicMock(return_value=True)
 
         # A non-parse ValueError exercises the retry branch on every attempt.
         agent_chain = MagicMock()
@@ -68,10 +77,11 @@ class TestRunContextRunnable:
 
         # error_detector.handle_error is a pass-through for this test.
         error_detector = MagicMock()
-        error_detector.handle_error = MagicMock(side_effect=lambda output, _backtrace: output)
+        error_detector.handle_error = MagicMock(side_effect=lambda output: output)
 
         runnable = RunContextRunnable.model_construct(
             journal=mock_journal,
+            sensitive_logger=sensitive_logger,
             agent_chain=agent_chain,
             error_detector=error_detector,
             logger=MagicMock(),
@@ -81,9 +91,95 @@ class TestRunContextRunnable:
 
         # Two retries -> two diagnostics, then the final AIMessage.
         assert len(written) == 3
-        assert all(isinstance(msg, AgentFrameworkMessage) for msg in written[:2])
-        assert all(
-            msg.content == "Retrying: the model's output could not be parsed (ValueError)"
-            for msg in written[:2]
-        )
+        for msg in written[:2]:
+            assert isinstance(msg, AgentFrameworkMessage)
+            assert msg.content == "Retrying: the model's output could not be parsed (ValueError) - not a parsing error"
         assert isinstance(written[-1], AIMessage)
+
+    @pytest.mark.asyncio
+    async def test_invoke_agent_chain_keeps_backtrace_out_of_client_output(self):
+        """
+        When the agent chain dies with an unhandled exception (e.g. an MCP tool
+        transport error), the client-facing message must carry only the exception
+        message: the full backtrace goes to the server log, not to the
+        ErrorDetector as client-facing details.
+        See https://github.com/cognizant-ai-lab/neuro-san/issues/1097
+        """
+        written = []
+        mock_journal = MagicMock()
+        mock_journal.write_message = AsyncMock(side_effect=lambda msg, *_a, **_k: written.append(msg))
+        sensitive_logger = MagicMock()
+        sensitive_logger.should_log = MagicMock(return_value=True)
+
+        # A RuntimeError exercises the non-retryable broad-exception branch.
+        agent_chain = MagicMock()
+        agent_chain.ainvoke = AsyncMock(side_effect=RuntimeError("Server error '504 Gateway Time-out'"))
+
+        # error_detector.handle_error is a pass-through for this test.
+        error_detector = MagicMock()
+        error_detector.handle_error = MagicMock(side_effect=lambda output: output)
+
+        runnable = RunContextRunnable.model_construct(
+            journal=mock_journal,
+            sensitive_logger=sensitive_logger,
+            agent_chain=agent_chain,
+            error_detector=error_detector,
+            logger=MagicMock(),
+        )
+
+        await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=3)
+
+        # Unhandled exceptions are not retried: a single final AIMessage.
+        assert len(written) == 1
+        final = written[-1]
+        assert isinstance(final, AIMessage)
+        assert final.content == "Agent stopped due to exception Server error '504 Gateway Time-out'"
+        # The ErrorDetector must not receive the backtrace as client-facing details.
+        error_detector.handle_error.assert_called_once_with(
+            "Agent stopped due to exception Server error '504 Gateway Time-out'")
+        # The backtrace is logged server-side instead.
+        assert any("Traceback" in str(call) for call in sensitive_logger.error.call_args_list)
+
+    @pytest.mark.asyncio
+    async def test_invoke_agent_chain_does_not_log_stale_backtrace(self):
+        """
+        A backtrace captured on an earlier attempt must not be logged when a
+        later attempt fails via a branch that captures no backtrace: any logged
+        traceback must correspond to the exception that ended the retry loop.
+        Here attempt 1 fails with a KeyError (captures a backtrace) and
+        attempt 2 fails with a rate-limit error (captures none), so no
+        traceback should be logged at all.
+        """
+        written = []
+        mock_journal = MagicMock()
+        mock_journal.write_message = AsyncMock(side_effect=lambda msg, *_a, **_k: written.append(msg))
+        sensitive_logger = MagicMock()
+        sensitive_logger.should_log = MagicMock(return_value=True)
+
+        request = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+        response = httpx.Response(429, request=request)
+        rate_limit_error = RateLimitError("rate limited", response=response, body=None)
+
+        agent_chain = MagicMock()
+        agent_chain.ainvoke = AsyncMock(side_effect=[KeyError("missing field"), rate_limit_error])
+
+        # error_detector.handle_error is a pass-through for this test.
+        error_detector = MagicMock()
+        error_detector.handle_error = MagicMock(side_effect=lambda output: output)
+
+        runnable = RunContextRunnable.model_construct(
+            journal=mock_journal,
+            sensitive_logger=sensitive_logger,
+            agent_chain=agent_chain,
+            error_detector=error_detector,
+            logger=MagicMock(),
+        )
+
+        await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=2)
+
+        # The final message reflects the rate-limit failure from the last attempt...
+        final = written[-1]
+        assert isinstance(final, AIMessage)
+        assert "rate limited" in final.content
+        # ...so the stale KeyError traceback from attempt 1 must not be logged.
+        assert not any("Traceback" in str(call) for call in sensitive_logger.error.call_args_list)

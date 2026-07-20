@@ -92,9 +92,9 @@ class AbstractAgentReservationist(Reservationist):
         """
         event.set()
 
-    def deploy_together(self, deployment_dict: Dict[AgentReservation, Dict[str, Any]],
-                        source: str,
-                        max_lifetime_in_seconds: float):
+    async def deploy_together(self, deployment_dict: Dict[AgentReservation, Dict[str, Any]],
+                              source: str,
+                              max_lifetime_in_seconds: float):
         """
         :param deployment_dict: A dictionary whose keys are AgentReservations
                             and whose values are agent network spec dictionaries.
@@ -116,4 +116,4 @@ class AbstractAgentReservationist(Reservationist):
         # Deploy locally.
         for storage in self.reservations_storage:
             # This can synchronously lock
-            storage.add_reservations(reservations_dict, source)
+            await storage.add_reservations(reservations_dict, source)
