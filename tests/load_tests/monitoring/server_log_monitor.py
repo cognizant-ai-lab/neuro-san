@@ -23,6 +23,7 @@ monitoring and telemetry when those features become available.
 import logging
 import os
 import re
+import sys
 import threading
 import time
 
@@ -51,6 +52,19 @@ from tests.load_tests.config import VALIDATION_REQUEST_ID_PATTERN
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 
 logger = logging.getLogger(__name__)
+
+# Console progress ticks for arrivals: single-line dots written via
+# logging (not print()).  An empty terminator keeps the dots on one
+# line, and propagate=False stops the root logger from prefixing each
+# dot with a timestamp or duplicating it.
+_progress_logger = logging.getLogger(__name__ + ".progress")
+_progress_logger.propagate = False
+if not _progress_logger.handlers:
+    _progress_handler = logging.StreamHandler(sys.stdout)
+    _progress_handler.terminator = ""
+    _progress_handler.setFormatter(logging.Formatter("%(message)s"))
+    _progress_logger.addHandler(_progress_handler)
+    _progress_logger.setLevel(logging.INFO)
 
 
 class _NullFile:
@@ -617,7 +631,7 @@ class ServerLogMonitor:
             if use_dots:
                 receipt_fh.write(detail + "\n")
                 receipt_fh.flush()
-                print(".", end="", flush=True)
+                _progress_logger.info(".")
             else:
                 logger.info("%s", detail)
             if count >= expected_count:
@@ -635,7 +649,7 @@ class ServerLogMonitor:
     ) -> None:
         """Log the final receipt summary and client snapshot."""
         if use_dots:
-            print()
+            _progress_logger.info("\n")
             logger.info(
                 "  All %s/%s requests received by "
                 "server (%.1fs)",
