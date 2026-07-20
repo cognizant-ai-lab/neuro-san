@@ -460,14 +460,14 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         progress_file.flush()
 
     def _write_to_console(self, tick_count, line, force=False) -> None:
-        """Write progress to console with reduced verbosity.
+        """Write progress to console.
 
-        Prints the full line on tick 1 and every 10th tick.
-        Silent in between to avoid overlapping receipt dots.
-        When ``force`` is set (e.g. the final line once all
-        requests are done) the line is always printed.  A single
-        blank separator is emitted only before the first console
-        line so the heartbeats are single-spaced thereafter.
+        Prints the full line on tick 1, then every
+        ``CONSOLE_TICK_INTERVAL`` ticks (currently every tick), and
+        always when ``force`` is set (e.g. the final line once all
+        requests are done).  A single blank separator is emitted only
+        before the first console line so the heartbeats are
+        single-spaced thereafter.
         """
         if (force or tick_count == 1
                 or tick_count % CONSOLE_TICK_INTERVAL == 0):

@@ -580,7 +580,9 @@ class TrafficRunner:
                     "stdout": "",
                     "stderr": reason,
                     "returncode": -1,
-                    "duration": time.time() - start,
+                    "elapsed": time.time() - start,
+                    "ttft": 0.0,
+                    "prompt": "",
                 })
             else:
                 results_list.append(fut.result())

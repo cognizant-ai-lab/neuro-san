@@ -110,6 +110,12 @@ class InputValidator:
     def resolve_max_requests(self, stages) -> int:
         """Return the effective max-requests cap."""
         if self._args.max_requests is not None:
+            if self._args.max_requests <= 0:
+                logger.error(
+                    "--max-requests must be a positive integer. Got: %s",
+                    self._args.max_requests,
+                )
+                sys.exit(1)
             return self._args.max_requests
         return sum(stages) * self._args.num_rounds
 
