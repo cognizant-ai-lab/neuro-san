@@ -49,7 +49,7 @@ from tests.load_tests.config import ValidationEvent
 from tests.load_tests.config import ResourceSnapshot
 from tests.load_tests.config import ServerCounts
 from tests.load_tests.config import StageSummary
-from tests.load_tests.config import compute_amplification
+from tests.load_tests.config import Formatters
 from tests.load_tests.config import DEFAULT_IDLE_TIMEOUT_SECONDS
 from tests.load_tests.config import DEFAULT_TIMEOUT_SECONDS
 from tests.load_tests.config import LEVEL_ADV
@@ -766,7 +766,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 log_pos,
             )
             total_retries = sum(retries.values())
-            amplification = compute_amplification(
+            amplification = Formatters.compute_amplification(
                 stage_requests, total_retries,
             )
 

@@ -23,7 +23,7 @@ from typing import Dict
 from typing import List
 from typing import Tuple
 
-from tests.load_tests.config import fmt_duration
+from tests.load_tests.config import Formatters
 
 from tests.load_tests.config import SEPARATOR_WIDTH
 
@@ -36,24 +36,24 @@ COMPLETION_MILESTONES = [50, 60, 70, 80, 90, 95, 100]
 COUNT_MILESTONE_STEP = 50
 
 
-def _percentile(sorted_values, pct):
-    """Compute the pct-th percentile from pre-sorted values."""
-    if not sorted_values:
-        return 0.0
-    idx = (pct / 100.0) * (len(sorted_values) - 1)
-    lower = int(math.floor(idx))
-    upper = min(lower + 1, len(sorted_values) - 1)
-    frac = idx - lower
-    return sorted_values[lower] + frac * (
-        sorted_values[upper] - sorted_values[lower]
-    )
-
-
 class LatencyAnalyzer:
     """Analyse per-request latency data across stages."""
 
     def __init__(self, stage_summaries) -> None:
         self._summaries = stage_summaries
+
+    @staticmethod
+    def _percentile(sorted_values, pct):
+        """Compute the pct-th percentile from pre-sorted values."""
+        if not sorted_values:
+            return 0.0
+        idx = (pct / 100.0) * (len(sorted_values) - 1)
+        lower = int(math.floor(idx))
+        upper = min(lower + 1, len(sorted_values) - 1)
+        frac = idx - lower
+        return sorted_values[lower] + frac * (
+            sorted_values[upper] - sorted_values[lower]
+        )
 
     # ----------------------------------------------------------
     # 1. Cumulative completion timeline per stage
@@ -96,11 +96,11 @@ class LatencyAnalyzer:
                 if count == prev_count:
                     continue
                 prev_count = count
-                duration = _percentile(latencies, pct)
+                duration = self._percentile(latencies, pct)
                 logger.info(
                     "    %3d%% (%d requests) completed by %s",
                     pct, count,
-                    fmt_duration(duration, precision=1),
+                    Formatters.fmt_duration(duration, precision=1),
                 )
             self._log_count_milestones(latencies)
 
@@ -124,7 +124,7 @@ class LatencyAnalyzer:
             logger.info(
                 "    %4d requests completed by %s",
                 count,
-                fmt_duration(duration, precision=1),
+                Formatters.fmt_duration(duration, precision=1),
             )
 
     # ----------------------------------------------------------
@@ -279,7 +279,7 @@ class LatencyAnalyzer:
         for i, peak in enumerate(bucket_peaks):
             t_start = i * bucket_size
             chart = "#" * (peak * 40 // max_conc) if max_conc else ""
-            label = fmt_duration(t_start)
+            label = Formatters.fmt_duration(t_start)
             logger.info(
                 "    %8s |%-40s| %d",
                 label, chart, peak,

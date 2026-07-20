@@ -21,8 +21,7 @@ from collections import Counter
 
 import psutil
 
-from tests.load_tests.config import fmt_duration
-from tests.load_tests.config import format_rss
+from tests.load_tests.config import Formatters
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
@@ -129,7 +128,7 @@ class SummaryReporter:
         logger.info("    Killed:    %s", total_killed)
         logger.info(
             "  Total wall time: %s",
-            fmt_duration(total_time, precision=2),
+            Formatters.fmt_duration(total_time, precision=2),
         )
         self._log_performance_stats()
 
@@ -155,9 +154,9 @@ class SummaryReporter:
             logger.info(
                 "  Time to first response: %s min"
                 " / %s avg / %s max",
-                fmt_duration(ttfr["min"]),
-                fmt_duration(ttfr["avg"]),
-                fmt_duration(ttfr["max"]),
+                Formatters.fmt_duration(ttfr["min"]),
+                Formatters.fmt_duration(ttfr["avg"]),
+                Formatters.fmt_duration(ttfr["max"]),
             )
 
         duration = self._request_duration_stats()
@@ -165,9 +164,9 @@ class SummaryReporter:
             logger.info(
                 "  Request duration: %s min / %s avg"
                 " / %s max",
-                fmt_duration(duration["min"]),
-                fmt_duration(duration["avg"]),
-                fmt_duration(duration["max"]),
+                Formatters.fmt_duration(duration["min"]),
+                Formatters.fmt_duration(duration["avg"]),
+                Formatters.fmt_duration(duration["max"]),
             )
 
         llm_stats = self._llm_call_stats()
@@ -185,9 +184,9 @@ class SummaryReporter:
             logger.info(
                 "  Server RSS: %s start \u2192 %s peak"
                 " \u2192 %s end",
-                format_rss(rss_trajectory["start"]),
-                format_rss(rss_trajectory["peak"]),
-                format_rss(rss_trajectory["end"]),
+                Formatters.format_rss(rss_trajectory["start"]),
+                Formatters.format_rss(rss_trajectory["peak"]),
+                Formatters.format_rss(rss_trajectory["end"]),
             )
 
         client_rss = self._client_rss_trajectory()
@@ -195,9 +194,9 @@ class SummaryReporter:
             logger.info(
                 "  Client RSS: %s start \u2192 %s peak"
                 " \u2192 %s end",
-                format_rss(client_rss["start"]),
-                format_rss(client_rss["peak"]),
-                format_rss(client_rss["end"]),
+                Formatters.format_rss(client_rss["start"]),
+                Formatters.format_rss(client_rss["peak"]),
+                Formatters.format_rss(client_rss["end"]),
             )
 
         sys_mem = self._sys_mem_trajectory()
@@ -421,8 +420,8 @@ class SummaryReporter:
             logger.info(
                 "    Requests with fixes took %s avg"
                 " vs %s avg without",
-                fmt_duration(avg_with),
-                fmt_duration(avg_without),
+                Formatters.fmt_duration(avg_with),
+                Formatters.fmt_duration(avg_without),
             )
 
     @staticmethod

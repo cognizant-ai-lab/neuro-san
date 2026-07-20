@@ -32,7 +32,7 @@ from typing import Optional
 from typing import Tuple
 
 from tests.load_tests.config import FAILURE_LOG_LIMIT
-from tests.load_tests.config import fmt_duration
+from tests.load_tests.config import Formatters
 from tests.load_tests.config import RequestResult
 from tests.load_tests.config import SharedRef
 from tests.load_tests.config import STATUS_CREATED
@@ -646,7 +646,7 @@ class TrafficRunner:
                 logger.info(
                     "Request %s: %s (%s)",
                     request_id, status,
-                    fmt_duration(elapsed, precision=2),
+                    Formatters.fmt_duration(elapsed, precision=2),
                 )
                 logger.info(
                     "  ... further per-request failures suppressed"
@@ -658,7 +658,7 @@ class TrafficRunner:
         logger.info(
             "Request %s: %s (%s)",
             request_id, status,
-            fmt_duration(elapsed, precision=2),
+            Formatters.fmt_duration(elapsed, precision=2),
         )
         for field, value in parsed_fields.items():
             if field == "reservation_id" and self._args.skip_reservation_check:
@@ -682,7 +682,7 @@ class TrafficRunner:
         )
         line = (
             f"Request {request_id}: {status}"
-            f" ({fmt_duration(elapsed, precision=2)})"
+            f" ({Formatters.fmt_duration(elapsed, precision=2)})"
             f"  {fields_str}\n"
         )
         with open(path, "a", encoding="utf-8") as fh:

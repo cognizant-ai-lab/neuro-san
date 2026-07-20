@@ -20,8 +20,7 @@ import logging
 import os
 import re
 
-from tests.load_tests.config import fmt_duration
-from tests.load_tests.config import format_rss
+from tests.load_tests.config import Formatters
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.cost_estimator import CostEstimator
@@ -256,7 +255,7 @@ class CrossRunComparison:
                 ),
                 str(run.get("succeeded", 0)),
                 CrossRunComparison._val_with_delta(
-                    fmt_duration(run.get("wall_time", 0)),
+                    Formatters.fmt_duration(run.get("wall_time", 0)),
                     deltas.get("wall_time"),
                 ),
                 CrossRunComparison._fmt_optional(
@@ -395,7 +394,7 @@ class CrossRunComparison:
         if value <= 0:
             return "\u2014"
         return CrossRunComparison._val_with_delta(
-            fmt_duration(value), delta_pct,
+            Formatters.fmt_duration(value), delta_pct,
         )
 
     @staticmethod
@@ -404,7 +403,7 @@ class CrossRunComparison:
         if value <= 0:
             return "\u2014"
         return CrossRunComparison._val_with_delta(
-            fmt_duration(value), delta_pct,
+            Formatters.fmt_duration(value), delta_pct,
         )
 
     @staticmethod
@@ -413,7 +412,7 @@ class CrossRunComparison:
         if value <= 0:
             return "\u2014"
         return CrossRunComparison._val_with_delta(
-            format_rss(value), delta_pct,
+            Formatters.format_rss(value), delta_pct,
         )
 
     @staticmethod

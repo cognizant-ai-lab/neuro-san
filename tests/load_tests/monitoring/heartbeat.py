@@ -30,7 +30,7 @@ from typing import Optional
 
 import psutil
 
-from tests.load_tests.config import format_rss
+from tests.load_tests.config import Formatters
 from tests.load_tests.config import HEARTBEAT_INTERVAL_SECONDS
 from tests.load_tests.config import SharedRef
 
@@ -130,7 +130,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
             self._swap_warned = True
             warning = (
                 f"  WARNING: Server has"
-                f" {format_rss(swap_mb)} swapped to disk"
+                f" {Formatters.format_rss(swap_mb)} swapped to disk"
                 " — severe performance impact"
             )
             logger.warning("%s", warning)
@@ -427,9 +427,9 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         if rss_mb is not None:
             swap_info = ""
             if swap_mb > 0:
-                swap_info = f" swap: {format_rss(swap_mb)}"
+                swap_info = f" swap: {Formatters.format_rss(swap_mb)}"
             server_rss_info = (
-                f"  RSS: {format_rss(rss_mb)}{swap_info}"
+                f"  RSS: {Formatters.format_rss(rss_mb)}{swap_info}"
             )
             if rss_mb > peak_server_rss:
                 peak_server_rss_ref.value = rss_mb

@@ -24,8 +24,7 @@ import logging
 
 from typing import List
 
-from tests.load_tests.config import compute_amplification
-from tests.load_tests.config import fmt_duration
+from tests.load_tests.config import Formatters
 from tests.load_tests.config import RequestResult
 from tests.load_tests.config import RETRY_ERROR_TYPES
 from tests.load_tests.config import STATUS_CREATED
@@ -96,8 +95,8 @@ class OutputValidator:
         )
         logger.info(
             "  Duration: %s | Avg: %s per request",
-            fmt_duration(elapsed, precision=2),
-            fmt_duration(avg_per, precision=2),
+            Formatters.fmt_duration(elapsed, precision=2),
+            Formatters.fmt_duration(avg_per, precision=2),
         )
 
     @staticmethod
@@ -112,7 +111,7 @@ class OutputValidator:
             count = retries.get(error_type, 0)
             logger.info("    %s retries: %s", error_type, count)
         logger.info("    Total retries:  %s", total_retries)
-        amplification = compute_amplification(
+        amplification = Formatters.compute_amplification(
             actual_requests, total_retries,
         )
         logger.info(

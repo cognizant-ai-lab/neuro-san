@@ -273,32 +273,36 @@ MODEL_PRICING = {
 DEFAULT_PRICING = {"prompt": 2.50, "completion": 10.00}
 
 
-def format_rss(rss_mb: float) -> str:
-    """Format RSS in human-readable units."""
-    if rss_mb >= 1024:
-        return f"{rss_mb / 1024:.1f}G"
-    return f"{rss_mb:.0f}M"
+class Formatters:
+    """Reporting helpers for human-readable metrics and derived values."""
 
+    @staticmethod
+    def format_rss(rss_mb: float) -> str:
+        """Format RSS in human-readable units."""
+        if rss_mb >= 1024:
+            return f"{rss_mb / 1024:.1f}G"
+        return f"{rss_mb:.0f}M"
 
-def fmt_duration(seconds: float, *, precision: int = 0) -> str:
-    """Format seconds with minutes suffix when >= 60s.
+    @staticmethod
+    def fmt_duration(seconds: float, *, precision: int = 0) -> str:
+        """Format seconds with minutes suffix when >= 60s.
 
-    Returns e.g. '1870s (31m)' or '45s' for short durations.
-    """
-    base = f"{seconds:.{precision}f}s"
-    if seconds >= 60:
-        mins = int(seconds) // 60
-        return f"{base} ({mins}m)"
-    return base
+        Returns e.g. '1870s (31m)' or '45s' for short durations.
+        """
+        base = f"{seconds:.{precision}f}s"
+        if seconds >= 60:
+            mins = int(seconds) // 60
+            return f"{base} ({mins}m)"
+        return base
 
+    @staticmethod
+    def compute_amplification(
+            actual_requests: int, total_retries: int,
+    ) -> float:
+        """Return the retry amplification factor.
 
-def compute_amplification(
-        actual_requests: int, total_retries: int,
-) -> float:
-    """Return the retry amplification factor.
-
-    1.0 means no retries; >1.0 means some LLM calls were retried.
-    """
-    if actual_requests <= 0:
-        return 1.0
-    return (actual_requests + total_retries) / actual_requests
+        1.0 means no retries; >1.0 means some LLM calls were retried.
+        """
+        if actual_requests <= 0:
+            return 1.0
+        return (actual_requests + total_retries) / actual_requests

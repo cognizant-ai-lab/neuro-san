@@ -26,8 +26,7 @@ from collections import Counter
 
 import psutil
 
-from tests.load_tests.config import fmt_duration
-from tests.load_tests.config import format_rss
+from tests.load_tests.config import Formatters
 from tests.load_tests.config import STATUS_CREATED
 
 logger = logging.getLogger(__name__)
@@ -88,7 +87,7 @@ class SummaryFileWriter:
         lines.append(f"  Workers:     {workers} (concurrent)")
         lines.append(
             f"  Total wall time:"
-            f" {fmt_duration(total_elapsed, precision=1)}"
+            f" {Formatters.fmt_duration(total_elapsed, precision=1)}"
         )
         ttfr_values = [
             r.get("ttft", 0)
@@ -100,9 +99,9 @@ class SummaryFileWriter:
             avg_ttfr = sum(ttfr_values) / len(ttfr_values)
             lines.append(
                 f"  Time to first response:"
-                f" {fmt_duration(min(ttfr_values))} min"
-                f" / {fmt_duration(avg_ttfr)} avg"
-                f" / {fmt_duration(max(ttfr_values))} max"
+                f" {Formatters.fmt_duration(min(ttfr_values))} min"
+                f" / {Formatters.fmt_duration(avg_ttfr)} avg"
+                f" / {Formatters.fmt_duration(max(ttfr_values))} max"
             )
         durations = [
             r.get("elapsed", 0)
@@ -113,9 +112,9 @@ class SummaryFileWriter:
             avg_dur = sum(durations) / len(durations)
             lines.append(
                 f"  Request duration:"
-                f" {fmt_duration(min(durations))} min"
-                f" / {fmt_duration(avg_dur)} avg"
-                f" / {fmt_duration(max(durations))} max"
+                f" {Formatters.fmt_duration(min(durations))} min"
+                f" / {Formatters.fmt_duration(avg_dur)} avg"
+                f" / {Formatters.fmt_duration(max(durations))} max"
             )
         llm_calls = [
             r.get("llm_calls", 0)
@@ -157,9 +156,9 @@ class SummaryFileWriter:
             return
         lines.append(
             f"  Server RSS:"
-            f" {format_rss(start_rss or 0)} start"
-            f" \u2192 {format_rss(peak_rss)} peak"
-            f" \u2192 {format_rss(end_rss or 0)} end"
+            f" {Formatters.format_rss(start_rss or 0)} start"
+            f" \u2192 {Formatters.format_rss(peak_rss)} peak"
+            f" \u2192 {Formatters.format_rss(end_rss or 0)} end"
         )
 
     def _write_client_rss_trajectory(self, lines) -> None:
@@ -182,9 +181,9 @@ class SummaryFileWriter:
             return
         lines.append(
             f"  Client RSS:"
-            f" {format_rss(start_rss or 0)} start"
-            f" \u2192 {format_rss(peak_rss)} peak"
-            f" \u2192 {format_rss(end_rss or 0)} end"
+            f" {Formatters.format_rss(start_rss or 0)} start"
+            f" \u2192 {Formatters.format_rss(peak_rss)} peak"
+            f" \u2192 {Formatters.format_rss(end_rss or 0)} end"
         )
 
     def _write_sys_mem_trajectory(self, lines) -> None:
@@ -283,8 +282,8 @@ class SummaryFileWriter:
             )
             lines.append(
                 f"    Requests with fixes took"
-                f" {fmt_duration(avg_with)} avg"
-                f" vs {fmt_duration(avg_without)} avg"
+                f" {Formatters.fmt_duration(avg_with)} avg"
+                f" vs {Formatters.fmt_duration(avg_without)} avg"
                 f" without"
             )
 
@@ -378,7 +377,7 @@ class SummaryFileWriter:
             lines.append(
                 f"  {pct:4d}% ({count} requests)"
                 f" completed by"
-                f" {fmt_duration(val, precision=1)}",
+                f" {Formatters.fmt_duration(val, precision=1)}",
             )
         self._write_count_milestones(lines, all_latencies)
         lines.append("")
@@ -399,7 +398,7 @@ class SummaryFileWriter:
             duration = sorted_latencies[count - 1]
             lines.append(
                 f"  {count:5d} requests completed by"
-                f" {fmt_duration(duration, precision=1)}",
+                f" {Formatters.fmt_duration(duration, precision=1)}",
             )
 
     def _write_server_timing(self, lines) -> None:
