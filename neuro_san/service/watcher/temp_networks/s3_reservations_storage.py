@@ -30,6 +30,7 @@ from neuro_san.internals.network_providers.abstract_reservations_storage import 
 from neuro_san.service.watcher.temp_networks.s3_reservations_expiration import S3ReservationsExpiration
 from neuro_san.service.watcher.temp_networks.s3_reservations_reader import S3ReservationsReader
 from neuro_san.service.watcher.temp_networks.s3_reservations_writer import S3ReservationsWriter
+from neuro_san.service.watcher.temp_networks.s3_util import S3Util
 
 
 class S3ReservationsStorage(AbstractReservationsStorage):
@@ -40,7 +41,7 @@ class S3ReservationsStorage(AbstractReservationsStorage):
     stored in its associated agent spec as metadata.
     """
 
-    def __init__(self, bucket_name: str = "", prefix: str = "reservations/",
+    def __init__(self, bucket_name: str = "", prefix: str = S3Util.DEFAULT_RESERVATIONS_PREFIX,
                  check_expirations_interval_seconds: float = 0.0):
         """
         Initialize S3 reservations storage.

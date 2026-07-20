@@ -25,12 +25,12 @@ from json import loads
 from logging import getLogger
 from logging import Logger
 
-from boto3 import client as boto3_client
 from botocore.client import BaseClient
 from botocore.exceptions import ClientError
 from botocore.exceptions import NoCredentialsError
 
-from neuro_san.service.watcher.temp_networks.s3_retry_util import S3RetryUtil
+from neuro_san.service.watcher.temp_networks.aws_sync_client_worker import AwsSyncClientWorker
+from neuro_san.service.watcher.temp_networks.s3_util import S3Util
 
 
 class S3ReservationsRetriever:
@@ -43,7 +43,8 @@ class S3ReservationsRetriever:
     This guy is used by the S3ReservationsReader and S3ReservationsExpiration.
     """
 
-    def __init__(self, name: str = "S3ReservationsRetriever", bucket_name: str = "", prefix: str = "reservations/"):
+    def __init__(self, name: str = "S3ReservationsRetriever", bucket_name: str = "",
+                 prefix: str = S3Util.DEFAULT_RESERVATIONS_PREFIX):
         """
         Initialize the S3 reservations retriever.
 
@@ -64,7 +65,7 @@ class S3ReservationsRetriever:
 
         # Set up S3 key prefix and initialize sync target
         self.prefix: str = prefix
-        self.client: BaseClient = None
+        self.s3_sync_client_worker = AwsSyncClientWorker(self.name, "s3")
 
     def get_prefix(self) -> str:
         """
@@ -78,25 +79,28 @@ class S3ReservationsRetriever:
         """
         return self.bucket_name
 
-    def get_client(self) -> BaseClient:
+    def get_sync_client_worker(self) -> AwsSyncClientWorker:
         """
-        :return: The synchronous S3 client.
+        :return: The S3 client worker.
         """
-        return self.client
+        return self.s3_sync_client_worker
 
     def start(self):
         """
         Initialize the S3 client and validate connection to the bucket.
+        """
+        initialize_function = partial(self.initialize)
+        self.s3_sync_client_worker.retry_with_new_client(initialize_function, source=self.name)
 
-        This method can be called to re-initialize the connection if needed.
+    def initialize(self, sync_aws_client: BaseClient = None):
+        """
+        Initialize the S3 client and validate connection to the bucket
+        using default AWS credential chain
         """
         try:
-            # Initialize S3 client using default AWS credential chain
-            # DEF - these are long-lived. What if credentials expire?
-            self.client = boto3_client("s3")
 
             # Validate bucket exists and we have access by performing a head operation
-            self.client.head_bucket(Bucket=self.bucket_name)
+            sync_aws_client.head_bucket(Bucket=self.bucket_name)
             self.logger.info("%s: Successfully connected to S3 bucket: %s", self.name, self.bucket_name)
 
         except NoCredentialsError as exception:
@@ -113,7 +117,9 @@ class S3ReservationsRetriever:
             raise ValueError(f"{self.name}: Error accessing S3 bucket '{self.bucket_name}': {exception}") \
                 from exception
 
-    def retrieve_object_with_retries(self, obj_key: str, source: str = None) -> Dict[str, Any]:
+    def retrieve_object_with_retries(self, obj_key: str = None,
+                                     source: str = None,
+                                     sync_aws_client: BaseClient = None) -> Dict[str, Any]:
         """
         Helper method to retrieve an S3 object with retries.
         :param obj_key: S3 object key to retrieve
@@ -121,10 +127,16 @@ class S3ReservationsRetriever:
         :raises: ClientError if the object cannot be retrieved after retries
                  JSONDecodeError if the content cannot be parsed as JSON
         """
-        get_function = partial(self.client.get_object, Bucket=self.bucket_name, Key=obj_key)
+        if obj_key is None:
+            raise ValueError(f"{self.name}: S3 object key must be provided")
+        if sync_aws_client is None:
+            raise ValueError(f"{self.name}: S3 client must be provided")
+
         if source is None:
             source = self.name
-        obj_response: Dict[str, Any] = S3RetryUtil.do_with_retries(source, get_function)
+
+        get_function = partial(sync_aws_client.get_object, Bucket=self.bucket_name, Key=obj_key)
+        obj_response: Dict[str, Any] = self.s3_sync_client_worker.do_with_retries(source, get_function)
         # Parse JSON content from S3 object body
         json_content: str = obj_response["Body"].read().decode("utf-8")
         return loads(json_content)
