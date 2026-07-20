@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# END COPYRIGHT
 
 """Agent profile loader — reads agent-specific prompts and configuration."""
 

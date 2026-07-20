@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# END COPYRIGHT
 
 # pylint: disable=too-many-lines
 """Generic load-test orchestrator for neuro-san agent networks.

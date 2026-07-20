@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# END COPYRIGHT
 
 """Pre-flight environment checks for real-LLM load testing.
 

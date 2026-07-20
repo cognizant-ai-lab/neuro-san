@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# END COPYRIGHT
 
 """Shared constants, regex patterns, and defaults for the load test framework."""
 

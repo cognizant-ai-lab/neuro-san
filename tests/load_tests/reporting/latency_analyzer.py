@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# END COPYRIGHT
 
 """Latency analysis — completion timeline, degradation, concurrency
 timeline, and server-side timing for diagnosing LLM bottlenecks.

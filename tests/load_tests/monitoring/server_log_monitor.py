@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# END COPYRIGHT
 
 """Server log monitoring — retry counting, request tracking, and disconnection scanning.
 
