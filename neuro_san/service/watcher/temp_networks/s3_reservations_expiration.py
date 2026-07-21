@@ -18,6 +18,7 @@
 from typing import Any
 from typing import Dict
 from typing import Iterable
+from typing import Optional
 
 from time import time
 from functools import partial
@@ -164,14 +165,16 @@ class S3ReservationsExpiration:
 
         expired: bool = False
         try:
-            # Retrieve the reservation object from S3
-            agent_spec: Dict[str, Any] = self.retriever.retrieve_object_with_retries(
+            # Retrieve the reservation object from S3. The parsed body can be
+            # any JSON type (not just a dict) - extract_reservation_data()
+            # below is designed to accept and validate exactly that.
+            agent_spec: Any = self.retriever.retrieve_object_with_retries(
                 obj_key=obj_key,
                 source=source,
                 sync_aws_client=sync_aws_client
             )
 
-            reservation_data: Dict[str, Any] = S3Util.extract_reservation_data(agent_spec)
+            reservation_data: Optional[Dict[str, Any]] = S3Util.extract_reservation_data(agent_spec)
             if reservation_data is None:
                 # Policy for objects under the prefix that do not parse as
                 # reservations: leave them alone and warn. Three behaviors are

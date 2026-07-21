@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import Optional
 from typing import Tuple
 
 from functools import partial
@@ -82,8 +83,10 @@ class S3ReservationsReader:
         get_function = partial(self.retriever.retrieve_object_with_retries, obj_key=s3_obj_key, source=self.name)
 
         try:
-            # Retrieve the reservation object from S3
-            agent_spec: Dict[str, Any] = client_worker.retry_with_new_client(get_function)
+            # Retrieve the reservation object from S3. The parsed body can be
+            # any JSON type (not just a dict) - extract_reservation_data()
+            # below is designed to accept and validate exactly that.
+            agent_spec: Any = client_worker.retry_with_new_client(get_function)
 
             # Validate the payload shape BEFORE constructing any objects, using
             # the same policy as the expiration sweep
@@ -99,7 +102,7 @@ class S3ReservationsReader:
             # "'>' not supported between instances of 'float' and 'NoneType'".
             # Validating the raw dict here is the one reliable place to detect
             # malformed payloads and treat them as not-found.
-            reservation_dict: Dict[str, Any] = S3Util.extract_reservation_data(agent_spec)
+            reservation_dict: Optional[Dict[str, Any]] = S3Util.extract_reservation_data(agent_spec)
             if reservation_dict is None:
                 # Log when we get malformed content on read (for request)
                 self.logger.error("%s: Failed to parse reservation payload for %s", self.name, reservation_id)

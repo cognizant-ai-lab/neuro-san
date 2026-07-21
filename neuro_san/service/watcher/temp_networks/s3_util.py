@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import Optional
 
 from random import random
 
@@ -97,7 +98,7 @@ class S3Util:
         return "ExpiredToken" in S3Util.get_error_code(err)
 
     @staticmethod
-    def extract_reservation_data(agent_spec: Any) -> Dict[str, Any]:
+    def extract_reservation_data(agent_spec: Any) -> Optional[Dict[str, Any]]:
         """
         Single, shared policy point for parsing the reservation block out of an
         agent-spec object read back from S3.
