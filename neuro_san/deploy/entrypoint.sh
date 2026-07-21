@@ -35,7 +35,7 @@ fi
 export PYTHONPATH
 
 echo "Configuration information:"
-cat /proc/meminfo | grep MemTotal
+grep MemTotal < /proc/meminfo
 if [ -f /sys/fs/cgroup/memory/memory.limit_in_bytes ]
 then
     cat /sys/fs/cgroup/memory/memory.limit_in_bytes
