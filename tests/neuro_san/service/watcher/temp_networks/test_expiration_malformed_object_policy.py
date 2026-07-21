@@ -81,7 +81,9 @@ class TestExpirationMalformedObjectPolicy(S3ReservationsStorageTestBase):
     """
     Verifies that expire_reservations() survives objects that are not
     shaped like reservations, keeps expiring well-formed reservations
-    around them, and never deletes an object it could not parse.
+    around them, and applies the age-gated policy to them: skip and
+    WARN while the object is younger than the grace period, delete with
+    a WARNING once it is older than any reservation could live.
     """
 
     def _put_json_object(self, key: str, payload: Any):
