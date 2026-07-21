@@ -34,6 +34,11 @@ from neuro_san.message_processing.structure_message_processor import StructureMe
 
 class QueueFilter:
     """
+    Filters messages from the input queue (the one from the MessageJournal)
+    to be sure they are suitable to be sent to the client on the output queue.
+
+    The main entrypoint to this class is filter_queue().
+    We want the work done in filter_queue() to be done off the main server thread.
     """
 
     def __init__(self, invocation_context: InvocationContext,
@@ -77,6 +82,11 @@ class QueueFilter:
         return message_processor
 
     async def filter_queue(self):
+        """
+        Main task entry point for DirectAgentSession.
+        Filter the messages coming off the input queue so that they can be sent to the client
+        via the output queue.
+        """
 
         response_dict: Dict[str, Any] = None
         async for message in self.input_queue:

@@ -186,7 +186,6 @@ class AsyncDirectAgentSession(AsyncAgentSession):
 
         # Task for late-stage conversions for any and all messages
         queue_filter = QueueFilter(self.invocation_context, template_response_dict, chat_filter, self.agent_network)
-
         task: Task = asyncio_executor.submit(self.request_id, queue_filter.filter_queue)
         # Ignore the future. Live in the now.
         _ = task
