@@ -30,6 +30,7 @@ from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.internals.chat.connectivity_reporter import ConnectivityReporter
 from neuro_san.internals.chat.data_driven_chat_session import DataDrivenChatSession
+from neuro_san.internals.chat.queue_filter import QueueFilter
 from neuro_san.internals.filters.message_filter import MessageFilter
 from neuro_san.internals.filters.message_filter_factory import MessageFilterFactory
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -190,10 +191,9 @@ class AsyncDirectAgentSession(AsyncAgentSession):
 
         # Late-stage conversions for any and all messages
         message_processor: MessageProcessor = chat_session.create_outgoing_message_processor()
+        queue_filter = QueueFilter(self.invocation_context, template_response_dict, message_filter, message_processor)
 
-        task: Task = asyncio_executor.submit(self.request_id, chat_session.filter_queue,
-                                             self.invocation_context, template_response_dict,
-                                             message_filter, message_processor)
+        task: Task = asyncio_executor.submit(self.request_id, queue_filter.filter_queue)
         # Ignore the future. Live in the now.
         _ = task
 

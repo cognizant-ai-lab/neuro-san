@@ -22,7 +22,6 @@ from typing import Tuple
 from typing import Type
 from typing import Union
 
-from copy import copy
 from copy import deepcopy
 from os import environ
 import traceback
@@ -37,7 +36,6 @@ from leaf_common.config.resolver_util import ResolverUtil
 
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.chat.chat_history_message_processor import ChatHistoryMessageProcessor
-from neuro_san.internals.filters.message_filter import MessageFilter
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.registry.agent_tool_registry import AgentToolRegistry
 from neuro_san.internals.interfaces.context_type_tracing_context_factory import ContextTypeTracingContextFactory
@@ -50,7 +48,6 @@ from neuro_san.internals.journals.intercepting_journal import InterceptingJourna
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.messages.agent_framework_message import AgentFrameworkMessage
 from neuro_san.internals.messages.base_message_dictionary_converter import BaseMessageDictionaryConverter
-from neuro_san.internals.messages.chat_message_type import ChatMessageType
 from neuro_san.internals.messages.sly_data_redactor import SlyDataRedactor
 from neuro_san.internals.run_context.factory.run_context_factory import RunContextFactory
 from neuro_san.internals.run_context.factory.master_tracing_context_factory import MasterTracingContextFactory
@@ -422,52 +419,6 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         # Eventually this might be a CompositeMessageProcessor
         message_processor = StructureMessageProcessor(structure_formats)
         return message_processor
-
-    async def filter_queue(self, invocation_context: InvocationContext,
-                           template_response_dict: Dict[str, Any],
-                           message_filter: MessageFilter,
-                           message_processor: MessageProcessor):
-
-        input_queue: AsyncCollatingQueue = invocation_context.get_queue()
-        output_queue: AsyncCollatingQueue = invocation_context.get_filtered_queue()
-
-        response_dict: Dict[str, Any] = None
-        async for message in input_queue:
-            response_dict = await self.process_queue_message(message, template_response_dict,
-                                                             message_filter, message_processor)
-            if response_dict is not None:
-                await output_queue.put(response_dict, synchronous=True)
-
-        await output_queue.put_final_item(synchronous=True)
-
-    async def process_queue_message(self, message: Dict[str, Any],
-                                    template_response_dict: Dict[str, Any],
-                                    message_filter: MessageFilter,
-                                    message_processor: MessageProcessor) -> Dict[str, Any]:
-        """
-        Process the message and return an appropriate response dictionary
-        This is called by the server main loop in streaming_chat() to filter
-        what needs to be sent to the client.
-        We'd rather this be done on the DataDrivenChatSession side of the queue.
-
-        :param message: A dictionary form of chat.ChatMessage
-        :param template_response_dict: A dictionary form of chat.ChatResponse
-        :param message_filter: An instance of MessageFilter
-        :param message_processor: An instance of MessageProcessor
-        :return: A dictionary form of chat.ChatResponse
-        """
-        if not message_filter.allow(message):
-            return None
-
-        # We expect the message to be a dictionary form of chat.ChatMessage
-        if message_processor is not None:
-            message_type: ChatMessageType = message.get("type")
-            # Can modify message
-            await message_processor.async_process_message(message, message_type)
-
-        response_dict: Dict[str, Any] = copy(template_response_dict)
-        response_dict["response"] = message
-        return response_dict
 
     async def close_of_work(self, parent_resource: LingeringResource = None):
         """
