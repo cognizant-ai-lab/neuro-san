@@ -66,8 +66,17 @@ class TempNetworkStorageUpdater(Startable):
         self.reservationist: AbstractAgentReservationist = None
         self.executor: AsyncioExecutor = None
 
-        # Default when not set is None so as to fall back to ThreadPoolExecutor default of (num_cpus + 4)
-        self.max_workers: int = environ.get("AGENT_MAX_CONCURRENT_REQUESTS", None)
+        # Default when not set is None (or <= 0) so as to fall back to ThreadPoolExecutor default of (num_cpus + 4)
+        self.max_workers: int = None
+        max_workers_str: str = environ.get("AGENT_MAX_CONCURRENT_REQUESTS", None)
+        if max_workers_str is not None:
+            try:
+                self.max_workers = int(max_workers_str)
+                if self.max_workers <= 0:
+                    # Revert to default
+                    self.max_workers = None
+            except ValueError:
+                pass
 
         self.temp_storage: ReservationsStorage = network_storage_dict.get(StorageClass.TEMP)
         if self.temp_storage is not None:

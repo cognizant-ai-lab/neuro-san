@@ -92,7 +92,17 @@ class ServerContext(ServerContextLite):
         """
         if self.executor_pool is None:
             # Default of None reverts to ThreadPoolExecutor default of (num_cpus + 4).
-            max_workers: int = environ.get("AGENT_MAX_WORKERS_PER_REQUEST", None)
+            max_workers: int = None
+            max_workers_str: str = environ.get("AGENT_MAX_WORKERS_PER_REQUEST", None)
+            if max_workers_str is not None:
+                try:
+                    max_workers = int(max_workers_str)
+                    if max_workers <= 0:
+                        # Revert to default
+                        max_workers = None
+                except ValueError:
+                    pass
+
             with self._executor_pool_lock:
                 if self.executor_pool is None:
                     self.executor_pool = AsyncioExecutorPool(reuse_mode=True,
