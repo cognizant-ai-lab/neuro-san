@@ -98,8 +98,10 @@ class QueueFilter:
             # Always signal completion so consumers don't hang if processing fails mid-stream.
             try:
                 await self.output_queue.put_final_item(synchronous=True)
+            # pylint: disable=broad-except
             except Exception:
                 pass
+
     async def process_queue_message(self, message: Dict[str, Any]) -> Dict[str, Any]:
         """
         Process the single message and return an appropriate response dictionary
