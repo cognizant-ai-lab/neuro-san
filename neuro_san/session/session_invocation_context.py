@@ -110,6 +110,7 @@ class SessionInvocationContext(InvocationContext):
         # Anything that has to do with the queue will need a new instance in
         # safe_shallow_copy() below to keep AsyncDirectAgentSessions happy.
         self.queue: AsyncCollatingQueue = AsyncCollatingQueue()
+        self.filtered_queue: AsyncCollatingQueue = AsyncCollatingQueue()
         self.journal: Journal = MessageJournal(self.queue)
         self.resources: List[LingeringResource] = []
         self.work_done_event: Event = Event()
@@ -170,6 +171,13 @@ class SessionInvocationContext(InvocationContext):
         """
         return self.queue
 
+    def get_filtered_queue(self) -> AsyncCollatingQueue:
+        """
+        :return: The AsyncCollatingQueue instance via which messages are streamed to the
+                AgentSession mechanics
+        """
+        return self.filtered_queue
+
     def get_metadata(self) -> Dict[str, str]:
         """
         :return: The metadata to pass along with any request
@@ -192,6 +200,10 @@ class SessionInvocationContext(InvocationContext):
         if self.queue is not None:
             self.queue.close()
             self.queue = None
+
+        if self.filtered_queue is not None:
+            self.filtered_queue.close()
+            self.filtered_queue = None
 
         for resource in self.resources:
             await resource.close_of_request()
@@ -270,6 +282,12 @@ class SessionInvocationContext(InvocationContext):
             self.queue = AsyncCollatingQueue()
             self.journal: Journal = MessageJournal(self.queue)
 
+        if self.filtered_queue is not None:
+            self.filtered_queue.reset()
+        else:
+            # filtered_queue is independent of the MessageJournal; just create a new instance.
+            self.filtered_queue = AsyncCollatingQueue()
+
         # Be sure we have an executor
         if self.asyncio_executor is None:
             self.asyncio_executor = self.async_executors_pool.get_executor()
@@ -303,6 +321,7 @@ class SessionInvocationContext(InvocationContext):
 
         # We need a different queue in order to call external agents with direct sessions.
         invocation_context.queue: AsyncCollatingQueue = AsyncCollatingQueue()
+        invocation_context.filtered_queue: AsyncCollatingQueue = AsyncCollatingQueue()
 
         # Now that the queue has changed, we need a new Journal as well
         # to be sure that the messages are sent to the correct queue.

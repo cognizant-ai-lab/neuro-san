@@ -22,7 +22,6 @@ from typing import List
 
 from asyncio import Task
 from contextlib import suppress
-from copy import copy
 import logging
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
@@ -31,11 +30,8 @@ from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.internals.chat.connectivity_reporter import ConnectivityReporter
 from neuro_san.internals.chat.data_driven_chat_session import DataDrivenChatSession
-from neuro_san.internals.filters.message_filter import MessageFilter
-from neuro_san.internals.filters.message_filter_factory import MessageFilterFactory
+from neuro_san.internals.chat.queue_filter import QueueFilter
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
-from neuro_san.internals.messages.chat_message_type import ChatMessageType
-from neuro_san.message_processing.message_processor import MessageProcessor
 from neuro_san.session.session_invocation_context import SessionInvocationContext
 
 
@@ -175,8 +171,6 @@ class AsyncDirectAgentSession(AsyncAgentSession):
 
         # Create a message filter so as to minimize network traffic per what the user wants
         chat_filter: Dict[str, Any] = request_dict.get("chat_filter")
-        message_filter: MessageFilter = MessageFilterFactory.create_message_filter(chat_filter)
-
         chat_context: Dict[str, Any] = request_dict.get("chat_context")
         sly_data: Dict[str, Any] = request_dict.get("sly_data")
 
@@ -190,14 +184,22 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         # Ignore the future. Live in the now.
         _ = task
 
-        # Late-stage conversions for any and all messages
-        message_processor: MessageProcessor = chat_session.create_outgoing_message_processor()
+        # Task for late-stage conversions for any and all messages
+        queue_filter = QueueFilter(self.invocation_context, template_response_dict, chat_filter, self.agent_network)
+        task: Task = asyncio_executor.submit(self.request_id, queue_filter.filter_queue)
+        # Ignore the future. Live in the now.
+        _ = task
 
         # The generator below will asynchronously block waiting for
         # chat.ChatMessage dictionaries to come back asynchronously from the submit()
         # above until there are no more from the input.
-        queue_generator = self.invocation_context.get_queue()
+        queue_generator = self.invocation_context.get_filtered_queue()
         try:
+            message: Dict[str, Any] = None
+            async for message in queue_generator:
+                if message is not None:
+                    yield message
+        finally:
             # Logic of what is done here:
             # 1. We tell underlying chat_session to delete its resources since we are done with this request;
             # 2. We do this in "finally" block so this releasing of resources happens in any case,
@@ -205,18 +207,6 @@ class AsyncDirectAgentSession(AsyncAgentSession):
             #    (which is implicitly constructed by these code lines and returned by this method)
             #    interrupted by caller-side "aclose" method.
             # 3. And we suppress all exceptions while deleting resources to keep things quieter.
-            async for message in queue_generator:
-                response_dict: Dict[str, Any] = copy(template_response_dict)
-                if message_filter.allow(message):
-                    # We expect the message to be a dictionary form of chat.ChatMessage
-                    if message_processor is not None:
-                        message_type: ChatMessageType = message.get("type")
-                        # Can modify message
-                        await message_processor.async_process_message(message, message_type)
-                    response_dict["response"] = message
-                    yield response_dict
-        finally:
-            # Release resources without exceptions
             with suppress(Exception):
                 self.invocation_context.finish_request()
 

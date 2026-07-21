@@ -54,7 +54,6 @@ from neuro_san.internals.run_context.factory.master_tracing_context_factory impo
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.message_processing.message_processor import MessageProcessor
 from neuro_san.message_processing.answer_message_processor import AnswerMessageProcessor
-from neuro_san.message_processing.structure_message_processor import StructureMessageProcessor
 
 # Lazily import specific errors from llm providers
 PATIENCE_ERRORS: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
@@ -398,27 +397,6 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         }
 
         return chat_context
-
-    def create_outgoing_message_processor(self) -> MessageProcessor:
-        """
-        :return: A MessageProcessor that filters messages outgoing to the client.
-                How this works is based on settings on the front man.
-                Can be None.
-        """
-        message_processor: MessageProcessor = None
-
-        front_man_name: str = self.registry.find_front_man()
-        front_man_spec: Dict[str, Any] = self.registry.get_agent_tool_spec(front_man_name)
-
-        # Get the formats we should parse from the final answer from the config for the network.
-        # As of 6/24/25, this is an unadvertised experimental feature.
-        structure_formats: Union[str, List[str]] = front_man_spec.get("structure_formats")
-        if structure_formats is None:
-            return message_processor
-
-        # Eventually this might be a CompositeMessageProcessor
-        message_processor = StructureMessageProcessor(structure_formats)
-        return message_processor
 
     async def close_of_work(self, parent_resource: LingeringResource = None):
         """
