@@ -36,9 +36,9 @@ from botocore.exceptions import BotoCoreError
 from botocore.credentials import Credentials
 from botocore.credentials import ReadOnlyCredentials
 from botocore.exceptions import ClientError
+from botocore.exceptions import NoCredentialsError
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
-from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.service.watcher.temp_networks.s3_util import S3Util
 
@@ -95,8 +95,13 @@ class AwsAsyncClientWorker:
                 return retval
 
             except ClientError as err:
-                extractor = DictionaryExtractor(err.response)
-                if "ExpiredToken" not in extractor.get("Error.Code", ""):
+                # S3Util.is_expired_token_error() is used instead of raw
+                # DictionaryExtractor access: the extractor returns a stored
+                # None in preference to its default, and
+                # '"ExpiredToken" not in None' would raise TypeError inside
+                # this handler, masking the original ClientError
+                # (see S3Util.get_error_code for details).
+                if not S3Util.is_expired_token_error(err):
                     raise
 
                 last_err = err
@@ -219,6 +224,17 @@ class AwsAsyncClientWorker:
             self.session = get_session()
 
         credentials: Credentials = await self.session.get_credentials()
+        if credentials is None:
+            # aiobotocore's credential resolver (like botocore's) returns None -
+            # it does not raise - when nothing in the chain (env vars, config
+            # files, IMDS/ECS, SSO) yields credentials. Without this check the
+            # call below fails with an opaque "AttributeError: 'NoneType' object
+            # has no attribute 'get_frozen_credentials'". Raise the
+            # botocore-idiomatic error instead; a client using the default
+            # credential chain surfaces this same misconfiguration as a
+            # NoCredentialsError from the S3 call itself, so callers/operators
+            # already know what it means.
+            raise NoCredentialsError()
 
         # Avoid a small race condition with the ClientError retry block
         # by always returning a local copy

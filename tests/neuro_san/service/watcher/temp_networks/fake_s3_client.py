@@ -28,6 +28,7 @@ module.
 """
 import io
 
+from typing import Any
 from typing import Dict
 
 from botocore.exceptions import ClientError
@@ -79,6 +80,43 @@ class FakeS3Client:
                 "GetObject",
             )
         return {"Body": io.BytesIO(self.objects[Key])}
+
+    def list_objects_v2(self, Bucket: str = None, Prefix: str = "",
+                        MaxKeys: int = 1000, ContinuationToken: str = None) -> Dict[str, Any]:
+        """
+        Stand-in for boto3's list_objects_v2, backed by the in-memory dict.
+
+        Mirrors the aspects of real S3 the expiration sweep relies on:
+          * Keys are returned in lexicographic (UTF-8 binary) order, which is
+            what real S3 guarantees. Tests can therefore control the sweep's
+            processing order by choosing key names (e.g. "a-poison" sorts
+            before "z-expired").
+          * When no keys match, the "Contents" key is omitted entirely; real
+            S3 omits it for empty result sets rather than returning [].
+          * Everything fits in one page (IsTruncated=False). Multi-page
+            behavior is exercised separately with a MagicMock side_effect
+            (see test_retry_on_listing_pagination.py), so this fake does not
+            implement ContinuationToken threading.
+        """
+        _ = Bucket, MaxKeys, ContinuationToken
+        keys = sorted(key for key in self.objects if key.startswith(Prefix))
+        response: Dict[str, Any] = {"IsTruncated": False}
+        if keys:
+            response["Contents"] = [{"Key": key} for key in keys]
+        return response
+
+    def delete_object(self, Bucket: str, Key: str) -> Dict[str, Any]:
+        """
+        Stand-in for boto3's delete_object.
+
+        Real S3 DELETE is idempotent: deleting a key that does not exist
+        returns 204 success, NOT a NoSuchKey error. The fake mirrors that so
+        tests exercise the storage code against real S3 semantics rather than
+        a stricter fake-only contract.
+        """
+        _ = Bucket
+        self.objects.pop(Key, None)
+        return {}
 
     def close(self):
         """

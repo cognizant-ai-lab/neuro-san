@@ -15,6 +15,9 @@
 #
 # END COPYRIGHT
 
+from typing import Any
+from typing import Dict
+
 from random import random
 
 from botocore.exceptions import ClientError
@@ -57,6 +60,92 @@ class S3Util:
         if isinstance(status, int) and 500 <= status < 600:
             return True
         return False
+
+    @staticmethod
+    def get_error_code(err: ClientError) -> str:
+        """
+        Safely extract the Error.Code from a botocore ClientError response.
+
+        Why this exists: DictionaryExtractor.get() only applies its default when
+        a key is *missing* along the path. When the terminal key is present with
+        a stored value of None, that None is returned in preference to the
+        default. botocore's REST-XML parser can produce exactly that for S3
+        error bodies with an empty <Code/> element (and S3-compatible
+        endpoints/test doubles can too), so code like
+            "ExpiredToken" not in extractor.get("Error.Code", "")
+        raises TypeError ("argument of type 'NoneType' is not iterable") inside
+        an exception handler, replacing the real S3 error with a TypeError.
+        This helper guarantees a str so substring/equality checks are safe.
+
+        :param err: The ClientError exception to evaluate
+        :return: The error code as a string, or "" if it cannot be determined
+        """
+        extractor = DictionaryExtractor(err.response)
+        code: Any = extractor.get("Error.Code", "")
+        if not isinstance(code, str):
+            code = "" if code is None else str(code)
+        return code
+
+    @staticmethod
+    def is_expired_token_error(err: ClientError) -> bool:
+        """
+        :param err: The ClientError exception to evaluate
+        :return: True if the error indicates expired credentials.
+                 Substring match intentionally covers both "ExpiredToken" and
+                 "ExpiredTokenException" (different AWS services/paths use both).
+        """
+        return "ExpiredToken" in S3Util.get_error_code(err)
+
+    @staticmethod
+    def extract_reservation_data(agent_spec: Any) -> Dict[str, Any]:
+        """
+        Single, shared policy point for parsing the reservation block out of an
+        agent-spec object read back from S3.
+
+        Before this helper, each consumer had its own ad-hoc handling of
+        malformed content, and the policies contradicted each other:
+          * S3ReservationsReader defaulted to {} and built a bogus Reservation
+            (id=None, expiration=None) whose expiration=None later crashed
+            request handling with "'>' not supported between float and NoneType".
+          * S3ReservationsExpiration defaulted expiration_time to 0, which made
+            "malformed" indistinguishable from "expired at epoch" and silently
+            DELETED the object.
+        Centralizing the shape check means both consumers agree on what a
+        well-formed reservation looks like; each caller decides what a None
+        return means for it (reader: treat as not-found; expiration: skip and
+        warn, but never delete).
+
+        Note on DictionaryExtractor semantics: its .get() only applies the
+        default when a key is missing. A stored JSON null (e.g.
+        {"metadata": {"reservation": null}}) is returned as None in preference
+        to the default - that exact shape still crashed the expiration sweep
+        with "'NoneType' object has no attribute 'get'" even after
+        DictionaryExtractor was introduced. That is why the isinstance checks
+        below cannot be replaced with extractor defaults.
+
+        :param agent_spec: Whatever was parsed from the S3 object body. May be
+                           None or any JSON type, not just a dict.
+        :return: The metadata.reservation dict - guaranteed to be a dict with a
+                 numeric expiration_time_in_seconds - or None if the object is
+                 not shaped like a reservation. The "id" field is intentionally
+                 NOT required: it is only used for logging, and requiring it
+                 would strand legacy objects that lack one.
+        """
+        if not isinstance(agent_spec, dict):
+            return None
+
+        extractor = DictionaryExtractor(agent_spec)
+        reservation_data: Any = extractor.get("metadata.reservation")
+        if not isinstance(reservation_data, dict):
+            return None
+
+        expiration_time: Any = reservation_data.get("expiration_time_in_seconds")
+        # bool is an int subclass in Python; a JSON true/false here is
+        # malformed data, not a timestamp, so exclude it explicitly.
+        if isinstance(expiration_time, bool) or not isinstance(expiration_time, (int, float)):
+            return None
+
+        return reservation_data
 
     @staticmethod
     def exponential_backoff_with_jitter(base_sleep: float, attempt: int) -> float:

@@ -124,7 +124,11 @@ class S3ReservationsWriter:
             source = self.name
 
         work_function: Awaitable = partial(self.add_all_reservations, reservations_dict, source)
-        await self.s3_async_client_worker.retry_with_new_client(work_function)
+        # Pass source through so the worker's credential-expiry warnings identify
+        # which deployment triggered the write. Without it the worker falls back
+        # to its own name ("S3ReservationsWriter"), losing the log correlation
+        # that the pre-refactor retry loop provided.
+        await self.s3_async_client_worker.retry_with_new_client(work_function, source=source)
 
     async def add_all_reservations(self,
                                    reservations_dict: Dict[Reservation, Dict[str, Any]],
