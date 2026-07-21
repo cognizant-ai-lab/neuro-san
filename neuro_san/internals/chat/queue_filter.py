@@ -89,14 +89,17 @@ class QueueFilter:
         via the output queue.
         We'd rather this work be done off the main server thread.
         """
-        response_dict: Dict[str, Any] = None
-        async for message in self.input_queue:
-            response_dict = await self.process_queue_message(message)
-            if response_dict is not None:
-                await self.output_queue.put(response_dict, synchronous=True)
-
-        await self.output_queue.put_final_item(synchronous=True)
-
+        try:
+            async for message in self.input_queue:
+                response_dict = await self.process_queue_message(message)
+                if response_dict is not None:
+                    await self.output_queue.put(response_dict, synchronous=True)
+        finally:
+            # Always signal completion so consumers don't hang if processing fails mid-stream.
+            try:
+                await self.output_queue.put_final_item(synchronous=True)
+            except Exception:
+                pass
     async def process_queue_message(self, message: Dict[str, Any]) -> Dict[str, Any]:
         """
         Process the single message and return an appropriate response dictionary
