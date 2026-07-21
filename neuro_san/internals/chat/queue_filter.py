@@ -17,14 +17,19 @@
 
 from typing import Any
 from typing import Dict
+from typing import List
+from typing import Union
 
 from copy import copy
 
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.filters.message_filter import MessageFilter
+from neuro_san.internals.filters.message_filter_factory import MessageFilterFactory
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.messages.chat_message_type import ChatMessageType
 from neuro_san.message_processing.message_processor import MessageProcessor
+from neuro_san.message_processing.structure_message_processor import StructureMessageProcessor
 
 
 class QueueFilter:
@@ -33,19 +38,43 @@ class QueueFilter:
 
     def __init__(self, invocation_context: InvocationContext,
                  template_response_dict: Dict[str, Any],
-                 message_filter: MessageFilter,
-                 message_processor: MessageProcessor):
+                 chat_filter: Dict[str, Any],
+                 agent_network: AgentNetwork):
         """
         Constructor
 
-        :param input_queue: The queue we will be iterating over.
-        :param output_queue: The queue we will be iterating over.
+        :param invocation_context: An instance of InvocationContext
+        :param template_response_dict: A dictionary form of chat.ChatResponse
+        :param chat_filter: A dictionary form of chat.ChatFilter
+        :param agent_network: An instance of AgentNetwork
         """
         self.input_queue: AsyncCollatingQueue = invocation_context.get_queue()
         self.output_queue: AsyncCollatingQueue = invocation_context.get_filtered_queue()
         self.template_response_dict: Dict[str, Any] = template_response_dict
-        self.message_filter: MessageFilter = message_filter
-        self.message_processor: MessageProcessor = message_processor
+
+        self.message_filter: MessageFilter = MessageFilterFactory.create_message_filter(chat_filter)
+        self.message_processor: MessageProcessor = self.create_outgoing_message_processor(agent_network)
+
+    def create_outgoing_message_processor(self, agent_network: AgentNetwork) -> MessageProcessor:
+        """
+        :return: A MessageProcessor that filters messages outgoing to the client.
+                How this works is based on settings on the front man.
+                Can be None.
+        """
+        message_processor: MessageProcessor = None
+
+        front_man_name: str = agent_network.find_front_man()
+        front_man_spec: Dict[str, Any] = agent_network.get_agent_tool_spec(front_man_name)
+
+        # Get the formats we should parse from the final answer from the config for the network.
+        # As of 6/24/25, this is an unadvertised experimental feature.
+        structure_formats: Union[str, List[str]] = front_man_spec.get("structure_formats")
+        if structure_formats is None:
+            return message_processor
+
+        # Eventually this might be a CompositeMessageProcessor
+        message_processor = StructureMessageProcessor(structure_formats)
+        return message_processor
 
     async def filter_queue(self):
 
