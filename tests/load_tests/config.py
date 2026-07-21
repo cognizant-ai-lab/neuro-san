@@ -20,7 +20,9 @@ import re
 from typing import Dict
 from typing import List
 from typing import Optional
-from typing import TypedDict
+
+from typing_extensions import NotRequired
+from typing_extensions import TypedDict
 
 
 class TokenEntry(TypedDict):
@@ -32,6 +34,7 @@ class TokenEntry(TypedDict):
     completion_tokens: int
     llm_calls: int
     model: str
+    reporting_agent: NotRequired[str]
 
 
 class NetworkTokenEntry(TypedDict):

@@ -565,7 +565,6 @@ class TrafficRunner:
                 try:
                     results_list.append(fut.result(timeout=remaining))
                     pending.discard(fut)
-                    killed += 1
                 except FutureTimeoutError:
                     pass
                 except CancelledError:
