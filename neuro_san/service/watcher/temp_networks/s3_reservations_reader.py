@@ -16,6 +16,7 @@
 # END COPYRIGHT
 
 from typing import Any
+from typing import Callable
 from typing import Dict
 from typing import Optional
 from typing import Tuple
@@ -80,7 +81,8 @@ class S3ReservationsReader:
         s3_obj_key: str = S3Util.get_obj_key_for_reservation(self.retriever.get_prefix(), reservation_id)
 
         client_worker: AwsSyncClientWorker = self.retriever.get_sync_client_worker()
-        get_function = partial(self.retriever.retrieve_object_with_retries, obj_key=s3_obj_key, source=self.name)
+        get_function: Callable = partial(self.retriever.retrieve_object_with_retries,
+                                         obj_key=s3_obj_key, source=self.name)
 
         try:
             # Retrieve the reservation object from S3. The parsed body can be

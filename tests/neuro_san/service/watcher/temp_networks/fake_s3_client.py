@@ -28,6 +28,9 @@ module.
 """
 import io
 
+from datetime import datetime
+from datetime import timezone
+
 from typing import Any
 from typing import Dict
 
@@ -47,6 +50,10 @@ class FakeS3Client:
         Initialize an empty in-memory bucket.
         """
         self.objects: Dict[str, bytes] = {}
+        # Per-key LastModified timestamps, surfaced by head_object().
+        # put_object() stamps "now"; tests that insert into self.objects
+        # directly can backdate a key here to exercise age-based behavior.
+        self.last_modified: Dict[str, datetime] = {}
 
     # pylint: disable=invalid-name
     def head_bucket(self, Bucket: str):
@@ -66,6 +73,7 @@ class FakeS3Client:
         if isinstance(Body, str):
             Body = Body.encode("utf-8")
         self.objects[Key] = Body
+        self.last_modified[Key] = datetime.now(timezone.utc)
         return {}
 
     def get_object(self, Bucket: str, Key: str):
@@ -116,7 +124,31 @@ class FakeS3Client:
         """
         _ = Bucket
         self.objects.pop(Key, None)
+        self.last_modified.pop(Key, None)
         return {}
+
+    def head_object(self, Bucket: str, Key: str) -> Dict[str, Any]:
+        """
+        Stand-in for boto3's head_object.
+
+        Keys inserted directly into self.objects (bypassing put_object)
+        default to "now", so they read as freshly written unless a test
+        backdates them via self.last_modified.
+
+        Real S3 signals a missing key on HEAD with error code "404" (a HEAD
+        response has no body to carry a NoSuchKey code), and the fake
+        mirrors that.
+        """
+        _ = Bucket
+        if Key not in self.objects:
+            raise ClientError(
+                {"Error": {"Code": "404", "Message": "Not Found"}},
+                "HeadObject",
+            )
+        return {
+            "LastModified": self.last_modified.get(Key, datetime.now(timezone.utc)),
+            "ContentLength": len(self.objects[Key]),
+        }
 
     def close(self):
         """

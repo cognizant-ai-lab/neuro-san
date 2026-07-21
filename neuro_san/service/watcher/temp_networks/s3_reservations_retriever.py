@@ -16,6 +16,7 @@
 # END COPYRIGHT
 
 from typing import Any
+from typing import Callable
 from typing import Dict
 
 from os import getenv
@@ -89,7 +90,7 @@ class S3ReservationsRetriever:
         """
         Initialize the S3 client and validate connection to the bucket.
         """
-        initialize_function = partial(self.initialize)
+        initialize_function: Callable = partial(self.initialize)
         self.s3_sync_client_worker.retry_with_new_client(initialize_function, source=self.name)
 
     def initialize(self, sync_aws_client: BaseClient = None):
@@ -135,7 +136,7 @@ class S3ReservationsRetriever:
         if source is None:
             source = self.name
 
-        get_function = partial(sync_aws_client.get_object, Bucket=self.bucket_name, Key=obj_key)
+        get_function: Callable = partial(sync_aws_client.get_object, Bucket=self.bucket_name, Key=obj_key)
         obj_response: Dict[str, Any] = self.s3_sync_client_worker.do_with_retries(source, get_function)
         # Parse JSON content from S3 object body
         json_content: str = obj_response["Body"].read().decode("utf-8")

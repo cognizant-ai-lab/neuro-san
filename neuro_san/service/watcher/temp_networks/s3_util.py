@@ -143,6 +143,10 @@ class S3Util:
         expiration_time: Any = reservation_data.get("expiration_time_in_seconds")
         # bool is an int subclass in Python; a JSON true/false here is
         # malformed data, not a timestamp, so exclude it explicitly.
+        # A stored JSON null (None) also fails the isinstance check below,
+        # so a null expiration is treated as malformed here rather than ever
+        # reaching a caller's "current_time > expiration_time" comparison as
+        # a None (which would raise TypeError).
         if isinstance(expiration_time, bool) or not isinstance(expiration_time, (int, float)):
             return None
 

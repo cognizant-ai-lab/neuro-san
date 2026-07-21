@@ -24,39 +24,52 @@ errors reported from production arise: the bucket is long-lived and
 shared across code versions, so it can contain objects written by an
 older schema, by other tooling, or by a since-fixed writer bug.
 
-Three policies are possible when the sweep meets such an object, and the
-codebase has already shipped two of them:
+Three policies were considered before the current one:
 
   1. Raise: the sweep crashes at the first malformed key, the watcher
      retries next interval and crashes at the same key again - so ONE
      bad object stops ALL expiration, forever, while logging the
      NoneType error every cycle.
-  2. Treat as expired and delete: DictionaryExtractor defaults make a
-     missing expiration_time read as 0, current_time > 0 is always
-     true, and the object is PERMANENTLY DELETED with only a
-     debug-level log naming reservation '<unknown>'.
-     That silently destroys any object the current code merely fails to
-     understand (e.g. schema drift during a rolling deploy, where an old
-     server's sweep would delete a new server's live reservations), and
-     it destroys the only evidence of whatever wrote the bad object.
-  3. Skip and warn (the policy these tests pin): the sweep must survive
-     the object, must keep expiring everything else, and must NOT delete
-     data it cannot parse - deleting data should be a human decision,
-     not a parse failure. The cost is that true garbage lingers and
-     warns every sweep until someone removes it.
+  2. Treat as expired and delete immediately: DictionaryExtractor
+     defaults make a missing expiration_time read as 0, current_time > 0
+     is always true, and the object is PERMANENTLY DELETED with only a
+     debug-level log naming reservation '<unknown>'. That silently
+     destroys any object the current code merely fails to understand
+     (e.g. schema drift during a rolling deploy, where an old server's
+     sweep would delete a new server's live reservations), and it
+     destroys the only evidence of whatever wrote the bad object.
+  3. Skip and warn forever: safe for the data and the sweep, but
+     unparseable detritus builds up and gets re-read and re-logged on
+     every pass (review feedback on the first draft of this policy).
 
-NOTE: test_wrong_shape_object_is_not_deleted and
-test_null_reservation_object_does_not_kill_sweep fail under either of
-the first two policies - by design. The first pins against policy 2's
-silent deletion; the second shows that policy 2 does not even fully
-stop the reported NoneType error, because DictionaryExtractor returns
-a stored JSON null in preference to its default, putting the sweep
-right back into policy 1's death spiral.
+The pinned policy is AGE-GATED deletion: an unparseable object is
+skipped with a WARNING while younger than
+S3ReservationsExpiration.MALFORMED_OBJECT_GRACE_SECONDS, and deleted
+with a WARNING once older. Every reservation has a bounded lifetime, so
+an object older than any possible lifetime cannot be a live reservation
+under ANY schema version - deleting it is safe and bounds the detritus,
+while the grace window keeps rolling-deploy schema drift from
+destroying live reservations and gives humans time to notice the
+warnings.
+
+NOTE on coverage vs the alternatives: immediate deletion (policy 2)
+fails test_young_wrong_shape_object_is_not_deleted; skip-forever
+(policy 3) fails test_old_wrong_shape_object_is_deleted; raising
+(policy 1) fails test_null_reservation_object_does_not_kill_sweep,
+because DictionaryExtractor returns a stored JSON null in preference to
+its default, which put naive extractor-based handling right back into
+policy 1's death spiral.
 """
 import json
 import time
 
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
+
 from typing import Any
+
+from neuro_san.service.watcher.temp_networks.s3_reservations_expiration import S3ReservationsExpiration
 
 from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
@@ -105,10 +118,9 @@ class TestExpirationMalformedObjectPolicy(S3ReservationsStorageTestBase):
         """
         Control case anchoring the harness: with only well-formed objects
         in the bucket, the sweep deletes the expired one and keeps the
-        live one. This test passes under any of the three candidate
-        policies; it exists so that failures in the sibling tests are
-        attributable to the malformed-object policy, not to the test
-        scaffolding.
+        live one. This test passes under any of the candidate policies;
+        it exists so that failures in the sibling tests are attributable
+        to the malformed-object policy, not to the test scaffolding.
         """
         expired_key: str = self._put_reservation_object("copy_cat-expired", -3600.0)
         live_key: str = self._put_reservation_object("copy_cat-live", +3600.0)
@@ -124,20 +136,22 @@ class TestExpirationMalformedObjectPolicy(S3ReservationsStorageTestBase):
             f"Expected the live reservation {live_key} to survive the sweep.",
         )
 
-    def test_wrong_shape_object_is_not_deleted(self):
+    def test_young_wrong_shape_object_is_not_deleted(self):
         """
         A valid-JSON object under the prefix with no metadata.reservation
-        block must NOT be deleted by the sweep.
+        block must NOT be deleted while it is younger than the grace
+        period (the fake stamps direct inserts as freshly written).
 
-        Guards against the treat-as-expired-and-delete policy, where
+        Guards against the immediate-delete policy, where
         DictionaryExtractor defaults classify the object as "expired at
         epoch 0" (current_time > 0 is always true) and delete_object
         permanently removes it, logging only at debug level as
-        reservation '<unknown>'. "We could not parse it" and "it has expired" are
-        different facts; conflating them silently destroys any object
-        written by a schema the current code doesn't know - including
-        live reservations written by a newer server version during a
-        rolling deploy.
+        reservation '<unknown>'. "We could not parse it" and "it has
+        expired" are different facts; conflating them silently destroys
+        any object written by a schema the current code doesn't know -
+        including live reservations written by a newer server version
+        during a rolling deploy, which are by definition younger than
+        the grace period.
         """
         wrong_shape_key: str = "reservations/wrong-shape.json"
         self._put_json_object(wrong_shape_key, {
@@ -151,12 +165,87 @@ class TestExpirationMalformedObjectPolicy(S3ReservationsStorageTestBase):
         self.assertIn(
             wrong_shape_key, self.fake_s3.objects,
             f"Expected the unparseable object {wrong_shape_key} to be left in place "
-            f"(skip-and-warn policy); it was deleted, meaning the sweep treats "
-            f"'could not parse' as 'expired' and silently destroys data.",
+            f"while younger than the grace period; it was deleted, meaning the sweep "
+            f"treats 'could not parse' as 'expired' and silently destroys data.",
         )
         self.assertIn(
             live_key, self.fake_s3.objects,
             f"Expected the live reservation {live_key} to survive the sweep.",
+        )
+
+    def test_old_wrong_shape_object_is_deleted(self):
+        """
+        An unparseable object OLDER than the grace period must be
+        deleted by the sweep (with a WARNING).
+
+        Guards against the skip-forever policy: every reservation has a
+        bounded lifetime, so an object last modified longer ago than any
+        reservation could live cannot be a live reservation under ANY
+        schema version. Leaving it would mean unparseable detritus
+        builds up and gets re-read and re-logged on every pass, forever.
+        """
+        old_key: str = "reservations/old-wrong-shape.json"
+        self._put_json_object(old_key, {
+            "foo": "bar",
+            "note": "valid JSON, but not shaped like a reservation",
+        })
+        # Backdate the object to just past the grace period.
+        self.fake_s3.last_modified[old_key] = (
+            datetime.now(timezone.utc)
+            - timedelta(seconds=S3ReservationsExpiration.MALFORMED_OBJECT_GRACE_SECONDS + 3600.0)
+        )
+        live_key: str = self._put_reservation_object("copy_cat-live", +3600.0)
+
+        self.storage.expiration.expire_reservations()
+
+        self.assertNotIn(
+            old_key, self.fake_s3.objects,
+            f"Expected the unparseable object {old_key}, last modified beyond the "
+            f"grace period, to be deleted; leaving it means detritus accumulates "
+            f"and is re-read and re-logged on every sweep.",
+        )
+        self.assertIn(
+            live_key, self.fake_s3.objects,
+            f"Expected the live reservation {live_key} to survive the sweep.",
+        )
+
+    def test_null_expiration_time_is_treated_as_malformed(self):
+        """
+        What happens if expiration_time_in_seconds is None (a stored JSON
+        null)? Answer: extract_reservation_data() rejects the whole
+        payload (null fails its isinstance check, and DictionaryExtractor
+        would otherwise return the stored null in preference to any
+        default), so the object takes the malformed path - skipped while
+        young - and the sweep's current_time > expiration_time comparison
+        can never see a None. No crash, no deletion, and reservations
+        after it still expire.
+        """
+        null_expiration_key: str = "reservations/a-null-expiration.json"
+        self._put_json_object(null_expiration_key, {
+            "name": "null-expiration",
+            "metadata": {
+                "reservation": {
+                    "id": "null-expiration",
+                    "lifetime_in_seconds": 3600.0,
+                    "expiration_time_in_seconds": None,
+                },
+                "stored_at": time.time(),
+            },
+        })
+        expired_key: str = self._put_reservation_object("z-expired", -3600.0)
+
+        self.storage.expiration.expire_reservations()
+
+        self.assertIn(
+            null_expiration_key, self.fake_s3.objects,
+            f"Expected the null-expiration object {null_expiration_key} to be "
+            f"treated as malformed (skipped while young), not deleted and not a "
+            f"crash: 'time() > None' must be unreachable.",
+        )
+        self.assertNotIn(
+            expired_key, self.fake_s3.objects,
+            f"Expected the expired reservation {expired_key} to be deleted even "
+            f"though a null-expiration object sorts before it in the sweep.",
         )
 
     def test_null_reservation_object_does_not_kill_sweep(self):
@@ -200,5 +289,5 @@ class TestExpirationMalformedObjectPolicy(S3ReservationsStorageTestBase):
         self.assertIn(
             poison_key, self.fake_s3.objects,
             f"Expected the unparseable object {poison_key} to be left in place "
-            f"(skip-and-warn policy), not deleted.",
+            f"(young: still within the grace period), not deleted.",
         )

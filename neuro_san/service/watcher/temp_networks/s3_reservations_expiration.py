@@ -16,6 +16,7 @@
 # END COPYRIGHT
 
 from typing import Any
+from typing import Callable
 from typing import Dict
 from typing import Iterable
 from typing import Optional
@@ -30,6 +31,7 @@ from logging import Logger
 from botocore.client import BaseClient
 from botocore.exceptions import ClientError
 
+from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.service.watcher.temp_networks.aws_sync_client_worker import AwsSyncClientWorker
 from neuro_san.service.watcher.temp_networks.s3_reservations_retriever import S3ReservationsRetriever
 from neuro_san.service.watcher.temp_networks.s3_util import S3Util
@@ -42,6 +44,15 @@ class S3ReservationsExpiration:
     The main entry point to this guy is expire_reservations() which gets called as part of
     S3ReservationsStorage watcher loop.
     """
+
+    # Grace period before an object under the prefix that does not parse as a
+    # reservation is deleted (see handle_malformed_object). Every reservation
+    # has a bounded lifetime (clamped against a server max, which defaults to
+    # Reservationist.DEFAULT_LIFETIME), so an object that has existed for
+    # twice that cannot be a live reservation under ANY schema version.
+    # Deployments that raise the server max lifetime beyond the default
+    # should raise this accordingly.
+    MALFORMED_OBJECT_GRACE_SECONDS: float = 2 * Reservationist.DEFAULT_LIFETIME
 
     def __init__(self, name: str = "S3ReservationsExpiration", bucket_name: str = "",
                  prefix: str = S3Util.DEFAULT_RESERVATIONS_PREFIX):
@@ -75,7 +86,7 @@ class S3ReservationsExpiration:
         """
         self.logger.debug("%s: Starting expiration process for S3 reservations", self.name)
 
-        expire_function = partial(self.expire_any_reservations)
+        expire_function: Callable = partial(self.expire_any_reservations)
 
         client_worker: AwsSyncClientWorker = self.retriever.get_sync_client_worker()
         client_worker.retry_with_new_client(expire_function, source=self.name)
@@ -128,7 +139,7 @@ class S3ReservationsExpiration:
             if continuation_token:
                 kwargs["ContinuationToken"] = continuation_token
 
-            list_objects_function = partial(sync_aws_client.list_objects_v2, **kwargs)
+            list_objects_function: Callable = partial(sync_aws_client.list_objects_v2, **kwargs)
             response = client_worker.do_with_retries(self.name, list_objects_function)
             if response is None:
                 response = {}
@@ -176,43 +187,30 @@ class S3ReservationsExpiration:
 
             reservation_data: Optional[Dict[str, Any]] = S3Util.extract_reservation_data(agent_spec)
             if reservation_data is None:
-                # Policy for objects under the prefix that do not parse as
-                # reservations: leave them alone and warn. Three behaviors are
-                # possible here, and each has been tried or considered:
-                #   1. Raise: one malformed object makes every sweep crash at
-                #      the same key ("'NoneType' object has no attribute
-                #      'get'"), so nothing sorted after it ever expires.
-                #   2. Treat as expired and delete (e.g. by defaulting
-                #      expiration_time to 0, where current_time > 0 is
-                #      always true): silently destroys any
-                #      object whose shape we merely fail to understand - e.g.
-                #      one written by a newer/older writer version - with only
-                #      a debug-level log naming reservation '<unknown>'.
-                #   3. Skip and warn (current): safe for both the data and the
-                #      sweep. The cost is that true garbage lingers and warns
-                #      on every sweep. That is deliberate: a human should
-                #      decide to delete data, not a parse failure.
-                self.logger.warning(
-                    "%s: Object %s under the reservations prefix does not parse as a "
-                    "reservation (missing/null metadata.reservation or non-numeric "
-                    "expiration_time_in_seconds). Leaving it in place. "
-                    "If this is expected garbage, remove it manually; if it recurs for "
-                    "objects the writer produced, check for schema drift.",
-                    self.name, obj_key)
-                return False
+                # Not shaped like a reservation. Note that a stored
+                # expiration_time_in_seconds of None/null lands HERE too:
+                # extract_reservation_data() returns None for the whole
+                # payload when that field is missing, null, or non-numeric.
+                return self.handle_malformed_object(obj_key, current_time,
+                                                    sync_aws_client=sync_aws_client)
 
             client_worker: AwsSyncClientWorker = self.retriever.get_sync_client_worker()
 
             # Compare current time against reservation's expiration timestamp.
-            # extract_reservation_data() guarantees this key exists and is numeric,
-            # so no default is needed and the comparison below cannot TypeError.
+            # What if expiration_time_in_seconds is None (a stored JSON null)
+            # or missing? It cannot be, by this line: null, missing, bool and
+            # non-numeric values all fail extract_reservation_data()'s
+            # isinstance check, which returns None for the WHOLE payload, and
+            # that case exits above via handle_malformed_object(). Here the
+            # value is guaranteed to be an int or float, so no default is
+            # needed and this comparison cannot raise TypeError.
             expiration_time: float = reservation_data.get("expiration_time_in_seconds")
             if current_time > expiration_time:
                 # Reservation has expired - remove it from S3 storage
                 try:
-                    delete_function = partial(sync_aws_client.delete_object,
-                                              Bucket=self.retriever.get_bucket_name(),
-                                              Key=obj_key)
+                    delete_function: Callable = partial(sync_aws_client.delete_object,
+                                                        Bucket=self.retriever.get_bucket_name(),
+                                                        Key=obj_key)
                     client_worker.do_with_retries(source, delete_function)
                     reservation_id: str = reservation_data.get("id", "<unknown>")
                     self.logger.debug("%s: Deleted expired reservation %s from S3", self.name, reservation_id)
@@ -263,3 +261,74 @@ class S3ReservationsExpiration:
                               self.name, obj_key, str(exception))
 
         return expired
+
+    def handle_malformed_object(self, obj_key: str, current_time: float,
+                                sync_aws_client: BaseClient = None) -> bool:
+        """
+        Policy for objects under the reservations prefix that do not parse as
+        reservations (see S3Util.extract_reservation_data). Four behaviors are
+        possible here, and each has been tried or considered:
+          1. Raise: one malformed object makes every sweep crash at the same
+             key ("'NoneType' object has no attribute 'get'"), so nothing
+             sorted after it ever expires.
+          2. Treat as expired and delete immediately: silently destroys any
+             object whose shape we merely fail to understand - including a
+             live reservation written by a newer schema version during a
+             rolling deploy.
+          3. Skip and warn forever: safe for the data, but unparseable
+             detritus builds up and gets re-read and re-logged on every pass.
+          4. Age-gated delete (current): skip and WARN while the object is
+             younger than MALFORMED_OBJECT_GRACE_SECONDS, then delete it with
+             a WARNING. Every reservation has a bounded lifetime, so once an
+             object has existed longer than any reservation could live, no
+             schema version can still consider it live - deleting it is safe,
+             detritus is bounded, and the warnings during the grace period
+             give humans a window to notice and diagnose schema drift.
+
+        :param obj_key: S3 object key of the unparseable object
+        :param current_time: Current timestamp to compare against
+        :param sync_aws_client: S3 client
+        :return: True if the object was deleted (counted as expired),
+                 False if it was left in place for now
+        """
+        client_worker: AwsSyncClientWorker = self.retriever.get_sync_client_worker()
+
+        # The object's age comes from S3's LastModified via head_object. This
+        # extra call happens only on this (rare) malformed path, never during
+        # a normal sweep. Any ClientError it raises (e.g. "404" because
+        # another process already deleted the object, or ExpiredToken) is
+        # handled by expire_one_reservation()'s handler, just like errors
+        # from the get/delete calls.
+        head_function: Callable = partial(sync_aws_client.head_object,
+                                          Bucket=self.retriever.get_bucket_name(),
+                                          Key=obj_key)
+        head_response: Dict[str, Any] = client_worker.do_with_retries(self.name, head_function)
+
+        last_modified: Any = head_response.get("LastModified")
+        if last_modified is None:
+            # No age available: err on the side of keeping data this pass.
+            age_in_seconds: float = 0.0
+        else:
+            age_in_seconds = current_time - last_modified.timestamp()
+
+        if age_in_seconds <= self.MALFORMED_OBJECT_GRACE_SECONDS:
+            self.logger.warning(
+                "%s: Object %s under the reservations prefix does not parse as a "
+                "reservation (missing/null metadata.reservation or non-numeric "
+                "expiration_time_in_seconds). Leaving it in place for now; if it is "
+                "still unparseable %d seconds after its last modification, it will be "
+                "deleted. If this recurs for objects the writer produced, check for "
+                "schema drift.",
+                self.name, obj_key, int(self.MALFORMED_OBJECT_GRACE_SECONDS))
+            return False
+
+        delete_function: Callable = partial(sync_aws_client.delete_object,
+                                            Bucket=self.retriever.get_bucket_name(),
+                                            Key=obj_key)
+        client_worker.do_with_retries(self.name, delete_function)
+        self.logger.warning(
+            "%s: Deleted unparseable object %s: last modified %s, older than the "
+            "%d-second grace period. No reservation lives that long, so no schema "
+            "version could still consider it live.",
+            self.name, obj_key, last_modified, int(self.MALFORMED_OBJECT_GRACE_SECONDS))
+        return True
