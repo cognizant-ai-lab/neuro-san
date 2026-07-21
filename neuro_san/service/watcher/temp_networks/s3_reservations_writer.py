@@ -16,7 +16,7 @@
 # END COPYRIGHT
 
 from typing import Any
-from typing import Awaitable
+from typing import Callable
 from typing import Dict
 
 from os import getenv
@@ -123,7 +123,9 @@ class S3ReservationsWriter:
         if source is None:
             source = self.name
 
-        work_function: Awaitable = partial(self.add_all_reservations, reservations_dict, source)
+        # partial() of an async method is a callable that RETURNS an awaitable
+        # when invoked, not an awaitable itself - hence Callable, not Awaitable.
+        work_function: Callable = partial(self.add_all_reservations, reservations_dict, source)
         # Pass source through so the worker's credential-expiry warnings identify
         # which deployment triggered the write. Without it the worker falls back
         # to its own name ("S3ReservationsWriter"), losing the log correlation
@@ -175,11 +177,11 @@ class S3ReservationsWriter:
         # Store as JSON object in S3 with proper content type
         json_body: str = dumps(agent_spec, indent=4)  # Pretty-printed JSON
 
-        put_function: Awaitable = partial(async_aws_client.put_object,
-                                          Bucket=self.bucket_name,
-                                          Key=key,
-                                          Body=json_body,
-                                          ContentType="application/json")
+        put_function: Callable = partial(async_aws_client.put_object,
+                                         Bucket=self.bucket_name,
+                                         Key=key,
+                                         Body=json_body,
+                                         ContentType="application/json")
 
         await self.s3_async_client_worker.do_with_retries(source, put_function)
 

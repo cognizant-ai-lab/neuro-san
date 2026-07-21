@@ -65,7 +65,7 @@ class S3ReservationsReader:
         """
         self.retriever.start()
 
-    def get_one_reservation(self, reservation_id: str) -> Tuple[Reservation, AgentNetwork]:
+    def get_one_reservation(self, reservation_id: str) -> Tuple[Optional[Reservation], Optional[AgentNetwork]]:
         """
         Sync a single reservation from S3.
 

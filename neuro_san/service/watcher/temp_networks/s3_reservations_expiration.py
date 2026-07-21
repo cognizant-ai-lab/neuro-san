@@ -237,7 +237,7 @@ class S3ReservationsExpiration:
             if error_code == "NoSuchKey":
                 self.logger.debug("%s: Reservation %s was already removed by another process", self.name, obj_key)
                 expired = True  # Object is gone, which is the desired outcome for expiration
-            elif "ExpiredToken" in error_code:
+            elif S3Util.is_expired_token_error(exception):
                 # Credential expiry must NOT be swallowed here. The client this sweep
                 # uses was created from frozen credentials (see AwsSyncClientWorker),
                 # which never auto-refresh, and the only code that can refresh them is

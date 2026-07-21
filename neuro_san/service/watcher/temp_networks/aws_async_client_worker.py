@@ -16,7 +16,7 @@
 # END COPYRIGHT
 
 from typing import Any
-from typing import Awaitable
+from typing import Callable
 
 from asyncio import CancelledError
 from asyncio import Lock as AsyncLock
@@ -74,7 +74,7 @@ class AwsAsyncClientWorker:
         # Cached frozen credentials which can be invalidated should they expire
         self.frozen_credentials: ReadOnlyCredentials = None
 
-    async def retry_with_new_client(self, work_function: Awaitable, *, source: str = None) -> Any:
+    async def retry_with_new_client(self, work_function: Callable, *, source: str = None) -> Any:
         """
         Retries the async work_function when client credentials can expire.
         :param work_function: The async work function to retry
@@ -135,7 +135,7 @@ class AwsAsyncClientWorker:
                 if self.async_aws_client_lock is None:
                     self.async_aws_client_lock = AsyncLock()
 
-    async def do_work_with_new_client(self, work_function: Awaitable, *, attempt: int = 1) -> Any:
+    async def do_work_with_new_client(self, work_function: Callable, *, attempt: int = 1) -> Any:
         """
         This method separates the machinations of obtaining a proper S3 client
         from add_all_reservations() which does all the actual work.
