@@ -85,6 +85,13 @@ class InvocationContext(LingeringResource):
     def get_queue(self) -> AsyncCollatingQueue:
         """
         :return: The AsyncCollatingQueue instance via which messages are streamed to the
+                QueueFilter mechanics
+        """
+        raise NotImplementedError
+
+    def get_filtered_queue(self) -> AsyncCollatingQueue:
+        """
+        :return: The AsyncCollatingQueue instance via which messages are streamed to the
                 AgentSession mechanics
         """
         raise NotImplementedError
