@@ -69,6 +69,8 @@ from datetime import timezone
 
 from typing import Any
 
+from botocore.exceptions import ClientError
+
 from neuro_san.service.watcher.temp_networks.s3_reservations_expiration import S3ReservationsExpiration
 
 from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
@@ -207,6 +209,41 @@ class TestExpirationMalformedObjectPolicy(S3ReservationsStorageTestBase):
         self.assertIn(
             live_key, self.fake_s3.objects,
             f"Expected the live reservation {live_key} to survive the sweep.",
+        )
+
+    def test_object_deleted_mid_check_counts_as_expired(self):
+        """
+        Race: another process deletes an unparseable object between the
+        sweep's get_object and the head_object age check.
+
+        HEAD signals a missing key with the bare HTTP code "404" - a HEAD
+        response has no body to carry a NoSuchKey code - so the sweep
+        must treat "404" the same as NoSuchKey: the object is gone, which
+        is the desired outcome for expiration, not an error to log.
+        """
+        racing_key: str = "reservations/racing.json"
+        self._put_json_object(racing_key, {"foo": "bar"})
+
+        def head_object_racing_delete(**_kwargs):
+            # Simulate the concurrent deletion: the object vanishes just
+            # before the HEAD lands, exactly as real S3 would report it.
+            raise ClientError(
+                {"Error": {"Code": "404", "Message": "Not Found"}},
+                "HeadObject",
+            )
+
+        # Inject onto the in-memory FakeS3Client for the duration of this
+        # test only (instance attribute shadows the class method).
+        self.fake_s3.head_object = head_object_racing_delete
+
+        expired: bool = self.storage.expiration.expire_one_reservation(
+            racing_key, time.time(), sync_aws_client=self.fake_s3)
+
+        self.assertTrue(
+            expired,
+            "Expected a 404 from the head_object age check to be treated as "
+            "'already removed by another process' (a successful expiration "
+            "outcome), not logged as an S3 error.",
         )
 
     def test_null_expiration_time_is_treated_as_malformed(self):

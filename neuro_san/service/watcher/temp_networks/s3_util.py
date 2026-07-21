@@ -113,8 +113,10 @@ class S3Util:
             DELETED the object.
         Centralizing the shape check means both consumers agree on what a
         well-formed reservation looks like; each caller decides what a None
-        return means for it (reader: treat as not-found; expiration: skip and
-        warn, but never delete).
+        return means for it (reader: treat as not-found; expiration:
+        age-gated handling - skip and warn while the object is young, delete
+        once it is older than any reservation could live; see
+        S3ReservationsExpiration.handle_malformed_object for that policy).
 
         Note on DictionaryExtractor semantics: its .get() only applies the
         default when a key is missing. A stored JSON null (e.g.

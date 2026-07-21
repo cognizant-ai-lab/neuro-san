@@ -231,8 +231,12 @@ class S3ReservationsExpiration:
 
         except ClientError as exception:
             error_code: str = S3Util.get_error_code(exception)
-            # Handle case where another process already removed the object before we could read it
-            if error_code == "NoSuchKey":
+            # Handle case where another process already removed the object
+            # before we could read it. Two codes mean "gone": GET errors carry
+            # NoSuchKey in the response body, while HEAD errors (from the
+            # malformed-path head_object age check) have no body for botocore
+            # to parse, so a missing key surfaces as the bare HTTP status "404".
+            if error_code in ("NoSuchKey", "404"):
                 self.logger.debug("%s: Reservation %s was already removed by another process", self.name, obj_key)
                 expired = True  # Object is gone, which is the desired outcome for expiration
             elif S3Util.is_expired_token_error(exception):
