@@ -229,6 +229,10 @@ ENV AGENT_HEALTH_PROBE_PORT="8081"
 # A value of 0 indicates unlimited requests are handled.
 ENV AGENT_MAX_CONCURRENT_REQUESTS="50"
 
+# Maximum number of worker threads per request.
+# Default of <= 0 (or unset) indicates system default of (num_cpus + 4).
+ENV AGENT_MAX_WORKERS_PER_REQUEST="0"
+
 # Number of requests served before the server shuts down in an orderly fashion.
 # This is useful for testing response handling in clusters with duplicated pods.
 # A value of -1 indicates unlimited requests are handled.

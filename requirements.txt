@@ -6,14 +6,8 @@
 # requirements-build.txt
 
 # In-house dependencies
-leaf-common>=1.2.45
+leaf-common>=1.2.47
 leaf-server-common>=0.1.25
-
-# These are needed for generating code from .proto files and for the
-# generated *_pb2_grpc.py files which import grpcio
-grpcio>=1.62.0
-grpcio-tools>=1.62.0
-protobuf>=4.25.3
 
 # Downgraded secondary dependencies for error-free pip installs
 pyhocon>=0.3.60
