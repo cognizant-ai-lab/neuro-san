@@ -45,7 +45,10 @@ then
     cat /sys/fs/cgroup/memory.max
 fi
 
-lscpu | grep "^CPU(s):"
+if command -v lscpu >/dev/null 2>&1
+then
+    lscpu | grep "^CPU(s):"
+fi
 if [ -f /sys/fs/cgroup/cpu/cpu.cfs_quota_us ]
 then
     cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us
