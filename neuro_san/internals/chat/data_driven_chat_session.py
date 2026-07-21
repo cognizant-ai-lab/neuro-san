@@ -423,6 +423,23 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         message_processor = StructureMessageProcessor(structure_formats)
         return message_processor
 
+    async def filter_queue(self, invocation_context: InvocationContext,
+                           template_response_dict: Dict[str, Any],
+                           message_filter: MessageFilter,
+                           message_processor: MessageProcessor):
+
+        input_queue: AsyncCollatingQueue = invocation_context.get_queue()
+        output_queue: AsyncCollatingQueue = invocation_context.get_filtered_queue()
+
+        response_dict: Dict[str, Any] = None
+        async for message in input_queue:
+            response_dict = await self.process_queue_message(message, template_response_dict,
+                                                             message_filter, message_processor)
+            if response_dict is not None:
+                await output_queue.put(response_dict, synchronous=True)
+
+        await output_queue.put_final_item(synchronous=True)
+
     async def process_queue_message(self, message: Dict[str, Any],
                                     template_response_dict: Dict[str, Any],
                                     message_filter: MessageFilter,

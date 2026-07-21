@@ -191,18 +191,21 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         # Late-stage conversions for any and all messages
         message_processor: MessageProcessor = chat_session.create_outgoing_message_processor()
 
+        task: Task = asyncio_executor.submit(self.request_id, chat_session.filter_queue,
+                                             self.invocation_context, template_response_dict,
+                                             message_filter, message_processor)
+        # Ignore the future. Live in the now.
+        _ = task
+
         # The generator below will asynchronously block waiting for
         # chat.ChatMessage dictionaries to come back asynchronously from the submit()
         # above until there are no more from the input.
-        queue_generator = self.invocation_context.get_queue()
+        queue_generator = self.invocation_context.get_filtered_queue()
         try:
+            message: Dict[str, Any] = None
             async for message in queue_generator:
-                response_dict: Dict[str, Any] = await chat_session.process_queue_message(message,
-                                                                                         template_response_dict,
-                                                                                         message_filter,
-                                                                                         message_processor)
-                if response_dict is not None:
-                    yield response_dict
+                if message is not None:
+                    yield message
         finally:
             # Logic of what is done here:
             # 1. We tell underlying chat_session to delete its resources since we are done with this request;
