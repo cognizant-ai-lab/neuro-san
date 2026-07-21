@@ -285,7 +285,7 @@ class SessionInvocationContext(InvocationContext):
         if self.filtered_queue is not None:
             self.filtered_queue.reset()
         else:
-            # When creating a new queue, we need to make sure that the journal knows about it
+            # filtered_queue is independent of the MessageJournal; just create a new instance.
             self.filtered_queue = AsyncCollatingQueue()
 
         # Be sure we have an executor
