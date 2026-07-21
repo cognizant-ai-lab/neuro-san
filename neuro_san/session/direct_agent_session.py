@@ -198,7 +198,7 @@ class DirectAgentSession(AgentSession):
             #    interrupted by caller-side "close" method.
             # 3. And we suppress all exceptions while deleting resources to keep things quieter.
             message: Dict[str, Any] = None
-            for message in generator.synchronously_iterate(self.invocation_context.get_queue()):
+            for message in generator.synchronously_iterate(self.invocation_context.get_filtered_queue()):
                 if message is not None:
                     yield message
         finally:
