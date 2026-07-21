@@ -44,7 +44,6 @@ if [ -f /sys/fs/cgroup/memory.max ]
 then
     cat /sys/fs/cgroup/memory.max
 fi
-echo
 
 lscpu | grep "^CPU(s):"
 if [ -f /sys/fs/cgroup/cpu/cpu.cfs_quota_us ]
@@ -55,7 +54,6 @@ if [ -f /sys/fs/cgroup/cpu.max ]
 then
     cat /sys/fs/cgroup/cpu.max
 fi
-echo
 
 ulimit -a
 
