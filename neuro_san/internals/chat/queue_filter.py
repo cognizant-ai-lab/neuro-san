@@ -62,6 +62,7 @@ class QueueFilter:
 
     def create_outgoing_message_processor(self, agent_network: AgentNetwork) -> MessageProcessor:
         """
+        :param agent_network: An instance of AgentNetwork
         :return: A MessageProcessor that filters messages outgoing to the client.
                 How this works is based on settings on the front man.
                 Can be None.
@@ -86,8 +87,8 @@ class QueueFilter:
         Main task entry point for DirectAgentSession.
         Filter the messages coming off the input queue so that they can be sent to the client
         via the output queue.
+        We'd rather this work be done off the main server thread.
         """
-
         response_dict: Dict[str, Any] = None
         async for message in self.input_queue:
             response_dict = await self.process_queue_message(message)
@@ -98,15 +99,9 @@ class QueueFilter:
 
     async def process_queue_message(self, message: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Process the message and return an appropriate response dictionary
-        This is called by the server main loop in streaming_chat() to filter
-        what needs to be sent to the client.
-        We'd rather this be done on the DataDrivenChatSession side of the queue.
+        Process the single message and return an appropriate response dictionary
 
         :param message: A dictionary form of chat.ChatMessage
-        :param template_response_dict: A dictionary form of chat.ChatResponse
-        :param message_filter: An instance of MessageFilter
-        :param message_processor: An instance of MessageProcessor
         :return: A dictionary form of chat.ChatResponse
         """
         if not self.message_filter.allow(message):
