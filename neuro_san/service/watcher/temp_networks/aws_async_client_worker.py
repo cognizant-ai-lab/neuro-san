@@ -33,22 +33,37 @@ from aiobotocore.session import AioSession
 from aiobotocore.session import ClientCreatorContext
 
 from botocore.exceptions import BotoCoreError
-from botocore.credentials import Credentials
-from botocore.credentials import ReadOnlyCredentials
 from botocore.exceptions import ClientError
-from botocore.exceptions import NoCredentialsError
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 
 from neuro_san.service.watcher.temp_networks.s3_util import S3Util
 
 
-# pylint: disable=too-many-instance-attributes
 class AwsAsyncClientWorker:
     """
     Class that manages a particular AWS boto async work_function (from functools.partial)
-    that has async_aws_client as an argument whose credentials are properly handled for
-    short-lived async boto clients.
+    that has async_aws_client as an argument, supplying it with an aiobotocore
+    client created per call.
+
+    Credential handling is delegated to aiobotocore by creating the client
+    WITHOUT explicit keys: such a client holds the session's credential
+    OBJECT and freezes it per request at signing time. For token-based
+    credential sources (IAM Instance Role, ECS Task Role, AWS SSO/IAM
+    Identity Center) that object is refreshable, checks its expiry window on
+    every request, and refreshes itself BEFORE signing - so the client never
+    presents an expired token to S3. The previous design passed a frozen
+    key/secret/token snapshot to create_client(), which pins static
+    credentials with no refresh machinery. See issue #1153.
+
+    Unlike AwsSyncClientWorker (whose client serves the per-request read hot
+    path and is therefore long-lived), this worker still creates its client
+    per work_function call: aiobotocore clients are async context managers
+    whose lifetime must be managed inside the event loop that uses them, the
+    writer that owns this worker has no stop() hook at which a long-lived
+    context could be exited cleanly, and the write path runs per deployment
+    batch - not per request - so client construction is not a hot-path cost
+    here.
     """
 
     def __init__(self, name: str, aws_service: str = "s3"):
@@ -68,15 +83,25 @@ class AwsAsyncClientWorker:
         self.async_aws_client_lock: AsyncLock = None
 
         # Boto Machinations
-        # We should be able to have a single Session for the lifetime of this object
+        # We should be able to have a single Session for the lifetime of this
+        # object. It is only discarded - to force the credential chain to be
+        # re-resolved - if S3 rejects the credentials a request was signed
+        # with (see retry_with_new_client).
         self.session: AioSession = None
-
-        # Cached frozen credentials which can be invalidated should they expire
-        self.frozen_credentials: ReadOnlyCredentials = None
 
     async def retry_with_new_client(self, work_function: Callable, *, source: str = None) -> Any:
         """
         Retries the async work_function when client credentials can expire.
+
+        Because clients are created keyless (see class docstring),
+        token-based credentials refresh at signing time and this retry path
+        stays dormant for them. It exists for STATIC credentials rotated
+        externally - e.g. environment variables or a credentials file
+        rewritten by another process. The credential chain is resolved once
+        per Session and those sources are never re-read on their own, so
+        the only way to pick up the new values is to discard the session
+        and re-resolve from scratch.
+
         :param work_function: The async work function to retry
         :param *: extra keyword arguments for work_function
         :param source: A string describing where the deployment was coming from
@@ -106,12 +131,13 @@ class AwsAsyncClientWorker:
 
                 last_err = err
 
-                # Background: Certain IAM Instance Roles, ECS Task Roles or AWS SSO/IAM Identity Center
-                #             profiles have token-based credentials that may expire.
-                #             See: https://docs.aws.amazon.com/boto3/latest/guide/configuration.html
-
-                # Reset the cached credentials as they are likely expired and try again.
-                self.frozen_credentials = None
+                # Discard the session so the next attempt re-resolves the
+                # credential chain (env vars, config files, IMDS/ECS, SSO)
+                # from scratch. This is a plain attribute swap: a concurrent
+                # batch that is mid-create under the lock may briefly keep
+                # using the old session, and will simply land in its own
+                # retry here if its credentials are also stale.
+                self.session = None
                 if source is None:
                     source = self.name
                 self.logger.warning("%s (%d): %s credentials seem to have expired. Retrying. "
@@ -165,14 +191,17 @@ class AwsAsyncClientWorker:
             lock_aquired_time = perf_counter()
             acquired_lock = True
 
-            # Get the current notion of frozen credentials.
-            frozen_creds: ReadOnlyCredentials = await self.get_frozen_credentials()
-            async_aws_client_creator_context = self.session.create_client(
-                self.aws_service,
-                aws_access_key_id=frozen_creds.access_key,
-                aws_secret_access_key=frozen_creds.secret_key,
-                aws_session_token=frozen_creds.token,
-            )
+            # Create the session if needed.
+            # We should only need one for the lifetime of this object (until
+            # the ExpiredToken handler in retry_with_new_client discards it).
+            if self.session is None:
+                self.session = get_session()
+
+            # No aws_access_key_id/aws_secret_access_key/aws_session_token
+            # arguments here: passing them would pin a static snapshot of the
+            # credentials into the client and disable at-signing-time refresh
+            # (see class docstring).
+            async_aws_client_creator_context = self.session.create_client(self.aws_service)
             client_created_time = perf_counter()
 
             # Normally this is done in a python ContextManager using a with-statement,
@@ -204,44 +233,6 @@ class AwsAsyncClientWorker:
                          lock_released_time - start_time,
                          finish_time - start_time)
         return retval
-
-    async def get_frozen_credentials(self) -> ReadOnlyCredentials:
-        """
-        Get the frozen credentials for the current session.
-        We are assuming that we already have the async_aws_client_lock.
-        """
-
-        # Use a local copy to avoid a race with the ClientError retry block
-        local_frozen: ReadOnlyCredentials = self.frozen_credentials
-
-        # If we already have some credentials, use them
-        if local_frozen is not None:
-            return local_frozen
-
-        # Create the session if needed
-        # We should only need one for the lifetime of the object
-        if self.session is None:
-            self.session = get_session()
-
-        credentials: Credentials = await self.session.get_credentials()
-        if credentials is None:
-            # aiobotocore's credential resolver (like botocore's) returns None -
-            # it does not raise - when nothing in the chain (env vars, config
-            # files, IMDS/ECS, SSO) yields credentials. Without this check the
-            # call below fails with an opaque "AttributeError: 'NoneType' object
-            # has no attribute 'get_frozen_credentials'". Raise the
-            # botocore-idiomatic error instead; a client using the default
-            # credential chain surfaces this same misconfiguration as a
-            # NoCredentialsError from the S3 call itself, so callers/operators
-            # already know what it means.
-            raise NoCredentialsError()
-
-        # Avoid a small race condition with the ClientError retry block
-        # by always returning a local copy
-        local_frozen = await credentials.get_frozen_credentials()
-        self.frozen_credentials = local_frozen
-
-        return local_frozen
 
     @staticmethod
     async def do_with_retries(source: str, fn, *, max_attempts: int = 8, base_sleep: float = 0.25):

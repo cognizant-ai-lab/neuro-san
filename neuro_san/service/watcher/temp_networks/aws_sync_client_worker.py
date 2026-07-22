@@ -19,18 +19,14 @@ from typing import Any
 from typing import Callable
 
 from time import sleep as sync_sleep
-from time import perf_counter
 
 from logging import getLogger
 from logging import Logger
 from threading import Lock as SyncLock
 
 from botocore.client import BaseClient
-from botocore.credentials import Credentials
-from botocore.credentials import ReadOnlyCredentials
 from botocore.exceptions import BotoCoreError
 from botocore.exceptions import ClientError
-from botocore.exceptions import NoCredentialsError
 from botocore.session import get_session
 from botocore.session import Session
 
@@ -39,12 +35,32 @@ from leaf_common.logging.sensitive_logger import SensitiveLogger
 from neuro_san.service.watcher.temp_networks.s3_util import S3Util
 
 
-# pylint: disable=too-many-instance-attributes
 class AwsSyncClientWorker:
     """
-    Class that manages a particular AWS boto synchronous work_function (from functools.partial)
-    that has sync_aws_client as an argument whose credentials are properly handled for
-    short-lived synchronous boto clients.
+    Class that manages a particular AWS boto synchronous work_function
+    (from functools.partial) that has sync_aws_client as an argument,
+    supplying it with a single long-lived botocore client.
+
+    Credential handling is delegated to botocore by creating the client
+    WITHOUT explicit keys: such a client holds the session's credential
+    OBJECT and freezes it per request at signing time. For token-based
+    credential sources (IAM Instance Role, ECS Task Role, AWS SSO/IAM
+    Identity Center) that object is RefreshableCredentials, which checks
+    its expiry window on every request and refreshes itself BEFORE
+    signing - so a long-lived keyless client never presents an expired
+    token to S3, and token rotation costs zero failed calls.
+    See: https://docs.aws.amazon.com/boto3/latest/guide/credentials.html
+
+    The previous design instead froze the session's credentials once and
+    passed the raw key/secret/token to create_client() - which makes
+    botocore build a static Credentials object with NO refresh machinery -
+    and created/closed a client around every work_function call,
+    discarding the client's urllib3 connection pool each time. That put
+    client construction (serialized under a worker-wide lock) plus a
+    fresh TCP+TLS handshake on every S3 call, on a read path that runs
+    per request for reservation-cache misses, and made token-expiry
+    recovery reactive: one real failed ExpiredToken round trip per expiry
+    cycle. See issue #1153.
     """
 
     def __init__(self, name: str, aws_service: str = "s3"):
@@ -58,18 +74,35 @@ class AwsSyncClientWorker:
         self.aws_service: str = aws_service
         self.logger: Logger = getLogger(self.__class__.__name__)
 
+        # Guards creation/reset of the session + client pair below.
+        # Only (re)creation is serialized; once created, the client is used
+        # WITHOUT the lock - botocore clients are thread-safe and serve
+        # concurrent requests through their connection pool, so no
+        # per-request serialization point is needed.
         self.sync_aws_client_lock: SyncLock = SyncLock()
 
-        # Boto Machinations
-        # We should be able to have a single Session for the lifetime of this object
+        # One Session and one client for the lifetime of this object.
+        # They are only discarded - together, by reset_client() - if S3
+        # rejects the credentials a request was signed with
+        # (see retry_with_new_client).
         self.session: Session = None
-
-        # Cached frozen credentials which can be invalidated should they expire
-        self.frozen_credentials: ReadOnlyCredentials = None
+        self.sync_aws_client: BaseClient = None
 
     def retry_with_new_client(self, work_function: Callable, *, source: str = None) -> Any:
         """
-        Retries the work_function when client credentials can expire.
+        Calls work_function with this worker's long-lived S3 client,
+        retrying with a rebuilt session + client should S3 reject the
+        credentials a request was signed with.
+
+        Because the client is keyless (see class docstring), token-based
+        credentials refresh at signing time and this retry path stays
+        dormant for them. It exists for STATIC credentials rotated
+        externally - e.g. environment variables or a credentials file
+        rewritten by another process. botocore resolves the credential
+        chain once per Session and never re-reads those sources on its
+        own, so the only way to pick up the new values is to discard the
+        session and client and re-resolve from scratch (reset_client()).
+
         :param work_function: The work function to retry
         :param *: extra keyword arguments for work_function
         :param source: A string describing where the deployment was coming from
@@ -81,7 +114,8 @@ class AwsSyncClientWorker:
 
         for attempt in range(1, max_attempts + 1):
             try:
-                retval: Any = self.do_work_with_new_client(work_function, attempt=attempt)
+                sync_aws_client: BaseClient = self.get_client()
+                retval: Any = work_function(sync_aws_client=sync_aws_client)
                 return retval
 
             except ClientError as err:
@@ -96,12 +130,10 @@ class AwsSyncClientWorker:
 
                 last_err = err
 
-                # Background: Certain IAM Instance Roles, ECS Task Roles or AWS SSO/IAM Identity Center
-                #             profiles have token-based credentials that may expire.
-                #             See: https://docs.aws.amazon.com/boto3/latest/guide/configuration.html
-
-                # Reset the cached credentials as they are likely expired and try again.
-                self.frozen_credentials = None
+                # Discard the session + client so the next attempt re-resolves
+                # the credential chain (env vars, config files, IMDS/ECS, SSO)
+                # from scratch.
+                self.reset_client()
                 if source is None:
                     source = self.name
                 self.logger.warning("%s (%d): %s credentials seem to have expired. Retrying. "
@@ -114,113 +146,58 @@ class AwsSyncClientWorker:
 
         raise RuntimeError(f"{self.aws_service} credential retries exhausted without capturing an error") from last_err
 
-    def do_work_with_new_client(self, work_function: Callable, *, attempt: int = 1) -> Any:
+    def get_client(self) -> BaseClient:
         """
-        This method separates the machinations of obtaining a proper S3 client
-        from add_all_reservations() which does all the actual work.
+        :return: This worker's long-lived S3 client, created (along with
+                 its Session) on first use.
 
-        :param work_function: The work function to retry
-        :param *: extra keyword arguments for work_function
-        :param attempt: Attempt number
-        :return: What work_function returns
+        The client is created WITHOUT explicit keys, which is what keeps
+        botocore's at-signing-time credential refresh in play (see class
+        docstring). Creation is serialized under the lock so concurrent
+        first callers cannot race the credential chain; after that,
+        callers get the cached client for the cost of one unlocked
+        attribute read.
         """
+        # Unlocked fast path: after first creation, this read is the whole
+        # cost of client acquisition on the read hot path.
+        local_client: BaseClient = self.sync_aws_client
+        if local_client is not None:
+            return local_client
 
-        retval: Any = None
+        with self.sync_aws_client_lock:
+            # Double-checked: another thread may have created the client
+            # while we waited on the lock.
+            if self.sync_aws_client is None:
+                # We should only need one Session for the lifetime of this
+                # object (until reset_client() forces re-resolution).
+                if self.session is None:
+                    self.session = get_session()
 
-        # Create an botocore client for sync operations.
-        sync_aws_client: BaseClient = None
+                # No aws_access_key_id/aws_secret_access_key/aws_session_token
+                # arguments here: passing them would pin a static snapshot of
+                # the credentials into the client and disable auto-refresh.
+                self.sync_aws_client = self.session.create_client(self.aws_service)
+                self.logger.info("%s: Created long-lived %s client", self.name, self.aws_service)
 
-        lock_released: bool = False
-        acquired_lock: bool = False
+            return self.sync_aws_client
 
-        start_time: float = perf_counter()
-        lock_aquired_time: float = 0.0
-        client_created_time: float = 0.0
-        lock_released_time: float = 0.0
-        try:
-            # Serialize creation of the Client with the lock to avoid credential-chain races.
-            # pylint: disable=consider-using-with
-            self.sync_aws_client_lock.acquire()
-            lock_aquired_time = perf_counter()
-            acquired_lock = True
-
-            # Get the current notion of frozen credentials.
-            frozen_creds: ReadOnlyCredentials = self.get_frozen_credentials()
-            sync_aws_client = self.session.create_client(
-                self.aws_service,
-                aws_access_key_id=frozen_creds.access_key,
-                aws_secret_access_key=frozen_creds.secret_key,
-                aws_session_token=frozen_creds.token,
-            )
-            client_created_time = perf_counter()
-
-            # Normally this is done in a python ContextManager using a with-statement,
-            # but we want to be holding the lock while we create the client to avoid
-            # credential-chain races like NoCredentialsError.
-
-            # Release the lock while we process, allowing other tasks to work on
-            # getting their own sync_aws_client.
-            self.sync_aws_client_lock.release()
-            lock_released_time = perf_counter()
-            lock_released = True
-
-            retval = work_function(sync_aws_client=sync_aws_client)
-
-        finally:
-            # Always release the lock if we successfully acquired it and have not already done so,
-            # in case there was an error getting/entering the context manager.
-            if acquired_lock and not lock_released:
-                self.sync_aws_client_lock.release()
-
-            if sync_aws_client is not None:
-                sync_aws_client.close()
-
-        finish_time: float = perf_counter()
-        self.logger.info("%s (%d): Lock acquisition in: %fs. Client context creation after: %fs. "
-                         "Lock release after: %fs. Finish after: %fs",
-                         self.name, attempt,
-                         lock_aquired_time - start_time,
-                         client_created_time - start_time,
-                         lock_released_time - start_time,
-                         finish_time - start_time)
-        return retval
-
-    def get_frozen_credentials(self) -> ReadOnlyCredentials:
+    def reset_client(self):
         """
-        Get the frozen credentials for the current session.
-        We are assuming that we already have the sync_aws_client_lock.
+        Discard the long-lived client AND its Session so the next
+        get_client() re-resolves the credential chain from scratch.
+        Discarding only the client would not be enough: the stale resolved
+        credentials live on the Session, and a new client built from the
+        old Session would just reuse them.
+
+        The old client is deliberately dropped without close(): other
+        threads may still be mid-request on it, and close() would tear the
+        connection pool out from under them. Dropping the reference lets
+        in-flight calls finish; the pool is released with the client
+        object once the last reference is gone.
         """
-
-        # Use a local copy to avoid a race with the ClientError retry block
-        local_frozen: ReadOnlyCredentials = self.frozen_credentials
-
-        # If we already have some credentials, use them
-        if local_frozen is not None:
-            return local_frozen
-
-        # Create the session if needed
-        # We should only need one for the lifetime of the object
-        if self.session is None:
-            self.session = get_session()
-
-        credentials: Credentials = self.session.get_credentials()
-        if credentials is None:
-            # botocore's credential resolver returns None - it does not raise -
-            # when nothing in the chain (env vars, config files, IMDS/ECS, SSO)
-            # yields credentials. Without this check the call below fails with
-            # an opaque "AttributeError: 'NoneType' object has no attribute
-            # 'get_frozen_credentials'". Raise the botocore-idiomatic error
-            # instead; a client using the default credential chain surfaces
-            # this same misconfiguration as a NoCredentialsError from the S3
-            # call itself, so callers/operators already know what it means.
-            raise NoCredentialsError()
-
-        # Avoid a small race condition with the ClientError retry block
-        # by always returning a local copy
-        local_frozen = credentials.get_frozen_credentials()
-        self.frozen_credentials = local_frozen
-
-        return local_frozen
+        with self.sync_aws_client_lock:
+            self.sync_aws_client = None
+            self.session = None
 
     @staticmethod
     def do_with_retries(source: str, fn, *, max_attempts: int = 8, base_sleep: float = 0.25):

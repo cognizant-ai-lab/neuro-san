@@ -30,9 +30,6 @@ from typing import Dict
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import patch
 
-from aiobotocore.credentials import AioCredentials
-from botocore.credentials import Credentials
-
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
 from neuro_san.service.watcher.temp_networks.s3_reservations_storage import S3ReservationsStorage
 from tests.neuro_san.service.watcher.temp_networks.fake_s3_client import FakeS3Client
@@ -76,55 +73,35 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
 
         self.fake_s3: FakeS3Client = FakeS3Client()
 
-        # Patch boto3_client at the import boundary in s3_reservations_storage
-        # so storage.start() receives our fake instead of a real boto3 client.
+        # Patch Session.create_client at the import boundary in
+        # aws_sync_client_worker so the workers receive our fake instead of a
+        # real boto3 client. The workers create their clients WITHOUT explicit
+        # keys and never consult Session.get_credentials themselves (credential
+        # resolution/refresh happens inside real clients at request-signing
+        # time), so intercepting create_client is the only seam needed.
         boto3_patcher = patch(
             "neuro_san.service.watcher.temp_networks.aws_sync_client_worker.Session.create_client",
             return_value=self.fake_s3,
         )
         boto3_patcher.start()
-        # Restores the real boto3_client symbol after the test completes,
+        # Restores the real create_client symbol after the test completes,
         # regardless of pass/fail.
         self.addCleanup(boto3_patcher.stop)
 
-        # Patch Session.get_credentials at the import boundary in s3_reservations_writer
-        # so storage.start() receives deterministic fake credentials.
-        def _fake_get_credentials(*_args, **_kwargs):
-            return Credentials("bogus", "bogus")
-
-        credentials_patcher = patch(
-            "neuro_san.service.watcher.temp_networks.aws_sync_client_worker.Session.get_credentials",
-            new=_fake_get_credentials,
-        )
-        credentials_patcher.start()
-        # Restores the real AioSession symbol after the test completes, regardless of pass/fail.
-        self.addCleanup(credentials_patcher.stop)
-
         self.fake_async_s3: FakeAsyncS3Client = FakeAsyncS3Client(self.fake_s3)
 
-        # Patch aiobotocore_client at the import boundary in s3_reservations_storage
-        # so storage.start() receives our fake instead of a real aiobotocore client.
+        # Patch AioSession.create_client at the import boundary in
+        # aws_async_client_worker so the writer receives our fake instead of a
+        # real aiobotocore client. Same reasoning as the sync patch above: the
+        # keyless-client design leaves create_client as the only seam.
         aiobotocore_patcher = patch(
             "neuro_san.service.watcher.temp_networks.aws_async_client_worker.AioSession.create_client",
             return_value=self.fake_async_s3,
         )
         aiobotocore_patcher.start()
-        # Restores the real aiobotocore symbol after the test completes,
+        # Restores the real create_client symbol after the test completes,
         # regardless of pass/fail.
         self.addCleanup(aiobotocore_patcher.stop)
-
-        # Patch AioSession.get_credentials at the import boundary in s3_reservations_writer
-        # so storage.start() receives deterministic fake credentials.
-        async def _async_fake_get_credentials(*_args, **_kwargs):
-            return AioCredentials("bogus", "bogus")
-
-        credentials_patcher = patch(
-            "neuro_san.service.watcher.temp_networks.aws_async_client_worker.AioSession.get_credentials",
-            new=_async_fake_get_credentials,
-        )
-        credentials_patcher.start()
-        # Restores the real AioSession symbol after the test completes, regardless of pass/fail.
-        self.addCleanup(credentials_patcher.stop)
 
         self.storage: S3ReservationsStorage = S3ReservationsStorage(
             bucket_name="test-bucket",
