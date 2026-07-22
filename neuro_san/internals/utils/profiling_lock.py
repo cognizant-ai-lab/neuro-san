@@ -23,7 +23,7 @@ from typing import Tuple
 from logging import getLogger
 from logging import Logger
 from os import environ
-from theading import Lock
+from threading import Lock
 from time import perf_counter
 
 
