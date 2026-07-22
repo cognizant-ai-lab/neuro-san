@@ -142,7 +142,6 @@ class AwsSyncClientWorker:
         keep the retry policies in sync when editing.
 
         :param work_function: The work function to retry
-        :param *: extra keyword arguments for work_function
         :param source: A string describing where the deployment was coming from
         :return: What work_function returns
         """

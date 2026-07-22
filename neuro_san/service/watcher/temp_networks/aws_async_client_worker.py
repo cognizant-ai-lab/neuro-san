@@ -127,7 +127,6 @@ class AwsAsyncClientWorker:
         keep the retry policies in sync when editing.
 
         :param work_function: The async work function to retry
-        :param *: extra keyword arguments for work_function
         :param source: A string describing where the deployment was coming from
         :return: What work_function returns
         """
@@ -221,7 +220,6 @@ class AwsAsyncClientWorker:
                 attempt used and can avoid discarding a fresh one built by
                 a concurrent batch.
         :param work_function: The async work function to retry
-        :param *: extra keyword arguments for work_function
         :param attempt: Attempt number
         :return: What work_function returns
         """
