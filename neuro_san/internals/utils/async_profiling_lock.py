@@ -48,10 +48,11 @@ class AsyncProfilingLock:
         self.logger: Logger = getLogger(name)
         self.stats_in_play: List[Tuple[str, float]] = []
 
-    def __enter__(self, stats: List[Tuple[str, float]]) -> AsyncProfilingLock:
+    def __enter__(self) -> AsyncProfilingLock:
         """
         Acquire the lock
         """
+        stats: List[Tuple[str, float]] = []
         self.acquire(stats)
         return self
 
