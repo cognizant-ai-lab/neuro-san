@@ -84,6 +84,8 @@ class GeminiLlmPolicy(LlmPolicy):
             # global verbose value) so that the warning is never triggered.
             verbose=False,
         )
+        # Cosmetic only: silences google-genai's misleading "AFC is enabled" log banner.
+        # Behavior is identical with or without this.
         return self._disable_afc(llm)
 
     def _disable_afc(self, llm: BaseLanguageModel) -> Any:
@@ -129,10 +131,14 @@ class GeminiLlmPolicy(LlmPolicy):
             module_name="google.genai.types",
             raise_if_not_found=False)
         if AutomaticFunctionCallingConfig is None:
+            # No google-genai SDK, so no AFC (and no banner) to worry about.
             return llm
 
+        # AFC can only be disabled per-request, so bind the setting onto every call.
         bound: Any = llm.bind(automatic_function_calling=AutomaticFunctionCallingConfig(disable=True))
         if not hasattr(bound, "bind_tools"):
+            # langchain-core < 1.4: bind() gives a generic RunnableBinding whose missing
+            # bind_tools() would break agent creation.  Keep the harmless banner instead.
             return llm
 
         return bound
