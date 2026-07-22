@@ -48,28 +48,28 @@ class AsyncProfilingLock:
         self.logger: Logger = getLogger(name)
         self.stats_in_play: List[Tuple[str, float]] = []
 
-    def __enter__(self) -> AsyncProfilingLock:
+    async def __aenter__(self) -> AsyncProfilingLock:
         """
         Acquire the lock
         """
         stats: List[Tuple[str, float]] = []
-        self.acquire(stats)
+        await self.acquire(stats)
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
         """
         Release the lock
         :return: True to suppress exception. False or None to propagate exception.
         """
-        self.release()
+        await self.release()
         return False
 
-    def acquire(self, stats: List[Tuple[str, float]] = None):
+    async def acquire(self, stats: List[Tuple[str, float]] = None):
         """
         Acquire the lock
         """
         self.add_stat(self.INITIAL_STATE, stats)
-        self.lock.acquire()
+        await self.lock.acquire()
         self.add_stat("acquired lock", stats)
         self.stats_in_play = stats
 
@@ -81,14 +81,14 @@ class AsyncProfilingLock:
             stats = self.stats_in_play
         stats.append((key, perf_counter()))
 
-    def release(self):
+    async def release(self):
         """
         Release the lock
         """
         stats: List[Tuple[str, float]] = self.stats_in_play
         self.stats_in_play = []
 
-        self.lock.release()
+        await self.lock.release()
 
         self.add_stat("released lock", stats)
         self.print_stats(stats)

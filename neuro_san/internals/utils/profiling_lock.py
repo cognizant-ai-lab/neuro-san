@@ -20,9 +20,9 @@ from __future__ import annotations
 from typing import List
 from typing import Tuple
 
+from theading import Lock
 from logging import getLogger
 from logging import Logger
-from threading import Lock
 from time import perf_counter
 
 
@@ -48,28 +48,28 @@ class ProfilingLock:
         self.logger: Logger = getLogger(name)
         self.stats_in_play: List[Tuple[str, float]] = []
 
-    async def __aenter__(self) -> ProfilingLock:
+    def __enter__(self) -> ProfilingLock:
         """
         Acquire the lock
         """
         stats: List[Tuple[str, float]] = []
-        await self.acquire(stats)
+        self.acquire(stats)
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
         """
         Release the lock
         :return: True to suppress exception. False or None to propagate exception.
         """
-        await self.release()
+        self.release()
         return False
 
-    async def acquire(self, stats: List[Tuple[str, float]] = None):
+    def acquire(self, stats: List[Tuple[str, float]] = None):
         """
         Acquire the lock
         """
         self.add_stat(self.INITIAL_STATE, stats)
-        await self.lock.acquire()
+        self.lock.acquire()
         self.add_stat("acquired lock", stats)
         self.stats_in_play = stats
 
@@ -81,14 +81,14 @@ class ProfilingLock:
             stats = self.stats_in_play
         stats.append((key, perf_counter()))
 
-    async def release(self):
+    def release(self):
         """
         Release the lock
         """
         stats: List[Tuple[str, float]] = self.stats_in_play
         self.stats_in_play = []
 
-        await self.lock.release()
+        self.lock.release()
 
         self.add_stat("released lock", stats)
         self.print_stats(stats)
