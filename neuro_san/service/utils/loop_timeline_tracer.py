@@ -157,7 +157,13 @@ class LoopTimelineTracer:
                  first. Empty if tracing has not started or no events have
                  been captured.
         """
-        return list(self._events)
+        # Deque iteration may raise if mutated concurrently from another thread.
+        for _ in range(5):
+            try:
+                return list(self._events)
+            except RuntimeError:
+                time.sleep(0)
+        return []
 
     def dump_to_file(self, path: str) -> int:
         """
