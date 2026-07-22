@@ -231,7 +231,9 @@ class LoopTimelineTracer:
             if isinstance(self_obj, asyncio.Task):
                 return cls._LABEL_TASK_STEP, self_obj.get_name()
             # Otherwise it's a plain callback (call_soon target, done cb, etc.).
-            qualname: str = getattr(callback, "__qualname__", repr(callback))
+            qualname = getattr(callback, "__qualname__", None)
+            if qualname is None:
+                qualname = repr(callback)
             return cls._LABEL_CALLBACK, qualname
         except Exception:  # pylint: disable=broad-exception-caught
             # Anything unexpected: don't crash the profile callback.
