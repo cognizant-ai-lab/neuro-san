@@ -23,6 +23,7 @@ from typing import Tuple
 from asyncio import Lock as AsyncLock
 from logging import getLogger
 from logging import Logger
+from os import environ
 from time import perf_counter
 
 
@@ -47,6 +48,7 @@ class AsyncProfilingLock:
 
         self.logger: Logger = getLogger(name)
         self.stats_in_play: List[Tuple[str, float]] = []
+        self.show_stats: bool = environ.get("AGENT_LOCK_PROFILING", "false").lower() == "true"
 
     async def __aenter__(self) -> AsyncProfilingLock:
         """
@@ -91,7 +93,8 @@ class AsyncProfilingLock:
         await self.lock.release()
 
         self.add_stat("released lock", stats)
-        self.print_stats(stats)
+        if self.show_stats:
+            self.print_stats(stats)
 
     def print_stats(self, stats: List[Tuple[str, float]]):
         """

@@ -20,9 +20,10 @@ from __future__ import annotations
 from typing import List
 from typing import Tuple
 
-from theading import Lock
 from logging import getLogger
 from logging import Logger
+from os import environ
+from theading import Lock
 from time import perf_counter
 
 
@@ -47,6 +48,7 @@ class ProfilingLock:
 
         self.logger: Logger = getLogger(name)
         self.stats_in_play: List[Tuple[str, float]] = []
+        self.show_stats: bool = environ.get("AGENT_LOCK_PROFILING", "false").lower() == "true"
 
     def __enter__(self) -> ProfilingLock:
         """
@@ -91,7 +93,8 @@ class ProfilingLock:
         self.lock.release()
 
         self.add_stat("released lock", stats)
-        self.print_stats(stats)
+        if self.show_stats:
+            self.print_stats(stats)
 
     def print_stats(self, stats: List[Tuple[str, float]]):
         """
