@@ -259,7 +259,9 @@ class HttpServer(AgentStateListener):
         try:
             threshold_ms: int = int(raw_threshold)
         except ValueError:
-            self.logger.warning({}, "Invalid AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS=%r; falling back to 100ms", raw_threshold)
+            self.logger.warning({},
+                                "Invalid AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS=%r; falling back to 100ms",
+                                raw_threshold)
             threshold_ms = 100
 
         io_loop = tornado.ioloop.IOLoop.current()
