@@ -255,10 +255,11 @@ class HttpServer(AgentStateListener):
         if not ConfigUtil.get_bool(os.environ, "AGENT_ASYNCIO_DEBUG"):
             return
 
+        raw_threshold: str = os.environ.get("AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS", "100")
         try:
-            threshold_ms: int = int(os.environ.get(
-                "AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS", "100"))
+            threshold_ms: int = int(raw_threshold)
         except ValueError:
+            self.logger.warning({}, "Invalid AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS=%r; falling back to 100ms", raw_threshold)
             threshold_ms = 100
 
         io_loop = tornado.ioloop.IOLoop.current()
