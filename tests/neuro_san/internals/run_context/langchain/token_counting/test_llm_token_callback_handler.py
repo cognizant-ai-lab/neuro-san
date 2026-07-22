@@ -94,6 +94,38 @@ class TestLlmTokenCallbackHandler:
             for record in caplog.records
         )
 
+    def test_calculate_token_costs_use_model_name_fallback(self, handler_with_model_infos):
+        """Test that an alias entry without prices falls back to its "use_model_name" entry."""
+        handler = handler_with_model_infos
+        handler.llm_infos["gpt-4-alias"] = {
+            "use_model_name": "gpt-4"
+        }
+        handler.provider_class = "openai"
+
+        cost = handler.calculate_token_costs("gpt-4-alias", 1000, 2000)
+
+        # Expected: same as "gpt-4": (1000/1000 * 0.03) + (2000/1000 * 0.01) = 0.05
+        assert cost == 0.05
+
+    def test_calculate_token_costs_use_model_name_missing_target(self, handler_with_empty_infos, caplog):
+        """Test that an alias pointing to a nonexistent entry warns and defaults to 0 instead of raising."""
+        handler = handler_with_empty_infos
+        handler.llm_infos = {
+            "dangling-alias": {
+                "use_model_name": "no-such-model"
+            }
+        }
+        handler.provider_class = "custom"
+
+        with caplog.at_level(logging.WARNING):
+            cost = handler.calculate_token_costs("dangling-alias", 1000, 2000)
+
+        assert cost == 0.0
+        assert any(
+            record.levelno == logging.WARNING and "No price info found for model dangling-alias" in record.getMessage()
+            for record in caplog.records
+        )
+
     def test_calculate_token_costs_zero_tokens(self, handler_with_model_infos):
         """Test with zero tokens."""
         handler = handler_with_model_infos
