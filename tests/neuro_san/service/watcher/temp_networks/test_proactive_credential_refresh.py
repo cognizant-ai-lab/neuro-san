@@ -43,6 +43,7 @@ against that design; it is green with keyless clients.
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Tuple
 
 from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
@@ -70,11 +71,12 @@ class _TokenBoundS3Client:
 
     # pylint: disable=too-few-public-methods
 
-    def __init__(self, fake_s3: FakeS3Client, bound_token: str,
+    def __init__(self, fake_s3: FakeS3Client, bound_token: Optional[str],
                  provider_state: Dict[str, str],
                  failed_calls: List[Tuple[str, str]]):
         self._fake_s3: FakeS3Client = fake_s3
-        self._bound_token: str = bound_token
+        # None means "created keylessly" - see class docstring.
+        self._bound_token: Optional[str] = bound_token
         self._provider_state: Dict[str, str] = provider_state
         self._failed_calls: List[Tuple[str, str]] = failed_calls
 
@@ -84,7 +86,7 @@ class _TokenBoundS3Client:
         Reject the request if the token it presents is no longer the
         provider's current token; otherwise delegate to the fake.
         """
-        presented_token: str = self._bound_token
+        presented_token: Optional[str] = self._bound_token
         if presented_token is None:
             # Keyless client: the request is signed with the token the
             # provider holds RIGHT NOW, resolved at request time.

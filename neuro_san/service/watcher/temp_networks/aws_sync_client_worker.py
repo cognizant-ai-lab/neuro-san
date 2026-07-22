@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Callable
+from typing import Optional
 
 from time import sleep as sync_sleep
 
@@ -242,7 +243,7 @@ class AwsSyncClientWorker:
 
             return self.sync_aws_client
 
-    def reset_client(self, failed_client: BaseClient = None):
+    def reset_client(self, failed_client: Optional[BaseClient] = None):
         """
         Discard the long-lived client AND its Session so the next
         get_client() re-resolves the credential chain from scratch.

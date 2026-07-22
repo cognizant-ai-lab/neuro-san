@@ -32,9 +32,9 @@ every local-cache miss, and on EVERY request naming an unknown agent id
     pool - so every S3 GET paid a fresh TCP+TLS handshake and churned
     file descriptors / TIME_WAIT sockets under concurrent load.
 
-Per-call clients are not required for credential correctness either: the
-long-lived client AwsSyncClientWorker now keeps is created WITHOUT
-explicit keys, so each request is signed through the session's
+Per-call clients are not required for credential correctness either:
+AwsSyncClientWorker's long-lived client is created WITHOUT explicit
+keys, so each request is signed through the session's
 RefreshableCredentials, which botocore refreshes automatically at
 signing time. (botocore clients are also thread-safe, so one client can
 serve concurrent readers through its connection pool.)
