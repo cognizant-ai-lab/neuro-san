@@ -110,4 +110,4 @@ class ProfilingLock:
             if first_time == 0.0:
                 first_time = time
             else:
-                self.logger.info("%s:%s in %f secs", self.name, key, time - first_time)
+                self.logger.info("%s (%s):%s in %f secs", self.name, self.lock, key, time - first_time)
