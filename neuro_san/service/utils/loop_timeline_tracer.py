@@ -122,6 +122,11 @@ class LoopTimelineTracer:
             return
         self._loop_thread_ident = threading.get_ident()
         self._previous_profile = sys.getprofile()
+        if self._previous_profile is not None:
+            self._logger.warning(
+                "LoopTimelineTracer is replacing an existing sys.setprofile hook (%r); it will be restored on stop()",
+                self._previous_profile,
+            )
         sys.setprofile(self._profile)
         self._logger.info(
             "LoopTimelineTracer active on thread %d (buffer=%d events)",
