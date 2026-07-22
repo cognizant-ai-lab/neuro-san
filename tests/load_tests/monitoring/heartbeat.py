@@ -182,6 +182,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                            peak_client_rss_ref: SharedRef,
                            peak_server_rss_ref: SharedRef,
                            peak_sys_mem_pct_ref: SharedRef,
+                           peak_sys_cpu_ref: SharedRef,
                            failed_ref: SharedRef,
                            server_dead_event: threading.Event,
                            ) -> None:
@@ -272,6 +273,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                         + Heartbeat.format_dur_stats(server_durs)
                     )
                 sys_cpu_info = self._format_system_cpu()
+                peak_sys_cpu_ref.value = self._peak_sys_cpu
                 line = (
                     f"  [progress] {done} of {total} completed"
                     f" ({pct}%{fail_info}) --"

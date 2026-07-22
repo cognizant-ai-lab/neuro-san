@@ -166,6 +166,7 @@ class StageSummary(TypedDict, total=False):
     after_sys_mem_pct: Optional[float]
     peak_sys_mem_pct: Optional[float]
     peak_sys_mem_avail_gb: Optional[float]
+    peak_sys_cpu: Optional[float]
 
 
 # Load test levels

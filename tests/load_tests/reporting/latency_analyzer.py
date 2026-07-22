@@ -30,8 +30,8 @@ from tests.load_tests.config import SEPARATOR_WIDTH
 
 logger = logging.getLogger(__name__)
 
-# Cumulative completion milestones (percent)
-COMPLETION_MILESTONES = [50, 60, 70, 80, 90, 95, 100]
+# Completion latency percentiles (percent)
+COMPLETION_MILESTONES = [50, 90, 95, 100]
 
 # Step size for count-based milestones (e.g. 50, 100, 150...)
 COUNT_MILESTONE_STEP = 50
@@ -69,7 +69,7 @@ class LatencyAnalyzer:
         self._log_completion_timeline(is_ramp=is_ramp)
 
     def _log_completion_timeline(self, *, is_ramp) -> None:
-        """Log cumulative request completion milestones per stage."""
+        """Log completion latency percentiles per stage on one line."""
         for summary in self._summaries:
             latencies = self._extract_latencies(summary)
             if not latencies:
@@ -84,25 +84,19 @@ class LatencyAnalyzer:
                     label += f", round {rnd}"
             else:
                 label = f"Round {rnd}"
-            logger.info(
-                "\n  Request completion timeline "
-                "(%s, %s requests):",
-                label, total,
-            )
-            prev_count = 0
+            parts_list = []
             for pct in COMPLETION_MILESTONES:
-                count = int(
-                    math.ceil(pct / 100.0 * total),
+                dur = Formatters.fmt_duration(
+                    self._percentile(latencies, pct),
+                    precision=1,
                 )
-                if count == prev_count:
-                    continue
-                prev_count = count
-                duration = self._percentile(latencies, pct)
-                logger.info(
-                    "    %3d%% (%d requests) completed by %s",
-                    pct, count,
-                    Formatters.fmt_duration(duration, precision=1),
-                )
+                parts_list.append(f"p{pct} {dur}")
+            parts = " / ".join(parts_list)
+            logger.info(
+                "\n  Completion percentiles "
+                "(%s, %s requests): %s",
+                label, total, parts,
+            )
             self._log_count_milestones(latencies)
 
     @staticmethod

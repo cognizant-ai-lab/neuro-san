@@ -413,13 +413,14 @@ class TrafficRunner:
                   primary_start_pattern=None,
                   ) -> Tuple[
         float, List[RequestResult], SharedRef, SharedRef,
-        SharedRef, SharedRef, bool, bool,
+        SharedRef, SharedRef, SharedRef, bool, bool,
     ]:
         """Fire num_requests concurrent requests using a thread pool.
 
         Returns (elapsed, results, peak_threads_ref,
         peak_client_rss_ref, peak_server_rss_ref,
-        peak_sys_mem_pct_ref, server_died, interrupted).
+        peak_sys_mem_pct_ref, peak_sys_cpu_ref, server_died,
+        interrupted).
 
         When ``cancel_event`` becomes set (Ctrl-C), in-flight
         subprocess requests are killed and the stage returns early
@@ -430,6 +431,7 @@ class TrafficRunner:
         peak_client_rss_ref = SharedRef()
         peak_server_rss_ref = SharedRef()
         peak_sys_mem_pct_ref = SharedRef()
+        peak_sys_cpu_ref = SharedRef()
         failed_ref = SharedRef()
         failed_ref.value = 0
         server_dead_event = threading.Event()
@@ -466,6 +468,7 @@ class TrafficRunner:
                     "peak_client_rss_ref": peak_client_rss_ref,
                     "peak_server_rss_ref": peak_server_rss_ref,
                     "peak_sys_mem_pct_ref": peak_sys_mem_pct_ref,
+                    "peak_sys_cpu_ref": peak_sys_cpu_ref,
                     "failed_ref": failed_ref,
                     "server_dead_event": server_dead_event,
                 },
@@ -509,6 +512,7 @@ class TrafficRunner:
             total_time, results_list,
             peak_threads_ref, peak_client_rss_ref,
             peak_server_rss_ref, peak_sys_mem_pct_ref,
+            peak_sys_cpu_ref,
             server_dead_event.is_set(), interrupted,
         )
 

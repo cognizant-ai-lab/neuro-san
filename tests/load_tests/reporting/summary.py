@@ -180,42 +180,25 @@ class SummaryReporter:
 
         self._log_model_distribution()
 
-        rss_trajectory = self._rss_trajectory()
-        if rss_trajectory is not None:
-            logger.info(
-                "  Server RSS: %s start \u2192 %s peak"
-                " \u2192 %s end",
-                Formatters.format_rss(rss_trajectory.get("start", 0)),
-                Formatters.format_rss(rss_trajectory.get("peak", 0)),
-                Formatters.format_rss(rss_trajectory.get("end", 0)),
-            )
-
-        client_rss = self._client_rss_trajectory()
-        if client_rss is not None:
-            logger.info(
-                "  Client RSS: %s start \u2192 %s peak"
-                " \u2192 %s end",
-                Formatters.format_rss(client_rss.get("start", 0)),
-                Formatters.format_rss(client_rss.get("peak", 0)),
-                Formatters.format_rss(client_rss.get("end", 0)),
-            )
-
         sys_mem = self._sys_mem_trajectory()
         if sys_mem is not None:
-            total_gb = (
-                psutil.virtual_memory().total / (1024 ** 3)
-            )
-            peak_detail = (
-                f"{sys_mem.get('peak', 0):.0f}% peak"
-                f" ({sys_mem.get('peak_avail_gb', 0):.1f}G free"
-                f" / {total_gb:.1f}G)"
-            )
+            vmem = psutil.virtual_memory()
+            total_gb = vmem.total / (1024 ** 3)
+            peak_pct = sys_mem.get("peak", 0)
+            peak_used_mb = peak_pct / 100.0 * vmem.total / (1024 ** 2)
             logger.info(
-                "  System memory: %s start \u2192 %s"
-                " \u2192 %s end",
-                f"{sys_mem.get('start', 0):.0f}%",
-                peak_detail,
-                f"{sys_mem.get('end', 0):.0f}%",
+                "  Peak memory usage: %.0fM / %.1fG"
+                " (%.0f%% used, %.1fG free)",
+                peak_used_mb, total_gb, peak_pct,
+                sys_mem.get("peak_avail_gb", 0),
+            )
+
+        peak_cpu = self._peak_sys_cpu()
+        if peak_cpu is not None:
+            ncores = psutil.cpu_count() or 1
+            logger.info(
+                "  Peak CPU usage: %.0f%% (%.2f of %d cores)",
+                peak_cpu, peak_cpu / 100.0 * ncores, ncores,
             )
 
         self._log_validation_summary()
@@ -302,54 +285,6 @@ class SummaryReporter:
             "max": max(values),
         }
 
-    def _rss_trajectory(self):
-        """Find start, peak, and end RSS across all stages."""
-        start_rss = None
-        end_rss = None
-        peak_rss = None
-        for summary in self._summaries:
-            before = summary.get("before_server_rss")
-            after = summary.get("after_server_rss")
-            peak = summary.get("peak_server_rss")
-            if before is not None and start_rss is None:
-                start_rss = before
-            if after is not None:
-                end_rss = after
-            if peak is not None:
-                if peak_rss is None or peak > peak_rss:
-                    peak_rss = peak
-        if peak_rss is None:
-            return None
-        return {
-            "start": start_rss or 0,
-            "peak": peak_rss,
-            "end": end_rss or 0,
-        }
-
-    def _client_rss_trajectory(self):
-        """Find start, peak, and end client RSS across stages."""
-        start_rss = None
-        end_rss = None
-        peak_rss = None
-        for summary in self._summaries:
-            before = summary.get("before_client_rss")
-            after = summary.get("after_client_rss")
-            peak = summary.get("peak_client_rss")
-            if before is not None and start_rss is None:
-                start_rss = before
-            if after is not None:
-                end_rss = after
-            if peak is not None:
-                if peak_rss is None or peak > peak_rss:
-                    peak_rss = peak
-        if peak_rss is None:
-            return None
-        return {
-            "start": start_rss or 0,
-            "peak": peak_rss,
-            "end": end_rss or 0,
-        }
-
     def _sys_mem_trajectory(self):
         """Find start, peak, and end system memory % across stages."""
         start_pct = None
@@ -377,6 +312,16 @@ class SummaryReporter:
             "peak_avail_gb": peak_avail_gb or 0,
             "end": end_pct or 0,
         }
+
+    def _peak_sys_cpu(self):
+        """Return the max peak system CPU% across stages, or None."""
+        peak = None
+        for summary in self._summaries:
+            val = summary.get("peak_sys_cpu")
+            if val is not None:
+                if peak is None or val > peak:
+                    peak = val
+        return peak
 
     def _log_validation_summary(self) -> None:
         """Log aggregate validation retry info if any."""

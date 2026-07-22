@@ -703,8 +703,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         before_sys_mem_pct = psutil.virtual_memory().percent
 
         (elapsed, results, peak_threads, peak_client_rss,
-         peak_server_rss, peak_sys_mem_pct, server_died,
-         interrupted) = (
+         peak_server_rss, peak_sys_mem_pct, peak_sys_cpu,
+         server_died, interrupted) = (
             self.runner.run_stage(
                 stage_requests, stage_workers,
                 global_offset + (1 if probe_used else 0),
@@ -738,24 +738,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 peak_client = {"rss": peak_rss}
             settled_client = ResourceMonitor.snapshot(
                 client_proc,
-            )
-            if before_client and settled_client:
-                rss_before = before_client.get("rss", 0)
-                rss_settled = settled_client.get("rss", 0)
-                rss_delta = rss_settled - rss_before
-                logger.info(
-                    "\n  Client AFTER: RSS %.1fM"
-                    " (%+.1fM from before)",
-                    rss_settled, rss_delta,
-                )
-            mem = psutil.virtual_memory()
-            used_mb = (mem.total - mem.available) / (1024 ** 2)
-            avail_gb = mem.available / (1024 ** 3)
-            total_gb = mem.total / (1024 ** 3)
-            logger.info(
-                "  System AFTER: %.0f%% used"
-                " (%.0fM used / %.1fG free / %.1fG total)",
-                mem.percent, used_mb, avail_gb, total_gb,
             )
 
         counts = OutputValidator.count_results(results)
@@ -819,6 +801,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 before_sys_mem_pct=before_sys_mem_pct,
                 after_sys_mem_pct=after_sys_mem_pct,
                 peak_sys_mem_pct=peak_sys_mem_pct,
+                peak_sys_cpu=peak_sys_cpu,
             )
             return summary_entry, probe_used, True
 
@@ -870,6 +853,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             before_sys_mem_pct=before_sys_mem_pct,
             after_sys_mem_pct=after_sys_mem_pct,
             peak_sys_mem_pct=peak_sys_mem_pct,
+            peak_sys_cpu=peak_sys_cpu,
         )
         return summary_entry, probe_used, False
 
@@ -1038,6 +1022,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             before_sys_mem_pct=None,
             after_sys_mem_pct=None,
             peak_sys_mem_pct=None,
+            peak_sys_cpu=None,
     ) -> StageSummary:
         """Assemble the stage summary dict."""
         summary_entry: StageSummary = {
@@ -1112,6 +1097,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             summary_entry["peak_sys_mem_avail_gb"] = (
                 peak_data["avail_gb"]
             )
+        if (peak_sys_cpu is not None
+                and peak_sys_cpu.value is not None):
+            summary_entry["peak_sys_cpu"] = peak_sys_cpu.value
         return summary_entry
 
     # pylint: disable=too-many-arguments
@@ -1745,76 +1733,26 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             ResourceMonitor.snapshot(self.server_proc)
             if self.server_proc else None
         )
-        if after_server:
-            ResourceMonitor.log_snapshot(
-                "Server AFTER", after_server,
-            )
-        mem = psutil.virtual_memory()
-        after_used_mb = (
-            (mem.total - mem.available) / (1024 ** 2)
-        )
-        avail_gb = mem.available / (1024 ** 3)
-        total_gb = mem.total / (1024 ** 3)
-        logger.info(
-            "  System AFTER: %.0f%% used"
-            " (%.0fM used / %.1fG free / %.1fG total)",
-            mem.percent, after_used_mb,
-            avail_gb, total_gb,
-        )
         after_kernel = self._read_kernel_memory()
-
-        if before_server and after_server:
-            rss_before = before_server.get("rss", 0)
-            rss_after = after_server.get("rss", 0)
-            peak_rss = (
-                peak_server.get("rss", 0)
-                if peak_server else rss_before
-            )
-            logger.info(
-                "\n  Server RSS: %.0fM start"
-                " \u2192 %.0fM peak (%+.0fM)"
-                " \u2192 %.0fM end (%+.0fM)",
-                rss_before, peak_rss,
-                peak_rss - rss_before,
-                rss_after,
-                rss_after - rss_before,
-            )
+        mem = psutil.virtual_memory()
+        total_gb = mem.total / (1024 ** 3)
         peak_used_mb = (
             peak_sys_mem_pct / 100.0
             * mem.total / (1024 ** 2)
         )
+        peak_free_gb = total_gb - peak_used_mb / 1024.0
         logger.info(
-            "  System memory: %.0f%% (%.0fM) start"
-            " \u2192 %.0f%% (%.0fM) peak (%+.0fM)"
-            " \u2192 %.0f%% (%.0fM) end (%+.0fM)",
-            before_sys_mem_pct, before_used_mb,
-            peak_sys_mem_pct, peak_used_mb,
-            peak_used_mb - before_used_mb,
-            mem.percent, after_used_mb,
-            after_used_mb - before_used_mb,
+            "\n  Peak memory usage: %.0fM / %.1fG"
+            " (%.0f%% used, %.1fG free)",
+            peak_used_mb, total_gb,
+            peak_sys_mem_pct, peak_free_gb,
         )
-
+        ncores = psutil.cpu_count() or 1
         logger.info(
-            "  System CPU: %.0f%% avg / %.0f%% peak"
-            " (across all cores)",
-            avg_sys_cpu, peak_sys_cpu,
+            "  Peak CPU usage: %.0f%% (%.2f of %d cores)",
+            peak_sys_cpu,
+            peak_sys_cpu / 100.0 * ncores, ncores,
         )
-        if (before_server and after_server
-                and count > 0):
-            cpu_before = before_server.get(
-                "cpu_seconds",
-            )
-            cpu_after = after_server.get("cpu_seconds")
-            if (cpu_before is not None
-                    and cpu_after is not None):
-                cpu_delta = cpu_after - cpu_before
-                logger.info(
-                    "  Server CPU time: %.1f CPU-s total"
-                    " \u2192 %.2f CPU-s/request"
-                    " (%.1f / %d)",
-                    cpu_delta, cpu_delta / count,
-                    cpu_delta, count,
-                )
 
         peak_rss_for_breakdown = 0.0
         if peak_server:
@@ -1828,25 +1766,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         kernel_breakdown = self._log_kernel_breakdown(
             before_kernel, after_kernel,
             peak_rss_for_breakdown,
+            log=False,
         )
-
-        if count > 0:
-            sys_used_mb = (
-                (mem.total - mem.available) / (1024 ** 2)
-            )
-            before_used_mb = (
-                before_kernel.get("MemTotal", 0)
-                - before_kernel.get("MemAvailable", 0)
-            ) if before_kernel else 0
-            delta = sys_used_mb - before_used_mb
-            per_req = delta / count
-            logger.info(
-                "  Per-request system cost:"
-                " %.0fM avg"
-                " ((%.0fM - %.0fM) / %d)",
-                per_req, sys_used_mb,
-                before_used_mb, count,
-            )
 
         self._export_server_only_json(
             round_dir, expected, count, elapsed,
@@ -2253,8 +2174,13 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     @staticmethod
     def _log_kernel_breakdown(
             before_kernel, after_kernel, server_rss_peak,
+            *, log=True,
     ) -> Dict[str, float]:
-        """Log kernel memory breakdown (delta)."""
+        """Compute the kernel memory breakdown (delta).
+
+        When ``log`` is False the values are still returned for JSON
+        export but nothing is printed to the console.
+        """
         if not after_kernel:
             return {}
 
@@ -2281,41 +2207,42 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
         unaccounted = max(0, sys_used - accounted)
 
-        logger.info(
-            "\n  Kernel memory breakdown:",
-        )
-        logger.info(
-            "    Server RSS:       %.0fM", rss_mb,
-        )
-        logger.info(
-            "    Kernel stacks:    %.0fM", kern_stacks,
-        )
-        logger.info(
-            "    Page tables:      %.0fM", page_tables,
-        )
-        logger.info(
-            "    Slab cache:       %.0fM", slab,
-        )
-        logger.info(
-            "    Page cache:       %.0fM", cached,
-        )
-        logger.info(
-            "    TCP buffers:      %.0fM", tcp_mem,
-        )
-        logger.info(
-            "    %s", "\u2500" * 30,
-        )
-        logger.info(
-            "    Accounted:        %.0fM", accounted,
-        )
-        logger.info(
-            "    Unaccounted:      %.0fM", unaccounted,
-        )
-        logger.info(
-            "    System total:     %.0fM"
-            " (used + cache)",
-            sys_used,
-        )
+        if log:
+            logger.info(
+                "\n  Kernel memory breakdown:",
+            )
+            logger.info(
+                "    Server RSS:       %.0fM", rss_mb,
+            )
+            logger.info(
+                "    Kernel stacks:    %.0fM", kern_stacks,
+            )
+            logger.info(
+                "    Page tables:      %.0fM", page_tables,
+            )
+            logger.info(
+                "    Slab cache:       %.0fM", slab,
+            )
+            logger.info(
+                "    Page cache:       %.0fM", cached,
+            )
+            logger.info(
+                "    TCP buffers:      %.0fM", tcp_mem,
+            )
+            logger.info(
+                "    %s", "\u2500" * 30,
+            )
+            logger.info(
+                "    Accounted:        %.0fM", accounted,
+            )
+            logger.info(
+                "    Unaccounted:      %.0fM", unaccounted,
+            )
+            logger.info(
+                "    System total:     %.0fM"
+                " (used + cache)",
+                sys_used,
+            )
 
         return {
             "server_rss_mb": rss_mb,
@@ -2555,7 +2482,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             latency_analyzer.log_degradation(
                 is_ramp=self.args.ramp,
             )
-            latency_analyzer.log_concurrency_timeline()
 
             server_chat_timing = []
             if self.server_log and pre_test_log_pos is not None:
