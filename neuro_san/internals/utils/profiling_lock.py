@@ -28,7 +28,7 @@ from time import perf_counter
 
 class ProfilingLock:
     """
-    Class that adds some profiling information to a syncronous lock.
+    Class that adds some profiling information to a synchronous lock.
     """
 
     INITIAL_STATE: str = "waiting for lock"
