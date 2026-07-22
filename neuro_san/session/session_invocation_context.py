@@ -68,7 +68,8 @@ class SessionInvocationContext(InvocationContext):
                  reservationist: Reservationist = None,
                  port: int = None,
                  effective_invocation: str = "chatbot",
-                 event_work_queue: AsyncCollatingQueue = None):
+                 event_work_queue: AsyncCollatingQueue = None,
+                 asyncio_executor: AsyncioExecutor = None):
         """
         Constructor
 
@@ -87,6 +88,11 @@ class SessionInvocationContext(InvocationContext):
         :param effective_invocation: A string representing the effective invocation of the session.
         :param event_work_queue: The AsyncCollatingQueue instance to use to queue up work
                             for events that will be finished up after the request ends.
+        :param asyncio_executor: An AsyncioExecutor to use for this context.
+                            When provided (injected by a caller such as the request handler),
+                            this context uses it as-is and does NOT return it to the pool -
+                            the injecting caller owns its lifecycle. When None (the default),
+                            an executor is obtained from the pool and returned to it when done.
         """
 
         # From args
@@ -102,8 +108,15 @@ class SessionInvocationContext(InvocationContext):
         self.event_work_queue: AsyncCollatingQueue = event_work_queue
 
         # Internal
-        # Get an async executor to run all tasks for this session instance:
-        self.asyncio_executor: AsyncioExecutor = self.async_executors_pool.get_executor()
+        # Get an async executor to run all tasks for this session instance.
+        # When one is injected, use it and remember we do not own it (the injector
+        # is responsible for returning it to the pool). Otherwise, pull one from the
+        # pool and take ownership of returning it when work is done.
+        self.owns_executor: bool = asyncio_executor is None
+        if asyncio_executor is not None:
+            self.asyncio_executor: AsyncioExecutor = asyncio_executor
+        else:
+            self.asyncio_executor: AsyncioExecutor = self.async_executors_pool.get_executor()
         self.request_reporting: Dict[str, Any] = {}
         self.origination: Origination = Origination()
 
@@ -116,6 +129,11 @@ class SessionInvocationContext(InvocationContext):
         self.work_done_event: Event = Event()
         self.request_finished: bool = False
         self.is_cloned: bool = False
+        # Set True by finish_request() when the remaining work is deferred to the
+        # event work queue. In that case the deferred-work path (event_work_monitor
+        # -> done_with_work) becomes responsible for returning the executor to the pool,
+        # even when the executor was injected - see finish_request() and done_with_work().
+        self.deferred_to_event_work: bool = False
 
     def start(self):
         """
@@ -358,6 +376,15 @@ class SessionInvocationContext(InvocationContext):
                 # Finish the event work later only if there is something that will finish it for us.
                 if self.event_work_queue is not None:
                     close_of_work_now = False
+                    # The remaining work (including close_of_work and returning the
+                    # executor to the pool) is deferred to the event work queue / monitor.
+                    # If our executor was injected by a caller, transfer ownership of
+                    # returning it to that deferred path: the injecting caller finishes
+                    # with this request before the deferred work runs, so it must not
+                    # return the executor itself. done_with_work() will return it when
+                    # the deferred work completes because owns_executor is now True.
+                    self.deferred_to_event_work = True
+                    self.owns_executor = True
                     # Need to do synchronous put because we are in a different event loop.
                     self._run_in_executor_until_complete("finish_request",
                                                          self.event_work_queue.put(self, synchronous=True))
@@ -404,6 +431,11 @@ class SessionInvocationContext(InvocationContext):
         if self.is_cloned:
             # Clones via safe_shallow_copy() share the same AsyncioExecutor,
             # so don't return it back to the pool just yet. Let the mama do that.
+            return
+
+        if not self.owns_executor:
+            # The executor was injected by a caller (e.g. the request handler) that
+            # owns its lifecycle and will return it to the pool itself. Don't touch it.
             return
 
         if self.asyncio_executor is not None:

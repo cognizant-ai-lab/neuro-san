@@ -18,6 +18,7 @@
 from typing import Any
 from typing import Dict
 from typing import AsyncGenerator
+from typing import Tuple
 
 import contextlib
 import json
@@ -228,17 +229,55 @@ class AsyncAgentService:
         self.request_counter.decrement()
         return response_dict
 
-    # pylint: disable=too-many-locals
     async def streaming_chat(self, request_dict: Dict[str, Any],
-                             request_metadata: Dict[str, Any]) \
+                             request_metadata: Dict[str, Any],
+                             asyncio_executor: AsyncioExecutor = None) \
             -> AsyncGenerator[Dict[str, Any], None]:
         """
         Initiates or continues the agent chat with the session_id
         context in the request.
 
+        This is a thin composition of prepare_streaming_chat() (synchronous setup)
+        and consume_streaming_chat() (the async streaming loop), driven back-to-back
+        on the caller's event loop. Callers that want to run the streaming loop on a
+        different event loop from the setup (e.g. the HTTP handler, which keeps setup
+        on the Tornado loop but drives consumption on the executor loop) should call
+        those two methods directly instead of this convenience wrapper.
+
         :param request_dict: a ChatRequest dictionary
         :param request_metadata: request metadata
+        :param asyncio_executor: An optional AsyncioExecutor to run this request's work on.
+                        When None (the default), one is obtained from the pool and returned
+                        to it when done - this preserves the behavior for all existing callers.
+                        When provided, it is injected into the SessionInvocationContext and
+                        the caller owns its lifecycle.
         :return: an iterator for (eventually) returned responses dictionaries
+        """
+        invocation_context, response_dict_generator, metadata, do_log, log_marker = \
+            self.prepare_streaming_chat(request_dict, request_metadata, asyncio_executor)
+        async for response_dict in self.consume_streaming_chat(
+                request_dict, invocation_context, response_dict_generator, metadata, do_log, log_marker):
+            yield response_dict
+
+    # pylint: disable=too-many-locals
+    def prepare_streaming_chat(self, request_dict: Dict[str, Any],
+                               request_metadata: Dict[str, Any],
+                               asyncio_executor: AsyncioExecutor = None) \
+            -> Tuple[SessionInvocationContext, AsyncGenerator[Dict[str, Any], None], Dict[str, str], bool, str]:
+        """
+        Synchronous setup for a streaming chat request: increments the request counter,
+        builds the SessionInvocationContext and the underlying session, and returns the
+        raw response generator plus the logging state the consume step needs.
+
+        This method contains no awaits and must be called from a thread that is NOT the
+        injected executor's own loop thread, because SessionInvocationContext.start()
+        performs a blocking initialize() wait against that loop.
+
+        :param request_dict: a ChatRequest dictionary
+        :param request_metadata: request metadata
+        :param asyncio_executor: An optional AsyncioExecutor to inject (see streaming_chat()).
+        :return: A tuple of
+                 (invocation_context, response_dict_generator, metadata, do_log, log_marker)
         """
         self.request_counter.increment()
         user_text: str = request_dict.get("user_message", {}).get("text", "")
@@ -278,7 +317,8 @@ class AsyncAgentService:
             reservationist,
             self.port,
             effective_invocation=effective_invocation,
-            event_work_queue=self.event_work_queue)
+            event_work_queue=self.event_work_queue,
+            asyncio_executor=asyncio_executor)
         invocation_context.start()
 
         # Set up logging inside async thread
@@ -296,6 +336,30 @@ class AsyncAgentService:
         # Get our args in order to pass to transport-agnostic session level
         response_dict_generator: AsyncGenerator[Dict[str, Any], None] = session.streaming_chat(request_dict)
 
+        return invocation_context, response_dict_generator, metadata, do_log, log_marker
+
+    async def consume_streaming_chat(self, request_dict: Dict[str, Any],
+                                     invocation_context: SessionInvocationContext,
+                                     response_dict_generator: AsyncGenerator[Dict[str, Any], None],
+                                     metadata: Dict[str, str],
+                                     do_log: bool,
+                                     log_marker: str) \
+            -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        The streaming loop for a streaming chat request: consumes the raw response
+        generator produced by prepare_streaming_chat(), converts each message for
+        output, and finalizes the request. This is where the per-message CPU work
+        (ChatMessageConverter/serialization callers) and teardown happen, so it is
+        the part the HTTP handler drives on the executor loop.
+
+        :param request_dict: a ChatRequest dictionary
+        :param invocation_context: The SessionInvocationContext from prepare_streaming_chat()
+        :param response_dict_generator: The raw response generator from prepare_streaming_chat()
+        :param metadata: The request metadata from prepare_streaming_chat()
+        :param do_log: Whether to log this request, from prepare_streaming_chat()
+        :param log_marker: The redacted log marker from prepare_streaming_chat()
+        :return: an iterator for (eventually) returned responses dictionaries
+        """
         # See if we want to put the request dict in the response
         extractor = DictionaryExtractor(request_dict)
         chat_filter_type: str = extractor.get("chat_filter.chat_filter_type", "MINIMAL")
