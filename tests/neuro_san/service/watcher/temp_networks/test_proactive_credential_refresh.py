@@ -40,17 +40,10 @@ cost one real failed S3 round trip - on the request path, user-visible
 latency plus error-log noise. This test was originally written red
 against that design; it is green with keyless clients.
 """
-import json
-import time
-
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Tuple
-
-from unittest.mock import patch
-
-from botocore.exceptions import ClientError
 
 from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
@@ -99,20 +92,8 @@ class _TokenBoundS3Client:
 
         if presented_token != self._provider_state["current_token"]:
             self._failed_calls.append((presented_token, Key))
-            raise ClientError(
-                {
-                    "Error": {
-                        "Code": "ExpiredToken",
-                        "Message": "The provided token has expired.",
-                    },
-                    "ResponseMetadata": {"HTTPStatusCode": 400},
-                },
-                "GetObject",
-            )
+            raise S3ReservationsStorageTestBase.make_expired_token_error("GetObject")
         return self._fake_s3.get_object(Bucket=Bucket, Key=Key)
-
-    def close(self):
-        """Match the real client lifecycle; nothing to release."""
 
 
 class TestProactiveCredentialRefresh(S3ReservationsStorageTestBase):
@@ -121,29 +102,6 @@ class TestProactiveCredentialRefresh(S3ReservationsStorageTestBase):
     two reads, the second read succeeds WITHOUT any S3 call being made
     with the stale token.
     """
-
-    def _put_live_reservation(self, reservation_id: str) -> str:
-        """
-        Place a well-formed, unexpired reservation object directly into
-        the fake bucket so the reader has something real to fetch.
-
-        :return: the reservation id (the reader derives the S3 key from it)
-        """
-        key: str = f"reservations/{reservation_id}.json"
-        self.fake_s3.objects[key] = json.dumps({
-            "name": reservation_id,
-            "llm_config": {"model_name": "gpt-5.2"},
-            "tools": [{"name": reservation_id, "function": {"description": "test frontman"}}],
-            "metadata": {
-                "reservation": {
-                    "id": reservation_id,
-                    "lifetime_in_seconds": 3600.0,
-                    "expiration_time_in_seconds": time.time() + 3600.0,
-                },
-                "stored_at": time.time(),
-            },
-        }).encode("utf-8")
-        return reservation_id
 
     def test_token_rotation_between_reads_causes_no_failed_call(self):
         """
@@ -178,18 +136,7 @@ class TestProactiveCredentialRefresh(S3ReservationsStorageTestBase):
                 self.fake_s3, kwargs.get("aws_session_token"), provider_state, failed_calls,
             )
 
-        # Innermost patch wins over the test base's create_client patch
-        # for the duration of this block.
-        with patch(
-            "neuro_san.service.watcher.temp_networks.aws_sync_client_worker.Session.create_client",
-            new=create_token_bound_client,
-        ):
-            # storage.start() (in setUp) already created the reader worker's
-            # long-lived client under the test base's own patch. Discard it
-            # so the client serving the reads below is provably created
-            # under THIS patch, with the token-checking behavior installed.
-            self.storage.reader.retriever.get_sync_client_worker().reset_client()
-
+        with self._fresh_reader_client(create_token_bound_client):
             reservation, _ = self.storage.get_one_reservation(reservation_id)
             self.assertIsNotNone(
                 reservation,
@@ -225,7 +172,7 @@ class TestProactiveCredentialRefresh(S3ReservationsStorageTestBase):
         self.assertGreaterEqual(
             len(create_client_kwargs), 1,
             "Expected at least one client construction under this test's patch; "
-            "the reset_client() above should have forced one.",
+            "_fresh_reader_client()'s reset should have forced one.",
         )
         for kwargs in create_client_kwargs:
             self.assertFalse(

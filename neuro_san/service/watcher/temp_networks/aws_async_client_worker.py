@@ -34,10 +34,17 @@ from aiobotocore.session import ClientCreatorContext
 
 from botocore.exceptions import BotoCoreError
 from botocore.exceptions import ClientError
+from botocore.exceptions import NoCredentialsError
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 
 from neuro_san.service.watcher.temp_networks.s3_util import S3Util
+
+# Module-level so do_with_retries() below does not construct them per call:
+# logging.getLogger() takes the process-global logging lock on every
+# invocation, and do_with_retries() runs once per put_object.
+_LOGGER: Logger = getLogger(__name__)
+_SENSITIVE_LOGGER: SensitiveLogger = SensitiveLogger(_LOGGER)
 
 
 class AwsAsyncClientWorker:
@@ -65,6 +72,15 @@ class AwsAsyncClientWorker:
     batch - not per request - so client construction is not a hot-path cost
     here.
     """
+
+    # Credential-retry policy for retry_with_new_client(): enough attempts,
+    # with short jittered backoff between them, to ride out a several-second
+    # external rotation window (a credentials file being rewritten) without
+    # stalling the write queue for tens of seconds. Backoff matters because
+    # each attempt re-resolves the full credential chain (possibly network
+    # calls to IMDS/ECS/SSO).
+    CREDENTIAL_RETRY_MAX_ATTEMPTS: int = 4
+    CREDENTIAL_RETRY_BASE_SLEEP_SECONDS: float = 0.5
 
     def __init__(self, name: str, aws_service: str = "s3"):
         """
@@ -95,12 +111,20 @@ class AwsAsyncClientWorker:
 
         Because clients are created keyless (see class docstring),
         token-based credentials refresh at signing time and this retry path
-        stays dormant for them. It exists for STATIC credentials rotated
-        externally - e.g. environment variables or a credentials file
-        rewritten by another process. The credential chain is resolved once
-        per Session and those sources are never re-read on their own, so
-        the only way to pick up the new values is to discard the session
-        and re-resolve from scratch.
+        stays dormant for them. It exists for static SESSION TOKENS rotated
+        externally - temporary credentials in a credentials file that
+        another process rewrites. The credential chain is resolved once per
+        Session and that file is never re-read on its own, so the only way
+        to pick up the new values is to discard the session and re-resolve
+        from scratch. Two rotation cases deliberately do NOT recover here:
+        environment variables (a process's environment cannot be changed
+        from outside, so re-resolving would re-read the same values), and
+        rotated access KEY PAIRS (S3 rejects those with InvalidAccessKeyId
+        or SignatureDoesNotMatch, not ExpiredToken). Both require a
+        process restart.
+
+        NOTE: mirrored in AwsSyncClientWorker.retry_with_new_client() -
+        keep the retry policies in sync when editing.
 
         :param work_function: The async work function to retry
         :param *: extra keyword arguments for work_function
@@ -111,12 +135,15 @@ class AwsAsyncClientWorker:
         # Async lock has to be created in the thread that uses it.
         self.ensure_async_lock_exists()
 
-        max_attempts: int = 8
         last_err: Exception = None
 
-        for attempt in range(1, max_attempts + 1):
+        for attempt in range(1, self.CREDENTIAL_RETRY_MAX_ATTEMPTS + 1):
+            # Obtain the session up front so the except block below can tell
+            # whether the session it wants to discard is still the one this
+            # attempt actually failed with.
+            session: AioSession = await self.get_or_create_session()
             try:
-                retval: Any = await self.do_work_with_new_client(work_function, attempt=attempt)
+                retval: Any = await self.do_work_with_new_client(session, work_function, attempt=attempt)
                 return retval
 
             except ClientError as err:
@@ -132,23 +159,44 @@ class AwsAsyncClientWorker:
                 last_err = err
 
                 # Discard the session so the next attempt re-resolves the
-                # credential chain (env vars, config files, IMDS/ECS, SSO)
-                # from scratch. This is a plain attribute swap: a concurrent
-                # batch that is mid-create under the lock may briefly keep
-                # using the old session, and will simply land in its own
-                # retry here if its credentials are also stale.
-                self.session = None
+                # credential chain from scratch - but only if it is still
+                # the session this attempt failed with. A concurrent batch's
+                # retry may already have rebuilt a fresh session; discarding
+                # that would just force a redundant chain re-resolution.
+                if self.session is session:
+                    self.session = None
                 if source is None:
                     source = self.name
                 self.logger.warning("%s (%d): %s credentials seem to have expired. Retrying. "
                                     "If you believe you have non-expiring %s credentials, be sure they are correct.",
                                     source, attempt, self.aws_service, self.aws_service)
+                if attempt < self.CREDENTIAL_RETRY_MAX_ATTEMPTS:
+                    # Jittered backoff gives an in-progress external rotation
+                    # time to land and keeps concurrent retries from hammering
+                    # the credential chain's network sources back-to-back.
+                    await async_sleep(S3Util.exponential_backoff_with_jitter(
+                        self.CREDENTIAL_RETRY_BASE_SLEEP_SECONDS, attempt))
 
-        # Exhausted retries
+        # Exhausted retries. Every path that exits the loop sets last_err
+        # first, so this raise always fires; the RuntimeError below is an
+        # unreachable backstop that keeps the exhaustion path explicit.
         if last_err is not None:
             raise last_err
 
-        raise RuntimeError(f"{self.aws_service} credential retries exhausted without capturing an error") from last_err
+        raise RuntimeError(f"{self.aws_service} credential retries exhausted without capturing an error")
+
+    async def get_or_create_session(self) -> AioSession:
+        """
+        :return: The worker's shared AioSession, creating it on first use
+                 (or after the credential retry discarded it).
+        Creation is serialized under the same async lock that serializes
+        client creation, so concurrent batches share one session instead of
+        racing to build several.
+        """
+        async with self.async_aws_client_lock:
+            if self.session is None:
+                self.session = get_session()
+            return self.session
 
     def ensure_async_lock_exists(self):
         """
@@ -161,11 +209,17 @@ class AwsAsyncClientWorker:
                 if self.async_aws_client_lock is None:
                     self.async_aws_client_lock = AsyncLock()
 
-    async def do_work_with_new_client(self, work_function: Callable, *, attempt: int = 1) -> Any:
+    async def do_work_with_new_client(self, session: AioSession, work_function: Callable, *,
+                                      attempt: int = 1) -> Any:
         """
         This method separates the machinations of obtaining a proper S3 client
         from add_all_reservations() which does all the actual work.
 
+        :param session: The AioSession to create the client from. Passed in
+                (rather than read from self.session here) so the caller's
+                credential-retry handler knows exactly which session this
+                attempt used and can avoid discarding a fresh one built by
+                a concurrent batch.
         :param work_function: The async work function to retry
         :param *: extra keyword arguments for work_function
         :param attempt: Attempt number
@@ -191,17 +245,11 @@ class AwsAsyncClientWorker:
             lock_aquired_time = perf_counter()
             acquired_lock = True
 
-            # Create the session if needed.
-            # We should only need one for the lifetime of this object (until
-            # the ExpiredToken handler in retry_with_new_client discards it).
-            if self.session is None:
-                self.session = get_session()
-
             # No aws_access_key_id/aws_secret_access_key/aws_session_token
             # arguments here: passing them would pin a static snapshot of the
             # credentials into the client and disable at-signing-time refresh
             # (see class docstring).
-            async_aws_client_creator_context = self.session.create_client(self.aws_service)
+            async_aws_client_creator_context = session.create_client(self.aws_service)
             client_created_time = perf_counter()
 
             # Normally this is done in a python ContextManager using a with-statement,
@@ -240,8 +288,6 @@ class AwsAsyncClientWorker:
         Generic retry wrapper for boto3 calls.
         boto3/botocore already retries, but this adds a bit of extra resilience and backoff for batch operations.
         """
-        logger: Logger = getLogger(__name__)
-        sensitive_logger: SensitiveLogger = SensitiveLogger(logger)
         sleep: float = 0.0
         attempt: int = 1
         while True:
@@ -252,22 +298,29 @@ class AwsAsyncClientWorker:
                     raise
 
                 sleep = S3Util.exponential_backoff_with_jitter(base_sleep, attempt)
-                sensitive_logger.warning("%s: Retryable async ClientError (%s). attempt=%d", source, err, attempt)
+                _SENSITIVE_LOGGER.warning("%s: Retryable async ClientError (%s). attempt=%d", source, err, attempt)
                 await async_sleep(sleep)
                 attempt += 1
+            except NoCredentialsError:
+                # Must precede the BotoCoreError catch below (it is a
+                # subclass): missing credentials cannot heal within this
+                # loop - the calling client's credential state is fixed -
+                # so backing off through 8 attempts (~16-48s of sleeps)
+                # would only stall the write queue before failing anyway.
+                raise
             except BotoCoreError as err:
                 # Often transient network/serialization issues
                 if attempt >= max_attempts:
                     raise
 
                 sleep = S3Util.exponential_backoff_with_jitter(base_sleep, attempt)
-                sensitive_logger.warning("%s: Retryable async BotoCoreError (%s). attempt=%d", source, err, attempt)
+                _SENSITIVE_LOGGER.warning("%s: Retryable async BotoCoreError (%s). attempt=%d", source, err, attempt)
                 await async_sleep(sleep)
                 attempt += 1
             except CancelledError:
-                logger.info("%s: async Task was cancelled.", source)
+                _LOGGER.info("%s: async Task was cancelled.", source)
                 raise
             except Exception as err:  # pylint: disable=broad-except
                 # Catch-all for unexpected exceptions; log and re-raise
-                sensitive_logger.error("%s: Unexpected async error (%s). attempt=%d", source, err, attempt)
+                _SENSITIVE_LOGGER.error("%s: Unexpected async error (%s). attempt=%d", source, err, attempt)
                 raise

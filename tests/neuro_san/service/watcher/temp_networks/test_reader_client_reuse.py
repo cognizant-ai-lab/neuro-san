@@ -43,11 +43,7 @@ This test was originally written red against the per-call design; it is
 green with the long-lived client and guards against regressing to
 one-client-per-read.
 """
-import json
-import time
-
 from unittest.mock import MagicMock
-from unittest.mock import patch
 
 from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
@@ -62,30 +58,6 @@ class TestReaderClientReuse(S3ReservationsStorageTestBase):
 
     NUM_READS: int = 5
 
-    def _put_live_reservation(self, reservation_id: str) -> str:
-        """
-        Place a well-formed, unexpired reservation object directly into
-        the fake bucket (matching the writer's on-disk schema) so the
-        reader has something real to fetch.
-
-        :return: the reservation id (the reader derives the S3 key from it)
-        """
-        key: str = f"reservations/{reservation_id}.json"
-        self.fake_s3.objects[key] = json.dumps({
-            "name": reservation_id,
-            "llm_config": {"model_name": "gpt-5.2"},
-            "tools": [{"name": reservation_id, "function": {"description": "test frontman"}}],
-            "metadata": {
-                "reservation": {
-                    "id": reservation_id,
-                    "lifetime_in_seconds": 3600.0,
-                    "expiration_time_in_seconds": time.time() + 3600.0,
-                },
-                "stored_at": time.time(),
-            },
-        }).encode("utf-8")
-        return reservation_id
-
     def test_repeated_reads_reuse_one_client(self):
         """
         N successful reads of the same reservation should construct
@@ -98,21 +70,13 @@ class TestReaderClientReuse(S3ReservationsStorageTestBase):
         """
         reservation_id: str = self._put_live_reservation("copy_cat-reuse")
 
-        # Count client constructions by re-patching the same symbol the
-        # test base patches; the innermost patch wins for this block.
+        # Count client constructions; _fresh_reader_client() re-patches the
+        # create_client seam with this mock and discards the client built in
+        # setUp, so the constructions counted are exactly the ones the reads
+        # below cause.
         create_client_mock = MagicMock(return_value=self.fake_s3)
 
-        with patch(
-            "neuro_san.service.watcher.temp_networks.aws_sync_client_worker.Session.create_client",
-            new=create_client_mock,
-        ):
-            # storage.start() (in setUp) already created the reader worker's
-            # long-lived client under the test base's own patch. Discard it
-            # so the client serving the reads below is provably created
-            # under THIS counting mock - otherwise call_count would be 0,
-            # which says nothing about reuse.
-            self.storage.reader.retriever.get_sync_client_worker().reset_client()
-
+        with self._fresh_reader_client(create_client_mock):
             for _ in range(self.NUM_READS):
                 reservation, agent_network = self.storage.get_one_reservation(reservation_id)
                 # Guard against a vacuous pass: every read must actually

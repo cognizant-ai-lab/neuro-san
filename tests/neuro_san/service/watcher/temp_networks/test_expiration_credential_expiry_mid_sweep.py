@@ -45,8 +45,6 @@ import time
 
 from unittest.mock import patch
 
-from botocore.exceptions import ClientError
-
 from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
 
@@ -120,16 +118,7 @@ class TestExpirationCredentialExpiryMidSweep(S3ReservationsStorageTestBase):
         def get_object_with_expiring_token(Bucket: str, Key: str):
             """Raise ExpiredToken exactly as boto3 surfaces it (HTTP 400)."""
             if token_state["expired"]:
-                raise ClientError(
-                    {
-                        "Error": {
-                            "Code": "ExpiredToken",
-                            "Message": "The provided token has expired.",
-                        },
-                        "ResponseMetadata": {"HTTPStatusCode": 400},
-                    },
-                    "GetObject",
-                )
+                raise self.make_expired_token_error("GetObject")
             return real_get_object(Bucket=Bucket, Key=Key)
 
         # Inject onto the in-memory FakeS3Client for the duration of this

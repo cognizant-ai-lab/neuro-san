@@ -82,9 +82,13 @@ class S3ReservationsStorage(AbstractReservationsStorage):
 
     def start(self):
         """
-        Initialize the S3 client and validate connection to the bucket.
+        Validate connection to the bucket, creating each worker's long-lived
+        S3 client on first use.
 
-        This method can be called to re-initialize the connection if needed.
+        Calling this again only re-validates bucket access through those same
+        clients; it does not rebuild them or re-resolve credentials (that
+        happens in AwsSyncClientWorker.reset_client(), driven by its
+        credential retry).
         """
         self.reader.start()
         self.expiration.start()
