@@ -2701,7 +2701,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
         record = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-            "neuro_san_version": self._fetch_server_version() or "unknown",
+            "neuro_san_version": self._server_ns_version or "unknown",
             "host": self.args.host,
             "agent": self.args.agent,
             "mode": "server-only",
@@ -2799,9 +2799,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 "hostname": socket.gethostname(),
                 "python_version": platform.python_version(),
                 "platform": platform.platform(),
-                "neuro_san_version": self._get_package_version(
-                    "neuro_san",
-                ),
+                "neuro_san_version": self._resolve_ns_version(),
                 "neuro_san_studio_version": self._get_package_version(
                     "neuro_san_studio",
                 ),
@@ -2936,17 +2934,30 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         """Return the ``--host`` value as a folder-name segment."""
         return re.sub(r"[^0-9A-Za-z.+-]", "-", str(self.args.host))
 
-    @staticmethod
-    def _version_tag() -> str:
+    def _resolve_ns_version(self) -> Optional[str]:
+        """Return the neuro-san version to tag this run with.
+
+        Prefers the *server's* version (via ``/healthz``) so the tag
+        reflects what is actually being exercised, even when the client
+        runs from a different checkout/venv or a remote machine.  The
+        result is cached in ``_server_ns_version``.  Falls back to the
+        locally installed package version when the server is
+        unreachable or does not report one.
+        """
+        if not self._server_ns_version:
+            self._server_ns_version = self._fetch_server_version()
+        return (
+            self._server_ns_version
+            or self._get_package_version("neuro-san")
+        )
+
+    def _version_tag(self) -> str:
         """Return a folder-name segment for the neuro-san version.
 
-        E.g. ``ns0.6.72`` when neuro-san is installed, or ``""`` when
-        the version can't be determined.  This is the *client*-side
-        installed version (matches the server when co-located).
+        E.g. ``ns0.6.81`` from the server's ``/healthz`` version, or
+        ``""`` when the version can't be determined.
         """
-        version = LoadTestOrchestrator._get_package_version(
-            "neuro-san",
-        )
+        version = self._resolve_ns_version()
         if not version:
             return ""
         safe = re.sub(r"[^0-9A-Za-z.+-]", "-", version)
