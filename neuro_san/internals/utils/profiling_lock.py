@@ -70,6 +70,8 @@ class ProfilingLock:
         """
         Acquire the lock
         """
+        if stats is None:
+            stats = []
         self.add_stat(self.INITIAL_STATE, stats)
         self.lock.acquire()
         self.add_stat("acquired lock", stats)

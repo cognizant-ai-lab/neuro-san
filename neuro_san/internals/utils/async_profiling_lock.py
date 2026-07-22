@@ -70,6 +70,8 @@ class AsyncProfilingLock:
         """
         Acquire the lock
         """
+        if stats is None:
+            stats = []
         self.add_stat(self.INITIAL_STATE, stats)
         await self.lock.acquire()
         self.add_stat("acquired lock", stats)
@@ -90,7 +92,7 @@ class AsyncProfilingLock:
         stats: List[Tuple[str, float]] = self.stats_in_play
         self.stats_in_play = []
 
-        await self.lock.release()
+        self.lock.release()
 
         self.add_stat("released lock", stats)
         if self.show_stats:
