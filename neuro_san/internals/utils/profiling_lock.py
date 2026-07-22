@@ -40,8 +40,8 @@ class ProfilingLock:
         :param name: The name of the lock
         :param lock_in: The lock to wrap. If no lock is provided, a new one will be created.
         """
-        self.name = name
-        self.lock = lock_in
+        self.name: str = name
+        self.lock: Lock = lock_in
         if self.lock is None:
             self.lock = Lock()
 
