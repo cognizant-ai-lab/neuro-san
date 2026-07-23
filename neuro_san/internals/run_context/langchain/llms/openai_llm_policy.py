@@ -19,6 +19,7 @@ from typing import Dict
 
 from contextlib import suppress
 from httpx import AsyncClient
+from httpx import Limits
 
 from langchain_core.language_models.base import BaseLanguageModel
 
@@ -35,6 +36,9 @@ class OpenAILlmPolicy(LlmPolicy):
     method to do that. Worth noting that where many other implementations might care about
     the llm reference, because of our create_client() implementation, we do not.
     """
+
+    # None means no limit
+    LIMITS: Limits = Limits(max_connections=None, max_keepalive_connections=None)
 
     def __init__(self, llm: BaseLanguageModel = None):
         """
@@ -96,7 +100,7 @@ class OpenAILlmPolicy(LlmPolicy):
         # Our run-time model resource here is httpx client which we need to control directly:
         openai_proxy: str = self.get_value_or_env(config, "openai_proxy", "OPENAI_PROXY")
         request_timeout: int = config.get("request_timeout")
-        self.http_client = AsyncClient(proxy=openai_proxy, timeout=request_timeout)
+        self.http_client = AsyncClient(proxy=openai_proxy, timeout=request_timeout, limits=self.LIMITS)
 
     def create_llm(self, config: Dict[str, Any], model_name: str, client: Any) -> BaseLanguageModel:
         """
