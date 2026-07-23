@@ -225,7 +225,7 @@ class HttpServer(AgentStateListener):
                 EventLoopLagMonitor(
                     sample_interval_seconds=1.0,
                     report_every_n_samples=30,
-                    break_between_reports_seconds=30
+                    break_between_reports_seconds=5.0,
                 )
             ServiceResources.set_event_loop_monitor(event_loop_monitor)
             main_loop.spawn_callback(event_loop_monitor.run)
