@@ -46,6 +46,8 @@ class StreamingChatHandler(BaseRequestHandler):
     """
     Handler class for neuro-san streaming chat API call.
     """
+    # enable extra logging for this handler, including request preparation time
+    do_extra_logging: bool = True
 
     # pylint: disable=attribute-defined-outside-init
     def initialize(self, **kwargs):
@@ -104,6 +106,7 @@ class StreamingChatHandler(BaseRequestHandler):
         request/connection, and writing already-serialized frames to the client.
         """
 
+        start_time = time.monotonic()
         metadata: Dict[str, Any] = self.get_metadata()
         service: AsyncAgentService = await self.get_service(agent_name, metadata)
         if service is None:
