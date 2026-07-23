@@ -26,7 +26,7 @@ import asyncio
 import json
 import os
 import random
-import threading
+from threading import Lock
 
 import tornado
 
@@ -127,7 +127,7 @@ class HttpServer(AgentStateListener):
         self.logger = HttpLogger(self.forwarded_request_metadata, self.logging_config)
         self.allowed_agents: Dict[str, AsyncAgentServiceProvider] = {}
         self.authorization_policy: AgentAuthorizer = AgentAuthorizationPolicy(self.allowed_agents)
-        self.lock = threading.Lock()
+        self.lock = Lock()
 
         # Add listener to handle adding per-agent http service
         # (services map is defined by self.allowed_agents dictionary)

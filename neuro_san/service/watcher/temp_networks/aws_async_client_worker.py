@@ -126,7 +126,7 @@ class AwsAsyncClientWorker:
 
     def ensure_async_lock_exists(self):
         """
-        Be sure we have an asyncio Lock to get our sessions.
+        Be sure we have an asynchronous Lock to get our sessions.
         """
         # Note that none of this is async in and of itself.
         if self.async_aws_client_lock is None:
