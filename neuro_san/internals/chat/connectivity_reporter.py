@@ -55,7 +55,7 @@ class ConnectivityReporter:
         Maybe someday.
     """
 
-    def __init__(self, inspector: AgentNetworkInspector):
+    def __init__(self, inspector: AgentNetworkInspector, toolbox_factory: ContextTypeToolboxFactory = None):
         """
         Constructor
 
@@ -63,9 +63,9 @@ class ConnectivityReporter:
         """
 
         self.inspector: AgentNetworkInspector = inspector
-        self.toolbox_factory: ContextTypeToolboxFactory = None
+        self.toolbox_factory: ContextTypeToolboxFactory = toolbox_factory
 
-        if self.inspector is not None:
+        if self.inspector is not None and self.toolbox_factory is None:
             config: Dict[str, Any] = self.inspector.get_config()
             self.toolbox_factory = MasterToolboxFactory.create_toolbox_factory(config)
 
