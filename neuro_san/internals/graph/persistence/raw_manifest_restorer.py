@@ -15,6 +15,12 @@
 #
 # END COPYRIGHT
 
+import os
+from io import BytesIO
+from typing import Any, Dict
+
+from leaf_common.serialization.format.hocon_serialization_format import HoconSerializationFormat
+
 from neuro_san.internals.persistence.abstract_async_config_restorer import AbstractAsyncConfigRestorer
 
 
@@ -30,3 +36,18 @@ class RawManifestRestorer(AbstractAsyncConfigRestorer):
         Constructor
         """
         super().__init__(file_purpose="agent network manifest", env_var="AGENT_MANIFEST_FILE", must_exist=False)
+
+    def deserialize_file_contents(self, file_path: str, file_contents: bytes) -> Dict[str, Any]:
+        """
+        Override to resolve HOCON include paths relative to the manifest file's own directory.
+        This ensures that sub-manifest includes (e.g. include "experimental/manifest.hocon")
+        work regardless of the server's working directory.
+        """
+        if not file_path.endswith(".hocon"):
+            return super().deserialize_file_contents(file_path, file_contents)
+
+        basedir = os.path.dirname(os.path.abspath(file_path))
+        bytes_file = BytesIO(file_contents)
+        serialization = HoconSerializationFormat()
+        config = serialization.to_object(bytes_file, basedir=basedir)
+        return self.filter_config(config, file_path)
