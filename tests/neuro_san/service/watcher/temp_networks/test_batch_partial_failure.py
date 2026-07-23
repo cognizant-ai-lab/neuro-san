@@ -21,6 +21,7 @@ exercises the partial-failure case: if a later entry's put_object
 fails, earlier successful writes remain in S3 (no automatic rollback).
 """
 from unittest.mock import patch
+import pytest
 
 from botocore.exceptions import ClientError
 
@@ -38,7 +39,8 @@ class TestBatchPartialFailure(S3ReservationsStorageTestBase):
     code review rather than letting it slip in silently.
     """
 
-    def test_add_preserves_earlier_successes_when_later_entry_fails(self):
+    @pytest.mark.asyncio
+    async def test_add_preserves_earlier_successes_when_later_entry_fails(self):
         """
         With a batch of 3 reservations where the 3rd put_object raises
         AccessDenied, add_reservations propagates the error and leaves
@@ -70,21 +72,23 @@ class TestBatchPartialFailure(S3ReservationsStorageTestBase):
         # base class hands each test a fresh FakeS3Client in setUp, so
         # this is a no-op today; the cleanup is here to document intent
         # and to keep the test correct if a future refactor turns
-        # self.fake_s3 into a shared object.
-        self.addCleanup(setattr, self.fake_s3, "put_object", real_put)
+        # self.fake_async_s3 into a shared object.
+        self.addCleanup(setattr, self.fake_async_s3, "put_object", real_put)
         call_log = {"count": 0}
+        template_error = ClientError(
+            {
+                "Error": {"Code": "AccessDenied"},
+                "ResponseMetadata": {"HTTPStatusCode": 403},
+            },
+            "PutObject",
+        )
 
-        # pylint: disable=invalid-name,unused-argument
+        # pylint: disable=invalid-name
         def fail_on_third(Bucket, Key, Body, ContentType):
             call_log["count"] += 1
             if call_log["count"] == 3:
-                raise ClientError(
-                    {
-                        "Error": {"Code": "AccessDenied"},
-                        "ResponseMetadata": {"HTTPStatusCode": 403},
-                    },
-                    "PutObject",
-                )
+                raise template_error
+
             return real_put(
                 Bucket=Bucket,
                 Key=Key,
@@ -98,11 +102,11 @@ class TestBatchPartialFailure(S3ReservationsStorageTestBase):
         # so no sleep should fire, but we patch it so a regression that
         # adds AccessDenied to retryable_codes does not hang the test.
         with patch(
-            "neuro_san.service.watcher.temp_networks."
-            "s3_reservations_storage.time.sleep"
+            "neuro_san.service.watcher.temp_networks.aws_async_client_worker.async_sleep"
         ):
+
             with self.assertRaises(ClientError) as ctx:
-                self.storage.add_reservations(
+                await self.storage.add_reservations(
                     {res_a: spec_a, res_b: spec_b, res_c: spec_c}
                 )
 

@@ -6,14 +6,8 @@
 # requirements-build.txt
 
 # In-house dependencies
-leaf-common>=1.2.44
+leaf-common>=1.2.47
 leaf-server-common>=0.1.25
-
-# These are needed for generating code from .proto files and for the
-# generated *_pb2_grpc.py files which import grpcio
-grpcio>=1.62.0
-grpcio-tools>=1.62.0
-protobuf>=4.25.3
 
 # Downgraded secondary dependencies for error-free pip installs
 pyhocon>=0.3.60
@@ -21,6 +15,7 @@ pyOpenSSL>=24.0.0
 
 boto3>=1.34.51
 botocore>=1.34.51
+aiobotocore>=3.7.0
 idna>=3.6
 urllib3>=1.26.18
 aiohttp>=3.13.0,<4.0
@@ -33,7 +28,9 @@ ruamel.yaml>=0.18.6
 # Keep all these guys limited for now, as it can be the wild wild west out there
 # We don't want to be on a dependencies treadmill with timing not of our choosing.
 langchain>=1.2.0,<2.0
-langchain-core>=1.2.5,<2.0
+# Floor 1.4.0: bind() on a chat model must return a chat-model-aware binding
+# (with bind_tools) for the Gemini AFC-disable in gemini_llm_policy.py to activate.
+langchain-core>=1.4.0,<2.0
 langchain-classic>=1.0.0,<2.0
 langchain-community>=0.4,<1.0
 bs4>=0.0.2,<0.1
@@ -75,6 +72,9 @@ json-repair>=0.47.3,<1.0
 
 # For cron-string parsing
 croniter>=6.2.2
+
+# Memory size estimation
+objsize>=0.8.0
 
 # MCP tools
 # These two pins are coupled: langchain-mcp-adapters depends on the mcp package,

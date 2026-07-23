@@ -211,9 +211,60 @@ ENV AGENT_FORWARDED_REQUEST_METADATA="request_id user_id"
 # for it on your docker run command line.
 ENV AGENT_HTTP_PORT="8080"
 
+# Dedicated port for the isolated health-probe server. Serves /, /healthz,
+# /readyz, /livez on its own asyncio event loop in a dedicated thread, so
+# probes stay fast even when the main Tornado loop is saturated by request
+# work. Uses SO_REUSEPORT so every worker process binds the same port and
+# the kernel distributes accepted connections across them.
+#
+# Set to 0 to disable the isolated probe server (in that case probes must
+# hit AGENT_HTTP_PORT, which continues to register the same handlers for
+# backward compatibility).
+#
+# Point your Kubernetes livenessProbe.httpGet.port at this port for
+# best-case probe responsiveness under load.
+ENV AGENT_HEALTH_PROBE_PORT="8081"
+
+# Enable asyncio debug mode on the Tornado main event loop in each worker.
+# When set to "true"/"1"/"yes", the server calls loop.set_debug(True), which:
+#   - turns on additional asyncio diagnostics
+#   - logs a WARNING via the "asyncio" logger whenever any callback runs longer
+#     than AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS (see below). The warning
+#     includes the source location of the offending callback -- the diagnostic
+#     to use when /livez probe latency spikes under load.
+# Adds ~5-10% loop overhead. Leave off in production unless diagnosing.
+ENV AGENT_ASYNCIO_DEBUG="false"
+
+# Slow-callback threshold in milliseconds. Only consulted when
+# AGENT_ASYNCIO_DEBUG is enabled. Lower values surface smaller hogs but
+# create more log volume. 50-100ms is a good first pass.
+ENV AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS="100"
+
+# Enable the sys.setprofile-based loop timeline tracer on the Tornado
+# main event loop. When enabled, records a linear timeline of every
+# scheduled unit of work run by the loop -- task steps, done callbacks,
+# call_soon callbacks, timer callbacks -- keyed by task name or callback
+# qualname. Useful for answering "what is occupying the loop right now?"
+# Adds ~5-10% loop overhead. Leave OFF in production unless diagnosing.
+ENV AGENT_LOOP_TIMELINE="false"
+
+# Ring buffer size for the loop timeline tracer. Older events drop off as
+# newer ones arrive. Only consulted when AGENT_LOOP_TIMELINE is enabled.
+ENV AGENT_LOOP_TIMELINE_MAX_EVENTS="100000"
+
+# If non-empty AND AGENT_LOOP_TIMELINE is enabled, the tracer writes its
+# buffered events to this JSONL file on graceful process shutdown. Leave
+# empty to keep the timeline in-memory only (snapshot via a debug endpoint
+# or signal handler at runtime).
+ENV AGENT_LOOP_TIMELINE_DUMP_PATH=""
+
 # Maximm number of requests that can be served at the same time
 # A value of 0 indicates unlimited requests are handled.
 ENV AGENT_MAX_CONCURRENT_REQUESTS="50"
+
+# Maximum number of worker threads per request.
+# Default of <= 0 (or unset) indicates system default of (num_cpus + 4).
+ENV AGENT_MAX_WORKERS_PER_REQUEST="0"
 
 # Number of requests served before the server shuts down in an orderly fashion.
 # This is useful for testing response handling in clusters with duplicated pods.

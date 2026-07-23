@@ -90,8 +90,8 @@ class AbstractReservationsStorage(ReservationsStorage, Startable):
                 self._stop_event.wait(timeout=sleep_time)
             # We're behind schedule; skip sleeping (prevents drift accumulation)
 
-    def add_reservations(self, reservations_dict: Dict[Reservation, Any],
-                         source: str = None):
+    async def add_reservations(self, reservations_dict: Dict[Reservation, Any],
+                               source: str = None):
         """
         Add a set of reservations for agent networks en-masse
 

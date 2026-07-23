@@ -15,20 +15,14 @@
 #
 # END COPYRIGHT
 
-import asyncio
+from asyncio import Lock as AsyncLock
 import logging
 from time import time
 from typing import Any
 from typing import Dict
-from typing import List
-from typing import Literal
 from typing import Optional
 from typing_extensions import override
 
-from langchain_community.callbacks.bedrock_anthropic_callback import MODEL_COST_PER_1K_INPUT_TOKENS
-from langchain_community.callbacks.bedrock_anthropic_callback import MODEL_COST_PER_1K_OUTPUT_TOKENS
-from langchain_community.callbacks.openai_info import get_openai_token_cost_for_model
-from langchain_community.callbacks.openai_info import TokenType
 from langchain_core.callbacks import AsyncCallbackHandler
 from langchain_core.messages import AIMessage
 from langchain_core.messages import BaseMessage
@@ -54,11 +48,10 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
     """
     Callback handler that tracks token usage via "AIMessage.usage_metadata".
 
-    This class is a modification of LangChain’s "UsageMetadataCallbackHandler" and "OpenAICallbackHandler":
-    - https://python.langchain.com/api_reference/_modules/langchain_core/callbacks/usage.html
-    #get_usage_metadata_callback
-    - https://python.langchain.com/api_reference/_modules/langchain_community/callbacks/openai_info.html
-    #OpenAICallbackHandler
+    This class is a modification of LangChain’s:
+    - "UsageMetadataCallbackHandler" in langchain_core.callbacks.usage
+    - "OpenAICallbackHandler" in langchain_community.callbacks.openai_info, from the sunset
+      langchain-community package (repository archived at https://github.com/langchain-ai/langchain-community)
 
     It collects token usage from the "usage_metadata" field of "AIMessage" each time an LLM or chat model
     finishes execution.
@@ -71,11 +64,9 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
     regardless of provider.
 
     Note:
-    Token cost is calculated using prices from the LLM info file when available.
-    For OpenAI, Azure OpenAI, Anthropic, and Bedrock Anthropic, there are  fallbacks to lookup tables in:
-        - langchain_community.callbacks.openai_info.py
-        - langchain_community.callbacks.bedrock_anthropic_callback.py
-    If no price information is found, the cost defaults to 0.
+    Token cost is calculated using prices from the LLM info file
+    ("price_per_1k_input_tokens" / "price_per_1k_output_tokens") when available.
+    If no price information is found, the cost defaults to 0 and a warning is logged.
     """
 
     # Token stats
@@ -89,7 +80,7 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
     def __init__(self, llm_infos: Dict[str, Any]):
         """Initialize the CallbackHandler."""
         super().__init__()
-        self._lock = asyncio.Lock()
+        self._lock = AsyncLock()
         self.llm_infos: Dict[str, Any] = llm_infos
         self.provider_class: str = None
         self.start_time: float = None
@@ -210,30 +201,19 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
 
     def calculate_token_costs(self, model_name: str, completion_tokens: int, prompt_tokens: int) -> float:
         """
-        Calculate token costs with fallback methods for different providers.
+        Calculate token costs from prices in the LLM info file.
         :param model_name: Model to calculate the cost
         :param completion_tokens: Number of output tokens
         :param prompt_tokens: Number of input tokens
         :return: Total cost
         """
-
-        # Try to get costs from llm_infos first
-        completion_token_cost: float = \
+        completion_token_cost: Optional[float] = \
             self._get_cost_from_info(model_name, completion_tokens, "price_per_1k_output_tokens")
-        prompt_token_cost: float = self._get_cost_from_info(model_name, prompt_tokens, "price_per_1k_input_tokens")
+        prompt_token_cost: Optional[float] = \
+            self._get_cost_from_info(model_name, prompt_tokens, "price_per_1k_input_tokens")
 
-        # Fallback to provider-specific methods for anthropic and openai based models
-        # Since there are lookup tables for these models in langchain-community
-        if self.provider_class in ["azure-openai", "openai"]:
-            completion_token_cost = completion_token_cost or \
-                self._get_openai_cost(model_name, completion_tokens, token_type=TokenType.COMPLETION)
-            prompt_token_cost = prompt_token_cost or \
-                self._get_openai_cost(model_name, prompt_tokens, token_type=TokenType.PROMPT)
-
-        elif self.provider_class in ["anthropic", "bedrock"]:
-            completion_token_cost = completion_token_cost or \
-                self._get_anthropic_cost(model_name, completion_tokens, "completion")
-            prompt_token_cost = prompt_token_cost or self._get_anthropic_cost(model_name, prompt_tokens, "prompt")
+        if completion_token_cost is None and prompt_token_cost is None:
+            logging.warning("No price info found for model %s in llm info. Token cost defaults to 0.", model_name)
 
         # Return total cost
         return (completion_token_cost or 0.0) + (prompt_token_cost or 0.0)
@@ -246,37 +226,20 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         :param price_key: keyword to look in llm info for price
         :return: Token cost
         """
-        if model_name not in self.llm_infos:
+        llm_info: Dict[str, Any] = self.llm_infos.get(model_name)
+        if llm_info is None:
             return None
 
-        price = self.llm_infos.get(model_name).get(price_key)
+        price: Optional[float] = llm_info.get(price_key)
+
+        # Alias entries (e.g. "gpt-5.2") carry no price of their own; fall back to the
+        # concrete model they point to via "use_model_name" (e.g. "gpt-5.2-2025-12-11").
+        if price is None:
+            use_model_name: Optional[str] = llm_info.get("use_model_name")
+            if use_model_name is not None:
+                price = self.llm_infos.get(use_model_name, {}).get(price_key)
+
         return (num_tokens / 1000) * price if price is not None else None
-
-    def _get_openai_cost(self, model_name: str, num_tokens: int, token_type: TokenType) -> Optional[float]:
-        """
-        Get OpenAI cost with error handling.
-        :param model_name: Anthorpic model to calculate the cost
-        :param num_tokens: Amount of tokens
-        :param token_type: Type of token, either "prompt" (input) or "completion" (output)
-        :return: Token cost
-        """
-        try:
-            return get_openai_token_cost_for_model(model_name=model_name, num_tokens=num_tokens, token_type=token_type)
-        except ValueError:
-            return None
-
-    def _get_anthropic_cost(self, model_name: str, num_tokens: int, token_type: str) -> Optional[float]:
-        """
-        Get Anthropic/Bedrock cost with error handling.
-        :param model_name: Anthorpic model to calculate the cost
-        :param num_tokens: Amount of tokens
-        :param token_type: Type of token, either "prompt" (input) or "completion" (output)
-        :return: Token cost
-        """
-        try:
-            return self._get_anthropic_bedrock_token_cost(model_name, num_tokens, token_type)
-        except ValueError:
-            return None
 
     def _init_model_entry(self, model_name: str):
         """
@@ -326,61 +289,3 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         else:
             has_content = bool(content)
         return not has_content and not getattr(message, "tool_calls", None)
-
-    def _get_anthropic_bedrock_token_cost(
-            self,
-            model_name: str,
-            num_tokens: int,
-            token_type: Literal["completion", "prompt"] = "prompt"
-    ) -> float:
-        """
-        Calculate token cost for Anthropic/Bedrock models from the lookup table with unified logic.
-        :param model_name: Anthorpic model to calculate the cost
-        :param num_tokens: Amount of tokens
-        :param token_type: Type of token, either "prompt" (input) or "completion" (output)
-        :return: Token cost
-        """
-
-        # Normalize model name for lookup
-        normalized_model: str = self._normalize_model_name(model_name)
-
-        # Find matching model in cost tables
-        # matching_models = [model for model in MODEL_COST_PER_1K_INPUT_TOKENS if normalized_model in model]
-        matching_models: List[str] = []
-        for model in MODEL_COST_PER_1K_INPUT_TOKENS:
-            if normalized_model in model:
-                matching_models.append(model)
-
-        if not matching_models:
-            error_msg = f"Unknown model: {model_name}. Known models: {', '.join(MODEL_COST_PER_1K_INPUT_TOKENS.keys())}"
-            logging.warning(error_msg)
-            raise ValueError(error_msg)
-
-        if len(matching_models) > 1:
-            error_msg = f"Ambiguous model name '{model_name}'. Matches: {', '.join(matching_models)}"
-            logging.warning(error_msg)
-            raise ValueError(error_msg)
-
-        # Calculate cost
-        full_model_id: str = matching_models[0]
-        if token_type == "prompt":
-            cost_table: Dict[str, float] = MODEL_COST_PER_1K_INPUT_TOKENS
-        else:
-            cost_table = MODEL_COST_PER_1K_OUTPUT_TOKENS
-
-        return (num_tokens / 1000) * cost_table[full_model_id]
-
-    def _normalize_model_name(self, model_name: str) -> str:
-        """
-        Normalize model name for consistent lookup across Bedrock and Anthropic formats.
-        :param model_name: Full name or id of Anthropic LLM
-        :return: Name for checking in the lookup table
-        """
-        if "anthropic" in model_name:
-            # For Bedrock: extract base model from cross-region inference profile
-            # e.g., 'us.anthropic.claude-3-sonnet' -> 'anthropic.claude-3-sonnet'
-            parts = model_name.split(".")
-            if len(parts) >= 2:
-                return ".".join(parts[-2:])
-
-        return model_name

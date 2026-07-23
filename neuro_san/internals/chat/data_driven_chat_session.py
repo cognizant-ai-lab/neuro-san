@@ -22,7 +22,8 @@ from typing import Tuple
 from typing import Type
 from typing import Union
 
-import copy
+from copy import deepcopy
+from os import environ
 import traceback
 
 from logging import getLogger
@@ -53,7 +54,6 @@ from neuro_san.internals.run_context.factory.master_tracing_context_factory impo
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.message_processing.message_processor import MessageProcessor
 from neuro_san.message_processing.answer_message_processor import AnswerMessageProcessor
-from neuro_san.message_processing.structure_message_processor import StructureMessageProcessor
 
 # Lazily import specific errors from llm providers
 PATIENCE_ERRORS: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
@@ -74,9 +74,14 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
 
         :param agent_network: The AgentNetwork to use.
         """
+        agent_network_copy: AgentNetwork = agent_network
+
         # We make a copy of the AgentNetwork at this level to allow for interactions
         # within this scope to modify the network topology.
-        agent_network_copy: AgentNetwork = copy.deepcopy(agent_network)
+        protect_original_copy: bool = environ.get("AGENT_PROTECT_ORIGINAL_COPY", "true").lower() == "true"
+        if protect_original_copy:
+            agent_network_copy = deepcopy(agent_network)
+
         self.registry: AgentToolRegistry = AgentToolRegistry(agent_network_copy)
 
         self.front_man: FrontMan = None
@@ -122,7 +127,7 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         if self.sly_data.get("request_metadata") is None:
             # Make a deep copy so the server's idea of the original metadata doesn't get modified
             # should any CodedTool somehow get the idea to modify it.
-            self.sly_data["request_metadata"] = copy.deepcopy(invocation_context.get_metadata())
+            self.sly_data["request_metadata"] = deepcopy(invocation_context.get_metadata())
 
         run_context: RunContext = RunContextFactory.create_run_context(None, None,
                                                                        invocation_context=invocation_context,
@@ -392,27 +397,6 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         }
 
         return chat_context
-
-    def create_outgoing_message_processor(self) -> MessageProcessor:
-        """
-        :return: A MessageProcessor that filters messages outgoing to the client.
-                How this works is based on settings on the front man.
-                Can be None.
-        """
-        message_processor: MessageProcessor = None
-
-        front_man_name: str = self.registry.find_front_man()
-        front_man_spec: Dict[str, Any] = self.registry.get_agent_tool_spec(front_man_name)
-
-        # Get the formats we should parse from the final answer from the config for the network.
-        # As of 6/24/25, this is an unadvertised experimental feature.
-        structure_formats: Union[str, List[str]] = front_man_spec.get("structure_formats")
-        if structure_formats is None:
-            return message_processor
-
-        # Eventually this might be a CompositeMessageProcessor
-        message_processor = StructureMessageProcessor(structure_formats)
-        return message_processor
 
     async def close_of_work(self, parent_resource: LingeringResource = None):
         """
