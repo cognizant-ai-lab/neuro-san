@@ -22,11 +22,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-<<<<<<< HEAD
-import os
-=======
 import asyncio
->>>>>>> origin/main
 import json
 import os
 import random
