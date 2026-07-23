@@ -40,8 +40,9 @@ class SummaryReporter:
     reporting methods can access them without re-passing.
     """
 
-    def __init__(self, stage_summaries) -> None:
+    def __init__(self, stage_summaries, neuro_san_version=None) -> None:
         self._summaries = stage_summaries
+        self._neuro_san_version = neuro_san_version
 
     def log_ramp_summary(self, *, is_ramp=True) -> None:
         """Log the ramp-up summary table across all stages."""
@@ -122,6 +123,10 @@ class SummaryReporter:
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         logger.info("  OVERALL RESULTS")
         logger.info("=" * SEPARATOR_WIDTH)
+        if self._neuro_san_version:
+            logger.info(
+                "  neuro-san version: %s", self._neuro_san_version,
+            )
         logger.info("  Total requests: %s", total_sent)
         logger.info("    Created:   %s", total_created)
         logger.info("    Failed:    %s", total_failed)

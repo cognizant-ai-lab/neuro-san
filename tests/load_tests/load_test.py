@@ -1679,6 +1679,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             round_num, expected,
         )
         logger.info("=" * 60)
+        logger.info(
+            "  neuro-san version: %s",
+            self._resolve_ns_version() or "unknown",
+        )
 
         before_server = (
             ResourceMonitor.snapshot(self.server_proc)
@@ -2467,7 +2471,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     "before the interrupt.",
                 )
 
-            summary_reporter = SummaryReporter(stage_summaries)
+            summary_reporter = SummaryReporter(
+                stage_summaries,
+                neuro_san_version=self._resolve_ns_version(),
+            )
             if len(stage_summaries) > 1:
                 summary_reporter.log_ramp_summary(
                     is_ramp=self.args.ramp,
