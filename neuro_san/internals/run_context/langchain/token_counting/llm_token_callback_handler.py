@@ -226,10 +226,19 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         :param price_key: keyword to look in llm info for price
         :return: Token cost
         """
-        if model_name not in self.llm_infos:
+        llm_info: Dict[str, Any] = self.llm_infos.get(model_name)
+        if llm_info is None:
             return None
 
-        price = self.llm_infos.get(model_name).get(price_key)
+        price: Optional[float] = llm_info.get(price_key)
+
+        # Alias entries (e.g. "gpt-5.2") carry no price of their own; fall back to the
+        # concrete model they point to via "use_model_name" (e.g. "gpt-5.2-2025-12-11").
+        if price is None:
+            use_model_name: Optional[str] = llm_info.get("use_model_name")
+            if use_model_name is not None:
+                price = self.llm_infos.get(use_model_name, {}).get(price_key)
+
         return (num_tokens / 1000) * price if price is not None else None
 
     def _init_model_entry(self, model_name: str):
