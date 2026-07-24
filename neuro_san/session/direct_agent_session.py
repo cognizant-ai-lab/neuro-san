@@ -51,6 +51,8 @@ class DirectAgentSession(AgentSession):
                  metadata: Dict[str, Any] = None,
                  security_cfg: Dict[str, Any] = None,
                  umbrella_timeout: Timeout = None,
+                 # Keyword-only: the sync and async session signatures diverge
+                 # above this point, so positional passing would misbind.
                  *,
                  toolbox_factory: ContextTypeToolboxFactory = None):
         """
@@ -86,6 +88,10 @@ class DirectAgentSession(AgentSession):
         self.agent_network: AgentNetwork = agent_network
         self.request_id: str = None
         self.umbrella_timeout: Timeout = umbrella_timeout
+        # Resolve the toolbox factory once at construction: an invocation
+        # context's factory is fixed when the context is built, and resolving
+        # here keeps connectivity() working even after close() sets
+        # self.invocation_context to None.
         self.toolbox_factory: ContextTypeToolboxFactory = toolbox_factory
         if self.toolbox_factory is None and invocation_context is not None:
             self.toolbox_factory = invocation_context.get_toolbox_factory()

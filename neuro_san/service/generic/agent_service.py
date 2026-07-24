@@ -206,6 +206,9 @@ class AgentService:
 
         # Delegate to Direct*Session
         agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
+        # Pass the toolbox factory that was created and loaded once at service
+        # construction, so connectivity reporting does not re-read toolbox
+        # info files on every request.
         session = DirectAgentSession(agent_network=agent_network,
                                      invocation_context=None,
                                      metadata=metadata,

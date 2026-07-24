@@ -120,6 +120,9 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         if self.loaded:
             return
 
+        # Double-checked locking: the test above keeps the per-report load()
+        # call cheap once loaded; the re-test under the lock makes the first
+        # load exclusive when a not-yet-loaded factory is shared by threads.
         with self.load_lock:
             if self.loaded:
                 return

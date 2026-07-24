@@ -50,6 +50,8 @@ class AsyncDirectAgentSession(AsyncAgentSession):
                  invocation_context: Optional[SessionInvocationContext],
                  metadata: Dict[str, Any] = None,
                  security_cfg: Dict[str, Any] = None,
+                 # Keyword-only: the sync and async session signatures diverge
+                 # above this point, so positional passing would misbind.
                  *,
                  toolbox_factory: ContextTypeToolboxFactory = None):
         """
@@ -82,6 +84,10 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         self.invocation_context: SessionInvocationContext = invocation_context
         self.agent_network: AgentNetwork = agent_network
         self.request_id: str = None
+        # Resolve the toolbox factory once at construction: an invocation
+        # context's factory is fixed when the context is built, and resolving
+        # here keeps connectivity() working even after close() sets
+        # self.invocation_context to None.
         self.toolbox_factory: ContextTypeToolboxFactory = toolbox_factory
         if self.toolbox_factory is None and invocation_context is not None:
             self.toolbox_factory = invocation_context.get_toolbox_factory()
