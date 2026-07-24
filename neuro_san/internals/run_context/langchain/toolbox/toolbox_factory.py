@@ -84,6 +84,7 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         """
         self.toolbox_infos: Dict[str, Any] = {}
         self.overlayer = DictionaryOverlay()
+        self.loaded: bool = False
 
         # Get user toolbox info file path with the following priority:
         # 1. "toolbox_info_file" from agent network hocon
@@ -109,6 +110,9 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         """
         Loads the base tool information from hocon files.
         """
+        if self.loaded:
+            return
+
         restorer = ToolboxInfoRestorer()
         self.toolbox_infos = restorer.restore()
 
@@ -116,6 +120,8 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         if self.toolbox_info_file:
             extra_toolbox_infos: Dict[str, Any] = restorer.restore(file_reference=self.toolbox_info_file)
             self.toolbox_infos = self.overlayer.overlay(self.toolbox_infos, extra_toolbox_infos)
+
+        self.loaded = True
 
     def create_tool_from_toolbox(
             self,
