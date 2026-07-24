@@ -15,11 +15,10 @@
 #
 # END COPYRIGHT
 
-import os
-from io import BytesIO
+import json
 from typing import Any, Dict
 
-from leaf_common.serialization.format.hocon_serialization_format import HoconSerializationFormat
+from pyhocon import ConfigFactory
 
 from neuro_san.internals.persistence.abstract_async_config_restorer import AbstractAsyncConfigRestorer
 
@@ -39,15 +38,19 @@ class RawManifestRestorer(AbstractAsyncConfigRestorer):
 
     def deserialize_file_contents(self, file_path: str, file_contents: bytes) -> Dict[str, Any]:
         """
-        Override to resolve HOCON include paths relative to the manifest file's own directory.
-        This ensures that sub-manifest includes (e.g. include "experimental/manifest.hocon")
-        work regardless of the server's working directory.
+        Override for HOCON manifest files: use ConfigFactory.parse_file() so that
+        include directives are resolved relative to the manifest file's own directory
+        rather than the process CWD.
+
+        This is backwards-compatible: parse_file() has always resolved includes
+        relative to the file being parsed, so no existing include paths need to change.
+        Agent HOCON files (not manifests) are unaffected — they continue to go through
+        the base class which uses parse_string() and CWD-relative resolution.
         """
         if not file_path.endswith(".hocon"):
             return super().deserialize_file_contents(file_path, file_contents)
 
-        basedir = os.path.dirname(os.path.abspath(file_path))
-        bytes_file = BytesIO(file_contents)
-        serialization = HoconSerializationFormat()
-        config = serialization.to_object(bytes_file, basedir=basedir)
+        config = ConfigFactory.parse_file(file_path)
+        if config is not None:
+            config = json.loads(json.dumps(config))
         return self.filter_config(config, file_path)
