@@ -19,6 +19,8 @@ from typing import Dict
 from typing import List
 from typing import Set
 
+import logging
+
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
@@ -72,6 +74,9 @@ class ConnectivityReporter:
         self.toolbox_factory: ContextTypeToolboxFactory = toolbox_factory
 
         if self.inspector is not None and self.toolbox_factory is None:
+            logger = logging.getLogger(self.__class__.__name__)
+            logger.info("No toolbox_factory provided. Building one from the agent network config. "
+                        "Pass a pre-loaded factory to avoid re-reading toolbox info files per report.")
             config: Dict[str, Any] = self.inspector.get_config()
             self.toolbox_factory = MasterToolboxFactory.create_toolbox_factory(config)
 

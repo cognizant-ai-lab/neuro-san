@@ -18,7 +18,10 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+import os
+
 from unittest import TestCase
+from unittest.mock import patch
 
 from neuro_san import REGISTRIES_DIR
 from neuro_san.internals.chat.connectivity_reporter import ConnectivityReporter
@@ -54,9 +57,13 @@ class TestConnectivityReporter(TestCase):
         Tests the connectivity of the hello world hocon
         """
         agent_network: AgentNetwork = self.get_sample_registry("hello_world.hocon")
-        reporter = ConnectivityReporter(agent_network)
 
-        messages: List[Dict[str, Any]] = reporter.report_network_connectivity()
+        # The reporter's self-built factory reads AGENT_TOOLBOX_INFO_FILE at
+        # construction. Keep the test hermetic against the environment.
+        with patch.dict(os.environ):
+            os.environ.pop("AGENT_TOOLBOX_INFO_FILE", None)
+            reporter = ConnectivityReporter(agent_network)
+            messages: List[Dict[str, Any]] = reporter.report_network_connectivity()
         self.assertEqual(len(messages), 2)
 
         # First guy is the front-man and he only has a single tool
@@ -86,12 +93,41 @@ class TestConnectivityReporter(TestCase):
         """
         agent_network: AgentNetwork = self.get_sample_registry("hello_world.hocon")
         toolbox_factory = ToolboxFactory()
+        # Keep the test hermetic: no user toolbox info file from the environment.
+        toolbox_factory.toolbox_info_file = None
         reporter = ConnectivityReporter(agent_network, toolbox_factory)
         self.assertIs(reporter.toolbox_factory, toolbox_factory)
 
         messages: List[Dict[str, Any]] = reporter.report_network_connectivity()
         self.assertEqual(len(messages), 2)
         self.assertTrue(toolbox_factory.loaded)
+
+    def test_injected_toolbox_factory_data_is_consulted(self):
+        """
+        Tests that display_as information comes from the injected factory's
+        toolbox infos, not from a factory built behind the scenes.
+        """
+        agent_network: AgentNetwork = self.get_sample_registry("requests_get.hocon")
+        toolbox_factory = ToolboxFactory()
+        # Keep the test hermetic: no user toolbox info file from the environment.
+        toolbox_factory.toolbox_info_file = None
+        # Seed distinctive tool info and mark loaded so load() keeps it as-is.
+        # A self-built or bundled factory would report "langchain_tool" instead.
+        toolbox_factory.toolbox_infos = {
+            "requests_get": {
+                "class": "mock_package.mock_module.MockTool",
+                "display_as": "injected_tool",
+            }
+        }
+        toolbox_factory.loaded = True
+
+        reporter = ConnectivityReporter(agent_network, toolbox_factory)
+        messages: List[Dict[str, Any]] = reporter.report_network_connectivity()
+
+        display_as_by_origin: Dict[str, str] = {
+            message.get("origin"): message.get("display_as") for message in messages
+        }
+        self.assertEqual(display_as_by_origin.get("web_browse_tool"), "injected_tool")
 
     def test_assemble_tool_list_args_tools_dict(self):
         """

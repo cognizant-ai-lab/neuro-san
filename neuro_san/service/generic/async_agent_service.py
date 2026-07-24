@@ -110,12 +110,16 @@ class AsyncAgentService:
         """
         agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
         config: Dict[str, Any] = agent_network.get_config()
-        self.llm_factory: ContextTypeLlmFactory = MasterLlmFactory.create_llm_factory(config)
-        self.toolbox_factory: ContextTypeToolboxFactory = MasterToolboxFactory.create_toolbox_factory(config)
+        llm_factory: ContextTypeLlmFactory = MasterLlmFactory.create_llm_factory(config)
+        toolbox_factory: ContextTypeToolboxFactory = MasterToolboxFactory.create_toolbox_factory(config)
 
-        # Load once.
-        self.llm_factory.load()
-        self.toolbox_factory.load()
+        # Load once, before publishing to the fields that request paths read,
+        # so no request can ever see an unloaded factory.
+        llm_factory.load()
+        toolbox_factory.load()
+
+        self.llm_factory: ContextTypeLlmFactory = llm_factory
+        self.toolbox_factory: ContextTypeToolboxFactory = toolbox_factory
 
     def get_agent_network(self) -> AgentNetwork:
         """

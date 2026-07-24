@@ -50,6 +50,7 @@ class DirectAgentSession(AgentSession):
                  metadata: Dict[str, Any] = None,
                  security_cfg: Dict[str, Any] = None,
                  umbrella_timeout: Timeout = None,
+                 *,
                  toolbox_factory: ContextTypeToolboxFactory = None):
         """
         Constructor
@@ -65,11 +66,14 @@ class DirectAgentSession(AgentSession):
                         GRPC Channel.  If None, uses insecure channel.
         :param umbrella_timeout: A Timeout object to periodically check in loops.
                         Default is None (no timeout).
-        :param toolbox_factory: An optional already-loaded ContextTypeToolboxFactory
-                        built from the same agent network's config, so connectivity
-                        reporting does not have to re-read toolbox info files.
+        :param toolbox_factory: An optional ContextTypeToolboxFactory built from
+                        the same agent network's config, so connectivity reporting
+                        does not have to re-read toolbox info files per request.
+                        May be passed pre-loaded; connectivity reporting will
+                        load() it (a no-op if already loaded).
                         If None, the invocation_context's toolbox factory is used
-                        when available.
+                        when available; failing that, connectivity reporting
+                        builds one from the agent network's config.
         """
         # These aren't used yet
         self._metadata: Dict[str, Any] = metadata
@@ -80,6 +84,8 @@ class DirectAgentSession(AgentSession):
         self.request_id: str = None
         self.umbrella_timeout: Timeout = umbrella_timeout
         self.toolbox_factory: ContextTypeToolboxFactory = toolbox_factory
+        if self.toolbox_factory is None and invocation_context is not None:
+            self.toolbox_factory = invocation_context.get_toolbox_factory()
         if metadata is not None:
             self.request_id = metadata.get("request_id")
 
@@ -122,10 +128,7 @@ class DirectAgentSession(AgentSession):
         response_dict: Dict[str, Any] = {
         }
 
-        toolbox_factory: ContextTypeToolboxFactory = self.toolbox_factory
-        if toolbox_factory is None and self.invocation_context is not None:
-            toolbox_factory = self.invocation_context.get_toolbox_factory()
-        reporter = ConnectivityReporter(self.agent_network, toolbox_factory)
+        reporter = ConnectivityReporter(self.agent_network, self.toolbox_factory)
         config: Dict[str, Any] = self.agent_network.get_config()
         metadata: Dict[str, Any] = config.get("metadata")
         connectivity_info: List[Dict[str, Any]] = reporter.report_network_connectivity()
