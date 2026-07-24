@@ -24,6 +24,7 @@ from neuro_san import REGISTRIES_DIR
 from neuro_san.internals.chat.connectivity_reporter import ConnectivityReporter
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
+from neuro_san.internals.run_context.langchain.toolbox.toolbox_factory import ToolboxFactory
 
 
 class TestConnectivityReporter(TestCase):
@@ -76,6 +77,21 @@ class TestConnectivityReporter(TestCase):
         tools: List[str] = connectivity.get("tools")
         self.assertIsNotNone(tools)
         self.assertEqual(len(tools), 0)
+
+    def test_injected_toolbox_factory_is_used(self):
+        """
+        Tests that a toolbox factory passed to the constructor is used as-is
+        rather than being replaced by one built from the inspector's config,
+        and that reporting loads it.
+        """
+        agent_network: AgentNetwork = self.get_sample_registry("hello_world.hocon")
+        toolbox_factory = ToolboxFactory()
+        reporter = ConnectivityReporter(agent_network, toolbox_factory)
+        self.assertIs(reporter.toolbox_factory, toolbox_factory)
+
+        messages: List[Dict[str, Any]] = reporter.report_network_connectivity()
+        self.assertEqual(len(messages), 2)
+        self.assertTrue(toolbox_factory.loaded)
 
     def test_assemble_tool_list_args_tools_dict(self):
         """

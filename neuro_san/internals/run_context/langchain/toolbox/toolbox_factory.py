@@ -109,6 +109,10 @@ class ToolboxFactory(ContextTypeToolboxFactory):
     def load(self):
         """
         Loads the base tool information from hocon files.
+
+        Only the first call does any work.  Subsequent calls on the same
+        instance are no-ops, so a shared factory can be load()-ed cheaply
+        on every use.
         """
         if self.loaded:
             return

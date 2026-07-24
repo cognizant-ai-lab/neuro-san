@@ -32,6 +32,7 @@ from neuro_san.internals.chat.connectivity_reporter import ConnectivityReporter
 from neuro_san.internals.chat.data_driven_chat_session import DataDrivenChatSession
 from neuro_san.internals.chat.queue_filter import QueueFilter
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.session.session_invocation_context import SessionInvocationContext
 
 
@@ -47,7 +48,8 @@ class AsyncDirectAgentSession(AsyncAgentSession):
                  agent_network: AgentNetwork,
                  invocation_context: SessionInvocationContext,
                  metadata: Dict[str, Any] = None,
-                 security_cfg: Dict[str, Any] = None):
+                 security_cfg: Dict[str, Any] = None,
+                 toolbox_factory: ContextTypeToolboxFactory = None):
         """
         Constructor
 
@@ -60,6 +62,11 @@ class AsyncDirectAgentSession(AsyncAgentSession):
                         secure the TLS and the authentication of the gRPC
                         connection.  Supplying this implies use of a secure
                         GRPC Channel.  If None, uses insecure channel.
+        :param toolbox_factory: An optional already-loaded ContextTypeToolboxFactory
+                        built from the same agent network's config, so connectivity
+                        reporting does not have to re-read toolbox info files.
+                        If None, the invocation_context's toolbox factory is used
+                        when available.
         """
         # These aren't used yet
         self._metadata: Dict[str, Any] = metadata
@@ -68,6 +75,7 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         self.invocation_context: SessionInvocationContext = invocation_context
         self.agent_network: AgentNetwork = agent_network
         self.request_id: str = None
+        self.toolbox_factory: ContextTypeToolboxFactory = toolbox_factory
         if metadata is not None:
             self.request_id = metadata.get("request_id")
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -124,7 +132,10 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         response_dict: Dict[str, Any] = {
         }
 
-        reporter = ConnectivityReporter(self.agent_network)
+        toolbox_factory: ContextTypeToolboxFactory = self.toolbox_factory
+        if toolbox_factory is None and self.invocation_context is not None:
+            toolbox_factory = self.invocation_context.get_toolbox_factory()
+        reporter = ConnectivityReporter(self.agent_network, toolbox_factory)
         config: Dict[str, Any] = self.agent_network.get_config()
         metadata: Dict[str, Any] = config.get("metadata")
         connectivity_info: List[Dict[str, Any]] = reporter.report_network_connectivity()

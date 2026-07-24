@@ -209,7 +209,8 @@ class AgentService:
         session = DirectAgentSession(agent_network=agent_network,
                                      invocation_context=None,
                                      metadata=metadata,
-                                     security_cfg=self.security_cfg)
+                                     security_cfg=self.security_cfg,
+                                     toolbox_factory=self.toolbox_factory)
         response_dict = session.connectivity(request_dict)
 
         if request_log is not None:

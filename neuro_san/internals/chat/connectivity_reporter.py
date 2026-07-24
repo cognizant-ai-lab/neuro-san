@@ -60,6 +60,12 @@ class ConnectivityReporter:
         Constructor
 
         :param inspector: The AgentNetworkInspector to use.
+        :param toolbox_factory: An optional ContextTypeToolboxFactory to consult
+                        for display_as information about toolbox tools.
+                        This should have been built from the same config as the
+                        inspector's agent network and may be passed pre-loaded
+                        so toolbox info files are not re-read per report.
+                        If None, one is created from the inspector's config.
         """
 
         self.inspector: AgentNetworkInspector = inspector
