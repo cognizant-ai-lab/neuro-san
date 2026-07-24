@@ -17,12 +17,11 @@
 """
 See class comment for details
 """
-import threading
-
 from typing import Dict
 
-import uuid
 import base64
+from threading import Lock
+import uuid
 
 from neuro_san.service.mcp.interfaces.client_session_policy import ClientSessionPolicy
 from neuro_san.service.mcp.session.mcp_client_session import McpClientSession
@@ -38,7 +37,7 @@ class McpSessionManager(ClientSessionPolicy):
 
     def __init__(self):
         # Lock to protect access to the sessions dictionary
-        self.lock: threading.Lock = threading.Lock()
+        self.lock: Lock = Lock()
         self.sessions: Dict[str, McpClientSession] = {}
 
     def create_session(self) -> McpClientSession:

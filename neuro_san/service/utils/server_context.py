@@ -20,6 +20,7 @@ from typing import Dict
 from typing import Optional
 
 from threading import Lock
+from os import environ
 
 from janus import Queue
 
@@ -90,10 +91,23 @@ class ServerContext(ServerContextLite):
                  than inheriting a dead reference from the parent.
         """
         if self.executor_pool is None:
+            # Default of None reverts to ThreadPoolExecutor default of (num_cpus + 4).
+            max_workers: int = None
+            max_workers_str: str = environ.get("AGENT_MAX_WORKERS_PER_REQUEST", None)
+            if max_workers_str is not None:
+                try:
+                    max_workers = int(max_workers_str)
+                    if max_workers <= 0:
+                        # Revert to default
+                        max_workers = None
+                except ValueError:
+                    pass
+
             with self._executor_pool_lock:
                 if self.executor_pool is None:
                     self.executor_pool = AsyncioExecutorPool(reuse_mode=True,
-                                                             idle_timeout_seconds=30)
+                                                             idle_timeout_seconds=30,
+                                                             max_workers=max_workers)
         return self.executor_pool
 
     def set_server_status(self, server_status: ServerStatus):

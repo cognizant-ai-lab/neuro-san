@@ -24,6 +24,7 @@ from typing import AsyncGenerator
 from http import HTTPStatus
 
 import asyncio
+from asyncio import Lock as AsyncLock
 import contextlib
 import json
 from json.decoder import JSONDecodeError
@@ -57,7 +58,7 @@ class StreamingChatHandler(BaseRequestHandler):
         self.keep_alive_frame: str = self._build_keep_alive_frame()
         self.last_send_ts = 0.0
         self.keep_alive_task: asyncio.Task = None
-        self.lock: asyncio.Lock = asyncio.Lock()  # protects request writes to output stream and last_send_ts updates
+        self.lock: AsyncLock = AsyncLock()  # protects request writes to output stream and last_send_ts updates
 
     @staticmethod
     def _build_keep_alive_frame() -> str:
