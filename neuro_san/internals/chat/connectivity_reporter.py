@@ -57,6 +57,10 @@ class ConnectivityReporter:
         Maybe someday.
     """
 
+    # Set once the self-build fallback below has been logged, so per-request
+    # reporter construction cannot flood the logs.
+    self_build_logged: bool = False
+
     def __init__(self, inspector: AgentNetworkInspector, toolbox_factory: ContextTypeToolboxFactory = None):
         """
         Constructor
@@ -74,9 +78,12 @@ class ConnectivityReporter:
         self.toolbox_factory: ContextTypeToolboxFactory = toolbox_factory
 
         if self.inspector is not None and self.toolbox_factory is None:
-            logger = logging.getLogger(self.__class__.__name__)
-            logger.info("No toolbox_factory provided. Building one from the agent network config. "
-                        "Pass a pre-loaded factory to avoid re-reading toolbox info files per report.")
+            if not ConnectivityReporter.self_build_logged:
+                ConnectivityReporter.self_build_logged = True
+                logger = logging.getLogger(self.__class__.__name__)
+                logger.info("No toolbox_factory provided. Building one from the agent network config. "
+                            "Pass a pre-loaded factory to avoid re-reading toolbox info files per report. "
+                            "(Logged once per process.)")
             config: Dict[str, Any] = self.inspector.get_config()
             self.toolbox_factory = MasterToolboxFactory.create_toolbox_factory(config)
 

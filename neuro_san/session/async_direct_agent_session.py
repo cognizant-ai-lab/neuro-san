@@ -19,6 +19,7 @@ from typing import Any
 from typing import Dict
 from typing import AsyncGenerator
 from typing import List
+from typing import Optional
 
 from asyncio import Task
 from contextlib import suppress
@@ -46,7 +47,7 @@ class AsyncDirectAgentSession(AsyncAgentSession):
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self,
                  agent_network: AgentNetwork,
-                 invocation_context: SessionInvocationContext,
+                 invocation_context: Optional[SessionInvocationContext],
                  metadata: Dict[str, Any] = None,
                  security_cfg: Dict[str, Any] = None,
                  *,
@@ -57,6 +58,8 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         :param agent_network: The AgentNetwork to use for the session.
         :param invocation_context: The SessionInvocationContext to use to consult
                         for policy objects scoped at the invocation level.
+                        May be None for sessions that only serve connectivity()
+                        or function(); chat methods require a real instance.
         :param metadata: A dictionary of request metadata to be forwarded
                         to subsequent yet-to-be-made requests.
         :param security_cfg: A dictionary of parameters used to
