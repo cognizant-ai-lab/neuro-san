@@ -258,6 +258,30 @@ ENV AGENT_LOOP_TIMELINE_MAX_EVENTS="100000"
 # or signal handler at runtime).
 ENV AGENT_LOOP_TIMELINE_DUMP_PATH=""
 
+# Enable the httpx-level LLM traffic tracer. Emits structured JSON events
+# (http_llm_out / http_llm_in / http_llm_end / optional http_llm_chunk)
+# to the dedicated logger "neuro_san.diagnostics.http_llm_trace" so post-run
+# analysis can reconstruct outbound LLM traffic per user request. Each user
+# chat request is tagged with a short user_req_id that propagates through
+# every downstream LLM call via ContextVar; grep on user_req_id to get the
+# full LLM lifecycle of one request in time order.
+#
+# Overhead is negligible. Route the logger to a separate file in
+# logging.hocon for clean offline analysis.
+ENV AGENT_HTTP_LLM_TRACE="false"
+
+# When true, request and response bodies are logged verbatim on
+# http_llm_out and http_llm_end events (capped at 64 KB per body).
+# Prompts and completions are large and often sensitive; off by default.
+# Only consulted when AGENT_HTTP_LLM_TRACE is enabled.
+ENV AGENT_HTTP_LLM_TRACE_INCLUDE_BODIES="false"
+
+# When true, one http_llm_chunk event is emitted per received body
+# chunk. Massive log volume (dozens of chunks per LLM call); enable only
+# when investigating inter-chunk cadence specifically.
+# Only consulted when AGENT_HTTP_LLM_TRACE is enabled.
+ENV AGENT_HTTP_LLM_TRACE_CHUNKS="false"
+
 # Maximm number of requests that can be served at the same time
 # A value of 0 indicates unlimited requests are handled.
 ENV AGENT_MAX_CONCURRENT_REQUESTS="50"
