@@ -60,6 +60,7 @@ class HealthCheckHandler(RequestHandler):
                    do not have to re-resolve importlib metadata on every probe.
         """
         self.logger = HttpLogger(forwarded_request_metadata, logging_config)
+        self.forwarded_request_metadata: List[str] = forwarded_request_metadata
         if op == "ready":
             self.status = server_status.is_server_ready()
         else:
@@ -67,10 +68,24 @@ class HealthCheckHandler(RequestHandler):
         self.server_name = server_status.get_server_name()
         self.versions = versions
 
+        self._set_cors_headers()
+
+    def _set_cors_headers(self, allowed_methods: str = "GET, OPTIONS"):
+        """
+        Set CORS response headers when AGENT_ALLOW_CORS_HEADERS is configured.
+        :param allowed_methods: comma-separated list of allowed HTTP methods.
+        """
         if os.environ.get("AGENT_ALLOW_CORS_HEADERS") is not None:
             self.set_header("Access-Control-Allow-Origin", "*")
-            self.set_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+            self.set_header("Access-Control-Allow-Methods", allowed_methods)
             self.set_header("Access-Control-Allow-Headers", "Content-Type, Transfer-Encoding")
+
+    def set_default_headers(self):
+        """
+        Called by Tornado when headers are reset, including by send_error().
+        Ensures CORS headers are present on error responses.
+        """
+        self._set_cors_headers()
 
     async def get(self):
         """

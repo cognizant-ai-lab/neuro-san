@@ -26,6 +26,7 @@ import time
 
 from http import HTTPStatus
 
+import os
 from threading import Lock
 from threading import Thread
 
@@ -35,6 +36,35 @@ from tornado.ioloop import IOLoop
 
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
+
+
+class CorsErrorHandler(ErrorHandler):
+    """
+    Default error handler that adds CORS headers to 404/405 responses.
+    Tornado's send_error() resets headers before generating the error page,
+    so CORS must be restored via set_default_headers().
+    """
+
+    def set_default_headers(self):
+        """
+        Set CORS response headers when AGENT_ALLOW_CORS_HEADERS is configured.
+        """
+        if os.environ.get("AGENT_ALLOW_CORS_HEADERS") is not None:
+            forwarded: List[str] = getattr(self.application, "forwarded_request_metadata", [])
+            metadata_headers: str = ", ".join(forwarded)
+            headers: str = "Content-Type, Transfer-Encoding"
+            if metadata_headers:
+                headers += f", {metadata_headers}"
+            self.set_header("Access-Control-Allow-Origin", "*")
+            self.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.set_header("Access-Control-Allow-Headers", headers)
+
+    def data_received(self, chunk):
+        """
+        Method overrides abstract method of RequestHandler
+        with no-op implementation.
+        """
+        return
 
 
 class HttpServerApp(Application):
@@ -61,7 +91,7 @@ class HttpServerApp(Application):
         :param forwarded_request_metadata: list of client metadata keys
         """
         # Call the base constructor
-        super().__init__(handlers=handlers)
+        super().__init__(handlers=handlers, default_handler_class=CorsErrorHandler)
         self.total: int = 0
         self.num_processing: int = 0
         self.requests_stats: Dict[str, int] = {}

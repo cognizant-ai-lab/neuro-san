@@ -75,15 +75,30 @@ class BaseRequestHandler(RequestHandler):
         self.show_absent: bool = os.environ.get("SHOW_ABSENT_METADATA") is not None
         self.request_id: int = 0
 
+        self._set_cors_headers()
+
+    def _set_cors_headers(self, allowed_methods: str = "GET, POST, OPTIONS"):
+        """
+        Set CORS response headers when AGENT_ALLOW_CORS_HEADERS is configured.
+        :param allowed_methods: comma-separated list of allowed HTTP methods.
+        """
         if os.environ.get("AGENT_ALLOW_CORS_HEADERS") is not None:
             self.set_header("Access-Control-Allow-Origin", "*")
-            self.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.set_header("Access-Control-Allow-Methods", allowed_methods)
             headers: str = "Content-Type, Transfer-Encoding"
-            metadata_headers: str = ", ".join(self.forwarded_request_metadata)
+            forwarded: List[str] = getattr(self, "forwarded_request_metadata", [])
+            metadata_headers: str = ", ".join(forwarded)
             if len(metadata_headers) > 0:
                 headers += f", {metadata_headers}"
             # Set all allowed headers:
             self.set_header("Access-Control-Allow-Headers", headers)
+
+    def set_default_headers(self):
+        """
+        Called by Tornado when headers are reset, including by send_error().
+        Ensures CORS headers are present on error responses.
+        """
+        self._set_cors_headers()
 
     def get_metadata(self) -> Dict[str, Any]:
         """

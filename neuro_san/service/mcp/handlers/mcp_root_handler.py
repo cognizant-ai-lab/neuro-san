@@ -68,14 +68,14 @@ class McpRootHandler(BaseRequestHandler):
         # For tool requests, we need to validate tool call arguments:
         self.tool_request_validator: ToolRequestValidator = ToolRequestValidator(self.openapi_service_spec)
 
-        self.set_header("Access-Control-Allow-Origin", "*")
-        self.set_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-        headers: str = "Content-Type, Transfer-Encoding"
-        metadata_headers: str = ", ".join(self.forwarded_request_metadata)
-        if len(metadata_headers) > 0:
-            headers += f", {metadata_headers}"
-        # Set all allowed headers:
-        self.set_header("Access-Control-Allow-Headers", headers)
+        self._set_cors_headers("GET, POST, DELETE, OPTIONS")
+
+    def set_default_headers(self):
+        """
+        Called by Tornado when headers are reset, including by send_error().
+        Ensures MCP CORS headers are present on error responses.
+        """
+        self._set_cors_headers("GET, POST, DELETE, OPTIONS")
 
     async def post(self):
         """
