@@ -91,7 +91,9 @@ class HttpServerApp(Application):
         :param forwarded_request_metadata: list of client metadata keys
         """
         # Call the base constructor
-        super().__init__(handlers=handlers, default_handler_class=CorsErrorHandler)
+        super().__init__(handlers=handlers,
+                         default_handler_class=CorsErrorHandler,
+                         default_handler_args={"status_code": HTTPStatus.NOT_FOUND})
         self.total: int = 0
         self.num_processing: int = 0
         self.requests_stats: Dict[str, int] = {}
