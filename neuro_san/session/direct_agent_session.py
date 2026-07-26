@@ -175,10 +175,8 @@ class DirectAgentSession(AgentSession):
         _ = task
 
         # Task for late-stage conversions for any and all messages
-        queue_filter = QueueFilter(self.invocation_context, template_response_dict, chat_filter, self.agent_network)
-        task: Task = asyncio_executor.submit(self.request_id, queue_filter.filter_queue)
-        # Ignore the future. Live in the now.
-        _ = task
+        queue_filter = QueueFilter(self.invocation_context, chat_filter, self.agent_network)
+        queue_filter.apply_to_journal()
 
         # The synchronously_iterate() method below will synchronously block waiting for
         # chat.ChatMessage dictionaries to come back asynchronously from the submit()
@@ -198,7 +196,7 @@ class DirectAgentSession(AgentSession):
             #    interrupted by caller-side "close" method.
             # 3. And we suppress all exceptions while deleting resources to keep things quieter.
             message: Dict[str, Any] = None
-            for message in generator.synchronously_iterate(self.invocation_context.get_filtered_queue()):
+            for message in generator.synchronously_iterate(self.invocation_context.get_queue()):
                 if message is not None:
                     yield message
         finally:
