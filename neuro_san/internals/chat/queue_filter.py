@@ -31,11 +31,9 @@ from neuro_san.message_processing.structure_message_processor import StructureMe
 
 class QueueFilter:
     """
-    Filters messages from the input queue (the one from the MessageJournal)
-    to be sure they are suitable to be sent to the client on the output queue.
-
-    The main entrypoint to this class is filter_queue().
-    We want the work done in filter_queue() to be done off the main server thread.
+    Prepares MessageFilter and MessageProcessors for use by the MessageJournal
+    to be sure the output prodduced by the MessageJournal is suitable given the parameters
+    of the request.
     """
 
     def __init__(self, chat_filter: Dict[str, Any], agent_network: AgentNetwork):
@@ -72,7 +70,7 @@ class QueueFilter:
 
     def apply_to_journal(self, invocation_context: InvocationContext):
         """
-        Apply the filter and processor to the message journal
+        Apply the filter and processor to the MessageJournal
         """
         message_journal: MessageJournal = invocation_context.get_journal()
         message_journal.set_message_filter(self.message_filter)
