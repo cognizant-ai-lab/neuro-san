@@ -345,6 +345,12 @@ ENV AGENT_HTTP_RESOURCES_MONITOR_INTERVAL="0"
 # Typical production value is 25-30 (under the 60s defaults of common proxies).
 ENV AGENT_STREAM_KEEP_ALIVE_WITH_PROGRESS_INTERVAL_SECONDS=0
 
+# When any particular CodedTool execution takes longer than this many seconds,
+# the system issues a message in the log.  This is very useful for determining
+# where your scale-up problems are with particular networks.  The default value of
+# 0 disables this feature.
+ENV AGENT_TOOL_EXECUTION_LOG_THRESHOLD_SECONDS=0
+
 # Optional URL describing how the server is to be referenced by the outside world.
 # This is useful when a server is behind a load-balancer as part of a larger cluster.
 ENV AGENT_EXTERNAL_SERVER_URL=""
