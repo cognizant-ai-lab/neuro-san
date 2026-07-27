@@ -258,13 +258,14 @@ ENV AGENT_LOOP_TIMELINE_MAX_EVENTS="100000"
 # or signal handler at runtime).
 ENV AGENT_LOOP_TIMELINE_DUMP_PATH=""
 
-# Maximm number of requests that can be served at the same time
+# Maximum number of requests that can be served at the same time
 # A value of 0 indicates unlimited requests are handled.
-ENV AGENT_MAX_CONCURRENT_REQUESTS="50"
+ENV AGENT_MAX_CONCURRENT_REQUESTS="0"
 
 # Maximum number of worker threads per request.
 # Default of <= 0 (or unset) indicates system default of (num_cpus + 4).
 ENV AGENT_MAX_WORKERS_PER_REQUEST="0"
+
 
 # Number of requests served before the server shuts down in an orderly fashion.
 # This is useful for testing response handling in clusters with duplicated pods.
