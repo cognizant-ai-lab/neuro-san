@@ -19,6 +19,8 @@ from typing import Dict
 from typing import List
 from typing import Set
 
+import logging
+
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
@@ -55,17 +57,33 @@ class ConnectivityReporter:
         Maybe someday.
     """
 
+    # Set once the self-build fallback below has been logged, so per-request
+    # reporter construction cannot flood the logs.
+    self_build_logged: bool = False
+
     def __init__(self, inspector: AgentNetworkInspector, toolbox_factory: ContextTypeToolboxFactory = None):
         """
         Constructor
 
         :param inspector: The AgentNetworkInspector to use.
+        :param toolbox_factory: An optional ContextTypeToolboxFactory to consult
+                        for display_as information about toolbox tools.
+                        This should have been built from the same config as the
+                        inspector's agent network and may be passed pre-loaded
+                        so toolbox info files are not re-read per report.
+                        If None, one is created from the inspector's config.
         """
 
         self.inspector: AgentNetworkInspector = inspector
         self.toolbox_factory: ContextTypeToolboxFactory = toolbox_factory
 
         if self.inspector is not None and self.toolbox_factory is None:
+            if not ConnectivityReporter.self_build_logged:
+                ConnectivityReporter.self_build_logged = True
+                logger = logging.getLogger(self.__class__.__name__)
+                logger.info("No toolbox_factory provided. Building one from the agent network config. "
+                            "Pass a pre-loaded factory to avoid re-reading toolbox info files per report. "
+                            "(Logged once per process.)")
             config: Dict[str, Any] = self.inspector.get_config()
             self.toolbox_factory = MasterToolboxFactory.create_toolbox_factory(config)
 
