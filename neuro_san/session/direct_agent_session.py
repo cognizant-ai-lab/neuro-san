@@ -175,8 +175,8 @@ class DirectAgentSession(AgentSession):
         _ = task
 
         # Task for late-stage conversions for any and all messages
-        queue_filter = QueueFilter(self.invocation_context, chat_filter, self.agent_network)
-        queue_filter.apply_to_journal()
+        queue_filter = QueueFilter(chat_filter, self.agent_network)
+        queue_filter.apply_to_journal(self.invocation_context)
 
         # The synchronously_iterate() method below will synchronously block waiting for
         # chat.ChatMessage dictionaries to come back asynchronously from the submit()

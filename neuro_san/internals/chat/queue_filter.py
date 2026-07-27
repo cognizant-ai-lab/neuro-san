@@ -38,17 +38,13 @@ class QueueFilter:
     We want the work done in filter_queue() to be done off the main server thread.
     """
 
-    def __init__(self, invocation_context: InvocationContext,
-                 chat_filter: Dict[str, Any],
-                 agent_network: AgentNetwork):
+    def __init__(self, chat_filter: Dict[str, Any], agent_network: AgentNetwork):
         """
         Constructor
 
-        :param invocation_context: An instance of InvocationContext
         :param chat_filter: A dictionary form of chat.ChatFilter
         :param agent_network: An instance of AgentNetwork
         """
-        self.invocation_context: InvocationContext = invocation_context
         self.message_filter: MessageFilter = MessageFilterFactory.create_message_filter(chat_filter)
         self.message_processor: MessageProcessor = self.create_outgoing_message_processor(agent_network)
 
@@ -74,10 +70,10 @@ class QueueFilter:
         message_processor = StructureMessageProcessor(structure_formats)
         return message_processor
 
-    def apply_to_journal(self):
+    def apply_to_journal(self, invocation_context: InvocationContext):
         """
         Apply the filter and processor to the message journal
         """
-        message_journal: MessageJournal = self.invocation_context.get_journal()
+        message_journal: MessageJournal = invocation_context.get_journal()
         message_journal.set_message_filter(self.message_filter)
         message_journal.set_message_processor(self.message_processor)
