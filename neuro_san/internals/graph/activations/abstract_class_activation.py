@@ -186,7 +186,7 @@ class AbstractClassActivation(AbstractCallableActivation):
             # String not parseable as float. Fine, just ignore.
             pass
 
-        if threshold >= 0.0 and duration > threshold:
+        if duration > threshold > 0.0:
             self.logger.info("Execution of %s took %f seconds", full_class_ref, duration)
 
         # Change the result into a message
