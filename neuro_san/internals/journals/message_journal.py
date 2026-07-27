@@ -45,7 +45,6 @@ class MessageJournal(Journal):
         self.hopper: AsyncHopper = hopper
         self.message_filter: MessageFilter = MaximalMessageFilter()
         self.message_processor: MessageProcessor = None
-        self.issue_response_dicts: bool = True
 
     def set_message_filter(self, message_filter: MessageFilter):
         """
@@ -81,9 +80,7 @@ class MessageJournal(Journal):
             # Can modify message_dict
             await self.message_processor.async_process_message(message_dict, message_type)
 
-        outgoing_dict: Dict[str, Any] = message_dict
-        if self.issue_response_dicts:
-            outgoing_dict = {"response": message_dict}
+        outgoing_dict = {"response": message_dict}
 
         # Queue Producer from this:
         #   https://stackoverflow.com/questions/74130544/asyncio-yielding-results-from-multiple-futures-as-they-arrive
