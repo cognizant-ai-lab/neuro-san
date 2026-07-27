@@ -187,6 +187,10 @@ class DirectAgentSession(AgentSession):
         chat_context: Dict[str, Any] = request_dict.get("chat_context")
         sly_data: Dict[str, Any] = request_dict.get("sly_data")
 
+        # Task for late-stage conversions for any and all messages
+        queue_filter = QueueFilter(chat_filter, self.agent_network)
+        queue_filter.apply_to_journal(self.invocation_context.get_journal())
+
         # Create an asynchronous background task to process the user input.
         # This might take a few minutes, which can be longer than some
         # sockets stay open.
@@ -194,12 +198,6 @@ class DirectAgentSession(AgentSession):
         task: Task = asyncio_executor.submit(self.request_id, chat_session.streaming_chat,
                                              user_input, self.invocation_context, sly_data,
                                              chat_context)
-        # Ignore the future. Live in the now.
-        _ = task
-
-        # Task for late-stage conversions for any and all messages
-        queue_filter = QueueFilter(self.invocation_context, template_response_dict, chat_filter, self.agent_network)
-        task: Task = asyncio_executor.submit(self.request_id, queue_filter.filter_queue)
         # Ignore the future. Live in the now.
         _ = task
 
@@ -221,7 +219,7 @@ class DirectAgentSession(AgentSession):
             #    interrupted by caller-side "close" method.
             # 3. And we suppress all exceptions while deleting resources to keep things quieter.
             message: Dict[str, Any] = None
-            for message in generator.synchronously_iterate(self.invocation_context.get_filtered_queue()):
+            for message in generator.synchronously_iterate(self.invocation_context.get_queue()):
                 if message is not None:
                     yield message
         finally:

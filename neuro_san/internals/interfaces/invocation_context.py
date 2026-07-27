@@ -89,13 +89,6 @@ class InvocationContext(LingeringResource):
         """
         raise NotImplementedError
 
-    def get_filtered_queue(self) -> AsyncCollatingQueue:
-        """
-        :return: The AsyncCollatingQueue instance via which messages are streamed to the
-                AgentSession mechanics
-        """
-        raise NotImplementedError
-
     def get_metadata(self) -> Dict[str, str]:
         """
         :return: The metadata to pass along with any request
