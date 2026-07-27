@@ -31,7 +31,7 @@ from tests.load_tests.config import SEPARATOR_WIDTH
 logger = logging.getLogger(__name__)
 
 # Completion latency percentiles (percent)
-COMPLETION_MILESTONES = [50, 90, 95, 100]
+COMPLETION_MILESTONES = [0, 50, 90, 95, 100]
 
 # Step size for count-based milestones (e.g. 50, 100, 150...)
 COUNT_MILESTONE_STEP = 50
