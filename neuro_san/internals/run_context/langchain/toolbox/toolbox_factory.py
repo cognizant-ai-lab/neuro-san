@@ -27,6 +27,8 @@ from typing import Union
 import logging
 import os
 
+from threading import Lock
+
 from langchain_core.tools.base import BaseTool
 from langchain_core.tools.base import BaseToolkit
 from pydantic import BaseModel
@@ -85,6 +87,7 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         self.toolbox_infos: Dict[str, Any] = {}
         self.overlayer = DictionaryOverlay()
         self.loaded: bool = False
+        self.load_lock: Lock = Lock()
 
         # Get user toolbox info file path with the following priority:
         # 1. "toolbox_info_file" from agent network hocon
@@ -109,19 +112,33 @@ class ToolboxFactory(ContextTypeToolboxFactory):
     def load(self):
         """
         Loads the base tool information from hocon files.
+
+        Only the first call does any work.  Subsequent calls on the same
+        instance are no-ops, so a shared factory can be load()-ed cheaply
+        on every use, even from multiple threads.
         """
         if self.loaded:
             return
 
-        restorer = ToolboxInfoRestorer()
-        self.toolbox_infos = restorer.restore()
+        # Double-checked locking: the test above keeps the per-report load()
+        # call cheap once loaded; the re-test under the lock makes the first
+        # load exclusive when a not-yet-loaded factory is shared by threads.
+        with self.load_lock:
+            if self.loaded:
+                return
 
-        # Mix in user-specified toolbox info, if available.
-        if self.toolbox_info_file:
-            extra_toolbox_infos: Dict[str, Any] = restorer.restore(file_reference=self.toolbox_info_file)
-            self.toolbox_infos = self.overlayer.overlay(self.toolbox_infos, extra_toolbox_infos)
+            restorer = ToolboxInfoRestorer()
+            toolbox_infos: Dict[str, Any] = restorer.restore()
 
-        self.loaded = True
+            # Mix in user-specified toolbox info, if available.
+            if self.toolbox_info_file:
+                extra_toolbox_infos: Dict[str, Any] = restorer.restore(file_reference=self.toolbox_info_file)
+                toolbox_infos = self.overlayer.overlay(toolbox_infos, extra_toolbox_infos)
+
+            # Publish the fully-assembled infos in a single assignment so that
+            # lock-free readers never observe a partially-overlaid dictionary.
+            self.toolbox_infos = toolbox_infos
+            self.loaded = True
 
     def create_tool_from_toolbox(
             self,
