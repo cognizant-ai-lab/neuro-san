@@ -27,6 +27,10 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
             - [context_window_size](#context_window_size)
             - [max_output_tokens](#max_output_tokens)
             - [knowledge_cutoff](#knowledge_cutoff)
+            - [price_per_1k_input_tokens](#price_per_1k_input_tokens)
+            - [price_per_1k_output_tokens](#price_per_1k_output_tokens)
+            - [model_launch_date](#model_launch_date)
+            - [model_retirement_date](#model_retirement_date)
             - [use_model_name](#use_model_name)
         - [classes](#classes)
             - [Class Name Keys](#class-name-keys)
@@ -140,12 +144,75 @@ While it is possible to specify a smaller max_output_tokens in a given [classes]
 configuration, it is not possible to simply list a new larger value and have it
 magically manifest itself.  This is a matter of how the LLM was trained.
 
+**`null` is allowed** for entries whose true output ceiling is not known ahead of time.
+The motivating case is OpenRouter's meta-router models (e.g. `openrouter/free`,
+`openrouter/auto`), which pick an underlying model at request time, so the real
+`max_output_tokens` varies per request. When `max_output_tokens` is `null`, neuro-san
+skips the `prompt_token_fraction` multiplication and leaves the resulting `max_tokens`
+unset on the LLM, letting the provider's own default take over. Concrete numeric values
+are still preferred whenever the model has a known fixed ceiling — `null` should be
+reserved for the cases above.
+
 #### `knowledge_cutoff`
 
 String date indicating the origination date of the last piece of training data.
 
 The lack of current knowledge is another common source of disappointment for neuro-san
 users when trying out newly released models.
+
+#### `price_per_1k_input_tokens`
+
+A floating-point number indicating the cost in US dollars to process 1,000 input tokens
+through the model. Input tokens include the prompt, chat history, system messages, tools,
+and any other content sent to the model.
+
+This value is typically sourced from the LLM provider's pricing page (see the comment near
+the price fields in the default file for the relevant URL). Providers change pricing
+periodically, so this number should be treated as a snapshot at the time the entry was
+authored.
+
+This key is optional, but the prices in the LLM info file are the only source used for token-cost
+estimation in the token callback handler. If no price information is found for a model, the
+reported cost defaults to 0 and a warning is logged.
+If a model has tiered or context-dependent pricing, the value here should be the standard published rate.
+
+#### `price_per_1k_output_tokens`
+
+A floating-point number indicating the cost in US dollars to generate 1,000 output tokens
+from the model. Output tokens are the tokens the model produces in its response.
+
+For most providers, output tokens are billed at a higher rate than input tokens.
+
+This key is optional and follows the same caveats as
+[`price_per_1k_input_tokens`](#price_per_1k_input_tokens): prices in the LLM info file are the
+only source used for token-cost estimation, and a model without price information reports a
+cost of 0 with a logged warning.
+
+#### `model_launch_date`
+
+A string in `YYYY-MM-DD` format indicating the date the model first became available on
+its provider's API.
+
+This is sourced from the provider's official release notes or model card (for example,
+the AWS Bedrock model cards for Anthropic models, OpenAI's release notes for OpenAI models,
+or the Gemini API deprecations page for Gemini models). Note that the date encoded in a
+model ID's suffix (e.g. `claude-sonnet-4-20250514`) is the model snapshot date, which is
+not always the same as the public launch date — prefer the provider's stated launch date
+over the ID suffix.
+
+This key is optional. It is informational only and is not consumed by neuro-san at runtime.
+
+#### `model_retirement_date`
+
+A string in `YYYY-MM-DD` format indicating the date the model is scheduled to be retired
+(shut down) on its provider's API, or `null` if no retirement date has been announced.
+
+For active models, some providers (notably Anthropic and Google) publish "earliest
+possible" or "not sooner than" retirement dates that may be pushed out — the value here
+reflects the provider's published date at the time the entry was authored.
+
+This key is optional. It is informational only and is not consumed by neuro-san at runtime,
+but is useful for tracking which models in your configuration are approaching end-of-life.
 
 #### `use_model_name`
 

@@ -67,7 +67,7 @@ in order to constitute a passing value for the test.
                             "description": "The sample of text to match against the acceptance_criteria"
                         }
                     },
-                    "required": ["sample", "acceptance_criteria"]
+                    "required": ["text_sample", "acceptance_criteria"]
                 }
             },
 

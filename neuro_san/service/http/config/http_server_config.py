@@ -17,11 +17,17 @@
 """
 See class comment for details
 """
+# Env var: dedicated port for the isolated health-probe server. 0 disables it,
+# in which case k8s/LB probes must hit the main server port's handlers (which
+# remain registered for backward compatibility).
+ENV_HEALTH_PROBE_PORT: str = "AGENT_HEALTH_PROBE_PORT"
 
 DEFAULT_HTTP_CONNECTIONS_BACKLOG: int = 128
 DEFAULT_HTTP_IDLE_CONNECTIONS_TIMEOUT_SECONDS: int = 3600
 DEFAULT_HTTP_SERVER_INSTANCES: int = 1
 DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS: int = 0
+DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS: int = 0
+DEFAULT_HEALTH_PROBE_PORT: int = 8081
 
 
 class HttpServerConfig:
@@ -34,4 +40,6 @@ class HttpServerConfig:
         self.http_idle_connection_timeout_seconds: int = DEFAULT_HTTP_IDLE_CONNECTIONS_TIMEOUT_SECONDS
         self.http_server_instances: int = DEFAULT_HTTP_SERVER_INSTANCES
         self.http_port: int = 80
+        self.http_probe_port: int = DEFAULT_HEALTH_PROBE_PORT
         self.http_server_monitor_interval_seconds: int = DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS
+        self.stream_keep_alive_with_progress_interval_seconds: int = DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS

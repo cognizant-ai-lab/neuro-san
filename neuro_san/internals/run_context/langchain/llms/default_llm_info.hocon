@@ -23,6 +23,11 @@
 
     # Model context and output tokens: https://platform.openai.com/docs/models
     # Model compatibility: https://platform.openai.com/docs/models#model-endpoint-compatibility
+    # Model launch dates come from OpenAI's model release notes:
+    # https://help.openai.com/en/articles/9624314-model-release-notes
+    # Retirement dates come from OpenAI's deprecations page:
+    # https://platform.openai.com/docs/deprecations
+    # For models with no announced retirement, "model_retirement_date" is null.
     "o3-mini": {
         "use_model_name": "o3-mini-2025-01-31",
     },
@@ -37,6 +42,11 @@
         "context_window_size": 200000,
         "max_output_tokens": 100000,
         "knowledge_cutoff": "09/30/2023",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.0011,
+        "price_per_1k_output_tokens": 0.0044,
+        "model_launch_date": "2025-01-31",
+        "model_retirement_date": "2026-10-23",
     },
 
     "o1": {
@@ -53,8 +63,81 @@
         "context_window_size": 200000,
         "max_output_tokens": 100000,
         "knowledge_cutoff": "09/30/2023",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.015,
+        "price_per_1k_output_tokens": 0.060,
+        "model_launch_date": "2024-12-17",
+        "model_retirement_date": "2026-10-23",
     },
 
+    "gpt-5.6-sol": {
+        "class": "openai",
+        "model_info_url": "https://developers.openai.com/api/docs/models/gpt-5.6-sol",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1050000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "02/16/2026",
+        "price_per_1k_input_tokens": 0.005,
+        "price_per_1k_output_tokens": 0.030,
+        "model_launch_date": "2026-07-09",
+        "model_retirement_date": null,
+    },
+    "gpt-5.6-terra": {
+        "class": "openai",
+        "model_info_url": "https://developers.openai.com/api/docs/models/gpt-5.6-terra",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1050000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "02/16/2026",
+        "price_per_1k_input_tokens": 0.0025,
+        "price_per_1k_output_tokens": 0.015,
+        "model_launch_date": "2026-07-09",
+        "model_retirement_date": null,
+    },
+    "gpt-5.6-luna": {
+        "class": "openai",
+        "model_info_url": "https://developers.openai.com/api/docs/models/gpt-5.6-luna",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1050000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "02/16/2026",
+        "price_per_1k_input_tokens": 0.001,
+        "price_per_1k_output_tokens": 0.006,
+        "model_launch_date": "2026-07-09",
+        "model_retirement_date": null,
+    },
+
+    "gpt-5.5-pro": {
+        "use_model_name": "gpt-5.5-pro-2026-04-23",
+    },
+    "gpt-5.5-pro-2026-04-23": {
+        "class": "openai",
+        "model_info_url": "https://developers.openai.com/api/docs/models/gpt-5.5-pro",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1050000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "12/01/2025",
+        "price_per_1k_input_tokens": 0.030,
+        "price_per_1k_output_tokens": 0.180,
+        "model_launch_date": "2026-04-23",
+        "model_retirement_date": null,
+    },
     "gpt-5.5": {
         "use_model_name": "gpt-5.5-2026-04-23",
     },
@@ -71,6 +154,8 @@
         "knowledge_cutoff": "12/01/2025",
         "price_per_1k_input_tokens": 0.005,
         "price_per_1k_output_tokens": 0.030,
+        "model_launch_date": "2026-04-23",
+        "model_retirement_date": null,
     },
     "gpt-5.4-pro": {
         "use_model_name": "gpt-5.4-pro-2026-03-05",
@@ -88,6 +173,8 @@
         "knowledge_cutoff": "08/31/2025",
         "price_per_1k_input_tokens": 0.03,
         "price_per_1k_output_tokens": 0.18,
+        "model_launch_date": "2026-03-05",
+        "model_retirement_date": null,
     },
     "gpt-5.4": {
         "use_model_name": "gpt-5.4-2026-03-05",
@@ -105,6 +192,8 @@
         "knowledge_cutoff": "08/31/2025",
         "price_per_1k_input_tokens": 0.0025,
         "price_per_1k_output_tokens": 0.015,
+        "model_launch_date": "2026-03-05",
+        "model_retirement_date": null,
     },
     "gpt-5.4-mini": {
         "use_model_name": "gpt-5.4-mini-2026-03-17",
@@ -120,6 +209,11 @@
         "context_window_size": 400000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "08/31/2025",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.00075,
+        "price_per_1k_output_tokens": 0.0045,
+        "model_launch_date": "2026-03-17",
+        "model_retirement_date": null,
     },
     "gpt-5.4-nano": {
         "use_model_name": "gpt-5.4-nano-2026-03-17",
@@ -135,6 +229,11 @@
         "context_window_size": 400000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "08/31/2025",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.0002,
+        "price_per_1k_output_tokens": 0.00125,
+        "model_launch_date": "2026-03-17",
+        "model_retirement_date": null,
     },
     "gpt-5.2": {
         "use_model_name": "gpt-5.2-2025-12-11",
@@ -153,6 +252,8 @@
         # https://developers.openai.com/api/docs/pricing/
         "price_per_1k_input_tokens": 0.00175,
         "price_per_1k_output_tokens": 0.014,
+        "model_launch_date": "2025-12-11",
+        "model_retirement_date": null,
     },
     "gpt-5.1": {
         "use_model_name": "gpt-5.1-2025-11-13",
@@ -168,6 +269,11 @@
         "context_window_size": 400000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "09/30/2024",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.0015,
+        "price_per_1k_output_tokens": 0.01,
+        "model_launch_date": "2025-11-13",
+        "model_retirement_date": null,
     },
     "gpt-5": {
         "use_model_name": "gpt-5-2025-08-07",
@@ -183,6 +289,11 @@
         "context_window_size": 400000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "09/30/2024",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.00125,
+        "price_per_1k_output_tokens": 0.01,
+        "model_launch_date": "2025-08-07",
+        "model_retirement_date": null,
     },
     "gpt-5-mini": {
         "use_model_name": "gpt-5-mini-2025-08-07",
@@ -198,6 +309,11 @@
         "context_window_size": 400000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "05/30/2024",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.00025,
+        "price_per_1k_output_tokens": 0.02,
+        "model_launch_date": "2025-08-07",
+        "model_retirement_date": null,
     },
     "gpt-4.1": {
         "use_model_name": "gpt-4.1-2025-04-14",
@@ -213,6 +329,11 @@
         "context_window_size": 1047576,
         "max_output_tokens": 32768,
         "knowledge_cutoff": "05/31/2024",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.002,
+        "price_per_1k_output_tokens": 0.008,
+        "model_launch_date": "2025-04-14",
+        "model_retirement_date": null,
     },
     "gpt-4o": {
         "use_model_name": "gpt-4o-2024-08-06",
@@ -228,6 +349,11 @@
         "context_window_size": 128000,
         "max_output_tokens": 4096,
         "knowledge_cutoff": "09/30/2023",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.005,
+        "price_per_1k_output_tokens": 0.015,
+        "model_launch_date": "2024-05-13",
+        "model_retirement_date": "2026-10-23",
     },
     "gpt-4o-2024-08-06": {
         "class": "openai",
@@ -240,6 +366,11 @@
         "context_window_size": 128000,
         "max_output_tokens": 16384,
         "knowledge_cutoff": "09/30/2023",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.0025,
+        "price_per_1k_output_tokens": 0.01,
+        "model_launch_date": "2024-08-06",
+        "model_retirement_date": null,
     },
     "gpt-4o-2024-11-20": {
         "class": "openai",
@@ -252,6 +383,11 @@
         "context_window_size": 128000,
         "max_output_tokens": 16384,
         "knowledge_cutoff": "09/30/2023",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.0025,
+        "price_per_1k_output_tokens": 0.01,
+        "model_launch_date": "2024-11-20",
+        "model_retirement_date": null,
     },
 
     "gpt-4o-mini": {
@@ -268,6 +404,11 @@
         "context_window_size": 128000,
         "max_output_tokens": 16384,
         "knowledge_cutoff": "09/30/2023",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.00015,
+        "price_per_1k_output_tokens": 0.00060,
+        "model_launch_date": "2024-07-18",
+        "model_retirement_date": null,
     },
 
     "gpt-4-turbo": {
@@ -284,6 +425,11 @@
         "context_window_size": 128000,
         "max_output_tokens": 4096,
         "knowledge_cutoff": "11/30/2023",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.010,
+        "price_per_1k_output_tokens": 0.030,
+        "model_launch_date": "2024-04-09",
+        "model_retirement_date": "2026-10-23",
     },
 
     "gpt-4": {
@@ -302,6 +448,11 @@
         "context_window_size": 8192,
         "max_output_tokens": 8192,
         "knowledge_cutoff": "11/30/2023",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.030,
+        "price_per_1k_output_tokens": 0.060,
+        "model_launch_date": "2023-06-13",
+        "model_retirement_date": "2026-10-23",
     },
 
     "gpt-3.5-turbo": {
@@ -324,10 +475,14 @@
         "context_window_size": 16384,
         "max_output_tokens": 4096,
         "knowledge_cutoff": "08/31/2021",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.0005,
+        "price_per_1k_output_tokens": 0.0015,
+        "model_launch_date": "2024-01-25",
+        "model_retirement_date": "2026-10-23",
     },
     "gpt-3.5-turbo-1106": {
         # FYI: LLMs that do not support tools cannot be used as front-men or branch nodes
-        # Per OpenAI, marked for shutdown on 09/28/2026.
         "class": "openai",
         "model_info_url": "https://platform.openai.com/docs/models/gpt-3.5-turbo",
         "modalities": {
@@ -338,6 +493,11 @@
         "context_window_size": 16384,
         "max_output_tokens": 4096,
         "knowledge_cutoff": "08/31/2021",
+        # https://developers.openai.com/api/docs/pricing/
+        "price_per_1k_input_tokens": 0.001,
+        "price_per_1k_output_tokens": 0.002,
+        "model_launch_date": "2023-11-06",
+        "model_retirement_date": "2026-09-28",
     },
 
     # Azure models
@@ -401,59 +561,25 @@
 
     # Anthropic models
 
-    # These 3 models, claude-haiku, claude-sonnet, and claude-opus, are references to the latest versions of their respective model lines.
+    # These 4 models, claude-haiku, claude-sonnet, claude-opus, and claude-fable are references to the latest versions of their respective model lines.
     # When a new version is released, we will update the "use_model_name" field to point to the new version, and the old version will still be accessible via its own entry.
-    # Status of model lines and versions can be found here:
+    # Status of model lines and versions, including retirement dates, can be found here:
     # https://platform.claude.com/docs/en/about-claude/model-deprecations
-    # Note that most of the retired Anthropic models can still be accessed via Amazon Bedrock.
+    # Model launch dates come from the AWS Bedrock model cards:
+    # https://docs.aws.amazon.com/bedrock/latest/userguide/model-cards-anthropic.html
+    # For deprecated models, "model_retirement_date" is the actual retirement date.
+    # For active models, it is the "not sooner than" tentative retirement date and may be pushed out.
     "claude-haiku": {
         "use_model_name": "claude-haiku-4-5-20251001"
     },
     "claude-sonnet": {
-        "use_model_name": "claude-sonnet-4-6"
+        "use_model_name": "claude-sonnet-5"
     },
     "claude-opus": {
-        "use_model_name": "claude-opus-4-7"
+        "use_model_name": "claude-opus-4-8"
     },
-
-    "claude-sonnet-4-0": {
-        "use_model_name": "claude-sonnet-4-20250514"
-    },
-    "claude-sonnet-4-20250514": {
-        "class": "anthropic",
-        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
-        "modalities": {
-            "input": [ "text", "image" ],
-            "output": [ "text" ],
-        },
-        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
-        "capabilities": [ "tools" ],
-        "context_window_size": 200000,
-        "max_output_tokens": 64000,
-        "knowledge_cutoff": "03/2025",
-        # https://platform.claude.com/docs/en/about-claude/pricing
-        "price_per_1k_input_tokens": 0.003,
-        "price_per_1k_output_tokens": 0.015,
-    },
-
-    "claude-opus-4-0": {
-        "use_model_name": "claude-opus-4-20250514"
-    },
-    "claude-opus-4-20250514": {
-        "class": "anthropic",
-        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
-        "modalities": {
-            "input": [ "text", "image" ],
-            "output": [ "text" ],
-        },
-        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
-        "capabilities": [ "tools" ],
-        "context_window_size": 200000,
-        "max_output_tokens": 32000,
-        "knowledge_cutoff": "03/2025",
-        # https://platform.claude.com/docs/en/about-claude/pricing
-        "price_per_1k_input_tokens": 0.015,
-        "price_per_1k_output_tokens": 0.075,
+    "claude-fable": {
+        "use_model_name": "claude-fable-5"
     },
 
     "claude-opus-4-1": {
@@ -474,6 +600,8 @@
         # https://platform.claude.com/docs/en/about-claude/pricing
         "price_per_1k_input_tokens": 0.015,
         "price_per_1k_output_tokens": 0.075,
+        "model_launch_date": "2025-08-05",
+        "model_retirement_date": "2026-08-05",
     },
 
     "claude-haiku-4-5": {
@@ -494,6 +622,8 @@
         # https://platform.claude.com/docs/en/about-claude/pricing
         "price_per_1k_input_tokens": 0.001,
         "price_per_1k_output_tokens": 0.005,
+        "model_launch_date": "2025-10-16",
+        "model_retirement_date": "2026-10-15",
     },
 
     "claude-sonnet-4-5": {
@@ -514,8 +644,9 @@
         # https://platform.claude.com/docs/en/about-claude/pricing
         "price_per_1k_input_tokens": 0.003,
         "price_per_1k_output_tokens": 0.015,
+        "model_launch_date": "2025-09-30",
+        "model_retirement_date": "2026-09-29",
     },
-
     "claude-sonnet-4-6": {
         "class": "anthropic",
         "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
@@ -531,6 +662,27 @@
         # https://platform.claude.com/docs/en/about-claude/pricing
         "price_per_1k_input_tokens": 0.003,
         "price_per_1k_output_tokens": 0.015,
+        "model_launch_date": "2026-02-17",
+        "model_retirement_date": "2027-02-17",
+    },
+    "claude-sonnet-5": {
+        "class": "anthropic",
+        "model_info_url": "https://platform.claude.com/docs/en/about-claude/models/overview",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "01/2026",
+        # https://platform.claude.com/docs/en/about-claude/pricing
+        # Standard pricing shown. Introductory pricing of $2 / $10 per MTok applies through 2026-08-31.
+        "price_per_1k_input_tokens": 0.003,
+        "price_per_1k_output_tokens": 0.015,
+        "model_launch_date": "2026-06-30",
+        "model_retirement_date": null,
     },
 
     "claude-opus-4-5": {
@@ -551,6 +703,8 @@
         # https://platform.claude.com/docs/en/about-claude/pricing
         "price_per_1k_input_tokens": 0.005,
         "price_per_1k_output_tokens": 0.025,
+        "model_launch_date": "2025-11-24",
+        "model_retirement_date": "2026-11-24",
     },
     "claude-opus-4-6": {
         "class": "anthropic",
@@ -567,6 +721,8 @@
         # https://platform.claude.com/docs/en/about-claude/pricing
         "price_per_1k_input_tokens": 0.005,
         "price_per_1k_output_tokens": 0.025,
+        "model_launch_date": "2026-02-05",
+        "model_retirement_date": "2027-02-05",
     },
     "claude-opus-4-7": {
         "class": "anthropic",
@@ -583,8 +739,136 @@
         # https://platform.claude.com/docs/en/about-claude/pricing
         "price_per_1k_input_tokens": 0.005,
         "price_per_1k_output_tokens": 0.025,
-    }
+        "model_launch_date": "2026-04-16",
+        "model_retirement_date": "2027-04-16",
+    },
+    "claude-opus-4-8": {
+        "class": "anthropic",
+        "model_info_url": "https://platform.claude.com/docs/en/about-claude/models/overview",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "01/2026",
+        # https://platform.claude.com/docs/en/about-claude/pricing
+        "price_per_1k_input_tokens": 0.005,
+        "price_per_1k_output_tokens": 0.025,
+        "model_launch_date": "2026-05-28",
+        "model_retirement_date": "2027-05-28",
+    },
+    "claude-fable-5": {
+        "class": "anthropic",
+        "model_info_url": "https://platform.claude.com/docs/en/about-claude/models/overview",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        # https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-fable-5.html
+        "knowledge_cutoff": "01/2026",
+        # https://platform.claude.com/docs/en/about-claude/pricing
+        "price_per_1k_input_tokens": 0.010,
+        "price_per_1k_output_tokens": 0.050,
+        "model_launch_date": "2026-06-09",
+        "model_retirement_date": null,
+    },
+    # Note on claude-mythos-5: As of 2026-06-10, this model is only available via the Project Glasswing,
+    # which is invitation-only. Thus, we are not including it in the default LLM info at this time.
+    # If it becomes generally available, we will add it to the registry with the appropriate details.
 
+
+    # Anthropic Claude via AWS Bedrock (class: "anthropic-bedrock")
+    #
+    # Recommendation: for Anthropic Claude on Bedrock, prefer this class over the
+    # legacy "bedrock" class. Reach for "bedrock" only when you need a
+    # non-Anthropic Bedrock model (Amazon Nova, Mistral, Meta Llama, AI21,
+    # Cohere, etc.).
+    #
+    # Why this section instead of the "bedrock" class further down:
+    #   * Built on the anthropic SDK's AnthropicBedrock / AsyncAnthropicBedrock
+    #     clients, so requests are fully async. The "bedrock" class uses boto3,
+    #     which is synchronous and serializes concurrent calls inside a worker.
+    #   * Exposes ChatAnthropic's parameter surface (thinking, effort,
+    #     mcp_servers, context_management, ...). The boto3 path does not.
+    #
+    # Cross-region inference profiles
+    # -------------------------------
+    # Bedrock routes Claude requests through inference profiles whose IDs are
+    # region-prefixed: "global." (any AWS region — typically cheapest and lowest
+    # latency) or geographic prefixes like "us.", "eu.", "apac." (which keep
+    # inference inside that geography for data residency or to reach models
+    # that are not exposed globally).
+    # See https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference.html
+    #
+    # The defaults below use the global profile. To pin to a geographic profile
+    # instead, swap the prefix on both the alias's "use_model_name" and the
+    # entry key, e.g.:
+    #     global.anthropic.claude-opus-4-8  ->  us.anthropic.claude-opus-4-8
+
+    "bedrock-claude-opus": {
+        "use_model_name": "global.anthropic.claude-opus-4-8"
+    },
+    "global.anthropic.claude-opus-4-8": {
+        "class": "anthropic-bedrock",
+        "model_info_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-opus-4-8.html",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "01/2026",
+    },
+    "bedrock-claude-sonnet": {
+        "use_model_name": "global.anthropic.claude-sonnet-5"
+    },
+    "global.anthropic.claude-sonnet-5": {
+        "class": "anthropic-bedrock",
+        "model_info_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-5.html",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "01/2026",
+    },
+    "global.anthropic.claude-sonnet-4-6": {
+        "class": "anthropic-bedrock",
+        "model_info_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-4-6.html",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 200000,
+        "max_output_tokens": 64000,
+        "knowledge_cutoff": "01/2026",
+    },
+    "bedrock-claude-haiku": {
+        "use_model_name": "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+    },
+    "global.anthropic.claude-haiku-4-5-20251001-v1:0": {
+        "class": "anthropic-bedrock",
+        "model_info_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-haiku-4-5.html",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 200000,
+        "max_output_tokens": 64000,
+        "knowledge_cutoff": "07/2025",
+    },
 
     # Ollama models
     # See https://ollama.com/search?c=tools for latest in tool-supporting Ollama models
@@ -786,6 +1070,28 @@
     },
 
     # Google Gemini
+    # Model launch dates and retirement dates come from the Gemini API deprecations page:
+    # https://ai.google.dev/gemini-api/docs/deprecations
+    # Per Google, the listed shutdown dates are the "earliest possible dates" — exact
+    # retirement is communicated with advance notice. For models with no announced
+    # retirement, "model_retirement_date" is null.
+    "gemini-3.5-flash": {
+        "class": "gemini",
+        "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash",
+        "modalities": {
+            "input": [ "text", "images", "video", "audio", "pdf"],
+            "output": [ "text"],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1048576,
+        "max_output_tokens": 65536,
+        "knowledge_cutoff": "01/2025",
+        # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
+        "price_per_1k_input_tokens": 0.0015,
+        "price_per_1k_output_tokens": 0.009,
+        "model_launch_date": "2026-05-19",
+        "model_retirement_date": null,
+    },
     "gemini-3.1-pro": {
         "use_model_name": "gemini-3.1-pro-preview"
     },
@@ -803,13 +1109,12 @@
         # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
         "price_per_1k_input_tokens": 0.002,
         "price_per_1k_output_tokens": 0.012,
+        "model_launch_date": "2026-02-19",
+        "model_retirement_date": null,
     },
     "gemini-3.1-flash-lite": {
-        "use_model_name": "gemini-3.1-flash-lite-preview"
-    },
-    "gemini-3.1-flash-lite-preview": {
         "class": "gemini",
-        "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite-preview",
+        "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite",
         "modalities": {
             "input": [ "text", "images", "video", "audio", "pdf"],
             "output": [ "text"],
@@ -821,6 +1126,8 @@
         # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
         "price_per_1k_input_tokens": 0.00025,
         "price_per_1k_output_tokens": 0.0015,
+        "model_launch_date": "2026-05-07",
+        "model_retirement_date": "2027-05-07",
     },
     # This model is optimized for agentic workflows that use custom tools and bash
     "gemini-3.1-pro-customtools": {
@@ -840,6 +1147,9 @@
         # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
         "price_per_1k_input_tokens": 0.002,
         "price_per_1k_output_tokens": 0.012,
+        # Same underlying model as gemini-3.1-pro-preview, configured for custom tools/bash.
+        "model_launch_date": "2026-02-19",
+        "model_retirement_date": null,
     },
     "gemini-3-flash": {
         "use_model_name": "gemini-3-flash-preview"
@@ -858,6 +1168,8 @@
         # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
         "price_per_1k_input_tokens": 0.0005,
         "price_per_1k_output_tokens": 0.003,
+        "model_launch_date": "2025-12-17",
+        "model_retirement_date": null,
     },
     "gemini-2.5-pro": {
         "class": "gemini",
@@ -873,6 +1185,8 @@
         # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
         "price_per_1k_input_tokens": 0.00125,
         "price_per_1k_output_tokens": 0.01,
+        "model_launch_date": "2025-06-17",
+        "model_retirement_date": "2026-10-16",
     },
     "gemini-2.5-flash": {
         "class": "gemini",
@@ -888,6 +1202,8 @@
         # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
         "price_per_1k_input_tokens": 0.0003,
         "price_per_1k_output_tokens": 0.0025,
+        "model_launch_date": "2025-06-17",
+        "model_retirement_date": "2026-10-16",
     },
     "gemini-2.5-flash-lite": {
         "class": "gemini",
@@ -903,62 +1219,27 @@
         # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
         "price_per_1k_input_tokens": 0.0001,
         "price_per_1k_output_tokens": 0.0004,
-    },
-    "gemini-2.0-flash": {
-        "class": "gemini",
-        "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-2.0-flash",
-        "modalities": {
-            "input": [ "text", "images", "video", "audio" ],
-            "output": [ "text", "images" ],
-        },
-        "capabilities": [ "tools" ],
-        "context_window_size": 1048576,
-        "max_output_tokens": 8192,
-        "knowledge_cutoff": "08/2024",
-        # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
-        "price_per_1k_input_tokens": 0.00015,
-        "price_per_1k_output_tokens": 0.0006,
-    },
-    "gemini-2.0-flash-lite": {
-        "class": "gemini",
-        "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-2.0-flash-lite",
-        "modalities": {
-            "input": [ "text", "images", "video", "audio" ],
-            "output": [ "text" ],
-        },
-        "capabilities": [ "tools" ],
-        "context_window_size": 1048576,
-        "max_output_tokens": 8192,
-        "knowledge_cutoff": "08/2024",
-        # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
-        "price_per_1k_input_tokens": 0.000075,
-        "price_per_1k_output_tokens": 0.0003,
+        "model_launch_date": "2025-07-22",
+        "model_retirement_date": "2026-10-16",
     },
 
-    # Bedrock
-
+    # Bedrock (class: "bedrock") — boto3-based ChatBedrock
+    #
+    # Do not pick this class for Anthropic Claude — use the "anthropic-bedrock"
+    # class further up instead. It is async, exposes ChatAnthropic's full
+    # parameter surface (thinking, effort, mcp_servers, context_management,
+    # ...), and avoids the per-process serialization boto3 imposes. The Claude
+    # entry below is kept only for backward compatibility with networks that
+    # still reference it.
+    #
+    # Reach for the "bedrock" class only when you need a non-Anthropic Bedrock
+    # model (Amazon Nova, Mistral, Meta Llama, AI21, Cohere, etc.).
+    #
     # These models require access to AWS endpoints in either us-east-1, us-east-2, or us-west-2
     # Also know that so far as of 10/7/2025, all bedrock models use synchronous clients,
     # which might not be the most performant choice for a server situation.
     # Consider bugging the maintainers of langchain-aws for async functionality.
 
-    "bedrock-us-claude-opus-4": {
-        "use_model_name": "us.anthropic.claude-opus-4-20250514-v1:0"
-    },
-    "us.anthropic.claude-opus-4-20250514-v1:0": {
-        # Per AWS, this will sunset on 3/1/2026
-        "class": "bedrock",
-        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
-        "modalities": {
-            "input": [ "text", "image" ],
-            "output": [ "text" ],
-        },
-        # Tool use: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#pricing
-        "capabilities": [ "tools" ],
-        "context_window_size": 200000,
-        "max_output_tokens": 32000,
-        "knowledge_cutoff": "03/2025",
-    },
     "bedrock-us-claude-sonnet-4": {
         "use_model_name": "us.anthropic.claude-sonnet-4-20250514-v1:0"
     },
@@ -974,6 +1255,62 @@
         "context_window_size": 200000,
         "max_output_tokens": 64000,
         "knowledge_cutoff": "03/2025",
+        "model_launch_date": "2025-05-23",
+        # https://docs.aws.amazon.com/bedrock/latest/userguide/model-lifecycle.html
+        "model_retirement_date": "2026-10-14",
+    },
+
+    # OpenRouter
+    # https://openrouter.ai/
+    #
+    # OpenRouter is a unified API gateway that fronts hundreds of models from many
+    # providers (OpenAI, Anthropic, Google, Meta, etc.) behind a single
+    # OpenAI-compatible endpoint. Models are addressed as "provider/model", e.g.
+    # "anthropic/claude-sonnet-4-5". A few "meta" router models (like openrouter/free
+    # and openrouter/auto) pick an underlying model at request time based on the
+    # capabilities your prompt needs.
+
+    "openrouter/free": {
+        # openrouter/free is a router that selects free models at random from the models available on OpenRouter.
+        # The router smartly filters for models that support features needed for your request
+        # such as image understanding, tool calling, structured outputs and more.
+        "class": "openrouter",
+        "model_info_url": "https://openrouter.ai/openrouter/free",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        # The underlying model is chosen at request time, so the true context window
+        # also varies per request. OpenRouter's model page advertises 200k, so we go
+        # with that as the nominal value used for prompt-token math.
+        "context_window_size": 200000,
+        # max_output_tokens likewise depends on which model the router picks, so we
+        # leave it null and let the underlying model's default apply.
+        "max_output_tokens": null,
+        "knowledge_cutoff": "unknown",
+    },
+
+    "openrouter/auto": {
+        # openrouter/auto is a paid auto-router that uses a meta-model to analyze the
+        # incoming prompt and pick one of dozens of candidate models for quality.
+        # Pricing matches whichever underlying model handles the request — there is
+        # no premium routing fee. See https://openrouter.ai/openrouter/auto
+        "class": "openrouter",
+        "model_info_url": "https://openrouter.ai/openrouter/auto",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        # Like openrouter/free, the underlying model is chosen per-request, so the
+        # true context window varies. OpenRouter's model page advertises 2m, so we go
+        # with that as the nominal value used for prompt-token math.
+        "context_window_size": 2000000,
+        # max_output_tokens depends on which model the router picks; leave null so
+        # the underlying model's default applies.
+        "max_output_tokens": null,
+        "knowledge_cutoff": "unknown",
     },
 
     # These are data for each LLM class, so they don't have to be repeated for each
@@ -1008,7 +1345,8 @@
                 "logprobs": null,
                 "top_logprobs": null,
                 "logit_bias": null,
-                # streaming is always on. Without it token counting will not work.
+                # streaming defaults to off; set "streaming": true in llm_config to enable.
+                "streaming": false,
                 # n is always 1.  neuro-san will only ever consider a single chat completion.
                 "top_p": null,
                 "max_tokens": null,         # This is always for output
@@ -1036,7 +1374,8 @@
                 # AD here means "ActiveDirectory"
                 "azure_ad_token": null,
                 "model_version": "",
-                # streaming is always on. Without it token counting will not work.
+                # streaming defaults to off; set "streaming": true in llm_config to enable.
+                "streaming": false,
                 # n is always 1.  neuro-san will only ever consider a single chat completion.
 
                 # If you really need more parameters, you will likely have to create your own LlmFactory.
@@ -1055,8 +1394,9 @@
                 "stop_sequences": null,
                 "anthropic_api_url": "https://api.anthropic.com",
                 "anthropic_api_key": null,
-                # streaming is always set to True so that ...
-                # stream_usage is always set to True so that token counting can work correctly
+                # streaming defaults to off; set "streaming": true in llm_config to enable.
+                # stream_usage tracks streaming, so it is enabled iff streaming is enabled.
+                "streaming": false,
 
                 # Reasoning / thinking parameters
                 #
@@ -1118,6 +1458,25 @@
                 "effort": null,
             }
         },
+        "anthropic-bedrock": {
+            # ChatAnthropicBedrock subclasses ChatAnthropic, so all Anthropic args
+            # are inherited unchanged. We only declare the AWS-specific knobs here.
+            # See https://docs.langchain.com/oss/python/integrations/chat/bedrock#chatanthropicbedrock
+            "extends": "anthropic",
+            "args": {
+                # Note that we can only supply arguments that are "Just Data" in nature.
+
+                # AWS region for the Bedrock endpoint, e.g. "us-east-1".
+                # Falls back to AWS_REGION / AWS_DEFAULT_REGION / ~/.aws/config when null.
+                "region_name": null,
+                # AWS credentials. Each falls back to its standard AWS env var
+                # (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN)
+                # or the default boto credential chain when null.
+                "aws_access_key_id": null,
+                "aws_secret_access_key": null,
+                "aws_session_token": null,
+            }
+        },
         "ollama": {
             "args": {
                 # Note that we can only supply arguments that are "Just Data" in nature.
@@ -1156,6 +1515,41 @@
                 "nvidia_base_url": null,
             }
         },
+        "openrouter": {
+            "args": {
+                # Note that we can only supply arguments that are "Just Data" in nature.
+                # See https://docs.langchain.com/oss/python/integrations/chat/openrouter
+                "openrouter_api_key": null,
+                "openrouter_api_base": null,
+                "request_timeout": null,    # In milliseconds; maps to ChatOpenRouter `timeout`
+                "max_retries": 2,
+                "temperature": null,
+                "max_tokens": null,         # This is always for output
+                "top_p": null,
+                "frequency_penalty": null,
+                "presence_penalty": null,
+                "seed": null,
+                "stop": null,               # Maps to ChatOpenRouter `stop_sequences`
+                # streaming defaults to off; set "streaming": true in llm_config to enable.
+                # stream_usage tracks streaming, so it is enabled iff streaming is enabled.
+                "streaming": false,
+
+                # OpenRouter-specific options
+                # See https://openrouter.ai/docs
+
+                # Reasoning settings, e.g. {"effort": "high", "summary": "auto"}
+                "reasoning": null,
+                # Provider routing preferences, e.g. {"order": ["Anthropic", "OpenAI"]}
+                "openrouter_provider": null,
+                # Route preference, e.g. "fallback"
+                "route": null,
+                # Session id used by OpenRouter to group related requests for observability.
+                # Falls back to OPENROUTER_SESSION_ID env var when null.
+                "session_id": null,
+                # Trace metadata forwarded to broadcast destinations (Langfuse, LangSmith, ...).
+                "trace": null,
+            }
+        },
         "gemini": {
             "args": {
                 # Note that we can only supply arguments that are "Just Data" in nature.
@@ -1164,6 +1558,7 @@
                 "max_tokens": null,
                 "max_retries": 6,
                 "n": 1,         # Number of chat completions to generate for each prompt.
+                "streaming": false,
                 "temperature": 0.7,         # [0.0, 2.0],
                 # Note that for Gemini 3.0+ models, it is recommended to keep the temperature parameter at 1.0 as setting it to 0.7 can cause infinite loops,
                 # degraded reasoning performance, and failure on complex tasks.
@@ -1210,7 +1605,8 @@
                 "rate_limiter": null,
                 "region_name": null,
                 "stop_sequences": null,
-                # streaming is always on. Without it token counting will not work.
+                # streaming defaults to off; set "streaming": true in llm_config to enable.
+                "streaming": false,
                 "system_prompt_with_tools": "",
                 "tags": null,
                 "temperature": null,
@@ -1229,10 +1625,6 @@
     "default_config":{
 
         "model_name": "gpt-5.2",           # The string name of the default model to use.
-
-        "temperature": 0.7,                 # The default LLM temperature (randomness) to use.
-                                            # Values are floats between 0.0 (least random) to
-                                            # 1.0 (most random).
 
         "prompt_token_fraction": 1.0,       # The fraction of total tokens (not necessarily words
                                             # or letters) to use for a prompt. Each model_name

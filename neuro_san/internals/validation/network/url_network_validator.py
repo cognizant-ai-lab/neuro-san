@@ -30,16 +30,19 @@ class UrlNetworkValidator(AbstractNetworkValidator):
     AbstractNetworkValidator that looks for correct URLs in an agent network
     """
 
-    def __init__(self, external_agents: List[str] = None, mcp_servers: List[str] = None):
+    def __init__(self, external_agents: List[str] = None, mcp_servers: List[str] = None,
+                 network_name: str = None):
         """
         Constructor
 
         :param external_agents: A list of valid /external_agent referencess
         :param mcp_servers: A list of MCP servers, as read in from a mcp_info.hocon file
+        :param network_name: The agent network name for diagnostic log lines
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.external_agents: List[str] = external_agents
         self.mcp_servers: List[str] = mcp_servers
+        self.network_name: str = network_name
 
     def validate_name_to_spec_dict(self, name_to_spec: Dict[str, Any]) -> List[str]:
         """
@@ -58,14 +61,16 @@ class UrlNetworkValidator(AbstractNetworkValidator):
         if self.mcp_servers:
             urls.extend(self.mcp_servers)
 
-        self.logger.info("Validating URLs for MCP tools and subnetwork...")
+        self.logger.debug("Validating %s URLs for MCP tools and subnetwork...", self.network_name)
 
         for agent_name, agent in name_to_spec.items():
-            if agent.get("tools"):
-                tools: List[str] = agent.get("tools")
-                if tools:
-                    safe_tools: List[str] = self.remove_dictionary_tools(tools)
-                    self.check_safe_urls(agent_name, safe_tools, urls, errors)
+            # coerce_tools treats a malformed `tools` (non-list) as empty so this
+            # validator does not iterate the characters of a string. The shape
+            # error itself is reported separately by ToolsShapeValidator.
+            tools: List[Any] = self.coerce_tools(agent)
+            if tools:
+                safe_tools: List[str] = self.remove_dictionary_tools(tools)
+                self.check_safe_urls(agent_name, safe_tools, urls, errors)
 
         return errors
 

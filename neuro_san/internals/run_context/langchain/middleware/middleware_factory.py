@@ -36,6 +36,7 @@ from neuro_san.internals.journals.originating_journal import OriginatingJournal
 from neuro_san.internals.journals.progress_journal import ProgressJournal
 from neuro_san.internals.messages.origination import Origination
 from neuro_san.internals.reservations.accumulating_agent_reservationist import AccumulatingAgentReservationist
+from neuro_san.internals.run_context.utils.activation_capsule import ActivationCapsule
 
 # We don't want to drag in langgraph as a dependency, but we will allow Checkpointers from there.
 Checkpointer: Type = Any
@@ -48,16 +49,20 @@ class MiddlewareFactory:
 
     def __init__(self, invocation_context: InvocationContext,
                  origin: List[Dict[str, Any]],
-                 chat_history: List[BaseMessage]):
+                 chat_history: List[BaseMessage],
+                 activation_capsule: ActivationCapsule):
         """
         :param invocation_context: The invocation context for the request.
         :param origin: A list of dictionaries containing origin information as to which agent
                     is creating the middleware.
         :param chat_history: The chat history of the RunContext that the middleware is being created for.
+        :param activation_capsule: An instance of ActivationCapsule that allows for
+                                   access to agents to be called during middleware invocation.
         """
         self.invocation_context: InvocationContext = invocation_context
         self.origin: List[Dict[str, Any]] = origin
         self.chat_history: List[BaseMessage] = chat_history
+        self.activation_capsule: ActivationCapsule = activation_capsule
         self.logger: Logger = getLogger(self.__class__.__name__)
 
     def create_agent_middleware(self, config: List[Dict[str, Any]], sly_data: Dict[str, Any]) \
@@ -223,6 +228,7 @@ Check these things:
             "reservationist": reservationist,
             "sly_data": sly_data,
             "chat_history": self.chat_history,
+            "activation_capsule": self.activation_capsule,
         }
         for key, value in special_args.items():
             if key in args:

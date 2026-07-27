@@ -34,7 +34,7 @@
 
 # Build arguments
 ARG NEURO_SAN_VERSION="Unspecified"
-ARG PACKAGE_INSTALL=/usr/local/lib/python3.12/site-packages
+ARG PACKAGE_INSTALL="/usr/local/lib/python3.12/site-packages"
 
 # Stage 1: Builder Stage - Use our python base image for installations
 # Set python image as base image
@@ -47,10 +47,10 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /
 
 # App-specific constants
-ENV USERNAME=neuro-san
-ENV APP_HOME=/usr/local/${USERNAME}
-ENV APP_SOURCE=${APP_HOME}/myapp
-ENV PIP3_VERSION=25.0.1
+ENV USERNAME="neuro-san"
+ENV APP_HOME="/usr/local/${USERNAME}"
+ENV APP_SOURCE="${APP_HOME}/myapp"
+ENV PIP3_VERSION="25.0.1"
 
 # Explicitly get the desired pip version
 RUN pip3 install --upgrade pip==${PIP3_VERSION} --no-cache-dir ; mkdir -p ${APP_SOURCE}
@@ -66,9 +66,9 @@ FROM python:3.12-slim AS final
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Set up user for app running in container
-ENV USERNAME=neuro-san
-ENV APP_HOME=/usr/local/${USERNAME}
-ENV APP_SOURCE=${APP_HOME}/myapp
+ENV USERNAME="neuro-san"
+ENV APP_HOME="/usr/local/${USERNAME}"
+ENV APP_SOURCE="${APP_HOME}/myapp"
 
 RUN \
     useradd -ms /bin/bash -d ${APP_HOME} -u 1001 ${USERNAME} \
@@ -93,8 +93,8 @@ COPY --from=builder /install /usr/local
 # Note: The registries directory where agent definitions live is mandatory
 #       The coded_tools directory where agent code lives is optional
 #       [s] allows for registries/coded_tools from within client repo or neuro-san repo
-COPY ./neuro_san/registrie[s] ./registrie[s] ${APP_SOURCE}/registries
-COPY ./neuro_san/coded_tool[s] ./coded_tool[s] ${APP_SOURCE}/coded_tools
+COPY ./neuro_san/registrie[s] ./registrie[s] ${APP_SOURCE}/registries/
+COPY ./neuro_san/coded_tool[s] ./coded_tool[s] ${APP_SOURCE}/coded_tools/
 
 # Copy application code and necessary files if we are running within the neuro-san repo
 # [n] allows this to not have to be there for client repo builds.
@@ -110,9 +110,9 @@ WORKDIR ${APP_SOURCE}
 # Cannot set ENV vars in Dockerfiles based on shell output within in-progress container build,
 # only from build args.
 ARG PACKAGE_INSTALL
-ENV PACKAGE_INSTALL=${PACKAGE_INSTALL}
-ENV PACKAGE_DEPLOY=${PACKAGE_INSTALL}/neuro_san/deploy
-ENV APP_ENTRYPOINT=${PACKAGE_DEPLOY}/entrypoint.sh
+ENV PACKAGE_INSTALL="${PACKAGE_INSTALL}"
+ENV PACKAGE_DEPLOY="${PACKAGE_INSTALL}/neuro_san/deploy"
+ENV APP_ENTRYPOINT="${PACKAGE_DEPLOY}/entrypoint.sh"
 
 ARG NEURO_SAN_VERSION
 
@@ -156,10 +156,10 @@ ENV NVIDIA_API_KEY=""
 
 # Where to find the tool registry manifest file which lists all the agent hocon
 # files to serve up from this server instance.  To specify multiple manifest files,
-# simply use a space-separated list of manifest files.  Manifest dictionaries will
-# effectively be merged, where content coming from manifests later in the list
-# have precedence.
-ENV AGENT_MANIFEST_FILE=${APP_SOURCE}/registries/manifest.hocon
+# simply use a delimited list of manifest files approriate to the OS
+# (delimiter is ':' on linux, ';' on Windows).  Manifest dictionaries will then effectively
+# be merged, where content coming from manifests later in the list have precedence.
+ENV AGENT_MANIFEST_FILE="${APP_SOURCE}/registries/manifest.hocon"
 
 # An llm_info hocon file with user-provided llm descriptions that are to be used
 # in addition to the neuro-san defaults.
@@ -171,14 +171,14 @@ ENV AGENT_TOOLBOX_INFO_FILE=""
 
 # Where to find the classes for CodedTool class implementations
 # that are used by specific agent networks.
-ENV AGENT_TOOL_PATH=${APP_SOURCE}/coded_tools
+ENV AGENT_TOOL_PATH="${APP_SOURCE}/coded_tools"
 
 # Where to find the configuration file for Python logging.
 # See https://docs.python.org/3/library/logging.config.html#dictionary-schema-details
 # as to how this file can be configured for your own needs.  Examples there are provided in YAML,
 # but these can be easily translated to JSON or HOCON (which we prefer).
 # Another good resource: https://docs.python.org/3/howto/logging-cookbook.html
-ENV AGENT_SERVICE_LOG_JSON=${PACKAGE_DEPLOY}/logging.hocon
+ENV AGENT_SERVICE_LOG_JSON="${PACKAGE_DEPLOY}/logging.hocon"
 
 # Threshold for logging.
 # See https://docs.python.org/3/library/logging.html#logging.Handler.setLevel
@@ -209,15 +209,68 @@ ENV AGENT_FORWARDED_REQUEST_METADATA="request_id user_id"
 # If you are changing this, you should also change the EXPOSE port above
 # and when running your container locally be sure to have a -p <port>:<port> entry
 # for it on your docker run command line.
-ENV AGENT_HTTP_PORT=8080
+ENV AGENT_HTTP_PORT="8080"
 
-# Maximm number of requests that can be served at the same time
-ENV AGENT_MAX_CONCURRENT_REQUESTS=0
+# Dedicated port for the isolated health-probe server. Serves /, /healthz,
+# /readyz, /livez on its own asyncio event loop in a dedicated thread, so
+# probes stay fast even when the main Tornado loop is saturated by request
+# work. Uses SO_REUSEPORT so every worker process binds the same port and
+# the kernel distributes accepted connections across them.
+#
+# Set to 0 to disable the isolated probe server (in that case probes must
+# hit AGENT_HTTP_PORT, which continues to register the same handlers for
+# backward compatibility).
+#
+# Point your Kubernetes livenessProbe.httpGet.port at this port for
+# best-case probe responsiveness under load.
+ENV AGENT_HEALTH_PROBE_PORT="8081"
+
+# Enable asyncio debug mode on the Tornado main event loop in each worker.
+# When set to "true"/"1"/"yes", the server calls loop.set_debug(True), which:
+#   - turns on additional asyncio diagnostics
+#   - logs a WARNING via the "asyncio" logger whenever any callback runs longer
+#     than AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS (see below). The warning
+#     includes the source location of the offending callback -- the diagnostic
+#     to use when /livez probe latency spikes under load.
+# Adds ~5-10% loop overhead. Leave off in production unless diagnosing.
+ENV AGENT_ASYNCIO_DEBUG="false"
+
+# Slow-callback threshold in milliseconds. Only consulted when
+# AGENT_ASYNCIO_DEBUG is enabled. Lower values surface smaller hogs but
+# create more log volume. 50-100ms is a good first pass.
+ENV AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS="100"
+
+# Enable the sys.setprofile-based loop timeline tracer on the Tornado
+# main event loop. When enabled, records a linear timeline of every
+# scheduled unit of work run by the loop -- task steps, done callbacks,
+# call_soon callbacks, timer callbacks -- keyed by task name or callback
+# qualname. Useful for answering "what is occupying the loop right now?"
+# Adds ~5-10% loop overhead. Leave OFF in production unless diagnosing.
+ENV AGENT_LOOP_TIMELINE="false"
+
+# Ring buffer size for the loop timeline tracer. Older events drop off as
+# newer ones arrive. Only consulted when AGENT_LOOP_TIMELINE is enabled.
+ENV AGENT_LOOP_TIMELINE_MAX_EVENTS="100000"
+
+# If non-empty AND AGENT_LOOP_TIMELINE is enabled, the tracer writes its
+# buffered events to this JSONL file on graceful process shutdown. Leave
+# empty to keep the timeline in-memory only (snapshot via a debug endpoint
+# or signal handler at runtime).
+ENV AGENT_LOOP_TIMELINE_DUMP_PATH=""
+
+# Maximum number of requests that can be served at the same time
+# A value of 0 indicates unlimited requests are handled.
+ENV AGENT_MAX_CONCURRENT_REQUESTS="0"
+
+# Maximum number of worker threads per request.
+# Default of <= 0 (or unset) indicates system default of (num_cpus + 4).
+ENV AGENT_MAX_WORKERS_PER_REQUEST="0"
+
 
 # Number of requests served before the server shuts down in an orderly fashion.
 # This is useful for testing response handling in clusters with duplicated pods.
 # A value of -1 indicates unlimited requests are handled.
-ENV AGENT_REQUEST_LIMIT=-1
+ENV AGENT_REQUEST_LIMIT="-1"
 
 # If this value is specified and >0,
 # it will enable dynamic run-time updates of the server agents configuration according
@@ -227,7 +280,7 @@ ENV AGENT_REQUEST_LIMIT=-1
 # with corresponding changes in manifest file.
 # Update will be done every AGENT_MANIFEST_UPDATE_PERIOD_SECONDS seconds;
 # if value is not specified or <= 0, no such dynamic updates will be executed.
-ENV AGENT_MANIFEST_UPDATE_PERIOD_SECONDS=0
+ENV AGENT_MANIFEST_UPDATE_PERIOD_SECONDS="0"
 
 # By default, the HTTP service reports the neuro-san library pip version in its health-check response.
 # It is possible to add other libraries to those results by listing them within this env var
@@ -238,17 +291,6 @@ ENV AGENT_MANIFEST_UPDATE_PERIOD_SECONDS=0
 # after a colon, like this: "my_repo:1.2.3".
 # You can combine these too, like this: "langchain openai my_repo:1.2.3"
 ENV AGENT_VERSION_LIBS=""
-
-# A reference to a Python class that can be used to log per-user request information.
-# This class must have a no-args constructor and implement the
-# neuro_san.interfaces.usage_logger.UsageLogger interface.
-# When not set, this defaults to a null implementation.
-ENV AGENT_USAGE_LOGGER=""
-
-# A space-delimited list of http metadata request keys to forward to the AGENT_USAGE_LOGGER
-# described above. When not set, this defaults to the value provided by
-# AGENT_FORWARDED_REQUEST_METADATA
-ENV AGENT_USAGE_LOGGER_METADATA=""
 
 # A space-delimited list of http metadata request keys to forward to tracing/Observability
 # infrastructure. When not set, this defaults to the value provided by
@@ -265,29 +307,50 @@ ENV AGENT_TRACING_METADATA_ENV_VARS="POD_NAME POD_NAMESPACE POD_IP NODE_NAME"
 # Impact:
 # Higher values allow the kernel to queue more incoming connections during traffic spikes,
 # reducing the chance of refused connections.
-ENV AGENT_HTTP_CONNECTIONS_BACKLOG=128
+ENV AGENT_HTTP_CONNECTIONS_BACKLOG="128"
 
 # Sets the maximum idle time (in seconds) before Tornado closes a keep-alive connection.
 # Impact:
 # Shorter timeouts free up resources faster under high load.
 # Longer timeouts reduce reconnections for clients that make periodic requests.
-ENV AGENT_HTTP_IDLE_CONNECTIONS_TIMEOUT=3600
+ENV AGENT_HTTP_IDLE_CONNECTIONS_TIMEOUT="3600"
 
 # Forks multiple worker processes, each with its own Tornado event loop, all sharing the same listening socket.
 # Impact:
 # Allows utilization of multiple CPU cores.
 # Improves concurrency without blocking a single IOLoop.
 # Typical Usage:
-# start(0) → Automatically spawns one process per CPU core.
-# start(N) → Manually specifies number of worker processes.
-ENV AGENT_HTTP_SERVER_INSTANCES=1
+#   Value of 0 → Automatically spawns one process per CPU core.
+#   Positive integer (N) → Manually specifies number of worker processes.
+# The developer-oriented default is 1, but we set to 0 here to allow pod CPU configuration
+# to dictate the number of server instance processes.
+# Note 7/7/2026: If your installation requires temporary agent networks (aka Reservations),
+# the server systems in place are not yet suitable for the multi-process operation
+# that is implied by a value that is not 1.
+ENV AGENT_HTTP_SERVER_INSTANCES="0"
 
 # If set to a value>0, will start periodic logging of currently used
 # run-time server resources:
 # open file descriptors;
 # open connections for server port.
 # Logging period is specified in seconds.
-ENV AGENT_HTTP_RESOURCES_MONITOR_INTERVAL=0
+ENV AGENT_HTTP_RESOURCES_MONITOR_INTERVAL="0"
+
+# Interval in seconds between HTTP keep-alive messages sent to streaming clients
+# to keep the connection alive during long quiet periods. This is important
+# when intermediaries (nginx, load balancers, AWS ALB) or clients would otherwise
+# drop an idle HTTP connection (commonly after ~60s) before the agent produces
+# its next streamed message. The keep-alive message only fires when the stream has been
+# quiet for approximately the full interval; real message traffic suppresses it.
+# A value of 0 (the default) disables the keep-alive messages entirely.
+# Typical production value is 25-30 (under the 60s defaults of common proxies).
+ENV AGENT_STREAM_KEEP_ALIVE_WITH_PROGRESS_INTERVAL_SECONDS=0
+
+# When any particular CodedTool execution takes longer than this many seconds,
+# the system issues a message in the log.  This is very useful for determining
+# where your scale-up problems are with particular networks.  The default value of
+# 0 disables this feature.
+ENV AGENT_TOOL_EXECUTION_LOG_THRESHOLD_SECONDS=0
 
 # Optional URL describing how the server is to be referenced by the outside world.
 # This is useful when a server is behind a load-balancer as part of a larger cluster.
@@ -334,6 +397,21 @@ ENV AGENT_MCP_ENABLE="true"
 ENV AGENT_MCP_ONLY="false"
 
 #
+# Server Hardening
+#
+
+# When set to "true", this parameter requires https for internal agent session communication.
+# The default is "true". Developers should set this to false to work locally without acquiring certificates.
+# Strongly consider keeping this on for production deployments.
+ENV AGENT_SESSION_REQUIRE_HTTPS="true"
+
+# When set to "false", this parameter will squelch the logging of sensitive information
+# as flagged by static analysis (SAST) tools.
+# The default is "false". Developers should set this to true to work locally with reasonable failure information.
+# Strongly consider keeping this off for production deployments.
+ENV LEAF_LOG_SENSITIVE="false"
+
+#
 # Authorization
 #
 
@@ -346,10 +424,13 @@ ENV AGENT_MCP_ONLY="false"
 #   neuro_san.internals.authorization.openfga.open_fga_authorizer.OpenFgaAuthorizer
 # Feel free to make your own as long as it derives from this interface:
 #   neuro_san.internals.authorization.interfaces.authorizer.Authorizer
+# Note that authorization (the ability to anwer the question "Does Actor X have Permission Y on Resource Z?")
+# is not to be confused with authentication (the ability to answer the question "Is Actor X who they say they are?")
+# Authentication is typically done outside a neuro-san server in a cluster load-balancer (for instance).
 ENV AGENT_AUTHORIZER=""
 
 # The request metadata field to use as the actor id for authorization
-ENV AGENT_AUTHORIZER_ACTOR_ID_METADATA_KEY=user_id
+ENV AGENT_AUTHORIZER_ACTOR_ID_METADATA_KEY="user_id"
 
 # See authorization logging.
 # In production you would not want to set this at all.
@@ -358,30 +439,35 @@ ENV AGENT_DEBUG_AUTH=""
 
 # The Actor type sent to the Authorizer
 # This typically corresponds to a specific type set up in the authorization policy
-ENV AGENT_AUTHORIZER_ACTOR_KEY=User
+ENV AGENT_AUTHORIZER_ACTOR_KEY="User"
 
 # The Resource type sent to the Authorizer
 # This typically corresponds to a specific type set up in the authorization policy
-ENV AGENT_AUTHORIZER_RESOURCE_KEY=AgentNetwork
+ENV AGENT_AUTHORIZER_RESOURCE_KEY="AgentNetwork"
 
 # The Relation type sent to the Authorizer used to judge whether the Actor has permission to access the Resource.
 # This typically corresponds to a specific relation set up in the authorization policy
 # Typically "read" from CRUD-based permissions.
-ENV AGENT_AUTHORIZER_ALLOW_RELATION=read
+ENV AGENT_AUTHORIZER_ALLOW_RELATION="read"
+
+# Whether to enable run-time statistics endpoints for neuro-san server as a whole.
+# These endpoints can be used to get information about the server's current resource usage
+# and also to control run-time service profiler.
+ENV ENABLE_RUN_TIME_STATISTICS="false"
 
 # Below: Env vars specific to OpenFgaAuthorizer
 
 # Where the OpenFGA HTTP server is running for the OpenFgaAuthorizer
 # Typical development example might be "http://localhost:8082"
-ENV FGA_API_URL=
+ENV FGA_API_URL=""
 
 # The file containing the authorization policy for the OpenFgaAuthorizer
 # This is a path to a json file that has been compiled from a .fga policy file using the fga CLI tool.
-ENV FGA_POLICY_FILE=
+ENV FGA_POLICY_FILE=""
 
 # The name of the authorization store to use
 # Typically "default"
-ENV FGA_STORE_NAME=
+ENV FGA_STORE_NAME=""
 
 
-ENTRYPOINT "${APP_ENTRYPOINT}"
+ENTRYPOINT ["/bin/bash", "-c", "exec ${APP_ENTRYPOINT}"]

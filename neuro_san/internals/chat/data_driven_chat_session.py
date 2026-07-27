@@ -22,7 +22,8 @@ from typing import Tuple
 from typing import Type
 from typing import Union
 
-import copy
+from copy import deepcopy
+from os import environ
 import traceback
 
 from logging import getLogger
@@ -33,27 +34,26 @@ from langchain_core.messages.base import BaseMessage
 
 from leaf_common.config.resolver_util import ResolverUtil
 
-from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.chat.chat_history_message_processor import ChatHistoryMessageProcessor
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.registry.agent_tool_registry import AgentToolRegistry
-from neuro_san.internals.graph.activations.sly_data_redactor import SlyDataRedactor
 from neuro_san.internals.interfaces.context_type_tracing_context_factory import ContextTypeTracingContextFactory
 from neuro_san.internals.interfaces.front_man import FrontMan
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.interfaces.run_target import RunTarget
+from neuro_san.internals.interfaces.tracing_context import TracingContext
 from neuro_san.internals.journals.intercepting_journal import InterceptingJournal
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.messages.agent_framework_message import AgentFrameworkMessage
 from neuro_san.internals.messages.base_message_dictionary_converter import BaseMessageDictionaryConverter
+from neuro_san.internals.messages.sly_data_redactor import SlyDataRedactor
 from neuro_san.internals.run_context.factory.run_context_factory import RunContextFactory
 from neuro_san.internals.run_context.factory.master_tracing_context_factory import MasterTracingContextFactory
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.message_processing.message_processor import MessageProcessor
 from neuro_san.message_processing.answer_message_processor import AnswerMessageProcessor
-from neuro_san.message_processing.structure_message_processor import StructureMessageProcessor
 
 # Lazily import specific errors from llm providers
 PATIENCE_ERRORS: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
@@ -74,9 +74,14 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
 
         :param agent_network: The AgentNetwork to use.
         """
+        agent_network_copy: AgentNetwork = agent_network
+
         # We make a copy of the AgentNetwork at this level to allow for interactions
         # within this scope to modify the network topology.
-        agent_network_copy: AgentNetwork = copy.deepcopy(agent_network)
+        protect_original_copy: bool = environ.get("AGENT_PROTECT_ORIGINAL_COPY", "true").lower() == "true"
+        if protect_original_copy:
+            agent_network_copy = deepcopy(agent_network)
+
         self.registry: AgentToolRegistry = AgentToolRegistry(agent_network_copy)
 
         self.front_man: FrontMan = None
@@ -88,6 +93,7 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         self.interceptor: InterceptingJournal = None
         self.original_input_message: AgentFrameworkMessage = None
         self.last_message_sent: bool = False
+        self.tracing_context: TracingContext = None
 
     async def set_up(self, invocation_context: InvocationContext,
                      sly_data: Dict[str, Any] = None,
@@ -121,67 +127,16 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         if self.sly_data.get("request_metadata") is None:
             # Make a deep copy so the server's idea of the original metadata doesn't get modified
             # should any CodedTool somehow get the idea to modify it.
-            self.sly_data["request_metadata"] = copy.deepcopy(invocation_context.get_metadata())
+            self.sly_data["request_metadata"] = deepcopy(invocation_context.get_metadata())
 
         run_context: RunContext = RunContextFactory.create_run_context(None, None,
                                                                        invocation_context=invocation_context,
-                                                                       chat_context=chat_context)
+                                                                       chat_context=chat_context,
+                                                                       tracing_context=self.tracing_context)
 
         self.front_man = self.registry.create_front_man(self.sly_data, run_context)
 
         await self.front_man.create_any_resources()
-
-    async def chat(self, user_input: str,
-                   invocation_context: InvocationContext,
-                   sly_data: Dict[str, Any] = None) -> Iterator[Dict[str, Any]]:
-        """
-        Performs a portion of the streaming_chat() responsibilities
-
-        :param user_input: A string with the user's input
-        :param invocation_context: The context policy container that pertains to the invocation
-                    of the agent.
-        :param sly_data: A mapping whose keys might be referenceable by agents, but whose
-                 values should not appear in agent chat text. Can be None.
-        :return: An Iterator over dictionary representation of chat messages.
-                The keys/values/structure of these chat message dictionaries will reflect
-                instances of ChatMessage from chat.proto.
-
-                Note that Iterators themselves are *not* simply lists. They are a Python
-                construct intended for use in a for-loop that is allowed to come up with
-                its content dynamically.  For our purposes, when an initiator of chat()
-                gets a handle to this Iterator, they can begin looping/waiting on its contents
-                without the content itself having been created yet.  This is a building
-                block of streaming results even though direct callers may not actually
-                be streaming.
-        """
-        if self.front_man is None:
-            await self.set_up(invocation_context, sly_data)
-        else:
-            self.front_man.update_invocation_context(invocation_context)
-
-        try:
-            # DEF - drill further down for iterator from here to enable getting
-            #       messages from downstream agents.
-            raw_messages: List[BaseMessage] = await self.front_man.submit_message(user_input)
-
-        except PATIENCE_ERRORS:
-            # This can happen if the user is trying to send a new message
-            # while it is still working on a previous message that has not
-            # yet returned.
-            raw_messages: List[BaseMessage] = [
-                AgentFrameworkMessage(content="Patience, please. I'm working on it.")
-            ]
-
-            logger: Logger = getLogger(self.__class__.__name__)
-            logger.error(traceback.format_exc())
-
-        converter = BaseMessageDictionaryConverter(origin=self.front_man.get_origin())
-        chat_messages: List[Dict[str, Any]] = []
-        for raw_message in raw_messages:
-            chat_message: Dict[str, Any] = converter.to_dict(raw_message)
-            chat_messages.append(chat_message)
-
-        return iter(chat_messages)
 
     # pylint: disable=too-many-locals
     async def streaming_chat(self, user_input: str,
@@ -213,12 +168,21 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         journal: Journal = self.invocation_context.get_journal()
         self.interceptor = InterceptingJournal(journal, origin=None)
 
+        # Find the front man spec to set up a SlyDataRedactor for use in the tracing context
+        front_man_name: str = self.registry.find_front_man()
+        front_man_spec: Dict[str, Any] = self.registry.get_agent_tool_spec(front_man_name)
+        redactor = SlyDataRedactor(front_man_spec,
+                                   config_keys=["allow.to_tracing.sly_data"],
+                                   allow_empty_dict=False)
+
         # Set up an input message that will show up in an Observability/tracing app
         # We keep this guy around for the duration of the chat session so that this class
         # has a pristine copy of what the inputs for use within run_it().
         self.original_input_message = AgentFrameworkMessage(content=user_input,
                                                             chat_context=chat_context,
-                                                            sly_data=sly_data)
+                                                            sly_data=sly_data,
+                                                            redactor=redactor)
+
         # Make a copy of the input message for use in the tracing context
         # We can't use the same object as original_input_message because
         # the tracing infrastructure ends up transforming the message for display.
@@ -236,11 +200,11 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         tracing_factory: ContextTypeTracingContextFactory = \
             MasterTracingContextFactory.create_tracing_context_factory()
         # For the factory args, we are our own run_target.
-        tracing_context: RunTarget = tracing_factory.create_tracing_context(config, run_target=self)
+        self.tracing_context = tracing_factory.create_tracing_context(config, run_target=self)
 
         try:
             # Run the run_target that was given back by the factory.
-            await tracing_context.run_it(input_message_for_show)
+            await self.tracing_context.run_it(input_message_for_show)
         finally:
             # Always signal that all work is done
             self.invocation_context.get_work_done_event().set()
@@ -306,18 +270,75 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
                                    allow_empty_dict=False)
         return_sly_data: Dict[str, Any] = redactor.filter_config(self.sly_data)
 
+        tracing_redactor = SlyDataRedactor(front_man_spec,
+                                           config_keys=["allow.to_tracing.sly_data"],
+                                           allow_empty_dict=False)
+
         # Stream over chat state as the last message
         # Use the interceptor to write the message.
         # This guy wraps the journal from the invocation context and listens to the
         # messages coming across, which allows us to report to the tracing infrastructure
         # at the end of the tracing context.
         message = AgentFrameworkMessage(content=answer, chat_context=return_chat_context,
-                                        sly_data=return_sly_data, structure=structure)
+                                        sly_data=return_sly_data, structure=structure,
+                                        redactor=tracing_redactor)
         await self.finalize_request(message)
 
         # Bogus output, but need something for interface
         outputs: AgentFrameworkMessage = inputs
         return outputs
+
+    async def chat(self, user_input: str,
+                   invocation_context: InvocationContext,
+                   sly_data: Dict[str, Any] = None) -> Iterator[Dict[str, Any]]:
+        """
+        Performs a portion of the streaming_chat() responsibilities
+
+        :param user_input: A string with the user's input
+        :param invocation_context: The context policy container that pertains to the invocation
+                    of the agent.
+        :param sly_data: A mapping whose keys might be referenceable by agents, but whose
+                 values should not appear in agent chat text. Can be None.
+        :return: An Iterator over dictionary representation of chat messages.
+                The keys/values/structure of these chat message dictionaries will reflect
+                instances of ChatMessage from chat.proto.
+
+                Note that Iterators themselves are *not* simply lists. They are a Python
+                construct intended for use in a for-loop that is allowed to come up with
+                its content dynamically.  For our purposes, when an initiator of chat()
+                gets a handle to this Iterator, they can begin looping/waiting on its contents
+                without the content itself having been created yet.  This is a building
+                block of streaming results even though direct callers may not actually
+                be streaming.
+        """
+        if self.front_man is None:
+            await self.set_up(invocation_context, sly_data)
+        else:
+            self.front_man.update_invocation_context(invocation_context)
+
+        try:
+            # DEF - drill further down for iterator from here to enable getting
+            #       messages from downstream agents.
+            raw_messages: List[BaseMessage] = await self.front_man.submit_message(user_input)
+
+        except PATIENCE_ERRORS:
+            # This can happen if the user is trying to send a new message
+            # while it is still working on a previous message that has not
+            # yet returned.
+            raw_messages: List[BaseMessage] = [
+                AgentFrameworkMessage(content="Patience, please. I'm working on it.")
+            ]
+
+            logger: Logger = getLogger(self.__class__.__name__)
+            logger.error(traceback.format_exc())
+
+        converter = BaseMessageDictionaryConverter(origin=self.front_man.get_origin())
+        chat_messages: List[Dict[str, Any]] = []
+        for raw_message in raw_messages:
+            chat_message: Dict[str, Any] = converter.to_dict(raw_message)
+            chat_messages.append(chat_message)
+
+        return iter(chat_messages)
 
     async def finalize_request(self, message: BaseMessage):
         """
@@ -377,27 +398,6 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
 
         return chat_context
 
-    def create_outgoing_message_processor(self) -> MessageProcessor:
-        """
-        :return: A MessageProcessor that filters messages outgoing to the client.
-                How this works is based on settings on the front man.
-                Can be None.
-        """
-        message_processor: MessageProcessor = None
-
-        front_man_name: str = self.registry.find_front_man()
-        front_man_spec: Dict[str, Any] = self.registry.get_agent_tool_spec(front_man_name)
-
-        # Get the formats we should parse from the final answer from the config for the network.
-        # As of 6/24/25, this is an unadvertised experimental feature.
-        structure_formats: Union[str, List[str]] = front_man_spec.get("structure_formats")
-        if structure_formats is None:
-            return message_processor
-
-        # Eventually this might be a CompositeMessageProcessor
-        message_processor = StructureMessageProcessor(structure_formats)
-        return message_processor
-
     async def close_of_work(self, parent_resource: LingeringResource = None):
         """
         Release resources owned by this context when the work is all done.
@@ -405,18 +405,16 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
 
         :param parent_resource: The parent resource, if any
         """
-        # Now that we are done, tell the Reservationist that we used for this request
-        # that there will be no more Reservations to corral.
-        reservationist: Reservationist = self.invocation_context.get_reservationist()
-        if reservationist is not None and isinstance(reservationist, LingeringResource):
-            await reservationist.close_of_work()
-
         # Close any objects on sly data that can be closed.
         await self.close_sly_data()
 
         if self.front_man is not None:
             await self.front_man.close_of_work()
             self.front_man = None
+
+        if self.tracing_context is not None:
+            await self.tracing_context.flush()
+            self.tracing_context = None
 
     async def close_sly_data(self):
         """

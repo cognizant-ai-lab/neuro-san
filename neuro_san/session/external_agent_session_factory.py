@@ -80,11 +80,16 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
         because in the general case this might involve querying external storage, which is potentially slow.
         """
         networks_order: List[str] = []
+        if network_storage_dict is None:
+            return networks_order
+
         for storage_name in network_storage_dict.keys():
             if storage_name != StorageClass.TEMP:
                 networks_order.append(storage_name)
+
         if StorageClass.TEMP in network_storage_dict:
             networks_order.append(StorageClass.TEMP)
+
         return networks_order
 
     def create_session_from_location_dict(self, agent_location: Dict[str, str],
@@ -116,22 +121,28 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
             metadata = invocation_context.get_metadata()
 
         session: AsyncAgentSession = None
-        if self.use_direct and (host is None or len(host) == 0 or host == "localhost"):
+        if self.is_use_direct() and (host is None or len(host) == 0 or host == "localhost"):
 
             # Optimization: We want to create a different kind of session to minimize socket usage
             # and potentially relieve the direct user of the burden of having to start a server
 
             agent_network_provider: AgentNetworkProvider = None
             for network_storage_name in self.get_networks_order(self.network_storage_dict):
+
                 network_storage = self.network_storage_dict.get(network_storage_name)
                 # Be sure we have something
                 agent_network_provider = network_storage.get_agent_network_provider(agent_name)
+                if agent_network_provider is None:
+                    continue
+
                 if agent_network_provider.get_agent_network() is not None:
                     break
 
-            agent_network: AgentNetwork = agent_network_provider.get_agent_network()
-            safe_invocation_context: InvocationContext = invocation_context.safe_shallow_copy(invocation)
-            session = AsyncDirectAgentSession(agent_network, safe_invocation_context, metadata=metadata)
+            if agent_network_provider is not None:
+                agent_network: AgentNetwork = agent_network_provider.get_agent_network()
+                if agent_network is not None:
+                    safe_invocation_context: InvocationContext = invocation_context.safe_shallow_copy(invocation)
+                    session = AsyncDirectAgentSession(agent_network, safe_invocation_context, metadata=metadata)
 
         if session is None:
             # When creating a session for external agents, specifically use None for the

@@ -25,6 +25,8 @@ import copy
 import logging
 import pathlib
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from leaf_server_common.logging.logging_setup import setup_logging
 
 from neuro_san.service.http.logging.log_context_filter import LogContextFilter
@@ -94,7 +96,14 @@ class HttpLogger(EventLoopLogger):
         and delegate logging to underlying standard Logger.
         """
         self.prepare_filter(metadata)
-        self.logger.error(msg, *args)
+        sensitive_logger = SensitiveLogger(self.logger)
+
+        # CheckMarx false-positive for Information Exposure Through an Error Message
+        # We specifically use the SensitiveLogger instance to log the message.
+        # This allows for a hardened server to turn off logging of this information
+        # by setting the env var LEAF_LOG_SENSITIVE to "false", while still allowing
+        # developers to see the error message.
+        sensitive_logger.error(msg, *args)
 
     def setup_logging(self, logging_config: Dict[str, Any]):
         """

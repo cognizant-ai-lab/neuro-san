@@ -16,8 +16,8 @@ jobs:
     if: >
       (github.event_name == 'push' && github.ref != 'refs/heads/main') ||
       (github.event_name == 'pull_request' && github.base_ref == 'main')
-    # 1.0.0
-    uses: cognizant-ai-lab/build-common/.github/workflows/_python-quality-gate.yml@455db3cc40e9ed6a0fb9bbaf8188888c1ae315c2
+    # 1.0.8
+    uses: cognizant-ai-lab/build-common/.github/workflows/_python-quality-gate.yml@30321843331e00848309b34e08b839e1f6490ba2
     with:
       python-version: '3.12'
       lint-toolchain: 'legacy'  # flake8 only (black/isort are opt-in)
@@ -25,6 +25,8 @@ jobs:
       shellcheck-command: 'build_scripts/run_shellcheck.sh'
       run-markdownlint: true
       markdownlint-command: 'build_scripts/run_markdownlint.sh'
+      run-hadolint: true
+      dockerfile-path: 'neuro_san/deploy/Dockerfile'
       check-readme-pypi: true
       test-command-override: >-
         export AGENT_TOOL_PATH="./neuro_san/coded_tools" &&

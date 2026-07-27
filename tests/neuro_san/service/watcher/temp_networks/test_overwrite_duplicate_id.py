@@ -19,7 +19,9 @@ S3ReservationsStorage.add_reservations is last-writer-wins for a given
 reservation id: a second call writes a new JSON blob to the same S3 key,
 replacing the first one.
 """
-from tests.neuro_san.service.watcher.temp_networks._test_base \
+import pytest
+
+from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
 
 
@@ -35,7 +37,8 @@ class TestOverwriteDuplicateId(S3ReservationsStorageTestBase):
     replacing.
     """
 
-    def test_add_reservations_overwrites_on_duplicate_id(self):
+    @pytest.mark.asyncio
+    async def test_add_reservations_overwrites_on_duplicate_id(self):
         """
         Write twice under the same reservation id with different lifetimes
         and different agent specs; verify the second write fully replaces
@@ -50,7 +53,7 @@ class TestOverwriteDuplicateId(S3ReservationsStorageTestBase):
         )
         first_spec = self._make_agent_spec("copy_cat")
         first_spec["llm_config"]["model_name"] = "gpt-4o"
-        self.storage.add_reservations({first_reservation: first_spec})
+        await self.storage.add_reservations({first_reservation: first_spec})
 
         # Second write: same id, longer lease, different model.
         second_reservation = self._make_reservation(
@@ -58,7 +61,7 @@ class TestOverwriteDuplicateId(S3ReservationsStorageTestBase):
         )
         second_spec = self._make_agent_spec("copy_cat")
         second_spec["llm_config"]["model_name"] = "gpt-5.2"
-        self.storage.add_reservations({second_reservation: second_spec})
+        await self.storage.add_reservations({second_reservation: second_spec})
 
         # Read back; the storage should expose only the second write.
         returned_reservation, returned_network = \

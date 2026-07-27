@@ -21,7 +21,7 @@ from typing import Any
 from typing import Dict
 
 from neuro_san.service.http.logging.http_logger import HttpLogger
-from neuro_san.service.mcp.util.mcp_request_util import McpRequestUtil
+from neuro_san.service.utils.request_util import RequestUtil
 
 
 class McpPromptsProcessor:
@@ -43,7 +43,7 @@ class McpPromptsProcessor:
         _ = metadata
         return {
             "jsonrpc": "2.0",
-            "id": McpRequestUtil.safe_request_id(request_id),
+            "id": RequestUtil.safe_request_id(request_id),
             "result": {
                 "prompts": []
             }

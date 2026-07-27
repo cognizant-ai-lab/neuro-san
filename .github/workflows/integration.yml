@@ -12,8 +12,8 @@ jobs:
   test:
     # don't run this job in sync'd clones
     if: github.repository == 'cognizant-ai-lab/neuro-san'
-    # 1.0.0
-    uses: cognizant-ai-lab/build-common/.github/workflows/_python-quality-gate.yml@455db3cc40e9ed6a0fb9bbaf8188888c1ae315c2
+    # 1.0.8
+    uses: cognizant-ai-lab/build-common/.github/workflows/_python-quality-gate.yml@30321843331e00848309b34e08b839e1f6490ba2
     with:
       python-version: '3.12'
       lint-command-override: 'true'  # no lint in this workflow

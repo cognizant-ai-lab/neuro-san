@@ -19,10 +19,12 @@ from typing import Dict
 
 from contextlib import suppress
 from httpx import AsyncClient
+from httpx import Limits
 
 from langchain_core.language_models.base import BaseLanguageModel
 
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
+from neuro_san.internals.utils.config_util import ConfigUtil
 
 
 class OpenAILlmPolicy(LlmPolicy):
@@ -34,6 +36,9 @@ class OpenAILlmPolicy(LlmPolicy):
     method to do that. Worth noting that where many other implementations might care about
     the llm reference, because of our create_client() implementation, we do not.
     """
+
+    # None means no limit
+    LIMITS: Limits = Limits(max_connections=None, max_keepalive_connections=None)
 
     def __init__(self, llm: BaseLanguageModel = None):
         """
@@ -95,7 +100,7 @@ class OpenAILlmPolicy(LlmPolicy):
         # Our run-time model resource here is httpx client which we need to control directly:
         openai_proxy: str = self.get_value_or_env(config, "openai_proxy", "OPENAI_PROXY")
         request_timeout: int = config.get("request_timeout")
-        self.http_client = AsyncClient(proxy=openai_proxy, timeout=request_timeout)
+        self.http_client = AsyncClient(proxy=openai_proxy, timeout=request_timeout, limits=self.LIMITS)
 
     def create_llm(self, config: Dict[str, Any], model_name: str, client: Any) -> BaseLanguageModel:
         """
@@ -120,6 +125,7 @@ class OpenAILlmPolicy(LlmPolicy):
         # Now construct LLM chat model we will be using:
         llm = ChatOpenAI(
             async_client=client,
+            root_async_client=self.async_openai_client,
             model_name=model_name,
             temperature=config.get("temperature"),
 
@@ -141,7 +147,14 @@ class OpenAILlmPolicy(LlmPolicy):
             logprobs=config.get("logprobs"),
             top_logprobs=config.get("top_logprobs"),
             logit_bias=config.get("logit_bias"),
-            streaming=True,  # streaming is always on. Without it token counting will not work.
+            # Streaming is configurable via the "streaming" key in llm_config; defaults
+            # to False so existing agents keep their long-standing non-streaming behavior.
+            # We pass streaming explicitly (rather than relying on LangChain's default) so
+            # that langchain_core._should_stream() picks up the configured value even when
+            # a streaming-aware callback handler is attached to the run manager. Token
+            # usage is collected from AIMessage.usage_metadata in LlmTokenCallbackHandler
+            # regardless of streaming mode.
+            streaming=ConfigUtil.get_bool(config, "streaming"),
             n=1,  # n is always 1.  neuro-san will only ever consider one chat completion.
             top_p=config.get("top_p"),
             max_tokens=config.get("max_tokens"),  # This is always for output
@@ -168,8 +181,8 @@ class OpenAILlmPolicy(LlmPolicy):
             # global verbose value) so that the warning is never triggered.
             verbose=False,
 
-            # Set stream_usage to True in order to get token counting chunks.
-            stream_usage=True
+            # Track streaming: emit token-usage frames only when streaming is enabled.
+            stream_usage=ConfigUtil.get_bool(config, "streaming")
         )
 
         return llm

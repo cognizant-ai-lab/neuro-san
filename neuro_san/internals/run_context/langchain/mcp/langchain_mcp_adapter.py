@@ -23,11 +23,12 @@ from typing import Optional
 import copy
 from logging import Logger
 from logging import getLogger
-import threading
+from threading import Lock
 
 from langchain_core.tools import BaseTool
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from neuro_san.internals.run_context.langchain.mcp.mcp_servers_info_restorer import McpServersInfoRestorer
+from neuro_san.internals.run_context.langchain.mcp.mcp_tool_error_handler import McpToolErrorHandler
 
 
 class LangChainMcpAdapter:
@@ -36,7 +37,7 @@ class LangChainMcpAdapter:
     LangChain-compatible tools. This class provides static methods for interacting with MCP servers.
     """
 
-    _mcp_info_lock: threading.Lock = threading.Lock()
+    _mcp_info_lock: Lock = Lock()
     _mcp_servers_info: Dict[str, Any] = None
 
     def __init__(self):
@@ -46,14 +47,21 @@ class LangChainMcpAdapter:
         self.client_allowed_tools: List[str] = []
         self.logger: Logger = getLogger(self.__class__.__name__)
 
-    @staticmethod
-    def _load_mcp_servers_info():
+    def _load_mcp_servers_info(self):
         """
         Loads MCP servers information from a configuration file if not already loaded.
         """
+        # Write through the class so the cache stays shared across instances.
+        # `self._mcp_servers_info = ...` would create an instance attribute that shadows
+        # the class attribute, leaving the class-level cache stuck at None and causing
+        # every new LangChainMcpAdapter to reload (and re-log) the config.
         with LangChainMcpAdapter._mcp_info_lock:
             if LangChainMcpAdapter._mcp_servers_info is None:
-                LangChainMcpAdapter._mcp_servers_info = McpServersInfoRestorer().restore()
+                try:
+                    LangChainMcpAdapter._mcp_servers_info = McpServersInfoRestorer().restore()
+                except ValueError as value_error:
+                    self.logger.warning("Error occurred while loading MCP servers info: %s", value_error)
+                    self.logger.info("Proceeding with empty MCP servers info.")
                 if LangChainMcpAdapter._mcp_servers_info is None:
                     # Something went wrong reading the file.
                     # Prevent further attempts to load info.
@@ -119,5 +127,20 @@ class LangChainMcpAdapter:
             # Add "langchain_tool" tags so journal callback can idenitify it.
             # These MCP tools are treated as Langchain tools and can be reported in the thinking file.
             tool.tags = ["langchain_tool"]
+            # Not all BaseTool subclasses have a coroutine to wrap, but the
+            # StructuredTools from langchain-mcp-adapters do: their async
+            # implementation (the function that opens the MCP session and calls
+            # the server) is held in their "coroutine" attribute.
+            if getattr(tool, "coroutine", None) is not None:
+                # Swap that attribute for a McpToolErrorHandler's async_invoke
+                # bound method so that MCP call failures come back to the LLM as
+                # concise "Error: ..." tool output instead of raw exceptions
+                # that abort the whole agent chain. The handler captures the
+                # original coroutine at construction, which is why it must be
+                # created before the assignment overwrites the attribute. It
+                # must be a bound method (not the handler instance itself) so
+                # langgraph can pass it to typing.get_type_hints() during agent
+                # construction. See McpToolErrorHandler for details.
+                tool.coroutine = McpToolErrorHandler(tool).async_invoke
 
         return mcp_tools

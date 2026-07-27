@@ -24,10 +24,13 @@ from typing import Optional
 from typing import Type
 from typing import Union
 
+import logging
 import os
 
+from threading import Lock
+
 from langchain_core.tools.base import BaseTool
-from langchain_community.agent_toolkits.base import BaseToolkit
+from langchain_core.tools.base import BaseToolkit
 from pydantic import BaseModel
 
 from leaf_common.config.dictionary_overlay import DictionaryOverlay
@@ -83,6 +86,8 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         """
         self.toolbox_infos: Dict[str, Any] = {}
         self.overlayer = DictionaryOverlay()
+        self.loaded: bool = False
+        self.load_lock: Lock = Lock()
 
         # Get user toolbox info file path with the following priority:
         # 1. "toolbox_info_file" from agent network hocon
@@ -107,14 +112,33 @@ class ToolboxFactory(ContextTypeToolboxFactory):
     def load(self):
         """
         Loads the base tool information from hocon files.
-        """
-        restorer = ToolboxInfoRestorer()
-        self.toolbox_infos = restorer.restore()
 
-        # Mix in user-specified toolbox info, if available.
-        if self.toolbox_info_file:
-            extra_toolbox_infos: Dict[str, Any] = restorer.restore(file_reference=self.toolbox_info_file)
-            self.toolbox_infos = self.overlayer.overlay(self.toolbox_infos, extra_toolbox_infos)
+        Only the first call does any work.  Subsequent calls on the same
+        instance are no-ops, so a shared factory can be load()-ed cheaply
+        on every use, even from multiple threads.
+        """
+        if self.loaded:
+            return
+
+        # Double-checked locking: the test above keeps the per-report load()
+        # call cheap once loaded; the re-test under the lock makes the first
+        # load exclusive when a not-yet-loaded factory is shared by threads.
+        with self.load_lock:
+            if self.loaded:
+                return
+
+            restorer = ToolboxInfoRestorer()
+            toolbox_infos: Dict[str, Any] = restorer.restore()
+
+            # Mix in user-specified toolbox info, if available.
+            if self.toolbox_info_file:
+                extra_toolbox_infos: Dict[str, Any] = restorer.restore(file_reference=self.toolbox_info_file)
+                toolbox_infos = self.overlayer.overlay(toolbox_infos, extra_toolbox_infos)
+
+            # Publish the fully-assembled infos in a single assignment so that
+            # lock-free readers never observe a partially-overlaid dictionary.
+            self.toolbox_infos = toolbox_infos
+            self.loaded = True
 
     def create_tool_from_toolbox(
             self,
@@ -152,8 +176,8 @@ class ToolboxFactory(ContextTypeToolboxFactory):
                 "Missing required key: 'class'.\n"
                 "Each tool must include a 'class' key:\n"
                 "- For Langchain base tools: use the full class path "
-                "(e.g., 'langchain_community.tools.bing_search.BingSearchResults')\n"
-                "- For shared CodedTools: use 'module.Class' format (e.g., 'websearch.WebSearch')"
+                "(e.g., 'some_package.some_module.SomeTool')\n"
+                "- For shared CodedTools: use 'module.Class' format (e.g., 'some_module.SomeCodedTool')"
             )
 
         # If "description" in the tool info, then it is a shared coded tool.
@@ -161,8 +185,21 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         if "description" in tool_info:
             return tool_info
 
+        tool_class_name: str = tool_info.get("class")
+        if not isinstance(tool_class_name, str) or not tool_class_name:
+            raise ValueError(f"Value for '{tool_name}.class' must be a non-empty string.")
+
+        if tool_class_name.startswith("langchain_community."):
+            logging.warning(
+                "Tool '%s' uses a class from langchain-community, which has been sunset "
+                "(https://github.com/langchain-ai/langchain-community/issues/674). "
+                "Tools based on langchain-community will be removed from the default toolbox "
+                "in a future release.",
+                tool_name
+            )
+
         # Instantiate the main tool or toolkit class
-        tool_class: Type[Any] = self._resolve_class(tool_info.get("class"))
+        tool_class: Type[Any] = self._resolve_class(tool_class_name)
         # Recursively resolve arguments (including wrapper dependencies)
         resolved_args: Dict[str, Any] = self._resolve_args(tool_info.get("args", empty))
         # Merge with user arguments where user_args get the priority

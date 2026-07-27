@@ -28,6 +28,8 @@ from pydantic_core import ValidationError
 from langchain_core.messages.base import BaseMessage
 from langchain_core.tools import BaseTool
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
 from neuro_san.internals.run_context.langchain.core.langchain_run import LangChainRun
 from neuro_san.internals.run_context.langchain.core.base_model_dictionary_converter \
@@ -159,13 +161,17 @@ It's function_json is described thusly:
         # to be an args_schema member which should be a pydantic BaseModel
         # for the objects that are passed as arguments.
         #
-        # If "parameters" is not None, create a pydantic BaseModel of the OpenAI function spec for the agent
-        # to satisfy that langchain need.  It's kind of a shame because this is just
-        # going to get converted back to an OpenAI function again later on in langchain
-        #  agent-land.
-        if use_function_json != function_json:
-            converter = BaseModelDictionaryConverter("parameters")
-            tool.args_schema = converter.from_dict(use_function_json)
+        # Always build an explicit args_schema from the OpenAI function spec.
+        # When no "parameters" block is declared, feed an empty dict to the
+        # converter so it produces an empty pydantic BaseModel. Without this,
+        # langchain's BaseTool auto-derives a schema from _arun(*args, **kwargs)
+        # which emits a property named "args" of type "array" with no "items"
+        # field — Gemini rejects that with INVALID_ARGUMENT. It's kind of a
+        # shame because this is just going to get converted back to an OpenAI
+        # function again later on in langchain agent-land.
+        converter = BaseModelDictionaryConverter("parameters")
+        schema_source: Dict[str, Any] = use_function_json if use_function_json != function_json else {}
+        tool.args_schema = converter.from_dict(schema_source)
 
         tool.tool_caller = tool_caller
 
@@ -226,8 +232,15 @@ It's function_json is described thusly:
             # This actually allows LLMs to recognize that something is wrong
             # and verbally report on that.
             logger = logging.getLogger(self.__class__.__name__)
-            logger.error("Tool._arun() got Exception: %s", str(exception))
-            logger.error(traceback.format_exc())
+            sensitive_logger = SensitiveLogger(logger)
+
+            # CheckMarx false-positive for Information Exposure Through an Error Message
+            # We specifically use the SensitiveLogger instance to log the message.
+            # This allows for a hardened server to turn off logging of this information
+            # by setting the env var LEAF_LOG_SENSITIVE to "false", while still allowing
+            # developers to see the error message.
+            sensitive_logger.error("Tool._arun() got Exception: %s", str(exception))
+            sensitive_logger.error(traceback.format_exc())
             run = None
             return str(exception)
 

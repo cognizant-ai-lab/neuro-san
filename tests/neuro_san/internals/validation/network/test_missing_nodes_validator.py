@@ -52,3 +52,21 @@ class TestMissingNodesNetworkValidator(TestCase, AbstractNetworkValidatorTest):
         errors: List[str] = validator.validate(config)
 
         self.assertEqual(1, len(errors), errors[-1])
+
+    def test_tools_as_string_does_not_iterate_chars(self):
+        """
+        Tests that a malformed `tools` field (string instead of list) does
+        not silently iterate the string character-by-character, which would
+        flag each character as a missing node. coerce_tools treats it as
+        empty; the shape error is reported separately by ToolsShapeValidator.
+        """
+        validator: DictionaryValidator = self.create_validator()
+
+        config: Dict[str, Any] = self.restore("hello_world.hocon")
+        # announcer's tools as a string referring to an existing agent
+        config["tools"][0]["tools"] = "synonymizer"
+
+        errors: List[str] = validator.validate(config)
+        # If we iterated chars, each char would be reported as missing.
+        # With defensive coercion, no missing-node errors are reported.
+        self.assertEqual(0, len(errors), errors)

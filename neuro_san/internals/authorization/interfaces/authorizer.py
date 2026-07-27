@@ -25,7 +25,16 @@ from typing import List
 class Authorizer:
     """
     An interface for authorization.
-    This is based on what we need from what packages like OpenFGA or Oso provide.
+
+    Note that _authorization_ - the ability to determine permission to access a resource (in
+    Neuro SAN's case an agent network) - is not to be confused with _authentication_ -
+    the ability to determine a user's identity.  Normally, authentication is done by
+    a system outside the scope of a Neuro SAN server, like by a load-balancer for a cluster.
+
+    The methods here are based on what we need from what packages like OpenFGA or Oso provide,
+    that is to assist in answering the question: "Does Actor X have Persmission Y on Resource Z?"
+    It is assumed at this level that the identity of Actor X has already been authenticated
+    outside the scope of a Neuro SAN server, if that is desired and necessary.
     """
 
     async def __aenter__(self) -> Authorizer:
@@ -34,9 +43,10 @@ class Authorizer:
         """
         raise NotImplementedError
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
         """
         Closes a scoped session with this Authorizer.
+        :return: True to suppress exception. False or None to propagate exception.
         """
         raise NotImplementedError
 

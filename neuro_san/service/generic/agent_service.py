@@ -46,9 +46,7 @@ from neuro_san.internals.run_context.factory.master_llm_factory import MasterLlm
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.chat_message_converter import ChatMessageConverter
 from neuro_san.service.generic.service_agent_reservationist import ServiceAgentReservationist
-from neuro_san.service.usage.usage_logger_factory import UsageLoggerFactory
-from neuro_san.service.usage.wrapped_usage_logger import WrappedUsageLogger
-from neuro_san.service.utils.server_context import ServerContext
+from neuro_san.service.interfaces.server_context_lite import ServerContextLite
 from neuro_san.session.direct_agent_session import DirectAgentSession
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
 from neuro_san.session.session_invocation_context import SessionInvocationContext
@@ -73,7 +71,7 @@ class AgentService:
                  agent_name: str,
                  agent_network_provider: AgentNetworkProvider,
                  server_logging: AgentServerLogging,
-                 server_context: ServerContext):
+                 server_context: ServerContextLite):
         """
         Set the gRPC interface up for health checking so that the service
         will be opened to callers when the mesh sees it operational, if this
@@ -112,6 +110,7 @@ class AgentService:
 
         self.request_timeout_seconds: float = agent_network.get_request_timeout_seconds()
         self.event_work_queue: AsyncCollatingQueue = server_context.get_event_work_queue()
+        self.network_storage_dict: Dict[str, Any] = server_context.get_network_storage_dict()
 
         # Load once
         self.llm_factory.load()
@@ -207,10 +206,14 @@ class AgentService:
 
         # Delegate to Direct*Session
         agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
+        # Pass the toolbox factory that was created and loaded once at service
+        # construction, so connectivity reporting does not re-read toolbox
+        # info files on every request.
         session = DirectAgentSession(agent_network=agent_network,
                                      invocation_context=None,
                                      metadata=metadata,
-                                     security_cfg=self.security_cfg)
+                                     security_cfg=self.security_cfg,
+                                     toolbox_factory=self.toolbox_factory)
         response_dict = session.connectivity(request_dict)
 
         if request_log is not None:
@@ -263,7 +266,7 @@ class AgentService:
             self.queues.sync_q.put(reservationist.get_queue())
 
         # Prepare
-        factory = ExternalAgentSessionFactory(use_direct=False)
+        factory = ExternalAgentSessionFactory(use_direct=True, network_storage_dict=self.network_storage_dict)
         invocation_context = SessionInvocationContext(
             self.agent_name,
             factory,
@@ -318,12 +321,6 @@ class AgentService:
             # even if iterator is interrupted.
             invocation_context.finish_request()
             invocation_context = None
-
-        # Maybe report token accounting to a UsageLogger
-        token_dict: Dict[str, Any] = request_reporting.get("token_accounting")
-        if token_dict is not None:
-            usage_logger: WrappedUsageLogger = UsageLoggerFactory.create_usage_logger()
-            usage_logger.synchronous_log_usage(token_dict, request_metadata)
 
         # Iterator has finally signaled that there are no more responses to be had.
         # Log that we are done.

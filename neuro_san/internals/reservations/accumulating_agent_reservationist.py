@@ -129,8 +129,6 @@ class AccumulatingAgentReservationist(Reservationist):
             return None
 
         # Do some validation here
-        validator = ManifestNetworkValidator(external_network_names=self._external_networks,
-                                             mcp_servers=self._mcp_servers)
         errors: Dict[str, List[str]] = {}
         for reservation, agent_network_spec in deployment_dict.items():
 
@@ -140,6 +138,10 @@ class AccumulatingAgentReservationist(Reservationist):
 
             # Validate what is being reserved.
             # Currently, we are assuming everything is an agent network
+            validator = ManifestNetworkValidator(
+                external_network_names=self._external_networks,
+                mcp_servers=self._mcp_servers,
+                network_name=key)
             new_errors: List[str] = validator.validate(agent_network_spec)
             if new_errors is not None and len(new_errors) > 0:
                 # There were errors. Report all at once
@@ -168,11 +170,12 @@ class AccumulatingAgentReservationist(Reservationist):
 
         return event
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
         """
         Python context manager protocol exit point.
         This is what gets called when you exit a with-statement.
         This triggers the initiation of the deployment.
+        :return: True to suppress exception. False or None to propagate exception.
         """
         # Initiate the deployments
         await self._supporting_reservationist.deploy_one(self._supporting_reservation, self.deployments)

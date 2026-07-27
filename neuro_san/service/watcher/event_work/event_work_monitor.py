@@ -17,26 +17,22 @@
 
 from typing import Set
 
-from logging import getLogger
-from logging import Logger
 from queue import Empty
 from threading import Event
-from threading import Thread
 from time import sleep
 
 from janus import Queue
 from janus import SyncQueueShutDown
 
-
-from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
+from neuro_san.service.watcher.interfaces.watcher_thread import WatcherThread
 from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.session.session_invocation_context import SessionInvocationContext
 
 
-class EventWorkMonitor(Startable):
+class EventWorkMonitor(WatcherThread):
     """
-    Startable implementation that looks for work from event invocations
+    WatcherThread implementation that looks for work from event invocations
     that is finishing up so as to shut down their resources correctly.
     """
 
@@ -46,22 +42,12 @@ class EventWorkMonitor(Startable):
 
         :param server_context: ServerContext for global-ish state
         """
+        super().__init__(server_context)
+        self.update_period_in_seconds = 0.5
         self.event_work_queue: AsyncCollatingQueue = server_context.get_event_work_queue()
-        self.logger: Logger = getLogger(self.__class__.__name__)
-        self.update_thread: Thread = Thread(target=self._run, name="EventWorkMonitor", daemon=True)
-        self.keep_running: bool = True
-        self.update_period_in_seconds: float = 0.5
         self.invocation_context_pool: Set[SessionInvocationContext] = set()
 
-    def start(self):
-        """
-        Perform start up.
-        """
-        self.logger.info("Starting EventWorkMonitor with %f seconds period",
-                         self.update_period_in_seconds)
-        self.update_thread.start()
-
-    def _run(self):
+    def run(self):
         """
         Main loop
         """
@@ -114,16 +100,3 @@ class EventWorkMonitor(Startable):
 
             # No need to check on this guy any more
             self.invocation_context_pool.remove(invocation_context)
-
-    def stop(self):
-        """
-        Perform steps to stop/shut-down
-        By default this does nothing
-        """
-        self.logger.info("Stopping EventWorkMonitor with %f seconds period",
-                         self.update_period_in_seconds)
-
-        self.keep_running = False
-
-        # Wait for the thread to finish
-        self.update_thread.join()

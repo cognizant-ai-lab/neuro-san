@@ -19,12 +19,15 @@ from typing import Dict
 from typing import List
 from typing import Set
 
+import logging
+
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.run_context.factory.master_toolbox_factory import MasterToolboxFactory
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.utils.external_agent_parsing import ExternalAgentParsing
+from neuro_san.internals.validation.network.abstract_network_validator import AbstractNetworkValidator
 
 
 class ConnectivityReporter:
@@ -54,17 +57,33 @@ class ConnectivityReporter:
         Maybe someday.
     """
 
-    def __init__(self, inspector: AgentNetworkInspector):
+    # Set once the self-build fallback below has been logged, so per-request
+    # reporter construction cannot flood the logs.
+    self_build_logged: bool = False
+
+    def __init__(self, inspector: AgentNetworkInspector, toolbox_factory: ContextTypeToolboxFactory = None):
         """
         Constructor
 
         :param inspector: The AgentNetworkInspector to use.
+        :param toolbox_factory: An optional ContextTypeToolboxFactory to consult
+                        for display_as information about toolbox tools.
+                        This should have been built from the same config as the
+                        inspector's agent network and may be passed pre-loaded
+                        so toolbox info files are not re-read per report.
+                        If None, one is created from the inspector's config.
         """
 
         self.inspector: AgentNetworkInspector = inspector
-        self.toolbox_factory: ContextTypeToolboxFactory = None
+        self.toolbox_factory: ContextTypeToolboxFactory = toolbox_factory
 
-        if self.inspector is not None:
+        if self.inspector is not None and self.toolbox_factory is None:
+            if not ConnectivityReporter.self_build_logged:
+                ConnectivityReporter.self_build_logged = True
+                logger = logging.getLogger(self.__class__.__name__)
+                logger.info("No toolbox_factory provided. Building one from the agent network config. "
+                            "Pass a pre-loaded factory to avoid re-reading toolbox info files per report. "
+                            "(Logged once per process.)")
             config: Dict[str, Any] = self.inspector.get_config()
             self.toolbox_factory = MasterToolboxFactory.create_toolbox_factory(config)
 
@@ -182,36 +201,22 @@ class ConnectivityReporter:
             # Nothing to report
             return tool_list
 
-        extractor = DictionaryExtractor(agent_spec)
+        # Combine the traditional `tools` field with `args.tools` (the coded-tool
+        # convention). coerce_* keep the result tolerant to malformed shapes;
+        # remove_dictionary_tools drops non-string entries (e.g., inline MCP
+        # configs) so the dedup set sees only agent-name strings.
+        combined: List[Any] = (
+            AbstractNetworkValidator.coerce_tools(agent_spec) +
+            AbstractNetworkValidator.coerce_args_tools(agent_spec)
+        )
 
         # Keep a set of the combined sources of tools,
         # so connectivity only gets reported once.
         tool_set: Set[str] = set()
-
-        # First check the tools of the run-of-the-mill agent spec
-        empty_list: List[str] = []
-        spec_tools: List[str] = extractor.get("tools", empty_list)
-
-        # Add to our list in order, but without repeats
-        for tool in spec_tools:
+        for tool in AbstractNetworkValidator.remove_dictionary_tools(combined):
             if tool not in tool_set:
                 tool_set.add(tool)
                 tool_list.append(tool)
-
-        # Next check a special case convention where a coded tool takes a dictionary of
-        # key/value pairs mapping function -> tool name.
-        empty_dict: Dict[str, Any] = {}
-        args_tools = extractor.get("args.tools", empty_dict)
-
-        if isinstance(args_tools, Dict):
-            args_tools = args_tools.values()
-
-        if isinstance(args_tools, List):
-            # Add to our list in order, but without repeats
-            for tool in args_tools:
-                if tool not in tool_set:
-                    tool_set.add(tool)
-                    tool_list.append(tool)
 
         return tool_list
 

@@ -44,9 +44,7 @@ from neuro_san.service.generic.service_agent_reservationist import ServiceAgentR
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.chat_message_converter import ChatMessageConverter
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
-from neuro_san.service.usage.usage_logger_factory import UsageLoggerFactory
-from neuro_san.service.usage.wrapped_usage_logger import WrappedUsageLogger
-from neuro_san.service.utils.server_context import ServerContext
+from neuro_san.service.interfaces.server_context_lite import ServerContextLite
 from neuro_san.session.async_direct_agent_session import AsyncDirectAgentSession
 from neuro_san.session.external_agent_session_factory import ExternalAgentSessionFactory
 from neuro_san.session.session_invocation_context import SessionInvocationContext
@@ -71,7 +69,7 @@ class AsyncAgentService:
                  agent_name: str,
                  agent_network_provider: AgentNetworkProvider,
                  server_logging: AgentServerLogging,
-                 server_context: ServerContext):
+                 server_context: ServerContextLite):
         """
         :param request_logger: The instance of the EventLoopLogger that helps
                         log information from running event loop
@@ -100,6 +98,7 @@ class AsyncAgentService:
 
         self.async_executor_pool: AsyncioExecutorPool = server_context.get_executor_pool()
         self.event_work_queue: AsyncCollatingQueue = server_context.get_event_work_queue()
+        self.network_storage_dict: Dict[str, Any] = server_context.get_network_storage_dict()
 
         self.reload_factories()
 
@@ -111,12 +110,22 @@ class AsyncAgentService:
         """
         agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
         config: Dict[str, Any] = agent_network.get_config()
-        self.llm_factory: ContextTypeLlmFactory = MasterLlmFactory.create_llm_factory(config)
-        self.toolbox_factory: ContextTypeToolboxFactory = MasterToolboxFactory.create_toolbox_factory(config)
+        llm_factory: ContextTypeLlmFactory = MasterLlmFactory.create_llm_factory(config)
+        toolbox_factory: ContextTypeToolboxFactory = MasterToolboxFactory.create_toolbox_factory(config)
 
-        # Load once.
-        self.llm_factory.load()
-        self.toolbox_factory.load()
+        # Load once, before publishing to the fields that request paths read,
+        # so no request can ever see an unloaded factory.
+        llm_factory.load()
+        toolbox_factory.load()
+
+        self.llm_factory: ContextTypeLlmFactory = llm_factory
+        self.toolbox_factory: ContextTypeToolboxFactory = toolbox_factory
+
+    def get_agent_network(self) -> AgentNetwork:
+        """
+        :return: The agent network for this service
+        """
+        return self.agent_network_provider.get_agent_network()
 
     def get_request_count(self) -> int:
         """
@@ -206,12 +215,16 @@ class AsyncAgentService:
 
         # Delegate to Direct*Session
         agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
+        # Pass the toolbox factory that was created and loaded once at service
+        # construction, so connectivity reporting does not re-read toolbox
+        # info files on every request.
         session: AsyncDirectAgentSession =\
             AsyncDirectAgentSession(
                 agent_network=agent_network,
                 invocation_context=None,
                 metadata=metadata,
-                security_cfg=self.security_cfg)
+                security_cfg=self.security_cfg,
+                toolbox_factory=self.toolbox_factory)
         response_dict = await session.connectivity(request_dict)
 
         if do_log:
@@ -262,7 +275,7 @@ class AsyncAgentService:
             self.queues.sync_q.put(reservationist.get_queue())
 
         # Prepare
-        factory = ExternalAgentSessionFactory(use_direct=False)
+        factory = ExternalAgentSessionFactory(use_direct=True, network_storage_dict=self.network_storage_dict)
         invocation_context = SessionInvocationContext(
             self.agent_name,
             factory,
@@ -318,12 +331,6 @@ class AsyncAgentService:
             # even if generator is interrupted.
             invocation_context.finish_request()
             invocation_context = None
-
-        # Maybe report token accounting to a UsageLogger
-        token_dict: Dict[str, Any] = request_reporting.get("token_accounting")
-        if token_dict is not None:
-            usage_logger: WrappedUsageLogger = UsageLoggerFactory.create_usage_logger()
-            await usage_logger.log_usage(token_dict, request_metadata)
 
         # Iterator has finally signaled that there are no more responses to be had.
         # Log that we are done.

@@ -23,6 +23,7 @@ from contextlib import suppress
 from langchain_core.language_models.base import BaseLanguageModel
 
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
+from neuro_san.internals.utils.config_util import ConfigUtil
 
 
 class GeminiLlmPolicy(LlmPolicy):
@@ -46,6 +47,7 @@ class GeminiLlmPolicy(LlmPolicy):
         ChatGoogleGenerativeAI = self.resolver.resolve_class_in_module("ChatGoogleGenerativeAI",
                                                                        module_name="langchain_google_genai.chat_models",
                                                                        install_if_missing="langchain-google-genai")
+
         llm = ChatGoogleGenerativeAI(
             model=model_name,
             google_api_key=self.get_value_or_env(config, "google_api_key",
@@ -59,6 +61,13 @@ class GeminiLlmPolicy(LlmPolicy):
             top_p=config.get("top_p"),
             thinking_level=config.get("thinking_level"),
             thinking_budget=config.get("thinking_budget"),
+
+            # Streaming is configurable via the "streaming" key in llm_config; defaults
+            # to False so existing agents keep their long-standing non-streaming behavior.
+            # We pass streaming explicitly (rather than relying on LangChain's default) so
+            # that langchain_core._should_stream() picks up the configured value even when
+            # a streaming-aware callback handler is attached to the run manager.
+            streaming=ConfigUtil.get_bool(config, "streaming"),
 
             # If omitted, this defaults to the global verbose value,
             # accessible via langchain_core.globals.get_verbose():
@@ -75,7 +84,64 @@ class GeminiLlmPolicy(LlmPolicy):
             # global verbose value) so that the warning is never triggered.
             verbose=False,
         )
-        return llm
+        # Cosmetic only: silences google-genai's misleading "AFC is enabled" log banner.
+        # Behavior is identical with or without this.
+        return self._disable_afc(llm)
+
+    def _disable_afc(self, llm: BaseLanguageModel) -> Any:
+        """
+        Explicitly disable the google-genai SDK's Automatic Function Calling (AFC)
+        on the given llm, if the environment allows it.
+
+        AFC is a client-side convenience feature of the google-genai SDK that can
+        only auto-execute tools passed to the SDK as Python callables.  LangChain
+        binds tools as function declarations (schemas), so AFC can never execute
+        anything here -- function calling is governed entirely by neuro-san's own
+        agent loop.  However, when AFC is not explicitly disabled, the SDK logs a
+        misleading "AFC is enabled with max remote calls: 10." INFO banner on
+        LLM calls made with no tools bound (e.g. by agents with no down-chain
+        tools).  Disabling AFC is behaviorally a no-op that silences that banner.
+        See https://github.com/cognizant-ai-lab/neuro-san/issues/1096
+
+        ChatGoogleGenerativeAI has no constructor argument for this -- the setting
+        is only honored as a per-request kwarg -- hence bind().
+
+        Note that requests with tools bound do not inherit bind() kwargs, so they
+        do not carry the explicit disable.  They are banner-free regardless:
+        google-genai >= 1.48 skips its AFC path entirely for declaration-style
+        tools, and langchain-google-genai >= 4.1.2 (our floor) requires
+        google-genai >= 1.56.
+
+        :param llm: The ChatGoogleGenerativeAI instance to disable AFC on.
+        :return: llm.bind(...) with AFC disabled, which behaves like the original
+                llm.  The original llm is returned unchanged when the environment
+                cannot support the bind:
+                * Without the google-genai SDK (langchain-google-genai < 4.0 builds
+                  on google-ai-generativelanguage), there is no AFC to disable.
+                * On langchain-core < 1.4, bind() returns a generic RunnableBinding
+                  with no bind_tools() method, which would break agent creation for
+                  agents with tools.  There the cosmetic banner is left alone.
+        """
+        # Use lazy loading to prevent installing the world.
+        # google-genai comes with langchain-google-genai >= 4.0, so intentionally
+        # no install_if_missing here: an older stack has no AFC to disable.
+        # pylint: disable=invalid-name
+        AutomaticFunctionCallingConfig = self.resolver.resolve_class_in_module(
+            "AutomaticFunctionCallingConfig",
+            module_name="google.genai.types",
+            raise_if_not_found=False)
+        if AutomaticFunctionCallingConfig is None:
+            # No google-genai SDK, so no AFC (and no banner) to worry about.
+            return llm
+
+        # AFC can only be disabled per-request, so bind the setting onto every call.
+        bound: Any = llm.bind(automatic_function_calling=AutomaticFunctionCallingConfig(disable=True))
+        if not hasattr(bound, "bind_tools"):
+            # langchain-core < 1.4: bind() gives a generic RunnableBinding whose missing
+            # bind_tools() would break agent creation.  Keep the harmless banner instead.
+            return llm
+
+        return bound
 
     async def delete_resources(self):
         """
@@ -112,15 +178,19 @@ class GeminiLlmPolicy(LlmPolicy):
         # https://reference.langchain.com/python/integrations/langchain_google_genai/ChatGoogleGenerativeAI/
         # #langchain_google_genai.ChatGoogleGenerativeAI.async_client
 
+        # The llm may be a bind() wrapper around the actual chat model
+        # (see _disable_afc), in which case the clients live on its "bound" attribute.
+        base_llm: Any = getattr(self.llm, "bound", self.llm)
+
         # Close sync client
-        if self.llm.client is not None:
+        if base_llm.client is not None:
             with suppress(Exception):
-                self.llm.client.close()
+                base_llm.client.close()
 
         # Close async client
-        if self.llm.async_client is not None:
+        if base_llm.async_client is not None:
             with suppress(Exception):
-                await self.llm.async_client.aclose()
+                await base_llm.async_client.aclose()
 
         # Let's not do this again, shall we?
         self.llm = None

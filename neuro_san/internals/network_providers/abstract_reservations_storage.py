@@ -24,6 +24,8 @@ import logging
 import time
 import threading
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
 from neuro_san.internals.interfaces.startable import Startable
@@ -75,7 +77,8 @@ class AbstractReservationsStorage(ReservationsStorage, Startable):
             try:
                 self.expire_reservations()
             except Exception as exception:  # pylint: disable=broad-except
-                self._logger.info("%s: Expiration cleanup failed: %s", self._name, exception)
+                sensitive_logger = SensitiveLogger(self._logger)
+                sensitive_logger.info("%s: Expiration cleanup failed: %s", self._name, exception)
             elapsed = time.monotonic() - start
             self._logger.debug("%s: Expiration cleanup took %f seconds.", self._name, elapsed)
 
@@ -87,8 +90,8 @@ class AbstractReservationsStorage(ReservationsStorage, Startable):
                 self._stop_event.wait(timeout=sleep_time)
             # We're behind schedule; skip sleeping (prevents drift accumulation)
 
-    def add_reservations(self, reservations_dict: Dict[Reservation, Any],
-                         source: str = None):
+    async def add_reservations(self, reservations_dict: Dict[Reservation, Any],
+                               source: str = None):
         """
         Add a set of reservations for agent networks en-masse
 

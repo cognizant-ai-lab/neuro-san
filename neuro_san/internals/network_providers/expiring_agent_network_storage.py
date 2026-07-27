@@ -24,6 +24,8 @@ from typing import Tuple
 import logging
 import time
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
@@ -52,6 +54,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         self.reservations_table: Dict[str, Reservation] = {}
         # Table maps agent name to the latest time it was accessed:
         self.access_times: Dict[str, float] = {}
+        self.sizes: Dict[str, int] = {}
 
         # Maximum number of items to keep in storage. 0 or negative means unlimited.
         self.max_items: int = 0
@@ -100,7 +103,8 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             if self.base_storage is not None:
                 self.base_storage.start()
         except Exception as exc:  # pylint: disable=broad-except
-            self.logger.error("%s: Failed to start base storage: %s", self._name, exc)
+            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger.error("%s: Failed to start base storage: %s", self._name, exc)
             super().stop()
             raise
 
@@ -113,7 +117,8 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             if self.base_storage is not None and isinstance(self.base_storage, Startable):
                 self.base_storage.stop()
         except Exception as exc:  # pylint: disable=broad-except
-            self.logger.error("%s: Failed to stop base storage: %s", self._name, exc)
+            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger.error("%s: Failed to stop base storage: %s", self._name, exc)
             raise
 
     @staticmethod
@@ -123,8 +128,8 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         """
         return time.time() > reservation.get_expiration_time_in_seconds()
 
-    def add_reservations(self, reservations_dict: Dict[Reservation, Dict[str, Any]],
-                         source: str = None):
+    async def add_reservations(self, reservations_dict: Dict[Reservation, Dict[str, Any]],
+                               source: str = None):
         """
         Add a set of reservations for agent networks en-masse
 
@@ -137,7 +142,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
 
         if self.base_storage is not None:
             # If we have a source storage, then we need to add these reservations there first:
-            self.base_storage.add_reservations(reservations_dict, source=source)
+            await self.base_storage.add_reservations(reservations_dict, source=source)
 
         # Figure out what's new vs what's not.
         # Need to do this while holding the lock
@@ -154,6 +159,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
                 self.agents_table[agent_name] = agent_network
                 self.reservations_table[agent_name] = reservation
                 self.access_times[agent_name] = now
+                self.sizes[agent_name] = agent_network.get_size_in_bytes()
 
                 if is_new:
                     added.append(agent_name)
@@ -165,10 +171,14 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         for listener in self.listeners:
             for agent_name in added:
                 listener.agent_added(agent_name, self)
-                self.logger.info("%s: ADDED network for agent %s from %s", self._name, agent_name, source)
+                agent_size_in_bytes: int = self.sizes.get(agent_name, 0)
+                self.logger.info("%s: ADDED network for agent %s (%d bytes) from %s",
+                                 self._name, agent_name, agent_size_in_bytes, source)
             for agent_name in replaced:
                 listener.agent_modified(agent_name, self)
-                self.logger.info("%s: REPLACED network for agent %s from %s", self._name, agent_name, source)
+                agent_size_in_bytes: int = self.sizes.get(agent_name, 0)
+                self.logger.info("%s: REPLACED network for agent %s (%d bytes) from %s",
+                                 self._name, agent_name, agent_size_in_bytes, source)
 
         # Evict least recently used items if we exceeded the limit
         self.evict_lru_agent_networks()
@@ -225,6 +235,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         self.reservations_table.pop(agent_name, None)
         self.agents_table.pop(agent_name, None)
         self.access_times.pop(agent_name, None)
+        self.sizes.pop(agent_name, None)
 
     def evict_lru_agent_networks(self):
         """
@@ -275,6 +286,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
 
                 # Our agent network no longer exists.
                 return None
+
             # Reservation is still valid, so we can return the AgentNetworkProvider for this agent.
             agent_network: AgentNetwork = self.agents_table.get(agent_name, None)
             if agent_network is not None:
@@ -282,11 +294,13 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
                     self.access_times[agent_name] = time.time()
                 return FixedAgentNetworkProvider(agent_network)
             return None
+
         # We don't have a reservation for this agent,
         # so check the source storage if we have one:
         if self.base_storage is not None:
             reservation, agent_network = self.base_storage.get_one_reservation(agent_name)
             if reservation is not None and not self.is_expired(reservation):
+                agent_size_in_bytes: int = agent_network.get_size_in_bytes()
                 # We have a valid reservation for this agent in the source storage,
                 # so return the AgentNetworkProvider for this agent.
                 # Also cache this reservation and agent network locally:
@@ -295,11 +309,14 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
                     self.reservations_table[agent_name] = reservation
                     self.agents_table[agent_name] = agent_network
                     self.access_times[agent_name] = now
+                    self.sizes[agent_name] = agent_size_in_bytes
+
                 # Notify listeners about this state change:
                 # do it outside of internal lock
                 for listener in self.listeners:
                     listener.agent_added(agent_name, self)
-                    self.logger.info("ADDED network for agent %s from %s", agent_name, "base storage")
+                    self.logger.info("ADDED network for agent %s (%d bytes) from %s",
+                                     agent_name, agent_size_in_bytes, "base storage")
 
                 # Evict least recently used items if we exceeded the limit
                 self.evict_lru_agent_networks()

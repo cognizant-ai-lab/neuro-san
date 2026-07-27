@@ -63,9 +63,10 @@ class OpenFgaAuthorizer(AbstractAuthorizer):
         self.fga_client = await OpenFgaStoreCache.get_client()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
         """
         Closes a scoped session with an Authorizer.
+        :return: True to suppress exception. False or None to propagate exception.
         """
         await self.fga_client.close()
         self.fga_client = None

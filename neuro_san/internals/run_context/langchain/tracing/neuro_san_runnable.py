@@ -36,8 +36,11 @@ from langchain_core.runnables.passthrough import RunnablePassthrough
 from langchain_core.runnables.utils import Input
 from langchain_core.runnables.utils import Output
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.run_target import RunTarget
+from neuro_san.internals.interfaces.tracing_context import TracingContext
 from neuro_san.internals.journals.intercepting_journal import InterceptingJournal
 from neuro_san.internals.messages.origination import Origination
 from neuro_san.internals.utils.metadata_util import MetadataUtil
@@ -62,8 +65,11 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
 
     # Default logger
     logger: Optional[Logger] = None
+    sensitive_logger: Optional[SensitiveLogger] = None
 
     run_target: Optional[RunTarget] = None
+
+    tracing_context: Optional[TracingContext] = None
 
     # This guy needs to be a pydantic class and in order to have
     # any non-pydantic non-serializable members, we need to do this.
@@ -83,6 +89,7 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
         super().__init__(afunc=run_target.run_it, **kwargs)
 
         self.logger: Logger = getLogger(self.__class__.__name__)
+        self.sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
 
     # pylint: disable=redefined-builtin
     @override
@@ -93,10 +100,13 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
         **kwargs: Any | None,
     ) -> Other:
 
-        # Called by langchain infrastruture when a chain is invoked.
-        # Calling the super here means that run_it() below will be called
-        # as part of the RunnablePassthrough infrastructure.
-        _: Other = await super().ainvoke(input, config, **kwargs)
+        # Run afunc (run_it) inside _acall_with_config so it gets a real run_manager.
+        # RunnablePassthrough.ainvoke invokes afunc raw and only wraps a no-op identity
+        # in _acall_with_config, which leaves child ainvoke calls inside run_it() (the
+        # agent_chain, etc.) without a parent_run_id pointing at this runnable. Wrapping
+        # afunc directly collapses the empty wrapper span and lets children nest under
+        # this runnable in the trace.
+        await self._acall_with_config(self.afunc, input, config, **kwargs)
 
         # Collect intercepted outputs to report back to the tracing infrastructure.
         outputs: Dict[str, Any] = self.get_intercepted_outputs()
@@ -170,6 +180,10 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
         if runnable_metadata:
             runnable_config["metadata"] = runnable_metadata
 
+        # Augment the config per the TracingContext
+        if self.tracing_context:
+            runnable_config = self.tracing_context.augment_config(runnable_config)
+
         return runnable_config
 
     def prepare_tracing_metadata(self) -> Dict[str, Any]:
@@ -188,9 +202,7 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
         runnable_metadata.update(to_add)
 
         request_keys: str = os.getenv("AGENT_TRACING_METADATA_REQUEST_KEYS",
-                                      os.getenv("AGENT_USAGE_LOGGER_METADATA",
-                                                os.getenv("AGENT_FORWARDED_REQUEST_METADATA",
-                                                          "request_id user_id")))
+                                      os.getenv("AGENT_FORWARDED_REQUEST_METADATA", "request_id user_id"))
         request_metadata: Dict[str, Any] = self.invocation_context.get_metadata()
         to_add: Dict[str, Any] = MetadataUtil.minimize_metadata(request_metadata, request_keys)
         runnable_metadata.update(to_add)

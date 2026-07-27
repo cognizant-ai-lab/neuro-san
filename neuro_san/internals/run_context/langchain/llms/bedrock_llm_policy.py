@@ -21,6 +21,7 @@ from typing import Dict
 from langchain_core.language_models.base import BaseLanguageModel
 
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
+from neuro_san.internals.utils.config_util import ConfigUtil
 
 
 class BedrockLlmPolicy(LlmPolicy):
@@ -67,7 +68,14 @@ class BedrockLlmPolicy(LlmPolicy):
             rate_limiter=config.get("rate_limiter"),
             region_name=config.get("region_name"),
             stop_sequences=config.get("stop_sequences"),
-            streaming=True,
+            # Streaming is configurable via the "streaming" key in llm_config; defaults
+            # to False so existing agents keep their long-standing non-streaming behavior.
+            # We pass streaming explicitly (rather than relying on LangChain's default) so
+            # that langchain_core._should_stream() picks up the configured value even when
+            # a streaming-aware callback is attached. Token usage is collected from
+            # AIMessage.usage_metadata in LlmTokenCallbackHandler regardless of streaming
+            # mode.
+            streaming=ConfigUtil.get_bool(config, "streaming"),
             system_prompt_with_tools=config.get("system_prompt_with_tools"),
             tags=config.get("tags"),
             temperature=config.get("temperature"),

@@ -18,6 +18,7 @@ from typing import Any
 from typing import Dict
 
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
+from neuro_san.internals.interfaces.tracing_context import TracingContext
 from neuro_san.internals.run_context.factory.master_llm_factory import MasterLlmFactory
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
@@ -29,12 +30,14 @@ class RunContextFactory:
     Creates the correct kind of RunContext
     """
 
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     @staticmethod
     def create_run_context(parent_run_context: RunContext,
                            tool_caller: ToolCaller,
                            invocation_context: InvocationContext = None,
                            chat_context: Dict[str, Any] = None,
-                           config: Dict[str, Any] = None) \
+                           config: Dict[str, Any] = None,
+                           tracing_context: TracingContext = None) \
             -> RunContext:
         """
         Creates an appropriate RunContext
@@ -50,6 +53,7 @@ class RunContextFactory:
                 to carry on a previous conversation, possibly from a different server.
         :param config: The config dictionary which may or may not contain
                        keys for the context_type and default llm_config
+        :param tracing_context: A TracingContext for the request
         """
 
         # Initialize return value
@@ -80,11 +84,13 @@ class RunContextFactory:
         if context_type.startswith("langchain"):
             run_context = LangChainRunContext(default_llm_config, parent_run_context,
                                               tool_caller, use_invocation_context,
-                                              chat_context, use_config.get("middleware_config"))
+                                              chat_context, use_config.get("middleware_config"),
+                                              tracing_context=tracing_context)
         else:
             # Default case
             run_context = LangChainRunContext(default_llm_config, parent_run_context,
                                               tool_caller, use_invocation_context,
-                                              chat_context, use_config.get("middleware_config"))
+                                              chat_context, use_config.get("middleware_config"),
+                                              tracing_context=tracing_context)
 
         return run_context

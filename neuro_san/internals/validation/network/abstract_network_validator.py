@@ -18,6 +18,8 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
+
 from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
 
 
@@ -27,9 +29,40 @@ class AbstractNetworkValidator(DictionaryValidator):
     common policy thrown in.
     """
 
+    # Sentinel returned by _locate_parameters when the parameters key is
+    # absent entirely.  Callers that need to distinguish "key missing" from
+    # "key present but null" can compare against this with ``is``.
+    _PARAMS_NOT_FOUND: Any = object()
+
+    @staticmethod
+    def _locate_parameters(agent_spec: Any) -> Any:
+        """
+        Locate the parameters block on an agent spec, checking
+        ``function.parameters`` (OpenAI-style) first, then a top-level
+        ``parameters`` key.
+
+        :return: The raw value if the key exists (may be ``None`` for
+                 explicitly null entries), or ``_PARAMS_NOT_FOUND`` when
+                 no parameters key is present at all.
+        """
+        if not isinstance(agent_spec, dict):
+            return AbstractNetworkValidator._PARAMS_NOT_FOUND
+        function_block: Any = agent_spec.get("function")
+        if isinstance(function_block, dict) and "parameters" in function_block:
+            return function_block.get("parameters")
+        if "parameters" in agent_spec:
+            return agent_spec.get("parameters")
+        return AbstractNetworkValidator._PARAMS_NOT_FOUND
+
     def validate(self, candidate: Dict[str, Any]) -> List[str]:
         """
-        Validate the agent network
+        Validate the agent network.
+
+        Expects a fully-resolved config (commondefs substitution, defaults
+        injection, and name correction already applied). Production callers
+        get this from the restorer's filter chain; the parameter validators
+        get it from ParametersSchemaNetworkValidator, which filters once for
+        both of its phases rather than once per validator.
 
         :param candidate: The agent network or name -> spec dictionary to validate
         :return: A list of error messages
@@ -91,7 +124,7 @@ class AbstractNetworkValidator(DictionaryValidator):
                 tool.startswith("https://"))
 
     @staticmethod
-    def remove_dictionary_tools(down_chains: List[str]) -> List[str]:
+    def remove_dictionary_tools(down_chains: List[Any]) -> List[str]:
         """
         Sometimes tool lists have dictionary entries to support servers-based tools
         that need more than just a string.  For instance MCP servers.
@@ -103,3 +136,49 @@ class AbstractNetworkValidator(DictionaryValidator):
             if isinstance(tool, str):
                 safe_list.append(tool)
         return safe_list
+
+    @staticmethod
+    def coerce_tools(agent_spec: Dict[str, Any]) -> List[Any]:
+        """
+        Return the agent's `tools` as a list, coercing malformed values to empty.
+
+        Callers that traverse the connectivity graph (front-man detection,
+        reachability, missing nodes, cycles) should use this rather than reading
+        `tools` directly so they do not crash on `str + list` or iterate the
+        characters of a string. The shape contract this enforces matches
+        ToolsShapeValidator.validate_tools, which is the place that reports the
+        shape error to the user.
+
+        :param agent_spec: The agent specification dictionary
+        :return: The agent's `tools` list, or an empty list if the value is malformed.
+        """
+        no_tools: List[Any] = []
+        extractor = DictionaryExtractor(agent_spec)
+        tools: Any = extractor.get("tools", no_tools)
+        if isinstance(tools, list):
+            return tools
+        return no_tools
+
+    @staticmethod
+    def coerce_args_tools(agent_spec: Dict[str, Any]) -> List[Any]:
+        """
+        Return `args.tools` as a list of values, coercing malformed shapes to empty.
+
+        `args.tools` is the convention coded tools use to declare downstream agents.
+        It may be a dict of label -> agent name (the values are the agent names)
+        or a list of agent names; anything else is coerced to empty. The shape
+        contract this enforces matches ToolsShapeValidator.validate_args_tools,
+        which is the place that reports the shape error to the user.
+
+        :param agent_spec: The agent specification dictionary
+        :return: The combined list of agent names referenced by `args.tools`, or
+                empty if the value is missing or malformed.
+        """
+        no_tools: List[Any] = []
+        extractor = DictionaryExtractor(agent_spec)
+        args_tools: Any = extractor.get("args.tools", no_tools)
+        if isinstance(args_tools, dict):
+            return list(args_tools.values())
+        if isinstance(args_tools, list):
+            return args_tools
+        return no_tools

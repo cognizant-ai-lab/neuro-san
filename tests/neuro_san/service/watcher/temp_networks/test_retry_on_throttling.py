@@ -21,10 +21,11 @@ transient ThrottlingException on the first attempt is retried, the
 retry succeeds, and S3 ends up consistent.
 """
 from unittest.mock import patch
+import pytest
 
 from botocore.exceptions import ClientError
 
-from tests.neuro_san.service.watcher.temp_networks._test_base \
+from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
 
 
@@ -37,7 +38,8 @@ class TestRetryOnThrottling(S3ReservationsStorageTestBase):
     the put succeeds.
     """
 
-    def test_add_retries_on_throttling_then_succeeds(self):
+    @pytest.mark.asyncio
+    async def test_add_retries_on_throttling_then_succeeds(self):
         """
         On a transient ThrottlingException, add_reservations should
         retry the put_object call. The retry should succeed and S3
@@ -75,13 +77,12 @@ class TestRetryOnThrottling(S3ReservationsStorageTestBase):
         self.fake_s3.put_object = flaky_put
 
         # Skip the real exponential-backoff sleep so the test stays
-        # fast. Patches the module-local time.sleep symbol that
+        # fast. Patches the module-local asyncio.sleep symbol that
         # _do_with_retries uses.
         with patch(
-            "neuro_san.service.watcher.temp_networks."
-            "s3_reservations_storage.time.sleep"
+            "neuro_san.service.watcher.temp_networks.aws_async_client_worker.async_sleep"
         ):
-            self.storage.add_reservations({reservation: agent_spec})
+            await self.storage.add_reservations({reservation: agent_spec})
 
         # put_object was invoked exactly twice: once that threw, once
         # that succeeded. Catches "no retry happened" (count == 1) and

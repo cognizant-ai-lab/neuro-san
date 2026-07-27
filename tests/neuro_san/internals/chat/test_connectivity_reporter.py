@@ -18,12 +18,16 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+import os
+
 from unittest import TestCase
+from unittest.mock import patch
 
 from neuro_san import REGISTRIES_DIR
 from neuro_san.internals.chat.connectivity_reporter import ConnectivityReporter
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
+from neuro_san.internals.run_context.langchain.toolbox.toolbox_factory import ToolboxFactory
 
 
 class TestConnectivityReporter(TestCase):
@@ -53,9 +57,13 @@ class TestConnectivityReporter(TestCase):
         Tests the connectivity of the hello world hocon
         """
         agent_network: AgentNetwork = self.get_sample_registry("hello_world.hocon")
-        reporter = ConnectivityReporter(agent_network)
 
-        messages: List[Dict[str, Any]] = reporter.report_network_connectivity()
+        # The reporter's self-built factory reads AGENT_TOOLBOX_INFO_FILE at
+        # construction. Keep the test hermetic against the environment.
+        with patch.dict(os.environ):
+            os.environ.pop("AGENT_TOOLBOX_INFO_FILE", None)
+            reporter = ConnectivityReporter(agent_network)
+            messages: List[Dict[str, Any]] = reporter.report_network_connectivity()
         self.assertEqual(len(messages), 2)
 
         # First guy is the front-man and he only has a single tool
@@ -76,3 +84,84 @@ class TestConnectivityReporter(TestCase):
         tools: List[str] = connectivity.get("tools")
         self.assertIsNotNone(tools)
         self.assertEqual(len(tools), 0)
+
+    def test_injected_toolbox_factory_is_used(self):
+        """
+        Tests that a toolbox factory passed to the constructor is used as-is
+        rather than being replaced by one built from the inspector's config,
+        and that reporting loads it.
+        """
+        agent_network: AgentNetwork = self.get_sample_registry("hello_world.hocon")
+        toolbox_factory = ToolboxFactory()
+        # Keep the test hermetic: no user toolbox info file from the environment.
+        toolbox_factory.toolbox_info_file = None
+        reporter = ConnectivityReporter(agent_network, toolbox_factory)
+        self.assertIs(reporter.toolbox_factory, toolbox_factory)
+
+        messages: List[Dict[str, Any]] = reporter.report_network_connectivity()
+        self.assertEqual(len(messages), 2)
+        self.assertTrue(toolbox_factory.loaded)
+
+    def test_injected_toolbox_factory_data_is_consulted(self):
+        """
+        Tests that display_as information comes from the injected factory's
+        toolbox infos, not from a factory built behind the scenes.
+        """
+        agent_network: AgentNetwork = self.get_sample_registry("requests_get.hocon")
+        toolbox_factory = ToolboxFactory()
+        # Keep the test hermetic: no user toolbox info file from the environment.
+        toolbox_factory.toolbox_info_file = None
+        # Seed distinctive tool info and mark loaded so load() keeps it as-is.
+        # A self-built or bundled factory would report "langchain_tool" instead.
+        toolbox_factory.toolbox_infos = {
+            "requests_get": {
+                "class": "mock_package.mock_module.MockTool",
+                "display_as": "injected_tool",
+            }
+        }
+        toolbox_factory.loaded = True
+
+        reporter = ConnectivityReporter(agent_network, toolbox_factory)
+        messages: List[Dict[str, Any]] = reporter.report_network_connectivity()
+
+        display_as_by_origin: Dict[str, str] = {
+            message.get("origin"): message.get("display_as") for message in messages
+        }
+        self.assertEqual(display_as_by_origin.get("web_browse_tool"), "injected_tool")
+
+    def test_assemble_tool_list_args_tools_dict(self):
+        """
+        Tests that an agent referencing downstream agents via `args.tools`
+        as a dict (the coded-tool convention) has those references included
+        in the assembled tool list. Previously the dict.values() result was
+        a dict_values view that failed the isinstance(args_tools, List)
+        check, silently dropping all coded-tool down-chains.
+        """
+        agent_spec: Dict[str, Any] = {
+            "args": {"tools": {"helper": "agent_a", "fallback": "agent_b"}},
+        }
+        tools: List[str] = ConnectivityReporter.assemble_tool_list(agent_spec)
+        self.assertEqual(sorted(tools), ["agent_a", "agent_b"])
+
+    def test_assemble_tool_list_tools_as_string_does_not_iterate_chars(self):
+        """
+        Tests that a malformed `tools` field (string instead of list) does
+        not silently iterate the string character-by-character. coerce_tools
+        treats it as empty.
+        """
+        agent_spec: Dict[str, Any] = {"tools": "agent_a"}
+        tools: List[str] = ConnectivityReporter.assemble_tool_list(agent_spec)
+        self.assertEqual([], tools)
+
+    def test_assemble_tool_list_dict_element_does_not_crash(self):
+        """
+        Tests that a dict element in `tools` (e.g., an inline MCP server
+        config) is filtered out instead of raising TypeError: unhashable
+        type: 'dict' when added to the dedup set. Other string entries are
+        retained.
+        """
+        agent_spec: Dict[str, Any] = {
+            "tools": ["agent_a", {"server": "mcp_server"}, "agent_b"],
+        }
+        tools: List[str] = ConnectivityReporter.assemble_tool_list(agent_spec)
+        self.assertEqual(tools, ["agent_a", "agent_b"])

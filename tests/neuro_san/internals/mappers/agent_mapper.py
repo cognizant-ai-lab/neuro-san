@@ -23,6 +23,10 @@ from neuro_san.internals.graph.persistence.agent_standalone_mapper import AgentS
 
 
 class TestMapper(unittest.TestCase):
+    """
+    Tests different file mappers
+    """
+
     def test_posix_mapping(self):
         """
         Tests mapping on POSIX platforms

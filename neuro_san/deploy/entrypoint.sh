@@ -34,6 +34,32 @@ then
 fi
 export PYTHONPATH
 
+echo "Configuration information:"
+grep MemTotal < /proc/meminfo
+if [ -f /sys/fs/cgroup/memory/memory.limit_in_bytes ]
+then
+    cat /sys/fs/cgroup/memory/memory.limit_in_bytes
+fi
+if [ -f /sys/fs/cgroup/memory.max ]
+then
+    cat /sys/fs/cgroup/memory.max
+fi
+
+if command -v lscpu >/dev/null 2>&1
+then
+    lscpu | grep "^CPU(s):"
+fi
+if [ -f /sys/fs/cgroup/cpu/cpu.cfs_quota_us ]
+then
+    cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us
+fi
+if [ -f /sys/fs/cgroup/cpu.max ]
+then
+    cat /sys/fs/cgroup/cpu.max
+fi
+
+ulimit -a
+
 echo "Toolchain:"
 ${PYTHON} --version
 ${PIP} --version
@@ -41,6 +67,8 @@ ${PIP} freeze
 
 PACKAGE_INSTALL=${PACKAGE_INSTALL:-.}
 echo "PACKAGE_INSTALL is ${PACKAGE_INSTALL}"
+
+echo "AGENT_SESSION_REQUIRE_HTTPS = ${AGENT_SESSION_REQUIRE_HTTPS}"
 
 echo "Starting service with args '$1'..."
 ${PYTHON} "${PACKAGE_INSTALL}"/neuro_san/service/main_loop/server_main_loop.py "$@"

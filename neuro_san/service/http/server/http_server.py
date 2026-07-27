@@ -22,20 +22,24 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+import asyncio
 import json
+import os
 import random
-import threading
+from threading import Lock
 
 import tornado
 
 from leaf_common.serialization.util.text_file_reader import TextFileReader
 
+from neuro_san.internals.utils.config_util import ConfigUtil
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.generic.agent_server_logging import AgentServerLogging
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
+from neuro_san.service.http.config.http_server_config import ENV_HEALTH_PROBE_PORT
 from neuro_san.service.http.config.http_server_config import HttpServerConfig
 from neuro_san.service.http.handlers.concierge_handler import ConciergeHandler
 from neuro_san.service.http.handlers.connectivity_handler import ConnectivityHandler
@@ -43,8 +47,11 @@ from neuro_san.service.http.handlers.function_handler import FunctionHandler
 from neuro_san.service.http.handlers.health_check_handler import HealthCheckHandler
 from neuro_san.service.http.handlers.openapi_publish_handler import OpenApiPublishHandler
 from neuro_san.service.http.handlers.streaming_chat_handler import StreamingChatHandler
+from neuro_san.service.http.handlers.profiler_control_handler import ProfilerControlHandler
+from neuro_san.service.http.handlers.snapshot_handler import SnapshotHandler
 from neuro_san.service.http.logging.http_logger import HttpLogger
 from neuro_san.service.http.server.agent_authorization_policy import AgentAuthorizationPolicy
+from neuro_san.service.http.server.health_probe_server import HealthProbeServer
 from neuro_san.service.http.server.http_server_app import HttpServerApp
 from neuro_san.service.http.server.resources_usage_logger import ResourcesUsageLogger
 from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
@@ -52,6 +59,7 @@ from neuro_san.service.interfaces.agent_server import AgentServer
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
 from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.service.mcp.handlers.mcp_root_handler import McpRootHandler
+from neuro_san.service.utils.loop_timeline_tracer import LoopTimelineTracer
 from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.service.utils.server_status import ServerStatus
 
@@ -119,13 +127,15 @@ class HttpServer(AgentStateListener):
         self.logger = HttpLogger(self.forwarded_request_metadata, self.logging_config)
         self.allowed_agents: Dict[str, AsyncAgentServiceProvider] = {}
         self.authorization_policy: AgentAuthorizer = AgentAuthorizationPolicy(self.allowed_agents)
-        self.lock = threading.Lock()
+        self.lock = Lock()
 
         # Add listener to handle adding per-agent http service
         # (services map is defined by self.allowed_agents dictionary)
         network_storage_dict: Dict[str, AgentNetworkStorage] = self.server_context.get_network_storage_dict()
         for network_storage in network_storage_dict.values():
             network_storage.add_listener(self)
+
+        self.server_context.set_agent_authorizer(self.authorization_policy)
 
     def start(self, startables: List[Startable]):
         """
@@ -151,6 +161,26 @@ class HttpServer(AgentStateListener):
                 ResourcesUsageLogger(
                     self.server_config.http_server_monitor_interval_seconds, self.http_port, self.logger)
             startables.append(resources_logger)
+
+        # Add the isolated health-probe server. It binds a dedicated port
+        # (default 8081, configurable via AGENT_HEALTH_PROBE_PORT; 0 disables)
+        # and serves /, /healthz, /readyz, /livez on its own asyncio loop in
+        # a dedicated thread -- so probes stay fast even when the main
+        # Tornado loop is saturated by request work.
+        probe_port: int = self.resolve_health_probe_port()
+        if probe_port == self.http_port:
+            self.logger.warning({},
+                                "Health probe port %d is the same as main HTTP port; "
+                                "dedicated probe server is not started, "
+                                "but /healthz, /readyz, /livez remain registered on the main port", probe_port)
+            probe_port = -1
+        if probe_port > 0:
+            startables.append(HealthProbeServer(
+                port=probe_port,
+                server_context=self.server_context,
+                forwarded_request_metadata=self.forwarded_request_metadata,
+                logging_config=self.logging_config,
+            ))
 
         # Bind the socket with a custom backlog
         server.bind(self.http_port, backlog=self.server_config.http_connections_backlog)
@@ -187,8 +217,127 @@ class HttpServer(AgentStateListener):
                             {}, "Failed to start %s: %s",
                             startable.__class__.__name__, str(exception))
 
+        # Optionally enable asyncio debug mode + slow-callback warnings on the
+        # Tornado IOLoop's underlying asyncio loop. Off by default to avoid the
+        # ~5-10% debug-mode overhead in production. Done after server.start()
+        # forks so each worker enables it in its own loop.
+        self._maybe_enable_asyncio_debug()
+
+        # Optionally install the sys.setprofile-based loop timeline tracer.
+        # Must be done on the Tornado loop thread, so we install it here --
+        # this method runs on that thread and IOLoop.current().start() below
+        # runs synchronously on the same thread.
+        self._maybe_start_loop_timeline_tracer()
+
         tornado.ioloop.IOLoop.current().start()
         self.logger.info({}, "Http server stopped.")
+
+    def _maybe_enable_asyncio_debug(self) -> None:
+        """
+        Enable asyncio debug mode and the slow-callback warning on the
+        current Tornado IOLoop's asyncio loop when requested via env vars.
+
+        Controls:
+          AGENT_ASYNCIO_DEBUG (bool, default false)
+              When truthy, enables loop.set_debug(True). This turns on
+              additional asyncio diagnostics including the slow-callback
+              warning. Adds ~5-10% loop overhead -- leave off in production
+              unless actively diagnosing.
+          AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS (int, default 100)
+              Threshold in milliseconds. Any callback running longer than
+              this on the Tornado loop will be logged at WARNING via the
+              "asyncio" logger, with the source location of the offending
+              callback.
+
+        Must be called after server.start() (i.e. after fork) so each
+        worker process configures its own loop.
+        """
+        if not ConfigUtil.get_bool(os.environ, "AGENT_ASYNCIO_DEBUG"):
+            return
+
+        raw_threshold: str = os.environ.get("AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS", "100")
+        try:
+            threshold_ms: int = int(raw_threshold)
+        except ValueError:
+            self.logger.warning({},
+                                "Invalid AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS=%r; falling back to 100ms",
+                                raw_threshold)
+            threshold_ms = 100
+
+        io_loop = tornado.ioloop.IOLoop.current()
+        loop = getattr(io_loop, "asyncio_loop", None) or asyncio.get_event_loop()
+        threshold_ms = max(threshold_ms, 1)
+        loop.set_debug(True)
+        loop.slow_callback_duration = threshold_ms / 1000.0
+        self.logger.info(
+            {},
+            "asyncio debug enabled on Tornado loop; "
+            "slow_callback_duration=%dms (warns via 'asyncio' logger)",
+            threshold_ms,
+        )
+
+    # pylint: disable=attribute-defined-outside-init
+    def _maybe_start_loop_timeline_tracer(self) -> None:
+        """
+        Start a LoopTimelineTracer on this thread if AGENT_LOOP_TIMELINE is
+        truthy. The tracer records per-callback timing on the Tornado event
+        loop -- a linear timeline of what ran and when.
+
+        Environment variables:
+          AGENT_LOOP_TIMELINE (bool, default false)
+              Enables the tracer.
+          AGENT_LOOP_TIMELINE_MAX_EVENTS (int, default 100000)
+              Ring buffer size. Older events drop off as new ones arrive.
+          AGENT_LOOP_TIMELINE_DUMP_PATH (str, default empty)
+              If non-empty, register an atexit hook that writes the buffered
+              timeline as JSONL to this path on graceful shutdown. When left
+              empty the timeline stays in-memory only; snapshot it manually
+              from a debug endpoint or signal handler.
+
+        The tracer adds ~5-10% loop overhead; keep off in production unless
+        actively diagnosing.
+        """
+        if not ConfigUtil.get_bool(os.environ, "AGENT_LOOP_TIMELINE"):
+            return
+
+        try:
+            max_events: int = int(os.environ.get(
+                "AGENT_LOOP_TIMELINE_MAX_EVENTS", str(LoopTimelineTracer.DEFAULT_MAX_EVENTS)))
+        except ValueError:
+            max_events = LoopTimelineTracer.DEFAULT_MAX_EVENTS
+        if max_events <= 0:
+            max_events = LoopTimelineTracer.DEFAULT_MAX_EVENTS
+
+        self._loop_timeline_tracer = LoopTimelineTracer(max_events=max_events)
+
+        dump_path: str = os.environ.get("AGENT_LOOP_TIMELINE_DUMP_PATH", "").strip()
+        if dump_path:
+            self._loop_timeline_tracer.register_atexit_dump(dump_path)
+            self.logger.info(
+                {}, "LoopTimelineTracer will dump to %s on shutdown", dump_path)
+
+        # Start LAST so the tracer captures all callbacks executed after the loop starts running.
+        self._loop_timeline_tracer.start()
+
+    def resolve_health_probe_port(self) -> int:
+        """
+        Resolve the port for the isolated HealthProbeServer.
+
+        Reads the AGENT_HEALTH_PROBE_PORT env var. Non-numeric values fall
+        back to the default (8081), and a value of 0 (or negative) disables
+        the separate probe server, in which case k8s / LB probes should hit
+        the main port's registered health handlers.
+
+        :return: A non-negative int. 0 disables the probe server.
+        """
+        raw: str = os.environ.get(ENV_HEALTH_PROBE_PORT, str(self.server_config.http_probe_port))
+        try:
+            value: int = int(raw)
+        except ValueError:
+            self.logger.warning({}, "Invalid %s=%r; falling back to default probe port %d",
+                                ENV_HEALTH_PROBE_PORT, raw, self.server_config.http_probe_port)
+            return self.server_config.http_probe_port
+        return max(value, 0)
 
     def make_app(self, requests_limit: int, concurrent_requests_limit: int, logger: EventLoopLogger):
         """
@@ -198,17 +347,24 @@ class HttpServer(AgentStateListener):
         enable_http_handlers: bool = self.server_context.get_server_status().http_service.is_requested()
 
         request_initialize_data: Dict[str, Any] = self.build_request_data()
+        # Resolve library versions once here; the same dict is passed to every
+        # health handler on both the main port and the isolated probe server so
+        # per-request probes never re-run importlib.metadata lookups.
+        server_status = self.server_context.get_server_status()
+        versions: Dict[str, Any] = server_status.get_versions()
         live_request_initialize_data: Dict[str, Any] = {
             "forwarded_request_metadata": self.forwarded_request_metadata,
-            "server_status": self.server_context.get_server_status(),
+            "server_status": server_status,
             "op": "live",
-            "logging_config": self.logging_config
+            "logging_config": self.logging_config,
+            "versions": versions,
         }
         ready_request_initialize_data: Dict[str, Any] = {
             "forwarded_request_metadata": self.forwarded_request_metadata,
-            "server_status": self.server_context.get_server_status(),
+            "server_status": server_status,
             "op": "ready",
-            "logging_config": self.logging_config
+            "logging_config": self.logging_config,
+            "versions": versions,
         }
         handlers = []
         # Health check handlers are enabled always
@@ -216,6 +372,12 @@ class HttpServer(AgentStateListener):
         handlers.append(("/healthz", HealthCheckHandler, ready_request_initialize_data))
         handlers.append(("/readyz", HealthCheckHandler, ready_request_initialize_data))
         handlers.append(("/livez", HealthCheckHandler, live_request_initialize_data))
+
+        # Setup handler for profiler control
+        handlers.append(("/profiler", ProfilerControlHandler))
+
+        # Setup handler for system snapshot query:
+        handlers.append(("/resources_utilization", SnapshotHandler, {"http_port": self.http_port}))
 
         if enable_http_handlers:
             handlers.append(("/api/v1/list", ConciergeHandler, request_initialize_data))
@@ -303,9 +465,10 @@ class HttpServer(AgentStateListener):
             raise ValueError(f"Failed to load '{self.openapi_service_spec_path}'") from exc
 
         return {
-            "agent_policy": self.authorization_policy,
+            "agent_policy": self.authorization_policy,  # now redundant cuz server_context has it
             "forwarded_request_metadata": self.forwarded_request_metadata,
             "openapi_service_spec": open_api_dict,
             "server_context": self.server_context,
-            "logging_config": self.logging_config
+            "logging_config": self.logging_config,
+            "keep_alive_interval_seconds": self.server_config.stream_keep_alive_with_progress_interval_seconds,
         }

@@ -17,10 +17,10 @@
 from typing import Any
 from typing import Dict
 
-from neuro_san.internals.graph.interfaces.agent_tool_factory import AgentToolFactory
-from neuro_san.internals.graph.interfaces.callable_activation import CallableActivation
 from neuro_san.internals.graph.registry.activation_factory import ActivationFactory
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
+from neuro_san.internals.interfaces.callable_activation import CallableActivation
 from neuro_san.internals.interfaces.front_man import FrontMan
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
@@ -117,3 +117,9 @@ class AgentToolRegistry(AgentNetworkInspector, AgentToolFactory):
         :return: The absolute path of agent llm info file for llm extension.
         """
         return self.agent_network.get_agent_llm_info_file()
+
+    def get_size_in_bytes(self) -> int:
+        """
+        :return: The size in bytes of this AgentNetwork
+        """
+        return self.agent_network.get_size_in_bytes()

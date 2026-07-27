@@ -21,6 +21,7 @@ from typing import Type
 
 from langchain_core.language_models.base import BaseLanguageModel
 
+from neuro_san.internals.run_context.langchain.llms.anthropic_bedrock_llm_policy import AnthropicBedrockLlmPolicy
 from neuro_san.internals.run_context.langchain.llms.anthropic_llm_policy import AnthropicLlmPolicy
 from neuro_san.internals.run_context.langchain.llms.azure_llm_policy import AzureLlmPolicy
 from neuro_san.internals.run_context.langchain.llms.bedrock_llm_policy import BedrockLlmPolicy
@@ -31,6 +32,7 @@ from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources impo
 from neuro_san.internals.run_context.langchain.llms.nvidia_llm_policy import NvidiaLlmPolicy
 from neuro_san.internals.run_context.langchain.llms.ollama_llm_policy import OllamaLlmPolicy
 from neuro_san.internals.run_context.langchain.llms.openai_llm_policy import OpenAILlmPolicy
+from neuro_san.internals.run_context.langchain.llms.openrouter_llm_policy import OpenRouterLlmPolicy
 
 
 class StandardLangChainLlmFactory(LangChainLlmFactory):
@@ -45,7 +47,7 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         "temperature"               A float "temperature" value with which to
                                     initialize the chat model.  In general,
                                     higher temperatures yield more random results.
-                                    Default if not specified is 0.7
+                                    Default if not specified is the provider's default.
 
         "max_tokens"                The maximum number of tokens to use in
                                     get_max_prompt_tokens(). By default, this comes from
@@ -70,11 +72,13 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         if self.class_to_llm_policy_type is None:
             self.class_to_llm_policy_type = {
                 "anthropic": AnthropicLlmPolicy,
+                "anthropic-bedrock": AnthropicBedrockLlmPolicy,
                 "azure-openai": AzureLlmPolicy,
                 "bedrock": BedrockLlmPolicy,
                 "gemini": GeminiLlmPolicy,
                 "nvidia": NvidiaLlmPolicy,
                 "openai": OpenAILlmPolicy,
+                "openrouter": OpenRouterLlmPolicy,
                 "ollama": OllamaLlmPolicy,
             }
 

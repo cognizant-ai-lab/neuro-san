@@ -19,7 +19,9 @@ S3ReservationsStorage.add_reservations accepts a dict of multiple
 {Reservation: agent_spec} pairs. This module exercises the for-loop
 that iterates over those pairs.
 """
-from tests.neuro_san.service.watcher.temp_networks._test_base \
+import pytest
+
+from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
 
 
@@ -31,7 +33,8 @@ class TestMultipleReservations(S3ReservationsStorageTestBase):
     body is never iterated more than once. This test fills that gap.
     """
 
-    def test_add_writes_each_reservation_independently(self):
+    @pytest.mark.asyncio
+    async def test_add_writes_each_reservation_independently(self):
         """
         One call to add_reservations({r1: s1, r2: s2, r3: s3}) writes
         three distinct S3 objects, one per reservation, each with the
@@ -55,7 +58,7 @@ class TestMultipleReservations(S3ReservationsStorageTestBase):
         spec_c["llm_config"]["model_name"] = "gemini-2.0-flash"
 
         # Single batch call - the entire interaction with the storage.
-        self.storage.add_reservations(
+        await self.storage.add_reservations(
             {res_a: spec_a, res_b: spec_b, res_c: spec_c}
         )
 

@@ -17,12 +17,31 @@
 
 from typing import Dict
 from typing import List
+from typing import Optional
 
 # Dictionary with provider key env var -> strings to look for
 API_KEY_EXCEPTIONS: Dict[str, List] = {
     "OPENAI_API_KEY": ["OPENAI_API_KEY", "Incorrect API key provided"],
     "ANTHROPIC_API_KEY": ["ANTHROPIC_API_KEY", "anthropic_api_key", "invalid x-api-key", "credit balance"],
     "GOOGLE_API_KEY": ["Application Default Credentials", "default credentials", "Gemini: 400 API key not valid"],
+
+    # OpenRouter surfaces a few distinct families of failures that the friendly
+    # OPENROUTER_API_KEY guidance addresses (matches the
+    # "1) double-check key / 2) get a key / 3) low credit balance" trio):
+    #   * Construction-time: ChatOpenRouter's pydantic validator raises with the
+    #     literal text "OPENROUTER_API_KEY must be set." (wrapped in a
+    #     pydantic_core.ValidationError, which is in API_KEY_ERRORS).
+    #   * Runtime 401 (UnauthorizedResponseError): str() is just the API's error
+    #     message — typically "Missing Authentication header" when no key was
+    #     sent and provider-defined strings (e.g. "No auth credentials found")
+    #     when one was sent but rejected.
+    #   * Runtime 402 (PaymentRequiredResponseError): "Insufficient credits..."
+    #     with a link to https://openrouter.ai/settings/credits. The same low-
+    #     balance bullet in the friendly message applies; matching "Insufficient
+    #     credits" plus the OpenRouter settings URL keeps the catch tight.
+    "OPENROUTER_API_KEY": ["OPENROUTER_API_KEY", "openrouter_api_key",
+                           "Missing Authentication header", "No auth credentials found",
+                           "Insufficient credits", "openrouter.ai/settings/credits"],
 
     # Azure OpenAI requires several parameters; all can be set via environment variables
     # except "deployment_name", which must be provided explicitly.
@@ -52,7 +71,7 @@ class ApiKeyErrorCheck:
     """
 
     @staticmethod
-    def check_for_api_key_exception(exception: Exception) -> str:
+    def check_for_api_key_exception(exception: Exception) -> Optional[str]:
         """
         :param exception: An exception to check
         :return: A more helpful exception message if it relates to an API key or None
@@ -89,7 +108,51 @@ Some things to try:
    on the same machine making this request.
 """
 
+        # No catalogue hit. If this is a pydantic ValidationError, the raw
+        # str(exception) can include `input_value=<the user's input>` — which
+        # would leak any user-supplied API key value. Rebuild the message from
+        # the structured .errors() data instead, omitting the raw input entirely.
+        if ApiKeyErrorCheck._is_pydantic_validation_error(exception):
+            return ApiKeyErrorCheck._format_redacted_pydantic_error(exception)
+
         return None
+
+    @staticmethod
+    def get_safe_log_message(exception: Exception) -> str:
+        """
+        Return a log-safe representation of the exception. For pydantic
+        ValidationErrors, returns the structured-error-derived message
+        (with `input` redacted) so user-supplied values can't leak into
+        server logs. For all other exception types, returns str(exception),
+        which preserves useful debug detail (status codes, request IDs).
+        """
+        if ApiKeyErrorCheck._is_pydantic_validation_error(exception):
+            return ApiKeyErrorCheck._format_redacted_pydantic_error(exception)
+        return str(exception)
+
+    @staticmethod
+    def _is_pydantic_validation_error(exception: Exception) -> bool:
+        """
+        Duck-typed check for pydantic_core.ValidationError to avoid a hard import
+        on pydantic_core from this util module.
+        """
+        cls = type(exception)
+        return cls.__name__ == "ValidationError" and cls.__module__.startswith("pydantic")
+
+    @staticmethod
+    def _format_redacted_pydantic_error(exception: Exception) -> str:
+        """
+        Build a message from a pydantic ValidationError using its structured
+        .errors() data, redacting the 'input' field entirely so user-supplied
+        values can't leak.
+        """
+        parts: List[str] = []
+        for err in exception.errors():
+            loc: str = ".".join(str(x) for x in err.get("loc", ()))
+            msg: str = err.get("msg", "")
+            err_type: str = err.get("type", "")
+            parts.append(f"{loc}: {msg} [type={err_type}, input=<redacted>]")
+        return f"{len(parts)} validation error(s): " + ";\n".join(parts)
 
     @staticmethod
     def check_for_internal_error(exception_traceback: str) -> bool:

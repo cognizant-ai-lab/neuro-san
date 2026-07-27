@@ -23,6 +23,7 @@ from logging import Logger
 from leaf_common.config.config_filter import ConfigFilter
 
 from neuro_san.internals.interfaces.storage_class import StorageClass
+from neuro_san.internals.graph.persistence.manifest_dict_filter_chain import ManifestDictFilterChain
 
 
 class ManifestDictConfigFilter(ConfigFilter):
@@ -64,20 +65,22 @@ class ManifestDictConfigFilter(ConfigFilter):
 
         for key, value in basis_config.items():
 
+            # Default template
             expanded_value: Dict[str, Any] = {
                 "serve": True,
                 StorageClass.PUBLIC: True,
-                "mcp": self.MCP_DEFAULT_MODE
+                "mcp": self.MCP_DEFAULT_MODE,
+                "periodic": False
             }
 
             # Traditional, easy entry in a manifest file.
             if isinstance(value, bool):
                 if not value:
-                    expanded_value = {
+                    updated_value: Dict[str, Any] = {
                         "serve": False,
-                        StorageClass.PUBLIC: False,
-                        "mcp": self.MCP_DEFAULT_MODE
+                        StorageClass.PUBLIC: False
                     }
+                    expanded_value.update(updated_value)
             elif isinstance(value, Dict):
                 expanded_value = value
             else:
@@ -86,12 +89,8 @@ class ManifestDictConfigFilter(ConfigFilter):
                                     key, self.manifest_file)
                 continue
 
-            # MCP designated entries are considered public by default.
-            if "mcp" not in expanded_value:
-                expanded_value["mcp"] = False
-            if expanded_value["mcp"]:
-                expanded_value[StorageClass.PUBLIC] = True
-
-            filtered[key] = expanded_value
+            # Apply the filter chain to the basis dictionary
+            entry_filter_chain = ManifestDictFilterChain(self.manifest_file, key)
+            filtered[key] = entry_filter_chain.filter_config(expanded_value)
 
         return filtered

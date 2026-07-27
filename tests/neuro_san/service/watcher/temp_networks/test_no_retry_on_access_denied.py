@@ -24,9 +24,11 @@ nothing retrievable through the public read path.
 """
 from unittest.mock import patch
 
+import pytest
+
 from botocore.exceptions import ClientError
 
-from tests.neuro_san.service.watcher.temp_networks._test_base \
+from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
 
 
@@ -37,7 +39,8 @@ class TestNoRetryOnAccessDenied(S3ReservationsStorageTestBase):
     they document the storage's full retry policy.
     """
 
-    def test_add_does_not_retry_on_access_denied(self):
+    @pytest.mark.asyncio
+    async def test_add_does_not_retry_on_access_denied(self):
         """
         On AccessDenied (HTTP 403 with error code AccessDenied -
         what real S3 returns for permission errors), add_reservations
@@ -55,27 +58,28 @@ class TestNoRetryOnAccessDenied(S3ReservationsStorageTestBase):
         # (AccessDenied is not in retryable_codes; 403 is not 5xx).
         call_log = {"count": 0}
 
+        template_error = ClientError(
+            {
+                "Error": {"Code": "AccessDenied"},
+                "ResponseMetadata": {"HTTPStatusCode": 403},
+            },
+            "PutObject",
+        )
+
         # pylint: disable=invalid-name,unused-argument
         def denied_put(Bucket, Key, Body, ContentType):
             call_log["count"] += 1
-            raise ClientError(
-                {
-                    "Error": {"Code": "AccessDenied"},
-                    "ResponseMetadata": {"HTTPStatusCode": 403},
-                },
-                "PutObject",
-            )
+            raise template_error
 
-        self.fake_s3.put_object = denied_put
+        self.fake_async_s3.put_object = denied_put
 
         # Skip backoff sleep defensively. If a regression makes
         # AccessDenied retryable, we don't want the test to hang.
         with patch(
-            "neuro_san.service.watcher.temp_networks."
-            "s3_reservations_storage.time.sleep"
+            "neuro_san.service.watcher.temp_networks.aws_async_client_worker.async_sleep"
         ):
             with self.assertRaises(ClientError) as ctx:
-                self.storage.add_reservations({reservation: agent_spec})
+                await self.storage.add_reservations({reservation: agent_spec})
 
         # The original error code is preserved on the way up. Catches
         # bugs where the storage swallows or wraps the error in a

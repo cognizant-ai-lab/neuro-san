@@ -212,3 +212,114 @@ class TestLangChainMcpAdapter:
 
         for tool in result:
             assert "langchain_tool" in tool.tags
+
+    @pytest.mark.asyncio
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
+    async def test_get_mcp_tools_wraps_tool_errors(self, mock_client_class, adapter, caplog):
+        """A tool whose MCP call raises (e.g. an HTTP 504 from a gateway timeout)
+        must return a concise "Error: ..." tool output instead of propagating the
+        exception and aborting the whole agent chain. The full traceback stays in
+        the server log. See https://github.com/cognizant-ai-lab/neuro-san/issues/1097"""
+
+        tool = StructuredTool(
+            name="wolfram",
+            description="test tool",
+            args_schema={"type": "object", "properties": {"query": {"type": "string"}}},
+            coroutine=AsyncMock(
+                side_effect=RuntimeError("Server error '504 Gateway Time-out' for url 'https://mcp.example.com/mcp'")
+            ),
+            response_format="content_and_artifact",
+        )
+
+        mock_client = mock_client_class.return_value
+        mock_client.get_tools = AsyncMock(return_value=[tool])
+
+        tools = await adapter.get_mcp_tools("https://mcp.example.com/mcp")
+
+        # Invoking the tool does not raise; the LLM sees a concise error message.
+        result = await tools[0].ainvoke({"query": "toss a coin 10 million times"})
+        assert result == \
+            "Error: RuntimeError: Server error '504 Gateway Time-out' for url 'https://mcp.example.com/mcp'"
+        # The full traceback is preserved in the server log for debugging.
+        assert "RuntimeError" in caplog.text
+
+    @pytest.mark.asyncio
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
+    async def test_get_mcp_tools_unwraps_exception_groups(self, mock_client_class, adapter):
+        """When the MCP transport fails at call time, anyio raises an ExceptionGroup
+        whose str() is just "unhandled errors in a TaskGroup (1 sub-exception)".
+        The tool output must surface the underlying cause instead of that summary."""
+
+        tool = StructuredTool(
+            name="wolfram",
+            description="test tool",
+            args_schema={"type": "object", "properties": {"query": {"type": "string"}}},
+            coroutine=AsyncMock(
+                side_effect=ExceptionGroup(
+                    "unhandled errors in a TaskGroup",
+                    [ConnectionError("All connection attempts failed")],
+                )
+            ),
+            response_format="content_and_artifact",
+        )
+
+        mock_client = mock_client_class.return_value
+        mock_client.get_tools = AsyncMock(return_value=[tool])
+
+        tools = await adapter.get_mcp_tools("https://mcp.example.com/mcp")
+
+        result = await tools[0].ainvoke({"query": "toss a coin 10 million times"})
+        # The real cause is in the output, not just the TaskGroup summary.
+        assert "ConnectionError: All connection attempts failed" in result
+
+    @pytest.mark.asyncio
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
+    async def test_get_mcp_tools_wrapped_tools_pass_through_results(self, mock_client_class, adapter):
+        """The error wrapping must not disturb normal (non-raising) tool results."""
+
+        tool = StructuredTool(
+            name="wolfram",
+            description="test tool",
+            args_schema={"type": "object", "properties": {"query": {"type": "string"}}},
+            coroutine=AsyncMock(return_value=("42", None)),
+            response_format="content_and_artifact",
+        )
+
+        mock_client = mock_client_class.return_value
+        mock_client.get_tools = AsyncMock(return_value=[tool])
+
+        tools = await adapter.get_mcp_tools("https://mcp.example.com/mcp")
+
+        result = await tools[0].ainvoke({"query": "6 times 7"})
+        assert result == "42"
+
+    @pytest.mark.asyncio
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpServersInfoRestorer')
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
+    async def test_get_mcp_tools_proceeds_when_restore_raises_value_error(
+        self, mock_client_class, mock_restorer_class, adapter, mock_mcp_tool, caplog
+    ):
+        """A malformed mcp_info config (restore() raising ValueError) must not hang or
+        propagate; get_mcp_tools should log a warning and proceed with an empty servers
+        info dict."""
+        # pylint: disable=protected-access
+        mock_restorer = mock_restorer_class.return_value
+        mock_restorer.restore.side_effect = ValueError(
+            'There was an error loading MCP servers info file "mcp_info.hocon".\n'
+            "Underlying error (ConfigSubstitutionException): "
+            "Cannot resolve variable ${YDC_API_KEY} (line: 68, col: 39)"
+        )
+
+        mock_client = mock_client_class.return_value
+        mock_client.get_tools = AsyncMock(return_value=[mock_mcp_tool])
+
+        tools = await adapter.get_mcp_tools("https://mcp.example.com/mcp")
+
+        # The tool fetch still completes — the load failure does not propagate.
+        assert len(tools) == 1
+        # Fallback to the empty dict so subsequent lookups don't blow up.
+        # pylint: disable=use-implicit-booleaness-not-comparison
+        assert LangChainMcpAdapter._mcp_servers_info == {}
+        # The real underlying cause is surfaced in the log so users can diagnose.
+        assert "Cannot resolve variable ${YDC_API_KEY}" in caplog.text

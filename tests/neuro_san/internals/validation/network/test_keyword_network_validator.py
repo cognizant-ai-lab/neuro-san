@@ -62,44 +62,6 @@ class TestKeywordNetworkValidator(TestCase, AbstractNetworkValidatorTest):
         self.assertEqual(1, len(errors))
         self.assertIn("must be a str", errors[0])
 
-    def test_tools_wrong_type(self):
-        """
-        Tests a network where tools is a string instead of a list
-        """
-        validator: DictionaryValidator = self.create_validator()
-
-        config: Dict[str, Any] = self.restore("hello_world.hocon")
-        config["tools"][0]["tools"] = "synonymizer"
-
-        errors: List[str] = validator.validate(config)
-        self.assertEqual(1, len(errors))
-        self.assertIn("must be a list", errors[0])
-
-    def test_tools_invalid_element(self):
-        """
-        Tests a network where a tools list element is neither str nor dict
-        """
-        validator: DictionaryValidator = self.create_validator()
-
-        config: Dict[str, Any] = self.restore("hello_world.hocon")
-        config["tools"][0]["tools"] = ["synonymizer", 123]
-
-        errors: List[str] = validator.validate(config)
-        self.assertEqual(1, len(errors))
-        self.assertIn("must be a str or dict", errors[0])
-
-    def test_tools_valid_with_dict_element(self):
-        """
-        Tests that a tools list with str and dict elements is valid
-        """
-        validator: DictionaryValidator = self.create_validator()
-
-        config: Dict[str, Any] = self.restore("hello_world.hocon")
-        config["tools"][0]["tools"] = ["synonymizer", {"server": "mcp_server"}]
-
-        errors: List[str] = validator.validate(config)
-        self.assertEqual(0, len(errors))
-
     def test_description_empty(self):
         """
         Tests a network where function.description is empty
@@ -143,10 +105,10 @@ class TestKeywordNetworkValidator(TestCase, AbstractNetworkValidatorTest):
         """
         Tests that the keywords parameter controls which validations run
         """
-        validator = KeywordNetworkValidator(keywords={"tools"})
+        validator = KeywordNetworkValidator(keywords={"description"})
 
         config: Dict[str, Any] = self.restore("hello_world.hocon")
-        # Empty instructions should be ignored when only validating tools
+        # Empty instructions should be ignored when only validating description
         config["tools"][0]["instructions"] = ""
 
         errors: List[str] = validator.validate(config)

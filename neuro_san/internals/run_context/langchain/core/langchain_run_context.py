@@ -17,7 +17,6 @@
 from typing import Any
 from typing import Dict
 from typing import List
-from typing import Set
 from typing import Union
 
 import json
@@ -28,6 +27,8 @@ from logging import Logger
 from logging import getLogger
 
 from pydantic_core import ValidationError
+
+from leaf_common.logging.sensitive_logger import SensitiveLogger
 
 from langchain.agents.factory import create_agent
 from langchain.agents.middleware.types import AgentMiddleware
@@ -42,6 +43,7 @@ from langchain_core.tools.base import BaseTool
 from neuro_san.internals.errors.error_detector import ErrorDetector
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
+from neuro_san.internals.interfaces.tracing_context import TracingContext
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.journals.intercepting_journal import InterceptingJournal
 from neuro_san.internals.journals.originating_journal import OriginatingJournal
@@ -56,6 +58,7 @@ from neuro_san.internals.run_context.langchain.core.langchain_run import LangCha
 from neuro_san.internals.run_context.langchain.core.run_context_runnable import RunContextRunnable
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_resources import LangChainLlmResources
 from neuro_san.internals.run_context.langchain.middleware.middleware_factory import MiddlewareFactory
+from neuro_san.internals.run_context.utils.activation_capsule import ActivationCapsule
 
 
 # pylint: disable=too-many-instance-attributes,too-many-public-methods
@@ -73,7 +76,8 @@ class LangChainRunContext(RunContext):
                  tool_caller: ToolCaller,
                  invocation_context: InvocationContext,
                  chat_context: Dict[str, Any],
-                 middleware_config: List[Dict[str, Any]] = None):
+                 middleware_config: List[Dict[str, Any]] = None,
+                 tracing_context: TracingContext = None):
         """
         Constructor
 
@@ -86,6 +90,7 @@ class LangChainRunContext(RunContext):
         :param chat_context: A ChatContext dictionary that contains all the state necessary
                 to carry on a previous conversation, possibly from a different server.
         :param middleware_config: An ordered list of middleware configurations
+        :param tracing_context: A TracingContext for the request
         """
         self.chat_history: List[BaseMessage] = []
         self.middleware_config: List[Dict[str, Any]] = middleware_config
@@ -105,26 +110,21 @@ class LangChainRunContext(RunContext):
         self.invocation_context: InvocationContext = invocation_context
         self.chat_context: Dict[str, Any] = chat_context
         self.origin: List[Dict[str, Any]] = []
-        # Have we already created resources for this RunContext:
+        # Have we already created resources for this RunContext?
         self.resources_created: bool = False
         # Default logger
         self.logger: Logger = getLogger(self.__class__.__name__)
 
-        parent_origin: List[Dict[str, Any]] = []
-        if parent_run_context is not None:
+        # A Placeholder for observabilty-specific tracing objects
+        self.tracing_context: TracingContext = tracing_context
 
-            # Get other stuff from parent if not specified
-            if self.invocation_context is None:
-                self.invocation_context = parent_run_context.get_invocation_context()
-            if self.chat_context is None:
-                self.chat_context = parent_run_context.get_chat_context()
-            parent_origin = parent_run_context.get_origin()
+        self.capsule: ActivationCapsule = None
 
-            # Initialize the origin.
-            agent_name: str = tool_caller.get_name()
-            origination: Origination = self.invocation_context.get_origination()
-            self.origin = origination.add_spec_name_to_origin(parent_origin, agent_name)
+        # If you add more members here, be sure to clear them out in close_of_work() below.
 
+        # Now that we have initialized all the members, some procedural initialization
+        self.create_capsule()
+        self.update_from_parent_run_context(parent_run_context)
         self.update_from_chat_context(self.chat_context)
 
         # Set up so local logging gives origin info.
@@ -135,6 +135,82 @@ class LangChainRunContext(RunContext):
         if self.invocation_context is not None:
             # Sets up self.journal
             self.update_invocation_context(self.invocation_context)
+
+    def create_capsule(self):
+        """
+        Create the ActivationCapsule
+        """
+        if self.tool_caller is not None:
+            agent_spec: Dict[str, Any] = self.tool_caller.get_agent_tool_spec()
+            # DEF: This is perhaps too brave a usage/cast, but it is indeed an AgentToolFactory
+            factory = self.tool_caller.get_inspector()
+            self.capsule = ActivationCapsule(self, agent_spec, factory)
+        else:
+            # DEF: It's likely that this current arrangement might impede middleware on the front-man
+            # to not be able to dynamically call out to other agents in the graph.
+            # Need a good example here. Also ConnectifiyReporter would need to be enhanced
+            # to look for tools specified in the middleware.
+            self.capsule = ActivationCapsule(self)
+
+    def update_from_parent_run_context(self, parent_run_context: RunContext):
+        """
+        Update from parent run context
+        :param parent_run_context: The parent RunContext
+        """
+        if parent_run_context is None:
+            return
+
+        # Get other stuff from parent if not specified
+        if self.invocation_context is None:
+            self.invocation_context = parent_run_context.get_invocation_context()
+        if self.chat_context is None:
+            self.chat_context = parent_run_context.get_chat_context()
+
+        self.tracing_context = parent_run_context.get_tracing_context().clone()
+        parent_origin: List[Dict[str, Any]] = parent_run_context.get_origin()
+
+        # Initialize the origin.
+        agent_name: str = self.tool_caller.get_name()
+        origination: Origination = self.invocation_context.get_origination()
+        self.origin = origination.add_spec_name_to_origin(parent_origin, agent_name)
+
+    def update_from_chat_context(self, chat_context: Dict[str, Any]):
+        """
+        :param chat_context: A ChatContext dictionary that contains all the state necessary
+                to carry on a previous conversation, possibly from a different server.
+        """
+        self.chat_context = chat_context
+
+        if self.chat_context is None:
+            return
+
+        # See if our origin appears in the chat histories.
+        # If so, get ours from there.
+        empty: List[Any] = []
+        chat_histories: List[Dict[str, Any]] = self.chat_context.get("chat_histories", empty)
+        our_origin_str: str = Origination.get_full_name_from_origin(self.origin)
+        for one_chat_history in chat_histories:
+
+            # See if the origin matches our own
+            test_origin: List[Dict[str, Any]] = one_chat_history.get("origin", empty)
+            test_origin_str: str = Origination.get_full_name_from_origin(test_origin)
+            if test_origin_str != our_origin_str:
+                continue
+
+            one_messages: List[Dict[str, Any]] = one_chat_history.get("messages", empty)
+            if not one_messages:
+                # Empty list - Nothing to convert. Use default empty list.
+                break
+
+            converter = BaseMessageDictionaryConverter()
+            self.chat_history = []
+            for chat_message in one_messages:
+                base_message: BaseMessage = converter.from_dict(chat_message)
+                if base_message is not None:
+                    self.chat_history.append(base_message)
+
+            # Nothing left to search for
+            break
 
     async def create_resources(self, agent_name: str,
                                instructions: str,
@@ -200,60 +276,43 @@ class LangChainRunContext(RunContext):
 
         # Get the factory we will use
         llm_factory: ContextTypeLlmFactory = self.invocation_context.get_llm_factory()
-
-        # Prepare a list of fallbacks.  By default, the llm_config itself is a single-entry fallback list.
-        fallbacks: List[Dict[str, Any]] = [self.llm_config]
-        fallbacks = self.llm_config.get("fallbacks", fallbacks)
-
-        # Get the sly data to see if there are any optional user llm_config (like API keys) to use
         sly_data: Dict[str, Any] = self.tool_caller.get_sly_data()
 
-        # Initialize a list of chain fallbacks. This may or may not get filled.
-        chain_fallbacks: List[Runnable] = []
-        first_llm: bool = True
-        required_llm_config: Set[str] = set()
+        main_llm_resources: LangChainLlmResources | Dict[str, Any] = \
+            llm_factory.create_llm_with_fallbacks(self.llm_config, sly_data)
 
-        # Go through the list of fallbacks in the config.
-        for fallback in fallbacks:
-
-            # Create a model we might use.
-            one_llm_resources: LangChainLlmResources | Set[str] = llm_factory.create_llm(fallback, sly_data)
-            if one_llm_resources is None:
-                # Nothing to use or report.
-                # Skip for now, a fallback might still be fulfilled.
-                continue
-
-            if isinstance(one_llm_resources, set):
-                # Report later on which required llm_config are missing
-                # Skip for now, a fallback might still be fulfilled.
-                required_llm_config.update(one_llm_resources)
-                continue
-
-            one_agent: Runnable = self.create_agent(instructions, one_llm_resources.get_model())
-
-            if first_llm:
-                # The first fully-specified agent is the one we want to be our main guy.
-                agent = one_agent
-                # For now. Could be problems with different providers w/ token counting.
-                self.llm_resources = one_llm_resources
-                # Anything that comes later will not be the first
-                first_llm = False
-            else:
-                # Anything later than the first guy is considered a fallback. Add it to the list.
-                chain_fallbacks.append(one_agent)
-
-        if agent is None:
+        if isinstance(main_llm_resources, dict):
             error: str = "No fully-specified LLM found in llm_config or fallbacks."
-            if len(required_llm_config) > 0:
+            error_dict: Dict[str, Any] = main_llm_resources
+
+            required_sly_data: List[str] = error_dict.get("required_sly_data_errors", [])
+            if len(required_sly_data) > 0:
                 error += "\nLLM operation for this agent requires at least one "
                 error += "of the following set in sly_data.llm_config:\n"
-                error += "\n".join(sorted(required_llm_config)) + "\n"
+                error += "\n    ".join(sorted(required_sly_data)) + "\n"
+
+            construction_errors: List[str] = error_dict.get("construction_errors", [])
+            if len(construction_errors) > 0:
+                error += "\nThe following errors occurred while constructing LLMs:\n"
+                error += "\n    ".join(construction_errors) + "\n"
+
+            api_key_errors: List[str] = error_dict.get("api_key_errors", [])
+            if len(api_key_errors) > 0:
+                error += "\n\nLLM operation for this agent requires at least one LLM provider API key"
+                error += " to be set as an environment variable."
+                error += "\nThe following errors occurred while looking for LLM API keys:\n"
+                error += "\n    ".join(api_key_errors)
+
+                for api_key_error in api_key_errors:
+                    # Note: We are assuming the errors have already been filtered for
+                    # not dispensing secrets with ApiKeyErrorCheck.get_safe_log_message()
+                    sensitive_logger = SensitiveLogger(self.logger)
+                    sensitive_logger.error("API KEY error detected: %s", api_key_error)
+
             raise ValueError(error)
 
-        if len(chain_fallbacks) > 0:
-            # Set up fallbacks.
-            # See https://python.langchain.com/docs/how_to/tools_error/#tryexcept-tool-call
-            agent = agent.with_fallbacks(chain_fallbacks)
+        self.llm_resources = main_llm_resources
+        agent: Runnable = self.create_agent(instructions, main_llm_resources.get_model())
 
         return agent
 
@@ -267,7 +326,7 @@ class LangChainRunContext(RunContext):
 
         # Create any middleware instances that were specified, in the order they were specified.
         # This will be None for most simple situations.
-        middleware_factory = MiddlewareFactory(self.invocation_context, self.origin, self.chat_history)
+        middleware_factory = MiddlewareFactory(self.invocation_context, self.origin, self.chat_history, self.capsule)
         sly_data: Dict[str, Any] = self.tool_caller.get_sly_data()
 
         middleware: List[AgentMiddleware] = None
@@ -343,8 +402,10 @@ class LangChainRunContext(RunContext):
                                       origin=self.origin,
                                       tool_caller=self.tool_caller,
                                       error_detector=self.error_detector,
-                                      session_id=session_id)
-        runnable_config: Dict[str, Any] = runnable.prepare_runnable_config(session_id=session_id, use_run_name=True)
+                                      session_id=session_id,
+                                      tracing_context=self.tracing_context)
+        runnable_config: Dict[str, Any] = runnable.prepare_runnable_config(session_id=session_id,
+                                                                           use_run_name=True)
 
         # This needs to be run as a chain otherwise LangSmith will pick up two
         # trace names for the same request.
@@ -461,7 +522,8 @@ class LangChainRunContext(RunContext):
         try:
             tool_chat_list = json.loads(tool_chat_list_string)
         except json.decoder.JSONDecodeError as exception:
-            self.logger.error("Exception: %s parsing %s", str(exception), str(tool_chat_list_string))
+            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger.error("Exception: %s parsing %s", str(exception), str(tool_chat_list_string))
             raise exception
 
         # The tool_output seems to contain the entire chat history of
@@ -489,13 +551,30 @@ class LangChainRunContext(RunContext):
         if self.llm_resources:
             await self.llm_resources.close_of_work()
 
-        self.tools = []
+        if self.capsule:
+            await self.capsule.close_of_work()
+
+        # In order of appearance from the constructor
+
         self.chat_history = []
-        self.agent_chain = None
-        self.recent_human_message = None
-        self.llm_resources = None
+        self.middleware_config = None
         self.journal = None
         self.interceptor = None
+        self.llm_resources = None
+        self.agent_chain = None
+        self.llm_config = None
+        self.run_id_base = None
+        self.tools = []
+        self.error_detector = None
+        self.recent_human_message = None
+        self.tool_caller = None
+        # invocation_context comes from the caller
+        self.chat_context = None
+        self.origin = []
+        self.resources_created = False
+        self.tracing_context = None
+        # Don't need to clear logger
+        self.capsule = None
 
     def get_agent_tool_spec(self) -> Dict[str, Any]:
         """
@@ -551,46 +630,14 @@ class LangChainRunContext(RunContext):
                 self.interceptor.write_unwrapped_message(message, self.origin)
         self.journal = OriginatingJournal(self.interceptor, self.origin, self.chat_history)
 
-    def update_from_chat_context(self, chat_context: Dict[str, Any]):
-        """
-        :param chat_context: A ChatContext dictionary that contains all the state necessary
-                to carry on a previous conversation, possibly from a different server.
-        """
-        self.chat_context = chat_context
-
-        if self.chat_context is None:
-            return
-
-        # See if our origin appears in the chat histories.
-        # If so, get ours from there.
-        empty: List[Any] = []
-        chat_histories: List[Dict[str, Any]] = self.chat_context.get("chat_histories", empty)
-        our_origin_str: str = Origination.get_full_name_from_origin(self.origin)
-        for one_chat_history in chat_histories:
-
-            # See if the origin matches our own
-            test_origin: List[Dict[str, Any]] = one_chat_history.get("origin", empty)
-            test_origin_str: str = Origination.get_full_name_from_origin(test_origin)
-            if test_origin_str != our_origin_str:
-                continue
-
-            one_messages: List[Dict[str, Any]] = one_chat_history.get("messages", empty)
-            if not one_messages:
-                # Empty list - Nothing to convert. Use default empty list.
-                break
-
-            converter = BaseMessageDictionaryConverter()
-            self.chat_history = []
-            for chat_message in one_messages:
-                base_message: BaseMessage = converter.from_dict(chat_message)
-                if base_message is not None:
-                    self.chat_history.append(base_message)
-
-            # Nothing left to search for
-            break
-
     def get_journal(self) -> Journal:
         """
         :return: The Journal associated with the instance
         """
         return self.journal
+
+    def get_tracing_context(self) -> TracingContext:
+        """
+        :return: The TracingContext associated with the instance
+        """
+        return self.tracing_context

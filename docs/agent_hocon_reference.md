@@ -36,12 +36,14 @@ Items in ***bold*** are essentials. Try to understand these first.
     - [max_steps](#max_steps)
     - [max_iterations](#max_iterations)
     - [max_execution_seconds](#max_execution_seconds)
+    - [max_attempts](#max_attempts)
     - [metadata](#metadata)
         - [description](#description)
         - [tags](#tags)
     - [request_timeout_seconds](#request_timeout_seconds)
     - [toolbox_info_file](#toolbox_info_file)
     - [verbose](#verbose)
+    - [sly_data_schema](#sly_data_schema)
 - [Single Agent Specification](#single-agent-specification)
     - [***name*** - the name of the agent so that other agents can reference it](#name)
     - [***function*** - specifies what the agent can do/needs as input to clients or other agents](#function)
@@ -50,7 +52,7 @@ Items in ***bold*** are essentials. Try to understand these first.
             - [type](#type)
             - [properties](#properties)
             - [required](#required)
-        - [sly_data_schema](#sly_data_schema)
+        - [sly_data_schema](#sly_data_schema-1)
             - [llm_config](#llm_config-1)
         - [sly_data_output_schema](#sly_data_output_schema)
     - [***instructions*** - main system prompt for the agent](#instructions)
@@ -73,12 +75,15 @@ Items in ***bold*** are essentials. Try to understand these first.
             - [messages](#messages)
         - [to_upstream](#to_upstream)
             - [sly_data](#sly_data-2)
+        - [to_tracing](#to_tracing)
+            - [sly_data](#sly_data-3)
     - [display_as](#display_as)
     - [max_message_history](#max_message_history)
     - [verbose](#verbose-1)
     - [max_steps](#max_steps-1)
     - [max_iterations](#max_iterations-1)
     - [max_execution_seconds](#max_execution_seconds-1)
+    - [max_attempts](#max_attempts-1)
     - [error_formatter](#error_formatter-1)
     - [error_fragments](#error_fragments-1)
     - [structure_formats](#structure_formats)
@@ -89,7 +94,7 @@ Items in ***bold*** are essentials. Try to understand these first.
             - [origin](#origin)
             - [origin_str](#origin_str)
             - [progress_reporter](#progress_reporter)
-            - [sly_data](#sly_data-3)
+            - [sly_data](#sly_data-4)
 
 <!--TOC-->
 
@@ -168,6 +173,11 @@ The `llm_info_file` key allows you to specify a custom HOCON file that extends t
 by agents in a neuro-san network. This is especially useful if you're using models or providers that are not included in
 the default configuration (e.g., newly released models or organization-specific endpoints).
 
+This file is also the only source of model prices for token-cost reporting: set
+[price_per_1k_input_tokens](./llm_info_hocon_reference.md#price_per_1k_input_tokens) and
+[price_per_1k_output_tokens](./llm_info_hocon_reference.md#price_per_1k_output_tokens) for your models,
+otherwise their reported cost defaults to 0 and a warning is logged.
+
 For more information on selecting and customizing models, see the [model_name](#model_name) and [class](#class) section below.
 
 ### toolbox_info_file
@@ -200,22 +210,66 @@ branches off work to any other agent/tool.  You can browse the `capabilities` se
 The most common situation is one where you will need your own access key set as an environment variable in order
 to use LLMs from various providers.
 
-| LLM Provider  | API Key environment variable                   |
-|:--------------|:-----------------------------------------------|
-| Amazon Bedrock| AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY    |
-| Anthropic     | ANTHROPIC_API_KEY                              |
-| Azure OpenAI  | AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT |
-| Google Gemini | GOOGLE_API_KEY                                 |
-| NVidia        | NVIDIA_API_KEY                                 |
-| Ollma         | &lt;None required&gt;                          |
-| OpenAI        | OPENAI_API_KEY                                 |
+| LLM Provider               | API Key environment variable                                 |
+|:---------------------------|:-------------------------------------------------------------|
+| Amazon Bedrock             | AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or AWS_PROFILE  |
+| Anthropic                  | ANTHROPIC_API_KEY                                            |
+| Anthropic via Bedrock      | AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or AWS_PROFILE  |
+| Azure OpenAI               | AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT               |
+| Google Gemini              | GOOGLE_API_KEY                                               |
+| NVidia                     | NVIDIA_API_KEY                                               |
+| Ollama                     | &lt;None required&gt;                                        |
+| OpenAI                     | OPENAI_API_KEY                                               |
+| OpenRouter                 | OPENROUTER_API_KEY                                           |
 
-**Anthropic Model Names:** The model names `claude-haiku`, `claude-sonnet`, and `claude-opus`
+For the Bedrock-based entries you can either set explicit credentials via
+`AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` (plus optional `AWS_SESSION_TOKEN`
+for temporary credentials), or point at a named profile in `~/.aws/credentials`
+via `AWS_PROFILE`. Both classes resolve credentials through the standard AWS
+credential chain, so SSO, EC2 instance roles, IMDS, and `AWS_DEFAULT_REGION` /
+`AWS_REGION` env vars all work the same way they do for any boto3 / anthropic-SDK
+call.
+
+**Anthropic Model Names:** The model names `claude-haiku`, `claude-sonnet`, `claude-opus`, and `claude-fable`
 are aliases that automatically reference the latest versions of their respective Anthropic model lines.
 This aliasing is recommended because Anthropic frequently deprecates older model versions. For information
 on current models and deprecation schedules, see the
 [Anthropic model deprecations documentation](https://platform.claude.com/docs/en/about-claude/model-deprecations).
-Note that most retired Anthropic models can still be accessed via Amazon Bedrock.
+
+**OpenRouter Model Names:** [OpenRouter](https://openrouter.ai/) is a unified API gateway that fronts
+hundreds of models from many providers (OpenAI, Anthropic, Google, Meta, etc.) behind a single endpoint.
+With the `openrouter` class, the `model_name` follows OpenRouter's `provider/model` convention, e.g.
+`anthropic/claude-sonnet-4-5` or `openai/gpt-4o`. OpenRouter also exposes "meta-router" models such as
+`openrouter/free` and `openrouter/auto` that select an underlying model at request time based on the
+capabilities the request needs (image understanding, tool calling, structured outputs, etc.). Because
+the underlying model is not known ahead of time for these routers, their `max_output_tokens` is left
+unset in `default_llm_info.hocon` — see the
+[llm_info_hocon_reference](./llm_info_hocon_reference.md#max_output_tokens) for what that means in practice.
+This integration requires the [`langchain-openrouter`](https://docs.langchain.com/oss/python/integrations/chat/openrouter)
+package, which neuro-san lazy-installs on first use.
+
+**Anthropic Claude on Bedrock — pick the right class:** AWS Bedrock can host Anthropic Claude models
+under two different langchain classes, and neuro-san wires up both:
+
+- `anthropic-bedrock` (recommended for Claude) — built on the `anthropic` SDK's
+  `AnthropicBedrock` / `AsyncAnthropicBedrock` clients. Fully async, and exposes
+  `ChatAnthropic`'s full parameter surface (`thinking`, `effort`, `mcp_servers`,
+  `context_management`, …).
+- `bedrock` — the legacy boto3-based `ChatBedrock`. Synchronous and serializes concurrent
+  calls inside a worker, and does not expose the Anthropic-specific knobs above. Reach for it
+  only when you need a non-Anthropic Bedrock model (Amazon Nova, Mistral, Meta Llama, AI21,
+  Cohere, etc.).
+
+Bedrock addresses Claude models by cross-region inference profile id with a region prefix
+(`global.`, `us.`, `eu.`, `apac.`), e.g. `global.anthropic.claude-opus-4-8` or
+`us.anthropic.claude-opus-4-8`. The short aliases in `default_llm_info.hocon`
+(`bedrock-claude-opus`, `bedrock-claude-sonnet`, `bedrock-claude-haiku`) all resolve to the
+`global.` profile; swap the prefix on both the alias's `use_model_name` and the target entry
+key to pin to a geographic region. See
+[AWS cross-region inference docs](https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference.html)
+for the trade-offs. The `anthropic-bedrock` class is provided by the
+[`langchain-aws[anthropic]`](https://docs.langchain.com/oss/python/integrations/chat/bedrock#chatanthropicbedrock)
+extra, which neuro-san lazy-installs on first use.
 
 **Security Best Practice:** _We strongly recommend to **not** set secrets as values within any source file._
 These files tend to creep into source control repos, and it is **very** bad practice
@@ -240,7 +294,7 @@ This will cause the system to look at the sly_data's llm_config dictionary for t
 api key(s) depending on the model provider. Note that key names are all-smalls versions of any
 environment variable names above.
 
-See also: [llm_config](#llm_config-1) in the [sly_data_schema](#sly_data_schema) section.
+See also: [llm_config](#llm_config-1) in the [sly_data_schema](#sly_data_schema-1) section.
 
 Example networks that advertise that their sly_data_schema needs external API keys:
 
@@ -271,14 +325,17 @@ You can use the `class` key in two ways:
 
 Set the `class` key to one of the values listed below, then specify the model using the `model_name` key.
 
-| LLM Provider  | Class Value   |
-|:--------------|:--------------|
-| Anthropic     | anthropic     |
-| Azure OpenAI  | azure-openai  |
-| Google Gemini | gemini        |
-| NVidia        | nvidiea       |
-| Ollma         | ollama        |
-| OpenAI        | openai        |
+| LLM Provider               | Class Value         |
+|:---------------------------|:--------------------|
+| Anthropic                  | anthropic           |
+| Anthropic via Bedrock      | anthropic-bedrock   |
+| Azure OpenAI               | azure-openai        |
+| Bedrock (non-Anthropic)    | bedrock             |
+| Google Gemini              | gemini              |
+| NVidia                     | nvidia              |
+| Ollama                     | ollama              |
+| OpenAI                     | openai              |
+| OpenRouter                 | openrouter          |
 
 You may only provide parameters that are explicitly defined for that provider's class under the
 `classes.<class>.args` section of
@@ -339,7 +396,20 @@ Deprecated. Use [max_steps](#max_steps) instead.
 
 An integer controlling the maximum amount of wall clock time (in seconds) to spend in the langchain
 [AgentExecutor](https://api.python.langchain.com/en/latest/agents/langchain.agents.agent.AgentExecutor.html)
-used for the agent.  Default is set for 2 minutes.
+used for the agent.  Default is set for 5 minutes.
+
+### max_attempts
+
+A positive integer (i.e. >= 1) indicating the maximum number of times to attempt an agent run given any failures.
+This is different from [max_steps](#max_steps) in that it specifically relates to retryable errors encountered
+during agent execution as opposed to limiting the number of super-steps.
+
+A "retryable" error here includes LLM provider API errors pertaining to rate limits, timeouts,
+and other temporary failures.  Failures which are known to be non-retryable are not re-attempted.
+These include API_KEY errors, ValueErrors from tools, and other unexpected exceptions; the idea
+being: these errors would just happen again anyway so why waste the tokens?
+
+The default setting is to use 3 attempts.
 
 ### request_timeout_seconds
 
@@ -367,6 +437,21 @@ which contains the following keys:
 
 A list of strings where if any one of the strings appears in agent output,
 it is considered an error and reported as such per the [error_formatter](#error_formatter).
+
+#### sly_data_schema
+
+The optional [JSON Schema](https://json-schema.org) dictionary describing what
+specific information the agent needs as input arguments over the private sly_data dictionary
+channel when it is called.  The sly_data itself is generally considered to be private information
+that does not belong in the chat stream, for example: credential information.
+
+This is a "global" definition of sly_data_schema that will be merged with any tool-specific definition.
+While this is intended only for use with a front-man agent only, it can sometimes be useful to
+have partial definitions for sly_data_schema that pertain to all agent networks in the manifest
+defined globally with this key while network-specific definitions can be defined with the `sly_data_schema`
+key within the front-man tool.
+
+For more details, see the [sly_data_schema](#sly_data_schema-1) key below.
 
 ### tools
 
@@ -480,6 +565,7 @@ This is an optional list of string keys in the [properties](#properties) diction
 to be required whenever an upstream agent calls the one being described.
 Note that it's possible to specify a default value for any property that is not listed as required.
 
+<!--- pyml disable-next-line no-duplicate-heading -->
 #### sly_data_schema
 
 The optional [JSON Schema](https://json-schema.org) dictionary describing what
@@ -502,6 +588,7 @@ definition, as sly_data itself is already visible to all other internal agents o
 Example networks that advertise their sly_data_schema:
 
 - [math_guy.hocon](../neuro_san/registries/math_guy.hocon)
+- [music_nerd_pro_sly_api_key.hocon](../neuro_san/registries/music_nerd_pro_sly_api_key.hocon)
 
 There are select few tacit conventions supported for certain sly_data values that need to come from the client:
 
@@ -523,7 +610,7 @@ Example networks that advertise that their sly_data_schema needs external API ke
 
 #### sly_data_output_schema
 
-Similar optional dictionary to [sly_data_schema](#sly_data_schema) above, but this specifies the schema
+Similar optional dictionary to [sly_data_schema](#sly_data_schema-1) above, but this specifies the schema
 for the sly_data being output by the agent network.
 
 Example networks that advertise their sly_data_output_schema:
@@ -582,7 +669,25 @@ This enables entire ecosystems of agent webs.
 #### MCP Servers
 
 Agents can call tools exposed by external Model Context Protocol (MCP) servers.
-MCP server URLs must either start with `https://mcp` or end with `/mcp`.
+
+MCP server URLs are recognized when they conform to the
+[MCP canonical server URI specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#canonical-server-uri):
+they must use the `http` or `https` scheme, must include a host, and must not contain a fragment.
+To distinguish MCP server URLs from other external agent URLs, the literal `mcp` must appear either
+as a label in the hostname (e.g. `mcp.example.com`) or as any segment of the URL path
+(e.g. `/mcp`, `/mcp/free`, `/server/mcp`, `/v1/mcp/server`).
+
+Examples of URLs that are recognized as MCP servers:
+
+- `https://mcp.example.com/mcp`
+- `https://mcp.example.com`
+- `https://mcp.example.com:8443`
+- `https://example.com/mcp/free`
+- `https://example.com/v1/mcp/server`
+- `http://localhost:8000/mcp/`
+
+If a URL you want to use does not satisfy these rules, fall back to the dictionary form below,
+which is always treated as an MCP reference regardless of URL shape.
 
 MCP servers can be configured in two formats:
 
@@ -865,6 +970,26 @@ A string value in the dictionary represents a translation to a new key.
 
 The same dictionary/list specification described in [to_downstream](#sly_data) also applies here.
 
+#### to_tracing
+
+_Front Man only_
+Dictionary which specifies security policy for information going to tracing applications.
+
+This has no effect on any information flowing between agents internal to the network.
+
+<!--- pyml disable-next-line no-duplicate-heading -->
+##### sly_data
+
+By default sly_data keys appear in messages going to tracing applications, but the values are `<redacted>`.
+To transmit sly_data values to a tracing application, you _must_ specifically enable it.
+
+A dictionary value whose keys represent keys in the sly_data dictionary.
+Boolean values for each key tell whether or not that data internal to the agent network
+is allowed to go to the tracing application in the message that is reported there.
+A string value in the dictionary represents a translation to a new key.
+
+The same dictionary/list specification described in [to_downstream](#sly_data) also applies here.
+
 ### display_as
 
 An optional string that describes how the agent node wishes to appear to a client
@@ -909,6 +1034,11 @@ Deprecated. Use [max_steps](#max_steps-1) instead.
 ### max_execution_seconds
 
 Same as top-level [max_execution_seconds](#max_execution_seconds), except at single-agent scope.
+
+<!--- pyml disable-next-line no-duplicate-heading -->
+### max_attempts
+
+Same as top-level [max_attempts](#max_attempts), except at single-agent scope.
 
 <!--- pyml disable-next-line no-duplicate-heading -->
 ### error_formatter

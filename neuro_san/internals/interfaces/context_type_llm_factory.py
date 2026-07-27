@@ -31,7 +31,7 @@ class ContextTypeLlmFactory:
         "temperature"               A float "temperature" value with which to
                                     initialize the chat model.  In general,
                                     higher temperatures yield more random results.
-                                    Default if not specified is 0.7
+                                    Default if not specified is the provider's default.
 
         "prompt_token_fraction"     The fraction of total tokens (not necessarily words
                                     or letters) to use for a prompt. Each model_name
@@ -65,5 +65,18 @@ class ContextTypeLlmFactory:
                 Can raise a ValueError if the config's class or model_name value is
                 unknown to this method.
                 Can return None if required llm_config keys are not provided.
+        """
+        raise NotImplementedError
+
+    def create_llm_with_fallbacks(self, config: Dict[str, Any],
+                                  sly_data: Dict[str, Any] = None,
+                                  num_fallbacks: int = None) -> Any:
+        """
+        :param config: A dictionary which describes which LLM to use, perhaps with fallbacks specified.
+        :param sly_data: A user-provided dictionary of private data,
+                from which we might extract API keys to use for user billing.
+                Can be None indicating no API keys are provided at all and the system defaults will be used.
+        :param num_fallbacks: The number of fallbacks to try. Default value of None implies all.
+        :return: An LLM instance native to the context type that deals with fallback specifications.
         """
         raise NotImplementedError

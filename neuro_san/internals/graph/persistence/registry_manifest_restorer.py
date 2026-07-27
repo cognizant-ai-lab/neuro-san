@@ -31,6 +31,7 @@ from pyparsing.exceptions import ParseSyntaxException
 from leaf_common.config.config_filter import ConfigFilter
 from leaf_common.config.dictionary_overlay import DictionaryOverlay
 from leaf_common.config.file_of_class import FileOfClass
+from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.persistence.interface.restorer import Restorer
 
 from neuro_san import REGISTRIES_DIR
@@ -67,6 +68,7 @@ class RegistryManifestRestorer(Restorer):
             self.agent_mapper = AgentFileTreeMapper()
 
         self.manifest_files: List[str] = []
+        self.periodic_configs: Dict[str, Dict[str, Any]] = {}
 
         if manifest_files is None:
             # We have no manifest list coming in, so check an env variable for a definition.
@@ -76,10 +78,10 @@ class RegistryManifestRestorer(Restorer):
                 manifest_file = REGISTRIES_DIR.get_file_in_basis("manifest.hocon")
 
             # Add what was found above
-            use_files: List[str] = manifest_file.split(" ")
+            use_files: List[str] = manifest_file.split(os.pathsep)
             self.manifest_files.extend(use_files)
         elif isinstance(manifest_files, str):
-            use_files: List[str] = manifest_files.split(" ")
+            use_files: List[str] = manifest_files.split(os.pathsep)
             self.manifest_files.extend(use_files)
         else:
             self.manifest_files = manifest_files
@@ -151,6 +153,11 @@ class RegistryManifestRestorer(Restorer):
         raw_restorer = RawManifestRestorer()
         raw_manifest: Dict[str, Any] = raw_restorer.restore(file_reference=manifest_file)
 
+        if not raw_manifest:
+            # Return early if no file and/or nothing in file
+            self.logger.warning("Manifest file %s did not exist or was essentially empty.", manifest_file)
+            return agent_networks
+
         # By the end of the filter chain, only served entries will be included.
         manifest_filter = ManifestFilterChain(manifest_file)
         one_manifest: Dict[str, Dict[str, Any]] = manifest_filter.filter_config(raw_manifest)
@@ -160,9 +167,6 @@ class RegistryManifestRestorer(Restorer):
 
         external_network_names: List[str] = self.find_external_network_names(one_manifest)
 
-        # DEF - need mcp servers as well at some point
-        validator = ManifestNetworkValidator(external_network_names)
-
         # At this point only hocon files we are going to serve up are in the one_manifest.
         for manifest_key, manifest_dict in one_manifest.items():
 
@@ -170,6 +174,10 @@ class RegistryManifestRestorer(Restorer):
 
             # We'll need to use an agent mapper to get to this agent definition file.
             agent_filepath: str = self.agent_mapper.agent_name_to_filepath(manifest_key)
+            network_name: str = self.agent_mapper.filepath_to_agent_network_name(agent_filepath)
+            validator = ManifestNetworkValidator(
+                external_network_names,
+                network_name=network_name)
             agent_network: AgentNetwork = None
             if usable_network:
                 agent_network = self.restore_one_agent_network(manifest_dir, agent_filepath, manifest_key)
@@ -203,9 +211,6 @@ class RegistryManifestRestorer(Restorer):
 
         external_network_names: List[str] = self.find_external_network_names(one_manifest)
 
-        # DEF - need mcp servers as well at some point
-        validator = ManifestNetworkValidator(external_network_names)
-
         # At this point only hocon files we are going to serve up are in the one_manifest.
         for manifest_key, manifest_dict in one_manifest.items():
 
@@ -213,6 +218,10 @@ class RegistryManifestRestorer(Restorer):
 
             # We'll need to use an agent mapper to get to this agent definition file.
             agent_filepath: str = self.agent_mapper.agent_name_to_filepath(manifest_key)
+            network_name: str = self.agent_mapper.filepath_to_agent_network_name(agent_filepath)
+            validator = ManifestNetworkValidator(
+                external_network_names,
+                network_name=network_name)
             agent_network: AgentNetwork = None
             if usable_network:
                 agent_network = await self.async_restore_one_agent_network(manifest_dir, agent_filepath, manifest_key)
@@ -238,8 +247,10 @@ class RegistryManifestRestorer(Restorer):
         :param validator: The validator.
         :param agent_networks: The accumulated agent networks
         """
-        if agent_network is not None:
+        network_name: str = self.agent_mapper.filepath_to_agent_network_name(agent_filepath)
 
+        if agent_network is not None:
+            self.logger.info("Validating %s agent network...", network_name)
             validation_errors: List[str] = validator.validate(agent_network.get_config())
             if len(validation_errors) > 0:
                 self.logger.error("manifest registry %s has validation errors. Skipping. Errors: %s",
@@ -252,8 +263,6 @@ class RegistryManifestRestorer(Restorer):
             self.logger.error("manifest registry %s not found in %s", manifest_key, manifest_file)
             return
 
-        network_name: str = self.agent_mapper.filepath_to_agent_network_name(agent_filepath)
-
         # Check if this agent network has been declared as MCP tool:
         if usable_network and manifest_dict.get("mcp", False):
             agent_network.set_as_mcp_tool()
@@ -262,6 +271,8 @@ class RegistryManifestRestorer(Restorer):
         storage: str = StorageClass.PUBLIC
         if not manifest_dict.get(StorageClass.PUBLIC):
             storage = StorageClass.PROTECTED
+        if manifest_dict.get("periodic", False):
+            self.periodic_configs[network_name] = manifest_dict["periodic"]
 
         agent_networks[storage][network_name] = agent_network
 
@@ -279,9 +290,13 @@ class RegistryManifestRestorer(Restorer):
             agent_network = registry_restorer.restore(file_reference=agent_filepath)
         except FileNotFoundError as exception:
             message: str = f"Failed to restore registry item {manifest_key}. Skipping. - {str(exception)}"
-            self.logger.error(message)
+            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger.error(message)
             agent_network = None
-        except (ParseException, ParseSyntaxException, JSONDecodeError) as exception:
+        except (ParseException, ParseSyntaxException, JSONDecodeError, ValueError) as exception:
+            # ValueError is the wrapper type raised by AbstractAsyncConfigRestorer for any
+            # parse / substitution / config-load failure; the other types are kept for
+            # belt-and-suspenders in case a future code path raises one directly.
 
             # Be sure we spit out the right exception message with relevant parsing
             # information as the error.  If not, we don't get enough good information
@@ -291,7 +306,8 @@ class RegistryManifestRestorer(Restorer):
                 use_exception = exception.__cause__
 
             message: str = f"Parse error in registry item {manifest_key}. Skipping. - {str(use_exception)}"
-            self.logger.error(message)
+            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger.error(message)
             agent_network = None
 
         return agent_network
@@ -311,9 +327,13 @@ class RegistryManifestRestorer(Restorer):
             agent_network = await registry_restorer.async_restore(file_reference=agent_filepath)
         except FileNotFoundError as exception:
             message: str = f"Failed to restore registry item {manifest_key}. Skipping. - {str(exception)}"
-            self.logger.error(message)
+            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger.error(message)
             agent_network = None
-        except (ParseException, ParseSyntaxException, JSONDecodeError) as exception:
+        except (ParseException, ParseSyntaxException, JSONDecodeError, ValueError) as exception:
+            # ValueError is the wrapper type raised by AbstractAsyncConfigRestorer for any
+            # parse / substitution / config-load failure; the other types are kept for
+            # belt-and-suspenders in case a future code path raises one directly.
 
             # Be sure we spit out the right exception message with relevant parsing
             # information as the error.  If not, we don't get enough good information
@@ -323,7 +343,8 @@ class RegistryManifestRestorer(Restorer):
                 use_exception = exception.__cause__
 
             message: str = f"Parse error in registry item {manifest_key}. Skipping. - {str(use_exception)}"
-            self.logger.error(message)
+            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger.error(message)
             agent_network = None
 
         return agent_network
@@ -335,6 +356,9 @@ class RegistryManifestRestorer(Restorer):
                 implementation.
         :return: a nested map of storage type -> (mapping of name -> agent networks)
         """
+        # Reset the periodic configs
+        self.periodic_configs = {}
+
         if file_reference is not None:
             return self.restore_from_files([file_reference])
 
@@ -348,6 +372,9 @@ class RegistryManifestRestorer(Restorer):
                 implementation.
         :return: a nested map of storage type -> (mapping of name -> agent networks)
         """
+        # Reset the periodic configs
+        self.periodic_configs = {}
+
         if file_reference is not None:
             return await self.async_restore_from_files([file_reference])
 
@@ -377,3 +404,9 @@ class RegistryManifestRestorer(Restorer):
             external_network_names.append(f"/{network_name}")
 
         return external_network_names
+
+    def get_periodic_configs(self) -> Dict[str, Dict[str, Any]]:
+        """
+        :return: a map of agent name -> periodic config
+        """
+        return self.periodic_configs
