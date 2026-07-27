@@ -78,6 +78,7 @@ from tests.load_tests.reporting.rebuild_results import ResultsRebuilder
 from tests.load_tests.reporting.disconnection_reporter import DisconnectionReporter
 from tests.load_tests.reporting.json_metadata import JsonMetadata
 from tests.load_tests.reporting.latency_analyzer import LatencyAnalyzer
+from tests.load_tests.reporting.latency_analyzer import COMPLETION_MILESTONES
 from tests.load_tests.reporting.pool_analyzer import PoolAnalyzer
 from tests.load_tests.reporting.resource_reporter import ResourceReporter
 from tests.load_tests.reporting.summary import SummaryReporter
@@ -1758,6 +1759,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             peak_sys_cpu / 100.0 * ncores, ncores,
         )
 
+        primary_pairs = self._server_only_primary_pairs(
+            log_pos, pri_start_re,
+        )
+        self._log_server_completion_percentiles(primary_pairs)
+
         peak_rss_for_breakdown = 0.0
         if peak_server:
             peak_rss_for_breakdown = (
@@ -1786,7 +1792,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         self._append_server_history_record(
             expected, count, elapsed, peak_server, peak_sys_cpu,
-            self._server_only_primary_pairs(log_pos, pri_start_re),
+            primary_pairs,
         )
 
         self._archive_server_log_to(round_dir)
@@ -2677,6 +2683,40 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             and record.get("neuro_san_version") != "unknown"
         )
         self._write_history_record(record, successful=successful)
+
+    @staticmethod
+    def _log_server_completion_percentiles(primary_pairs) -> None:
+        """Log server-side completion-duration percentiles on one line.
+
+        Durations are server-side processing times (Start->Finish from
+        the primary agent's log pairs), so they run slightly shorter
+        than the client's end-to-end per-request duration.  Reuses
+        ``LatencyAnalyzer._percentile`` and ``COMPLETION_MILESTONES`` so
+        the math and labels match the client's percentile line.
+        """
+        durations = sorted(
+            float(p["duration"]) for p in primary_pairs
+            if isinstance(p.get("duration"), (int, float))
+            and p["duration"] > 0
+        )
+        if not durations:
+            return
+        parts = " / ".join(
+            "p%s %s" % (
+                pct,
+                Formatters.fmt_duration(
+                    # pylint: disable=protected-access
+                    LatencyAnalyzer._percentile(durations, pct),
+                    precision=1,
+                ),
+            )
+            for pct in COMPLETION_MILESTONES
+        )
+        logger.info(
+            "\n  Server-side completion percentiles"
+            " (%d requests): %s",
+            len(durations), parts,
+        )
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _append_server_history_record(
