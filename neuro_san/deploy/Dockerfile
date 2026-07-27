@@ -212,7 +212,7 @@ ENV AGENT_FORWARDED_REQUEST_METADATA="request_id user_id"
 ENV AGENT_HTTP_PORT=8080
 
 # Maximm number of requests that can be served at the same time
-ENV AGENT_MAX_CONCURRENT_REQUESTS 50
+ENV AGENT_MAX_CONCURRENT_REQUESTS=0
 
 # Number of requests served before the server shuts down in an orderly fashion.
 # This is useful for testing response handling in clusters with duplicated pods.
