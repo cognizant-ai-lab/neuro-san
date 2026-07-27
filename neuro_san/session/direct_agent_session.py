@@ -189,7 +189,7 @@ class DirectAgentSession(AgentSession):
 
         # Task for late-stage conversions for any and all messages
         queue_filter = QueueFilter(chat_filter, self.agent_network)
-        queue_filter.apply_to_journal(self.invocation_context)
+        queue_filter.apply_to_journal(self.invocation_context.get_journal())
 
         # Create an asynchronous background task to process the user input.
         # This might take a few minutes, which can be longer than some

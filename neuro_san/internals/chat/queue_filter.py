@@ -23,7 +23,6 @@ from typing import Union
 from neuro_san.internals.filters.message_filter import MessageFilter
 from neuro_san.internals.filters.message_filter_factory import MessageFilterFactory
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
-from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.message_journal import MessageJournal
 from neuro_san.message_processing.message_processor import MessageProcessor
 from neuro_san.message_processing.structure_message_processor import StructureMessageProcessor
@@ -68,10 +67,9 @@ class QueueFilter:
         message_processor = StructureMessageProcessor(structure_formats)
         return message_processor
 
-    def apply_to_journal(self, invocation_context: InvocationContext):
+    def apply_to_journal(self, message_journal: MessageJournal):
         """
         Apply the filter and processor to the MessageJournal
         """
-        message_journal: MessageJournal = invocation_context.get_journal()
         message_journal.set_message_filter(self.message_filter)
         message_journal.set_message_processor(self.message_processor)
