@@ -197,6 +197,10 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         chat_context: Dict[str, Any] = request_dict.get("chat_context")
         sly_data: Dict[str, Any] = request_dict.get("sly_data")
 
+        # Task for late-stage conversions for any and all messages
+        queue_filter = QueueFilter(chat_filter, self.agent_network)
+        queue_filter.apply_to_journal(self.invocation_context)
+
         # Create an asynchronous background task to process the user input.
         # This might take a few minutes, which can be longer than some
         # sockets stay open.
@@ -206,10 +210,6 @@ class AsyncDirectAgentSession(AsyncAgentSession):
                                              chat_context)
         # Ignore the future. Live in the now.
         _ = task
-
-        # Task for late-stage conversions for any and all messages
-        queue_filter = QueueFilter(chat_filter, self.agent_network)
-        queue_filter.apply_to_journal(self.invocation_context)
 
         # The generator below will asynchronously block waiting for
         # chat.ChatMessage dictionaries to come back asynchronously from the submit()
