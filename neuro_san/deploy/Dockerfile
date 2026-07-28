@@ -258,33 +258,9 @@ ENV AGENT_LOOP_TIMELINE_MAX_EVENTS="100000"
 # or signal handler at runtime).
 ENV AGENT_LOOP_TIMELINE_DUMP_PATH=""
 
-# Enable the httpx-level LLM traffic tracer. Emits structured JSON events
-# (http_llm_out / http_llm_in / http_llm_end / optional http_llm_chunk)
-# to the dedicated logger "neuro_san.diagnostics.http_llm_trace" so post-run
-# analysis can reconstruct outbound LLM traffic per user request. Each user
-# chat request is tagged with a short user_req_id that propagates through
-# every downstream LLM call via ContextVar; grep on user_req_id to get the
-# full LLM lifecycle of one request in time order.
-#
-# Overhead is negligible. Route the logger to a separate file in
-# logging.hocon for clean offline analysis.
-ENV AGENT_HTTP_LLM_TRACE="false"
-
-# When true, request and response bodies are logged verbatim on
-# http_llm_out and http_llm_end events (capped at 64 KB per body).
-# Prompts and completions are large and often sensitive; off by default.
-# Only consulted when AGENT_HTTP_LLM_TRACE is enabled.
-ENV AGENT_HTTP_LLM_TRACE_INCLUDE_BODIES="false"
-
-# When true, one http_llm_chunk event is emitted per received body
-# chunk. Massive log volume (dozens of chunks per LLM call); enable only
-# when investigating inter-chunk cadence specifically.
-# Only consulted when AGENT_HTTP_LLM_TRACE is enabled.
-ENV AGENT_HTTP_LLM_TRACE_CHUNKS="false"
-
-# Maximm number of requests that can be served at the same time
+# Maximum number of requests that can be served at the same time
 # A value of 0 indicates unlimited requests are handled.
-ENV AGENT_MAX_CONCURRENT_REQUESTS="50"
+ENV AGENT_MAX_CONCURRENT_REQUESTS="0"
 
 # Maximum number of worker threads per request.
 # Default of <= 0 (or unset) indicates system default of (num_cpus + 4).
@@ -368,6 +344,12 @@ ENV AGENT_HTTP_RESOURCES_MONITOR_INTERVAL="0"
 # A value of 0 (the default) disables the keep-alive messages entirely.
 # Typical production value is 25-30 (under the 60s defaults of common proxies).
 ENV AGENT_STREAM_KEEP_ALIVE_WITH_PROGRESS_INTERVAL_SECONDS=0
+
+# When any particular CodedTool execution takes longer than this many seconds,
+# the system issues a message in the log.  This is very useful for determining
+# where your scale-up problems are with particular networks.  The default value of
+# 0 disables this feature.
+ENV AGENT_TOOL_EXECUTION_LOG_THRESHOLD_SECONDS=0
 
 # Optional URL describing how the server is to be referenced by the outside world.
 # This is useful when a server is behind a load-balancer as part of a larger cluster.

@@ -63,6 +63,10 @@ class StructureMessageProcessor(MessageProcessor):
         :param chat_message_dict: The ChatMessage dictionary to process.
         :param message_type: The ChatMessageType of the chat_message_dictionary to process.
         """
+        if message_type != ChatMessageType.AGENT_FRAMEWORK:
+            # No formats to look for
+            return
+
         text: str = chat_message_dict.get("text")
         structure: Dict[str, Any] = chat_message_dict.get("structure")
 
