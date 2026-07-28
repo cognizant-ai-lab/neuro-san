@@ -37,13 +37,17 @@ class CliBuilder:
     def build_cli_command(
             host, port, agent_name, prompt_file,
             include_tokens=False, use_https=False,
+            chat_filter_type="MAXIMAL",
     ) -> List[str]:
         """Build the agent_cli subprocess command list.
 
         Uses --no_thinking_file to avoid race conditions under
         concurrency.  When include_tokens is True, adds --tokens
         for inline token accounting.  When use_https is True,
-        connects over HTTPS/TLS instead of plain HTTP.
+        connects over HTTPS/TLS instead of plain HTTP.  When
+        chat_filter_type is "MINIMAL", adds --minimal so the server
+        streams only the final answer; agent_cli defaults to
+        --maximal otherwise.
         """
         cmd = [
             "python", "-m", "neuro_san.client.agent_cli",
@@ -57,6 +61,8 @@ class CliBuilder:
         ]
         if include_tokens:
             cmd.append("--tokens")
+        if str(chat_filter_type).upper() == "MINIMAL":
+            cmd.append("--minimal")
         return cmd
 
     @staticmethod

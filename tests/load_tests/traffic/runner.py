@@ -108,6 +108,9 @@ class TrafficRunner:
                         self._args.agent, prompt_file,
                         include_tokens=self._args.include_tokens,
                         use_https=getattr(self._args, "https", False),
+                        chat_filter_type=getattr(
+                            self._args, "chat_filter", "maximal",
+                        ).upper(),
                     ),
                     self._args.request_timeout, self._args.idle_timeout,
                     cancel_event,

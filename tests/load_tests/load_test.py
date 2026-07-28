@@ -341,11 +341,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             type=str,
             choices=["maximal", "minimal"],
             default="maximal",
-            help="Server-side chat message filter (--http-client "
-                 "mode only). maximal: stream all messages "
-                 "including AGENT_PROGRESS (default). minimal: "
-                 "stream only the final answer message, which "
-                 "reduces server-to-client traffic and the "
+            help="Server-side chat message filter (both subprocess "
+                 "and --http-client modes). maximal: stream all "
+                 "messages including AGENT_PROGRESS (default). "
+                 "minimal: stream only the final answer message, "
+                 "which reduces server-to-client traffic and the "
                  "server-side work of producing progress events.",
         )
         parser.add_argument(
