@@ -1193,9 +1193,13 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 r.get("total_tokens") for r in results
             )
             if has_token_data:
+                token_source = (
+                    "HTTP token_accounting"
+                    if getattr(self.args, "http_client", False)
+                    else "agent_cli --tokens"
+                )
                 logger.info(
-                    "\n  Token usage "
-                    "(from agent_cli --tokens):",
+                    "\n  Token usage (from %s):", token_source,
                 )
                 TrafficRunner.log_token_summary(
                     results, output_dir=self._output_dir,
