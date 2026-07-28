@@ -1725,6 +1725,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             mem.percent, before_used_mb,
             avail_gb, total_gb,
         )
+        ncores = psutil.cpu_count() or 1
+        logger.info(
+            "  System CPU: %d cores (%.0f%% in use)",
+            ncores, psutil.cpu_percent(interval=0.1),
+        )
         before_sys_mem_pct = mem.percent
         before_kernel = self._read_kernel_memory()
 

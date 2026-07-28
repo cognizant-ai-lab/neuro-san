@@ -239,6 +239,7 @@ class InputValidator:
                 "            --total-timeout disabled",
             )
         self._print_system_memory()
+        self._print_system_cpu()
 
     @staticmethod
     def _print_system_memory() -> None:
@@ -250,6 +251,16 @@ class InputValidator:
             "  System RAM: %.1fG (%.1fG available,"
             " %.0f%% used)",
             total_gb, avail_gb, mem.percent,
+        )
+
+    @staticmethod
+    def _print_system_cpu() -> None:
+        """Print core count and current system CPU utilization."""
+        ncores = psutil.cpu_count() or 1
+        cpu_pct = psutil.cpu_percent(interval=0.1)
+        logger.info(
+            "  System CPU: %d cores (%.0f%% in use)",
+            ncores, cpu_pct,
         )
 
     def _estimate_stage_duration(
