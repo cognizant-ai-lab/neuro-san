@@ -223,7 +223,7 @@ class RegistryManifestRestorer(Restorer):
         :param manifest_key: The key in the manifest file.
         :param manifest_dict: The dictionary of the manifest file.
         :param external_network_names: The list of external network names
-        :return: a nested map of storage type -> (mapping of name -> agent networks)
+        :return: A tuple of (agent_network, network_name, manifest_dict)
         """
         usable_network: bool = isinstance(manifest_dict, dict) and manifest_dict.get("serve", False)
 
@@ -315,7 +315,7 @@ class RegistryManifestRestorer(Restorer):
         :param manifest_key: The key in the manifest file.
         :param manifest_dict: The dictionary of the manifest file.
         :param external_network_names: The list of external network names
-        :return: a nested map of storage type -> (mapping of name -> agent networks)
+        :return: A tuple of (agent_network, network_name, manifest_dict)
         """
         usable_network: bool = isinstance(manifest_dict, dict) and manifest_dict.get("serve", False)
 
