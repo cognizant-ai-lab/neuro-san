@@ -19,6 +19,7 @@ from typing import Dict
 from typing import List
 from typing import Sequence
 from typing import Tuple
+from typing import Type
 from typing import Union
 
 import os
@@ -176,7 +177,7 @@ class RegistryManifestRestorer(Restorer):
 
         # Determine how many threads to use and which style of executor to use
         max_workers: int = len(one_manifest)
-        pool_executor: Executor = ThreadPoolExecutor
+        pool_executor: Type[Executor] = ThreadPoolExecutor
 
         # By default use a ThreadPoolExecutor, but because of the GIL, in cases of large manifests,
         # a ProcessPoolExecutor ends up being more heavyweight, yet still more efficient because of
