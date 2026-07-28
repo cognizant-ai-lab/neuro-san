@@ -249,7 +249,6 @@ class RegistryManifestRestorer(Restorer):
         :param agent_networks: a nested map of storage type -> (mapping of name -> agent networks)
                                 potentially modified
         """
-
         if agent_network is None:
             return
 
