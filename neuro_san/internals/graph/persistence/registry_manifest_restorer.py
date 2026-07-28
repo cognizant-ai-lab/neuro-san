@@ -306,11 +306,7 @@ class RegistryManifestRestorer(Restorer):
             agent_network: AgentNetwork = None
             network_name: str = None
             agent_network, network_name, manifest_dict = await self.async_read_one_agent_network(
-                manifest_key,
-                manifest_dict,
-                manifest_file,
-                manifest_dir,
-                external_network_names
+                manifest_key, manifest_dict, manifest_file, manifest_dir, external_network_names, self.agent_mapper
             )
             self.maybe_store_agent_network(agent_network, network_name, manifest_dict, agent_networks)
 
