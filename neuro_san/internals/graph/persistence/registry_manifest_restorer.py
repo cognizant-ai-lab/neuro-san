@@ -313,8 +313,8 @@ class RegistryManifestRestorer(Restorer):
         return agent_networks
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
+    @staticmethod
     async def async_read_one_agent_network(
-                self,
                 manifest_key: str,
                 manifest_dict: Dict[str, Any],
                 manifest_file: str = None,
@@ -342,7 +342,7 @@ class RegistryManifestRestorer(Restorer):
                 manifest_dir, agent_filepath, manifest_key, agent_mapper
             )
 
-        agent_network = self.process_one_agent_network(
+        agent_network = RegistryManifestRestorer.process_one_agent_network(
             agent_network, usable_network, agent_filepath,
             manifest_file, manifest_key, manifest_dict, validator, agent_mapper
         )
