@@ -1325,6 +1325,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
         if os.path.isfile(json_path):
             logger.info("  Raw results: %s", json_path)
+        requests_dir = os.path.join(self._output_dir, "requests")
+        if os.path.isdir(requests_dir):
+            logger.info("  Requests:    %s", requests_dir)
         gz_path = os.path.join(
             self._output_dir, "server.log.gz",
         )
