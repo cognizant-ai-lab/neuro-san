@@ -737,6 +737,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         if probe_used:
             results.insert(0, probe_result)
+            elapsed += probe_result.get("elapsed", 0.0)
 
         if stop_event:
             stop_event.set()
