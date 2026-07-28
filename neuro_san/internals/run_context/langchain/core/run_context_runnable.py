@@ -27,7 +27,6 @@ import traceback
 
 from pydantic import ConfigDict
 
-from langchain_classic.callbacks.tracers.logging import LoggingCallbackHandler
 from langchain_core.agents import AgentFinish
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.messages.ai import AIMessage
@@ -162,6 +161,15 @@ class RunContextRunnable(NeuroSanRunnable):
         if isinstance(verbose, str) and verbose.lower() in ("true", "extra", "logging"):
             # This particular class adds a *lot* of very detailed messages
             # to the logs.  Add this because some people are interested in it.
+            # If you find yourself curious about this setting, what you probably
+            # are really looking for is an Observability setup like:
+            #       LangSmith, Langfuse, HoneyHive, or Arize Phoenix.
+            # See the docs for Observability plugins in neuro-san-studio.
+            # This was our only tie to langchain-classic, so make it optional in this case.
+            LoggingCallbackHandler: Type[BaseCallbackHandler] = ResolverUtil.create_type(
+                "langchain_classic.callbacks.tracers.logging.LoggingCallbackHandler",
+                install_if_missing="langchain-classic"
+            )
             callbacks.append(LoggingCallbackHandler(self.logger))
 
         # Get the number of attempts from the spec.
