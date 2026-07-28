@@ -19,7 +19,6 @@ from typing import Dict
 from typing import List
 from typing import Sequence
 from typing import Tuple
-from typing import Type
 from typing import Union
 
 import os
@@ -27,11 +26,11 @@ import json
 from logging import getLogger
 from logging import Logger
 
-from concurrent.futures import Executor
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from json.decoder import JSONDecodeError
+from multiprocessing import get_context
 from time import perf_counter
 
 from pyparsing.exceptions import ParseException
@@ -183,16 +182,17 @@ class RegistryManifestRestorer(Restorer):
         # Avoid spawning an unbounded number of workers.
         cpu_count: int = os.cpu_count() or 1
         max_workers: int = min(len(one_manifest), cpu_count)
-        pool_executor: Type[Executor] = ThreadPoolExecutor
+        executor_factory = partial(ThreadPoolExecutor, max_workers=max_workers)
 
         # By default use a ThreadPoolExecutor, but because of the GIL, in cases of large manifests,
         # a ProcessPoolExecutor ends up being more heavyweight, yet still more efficient because of
         # the GIL.  When we get to free-threading in Python 3.14T, this can be changed back to ThreadPoolExecutor.
         process_threshold: int = 20     # Somewhat arbitrary
         if len(one_manifest) > process_threshold:
-            pool_executor = ProcessPoolExecutor
+            executor_factory = partial(ProcessPoolExecutor, max_workers=max_workers,
+                                       mp_context=get_context("spawn"))
 
-        with pool_executor(max_workers=max_workers) as executor:
+        with executor_factory() as executor:
 
             read_one: Any = partial(self.read_one_agent_network,
                                     manifest_file=manifest_file,
