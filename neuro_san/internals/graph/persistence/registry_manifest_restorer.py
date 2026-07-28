@@ -18,13 +18,21 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Sequence
+from typing import Tuple
 from typing import Union
 
 import os
 import json
-import logging
+from logging import getLogger
+from logging import Logger
 
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from json.decoder import JSONDecodeError
+from multiprocessing import get_context
+from time import perf_counter
+
 from pyparsing.exceptions import ParseException
 from pyparsing.exceptions import ParseSyntaxException
 
@@ -86,14 +94,13 @@ class RegistryManifestRestorer(Restorer):
         else:
             self.manifest_files = manifest_files
 
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger: Logger = getLogger(self.__class__.__name__)
 
     def restore_from_files(self, file_references: Sequence[str]) -> Dict[str, Dict[str, AgentNetwork]]:
         """
         :param file_references: The sequence of file references to use when restoring.
         :return: a nested map of storage type -> (mapping of name -> agent networks)
         """
-
         all_agent_networks: Dict[str, Dict[str, AgentNetwork]] = {}
         overlayer = DictionaryOverlay()
 
@@ -145,6 +152,7 @@ class RegistryManifestRestorer(Restorer):
         :param manifest_file: The file reference to use when restoring.
         :return: a nested map of storage type -> (mapping of name -> agent networks)
         """
+        start: float = perf_counter()
 
         agent_networks: Dict[str, Dict[str, AgentNetwork]] = {}
         for storage_class in StorageClass.ALL_PERMANENT:
@@ -167,26 +175,130 @@ class RegistryManifestRestorer(Restorer):
 
         external_network_names: List[str] = self.find_external_network_names(one_manifest)
 
-        # At this point only hocon files we are going to serve up are in the one_manifest.
-        for manifest_key, manifest_dict in one_manifest.items():
+        # Determine how many threads to use and which style of executor to use
+        if not one_manifest:
+            return agent_networks
 
-            usable_network: bool = isinstance(manifest_dict, dict) and manifest_dict.get("serve", False)
+        # Avoid spawning an unbounded number of workers.
+        cpu_count: int = os.cpu_count() or 1
+        max_workers: int = min(len(one_manifest), cpu_count)
+        executor_factory = partial(ThreadPoolExecutor, max_workers=max_workers)
 
-            # We'll need to use an agent mapper to get to this agent definition file.
-            agent_filepath: str = self.agent_mapper.agent_name_to_filepath(manifest_key)
-            network_name: str = self.agent_mapper.filepath_to_agent_network_name(agent_filepath)
-            validator = ManifestNetworkValidator(
-                external_network_names,
-                network_name=network_name)
-            agent_network: AgentNetwork = None
-            if usable_network:
-                agent_network = self.restore_one_agent_network(manifest_dir, agent_filepath, manifest_key)
+        # By default use a ThreadPoolExecutor, but because of the GIL, in cases of large manifests,
+        # a ProcessPoolExecutor ends up being more heavyweight, yet still more efficient because of
+        # the GIL.  When we get to free-threading in Python 3.14T, this can be changed back to ThreadPoolExecutor.
+        process_threshold: int = 20     # Somewhat arbitrary
+        if len(one_manifest) > process_threshold:
+            # While "spawn" below is more correct for more OSes and more Python versions,
+            # it is not necessarily the fastest. "fork" can be faster, but could lead to deadlocks.
+            # See https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
+            executor_factory = partial(ProcessPoolExecutor, max_workers=max_workers,
+                                       mp_context=get_context("spawn"))
 
-            self.process_one_agent_network(agent_network, usable_network, agent_filepath,
-                                           manifest_file, manifest_key, manifest_dict,
-                                           validator, agent_networks)
+        try:
+            with executor_factory() as executor:
+
+                read_one: Any = partial(self.read_one_agent_network,
+                                        manifest_file=manifest_file,
+                                        manifest_dir=manifest_dir,
+                                        external_network_names=external_network_names,
+                                        agent_mapper=self.agent_mapper)
+                manifest_keys: List[str] = list(one_manifest.keys())
+                manifest_dicts: List[Dict[str, Any]] = list(one_manifest.values())
+
+                results: List[Tuple[AgentNetwork, str, Dict[str, Any]]] = executor.map(read_one, manifest_keys,
+                                                                                       manifest_dicts)
+                result: Tuple[AgentNetwork, str, Dict[str, Any]] = None
+                for result in results:
+                    self.maybe_store_agent_network(result[0], result[1], result[2], agent_networks)
+        except Exception:     # pylint: disable=broad-except
+            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger.exception("Manifest file %s could not be restored.", manifest_file)
+
+        stop: float = perf_counter()
+        duration: float = stop - start
+        if duration > 5.0:
+            # DEF - for some reason infos don't show up in the logs at server start time. :shrug:
+            self.logger.warning("Manifest file %s restored in %.2f seconds.", manifest_file, duration)
 
         return agent_networks
+
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    @staticmethod
+    def read_one_agent_network(
+                manifest_key: str,
+                manifest_dict: Dict[str, Any],
+                manifest_file: str = None,
+                manifest_dir: str = None,
+                external_network_names: List[str] = None,
+                agent_mapper: AgentFileTreeMapper = None
+            ) -> Tuple[AgentNetwork, str, Dict[str, Any]]:
+        """
+        :param manifest_dir: The directory of the manifest file.
+        :param manifest_file: The file reference to use when restoring.
+        :param manifest_key: The key in the manifest file.
+        :param manifest_dict: The dictionary of the manifest file.
+        :param external_network_names: The list of external network names
+        :param agent_mapper: The AgentFileTreeMapper to use
+        :return: A tuple of (agent_network, network_name, manifest_dict)
+        """
+        usable_network: bool = isinstance(manifest_dict, dict) and manifest_dict.get("serve", False)
+
+        # We'll need to use an agent mapper to get to this agent definition file.
+        agent_filepath: str = agent_mapper.agent_name_to_filepath(manifest_key)
+        network_name: str = agent_mapper.filepath_to_agent_network_name(agent_filepath)
+        validator = ManifestNetworkValidator(external_network_names, network_name=network_name)
+
+        agent_network: AgentNetwork = None
+
+        try:
+            if usable_network:
+                agent_network = RegistryManifestRestorer.restore_one_agent_network(
+                    manifest_dir, agent_filepath, manifest_key, agent_mapper
+                )
+
+            agent_network = RegistryManifestRestorer.process_one_agent_network(
+                agent_network, usable_network, agent_filepath,
+                manifest_file, manifest_key, manifest_dict,
+                validator, agent_mapper
+            )
+        except Exception as ex:     # pylint: disable=broad-except
+            # None-out the agent_network.
+            # This will mean that the failed read will skip the network without blowing anything else up.
+            agent_network = None
+            sensitive_logger = SensitiveLogger(getLogger(__name__))
+            sensitive_logger.error("Failed to restore agent_network %s from %s. Skipping. - %s",
+                                   manifest_key, manifest_file, str(ex))
+
+        return agent_network, network_name, manifest_dict
+
+    def maybe_store_agent_network(self, agent_network: AgentNetwork, network_name: str, manifest_dict: Dict[str, Any],
+                                  agent_networks: Dict[str, Dict[str, AgentNetwork]]):
+        """
+        Determine whether and where to store the agent network
+
+        :param agent_network: The agent network to store
+        :param network_name: The name of the network
+        :param manifest_dict: The manifest dictionary
+        :param agent_networks: a nested map of storage type -> (mapping of name -> agent networks)
+                                potentially modified
+        """
+        if agent_network is None and isinstance(manifest_dict, dict) and manifest_dict.get("serve", False):
+            # Restore/validation failure - never stored, same as before
+            return
+
+        # At this point even if agent_network is None, we still have a store to do.
+        # With a None agent_network, we just don't store anythin so a later manifest version
+        # can override an earlier one, per ServerdManifiestConfigFilter.
+
+        # Figure out where we want to put the network per the network's manifest dictionary
+        storage: str = StorageClass.PUBLIC
+        if not manifest_dict.get(StorageClass.PUBLIC):
+            storage = StorageClass.PROTECTED
+        if manifest_dict.get("periodic", False):
+            self.periodic_configs[network_name] = manifest_dict["periodic"]
+
+        agent_networks[storage][network_name] = agent_network
 
     # pylint: disable=too-many-locals
     async def async_restore_one_manifest(self, manifest_file: str) -> Dict[str, Dict[str, AgentNetwork]]:
@@ -213,30 +325,64 @@ class RegistryManifestRestorer(Restorer):
 
         # At this point only hocon files we are going to serve up are in the one_manifest.
         for manifest_key, manifest_dict in one_manifest.items():
-
-            usable_network: bool = isinstance(manifest_dict, dict) and manifest_dict.get("serve", False)
-
-            # We'll need to use an agent mapper to get to this agent definition file.
-            agent_filepath: str = self.agent_mapper.agent_name_to_filepath(manifest_key)
-            network_name: str = self.agent_mapper.filepath_to_agent_network_name(agent_filepath)
-            validator = ManifestNetworkValidator(
-                external_network_names,
-                network_name=network_name)
             agent_network: AgentNetwork = None
-            if usable_network:
-                agent_network = await self.async_restore_one_agent_network(manifest_dir, agent_filepath, manifest_key)
-
-            self.process_one_agent_network(agent_network, usable_network, agent_filepath,
-                                           manifest_file, manifest_key, manifest_dict,
-                                           validator, agent_networks)
+            network_name: str = None
+            agent_network, network_name, manifest_dict = await self.async_read_one_agent_network(
+                manifest_key, manifest_dict, manifest_file, manifest_dir, external_network_names, self.agent_mapper
+            )
+            self.maybe_store_agent_network(agent_network, network_name, manifest_dict, agent_networks)
 
         return agent_networks
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
-    def process_one_agent_network(self, agent_network: AgentNetwork, usable_network: bool, agent_filepath: str,
-                                  manifest_file: str, manifest_key: str, manifest_dict: Dict[str, Any],
-                                  validator: ManifestNetworkValidator,
-                                  agent_networks: Dict[str, Dict[str, AgentNetwork]]):
+    @staticmethod
+    async def async_read_one_agent_network(
+                manifest_key: str,
+                manifest_dict: Dict[str, Any],
+                manifest_file: str = None,
+                manifest_dir: str = None,
+                external_network_names: List[str] = None,
+                agent_mapper: AgentFileTreeMapper = None
+            ) -> Tuple[AgentNetwork, str, Dict[str, Any]]:
+        """
+        :param manifest_dir: The directory of the manifest file.
+        :param manifest_file: The file reference to use when restoring.
+        :param manifest_key: The key in the manifest file.
+        :param manifest_dict: The dictionary of the manifest file.
+        :param external_network_names: The list of external network names
+        :return: A tuple of (agent_network, network_name, manifest_dict)
+        """
+        usable_network: bool = isinstance(manifest_dict, dict) and manifest_dict.get("serve", False)
+
+        # We'll need to use an agent mapper to get to this agent definition file.
+        agent_filepath: str = agent_mapper.agent_name_to_filepath(manifest_key)
+        network_name: str = agent_mapper.filepath_to_agent_network_name(agent_filepath)
+        validator = ManifestNetworkValidator(external_network_names, network_name=network_name)
+        agent_network: AgentNetwork = None
+        if usable_network:
+            agent_network = await RegistryManifestRestorer.async_restore_one_agent_network(
+                manifest_dir, agent_filepath, manifest_key, agent_mapper
+            )
+
+        agent_network = RegistryManifestRestorer.process_one_agent_network(
+            agent_network, usable_network, agent_filepath,
+            manifest_file, manifest_key, manifest_dict, validator, agent_mapper
+        )
+
+        return agent_network, network_name, manifest_dict
+
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    @staticmethod
+    def process_one_agent_network(
+                agent_network: AgentNetwork,
+                usable_network: bool,
+                agent_filepath: str,
+                manifest_file: str,
+                manifest_key: str,
+                manifest_dict: Dict[str, Any],
+                validator: ManifestNetworkValidator,
+                agent_mapper: AgentFileTreeMapper
+            ) -> AgentNetwork:
         """
         :param agent_network: The agent network to process.
         :param usable_network: Is this agent network usable?
@@ -245,52 +391,50 @@ class RegistryManifestRestorer(Restorer):
         :param manifest_key: The manifest key.
         :param manifest_dict: The manifest dictionary.
         :param validator: The validator.
-        :param agent_networks: The accumulated agent networks
+        :param agent_mapper: The agent mapper.
+        :return: The agent network
         """
-        network_name: str = self.agent_mapper.filepath_to_agent_network_name(agent_filepath)
+        network_name: str = agent_mapper.filepath_to_agent_network_name(agent_filepath)
+        logger: Logger = getLogger(__name__)
 
         if agent_network is not None:
-            self.logger.info("Validating %s agent network...", network_name)
+            logger.info("Validating %s agent network...", network_name)
             validation_errors: List[str] = validator.validate(agent_network.get_config())
             if len(validation_errors) > 0:
-                self.logger.error("manifest registry %s has validation errors. Skipping. Errors: %s",
-                                  agent_filepath,
-                                  json.dumps(validation_errors, indent=4, sort_keys=True))
+                logger.error("manifest registry %s has validation errors. Skipping. Errors: %s",
+                             agent_filepath,
+                             json.dumps(validation_errors, indent=4, sort_keys=True))
                 agent_network = None
-                return
+                return agent_network
 
         if usable_network and agent_network is None:
-            self.logger.error("manifest registry %s not found in %s", manifest_key, manifest_file)
-            return
+            logger.error("manifest registry %s not found in %s", manifest_key, manifest_file)
+            return agent_network
 
         # Check if this agent network has been declared as MCP tool:
         if usable_network and manifest_dict.get("mcp", False):
             agent_network.set_as_mcp_tool()
 
-        # Figure out where we want to put the network per the network's manifest dictionary
-        storage: str = StorageClass.PUBLIC
-        if not manifest_dict.get(StorageClass.PUBLIC):
-            storage = StorageClass.PROTECTED
-        if manifest_dict.get("periodic", False):
-            self.periodic_configs[network_name] = manifest_dict["periodic"]
+        return agent_network
 
-        agent_networks[storage][network_name] = agent_network
-
-    def restore_one_agent_network(self, manifest_dir: str, agent_filepath: str, manifest_key: str) -> AgentNetwork:
+    @staticmethod
+    def restore_one_agent_network(manifest_dir: str, agent_filepath: str, manifest_key: str,
+                                  agent_mapper: AgentFileTreeMapper) -> AgentNetwork:
         """
         :param manifest_dir: The directory of the manifest file
         :param agent_filepath: The file reference for the agent network description to restore
         :param manifest_key: the key to use when restoring
+        :param agent_mapper: the agent mapper
         :return: a built map of agent networks
         """
 
         agent_network: AgentNetwork = None
-        registry_restorer = AgentNetworkRestorer(registry_dir=manifest_dir, agent_mapper=self.agent_mapper)
+        registry_restorer = AgentNetworkRestorer(registry_dir=manifest_dir, agent_mapper=agent_mapper)
         try:
             agent_network = registry_restorer.restore(file_reference=agent_filepath)
         except FileNotFoundError as exception:
             message: str = f"Failed to restore registry item {manifest_key}. Skipping. - {str(exception)}"
-            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger = SensitiveLogger(getLogger(__name__))
             sensitive_logger.error(message)
             agent_network = None
         except (ParseException, ParseSyntaxException, JSONDecodeError, ValueError) as exception:
@@ -306,28 +450,31 @@ class RegistryManifestRestorer(Restorer):
                 use_exception = exception.__cause__
 
             message: str = f"Parse error in registry item {manifest_key}. Skipping. - {str(use_exception)}"
-            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger = SensitiveLogger(getLogger(__name__))
             sensitive_logger.error(message)
             agent_network = None
 
         return agent_network
 
-    async def async_restore_one_agent_network(self, manifest_dir: str, agent_filepath: str, manifest_key: str) \
+    @staticmethod
+    async def async_restore_one_agent_network(manifest_dir: str, agent_filepath: str,
+                                              manifest_key: str, agent_mapper: AgentFileTreeMapper) \
             -> AgentNetwork:
         """
         :param manifest_dir: The directory of the manifest file
         :param agent_filepath: The file reference for the agent network description to restore
         :param manifest_key: the key to use when restoring
+        :param agent_mapper: the agent mapper
         :return: a built map of agent networks
         """
 
         agent_network: AgentNetwork = None
-        registry_restorer = AgentNetworkRestorer(registry_dir=manifest_dir, agent_mapper=self.agent_mapper)
+        registry_restorer = AgentNetworkRestorer(registry_dir=manifest_dir, agent_mapper=agent_mapper)
         try:
             agent_network = await registry_restorer.async_restore(file_reference=agent_filepath)
         except FileNotFoundError as exception:
             message: str = f"Failed to restore registry item {manifest_key}. Skipping. - {str(exception)}"
-            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger = SensitiveLogger(getLogger(__name__))
             sensitive_logger.error(message)
             agent_network = None
         except (ParseException, ParseSyntaxException, JSONDecodeError, ValueError) as exception:
@@ -343,7 +490,7 @@ class RegistryManifestRestorer(Restorer):
                 use_exception = exception.__cause__
 
             message: str = f"Parse error in registry item {manifest_key}. Skipping. - {str(use_exception)}"
-            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger = SensitiveLogger(getLogger(__name__))
             sensitive_logger.error(message)
             agent_network = None
 
