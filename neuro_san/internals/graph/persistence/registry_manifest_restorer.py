@@ -18,6 +18,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Sequence
+from typing import Tuple
 from typing import Union
 
 import os
@@ -169,24 +170,55 @@ class RegistryManifestRestorer(Restorer):
 
         # At this point only hocon files we are going to serve up are in the one_manifest.
         for manifest_key, manifest_dict in one_manifest.items():
-
-            usable_network: bool = isinstance(manifest_dict, dict) and manifest_dict.get("serve", False)
-
-            # We'll need to use an agent mapper to get to this agent definition file.
-            agent_filepath: str = self.agent_mapper.agent_name_to_filepath(manifest_key)
-            network_name: str = self.agent_mapper.filepath_to_agent_network_name(agent_filepath)
-            validator = ManifestNetworkValidator(
-                external_network_names,
-                network_name=network_name)
             agent_network: AgentNetwork = None
-            if usable_network:
-                agent_network = self.restore_one_agent_network(manifest_dir, agent_filepath, manifest_key)
+            network_name: str = None
+            agent_network, network_name = self.read_one_agent_network(manifest_dir, manifest_file,
+                                                                      manifest_key, manifest_dict,
+                                                                      external_network_names)
+            if agent_network is not None:
 
-            self.process_one_agent_network(agent_network, usable_network, agent_filepath,
-                                           manifest_file, manifest_key, manifest_dict,
-                                           validator, agent_networks)
+                # Figure out where we want to put the network per the network's manifest dictionary
+                storage: str = StorageClass.PUBLIC
+                if not manifest_dict.get(StorageClass.PUBLIC):
+                    storage = StorageClass.PROTECTED
+                if manifest_dict.get("periodic", False):
+                    self.periodic_configs[network_name] = manifest_dict["periodic"]
+
+                agent_networks[storage][network_name] = agent_network
 
         return agent_networks
+
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def read_one_agent_network(
+                self,
+                manifest_dir: str,
+                manifest_file: str,
+                manifest_key: str,
+                manifest_dict: Dict[str, Any],
+                external_network_names: List[str]
+            ) -> Tuple[AgentNetwork, str]:
+        """
+        :param manifest_dir: The directory of the manifest file.
+        :param manifest_file: The file reference to use when restoring.
+        :param manifest_key: The key in the manifest file.
+        :param manifest_dict: The dictionary of the manifest file.
+        :param external_network_names: The list of external network names
+        :return: a nested map of storage type -> (mapping of name -> agent networks)
+        """
+        usable_network: bool = isinstance(manifest_dict, dict) and manifest_dict.get("serve", False)
+
+        # We'll need to use an agent mapper to get to this agent definition file.
+        agent_filepath: str = self.agent_mapper.agent_name_to_filepath(manifest_key)
+        network_name: str = self.agent_mapper.filepath_to_agent_network_name(agent_filepath)
+        validator = ManifestNetworkValidator(external_network_names, network_name=network_name)
+
+        agent_network: AgentNetwork = None
+        if usable_network:
+            agent_network = self.restore_one_agent_network(manifest_dir, agent_filepath, manifest_key)
+
+        self.process_one_agent_network(agent_network, usable_network, agent_filepath,
+                                       manifest_file, manifest_key, manifest_dict, validator)
+        return agent_network, network_name
 
     # pylint: disable=too-many-locals
     async def async_restore_one_manifest(self, manifest_file: str) -> Dict[str, Dict[str, AgentNetwork]]:
@@ -213,30 +245,60 @@ class RegistryManifestRestorer(Restorer):
 
         # At this point only hocon files we are going to serve up are in the one_manifest.
         for manifest_key, manifest_dict in one_manifest.items():
-
-            usable_network: bool = isinstance(manifest_dict, dict) and manifest_dict.get("serve", False)
-
-            # We'll need to use an agent mapper to get to this agent definition file.
-            agent_filepath: str = self.agent_mapper.agent_name_to_filepath(manifest_key)
-            network_name: str = self.agent_mapper.filepath_to_agent_network_name(agent_filepath)
-            validator = ManifestNetworkValidator(
-                external_network_names,
-                network_name=network_name)
             agent_network: AgentNetwork = None
-            if usable_network:
-                agent_network = await self.async_restore_one_agent_network(manifest_dir, agent_filepath, manifest_key)
+            network_name: str = None
+            agent_network, network_name = await self.async_read_one_agent_network(manifest_dir, manifest_file,
+                                                                                  manifest_key, manifest_dict,
+                                                                                  external_network_names)
+            if agent_network is not None:
 
-            self.process_one_agent_network(agent_network, usable_network, agent_filepath,
-                                           manifest_file, manifest_key, manifest_dict,
-                                           validator, agent_networks)
+                # Figure out where we want to put the network per the network's manifest dictionary
+                storage: str = StorageClass.PUBLIC
+                if not manifest_dict.get(StorageClass.PUBLIC):
+                    storage = StorageClass.PROTECTED
+                if manifest_dict.get("periodic", False):
+                    self.periodic_configs[network_name] = manifest_dict["periodic"]
+
+                agent_networks[storage][network_name] = agent_network
 
         return agent_networks
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
+    async def async_read_one_agent_network(
+                self,
+                manifest_dir: str,
+                manifest_file: str,
+                manifest_key: str,
+                manifest_dict: Dict[str, Any],
+                external_network_names: List[str]
+            ) -> Tuple[AgentNetwork, str]:
+        """
+        :param manifest_dir: The directory of the manifest file.
+        :param manifest_file: The file reference to use when restoring.
+        :param manifest_key: The key in the manifest file.
+        :param manifest_dict: The dictionary of the manifest file.
+        :param external_network_names: The list of external network names
+        :return: a nested map of storage type -> (mapping of name -> agent networks)
+        """
+        usable_network: bool = isinstance(manifest_dict, dict) and manifest_dict.get("serve", False)
+
+        # We'll need to use an agent mapper to get to this agent definition file.
+        agent_filepath: str = self.agent_mapper.agent_name_to_filepath(manifest_key)
+        network_name: str = self.agent_mapper.filepath_to_agent_network_name(agent_filepath)
+        validator = ManifestNetworkValidator(external_network_names, network_name=network_name)
+        agent_network: AgentNetwork = None
+        if usable_network:
+            agent_network = await self.async_restore_one_agent_network(manifest_dir, agent_filepath, manifest_key)
+
+        agent_network = self.process_one_agent_network(agent_network, usable_network, agent_filepath,
+                                                       manifest_file, manifest_key, manifest_dict, validator)
+
+        return agent_network, network_name
+
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def process_one_agent_network(self, agent_network: AgentNetwork, usable_network: bool, agent_filepath: str,
                                   manifest_file: str, manifest_key: str, manifest_dict: Dict[str, Any],
-                                  validator: ManifestNetworkValidator,
-                                  agent_networks: Dict[str, Dict[str, AgentNetwork]]):
+                                  validator: ManifestNetworkValidator) -> AgentNetwork:
         """
         :param agent_network: The agent network to process.
         :param usable_network: Is this agent network usable?
@@ -245,7 +307,6 @@ class RegistryManifestRestorer(Restorer):
         :param manifest_key: The manifest key.
         :param manifest_dict: The manifest dictionary.
         :param validator: The validator.
-        :param agent_networks: The accumulated agent networks
         """
         network_name: str = self.agent_mapper.filepath_to_agent_network_name(agent_filepath)
 
@@ -257,24 +318,17 @@ class RegistryManifestRestorer(Restorer):
                                   agent_filepath,
                                   json.dumps(validation_errors, indent=4, sort_keys=True))
                 agent_network = None
-                return
+                return agent_network
 
         if usable_network and agent_network is None:
             self.logger.error("manifest registry %s not found in %s", manifest_key, manifest_file)
-            return
+            return agent_network
 
         # Check if this agent network has been declared as MCP tool:
         if usable_network and manifest_dict.get("mcp", False):
             agent_network.set_as_mcp_tool()
 
-        # Figure out where we want to put the network per the network's manifest dictionary
-        storage: str = StorageClass.PUBLIC
-        if not manifest_dict.get(StorageClass.PUBLIC):
-            storage = StorageClass.PROTECTED
-        if manifest_dict.get("periodic", False):
-            self.periodic_configs[network_name] = manifest_dict["periodic"]
-
-        agent_networks[storage][network_name] = agent_network
+        return agent_network
 
     def restore_one_agent_network(self, manifest_dir: str, agent_filepath: str, manifest_key: str) -> AgentNetwork:
         """
