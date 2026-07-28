@@ -25,9 +25,13 @@ import os
 import json
 import logging
 
-from concurrent.futures import ThreadPoolExecutor as PoolExecutor
+from concurrent.futures import Executor
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from json.decoder import JSONDecodeError
+from time import perf_counter
+
 from pyparsing.exceptions import ParseException
 from pyparsing.exceptions import ParseSyntaxException
 
@@ -147,6 +151,8 @@ class RegistryManifestRestorer(Restorer):
         :param manifest_file: The file reference to use when restoring.
         :return: a nested map of storage type -> (mapping of name -> agent networks)
         """
+        start: float = perf_counter()
+
         agent_networks: Dict[str, Dict[str, AgentNetwork]] = {}
         for storage_class in StorageClass.ALL_PERMANENT:
             agent_networks[storage_class] = {}
@@ -168,8 +174,18 @@ class RegistryManifestRestorer(Restorer):
 
         external_network_names: List[str] = self.find_external_network_names(one_manifest)
 
+        # Determine how many threads to use and which style of executor to use
         max_workers: int = len(one_manifest)
-        with PoolExecutor(max_workers=max_workers) as executor:
+        pool_executor: Executor = ThreadPoolExecutor
+
+        # By default use a ThreadPoolExecutor, but because of the GIL, in cases of large manifests,
+        # a ProcessPoolExecutor ends up being more heavyweight, yet still more efficient because of
+        # the GIL.  When we get to free-threading in Python 3.14T, this can be changed back to ThreadPoolExecutor.
+        process_threshold: int = 20     # Somewhat arbitrary
+        if max_workers > process_threshold:
+            pool_executor = ProcessPoolExecutor
+
+        with pool_executor(max_workers=max_workers) as executor:
 
             read_one: Any = partial(self.read_one_agent_network,
                                     manifest_file=manifest_file,
@@ -196,6 +212,11 @@ class RegistryManifestRestorer(Restorer):
                         self.periodic_configs[network_name] = manifest_dict["periodic"]
 
                     agent_networks[storage][network_name] = agent_network
+
+        stop: float = perf_counter()
+        duration: float = stop - start
+        if duration > 5.0:
+            self.logger.warning("Manifest file %s restored in %.2f seconds.", manifest_file, duration)
 
         return agent_networks
 
