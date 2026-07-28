@@ -236,8 +236,9 @@ class RegistryManifestRestorer(Restorer):
         if usable_network:
             agent_network = self.restore_one_agent_network(manifest_dir, agent_filepath, manifest_key)
 
-        self.process_one_agent_network(agent_network, usable_network, agent_filepath,
-                                       manifest_file, manifest_key, manifest_dict, validator)
+        agent_network = self.process_one_agent_network(
+            agent_network, usable_network, agent_filepath, manifest_file, manifest_key, manifest_dict, validator
+        )
         return agent_network, network_name, manifest_dict
 
     def maybe_store_agent_network(self, agent_network: AgentNetwork, network_name: str, manifest_dict: Dict[str, Any],
