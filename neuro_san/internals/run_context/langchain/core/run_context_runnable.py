@@ -166,6 +166,7 @@ class RunContextRunnable(NeuroSanRunnable):
             #       LangSmith, Langfuse, HoneyHive, or Arize Phoenix.
             # See the docs for Observability plugins in neuro-san-studio.
             # This was our only tie to langchain-classic, so make it optional in this case.
+            # pylint: disable=invalid-name
             LoggingCallbackHandler: Type[BaseCallbackHandler] = ResolverUtil.create_type(
                 "langchain_classic.callbacks.tracers.logging.LoggingCallbackHandler",
                 install_if_missing="langchain-classic"
