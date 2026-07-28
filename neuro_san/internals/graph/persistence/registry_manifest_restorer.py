@@ -192,21 +192,25 @@ class RegistryManifestRestorer(Restorer):
             executor_factory = partial(ProcessPoolExecutor, max_workers=max_workers,
                                        mp_context=get_context("spawn"))
 
-        with executor_factory() as executor:
+        try:
+            with executor_factory() as executor:
 
-            read_one: Any = partial(self.read_one_agent_network,
-                                    manifest_file=manifest_file,
-                                    manifest_dir=manifest_dir,
-                                    external_network_names=external_network_names,
-                                    agent_mapper=self.agent_mapper)
-            manifest_keys: List[str] = list(one_manifest.keys())
-            manifest_dicts: List[Dict[str, Any]] = list(one_manifest.values())
+                read_one: Any = partial(self.read_one_agent_network,
+                                        manifest_file=manifest_file,
+                                        manifest_dir=manifest_dir,
+                                        external_network_names=external_network_names,
+                                        agent_mapper=self.agent_mapper)
+                manifest_keys: List[str] = list(one_manifest.keys())
+                manifest_dicts: List[Dict[str, Any]] = list(one_manifest.values())
 
-            results: List[Tuple[AgentNetwork, str, Dict[str, Any]]] = executor.map(read_one, manifest_keys,
-                                                                                   manifest_dicts)
-            result: Tuple[AgentNetwork, str, Dict[str, Any]] = None
-            for result in results:
-                self.maybe_store_agent_network(result[0], result[1], result[2], agent_networks)
+                results: List[Tuple[AgentNetwork, str, Dict[str, Any]]] = executor.map(read_one, manifest_keys,
+                                                                                       manifest_dicts)
+                result: Tuple[AgentNetwork, str, Dict[str, Any]] = None
+                for result in results:
+                    self.maybe_store_agent_network(result[0], result[1], result[2], agent_networks)
+        except Exception:     # pylint: disable=broad-except
+            sensitive_logger = SensitiveLogger(self.logger)
+            sensitive_logger.exception("Manifest file %s could not be restored.", manifest_file)
 
         stop: float = perf_counter()
         duration: float = stop - start
@@ -243,16 +247,26 @@ class RegistryManifestRestorer(Restorer):
         validator = ManifestNetworkValidator(external_network_names, network_name=network_name)
 
         agent_network: AgentNetwork = None
-        if usable_network:
-            agent_network = RegistryManifestRestorer.restore_one_agent_network(
-                manifest_dir, agent_filepath, manifest_key, agent_mapper
-            )
 
-        agent_network = RegistryManifestRestorer.process_one_agent_network(
-            agent_network, usable_network, agent_filepath,
-            manifest_file, manifest_key, manifest_dict,
-            validator, agent_mapper
-        )
+        try:
+            if usable_network:
+                agent_network = RegistryManifestRestorer.restore_one_agent_network(
+                    manifest_dir, agent_filepath, manifest_key, agent_mapper
+                )
+
+            agent_network = RegistryManifestRestorer.process_one_agent_network(
+                agent_network, usable_network, agent_filepath,
+                manifest_file, manifest_key, manifest_dict,
+                validator, agent_mapper
+            )
+        except Exception as ex:     # pylint: disable=broad-except
+            # None-out the agent_network.
+            # This will mean that the failed read will skip the network without blowing anything else up.
+            agent_network = None
+            sensitive_logger = SensitiveLogger(getLogger(__name__))
+            sensitive_logger.error("Failed to restore agent_network %s from %s. Skipping. - %s",
+                                   manifest_key, manifest_file, str(ex))
+
         return agent_network, network_name, manifest_dict
 
     def maybe_store_agent_network(self, agent_network: AgentNetwork, network_name: str, manifest_dict: Dict[str, Any],
