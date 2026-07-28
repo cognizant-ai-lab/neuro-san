@@ -190,7 +190,8 @@ class RegistryManifestRestorer(Restorer):
         process_threshold: int = 20     # Somewhat arbitrary
         if len(one_manifest) > process_threshold:
             # While "spawn" below is more correct for more OSes and more Python versions,
-            # it is not necessarily the fastest.
+            # it is not necessarily the fastest. "fork" can be faster, but could lead to deadlocks.
+            # See https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
             executor_factory = partial(ProcessPoolExecutor, max_workers=max_workers,
                                        mp_context=get_context("spawn"))
 
