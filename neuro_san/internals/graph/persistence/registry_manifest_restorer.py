@@ -176,16 +176,26 @@ class RegistryManifestRestorer(Restorer):
         external_network_names: List[str] = self.find_external_network_names(one_manifest)
 
         # Determine how many threads to use and which style of executor to use
-        max_workers: int = len(one_manifest)
+        if not one_manifest:
+            return agent_networks
+
+        # Avoid spawning an unbounded number of workers.
+        cpu_count: int = os.cpu_count() or 1
+        max_workers: int = min(len(one_manifest), cpu_count)
         pool_executor: Type[Executor] = ThreadPoolExecutor
 
         # By default use a ThreadPoolExecutor, but because of the GIL, in cases of large manifests,
         # a ProcessPoolExecutor ends up being more heavyweight, yet still more efficient because of
         # the GIL.  When we get to free-threading in Python 3.14T, this can be changed back to ThreadPoolExecutor.
         process_threshold: int = 20     # Somewhat arbitrary
-        if max_workers > process_threshold:
+        if len(one_manifest) > process_threshold:
             pool_executor = ProcessPoolExecutor
 
+        # ProcessPoolExecutor requires the mapped callable (and any captured state) to be picklable.
+        # `read_one_agent_network` is a bound method and captures `self`, so fall back to threads unless
+        # this gets refactored to use a module-level worker function.
+        if pool_executor is ProcessPoolExecutor:
+            pool_executor = ThreadPoolExecutor
         with pool_executor(max_workers=max_workers) as executor:
 
             read_one: Any = partial(self.read_one_agent_network,
