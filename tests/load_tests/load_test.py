@@ -2310,8 +2310,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         """Execute the full load test workflow."""
         level = self.args.level
         self.args.include_tokens = not self.args.no_tokens
-        if self.args.http_client:
-            self.args.client_only = True
         split_mode = (
             self.args.client_only or self.args.server_only
         )
@@ -2319,15 +2317,15 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             level = LEVEL_MIN
             self.args.level = LEVEL_MIN
             self.args.monitor_resources = True
-        if self.args.yes and level != LEVEL_ADV:
-            if not split_mode:
-                logger.error(
-                    "--yes is only supported at adv level. "
-                    "At %s level, the cost confirmation "
-                    "prompt is required.",
-                    level,
-                )
-                raise SystemExit(1)
+        if (self.args.yes and level != LEVEL_ADV
+                and not self.args.server_only):
+            logger.error(
+                "--yes is only supported at adv level. "
+                "At %s level, the cost confirmation "
+                "prompt is required.",
+                level,
+            )
+            raise SystemExit(1)
         if (self.args.client_only
                 and self.args.server_only):
             logger.error(

@@ -152,15 +152,16 @@ class InputValidator:
             self._run_cost_probe(runner, output_dir)
         )
 
+        remaining = max(capped - 1, 0)
         est_stage_duration = self._estimate_stage_duration(
-            probe_data.get("elapsed", 0),
+            probe_data.get("elapsed", 0), remaining,
         )
         logger.info(
             "  Estimated stage duration: ~%ss "
             "(%.1fs x %s requests)",
             int(est_stage_duration),
             probe_data.get("elapsed", 0),
-            self._args.num_requests,
+            remaining,
         )
 
         warnings = self._collect_warnings(
@@ -263,15 +264,17 @@ class InputValidator:
             ncores, cpu_pct,
         )
 
+    @staticmethod
     def _estimate_stage_duration(
-            self, probe_elapsed,
+            probe_elapsed, remaining,
     ) -> float:
         """Estimate stage wall time from probe duration.
 
         LLM is the bottleneck, so concurrent requests do not
-        scale linearly.  Estimate as probe_time x num_requests.
+        scale linearly.  Estimate as probe_time x remaining
+        requests (the probe already ran, so it is excluded).
         """
-        return probe_elapsed * self._args.num_requests
+        return probe_elapsed * remaining
 
     def _collect_warnings(
             self, *, capped, total_planned,
