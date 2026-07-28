@@ -25,6 +25,8 @@ import os
 import json
 import logging
 
+from concurrent.futures import ThreadPoolExecutor as PoolExecutor
+from functools import partial
 from json.decoder import JSONDecodeError
 from pyparsing.exceptions import ParseException
 from pyparsing.exceptions import ParseSyntaxException
@@ -94,7 +96,6 @@ class RegistryManifestRestorer(Restorer):
         :param file_references: The sequence of file references to use when restoring.
         :return: a nested map of storage type -> (mapping of name -> agent networks)
         """
-
         all_agent_networks: Dict[str, Dict[str, AgentNetwork]] = {}
         overlayer = DictionaryOverlay()
 
@@ -146,7 +147,6 @@ class RegistryManifestRestorer(Restorer):
         :param manifest_file: The file reference to use when restoring.
         :return: a nested map of storage type -> (mapping of name -> agent networks)
         """
-
         agent_networks: Dict[str, Dict[str, AgentNetwork]] = {}
         for storage_class in StorageClass.ALL_PERMANENT:
             agent_networks[storage_class] = {}
@@ -168,35 +168,46 @@ class RegistryManifestRestorer(Restorer):
 
         external_network_names: List[str] = self.find_external_network_names(one_manifest)
 
-        # At this point only hocon files we are going to serve up are in the one_manifest.
-        for manifest_key, manifest_dict in one_manifest.items():
-            agent_network: AgentNetwork = None
-            network_name: str = None
-            agent_network, network_name = self.read_one_agent_network(manifest_dir, manifest_file,
-                                                                      manifest_key, manifest_dict,
-                                                                      external_network_names)
-            if agent_network is not None:
+        max_workers: int = len(one_manifest)
+        with PoolExecutor(max_workers=max_workers) as executor:
 
-                # Figure out where we want to put the network per the network's manifest dictionary
-                storage: str = StorageClass.PUBLIC
-                if not manifest_dict.get(StorageClass.PUBLIC):
-                    storage = StorageClass.PROTECTED
-                if manifest_dict.get("periodic", False):
-                    self.periodic_configs[network_name] = manifest_dict["periodic"]
+            read_one: Any = partial(self.read_one_agent_network,
+                                    manifest_file=manifest_file,
+                                    manifest_dir=manifest_dir,
+                                    external_network_names=external_network_names)
+            manifest_keys: List[str] = list(one_manifest.keys())
+            manifest_dicts: List[Dict[str, Any]] = list(one_manifest.values())
 
-                agent_networks[storage][network_name] = agent_network
+            results: List[Tuple[AgentNetwork, str, Dict[str, Any]]] = executor.map(read_one, manifest_keys,
+                                                                                   manifest_dicts)
+            result: Tuple[AgentNetwork, str, Dict[str, Any]] = None
+            for result in results:
+
+                agent_network: AgentNetwork = result[0]
+                network_name: str = result[1]
+                manifest_dict: Dict[str, Any] = result[2]
+                if agent_network is not None:
+
+                    # Figure out where we want to put the network per the network's manifest dictionary
+                    storage: str = StorageClass.PUBLIC
+                    if not manifest_dict.get(StorageClass.PUBLIC):
+                        storage = StorageClass.PROTECTED
+                    if manifest_dict.get("periodic", False):
+                        self.periodic_configs[network_name] = manifest_dict["periodic"]
+
+                    agent_networks[storage][network_name] = agent_network
 
         return agent_networks
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def read_one_agent_network(
                 self,
-                manifest_dir: str,
-                manifest_file: str,
                 manifest_key: str,
                 manifest_dict: Dict[str, Any],
-                external_network_names: List[str]
-            ) -> Tuple[AgentNetwork, str]:
+                manifest_file: str = None,
+                manifest_dir: str = None,
+                external_network_names: List[str] = None
+            ) -> Tuple[AgentNetwork, str, Dict[str, Any]]:
         """
         :param manifest_dir: The directory of the manifest file.
         :param manifest_file: The file reference to use when restoring.
@@ -218,7 +229,7 @@ class RegistryManifestRestorer(Restorer):
 
         self.process_one_agent_network(agent_network, usable_network, agent_filepath,
                                        manifest_file, manifest_key, manifest_dict, validator)
-        return agent_network, network_name
+        return agent_network, network_name, manifest_dict
 
     # pylint: disable=too-many-locals
     async def async_restore_one_manifest(self, manifest_file: str) -> Dict[str, Dict[str, AgentNetwork]]:
