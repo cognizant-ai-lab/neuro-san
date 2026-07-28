@@ -266,8 +266,13 @@ class RegistryManifestRestorer(Restorer):
         :param agent_networks: a nested map of storage type -> (mapping of name -> agent networks)
                                 potentially modified
         """
-        if agent_network is None:
+        if agent_network is None and isinstance(manifest_dict, dict) and manifest_dict.get("serve", False):
+            # Restore/validation failure - never stored, same as before
             return
+
+        # At this point even if agent_network is None, we still have a store to do.
+        # With a None agent_network, we just don't store anythin so a later manifest version
+        # can override an earlier one, per ServerdManifiestConfigFilter.
 
         # Figure out where we want to put the network per the network's manifest dictionary
         storage: str = StorageClass.PUBLIC
