@@ -189,6 +189,8 @@ class RegistryManifestRestorer(Restorer):
         # the GIL.  When we get to free-threading in Python 3.14T, this can be changed back to ThreadPoolExecutor.
         process_threshold: int = 20     # Somewhat arbitrary
         if len(one_manifest) > process_threshold:
+            # While "spawn" below is more correct for more OSes and more Python versions,
+            # it is not necessarily the fastest.
             executor_factory = partial(ProcessPoolExecutor, max_workers=max_workers,
                                        mp_context=get_context("spawn"))
 
