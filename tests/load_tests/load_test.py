@@ -337,6 +337,18 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                  "all levels.",
         )
         parser.add_argument(
+            "--chat-filter",
+            type=str,
+            choices=["maximal", "minimal"],
+            default="maximal",
+            help="Server-side chat message filter (--http-client "
+                 "mode only). maximal: stream all messages "
+                 "including AGENT_PROGRESS (default). minimal: "
+                 "stream only the final answer message, which "
+                 "reduces server-to-client traffic and the "
+                 "server-side work of producing progress events.",
+        )
+        parser.add_argument(
             "--skip-reservation-check",
             action="store_true",
             default=False,
@@ -2869,6 +2881,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 "num_rounds": self.args.num_rounds,
                 "num_requests": self.args.num_requests,
                 "same_prompt": self.args.same_prompt,
+                "chat_filter": self.args.chat_filter,
                 "server_log": self.server_log,
                 "estimated_tokens_per_request": (
                     self.profile.estimated_tokens_per_request

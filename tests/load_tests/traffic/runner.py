@@ -177,6 +177,9 @@ class TrafficRunner:
                 timeout=self._args.request_timeout,
                 idle_timeout=self._args.idle_timeout,
                 use_https=getattr(self._args, "https", False),
+                chat_filter_type=getattr(
+                    self._args, "chat_filter", "maximal",
+                ).upper(),
             )
         )
         elapsed = time.time() - start

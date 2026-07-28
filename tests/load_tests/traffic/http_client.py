@@ -54,6 +54,7 @@ class HttpClient:
     def execute_request(
             host, port, agent, prompt, *,
             timeout, idle_timeout, use_https=False,
+            chat_filter_type="MAXIMAL",
     ) -> Tuple[str, Dict[str, str], str, float, Dict]:
         """Send one streaming_chat request using the agent_cli
         client stack in-thread.
@@ -112,7 +113,7 @@ class HttpClient:
             "user_input": prompt,
             "sly_data": None,
             "chat_filter": {
-                "chat_filter_type": "MAXIMAL",
+                "chat_filter_type": chat_filter_type,
             },
         }
 
