@@ -199,20 +199,7 @@ class RegistryManifestRestorer(Restorer):
                                                                                    manifest_dicts)
             result: Tuple[AgentNetwork, str, Dict[str, Any]] = None
             for result in results:
-
-                agent_network: AgentNetwork = result[0]
-                network_name: str = result[1]
-                manifest_dict: Dict[str, Any] = result[2]
-                if agent_network is not None:
-
-                    # Figure out where we want to put the network per the network's manifest dictionary
-                    storage: str = StorageClass.PUBLIC
-                    if not manifest_dict.get(StorageClass.PUBLIC):
-                        storage = StorageClass.PROTECTED
-                    if manifest_dict.get("periodic", False):
-                        self.periodic_configs[network_name] = manifest_dict["periodic"]
-
-                    agent_networks[storage][network_name] = agent_network
+                self.maybe_store_agent_network(result[0], result[1], result[2], agent_networks)
 
         stop: float = perf_counter()
         duration: float = stop - start
@@ -253,6 +240,28 @@ class RegistryManifestRestorer(Restorer):
                                        manifest_file, manifest_key, manifest_dict, validator)
         return agent_network, network_name, manifest_dict
 
+    def maybe_store_agent_network(self, agent_network: AgentNetwork, network_name: str, manifest_dict: Dict[str, Any],
+                                  agent_networks: Dict[str, Dict[str, AgentNetwork]]):
+        """
+        :param agent_network: The agent network to store
+        :param network_name: The name of the network
+        :param manifest_dict: The manifest dictionary
+        :param agent_networks: a nested map of storage type -> (mapping of name -> agent networks)
+                                potentially modified
+        """
+
+        if agent_network is None:
+            return
+
+        # Figure out where we want to put the network per the network's manifest dictionary
+        storage: str = StorageClass.PUBLIC
+        if not manifest_dict.get(StorageClass.PUBLIC):
+            storage = StorageClass.PROTECTED
+        if manifest_dict.get("periodic", False):
+            self.periodic_configs[network_name] = manifest_dict["periodic"]
+
+        agent_networks[storage][network_name] = agent_network
+
     # pylint: disable=too-many-locals
     async def async_restore_one_manifest(self, manifest_file: str) -> Dict[str, Dict[str, AgentNetwork]]:
         """
@@ -280,31 +289,26 @@ class RegistryManifestRestorer(Restorer):
         for manifest_key, manifest_dict in one_manifest.items():
             agent_network: AgentNetwork = None
             network_name: str = None
-            agent_network, network_name = await self.async_read_one_agent_network(manifest_dir, manifest_file,
-                                                                                  manifest_key, manifest_dict,
-                                                                                  external_network_names)
-            if agent_network is not None:
-
-                # Figure out where we want to put the network per the network's manifest dictionary
-                storage: str = StorageClass.PUBLIC
-                if not manifest_dict.get(StorageClass.PUBLIC):
-                    storage = StorageClass.PROTECTED
-                if manifest_dict.get("periodic", False):
-                    self.periodic_configs[network_name] = manifest_dict["periodic"]
-
-                agent_networks[storage][network_name] = agent_network
+            agent_network, network_name, manifest_dict = await self.async_read_one_agent_network(
+                manifest_key,
+                manifest_dict,
+                manifest_file,
+                manifest_dir,
+                external_network_names
+            )
+            self.maybe_store_agent_network(agent_network, network_name, manifest_dict, agent_networks)
 
         return agent_networks
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     async def async_read_one_agent_network(
                 self,
-                manifest_dir: str,
-                manifest_file: str,
                 manifest_key: str,
                 manifest_dict: Dict[str, Any],
-                external_network_names: List[str]
-            ) -> Tuple[AgentNetwork, str]:
+                manifest_file: str = None,
+                manifest_dir: str = None,
+                external_network_names: List[str] = None
+            ) -> Tuple[AgentNetwork, str, Dict[str, Any]]:
         """
         :param manifest_dir: The directory of the manifest file.
         :param manifest_file: The file reference to use when restoring.
@@ -326,7 +330,7 @@ class RegistryManifestRestorer(Restorer):
         agent_network = self.process_one_agent_network(agent_network, usable_network, agent_filepath,
                                                        manifest_file, manifest_key, manifest_dict, validator)
 
-        return agent_network, network_name
+        return agent_network, network_name, manifest_dict
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def process_one_agent_network(self, agent_network: AgentNetwork, usable_network: bool, agent_filepath: str,
