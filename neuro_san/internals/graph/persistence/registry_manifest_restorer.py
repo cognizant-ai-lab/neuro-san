@@ -243,6 +243,8 @@ class RegistryManifestRestorer(Restorer):
     def maybe_store_agent_network(self, agent_network: AgentNetwork, network_name: str, manifest_dict: Dict[str, Any],
                                   agent_networks: Dict[str, Dict[str, AgentNetwork]]):
         """
+        Determine whether and where to store the agent network
+
         :param agent_network: The agent network to store
         :param network_name: The name of the network
         :param manifest_dict: The manifest dictionary
