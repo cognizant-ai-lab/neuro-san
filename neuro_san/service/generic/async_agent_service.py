@@ -110,12 +110,16 @@ class AsyncAgentService:
         """
         agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
         config: Dict[str, Any] = agent_network.get_config()
-        self.llm_factory: ContextTypeLlmFactory = MasterLlmFactory.create_llm_factory(config)
-        self.toolbox_factory: ContextTypeToolboxFactory = MasterToolboxFactory.create_toolbox_factory(config)
+        llm_factory: ContextTypeLlmFactory = MasterLlmFactory.create_llm_factory(config)
+        toolbox_factory: ContextTypeToolboxFactory = MasterToolboxFactory.create_toolbox_factory(config)
 
-        # Load once.
-        self.llm_factory.load()
-        self.toolbox_factory.load()
+        # Load once, before publishing to the fields that request paths read,
+        # so no request can ever see an unloaded factory.
+        llm_factory.load()
+        toolbox_factory.load()
+
+        self.llm_factory: ContextTypeLlmFactory = llm_factory
+        self.toolbox_factory: ContextTypeToolboxFactory = toolbox_factory
 
     def get_agent_network(self) -> AgentNetwork:
         """
@@ -211,12 +215,16 @@ class AsyncAgentService:
 
         # Delegate to Direct*Session
         agent_network: AgentNetwork = self.agent_network_provider.get_agent_network()
+        # Pass the toolbox factory that was created and loaded once at service
+        # construction, so connectivity reporting does not re-read toolbox
+        # info files on every request.
         session: AsyncDirectAgentSession =\
             AsyncDirectAgentSession(
                 agent_network=agent_network,
                 invocation_context=None,
                 metadata=metadata,
-                security_cfg=self.security_cfg)
+                security_cfg=self.security_cfg,
+                toolbox_factory=self.toolbox_factory)
         response_dict = await session.connectivity(request_dict)
 
         if do_log:

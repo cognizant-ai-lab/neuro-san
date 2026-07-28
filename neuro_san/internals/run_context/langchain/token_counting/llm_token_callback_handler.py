@@ -15,7 +15,7 @@
 #
 # END COPYRIGHT
 
-import asyncio
+from asyncio import Lock as AsyncLock
 import logging
 from time import time
 from typing import Any
@@ -80,7 +80,7 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
     def __init__(self, llm_infos: Dict[str, Any]):
         """Initialize the CallbackHandler."""
         super().__init__()
-        self._lock = asyncio.Lock()
+        self._lock = AsyncLock()
         self.llm_infos: Dict[str, Any] = llm_infos
         self.provider_class: str = None
         self.start_time: float = None
