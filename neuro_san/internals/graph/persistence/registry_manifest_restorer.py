@@ -211,6 +211,7 @@ class RegistryManifestRestorer(Restorer):
         stop: float = perf_counter()
         duration: float = stop - start
         if duration > 5.0:
+            # DEF - for some reason infos don't show up in the logs at server start time. :shrug:
             self.logger.warning("Manifest file %s restored in %.2f seconds.", manifest_file, duration)
 
         return agent_networks
