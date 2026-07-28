@@ -120,32 +120,6 @@ class RegistryManifestRestorer(Restorer):
 
         return all_agent_networks
 
-    async def async_restore_from_files(self, file_references: Sequence[str]) -> Dict[str, Dict[str, AgentNetwork]]:
-        """
-        :param file_references: The sequence of file references to use when restoring.
-        :return: a nested map of storage type -> (mapping of name -> agent networks)
-        """
-
-        all_agent_networks: Dict[str, Dict[str, AgentNetwork]] = {}
-        overlayer = DictionaryOverlay()
-
-        # Loop through all the manifest files in the list to make a composite
-        for manifest_file in file_references:
-            agents_from_one_manifest: Dict[str, Dict[str, AgentNetwork]] = \
-                await self.async_restore_one_manifest(manifest_file)
-            # Do a deep update() with the overlayer.
-            all_agent_networks = overlayer.overlay(all_agent_networks, agents_from_one_manifest)
-
-        # Loop through the agent networks dictionary removing any references to None values
-        # for networks. This indicates they should not be served.
-        config_filter: ConfigFilter = ServedManifestConfigFilter(manifest_file=None,
-                                                                 warn_on_skip=False,
-                                                                 entry_for_skipped=False)
-        for storage_type, storage_dict in all_agent_networks.items():
-            all_agent_networks[storage_type] = config_filter.filter_config(storage_dict)
-
-        return all_agent_networks
-
     # pylint: disable=too-many-locals
     def restore_one_manifest(self, manifest_file: str) -> Dict[str, Dict[str, AgentNetwork]]:
         """
@@ -300,77 +274,6 @@ class RegistryManifestRestorer(Restorer):
 
         agent_networks[storage][network_name] = agent_network
 
-    # pylint: disable=too-many-locals
-    async def async_restore_one_manifest(self, manifest_file: str) -> Dict[str, Dict[str, AgentNetwork]]:
-        """
-        :param manifest_file: The file reference to use when restoring.
-        :return: a nested map of storage type -> (mapping of name -> agent networks)
-        """
-
-        agent_networks: Dict[str, Dict[str, AgentNetwork]] = {}
-        for storage_class in StorageClass.ALL_PERMANENT:
-            agent_networks[storage_class] = {}
-
-        raw_restorer = RawManifestRestorer()
-        raw_manifest: Dict[str, Any] = await raw_restorer.async_restore(file_reference=manifest_file)
-
-        # By the end of the filter chain, only served entries will be included.
-        manifest_filter = ManifestFilterChain(manifest_file)
-        one_manifest: Dict[str, Dict[str, Any]] = manifest_filter.filter_config(raw_manifest)
-
-        file_of_class = FileOfClass(manifest_file)
-        manifest_dir: str = file_of_class.get_basis()
-
-        external_network_names: List[str] = self.find_external_network_names(one_manifest)
-
-        # At this point only hocon files we are going to serve up are in the one_manifest.
-        for manifest_key, manifest_dict in one_manifest.items():
-            agent_network: AgentNetwork = None
-            network_name: str = None
-            agent_network, network_name, manifest_dict = await self.async_read_one_agent_network(
-                manifest_key, manifest_dict, manifest_file, manifest_dir, external_network_names, self.agent_mapper
-            )
-            self.maybe_store_agent_network(agent_network, network_name, manifest_dict, agent_networks)
-
-        return agent_networks
-
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
-    @staticmethod
-    async def async_read_one_agent_network(
-                manifest_key: str,
-                manifest_dict: Dict[str, Any],
-                manifest_file: str = None,
-                manifest_dir: str = None,
-                external_network_names: List[str] = None,
-                agent_mapper: AgentFileTreeMapper = None
-            ) -> Tuple[AgentNetwork, str, Dict[str, Any]]:
-        """
-        :param manifest_dir: The directory of the manifest file.
-        :param manifest_file: The file reference to use when restoring.
-        :param manifest_key: The key in the manifest file.
-        :param manifest_dict: The dictionary of the manifest file.
-        :param external_network_names: The list of external network names
-        :return: A tuple of (agent_network, network_name, manifest_dict)
-        """
-        usable_network: bool = isinstance(manifest_dict, dict) and manifest_dict.get("serve", False)
-
-        # We'll need to use an agent mapper to get to this agent definition file.
-        agent_filepath: str = agent_mapper.agent_name_to_filepath(manifest_key)
-        network_name: str = agent_mapper.filepath_to_agent_network_name(agent_filepath)
-        validator = ManifestNetworkValidator(external_network_names, network_name=network_name)
-        agent_network: AgentNetwork = None
-        if usable_network:
-            agent_network = await RegistryManifestRestorer.async_restore_one_agent_network(
-                manifest_dir, agent_filepath, manifest_key, agent_mapper
-            )
-
-        agent_network = RegistryManifestRestorer.process_one_agent_network(
-            agent_network, usable_network, agent_filepath,
-            manifest_file, manifest_key, manifest_dict, validator, agent_mapper
-        )
-
-        return agent_network, network_name, manifest_dict
-
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     @staticmethod
     def process_one_agent_network(
@@ -456,46 +359,6 @@ class RegistryManifestRestorer(Restorer):
 
         return agent_network
 
-    @staticmethod
-    async def async_restore_one_agent_network(manifest_dir: str, agent_filepath: str,
-                                              manifest_key: str, agent_mapper: AgentFileTreeMapper) \
-            -> AgentNetwork:
-        """
-        :param manifest_dir: The directory of the manifest file
-        :param agent_filepath: The file reference for the agent network description to restore
-        :param manifest_key: the key to use when restoring
-        :param agent_mapper: the agent mapper
-        :return: a built map of agent networks
-        """
-
-        agent_network: AgentNetwork = None
-        registry_restorer = AgentNetworkRestorer(registry_dir=manifest_dir, agent_mapper=agent_mapper)
-        try:
-            agent_network = await registry_restorer.async_restore(file_reference=agent_filepath)
-        except FileNotFoundError as exception:
-            message: str = f"Failed to restore registry item {manifest_key}. Skipping. - {str(exception)}"
-            sensitive_logger = SensitiveLogger(getLogger(__name__))
-            sensitive_logger.error(message)
-            agent_network = None
-        except (ParseException, ParseSyntaxException, JSONDecodeError, ValueError) as exception:
-            # ValueError is the wrapper type raised by AbstractAsyncConfigRestorer for any
-            # parse / substitution / config-load failure; the other types are kept for
-            # belt-and-suspenders in case a future code path raises one directly.
-
-            # Be sure we spit out the right exception message with relevant parsing
-            # information as the error.  If not, we don't get enough good information
-            # to act on when there is a problem.
-            use_exception: Exception = exception
-            if exception.__cause__ is not None:
-                use_exception = exception.__cause__
-
-            message: str = f"Parse error in registry item {manifest_key}. Skipping. - {str(use_exception)}"
-            sensitive_logger = SensitiveLogger(getLogger(__name__))
-            sensitive_logger.error(message)
-            agent_network = None
-
-        return agent_network
-
     def restore(self, file_reference: str = None) -> Dict[str, Dict[str, AgentNetwork]]:
         """
         :param file_reference: The file reference to use when restoring.
@@ -510,22 +373,6 @@ class RegistryManifestRestorer(Restorer):
             return self.restore_from_files([file_reference])
 
         agent_networks: Dict[str, Dict[str, AgentNetwork]] = self.restore_from_files(self.manifest_files)
-        return agent_networks
-
-    async def async_restore(self, file_reference: str = None) -> Dict[str, Dict[str, AgentNetwork]]:
-        """
-        :param file_reference: The file reference to use when restoring.
-                Default is None, implying the file reference is up to the
-                implementation.
-        :return: a nested map of storage type -> (mapping of name -> agent networks)
-        """
-        # Reset the periodic configs
-        self.periodic_configs = {}
-
-        if file_reference is not None:
-            return await self.async_restore_from_files([file_reference])
-
-        agent_networks: Dict[str, Dict[str, AgentNetwork]] = await self.async_restore_from_files(self.manifest_files)
         return agent_networks
 
     def get_manifest_files(self) -> List[str]:
