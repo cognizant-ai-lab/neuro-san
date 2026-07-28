@@ -355,17 +355,23 @@ class HttpxLlmTracer:
         """
         if not host:
             return "unknown"
-        if "openai.com" in host or "openai.azure.com" in host:
+
+        normalized_host: str = host.strip().lower().rstrip(".")
+
+        def _host_matches(domain: str) -> bool:
+            return normalized_host == domain or normalized_host.endswith(f".{domain}")
+
+        if _host_matches("openai.com") or _host_matches("openai.azure.com"):
             return "openai"
-        if "anthropic.com" in host:
+        if _host_matches("anthropic.com"):
             return "anthropic"
-        if "googleapis.com" in host or "generativelanguage" in host:
+        if _host_matches("googleapis.com") or _host_matches("generativelanguage"):
             return "google"
-        if "amazonaws.com" in host or "bedrock" in host:
+        if _host_matches("amazonaws.com") or _host_matches("bedrock"):
             return "aws"
-        if "nvcf.nvidia.com" in host or "integrate.api.nvidia.com" in host:
+        if _host_matches("nvcf.nvidia.com") or _host_matches("integrate.api.nvidia.com"):
             return "nvidia"
-        if "cohere.ai" in host:
+        if _host_matches("cohere.ai"):
             return "cohere"
         return "unknown"
 
