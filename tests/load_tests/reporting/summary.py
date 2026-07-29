@@ -206,6 +206,13 @@ class SummaryReporter:
                 peak_cpu, peak_cpu / 100.0 * ncores, ncores,
             )
 
+        peak_threads = self._peak_server_threads()
+        if peak_threads is not None:
+            logger.info(
+                "  Peak server threads: %s",
+                f"{peak_threads:,}",
+            )
+
         self._log_validation_summary()
 
     def _request_duration_stats(self):
@@ -323,6 +330,20 @@ class SummaryReporter:
         peak = None
         for summary in self._summaries:
             val = summary.get("peak_sys_cpu")
+            if val is not None:
+                if peak is None or val > peak:
+                    peak = val
+        return peak
+
+    def _peak_server_threads(self):
+        """Return the max peak server thread count across stages.
+
+        None when the server was not monitored (e.g. client-only or
+        no local server), so the line is omitted.
+        """
+        peak = None
+        for summary in self._summaries:
+            val = summary.get("peak_threads")
             if val is not None:
                 if peak is None or val > peak:
                     peak = val

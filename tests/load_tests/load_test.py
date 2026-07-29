@@ -29,6 +29,7 @@ import logging
 import os
 import platform
 import re
+import resource
 import shutil
 import signal
 import socket
@@ -1739,6 +1740,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "  System CPU: %d cores (%.0f%% in use)",
             ncores, psutil.cpu_percent(interval=0.1),
         )
+        self._log_system_threads()
         before_sys_mem_pct = mem.percent
         before_kernel = self._read_kernel_memory()
 
@@ -2174,6 +2176,39 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             json.dump(raw_data, fh, indent=2)
 
     @staticmethod
+    def _log_system_threads() -> None:
+        """Print current thread count and OS thread/process limits."""
+        total_threads = 0
+        for proc in psutil.process_iter(["num_threads"]):
+            try:
+                total_threads += proc.info["num_threads"] or 0
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        try:
+            soft, _ = resource.getrlimit(resource.RLIMIT_NPROC)
+            user_limit = (
+                "unlimited"
+                if soft == resource.RLIM_INFINITY
+                else f"{soft:,}"
+            )
+        except (ValueError, OSError, AttributeError):
+            user_limit = "n/a"
+        sys_max = "n/a"
+        try:
+            with open(
+                "/proc/sys/kernel/threads-max",
+                encoding="utf-8",
+            ) as handle:
+                sys_max = f"{int(handle.read().strip()):,}"
+        except (OSError, ValueError):
+            pass
+        logger.info(
+            "  System threads: %s in use / limit %s"
+            " per-user (%s max)",
+            f"{total_threads:,}", user_limit, sys_max,
+        )
+
+    @staticmethod
     def _read_kernel_memory() -> Optional[Dict[str, float]]:
         """Read kernel memory breakdown from /proc/meminfo.
 
@@ -2354,8 +2389,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             self.args.server_log = "auto"
         if self.args.no_server_log and not self.args.server_only:
             self.args.server_log = None
-        elif (not self.args.no_server_log
-                and self.args.server_log is None
+        elif (self.args.server_log is None
                 and not self.args.client_only
                 and not self.args.server_only
                 and self.args.host in LOCAL_HOSTS

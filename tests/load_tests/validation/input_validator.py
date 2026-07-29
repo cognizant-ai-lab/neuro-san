@@ -23,6 +23,7 @@ actual token usage before committing to a full run.
 
 import logging
 import os
+import resource
 import sys
 from typing import List
 from typing import Optional
@@ -241,6 +242,7 @@ class InputValidator:
             )
         self._print_system_memory()
         self._print_system_cpu()
+        self._print_system_threads()
 
     @staticmethod
     def _print_system_memory() -> None:
@@ -262,6 +264,39 @@ class InputValidator:
         logger.info(
             "  System CPU: %d cores (%.0f%% in use)",
             ncores, cpu_pct,
+        )
+
+    @staticmethod
+    def _print_system_threads() -> None:
+        """Print current thread count and OS thread/process limits."""
+        total_threads = 0
+        for proc in psutil.process_iter(["num_threads"]):
+            try:
+                total_threads += proc.info["num_threads"] or 0
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        try:
+            soft, _ = resource.getrlimit(resource.RLIMIT_NPROC)
+            user_limit = (
+                "unlimited"
+                if soft == resource.RLIM_INFINITY
+                else f"{soft:,}"
+            )
+        except (ValueError, OSError, AttributeError):
+            user_limit = "n/a"
+        sys_max = "n/a"
+        try:
+            with open(
+                "/proc/sys/kernel/threads-max",
+                encoding="utf-8",
+            ) as handle:
+                sys_max = f"{int(handle.read().strip()):,}"
+        except (OSError, ValueError):
+            pass
+        logger.info(
+            "  System threads: %s in use / limit %s"
+            " per-user (%s max)",
+            f"{total_threads:,}", user_limit, sys_max,
         )
 
     @staticmethod
