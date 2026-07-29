@@ -21,6 +21,7 @@ from typing import Any
 from typing import AsyncIterator
 from typing import Callable
 from typing import Dict
+from typing import List
 from typing import Optional
 
 import contextvars
@@ -348,30 +349,40 @@ class HttpxLlmTracer:
             pass
 
     @staticmethod
+    def _host_matches(normalized_host: str, domains: List[str]) -> bool:
+        """
+        Return True if the normalized host matches the domain or is a subdomain of it
+        for any of the provided domains.
+        Used for provider inference.
+        """
+        for domain in domains:
+            if normalized_host == domain or normalized_host.endswith(f".{domain}"):
+                return True
+        return False
+
+    @staticmethod
     def _infer_provider(host: Optional[str]) -> str:
         """
         Best-effort provider name from the request host. Used only as a
         readable label in log lines; unknown hosts default to "unknown".
         """
+        # pylint: disable=too-many-return-statements
         if not host:
             return "unknown"
 
         normalized_host: str = host.strip().lower().rstrip(".")
 
-        def _host_matches(domain: str) -> bool:
-            return normalized_host == domain or normalized_host.endswith(f".{domain}")
-
-        if _host_matches("openai.com") or _host_matches("openai.azure.com"):
+        if HttpxLlmTracer._host_matches(normalized_host, ["openai.com", "openai.azure.com"]):
             return "openai"
-        if _host_matches("anthropic.com"):
+        if HttpxLlmTracer._host_matches(normalized_host, ["anthropic.com"]):
             return "anthropic"
-        if _host_matches("googleapis.com") or _host_matches("generativelanguage"):
+        if HttpxLlmTracer._host_matches(normalized_host, ["googleapis.com", "generativelanguage"]):
             return "google"
-        if _host_matches("amazonaws.com") or _host_matches("bedrock"):
+        if HttpxLlmTracer._host_matches(normalized_host, ["amazonaws.com", "bedrock"]):
             return "aws"
-        if _host_matches("nvcf.nvidia.com") or _host_matches("integrate.api.nvidia.com"):
+        if HttpxLlmTracer._host_matches(normalized_host, ["nvcf.nvidia.com", "integrate.api.nvidia.com"]):
             return "nvidia"
-        if _host_matches("cohere.ai"):
+        if HttpxLlmTracer._host_matches(normalized_host, ["cohere.ai"]):
             return "cohere"
         return "unknown"
 
