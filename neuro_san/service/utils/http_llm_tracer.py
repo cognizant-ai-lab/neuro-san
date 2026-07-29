@@ -140,10 +140,9 @@ class HttpxLlmTracer:
 
         def patched_init(self, *args, **kwargs):
             existing_hooks: Dict[str, list] = kwargs.pop("event_hooks", None) or {}
-            merged_hooks: Dict[str, list] = {
-                "request": [cls._on_request] + list(existing_hooks.get("request", [])),
-                "response": [cls._on_response] + list(existing_hooks.get("response", [])),
-            }
+            merged_hooks: Dict[str, list] = dict(existing_hooks)
+            merged_hooks["request"] = [cls._on_request] + list(existing_hooks.get("request", []))
+            merged_hooks["response"] = [cls._on_response] + list(existing_hooks.get("response", []))
             kwargs["event_hooks"] = merged_hooks
             original_init(self, *args, **kwargs)
 
