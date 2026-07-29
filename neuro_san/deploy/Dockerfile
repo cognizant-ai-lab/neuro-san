@@ -294,7 +294,7 @@ ENV AGENT_MANIFEST_UPDATE_PERIOD_SECONDS="0"
 # "fork":       uses a multi-process based concurrency model. It is actually the fastest option,
 #               but has potential to lead to deadlocks over repeated manifest reads.
 #               It can still be a reasonable option for server environments where the manifest
-#               is known never to change at all.
+#               is known never to change at all (AGENT_MANIFEST_UPDATE_PERIOD_SECONDS="0").
 # See https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
 # for more details on "spawn" and "fork" concurrency models.
 ENV AGENT_MANIFEST_CONCURRENCY_CONTEXT="thread"
