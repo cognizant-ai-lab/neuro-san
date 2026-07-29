@@ -203,6 +203,13 @@ flag to your invocation.
             # Nope. Just a regular http connection failure given the tool_name. Can't help ya.
             raise exception
 
+        finally:
+            # Always release the sub-agent's LangChainLlmResources (LLM
+            # client, sockets, etc.). Without this the sub-agent orphans
+            # its httpx.AsyncClient pool on every invocation, and under
+            # load those pools accumulate as leaked sockets.
+            await callable_activation.close_of_work(self.run_context)
+
         # We got a message back, take the content as the return string
         return message.content
 

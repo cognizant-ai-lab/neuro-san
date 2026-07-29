@@ -232,27 +232,35 @@ context with which it will proces input, essentially telling it what to do.
             self.factory.create_agent_activation(self.run_context, our_agent_spec, use_tool_name,
                                                  self.sly_data, tool_arguments, None, invocation=invocation)
 
-        message: BaseMessage = await callable_component.build()
+        try:
+            message: BaseMessage = await callable_component.build()
 
-        # Prepare the tool output
-        tool_output: Dict[str, Any] = {
-            "origin": callable_component.get_origin(),
-            "tool_call_id": component_tool_call.get_id(),
-            "output": message,
-            # Add the component's sly_data to the mix.
-            # External tools have separate dictionaries of redacted sly_data that need to
-            # be reintegrated with the single copy that floats around the agent network.
-            "sly_data": callable_component.sly_data
-        }
+            # Prepare the tool output
+            tool_output: Dict[str, Any] = {
+                "origin": callable_component.get_origin(),
+                "tool_call_id": component_tool_call.get_id(),
+                "output": message,
+                # Add the component's sly_data to the mix.
+                # External tools have separate dictionaries of redacted sly_data that need to
+                # be reintegrated with the single copy that floats around the agent network.
+                "sly_data": callable_component.sly_data
+            }
 
-        # Clean up after this CallableActivation.
-        # Note that the run_context passed here is used as a comparison to be sure
-        # that the CallableActivation's cleanup does not accidentally clean up
-        # any resources that should still remain open for this
-        # CallingActivation's purposes.
-        await callable_component.close_of_work(self.run_context)
+            return tool_output
 
-        return tool_output
+        finally:
+            # Clean up after this CallableActivation. Runs on both the
+            # success path and any exception path from build() -- previously
+            # the close was only called after success, so a failed sub-agent
+            # invocation orphaned its LangChainLlmResources (LLM client and
+            # its httpx connection pool). Under load, transient sub-agent
+            # failures were leaking sockets.
+            #
+            # Note that the run_context passed here is used as a comparison to be sure
+            # that the CallableActivation's cleanup does not accidentally clean up
+            # any resources that should still remain open for this
+            # CallingActivation's purposes.
+            await callable_component.close_of_work(self.run_context)
 
     async def build(self) -> BaseMessage:
         """
