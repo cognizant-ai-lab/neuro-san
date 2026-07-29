@@ -365,6 +365,8 @@ ENV AGENT_TOOL_EXECUTION_LOG_THRESHOLD_SECONDS=0
 #               but has potential to lead to deadlocks over repeated manifest reads.
 #               It can still be a reasonable option for server environments where the manifest
 #               is known never to change at all.
+# See https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
+# for more details on "spawn" and "fork" concurrency models.
 ENV AGENT_MANIFEST_CONCURRENCY_CONTEXT="thread"
 
 # Optional URL describing how the server is to be referenced by the outside world.
