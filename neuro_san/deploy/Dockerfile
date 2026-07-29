@@ -351,6 +351,22 @@ ENV AGENT_STREAM_KEEP_ALIVE_WITH_PROGRESS_INTERVAL_SECONDS=0
 # 0 disables this feature.
 ENV AGENT_TOOL_EXECUTION_LOG_THRESHOLD_SECONDS=0
 
+# Describes the concurrency model used for the manifest file updates.
+# Valid values are "thread" (the default) and "spawn" and "fork".
+#
+# "thread":     uses the default threading concurrency model.  It is best for servers who
+#               know their manifest content will be changing over the course of their lifetime.
+#               It is slowest of all options, but has the least amount of overall memory overhead
+#               and is lightweight and generally the safest and problem-free.
+# "spawn":      uses a multi-process based concurrency model.  It is the safest option (avoiding deadlocks)
+#               for environments where the manifest is changing, but some speed is still desired
+#               (like development servers).
+# "fork":       uses a multi-process based concurrency model. It is actually the fastest option,
+#               but has potential to lead to deadlocks over repeated manifest reads.
+#               It can still be a reasonable option for server environments where the manifest
+#               is known never to change at all.
+ENV AGENT_MANIFEST_CONCURRENCY_CONTEXT="thread"
+
 # Optional URL describing how the server is to be referenced by the outside world.
 # This is useful when a server is behind a load-balancer as part of a larger cluster.
 ENV AGENT_EXTERNAL_SERVER_URL=""

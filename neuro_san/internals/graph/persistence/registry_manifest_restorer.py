@@ -156,18 +156,31 @@ class RegistryManifestRestorer(Restorer):
         # Avoid spawning an unbounded number of workers.
         cpu_count: int = os.cpu_count() or 1
         max_workers: int = min(len(one_manifest), cpu_count)
-        executor_factory = partial(ThreadPoolExecutor, max_workers=max_workers)
 
-        # By default use a ThreadPoolExecutor, but because of the GIL, in cases of large manifests,
-        # a ProcessPoolExecutor ends up being more heavyweight, yet still more efficient because of
-        # the GIL.  When we get to free-threading in Python 3.14T, this can be changed back to ThreadPoolExecutor.
-        process_threshold: int = 20     # Somewhat arbitrary
-        if len(one_manifest) > process_threshold:
-            # While "spawn" below is more correct for more OSes and more Python versions,
-            # it is not necessarily the fastest. "fork" can be faster, but could lead to deadlocks.
-            # See https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
+        # The default of "thread" is the least heavyweight, but not necessarily the fastest
+        # given the context of how/how often the manifest is read.
+        concurrency_context: str = os.environ.get("AGENT_MANIFEST_CONCURRENCY_CONTEXT", "thread").lower()
+
+        executor_factory = None
+        if concurrency_context == "spawn" or concurrency_context == "fork":
+            # Use a ProcessPoolExecutor for "spawn" and "fork".
+            # In cases of large manifests, a ProcessPoolExecutor ends up being more heavyweight,
+            # yet still more time-efficient because of the parallelism sidestepping the GIL.
+            # When we get to free-threading in Python 3.14T, this can be all be changed back to ThreadPoolExecutor.
+            #
+            # "spawn" is the safest option (avoiding deadlocks) for environments where the manifest is changing,
+            # but some speed is still desired (like development servers).
+            #
+            # "fork" is actually the fastest option, but has potential to lead to deadlocks.
+            # This is still a reasonable option for server environments where the manifest
+            # is known never to change at all.
             executor_factory = partial(ProcessPoolExecutor, max_workers=max_workers,
-                                       mp_context=get_context("spawn"))
+                                       mp_context=get_context(concurrency_context))
+        else:
+            # The default of "thread" is best for servers who know their manifest content will be
+            # changing over the course of their lifetime. It is slowest of all options, but has
+            # the least amount of overall memory overhead and is lightweight and safe and problem-free.
+            executor_factory = partial(ThreadPoolExecutor, max_workers=max_workers)
 
         try:
             with executor_factory() as executor:
