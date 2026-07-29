@@ -212,7 +212,7 @@ class RegistryManifestRestorer(Restorer):
             # This is still a reasonable option for server environments where the manifest
             # is known never to change at all.
             #
-            # "forkserver" is a bit like "fork" but with a bit more safety.
+            # "forkserver" is a little slower than "fork" but with a bit more safety.
             # See https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
             # for more details.
             executor_factory = partial(ProcessPoolExecutor, max_workers=max_workers,

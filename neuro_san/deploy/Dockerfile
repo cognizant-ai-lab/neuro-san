@@ -291,12 +291,12 @@ ENV AGENT_MANIFEST_UPDATE_PERIOD_SECONDS="0"
 # "spawn":      uses a multi-process based concurrency model.  It is the safest option (avoiding deadlocks)
 #               for environments where the manifest is changing, but some speed is still desired
 #               (like development servers).
+# "forkserver"  Is just like "fork" below, but forks from a clean process for memory conservation,
+#               More process overhead, not as quick but safer than "fork".
 # "fork":       uses a multi-process based concurrency model. It is actually the fastest option,
 #               but has potential to lead to deadlocks over repeated manifest reads.
 #               It can still be a reasonable option for server environments where the manifest
 #               is known never to change at all (AGENT_MANIFEST_UPDATE_PERIOD_SECONDS="0").
-# "forkserver"  Is just like "fork" above, but forks from a clean process for memory conservation,
-#               More process overhead, but as quick but safer than "fork".
 #
 # See https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
 # for more details on "spawn", "fork" and "forkserver" concurrency models.
