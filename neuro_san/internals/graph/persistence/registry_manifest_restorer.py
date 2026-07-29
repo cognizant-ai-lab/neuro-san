@@ -176,10 +176,16 @@ class RegistryManifestRestorer(Restorer):
             # is known never to change at all.
             executor_factory = partial(ProcessPoolExecutor, max_workers=max_workers,
                                        mp_context=get_context(concurrency_context))
-        else:
+        elif concurrency_context == "thread":
+            # Use a ThreadPoolExecutor for "thread".
             # The default of "thread" is best for servers who know their manifest content will be
             # changing over the course of their lifetime. It is slowest of all options, but has
             # the least amount of overall memory overhead and is lightweight and safe and problem-free.
+            executor_factory = partial(ThreadPoolExecutor, max_workers=max_workers)
+        else:
+            # Default to ThreadPoolExecutor
+            self.logger.warning("Unknown concurrency context %s. Defaulting to ThreadPoolExecutor.",
+                                concurrency_context)
             executor_factory = partial(ThreadPoolExecutor, max_workers=max_workers)
 
         try:
