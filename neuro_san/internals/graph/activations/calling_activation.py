@@ -18,6 +18,8 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from contextlib import suppress
+
 from langchain_core.messages.base import BaseMessage
 
 from leaf_common.config.dictionary_overlay import DictionaryOverlay
@@ -253,14 +255,14 @@ context with which it will proces input, essentially telling it what to do.
             # success path and any exception path from build() -- previously
             # the close was only called after success, so a failed sub-agent
             # invocation orphaned its LangChainLlmResources (LLM client and
-            # its httpx connection pool). Under load, transient sub-agent
-            # failures were leaking sockets.
+            # its httpx connection pool).
             #
             # Note that the run_context passed here is used as a comparison to be sure
             # that the CallableActivation's cleanup does not accidentally clean up
             # any resources that should still remain open for this
             # CallingActivation's purposes.
-            await callable_component.close_of_work(self.run_context)
+            with suppress(Exception):
+                await callable_component.close_of_work(self.run_context)
 
     async def build(self) -> BaseMessage:
         """
