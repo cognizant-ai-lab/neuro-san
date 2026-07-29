@@ -81,6 +81,15 @@ class HttpxLlmTracer:
     httpx.AsyncClient.__init__ to inject event_hooks on every future
     client, regardless of which provider SDK creates it. Idempotent --
     a second call is a no-op.
+
+    Env vars:
+    AGENT_HTTP_LLM_TRACE (default "false") — master toggle. When enabled, installs the tracer on server startup.
+    AGENT_HTTP_LLM_TRACE_INCLUDE_BODIES (default "false") — capture request/response bodies verbatim
+            (capped at 64 KB each).
+            Prompts and completions are large and often sensitive; off by default.
+    AGENT_HTTP_LLM_TRACE_CHUNKS (default "false") — emit one event per received body chunk.
+            Massive log volume (dozens of chunks per streaming LLM call);
+            enable only when investigating inter-chunk cadence.
     """
 
     # Class-level singleton state. ContextVar behavior is per-context, not
