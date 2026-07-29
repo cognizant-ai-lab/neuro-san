@@ -184,7 +184,7 @@ class RegistryManifestRestorer(Restorer):
             executor_factory = partial(ThreadPoolExecutor, max_workers=max_workers)
         else:
             # Default to ThreadPoolExecutor
-            self.logger.warning("Unknown concurrency context %s. Defaulting to ThreadPoolExecutor.",
+            self.logger.warning("Unknown concurrency context '%s'. Defaulting to ThreadPoolExecutor.",
                                 concurrency_context)
             executor_factory = partial(ThreadPoolExecutor, max_workers=max_workers)
 
