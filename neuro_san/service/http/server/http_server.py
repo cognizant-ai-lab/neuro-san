@@ -223,7 +223,7 @@ class HttpServer(AgentStateListener):
         main_loop = tornado.ioloop.IOLoop.current()
 
         # Enable event loop lag monitor if requested by environment variable.
-        if os.getenv("ENABLE_EVENT_LOOP_STATISTICS", "false").lower() == "true":
+        if ConfigUtil.get_bool(os.environ, "ENABLE_EVENT_LOOP_STATISTICS"):
             event_loop_monitor = \
                 EventLoopLagMonitor(
                     sample_interval_seconds=1.0,
