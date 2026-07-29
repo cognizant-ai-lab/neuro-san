@@ -20,19 +20,23 @@ See class comment for details
 from typing import Any
 from typing import Dict
 from typing import AsyncGenerator
+from typing import Optional
 
 from http import HTTPStatus
 
 import asyncio
+from asyncio import Lock as AsyncLock
 import contextlib
 import json
 from json.decoder import JSONDecodeError
 import time
+import uuid
 import tornado
 
 from neuro_san.internals.messages.chat_message_type import ChatMessageType
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
+from neuro_san.service.utils.http_llm_tracer import HttpxLlmTracer
 
 
 class StreamingChatHandler(BaseRequestHandler):
@@ -57,7 +61,7 @@ class StreamingChatHandler(BaseRequestHandler):
         self.keep_alive_frame: str = self._build_keep_alive_frame()
         self.last_send_ts = 0.0
         self.keep_alive_task: asyncio.Task = None
-        self.lock: asyncio.Lock = asyncio.Lock()  # protects request writes to output stream and last_send_ts updates
+        self.lock: AsyncLock = AsyncLock()  # protects request writes to output stream and last_send_ts updates
 
     @staticmethod
     def _build_keep_alive_frame() -> str:
@@ -81,12 +85,22 @@ class StreamingChatHandler(BaseRequestHandler):
 
     # pylint: disable=too-many-statements
     # pylint: disable=too-many-branches
+    # pylint: disable=too-many-locals
     async def post(self, agent_name: str):
         """
         Implementation of POST request handler for streaming chat API call.
         """
-
         metadata: Dict[str, Any] = self.get_metadata()
+        req_id: Optional[str] = metadata.get("request_id", None)
+        if req_id is None:
+            req_id = uuid.uuid4().hex[:8]
+        # Tag every outbound LLM call made during this request with a
+        # short user_req_id so the HttpxLlmTracer's structured log lines
+        # can be grouped for post-run analysis. ContextVar propagates
+        # through asyncio + executor bridges, so downstream LLM calls
+        # inherit this id automatically. No-op if the tracer is disabled.
+        HttpxLlmTracer.set_user_request_id(req_id)
+
         service: AsyncAgentService = await self.get_service(agent_name, metadata)
         if service is None:
             return
@@ -142,6 +156,7 @@ class StreamingChatHandler(BaseRequestHandler):
             # Now process the result stream
             async with asyncio.timeout(request_timeout):
                 result_generator = service.streaming_chat(request_dict, metadata)
+
                 async for result_dict in result_generator:
                     result_str: str = json.dumps(result_dict) + "\n"
                     async with self.lock:

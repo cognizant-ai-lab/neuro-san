@@ -19,10 +19,10 @@ from typing import Any
 from typing import Dict
 from typing import AsyncGenerator
 from typing import List
+from typing import Optional
 
 from asyncio import Task
 from contextlib import suppress
-from copy import copy
 import logging
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
@@ -31,11 +31,9 @@ from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.internals.chat.connectivity_reporter import ConnectivityReporter
 from neuro_san.internals.chat.data_driven_chat_session import DataDrivenChatSession
-from neuro_san.internals.filters.message_filter import MessageFilter
-from neuro_san.internals.filters.message_filter_factory import MessageFilterFactory
+from neuro_san.internals.chat.queue_filter import QueueFilter
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
-from neuro_san.internals.messages.chat_message_type import ChatMessageType
-from neuro_san.message_processing.message_processor import MessageProcessor
+from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.session.session_invocation_context import SessionInvocationContext
 
 
@@ -49,21 +47,35 @@ class AsyncDirectAgentSession(AsyncAgentSession):
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self,
                  agent_network: AgentNetwork,
-                 invocation_context: SessionInvocationContext,
+                 invocation_context: Optional[SessionInvocationContext],
                  metadata: Dict[str, Any] = None,
-                 security_cfg: Dict[str, Any] = None):
+                 security_cfg: Dict[str, Any] = None,
+                 # Keyword-only: the sync and async session signatures diverge
+                 # above this point, so positional passing would misbind.
+                 *,
+                 toolbox_factory: ContextTypeToolboxFactory = None):
         """
         Constructor
 
         :param agent_network: The AgentNetwork to use for the session.
         :param invocation_context: The SessionInvocationContext to use to consult
                         for policy objects scoped at the invocation level.
+                        May be None for sessions that only serve connectivity()
+                        or function(); chat methods require a real instance.
         :param metadata: A dictionary of request metadata to be forwarded
                         to subsequent yet-to-be-made requests.
         :param security_cfg: A dictionary of parameters used to
                         secure the TLS and the authentication of the gRPC
                         connection.  Supplying this implies use of a secure
                         GRPC Channel.  If None, uses insecure channel.
+        :param toolbox_factory: An optional ContextTypeToolboxFactory built from
+                        the same agent network's config, so connectivity reporting
+                        does not have to re-read toolbox info files per request.
+                        May be passed pre-loaded; connectivity reporting will
+                        load() it (a no-op if already loaded).
+                        If None, the invocation_context's toolbox factory is used
+                        when available; failing that, connectivity reporting
+                        builds one from the agent network's config.
         """
         # These aren't used yet
         self._metadata: Dict[str, Any] = metadata
@@ -72,6 +84,13 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         self.invocation_context: SessionInvocationContext = invocation_context
         self.agent_network: AgentNetwork = agent_network
         self.request_id: str = None
+        # Resolve the toolbox factory once at construction: an invocation
+        # context's factory is fixed when the context is built, and resolving
+        # here keeps connectivity() working even after close() sets
+        # self.invocation_context to None.
+        self.toolbox_factory: ContextTypeToolboxFactory = toolbox_factory
+        if self.toolbox_factory is None and invocation_context is not None:
+            self.toolbox_factory = invocation_context.get_toolbox_factory()
         if metadata is not None:
             self.request_id = metadata.get("request_id")
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -128,7 +147,7 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         response_dict: Dict[str, Any] = {
         }
 
-        reporter = ConnectivityReporter(self.agent_network)
+        reporter = ConnectivityReporter(self.agent_network, self.toolbox_factory)
         config: Dict[str, Any] = self.agent_network.get_config()
         metadata: Dict[str, Any] = config.get("metadata")
         connectivity_info: List[Dict[str, Any]] = reporter.report_network_connectivity()
@@ -175,10 +194,12 @@ class AsyncDirectAgentSession(AsyncAgentSession):
 
         # Create a message filter so as to minimize network traffic per what the user wants
         chat_filter: Dict[str, Any] = request_dict.get("chat_filter")
-        message_filter: MessageFilter = MessageFilterFactory.create_message_filter(chat_filter)
-
         chat_context: Dict[str, Any] = request_dict.get("chat_context")
         sly_data: Dict[str, Any] = request_dict.get("sly_data")
+
+        # Task for late-stage conversions for any and all messages
+        queue_filter = QueueFilter(chat_filter, self.agent_network)
+        queue_filter.apply_to_journal(self.invocation_context.get_journal())
 
         # Create an asynchronous background task to process the user input.
         # This might take a few minutes, which can be longer than some
@@ -190,14 +211,16 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         # Ignore the future. Live in the now.
         _ = task
 
-        # Late-stage conversions for any and all messages
-        message_processor: MessageProcessor = chat_session.create_outgoing_message_processor()
-
         # The generator below will asynchronously block waiting for
         # chat.ChatMessage dictionaries to come back asynchronously from the submit()
         # above until there are no more from the input.
         queue_generator = self.invocation_context.get_queue()
         try:
+            message: Dict[str, Any] = None
+            async for message in queue_generator:
+                if message is not None:
+                    yield message
+        finally:
             # Logic of what is done here:
             # 1. We tell underlying chat_session to delete its resources since we are done with this request;
             # 2. We do this in "finally" block so this releasing of resources happens in any case,
@@ -205,18 +228,6 @@ class AsyncDirectAgentSession(AsyncAgentSession):
             #    (which is implicitly constructed by these code lines and returned by this method)
             #    interrupted by caller-side "aclose" method.
             # 3. And we suppress all exceptions while deleting resources to keep things quieter.
-            async for message in queue_generator:
-                response_dict: Dict[str, Any] = copy(template_response_dict)
-                if message_filter.allow(message):
-                    # We expect the message to be a dictionary form of chat.ChatMessage
-                    if message_processor is not None:
-                        message_type: ChatMessageType = message.get("type")
-                        # Can modify message
-                        await message_processor.async_process_message(message, message_type)
-                    response_dict["response"] = message
-                    yield response_dict
-        finally:
-            # Release resources without exceptions
             with suppress(Exception):
                 self.invocation_context.finish_request()
 

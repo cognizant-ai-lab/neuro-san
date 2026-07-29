@@ -22,15 +22,17 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+import asyncio
 import json
 import os
 import random
-import threading
+from threading import Lock
 
 import tornado
 
 from leaf_common.serialization.util.text_file_reader import TextFileReader
 
+from neuro_san.internals.utils.config_util import ConfigUtil
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
@@ -59,8 +61,12 @@ from neuro_san.service.interfaces.agent_server import AgentServer
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
 from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.service.mcp.handlers.mcp_root_handler import McpRootHandler
+from neuro_san.service.utils.http_llm_tracer import HttpxLlmTracer
+from neuro_san.service.utils.loop_timeline_tracer import LoopTimelineTracer
 from neuro_san.service.utils.server_context import ServerContext
+from neuro_san.service.utils.service_resources import ServiceResources
 from neuro_san.service.utils.server_status import ServerStatus
+from neuro_san.internals.utils.event_loop_lag_monitor import EventLoopLagMonitor
 
 
 DEFAULT_SERVER_NAME: str = 'neuro-san.Agent'
@@ -126,7 +132,7 @@ class HttpServer(AgentStateListener):
         self.logger = HttpLogger(self.forwarded_request_metadata, self.logging_config)
         self.allowed_agents: Dict[str, AsyncAgentServiceProvider] = {}
         self.authorization_policy: AgentAuthorizer = AgentAuthorizationPolicy(self.allowed_agents)
-        self.lock = threading.Lock()
+        self.lock = Lock()
 
         # Add listener to handle adding per-agent http service
         # (services map is defined by self.allowed_agents dictionary)
@@ -216,8 +222,169 @@ class HttpServer(AgentStateListener):
                             {}, "Failed to start %s: %s",
                             startable.__class__.__name__, str(exception))
 
+        main_loop = tornado.ioloop.IOLoop.current()
+
+        # Enable event loop lag monitor if requested by environment variable.
+        if ConfigUtil.get_bool(os.environ, "ENABLE_EVENT_LOOP_STATISTICS"):
+            event_loop_monitor = \
+                EventLoopLagMonitor(
+                    sample_interval_seconds=1.0,
+                    report_every_n_samples=30,
+                    break_between_reports_seconds=30
+                )
+            ServiceResources.set_event_loop_monitor(event_loop_monitor)
+            main_loop.spawn_callback(event_loop_monitor.run)
+
+        # Optionally enable asyncio debug mode + slow-callback warnings on the
+        # Tornado IOLoop's underlying asyncio loop. Off by default to avoid the
+        # ~5-10% debug-mode overhead in production. Done after server.start()
+        # forks so each worker enables it in its own loop.
+        self._maybe_enable_asyncio_debug()
+
+        # Optionally install the sys.setprofile-based loop timeline tracer.
+        # Must be done on the Tornado loop thread, so we install it here --
+        # this method runs on that thread and IOLoop.current().start() below
+        # runs synchronously on the same thread.
+        self._maybe_start_loop_timeline_tracer()
+
+        # Optionally install the httpx-level LLM traffic tracer. Must run
+        # BEFORE any LLM SDK constructs its httpx.AsyncClient, which happens
+        # lazily on first LLM call, so installing here (before IOLoop.start)
+        # is safely ahead of any traffic.
+        self._maybe_install_http_llm_tracer()
+
         tornado.ioloop.IOLoop.current().start()
         self.logger.info({}, "Http server stopped.")
+
+    def _maybe_enable_asyncio_debug(self) -> None:
+        """
+        Enable asyncio debug mode and the slow-callback warning on the
+        current Tornado IOLoop's asyncio loop when requested via env vars.
+
+        Controls:
+          AGENT_ASYNCIO_DEBUG (bool, default false)
+              When truthy, enables loop.set_debug(True). This turns on
+              additional asyncio diagnostics including the slow-callback
+              warning. Adds ~5-10% loop overhead -- leave off in production
+              unless actively diagnosing.
+          AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS (int, default 100)
+              Threshold in milliseconds. Any callback running longer than
+              this on the Tornado loop will be logged at WARNING via the
+              "asyncio" logger, with the source location of the offending
+              callback.
+
+        Must be called after server.start() (i.e. after fork) so each
+        worker process configures its own loop.
+        """
+        if not ConfigUtil.get_bool(os.environ, "AGENT_ASYNCIO_DEBUG"):
+            return
+
+        raw_threshold: str = os.environ.get("AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS", "100")
+        try:
+            threshold_ms: int = int(raw_threshold)
+        except ValueError:
+            self.logger.warning({},
+                                "Invalid AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS=%r; falling back to 100ms",
+                                raw_threshold)
+            threshold_ms = 100
+
+        io_loop = tornado.ioloop.IOLoop.current()
+        loop = getattr(io_loop, "asyncio_loop", None) or asyncio.get_event_loop()
+        threshold_ms = max(threshold_ms, 1)
+        loop.set_debug(True)
+        loop.slow_callback_duration = threshold_ms / 1000.0
+        self.logger.info(
+            {},
+            "asyncio debug enabled on Tornado loop; "
+            "slow_callback_duration=%dms (warns via 'asyncio' logger)",
+            threshold_ms,
+        )
+
+    # pylint: disable=attribute-defined-outside-init
+    def _maybe_start_loop_timeline_tracer(self) -> None:
+        """
+        Start a LoopTimelineTracer on this thread if AGENT_LOOP_TIMELINE is
+        truthy. The tracer records per-callback timing on the Tornado event
+        loop -- a linear timeline of what ran and when.
+
+        Environment variables:
+          AGENT_LOOP_TIMELINE (bool, default false)
+              Enables the tracer.
+          AGENT_LOOP_TIMELINE_MAX_EVENTS (int, default 100000)
+              Ring buffer size. Older events drop off as new ones arrive.
+          AGENT_LOOP_TIMELINE_DUMP_PATH (str, default empty)
+              If non-empty, register an atexit hook that writes the buffered
+              timeline as JSONL to this path on graceful shutdown. When left
+              empty the timeline stays in-memory only; snapshot it manually
+              from a debug endpoint or signal handler.
+
+        The tracer adds ~5-10% loop overhead; keep off in production unless
+        actively diagnosing.
+        """
+        if not ConfigUtil.get_bool(os.environ, "AGENT_LOOP_TIMELINE"):
+            return
+
+        try:
+            max_events: int = int(os.environ.get(
+                "AGENT_LOOP_TIMELINE_MAX_EVENTS", str(LoopTimelineTracer.DEFAULT_MAX_EVENTS)))
+        except ValueError:
+            max_events = LoopTimelineTracer.DEFAULT_MAX_EVENTS
+        if max_events <= 0:
+            max_events = LoopTimelineTracer.DEFAULT_MAX_EVENTS
+
+        self._loop_timeline_tracer = LoopTimelineTracer(max_events=max_events)
+
+        dump_path: str = os.environ.get("AGENT_LOOP_TIMELINE_DUMP_PATH", "").strip()
+        if dump_path:
+            self._loop_timeline_tracer.register_atexit_dump(dump_path)
+            self.logger.info(
+                {}, "LoopTimelineTracer will dump to %s on shutdown", dump_path)
+
+        # Start LAST so the tracer captures all callbacks executed after the loop starts running.
+        self._loop_timeline_tracer.start()
+
+    def _maybe_install_http_llm_tracer(self) -> None:
+        """
+        Install the httpx-level LLM traffic tracer if AGENT_HTTP_LLM_TRACE
+        is truthy. Emits structured JSON events (http_llm_out /
+        http_llm_in / http_llm_end / optional http_llm_chunk) to the
+        dedicated logger "neuro_san.diagnostics.http_llm_trace" so
+        post-run analysis can reconstruct the LLM traffic lifecycle of
+        any user request via the user_req_id field.
+
+        Environment variables:
+          AGENT_HTTP_LLM_TRACE (bool, default false)
+              Enables the tracer. Off by default.
+          AGENT_HTTP_LLM_TRACE_INCLUDE_BODIES (bool, default false)
+              When true, request and response bodies are logged verbatim
+              (capped at 64 KB per body). Prompts + completions are large
+              and sensitive; off by default.
+          AGENT_HTTP_LLM_TRACE_CHUNKS (bool, default false)
+              When true, emits one http_llm_chunk event per received
+              body chunk. Massive log volume; enable only when
+              investigating inter-chunk cadence.
+
+        The tracer overhead is negligible (a few log writes per LLM
+        call). Route the "neuro_san.diagnostics.http_llm_trace" logger
+        to a separate file in logging.hocon for clean offline analysis.
+        """
+        if not ConfigUtil.get_bool(os.environ, "AGENT_HTTP_LLM_TRACE"):
+            return
+
+        include_bodies: bool = ConfigUtil.get_bool(
+            os.environ, "AGENT_HTTP_LLM_TRACE_INCLUDE_BODIES")
+        include_chunks: bool = ConfigUtil.get_bool(
+            os.environ, "AGENT_HTTP_LLM_TRACE_CHUNKS")
+
+        HttpxLlmTracer.install(
+            include_bodies=include_bodies,
+            include_chunks=include_chunks,
+        )
+        self.logger.info(
+            {},
+            "HttpxLlmTracer installed (include_bodies=%s include_chunks=%s)",
+            include_bodies, include_chunks,
+        )
 
     def resolve_health_probe_port(self) -> int:
         """
