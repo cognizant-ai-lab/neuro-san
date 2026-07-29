@@ -265,9 +265,18 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             nargs="?",
             const="auto",
             default=None,
-            help="Enable server log analysis.  Without a path, "
-                 "auto-detects the log from the server process.  "
-                 "With a path, uses the given file.",
+            help="Server log analysis.  Auto-detected by default "
+                 "for a local server at norm/adv levels.  Pass a "
+                 "path to use a specific file, or --server-log "
+                 "with no path to force auto-detect.  Disable with "
+                 "--no-server-log.",
+        )
+        parser.add_argument(
+            "--no-server-log",
+            action="store_true",
+            default=False,
+            help="Disable server log analysis (overrides the "
+                 "default local auto-detect).",
         )
         parser.add_argument(
             "--archive-server-log",
@@ -2343,6 +2352,19 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if (self.args.server_only
                 and self.args.server_log is None):
             self.args.server_log = "auto"
+        if self.args.no_server_log and not self.args.server_only:
+            self.args.server_log = None
+        elif (not self.args.no_server_log
+                and self.args.server_log is None
+                and not self.args.client_only
+                and not self.args.server_only
+                and self.args.host in LOCAL_HOSTS
+                and level != LEVEL_MIN):
+            self.args.server_log = (
+                EnvironmentValidator.try_auto_detect_server_log(
+                    self.args,
+                )
+            )
         explicit = getattr(self.args, "_explicit", set())
         self._apply_level_defaults(self.args, explicit)
         self._apply_scale(self.args)

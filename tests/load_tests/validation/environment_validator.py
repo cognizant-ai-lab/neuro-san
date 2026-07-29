@@ -143,6 +143,40 @@ class EnvironmentValidator:
         return server_proc
 
     @staticmethod
+    def try_auto_detect_server_log(args) -> Optional[str]:
+        """Best-effort local server-log detection; None if unavailable.
+
+        Unlike auto_detect_server_log, this never aborts.  It is used
+        for the default (unrequested) auto-detect so that remote or
+        no-server runs degrade quietly to no server-log analysis
+        instead of failing.
+        """
+        if not EnvironmentValidator.is_port_open(
+                args.host, args.port,
+        ):
+            return None
+        server_proc = None
+        for keyword in ["neuro_san_studio", "server_main_loop"]:
+            server_proc = ResourceMonitor.find_process(keyword)
+            if server_proc is not None:
+                break
+        if server_proc is None:
+            server_proc = ResourceMonitor.find_process_by_port(
+                args.port,
+            )
+        if server_proc is None:
+            return None
+        try:
+            candidate = os.path.join(
+                server_proc.cwd(), "logs", "server.log",
+            )
+            if os.path.isfile(candidate):
+                return candidate
+        except (psutil.AccessDenied, psutil.NoSuchProcess, OSError):
+            return None
+        return None
+
+    @staticmethod
     def auto_detect_server_log(server_proc) -> str:
         """Auto-detect server log from server process CWD.
 

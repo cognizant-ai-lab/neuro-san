@@ -67,19 +67,24 @@ python -m tests.load_tests.load_test --agent hello_world --level adv \
 | Feature                              | min | norm | adv |
 |--------------------------------------|-----|------|-----|
 | Fire requests + validate responses   |  Y  |  Y   |  Y  |
-| Server log (retries, disconnections) |     | opt  | opt |
+| Server log (retries, disconnections) |     | auto | auto |
 | Resource monitoring (RSS, threads)   | opt |  Y   |  Y  |
 | Token accounting (from stdout)       |  Y  |  Y   |  Y  |
 | Pool reuse analysis                  |     |      | opt |
 | JSON export (`raw_results.json`)     |  Y  |  Y   |  Y  |
 
-`opt` = available with optional flags. `--server-log` enables retry
-counting, server-side validation, disconnection detection, and pool
-reuse analysis at any level.  Use `--server-log` alone to auto-detect
-the log from the server process, or `--server-log <path>` for an
-explicit file. `--monitor-resources` enables psutil monitoring at
-`min` level. Token accounting via `agent_cli --tokens` is enabled
-at all levels by default (disable with `--no-tokens`).
+`opt` = available with optional flags; `auto` = on by default when the
+target server is local. `--server-log` enables retry counting,
+server-side validation, disconnection detection, and pool reuse
+analysis. At `norm`/`adv` levels it is **auto-detected by default** for
+a local server, so no flag is needed when colocated; it degrades
+quietly to off for a remote host or when no local server is found.
+Pass `--server-log <path>` to use an explicit file, `--server-log`
+alone to force auto-detect (aborts if detection fails), or
+`--no-server-log` to disable it. It stays off by default at `min`.
+`--monitor-resources` enables psutil monitoring at `min` level. Token
+accounting via `agent_cli --tokens` is enabled at all levels by
+default (disable with `--no-tokens`).
 
 **`adv` level defaults:** 50 requests, 3 rounds (150 total requests).
 With `--yes`, workers auto-match to 50 (full concurrency). Without
@@ -95,10 +100,14 @@ during the cost confirmation on all levels if
 `max-workers < num-requests`. Explicit `--max-workers` is always
 respected regardless of `--yes`.
 
-When `--server-log` is omitted, server-log-dependent sections print
-"not available" in the output.  When `--server-log` is passed without
+At `norm`/`adv` with a local server, server-log analysis is on by
+default (auto-detected).  It is off when disabled with
+`--no-server-log`, at `min` level, for a remote host, or when no local
+server is found — in which cases server-log-dependent sections print
+"not available".  When `--server-log` is passed **explicitly** without
 a path and auto-detection fails, the load test aborts with an error
-and suggests providing the path explicitly.
+and suggests providing the path explicitly (the default auto-detect
+never aborts).
 
 ## Traffic Modes
 
@@ -118,7 +127,8 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 |----------------------------|-------------|----------------------------------------------|
 | `--agent`                  | hello_world | Agent name as registered in the server       |
 | `--level`                  | norm        | Test depth: min, norm, or adv                |
-| `--server-log [PATH]`      | (none)      | Enable server log analysis. Without a path, auto-detects from server process. With a path, uses the given file. |
+| `--server-log [PATH]`      | auto (local, norm/adv) | Server log analysis. Auto-detected by default for a local server at norm/adv (off at min, remote, or if no local server). Pass a path for an explicit file, or the flag alone to force auto-detect. |
+| `--no-server-log`          | off         | Disable server log analysis (overrides the default local auto-detect) |
 | `--monitor-resources`      | off         | Enable psutil monitoring at min level         |
 | `--no-tokens`              | off         | Disable per-request token accounting         |
 | `--profile-path`           | auto        | Directory containing profile JSON files (or `LOAD_TEST_PROFILE_PATH` env var) |
