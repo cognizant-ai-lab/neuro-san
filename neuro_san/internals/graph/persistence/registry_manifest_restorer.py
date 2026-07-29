@@ -159,36 +159,10 @@ class RegistryManifestRestorer(Restorer):
 
         # The default of "thread" is the least heavyweight, but not necessarily the fastest
         # given the context of how/how often the manifest is read.
-        concurrency_context: str = os.environ.get("AGENT_MANIFEST_CONCURRENCY_CONTEXT", "thread").strip().lower()
-
-        executor_factory = None
-        if concurrency_context in ("spawn", "fork"):
-            # Use a ProcessPoolExecutor for "spawn" and "fork".
-            # In cases of large manifests, a ProcessPoolExecutor ends up being more heavyweight,
-            # yet still more time-efficient because of the parallelism sidestepping the GIL.
-            # When we get to free-threading in Python 3.14T, this can be all be changed back to ThreadPoolExecutor.
-            #
-            # "spawn" is the safest option (avoiding deadlocks) for environments where the manifest is changing,
-            # but some speed is still desired (like development servers).
-            #
-            # "fork" is actually the fastest option, but has potential to lead to deadlocks.
-            # This is still a reasonable option for server environments where the manifest
-            # is known never to change at all.
-            executor_factory = partial(ProcessPoolExecutor, max_workers=max_workers,
-                                       mp_context=get_context(concurrency_context))
-        elif concurrency_context == "thread":
-            # Use a ThreadPoolExecutor for "thread".
-            # The default of "thread" is best for servers who know their manifest content will be
-            # changing over the course of their lifetime. It is slowest of all options, but has
-            # the least amount of overall memory overhead and is lightweight and safe and problem-free.
-            executor_factory = partial(ThreadPoolExecutor, max_workers=max_workers)
-        else:
-            # Default to ThreadPoolExecutor
-            self.logger.warning("Unknown concurrency context '%s'. Defaulting to ThreadPoolExecutor.",
-                                concurrency_context)
-            executor_factory = partial(ThreadPoolExecutor, max_workers=max_workers)
+        concurrency_context: str = os.environ.get("AGENT_MANIFEST_CONCURRENCY_CONTEXT", "thread")
 
         try:
+            executor_factory = self.find_executory_factory(concurrency_context, max_workers)
             with executor_factory() as executor:
 
                 read_one: Any = partial(self.read_one_agent_network,
@@ -215,6 +189,43 @@ class RegistryManifestRestorer(Restorer):
             self.logger.warning("Manifest file %s restored in %.2f seconds.", manifest_file, duration)
 
         return agent_networks
+
+    def find_executory_factory(self, concurrency_context: str, max_workers: int) -> Any:
+        """
+        :param concurrency_context: The concurrency context to use.
+        :param max_workers: The maximum number of workers to use.
+        :return: The executor factory to use as a no-args constructor.
+        """
+        executor_factory = None
+        concurrency_context = concurrency_context.strip().lower()
+
+        if concurrency_context in ("spawn", "fork"):
+            # Use a ProcessPoolExecutor for "spawn" and "fork".
+            # In cases of large manifests, a ProcessPoolExecutor ends up being more heavyweight,
+            # yet still more time-efficient because of the parallelism sidestepping the GIL.
+            # When we get to free-threading in Python 3.14T, this can be all be changed back to ThreadPoolExecutor.
+            #
+            # "spawn" is the safest option (avoiding deadlocks) for environments where the manifest is changing,
+            # but some speed is still desired (like development servers).
+            #
+            # "fork" is actually the fastest option, but has potential to lead to deadlocks.
+            # This is still a reasonable option for server environments where the manifest
+            # is known never to change at all.
+            executor_factory = partial(ProcessPoolExecutor, max_workers=max_workers,
+                                       mp_context=get_context(concurrency_context))
+        elif concurrency_context == "thread":
+            # Use a ThreadPoolExecutor for "thread".
+            # The default of "thread" is best for servers who know their manifest content will be
+            # changing over the course of their lifetime. It is slowest of all options, but has
+            # the least amount of overall memory overhead and is lightweight and safe and problem-free.
+            executor_factory = partial(ThreadPoolExecutor, max_workers=max_workers)
+        else:
+            # Default to ThreadPoolExecutor
+            self.logger.warning("Unknown concurrency context '%s'. Defaulting to ThreadPoolExecutor.",
+                                concurrency_context)
+            executor_factory = partial(ThreadPoolExecutor, max_workers=max_workers)
+
+        return executor_factory
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     @staticmethod
