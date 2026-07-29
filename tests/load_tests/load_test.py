@@ -1794,6 +1794,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             peak_sys_cpu,
             peak_sys_cpu / 100.0 * ncores, ncores,
         )
+        logger.info(
+            "  Peak server threads: %s", f"{peak_threads:,}",
+        )
 
         primary_pairs = self._server_only_primary_pairs(
             log_pos, pri_start_re,
