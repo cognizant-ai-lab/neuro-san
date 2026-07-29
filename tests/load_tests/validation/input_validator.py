@@ -187,7 +187,7 @@ class InputValidator:
 
         prompt = (
             "\nProceed with remaining "
-            f"{capped - 1} requests? [y/N]: "
+            f"{capped - 1} requests? [y/n]: "
         )
         while True:
             try:
@@ -197,7 +197,7 @@ class InputValidator:
                 sys.exit(0)
             if answer in ("y", "yes"):
                 break
-            if answer in ("", "n", "no"):
+            if answer in ("n", "no"):
                 logger.info("Aborted by user.")
                 sys.exit(0)
             logger.info("  Please answer 'y' or 'n'.")
