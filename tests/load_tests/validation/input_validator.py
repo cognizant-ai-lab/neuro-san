@@ -185,13 +185,22 @@ class InputValidator:
 
         logger.info("=" * SEPARATOR_WIDTH)
 
-        answer = input(
+        prompt = (
             "\nProceed with remaining "
-            f"{capped - 1} requests? [y/N]: ",
-        ).strip().lower()
-        if answer not in ("y", "yes"):
-            logger.info("Aborted by user.")
-            sys.exit(0)
+            f"{capped - 1} requests? [y/N]: "
+        )
+        while True:
+            try:
+                answer = input(prompt).strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                logger.info("\nAborted by user.")
+                sys.exit(0)
+            if answer in ("y", "yes"):
+                break
+            if answer in ("", "n", "no"):
+                logger.info("Aborted by user.")
+                sys.exit(0)
+            logger.info("  Please answer 'y' or 'n'.")
 
         return probe_result
 
