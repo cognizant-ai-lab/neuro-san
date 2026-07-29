@@ -29,6 +29,7 @@ from typing import Tuple
 import psutil
 
 from neuro_san.service.utils.server_context import ServerContext
+from neuro_san.internals.utils.event_loop_lag_monitor import EventLoopLagMonitor
 
 # Unix-only
 try:
@@ -54,6 +55,7 @@ class ServiceResources:
     max_memory_used_bytes: float = 0.0
 
     server_context: Optional[ServerContext] = None  # service ServerContext object for obtaining run-time metrics
+    event_loop_monitor: Optional[EventLoopLagMonitor] = None  # service EventLoopLagMonitor for event loop metrics
 
     @classmethod
     def set_server_context(cls, context: ServerContext):
@@ -62,6 +64,14 @@ class ServiceResources:
         :param context: ServerContext instance
         """
         cls.server_context = context
+
+    @classmethod
+    def set_event_loop_monitor(cls, monitor: EventLoopLagMonitor):
+        """
+        Set the event loop lag monitor for this class, which can be used to obtain service event loop metrics.
+        :param monitor: EventLoopLagMonitor instance
+        """
+        cls.event_loop_monitor = monitor
 
     # ---------------------------
     # POSIX helpers (Linux/macOS)
@@ -365,6 +375,10 @@ class ServiceResources:
         }
         if cls.server_context is not None:
             snapshot["executor_threads"] = cls.server_context.get_executor_pool().get_threads_metrics()
+        if cls.event_loop_monitor is not None:
+            loop_metrics: Dict[str, Any] = cls.event_loop_monitor.get_metrics()
+            if loop_metrics:
+                snapshot["event_loop_metrics"] = loop_metrics
 
         snapshot["total_threads"] = psutil.Process().num_threads()
         return snapshot

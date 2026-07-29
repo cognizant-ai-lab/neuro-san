@@ -62,7 +62,9 @@ from neuro_san.service.mcp.handlers.mcp_root_handler import McpRootHandler
 from neuro_san.service.utils.http_llm_tracer import HttpxLlmTracer
 from neuro_san.service.utils.loop_timeline_tracer import LoopTimelineTracer
 from neuro_san.service.utils.server_context import ServerContext
+from neuro_san.service.utils.service_resources import ServiceResources
 from neuro_san.service.utils.server_status import ServerStatus
+from neuro_san.internals.utils.event_loop_lag_monitor import EventLoopLagMonitor
 
 
 DEFAULT_SERVER_NAME: str = 'neuro-san.Agent'
@@ -217,6 +219,19 @@ class HttpServer(AgentStateListener):
                         self.logger.error(
                             {}, "Failed to start %s: %s",
                             startable.__class__.__name__, str(exception))
+
+        main_loop = tornado.ioloop.IOLoop.current()
+
+        # Enable event loop lag monitor if requested by environment variable.
+        if ConfigUtil.get_bool(os.environ, "ENABLE_EVENT_LOOP_STATISTICS"):
+            event_loop_monitor = \
+                EventLoopLagMonitor(
+                    sample_interval_seconds=1.0,
+                    report_every_n_samples=30,
+                    break_between_reports_seconds=30
+                )
+            ServiceResources.set_event_loop_monitor(event_loop_monitor)
+            main_loop.spawn_callback(event_loop_monitor.run)
 
         # Optionally enable asyncio debug mode + slow-callback warnings on the
         # Tornado IOLoop's underlying asyncio loop. Off by default to avoid the
