@@ -199,7 +199,7 @@ class RegistryManifestRestorer(Restorer):
         executor_factory = None
         concurrency_context = concurrency_context.strip().lower()
 
-        if concurrency_context in ("spawn", "fork"):
+        if concurrency_context in ("spawn", "fork", "forkserver"):
             # Use a ProcessPoolExecutor for "spawn" and "fork".
             # In cases of large manifests, a ProcessPoolExecutor ends up being more heavyweight,
             # yet still more time-efficient because of the parallelism sidestepping the GIL.
@@ -211,6 +211,10 @@ class RegistryManifestRestorer(Restorer):
             # "fork" is actually the fastest option, but has potential to lead to deadlocks.
             # This is still a reasonable option for server environments where the manifest
             # is known never to change at all.
+            #
+            # "forkserver" is a bit like "fork" but with a bit more safety.
+            # See https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
+            # for more details.
             executor_factory = partial(ProcessPoolExecutor, max_workers=max_workers,
                                        mp_context=get_context(concurrency_context))
         elif concurrency_context == "thread":
