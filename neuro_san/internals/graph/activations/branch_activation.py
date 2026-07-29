@@ -201,7 +201,7 @@ flag to your invocation.
 """) from exception
 
             # Nope. Just a regular http connection failure given the tool_name. Can't help ya.
-            raise exception
+            raise
 
         finally:
             # Always release the sub-agent's LangChainLlmResources (LLM
