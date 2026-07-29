@@ -162,7 +162,7 @@ class RegistryManifestRestorer(Restorer):
         concurrency_context: str = os.environ.get("AGENT_MANIFEST_CONCURRENCY_CONTEXT", "thread").lower()
 
         executor_factory = None
-        if concurrency_context == "spawn" or concurrency_context == "fork":
+        if concurrency_context in ("spawn", "fork"):
             # Use a ProcessPoolExecutor for "spawn" and "fork".
             # In cases of large manifests, a ProcessPoolExecutor ends up being more heavyweight,
             # yet still more time-efficient because of the parallelism sidestepping the GIL.
