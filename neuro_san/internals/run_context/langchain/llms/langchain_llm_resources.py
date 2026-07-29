@@ -87,9 +87,12 @@ class LangChainLlmResources(LingeringResource):
         # Note we are not changing the LlmPolicy interface to be LingeringResource at the moment.
         # This is something that could be extended external to neuro-san for someone's pet LLM,
         # so we are not going there to preserve backwards compatibility.
+        print(f"+++++ HANGING close-of-work for policy {self.llm_policy}")
         if self.llm_policy is not None:
+            print(f"+++++ HANGING delete-resources for policy {self.llm_policy}")
             await self.llm_policy.delete_resources()
 
         # Close any child resources
         for child_resource in self.child_resources:
+            print(f"+++++ HANGING delete-child-resources for child-resource {child_resource} policy:{self.llm_policy}")
             await child_resource.close_of_work(self)

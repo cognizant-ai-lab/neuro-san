@@ -193,6 +193,7 @@ class OpenAILlmPolicy(LlmPolicy):
         Release the run-time resources used by the instance.
         """
         self.async_openai_client = None
+        print(f"+++++++++++++++++++++++ HANGING DeleteResorces for http_client {id(self.http_client)}")
 
         if self.http_client is not None:
             try:
