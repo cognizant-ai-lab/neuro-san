@@ -101,6 +101,7 @@ class OpenAILlmPolicy(LlmPolicy):
         openai_proxy: str = self.get_value_or_env(config, "openai_proxy", "OPENAI_PROXY")
         request_timeout: int = config.get("request_timeout")
         self.http_client = AsyncClient(proxy=openai_proxy, timeout=request_timeout, limits=self.LIMITS)
+        print(f"+++++++++++++++++++++++ HANGING Created http_client {id(self.http_client)}")
 
     def create_llm(self, config: Dict[str, Any], model_name: str, client: Any) -> BaseLanguageModel:
         """
@@ -194,7 +195,13 @@ class OpenAILlmPolicy(LlmPolicy):
         self.async_openai_client = None
 
         if self.http_client is not None:
-            with suppress(Exception):
+            try:
+                print(f"+++++++++++++++++++++++ HANGING Closed http_client {id(self.http_client)}")
                 await self.http_client.aclose()
+            except Exception as exc:
+                print(f"+++++++++++++++ HANGING Exception occurred while closing {id(self.http_client)} Ignoring and continuing.")
+
+            # with suppress(Exception):
+            #     await self.http_client.aclose()
 
         self.http_client = None
