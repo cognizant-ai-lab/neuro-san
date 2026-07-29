@@ -159,7 +159,7 @@ class RegistryManifestRestorer(Restorer):
 
         # The default of "thread" is the least heavyweight, but not necessarily the fastest
         # given the context of how/how often the manifest is read.
-        concurrency_context: str = os.environ.get("AGENT_MANIFEST_CONCURRENCY_CONTEXT", "thread").lower()
+        concurrency_context: str = os.environ.get("AGENT_MANIFEST_CONCURRENCY_CONTEXT", "thread").strip().lower()
 
         executor_factory = None
         if concurrency_context in ("spawn", "fork"):
