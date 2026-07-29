@@ -2495,7 +2495,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             logger.info("  server_log=%s", self.server_log)
         else:
             logger.info("  server_log=none")
-        if self.profile.estimated_tokens_per_request:
+        if self.probe_result and self.probe_result.get("total_tokens"):
+            logger.info(
+                "  tokens_per_request=%s (measured by probe)",
+                f"{self.probe_result.get('total_tokens'):,}",
+            )
+        elif self.profile.estimated_tokens_per_request:
             logger.info(
                 "  estimated_tokens_per_request=%s",
                 f"{self.profile.estimated_tokens_per_request:,}",
