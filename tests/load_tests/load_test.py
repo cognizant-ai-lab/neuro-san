@@ -257,9 +257,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "--yes",
             action="store_true",
             default=False,
-            help="Skip the cost confirmation prompt "
-                 "(adv level only). Also auto-matches "
-                 "--max-workers to --num-requests.",
+            help="Skip the dry-run cost-confirmation probe "
+                 "(runs by default at min/norm; adv skips it "
+                 "by default). Also auto-matches --max-workers "
+                 "to --num-requests at adv level.",
         )
         parser.add_argument(
             "--server-log",
@@ -2381,15 +2382,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             level = LEVEL_MIN
             self.args.level = LEVEL_MIN
             self.args.monitor_resources = True
-        if (self.args.yes and level != LEVEL_ADV
-                and not self.args.server_only):
-            logger.error(
-                "--yes is only supported at adv level. "
-                "At %s level, the cost confirmation "
-                "prompt is required.",
-                level,
-            )
-            raise SystemExit(1)
         if (self.args.client_only
                 and self.args.server_only):
             logger.error(

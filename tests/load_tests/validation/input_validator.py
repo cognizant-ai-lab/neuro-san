@@ -127,10 +127,14 @@ class InputValidator:
     ) -> Optional[RequestResult]:
         """Display PRE-RUN SUMMARY and optionally run a dry-run probe.
 
-        With --yes: shows the summary and returns immediately.
-        Without --yes: fires one probe request with --tokens to
-        measure actual token usage, collects warnings, and asks
-        the user to confirm.
+        The dry-run probe + cost confirmation runs by default at min
+        and norm levels; --yes bypasses it. At adv level it does not
+        run by default (adv is an explicit stress test).
+
+        When skipped, shows the summary and returns immediately.
+        Otherwise fires one probe request with --tokens to measure
+        actual token usage, collects warnings, and asks the user to
+        confirm.
 
         Returns the probe result dict if a probe was run, else None.
         """
@@ -139,7 +143,7 @@ class InputValidator:
 
         self._print_summary_header(stages, total_planned, capped)
 
-        if self._args.yes:
+        if self._args.yes or self._args.level == LEVEL_ADV:
             warnings = self._collect_warnings(
                 capped=capped,
                 total_planned=total_planned,
@@ -176,12 +180,10 @@ class InputValidator:
         )
         self._print_warnings(warnings)
 
-        if self._args.level != LEVEL_ADV:
-            logger.info(
-                "\n  Tip: use --yes at adv level to skip "
-                "this confirmation.\n"
-                "       --yes does not auto-adjust timeouts.",
-            )
+        logger.info(
+            "\n  Tip: use --yes to skip this confirmation.\n"
+            "       --yes does not auto-adjust timeouts.",
+        )
 
         logger.info("=" * SEPARATOR_WIDTH)
 
