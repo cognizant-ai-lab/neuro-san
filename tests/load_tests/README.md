@@ -79,12 +79,14 @@ python -m tests.load_tests.load_test --agent hello_world --level adv \
 `opt` = available with optional flags; `auto` = on by default when the
 target server is local. `--server-log` enables retry counting,
 server-side validation, disconnection detection, and pool reuse
-analysis. At `norm`/`adv` levels it is **auto-detected by default** for
-a local server, so no flag is needed when colocated; it degrades
-quietly to off for a remote host or when no local server is found.
-Pass `--server-log <path>` to use an explicit file, `--server-log`
-alone to force auto-detect (aborts if detection fails), or
-`--no-server-log` to disable it. It stays off by default at `min`.
+analysis. At `norm`/`adv` (all-in-one) a server log is expected: it is
+auto-detected for a local server (no flag needed when colocated). If a
+local log isn't found, the run **prompts** you to continue without it
+(or abort); a **remote** host aborts with a pointer to
+`--client-only`. Use `--no-server-log` to skip the prompt
+and run without log analysis, or `--server-log <path>` for an explicit
+file (`--server-log` alone forces auto-detect and aborts if it fails).
+It stays off by default at `min`.
 Resource monitoring is on automatically at `norm`/`adv` and in the
 `min` profile used by `--client-only`/`--server-only`. Token
 accounting via `agent_cli --tokens` is enabled at all levels by
@@ -104,14 +106,13 @@ during the cost confirmation on all levels if
 `max-workers < num-requests`. Explicit `--max-workers` is always
 respected regardless of `--yes`.
 
-At `norm`/`adv` with a local server, server-log analysis is on by
-default (auto-detected).  It is off when disabled with
-`--no-server-log`, at `min` level, for a remote host, or when no local
-server is found — in which cases server-log-dependent sections print
-"not available".  When `--server-log` is passed **explicitly** without
-a path and auto-detection fails, the load test aborts with an error
-and suggests providing the path explicitly (the default auto-detect
-never aborts).
+At `norm`/`adv`, server-log analysis is expected: it is auto-detected
+for a local server. If a local log isn't found you're prompted to
+continue without it; a remote host aborts (use `--client-only`). Pass
+`--no-server-log` to skip the prompt and
+opt out — server-log-dependent sections then print "not available".
+At `min` (the `--client-only`/`--server-only` profile) server-log
+analysis is always off.
 
 ## Traffic Modes
 
@@ -131,8 +132,8 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 |----------------------------|-------------|----------------------------------------------|
 | `--agent`                  | hello_world | Agent name as registered in the server       |
 | `--level`                  | norm        | Test depth: norm or adv for an all-in-one run (min is rejected there; min is used automatically by `--client-only`/`--server-only`) |
-| `--server-log [PATH]`      | auto (local, norm/adv) | Server log analysis. Auto-detected by default for a local server at norm/adv (off at min, remote, or if no local server). Pass a path for an explicit file, or the flag alone to force auto-detect. |
-| `--no-server-log`          | off         | Disable server log analysis (overrides the default local auto-detect) |
+| `--server-log [PATH]`      | auto (local, norm/adv) | Server log analysis. Auto-detected for a local server at norm/adv; if not found you're prompted to continue without it (remote host aborts — use `--client-only`). Pass a path for an explicit file, or the flag alone to force auto-detect. |
+| `--no-server-log`          | off         | Skip the missing-log prompt at norm/adv and run without server-log analysis; overrides the local auto-detect |
 | `--no-tokens`              | off         | Disable per-request token accounting         |
 | `--profile-path`           | auto        | Directory containing profile JSON files (or `LOAD_TEST_PROFILE_PATH` env var) |
 | `--host`                   | localhost   | Neuro-san server host                        |

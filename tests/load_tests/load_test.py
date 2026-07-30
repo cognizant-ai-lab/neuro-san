@@ -1468,6 +1468,35 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             return int(age_seconds // 60)
         return None
 
+    def _confirm_no_server_log(self, level) -> None:
+        """Prompt to continue when a local server.log isn't found.
+
+        norm/adv expect a server log; if auto-detect fails, offer to
+        run without it or abort. --no-server-log skips this prompt;
+        --yes does not (it only bypasses the cost confirmation).
+        """
+        logger.warning(
+            "Server log not found for --level %s. Without it: "
+            "no retry, disconnection, or pool analysis.\n"
+            "  Set it with --server-log <path>, or use "
+            "--no-server-log to skip this prompt.",
+            level,
+        )
+        prompt = "Continue without server-log analysis? [y/n]: "
+        while True:
+            try:
+                answer = input(prompt).strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                logger.info("\nAborted by user.")
+                sys.exit(0)
+            if answer in ("y", "yes"):
+                logger.info("  Continuing without server-log analysis.")
+                return
+            if answer in ("n", "no"):
+                logger.info("Aborted by user.")
+                sys.exit(0)
+            logger.info("  Please answer 'y' or 'n'.")
+
     @staticmethod
     def _apply_level_defaults(args, explicit_args) -> None:
         """Override argparse defaults with level-specific values.
@@ -2398,11 +2427,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             self.args.level = LEVEL_MIN
         elif level == LEVEL_MIN:
             logger.error(
-                "--level min is only supported with "
-                "--client-only or --server-only. For an "
-                "all-in-one run use --level norm or "
-                "--level adv (or --client-only for the "
-                "lightweight traffic-only profile).",
+                "--level min requires --client-only or "
+                "--server-only. For an all-in-one run use "
+                "--level norm or --level adv.",
             )
             raise SystemExit(1)
         if (self.args.client_only
@@ -2434,6 +2461,20 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     self.args,
                 )
             )
+        if (level != LEVEL_MIN
+                and not self.args.client_only
+                and not self.args.server_only
+                and not self.args.no_server_log
+                and self.args.server_log is None):
+            if self.args.host not in LOCAL_HOSTS:
+                logger.error(
+                    "--level %s needs a local server to read "
+                    "server.log. Use --client-only for a remote "
+                    "server, or pass --server-log <path>.",
+                    level,
+                )
+                raise SystemExit(1)
+            self._confirm_no_server_log(level)
         explicit = getattr(self.args, "_explicit", set())
         self._apply_level_defaults(self.args, explicit)
         self._apply_scale(self.args)
