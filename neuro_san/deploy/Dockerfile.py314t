@@ -273,17 +273,22 @@ ARG NEURO_SAN_VERSION
 #
 # Free-threading (no-GIL) control
 #
-# This image runs a free-threaded 3.14t interpreter, which by default runs with
-# the GIL DISABLED. Note: if a C/Rust extension that is not yet marked
-# free-thread-safe gets imported, CPython automatically RE-ENABLES the GIL at
-# runtime (with a warning) unless you force it off. neuro-san pulls in several
-# native extensions, so out of the box you may see the GIL re-enabled.
+# This image runs a free-threaded 3.14t interpreter. We FORCE the GIL OFF by
+# default: PYTHON_GIL=0 keeps the GIL disabled even when a C/Rust extension that
+# is not marked free-thread-safe is imported (CPython would otherwise auto
+# RE-ENABLE the GIL for such an import). So every `docker run` of this image
+# gets true free-threading unless overridden.
 #
-# To override, set PYTHON_GIL at runtime (docker run -e PYTHON_GIL=...):
-#   PYTHON_GIL=0  -> force the GIL OFF (true free-threading; only safe once all
-#                    loaded native extensions are free-thread-safe)
+# WARNING: neuro-san loads several native extensions that do NOT declare
+# free-thread safety (e.g. orjson -- see ORJSON_BUILD_FREETHREADED above -- and
+# others). Running them with the GIL forced off means CPython emits a warning
+# and proceeds WITHOUT the GIL's protection; concurrent use of a not-yet-safe
+# extension can data-race or crash. This is a deliberate choice for this image.
+#
+# Override at runtime if needed (docker run -e PYTHON_GIL=...):
 #   PYTHON_GIL=1  -> force the GIL ON (run 3.14t as a conventional interpreter)
-# Left unset here on purpose so the interpreter makes the safe default choice.
+#   PYTHON_GIL=0  -> (this image's default) force the GIL OFF
+ENV PYTHON_GIL=0
 
 #
 # API Keys for LLM Access
