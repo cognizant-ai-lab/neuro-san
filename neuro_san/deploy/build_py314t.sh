@@ -64,6 +64,7 @@ LEAF_SERVER_COMMON_DIR=${LEAF_SERVER_COMMON_DIR:-../leaf-server-common}
 PYTHON_VERSION=${PYTHON_VERSION:-3.14t}
 BASE_IMAGE=${BASE_IMAGE:-debian:trixie-slim}
 UV_IMAGE=${UV_IMAGE:-ghcr.io/astral-sh/uv:latest}
+echo ">>>>>>>>>>>>>>UV_IMAGE = ${UV_IMAGE}"
 
 # Where this repo's app source and Dockerfile live, relative to the run dir.
 NEURO_SAN_PKG="neuro_san"
@@ -146,7 +147,7 @@ function build_main() {
         --build-arg NEURO_SAN_VERSION="${USER}-$(date +'%Y-%m-%d-%H-%M')" \
         --build-arg PYTHON_VERSION="${PYTHON_VERSION}" \
         --build-arg BASE_IMAGE="${BASE_IMAGE}" \
-        --build-arg UV_IMAGE="${UV_IMAGE}" \
+#        --build-arg UV_IMAGE="${UV_IMAGE}" \
         --build-arg LEAF_COMMON_VERSION="${LEAF_COMMON_VERSION}" \
         --build-arg LEAF_SERVER_COMMON_VERSION="${LEAF_SERVER_COMMON_VERSION}" \
         --build-arg PACKAGE_INSTALL="/usr/local/neuro-san/myapp" \
