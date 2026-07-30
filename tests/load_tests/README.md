@@ -144,11 +144,11 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--stages`                 | 10,30,50,100| Concurrency per stage in ramp mode           |
 | `--num-rounds`             | 1           | Repeat the full sequence N times             |
 | `--max-requests`           | sum(stages) * num_rounds | Hard cap on total requests |
-| `--request-timeout`        | 1200        | Hard timeout per request (seconds)           |
-| `--idle-timeout`           | 900         | Abort a request that is idle for N seconds (resets on activity). Subprocess mode: no `agent_cli` output; HTTP mode (`--http-client`): no next stream chunk |
-| `--stage-timeout`          | 1500        | Hard timeout for entire stage/round (seconds). Kills remaining in-flight requests |
-| `--total-timeout`          | 0 (disabled)| Hard timeout for entire load test (seconds). Kills run when exceeded |
-| `--settle-time`            | 15          | Wait after each stage for server cleanup     |
+| `--request-timeout`        | 1200 (20m)  | Hard timeout per request. Accepts a bare number (seconds) or an `s`/`m`/`h` suffix (e.g. `90s`, `20m`, `2h`) |
+| `--idle-timeout`           | 900 (15m)   | Abort a request that is idle for this long (resets on activity). Accepts seconds or an `s`/`m`/`h` suffix. Subprocess mode: no `agent_cli` output; HTTP mode (`--http-client`): no next stream chunk |
+| `--stage-timeout`          | 1500 (25m)  | Hard timeout for entire stage/round. Accepts seconds or an `s`/`m`/`h` suffix. Kills remaining in-flight requests |
+| `--total-timeout`          | 0 (disabled)| Hard timeout for entire load test. Accepts seconds or an `s`/`m`/`h` suffix. Kills run when exceeded |
+| `--settle-time`            | 15 (15s)    | Wait after each stage for server cleanup. Accepts seconds or an `s`/`m`/`h` suffix |
 | `--same-prompt`            | off         | Use identical prompt for all requests        |
 | `--yes`                    | off         | Bypass the dry-run probe + cost confirmation (which run by default at min/norm; adv skips them already). At adv, also auto-matches `--max-workers` to `--num-requests` |
 | `--scale`                  | 1           | Multiply `--num-requests`, `--max-workers`, `--request-timeout`, `--idle-timeout`, `--stage-timeout`, `--total-timeout` by this factor. `--max-requests` auto-adjusts. |

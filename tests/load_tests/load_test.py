@@ -70,6 +70,7 @@ from tests.load_tests.config import HISTORY_THRESHOLDS_SECONDS
 from tests.load_tests.config import THREAD_JOIN_TIMEOUT
 from tests.load_tests.confirm import Confirm
 from tests.load_tests.cost_estimator import CostEstimator
+from tests.load_tests.duration import DurationParser
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
@@ -209,42 +210,51 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
         parser.add_argument(
             "--request-timeout",
-            type=int,
+            type=DurationParser.parse,
+            metavar="DURATION",
             default=DEFAULT_TIMEOUT_SECONDS,
-            help="Hard timeout per request in seconds "
-                 "(default: 1200). Safety net to prevent requests "
-                 "from running forever.",
+            help="Hard timeout per request. Bare number = seconds, "
+                 "or suffix s/m/h (e.g. 90s, 20m, 2h). "
+                 "Default: 1200 (20m). Safety net to prevent "
+                 "requests from running forever.",
         )
         parser.add_argument(
             "--idle-timeout",
-            type=int,
+            type=DurationParser.parse,
+            metavar="DURATION",
             default=DEFAULT_IDLE_TIMEOUT_SECONDS,
-            help="Kill a request if no output for this many "
-                 "seconds (default: 900). "
-                 "Detects hanging requests.",
+            help="Kill a request if no output for this long. Bare "
+                 "number = seconds, or suffix s/m/h (e.g. 90s, 15m). "
+                 "Default: 900 (15m). Detects hanging requests.",
         )
         parser.add_argument(
             "--stage-timeout",
-            type=int,
+            type=DurationParser.parse,
+            metavar="DURATION",
             default=1500,
-            help="Hard timeout for an entire stage/round in "
-                 "seconds (default: 1500 / 25 min). "
-                 "Kills remaining in-flight requests when hit.",
+            help="Hard timeout for an entire stage/round. Bare "
+                 "number = seconds, or suffix s/m/h (e.g. 25m, 1h). "
+                 "Default: 1500 (25m). Kills remaining in-flight "
+                 "requests when hit.",
         )
         parser.add_argument(
             "--total-timeout",
-            type=int,
+            type=DurationParser.parse,
+            metavar="DURATION",
             default=0,
-            help="Hard timeout for the entire load test in "
-                 "seconds (default: 0 / disabled). "
-                 "Kills the test run when exceeded.",
+            help="Hard timeout for the entire load test. Bare "
+                 "number = seconds, or suffix s/m/h (e.g. 30m, 2h). "
+                 "Default: 0 (disabled). Kills the test run when "
+                 "exceeded.",
         )
         parser.add_argument(
             "--settle-time",
-            type=int,
+            type=DurationParser.parse,
+            metavar="DURATION",
             default=15,
-            help="Seconds to wait after each stage for cleanup "
-                 "(default: 15)",
+            help="Wait this long after each stage for cleanup. Bare "
+                 "number = seconds, or suffix s/m/h (e.g. 15s, 1m). "
+                 "Default: 15 (15s).",
         )
         parser.add_argument(
             "--same-prompt",
