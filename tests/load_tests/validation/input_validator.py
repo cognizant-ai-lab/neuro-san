@@ -23,7 +23,6 @@ actual token usage before committing to a full run.
 
 import logging
 import os
-import resource
 import sys
 from typing import List
 from typing import Optional
@@ -35,6 +34,7 @@ from tests.load_tests.config import DEFAULT_STAGES
 from tests.load_tests.config import LEVEL_ADV
 from tests.load_tests.config import RequestResult
 from tests.load_tests.config import SEPARATOR_WIDTH
+from tests.load_tests.reporting.system_resources import SystemResources
 
 logger = logging.getLogger(__name__)
 
@@ -251,64 +251,7 @@ class InputValidator:
             logger.info(
                 "            --total-timeout disabled",
             )
-        self._print_system_memory()
-        self._print_system_cpu()
-        self._print_system_threads()
-
-    @staticmethod
-    def _print_system_memory() -> None:
-        """Print total and available system memory."""
-        mem = psutil.virtual_memory()
-        total_gb = mem.total / (1024 ** 3)
-        avail_gb = mem.available / (1024 ** 3)
-        logger.info(
-            "  System RAM: %.1fG (%.1fG available,"
-            " %.0f%% used)",
-            total_gb, avail_gb, mem.percent,
-        )
-
-    @staticmethod
-    def _print_system_cpu() -> None:
-        """Print core count and current system CPU utilization."""
-        ncores = psutil.cpu_count() or 1
-        cpu_pct = psutil.cpu_percent(interval=0.1)
-        logger.info(
-            "  System CPU: %d cores (%.0f%% in use)",
-            ncores, cpu_pct,
-        )
-
-    @staticmethod
-    def _print_system_threads() -> None:
-        """Print current thread count and OS thread/process limits."""
-        total_threads = 0
-        for proc in psutil.process_iter(["num_threads"]):
-            try:
-                total_threads += proc.info["num_threads"] or 0
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                continue
-        try:
-            soft, _ = resource.getrlimit(resource.RLIMIT_NPROC)
-            user_limit = (
-                "unlimited"
-                if soft == resource.RLIM_INFINITY
-                else f"{soft:,}"
-            )
-        except (ValueError, OSError, AttributeError):
-            user_limit = "n/a"
-        sys_max = "n/a"
-        try:
-            with open(
-                "/proc/sys/kernel/threads-max",
-                encoding="utf-8",
-            ) as handle:
-                sys_max = f"{int(handle.read().strip()):,}"
-        except (OSError, ValueError):
-            pass
-        logger.info(
-            "  System threads: %s in use / limit %s"
-            " per-user (%s max)",
-            f"{total_threads:,}", user_limit, sys_max,
-        )
+        SystemResources.log_prerun()
 
     @staticmethod
     def _estimate_stage_duration(

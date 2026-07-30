@@ -29,7 +29,6 @@ import logging
 import os
 import platform
 import re
-import resource
 import shutil
 import signal
 import socket
@@ -83,6 +82,7 @@ from tests.load_tests.reporting.latency_analyzer import COMPLETION_MILESTONES
 from tests.load_tests.reporting.pool_analyzer import PoolAnalyzer
 from tests.load_tests.reporting.resource_reporter import ResourceReporter
 from tests.load_tests.reporting.summary import SummaryReporter
+from tests.load_tests.reporting.system_resources import SystemResources
 from tests.load_tests.reporting.summary_file_writer import SummaryFileWriter
 from tests.load_tests.traffic.runner import TrafficRunner
 from tests.load_tests.validation.environment_validator import EnvironmentValidator
@@ -724,10 +724,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if probe_used:
             stage_requests = max(actual_requests - 1, 0)
 
-        before_sys_mem_pct = psutil.virtual_memory().percent
+        sys_before = SystemResources.snapshot()
+        before_sys_mem_pct = sys_before["mem_pct"]
 
         (elapsed, results, peak_threads, peak_client_rss,
          peak_server_rss, peak_sys_mem_pct, peak_sys_cpu,
+         peak_sys_threads,
          server_died, interrupted) = (
             self.runner.run_stage(
                 stage_requests, stage_workers,
@@ -796,9 +798,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if not should_abort:
             should_abort = OutputValidator.check_timeout_abort(counts)
         if should_abort:
-            after_sys_mem_pct = (
-                psutil.virtual_memory().percent
-            )
+            sys_after = SystemResources.snapshot()
+            after_sys_mem_pct = sys_after["mem_pct"]
             summary_entry = self._build_stage_summary(
                 stage_num=stage_num,
                 round_num=round_num,
@@ -828,6 +829,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 after_sys_mem_pct=after_sys_mem_pct,
                 peak_sys_mem_pct=peak_sys_mem_pct,
                 peak_sys_cpu=peak_sys_cpu,
+                before_sys=sys_before,
+                after_sys=sys_after,
+                peak_sys_threads=peak_sys_threads,
             )
             return summary_entry, probe_used, True
 
@@ -850,7 +854,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 )
             )
 
-        after_sys_mem_pct = psutil.virtual_memory().percent
+        sys_after = SystemResources.snapshot()
+        after_sys_mem_pct = sys_after["mem_pct"]
 
         summary_entry = self._build_stage_summary(
             stage_num=stage_num,
@@ -881,6 +886,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             after_sys_mem_pct=after_sys_mem_pct,
             peak_sys_mem_pct=peak_sys_mem_pct,
             peak_sys_cpu=peak_sys_cpu,
+            before_sys=sys_before,
+            after_sys=sys_after,
+            peak_sys_threads=peak_sys_threads,
         )
         return summary_entry, probe_used, False
 
@@ -1051,6 +1059,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             after_sys_mem_pct=None,
             peak_sys_mem_pct=None,
             peak_sys_cpu=None,
+            before_sys=None,
+            after_sys=None,
+            peak_sys_threads=None,
     ) -> StageSummary:
         """Assemble the stage summary dict."""
         summary_entry: StageSummary = {
@@ -1129,6 +1140,25 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if (peak_sys_cpu is not None
                 and peak_sys_cpu.value is not None):
             summary_entry["peak_sys_cpu"] = peak_sys_cpu.value
+        if before_sys:
+            summary_entry["before_sys_mem_avail_gb"] = (
+                before_sys.get("mem_avail_gb")
+            )
+            summary_entry["before_sys_cpu"] = before_sys.get("cpu_pct")
+            summary_entry["before_sys_threads"] = (
+                before_sys.get("threads")
+            )
+        if after_sys:
+            summary_entry["after_sys_mem_avail_gb"] = (
+                after_sys.get("mem_avail_gb")
+            )
+            summary_entry["after_sys_cpu"] = after_sys.get("cpu_pct")
+            summary_entry["after_sys_threads"] = (
+                after_sys.get("threads")
+            )
+        if (peak_sys_threads is not None
+                and peak_sys_threads.value is not None):
+            summary_entry["peak_sys_threads"] = peak_sys_threads.value
         return summary_entry
 
     # pylint: disable=too-many-arguments
@@ -1746,12 +1776,25 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             avail_gb, total_gb,
         )
         ncores = psutil.cpu_count() or 1
+        before_sys_cpu = psutil.cpu_percent(interval=0.1)
         logger.info(
             "  System CPU: %d cores (%.0f%% in use)",
-            ncores, psutil.cpu_percent(interval=0.1),
+            ncores, before_sys_cpu,
         )
-        self._log_system_threads()
+        before_sys_threads = SystemResources.total_threads()
+        user_limit, sys_max = SystemResources.thread_limits()
+        logger.info(
+            "  System threads: %s in use / limit %s"
+            " per-user (%s max)",
+            f"{before_sys_threads:,}", user_limit, sys_max,
+        )
         before_sys_mem_pct = mem.percent
+        sys_before = {
+            "mem_pct": mem.percent,
+            "mem_avail_gb": avail_gb,
+            "cpu_pct": before_sys_cpu,
+            "threads": before_sys_threads,
+        }
         before_kernel = self._read_kernel_memory()
 
         logger.info(
@@ -1765,7 +1808,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         count, completed, peak_server, \
             peak_threads, \
             peak_sys_mem_pct, elapsed, interrupted, \
-            peak_sys_cpu, avg_sys_cpu = (
+            peak_sys_cpu, avg_sys_cpu, peak_sys_threads = (
                 self._tail_server_log(
                     expected, log_pos,
                     pri_start_re, pri_finish_re,
@@ -1787,22 +1830,26 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         after_kernel = self._read_kernel_memory()
         mem = psutil.virtual_memory()
         total_gb = mem.total / (1024 ** 3)
-        peak_used_mb = (
-            peak_sys_mem_pct / 100.0
-            * mem.total / (1024 ** 2)
+        after_avail_gb = mem.available / (1024 ** 3)
+        after_sys_cpu = psutil.cpu_percent(interval=0.1)
+        after_sys_threads = SystemResources.total_threads()
+        peak_avail_gb = (
+            total_gb - peak_sys_mem_pct / 100.0 * total_gb
         )
-        peak_free_gb = total_gb - peak_used_mb / 1024.0
-        logger.info(
-            "\n  Peak memory usage: %.0fM / %.1fG"
-            " (%.0f%% used, %.1fG free)",
-            peak_used_mb, total_gb,
-            peak_sys_mem_pct, peak_free_gb,
-        )
-        ncores = psutil.cpu_count() or 1
-        logger.info(
-            "  Peak CPU usage: %.0f%% (%.2f of %d cores)",
-            peak_sys_cpu,
-            peak_sys_cpu / 100.0 * ncores, ncores,
+        SystemResources.log_section(
+            sys_before,
+            {
+                "mem_pct": peak_sys_mem_pct,
+                "mem_avail_gb": peak_avail_gb,
+                "cpu_pct": peak_sys_cpu,
+                "threads": peak_sys_threads,
+            },
+            {
+                "mem_pct": mem.percent,
+                "mem_avail_gb": after_avail_gb,
+                "cpu_pct": after_sys_cpu,
+                "threads": after_sys_threads,
+            },
         )
         logger.info(
             "  Peak server threads: %s", f"{peak_threads:,}",
@@ -1907,7 +1954,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         Returns (count, completed, peak_server,
         peak_threads, peak_sys_mem_pct, elapsed,
-        interrupted).
+        interrupted, peak_sys_cpu, avg_sys_cpu,
+        peak_sys_threads).
         """
         start_time = time.time()
         count = 0
@@ -1918,6 +1966,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         peak_threads = 0
         peak_sys_mem_pct = before_sys_mem_pct
         peak_sys_cpu = 0.0
+        peak_sys_threads = 0
         sys_cpu_sum = 0.0
         sys_cpu_n = 0
         interrupted = False
@@ -2062,6 +2111,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                         sys_cpu_n += 1
                         if cur_sys_cpu > peak_sys_cpu:
                             peak_sys_cpu = cur_sys_cpu
+                        peak_sys_threads = max(
+                            peak_sys_threads,
+                            SystemResources.total_threads(),
+                        )
                         last_monitor = now
 
                         if (now - last_heartbeat
@@ -2119,7 +2172,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             count, completed, peak_server,
             peak_threads,
             peak_sys_mem_pct, elapsed, interrupted,
-            peak_sys_cpu, avg_sys_cpu,
+            peak_sys_cpu, avg_sys_cpu, peak_sys_threads,
         )
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -2195,39 +2248,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 json_path, "w", encoding="utf-8",
         ) as fh:
             json.dump(raw_data, fh, indent=2)
-
-    @staticmethod
-    def _log_system_threads() -> None:
-        """Print current thread count and OS thread/process limits."""
-        total_threads = 0
-        for proc in psutil.process_iter(["num_threads"]):
-            try:
-                total_threads += proc.info["num_threads"] or 0
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                continue
-        try:
-            soft, _ = resource.getrlimit(resource.RLIMIT_NPROC)
-            user_limit = (
-                "unlimited"
-                if soft == resource.RLIM_INFINITY
-                else f"{soft:,}"
-            )
-        except (ValueError, OSError, AttributeError):
-            user_limit = "n/a"
-        sys_max = "n/a"
-        try:
-            with open(
-                "/proc/sys/kernel/threads-max",
-                encoding="utf-8",
-            ) as handle:
-                sys_max = f"{int(handle.read().strip()):,}"
-        except (OSError, ValueError):
-            pass
-        logger.info(
-            "  System threads: %s in use / limit %s"
-            " per-user (%s max)",
-            f"{total_threads:,}", user_limit, sys_max,
-        )
 
     @staticmethod
     def _read_kernel_memory() -> Optional[Dict[str, float]]:

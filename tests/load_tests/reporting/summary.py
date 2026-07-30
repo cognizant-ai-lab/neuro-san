@@ -20,14 +20,13 @@ import logging
 
 from collections import Counter
 
-import psutil
-
 from tests.load_tests.config import Formatters
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
+from tests.load_tests.reporting.system_resources import SystemResources
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
 logger = logging.getLogger(__name__)
@@ -153,6 +152,8 @@ class SummaryReporter:
                 "    Amplification:   %.2fx", amplification,
             )
 
+        self._log_system_resources()
+
     def _log_performance_stats(self) -> None:
         """Log TTFR, duration, LLM calls, and RSS trajectory."""
         ttfr = self._ttfr_stats()
@@ -185,27 +186,6 @@ class SummaryReporter:
 
         self._log_model_distribution()
 
-        sys_mem = self._sys_mem_trajectory()
-        if sys_mem is not None:
-            vmem = psutil.virtual_memory()
-            total_gb = vmem.total / (1024 ** 3)
-            peak_pct = sys_mem.get("peak", 0)
-            peak_used_mb = peak_pct / 100.0 * vmem.total / (1024 ** 2)
-            logger.info(
-                "  Peak memory usage: %.0fM / %.1fG"
-                " (%.0f%% used, %.1fG free)",
-                peak_used_mb, total_gb, peak_pct,
-                sys_mem.get("peak_avail_gb", 0),
-            )
-
-        peak_cpu = self._peak_sys_cpu()
-        if peak_cpu is not None:
-            ncores = psutil.cpu_count() or 1
-            logger.info(
-                "  Peak CPU usage: %.0f%% (%.2f of %d cores)",
-                peak_cpu, peak_cpu / 100.0 * ncores, ncores,
-            )
-
         peak_threads = self._peak_server_threads()
         if peak_threads is not None:
             logger.info(
@@ -214,6 +194,65 @@ class SummaryReporter:
             )
 
         self._log_validation_summary()
+
+    def _log_system_resources(self) -> None:
+        """Log the aligned SYSTEM RESOURCES before/peak/after section."""
+        SystemResources.log_section(
+            self._sys_edge_snapshot("before"),
+            self._sys_peak_snapshot(),
+            self._sys_edge_snapshot("after"),
+        )
+
+    def _sys_edge_snapshot(self, edge):
+        """Build the before/after whole-system snapshot across stages.
+
+        ``before`` takes the first stage's start values; ``after``
+        takes the last stage's end values.  Returns None when no
+        system data was collected.
+        """
+        prefix = f"{edge}_sys_"
+        chosen = None
+        for summary in self._summaries:
+            pct = summary.get(prefix + "mem_pct")
+            if pct is None:
+                continue
+            snap = {
+                "mem_pct": pct,
+                "mem_avail_gb": summary.get(prefix + "mem_avail_gb"),
+                "cpu_pct": summary.get(prefix + "cpu"),
+                "threads": summary.get(prefix + "threads"),
+            }
+            if edge == "before":
+                return snap
+            chosen = snap
+        return chosen
+
+    def _sys_peak_snapshot(self):
+        """Build the whole-system peak snapshot (per-metric max)."""
+        peak_pct = None
+        peak_avail = None
+        peak_cpu = None
+        peak_threads = None
+        for summary in self._summaries:
+            pct = summary.get("peak_sys_mem_pct")
+            if pct is not None and (peak_pct is None or pct > peak_pct):
+                peak_pct = pct
+                peak_avail = summary.get("peak_sys_mem_avail_gb")
+            cpu = summary.get("peak_sys_cpu")
+            if cpu is not None and (peak_cpu is None or cpu > peak_cpu):
+                peak_cpu = cpu
+            threads = summary.get("peak_sys_threads")
+            if (threads is not None
+                    and (peak_threads is None or threads > peak_threads)):
+                peak_threads = threads
+        if peak_pct is None and peak_cpu is None and peak_threads is None:
+            return None
+        return {
+            "mem_pct": peak_pct,
+            "mem_avail_gb": peak_avail,
+            "cpu_pct": peak_cpu,
+            "threads": peak_threads,
+        }
 
     def _request_duration_stats(self):
         """Compute min/avg/max elapsed time across requests."""
@@ -296,44 +335,6 @@ class SummaryReporter:
             "avg": sum(values) / len(values),
             "max": max(values),
         }
-
-    def _sys_mem_trajectory(self):
-        """Find start, peak, and end system memory % across stages."""
-        start_pct = None
-        end_pct = None
-        peak_pct = None
-        peak_avail_gb = None
-        for summary in self._summaries:
-            before = summary.get("before_sys_mem_pct")
-            after = summary.get("after_sys_mem_pct")
-            peak = summary.get("peak_sys_mem_pct")
-            avail = summary.get("peak_sys_mem_avail_gb")
-            if before is not None and start_pct is None:
-                start_pct = before
-            if after is not None:
-                end_pct = after
-            if peak is not None:
-                if peak_pct is None or peak > peak_pct:
-                    peak_pct = peak
-                    peak_avail_gb = avail
-        if peak_pct is None:
-            return None
-        return {
-            "start": start_pct or 0,
-            "peak": peak_pct,
-            "peak_avail_gb": peak_avail_gb or 0,
-            "end": end_pct or 0,
-        }
-
-    def _peak_sys_cpu(self):
-        """Return the max peak system CPU% across stages, or None."""
-        peak = None
-        for summary in self._summaries:
-            val = summary.get("peak_sys_cpu")
-            if val is not None:
-                if peak is None or val > peak:
-                    peak = val
-        return peak
 
     def _peak_server_threads(self):
         """Return the max peak server thread count across stages.

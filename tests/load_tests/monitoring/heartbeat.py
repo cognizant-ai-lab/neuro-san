@@ -35,6 +35,7 @@ import psutil
 from tests.load_tests.config import Formatters
 from tests.load_tests.config import HEARTBEAT_INTERVAL_SECONDS
 from tests.load_tests.config import SharedRef
+from tests.load_tests.reporting.system_resources import SystemResources
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +184,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                            peak_server_rss_ref: SharedRef,
                            peak_sys_mem_pct_ref: SharedRef,
                            peak_sys_cpu_ref: SharedRef,
+                           peak_sys_threads_ref: SharedRef,
                            failed_ref: SharedRef,
                            server_dead_event: threading.Event,
                            ) -> None:
@@ -198,6 +200,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         peak_threads = 0
         peak_server_rss = 0.0
         peak_sys_mem_pct = 0.0
+        peak_sys_threads = 0
         tick_count = 0
         peak_rss = self._sample_client_rss(0.0, peak_client_rss_ref)
         ready_event.set()
@@ -274,6 +277,10 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
                     )
                 sys_cpu_info = self._format_system_cpu()
                 peak_sys_cpu_ref.value = self._peak_sys_cpu
+                cur_sys_threads = SystemResources.total_threads()
+                if cur_sys_threads > peak_sys_threads:
+                    peak_sys_threads = cur_sys_threads
+                    peak_sys_threads_ref.value = cur_sys_threads
                 line = (
                     f"  [progress] {done} of {total} completed"
                     f" ({pct}%{fail_info}) --"
