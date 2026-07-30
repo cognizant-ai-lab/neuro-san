@@ -258,9 +258,9 @@ ENV AGENT_LOOP_TIMELINE_MAX_EVENTS="100000"
 # or signal handler at runtime).
 ENV AGENT_LOOP_TIMELINE_DUMP_PATH=""
 
-# Maximm number of requests that can be served at the same time
+# Maximum number of requests that can be served at the same time
 # A value of 0 indicates unlimited requests are handled.
-ENV AGENT_MAX_CONCURRENT_REQUESTS="50"
+ENV AGENT_MAX_CONCURRENT_REQUESTS="0"
 
 # Maximum number of worker threads per request.
 # Default of <= 0 (or unset) indicates system default of (num_cpus + 4).
@@ -280,6 +280,28 @@ ENV AGENT_REQUEST_LIMIT="-1"
 # Update will be done every AGENT_MANIFEST_UPDATE_PERIOD_SECONDS seconds;
 # if value is not specified or <= 0, no such dynamic updates will be executed.
 ENV AGENT_MANIFEST_UPDATE_PERIOD_SECONDS="0"
+
+# Describes the concurrency model used for the manifest file updates.
+# Valid values are "thread" (the default) and "spawn" and "fork".
+#
+# "thread":     uses the default threading concurrency model.  It is best for servers who
+#               know their manifest content will be changing over the course of their lifetime.
+#               It is slowest of all options, but has the least amount of overall memory overhead
+#               and is lightweight and generally the safest and problem-free.
+# "spawn":      uses a multi-process based concurrency model.  It is the safest option (avoiding deadlocks)
+#               for environments where the manifest is changing, but some speed is still desired
+#               (like development servers).
+# "forkserver"  Is just like "fork" below, but forks from a clean process for memory conservation,
+#               More process overhead, not as quick but safer than "fork".
+# "fork":       uses a multi-process based concurrency model. It is actually the fastest option,
+#               but has potential to lead to deadlocks over repeated manifest reads.
+#               It can still be a reasonable option for server environments where the manifest
+#               is known never to change at all (AGENT_MANIFEST_UPDATE_PERIOD_SECONDS="0").
+#
+# See https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
+# for more details on "spawn", "fork" and "forkserver" concurrency models.
+# Not all are available on all OSes.
+ENV AGENT_MANIFEST_CONCURRENCY_CONTEXT="thread"
 
 # By default, the HTTP service reports the neuro-san library pip version in its health-check response.
 # It is possible to add other libraries to those results by listing them within this env var
@@ -344,6 +366,12 @@ ENV AGENT_HTTP_RESOURCES_MONITOR_INTERVAL="0"
 # A value of 0 (the default) disables the keep-alive messages entirely.
 # Typical production value is 25-30 (under the 60s defaults of common proxies).
 ENV AGENT_STREAM_KEEP_ALIVE_WITH_PROGRESS_INTERVAL_SECONDS=0
+
+# When any particular CodedTool execution takes longer than this many seconds,
+# the system issues a message in the log.  This is very useful for determining
+# where your scale-up problems are with particular networks.  The default value of
+# 0 disables this feature.
+ENV AGENT_TOOL_EXECUTION_LOG_THRESHOLD_SECONDS=0
 
 # Optional URL describing how the server is to be referenced by the outside world.
 # This is useful when a server is behind a load-balancer as part of a larger cluster.
