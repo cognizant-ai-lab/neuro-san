@@ -86,6 +86,13 @@ ARG LEAF_SERVER_COMMON_VERSION="0.1.17"
 ARG PACKAGE_INSTALL="/usr/local/neuro-san/myapp"
 
 # ===========================================================================
+# Stage 0: uv source - a tiny stage we lift the static `uv` binary out of.
+# Referenced as a named stage (rather than COPY --from=${UV_IMAGE}) because a
+# global ARG is usable in FROM but NOT inside a COPY --from within a stage.
+# ===========================================================================
+FROM ${UV_IMAGE} AS uvsrc
+
+# ===========================================================================
 # Stage 1: Builder - provision free-threaded 3.14t and install all deps
 # ===========================================================================
 FROM ${BASE_IMAGE} AS builder
@@ -128,7 +135,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
     | sh -s -- -y --profile minimal --default-toolchain stable
 
 # Bring in the uv binary (static, no runtime deps).
-COPY --from=${UV_IMAGE} /uv /usr/local/bin/uv
+COPY --from=uvsrc /uv /usr/local/bin/uv
 
 # ---------------------------------------------------------------------------
 # Provision the free-threaded interpreter and an application venv on top of it.

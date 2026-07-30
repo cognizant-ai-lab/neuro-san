@@ -147,7 +147,7 @@ function build_main() {
         --build-arg NEURO_SAN_VERSION="${USER}-$(date +'%Y-%m-%d-%H-%M')" \
         --build-arg PYTHON_VERSION="${PYTHON_VERSION}" \
         --build-arg BASE_IMAGE="${BASE_IMAGE}" \
-#        --build-arg UV_IMAGE="${UV_IMAGE}" \
+        --build-arg UV_IMAGE="${UV_IMAGE}" \
         --build-arg LEAF_COMMON_VERSION="${LEAF_COMMON_VERSION}" \
         --build-arg LEAF_SERVER_COMMON_VERSION="${LEAF_SERVER_COMMON_VERSION}" \
         --build-arg PACKAGE_INSTALL="/usr/local/neuro-san/myapp" \
