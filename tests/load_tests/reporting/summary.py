@@ -39,9 +39,11 @@ class SummaryReporter:
     reporting methods can access them without re-passing.
     """
 
-    def __init__(self, stage_summaries, neuro_san_version=None) -> None:
+    def __init__(self, stage_summaries, neuro_san_version=None,
+                 client_token_source="agent_cli --tokens") -> None:
         self._summaries = stage_summaries
         self._neuro_san_version = neuro_san_version
+        self._client_token_source = client_token_source
 
     def log_ramp_summary(self, *, is_ramp=True) -> None:
         """Log the ramp-up summary table across all stages."""
@@ -152,10 +154,11 @@ class SummaryReporter:
                 "    Amplification:   %.2fx", amplification,
             )
 
+        self._log_llm_token_usage()
         self._log_system_resources()
 
     def _log_performance_stats(self) -> None:
-        """Log TTFR, duration, LLM calls, and RSS trajectory."""
+        """Log TTFR and request-duration stats."""
         ttfr = self._ttfr_stats()
         if ttfr is not None:
             logger.info(
@@ -176,24 +179,150 @@ class SummaryReporter:
                 Formatters.fmt_duration(duration.get("max", 0)),
             )
 
-        llm_stats = self._llm_call_stats()
-        if llm_stats is not None:
-            logger.info(
-                "  LLM calls: %s min / %s avg / %s max",
-                llm_stats.get("min", 0), llm_stats.get("avg", 0),
-                llm_stats.get("max", 0),
-            )
-
-        self._log_model_distribution()
-
-        peak_threads = self._peak_server_threads()
-        if peak_threads is not None:
-            logger.info(
-                "  Peak server threads: %s",
-                f"{peak_threads:,}",
-            )
-
         self._log_validation_summary()
+
+    def _log_llm_token_usage(self) -> None:
+        """Log the LLM & TOKEN USAGE section (client vs server log).
+
+        A uniform block for all modes: the client side comes from
+        agent_cli/HTTP token accounting, the server side from
+        server.log.  Whichever side is unavailable prints "not
+        available".  When both are present (all-in-one) a Match line
+        reports whether they agree.
+        """
+        if self._has_client_token_copy():
+            client = self._token_stats("client_")
+            server = self._token_stats("")
+        else:
+            client = self._token_stats("")
+            server = None
+        printed = SummaryReporter.render_token_usage(
+            client, server,
+            client_source=self._client_token_source,
+        )
+        if printed:
+            self._log_model_distribution()
+
+    @staticmethod
+    def render_token_usage(client, server, *, client_source) -> bool:
+        """Render the LLM & TOKEN USAGE block; return True if printed.
+
+        ``client`` and ``server`` are token-stat dicts (from
+        ``aggregate_token_entries``) or None when that side is
+        unavailable.  Prints nothing when both are None.
+        """
+        if client is None and server is None:
+            return False
+        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
+        logger.info("  LLM & TOKEN USAGE")
+        logger.info("=" * SEPARATOR_WIDTH)
+        SummaryReporter._log_token_source(
+            f"Client ({client_source})", client,
+        )
+        SummaryReporter._log_token_source("Server log", server)
+        if client is not None and server is not None:
+            SummaryReporter._log_token_match(client, server)
+        return True
+
+    @staticmethod
+    def _log_token_source(label, stats) -> None:
+        """Log one source's LLM/token lines, or 'not available'."""
+        if stats is None:
+            logger.info("  %s: not available", label)
+            return
+        logger.info("  %s:", label)
+        logger.info(
+            "    LLM calls: %s total  (%s / %s / %s min/avg/max)",
+            stats["calls_total"], stats["calls_min"],
+            stats["calls_avg"], stats["calls_max"],
+        )
+        logger.info(
+            "    Tokens:    %s total  (%s / %s / %s min/avg/max),"
+            "  %s prompt + %s completion",
+            f"{stats['tok_total']:,}", f"{stats['tok_min']:,}",
+            f"{stats['tok_avg']:,}", f"{stats['tok_max']:,}",
+            f"{stats['prompt_total']:,}", f"{stats['comp_total']:,}",
+        )
+
+    @staticmethod
+    def _log_token_match(client, server) -> None:
+        """Log whether client and server-log totals agree."""
+        calls_ok = client["calls_total"] == server["calls_total"]
+        tok_ok = client["tok_total"] == server["tok_total"]
+        if calls_ok and tok_ok:
+            logger.info("  Match: OK")
+            return
+        logger.info(
+            "  Match: MISMATCH — LLM calls %s vs %s, "
+            "tokens %s vs %s",
+            client["calls_total"], server["calls_total"],
+            f"{client['tok_total']:,}", f"{server['tok_total']:,}",
+        )
+
+    @staticmethod
+    def aggregate_token_entries(entries):
+        """Aggregate token dicts into a stats dict, or None if empty.
+
+        Each entry needs total_tokens, prompt_tokens,
+        completion_tokens, and llm_calls.  Entries with zero total
+        tokens are ignored.
+        """
+        calls = []
+        toks = []
+        prompt_total = 0
+        comp_total = 0
+        for entry in entries:
+            tok = entry.get("total_tokens", 0) or 0
+            if not tok:
+                continue
+            toks.append(tok)
+            prompt_total += entry.get("prompt_tokens", 0) or 0
+            comp_total += entry.get("completion_tokens", 0) or 0
+            calls.append(entry.get("llm_calls", 0) or 0)
+        if not toks:
+            return None
+        count = len(toks)
+        return {
+            "calls_min": min(calls),
+            "calls_avg": round(sum(calls) / count),
+            "calls_max": max(calls),
+            "calls_total": sum(calls),
+            "tok_min": min(toks),
+            "tok_avg": round(sum(toks) / count),
+            "tok_max": max(toks),
+            "tok_total": sum(toks),
+            "prompt_total": prompt_total,
+            "comp_total": comp_total,
+        }
+
+    def _has_client_token_copy(self) -> bool:
+        """True if results carry a preserved client-side token copy."""
+        for summary in self._summaries:
+            for result in summary.get("results", []):
+                if "client_total_tokens" in result:
+                    return True
+        return False
+
+    def _token_stats(self, prefix):
+        """Aggregate per-request token fields (optionally prefixed)."""
+        entries = []
+        for summary in self._summaries:
+            for result in summary.get("results", []):
+                entries.append({
+                    "total_tokens": result.get(
+                        prefix + "total_tokens", 0,
+                    ),
+                    "prompt_tokens": result.get(
+                        prefix + "prompt_tokens", 0,
+                    ),
+                    "completion_tokens": result.get(
+                        prefix + "completion_tokens", 0,
+                    ),
+                    "llm_calls": result.get(
+                        prefix + "llm_calls", 0,
+                    ),
+                })
+        return SummaryReporter.aggregate_token_entries(entries)
 
     def _log_system_resources(self) -> None:
         """Log the aligned SYSTEM RESOURCES before/peak/after section."""
@@ -268,22 +397,6 @@ class SummaryReporter:
             "max": max(durations),
         }
 
-    def _llm_call_stats(self):
-        """Compute min/avg/max LLM calls per request."""
-        calls = []
-        for summary in self._summaries:
-            for result in summary.get("results", []):
-                llm = result.get("llm_calls", 0)
-                if llm > 0:
-                    calls.append(llm)
-        if not calls:
-            return None
-        return {
-            "min": min(calls),
-            "avg": round(sum(calls) / len(calls)),
-            "max": max(calls),
-        }
-
     def _log_model_distribution(self) -> None:
         """Log LLM model usage and flag fallback models.
 
@@ -335,20 +448,6 @@ class SummaryReporter:
             "avg": sum(values) / len(values),
             "max": max(values),
         }
-
-    def _peak_server_threads(self):
-        """Return the max peak server thread count across stages.
-
-        None when the server was not monitored (e.g. client-only or
-        no local server), so the line is omitted.
-        """
-        peak = None
-        for summary in self._summaries:
-            val = summary.get("peak_threads")
-            if val is not None:
-                if peak is None or val > peak:
-                    peak = val
-        return peak
 
     def _log_validation_summary(self) -> None:
         """Log aggregate validation retry info if any."""

@@ -1200,6 +1200,20 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 r for r in results
                 if r.get("request_id") != "request-0"
             ]
+            if token_data:
+                for result in stage_results:
+                    result["client_total_tokens"] = (
+                        result.get("total_tokens", 0)
+                    )
+                    result["client_prompt_tokens"] = (
+                        result.get("prompt_tokens", 0)
+                    )
+                    result["client_completion_tokens"] = (
+                        result.get("completion_tokens", 0)
+                    )
+                    result["client_llm_calls"] = (
+                        result.get("llm_calls", 0)
+                    )
             LoadTestOrchestrator._attach_token_data(
                 stage_results, token_data,
             )
@@ -1576,6 +1590,41 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         ]
         return Heartbeat.format_dur_stats(durations)
 
+    def _log_server_only_token_usage(self, log_pos) -> None:
+        """Log the LLM & TOKEN USAGE section for a server-only round.
+
+        There is no client side in server-only, so the client line
+        reads "not available" and the numbers come solely from
+        server.log token accounting.
+        """
+        token_data = (
+            self.log_monitor.parse_token_accounting_since(log_pos)
+        )
+        server_stats = SummaryReporter.aggregate_token_entries(
+            token_data.values(),
+        )
+        printed = SummaryReporter.render_token_usage(
+            None, server_stats,
+            client_source="agent_cli --tokens",
+        )
+        if not printed:
+            return
+        model_counts: Dict[str, int] = {}
+        for entry in token_data.values():
+            model = entry.get("model")
+            if model and model != "unknown":
+                model_counts[model] = model_counts.get(model, 0) + 1
+        if model_counts:
+            logger.info(
+                "  LLM models: %s",
+                ", ".join(
+                    f"{m} ({c})" for m, c in sorted(
+                        model_counts.items(),
+                        key=lambda kv: kv[1], reverse=True,
+                    )
+                ),
+            )
+
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _server_only_heartbeat(
             self, received, expected, completed,
@@ -1879,6 +1928,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             self.log_monitor.scan_server_errors_since(log_pos)
         )
         OutputValidator.log_server_errors(server_errors)
+
+        self._log_server_only_token_usage(log_pos)
 
         peak_rss_for_breakdown = 0.0
         if peak_server:
@@ -2609,6 +2660,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             summary_reporter = SummaryReporter(
                 stage_summaries,
                 neuro_san_version=self._resolve_ns_version(),
+                client_token_source=(
+                    "HTTP token_accounting"
+                    if getattr(self.args, "http_client", False)
+                    else "agent_cli --tokens"
+                ),
             )
             if len(stage_summaries) > 1:
                 summary_reporter.log_ramp_summary(
