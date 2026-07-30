@@ -68,6 +68,7 @@ from tests.load_tests.config import HISTORY_FILE_NAME
 from tests.load_tests.config import HISTORY_UNKNOWN_FILE_NAME
 from tests.load_tests.config import HISTORY_THRESHOLDS_SECONDS
 from tests.load_tests.config import THREAD_JOIN_TIMEOUT
+from tests.load_tests.confirm import Confirm
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
@@ -1482,20 +1483,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "--no-server-log to skip this prompt.",
             level,
         )
-        prompt = "Continue without server-log analysis? [y/n]: "
-        while True:
-            try:
-                answer = input(prompt).strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                logger.info("\nAborted by user.")
-                sys.exit(0)
-            if answer in ("y", "yes"):
-                logger.info("  Continuing without server-log analysis.")
-                return
-            if answer in ("n", "no"):
-                logger.info("Aborted by user.")
-                sys.exit(0)
-            logger.info("  Please answer 'y' or 'n'.")
+        if not Confirm.ask("Continue without server-log analysis?"):
+            logger.info("Aborted by user.")
+            sys.exit(0)
+        logger.info("  Continuing without server-log analysis.")
 
     @staticmethod
     def _apply_level_defaults(args, explicit_args) -> None:
@@ -2521,28 +2512,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     self.args,
                 )
             )
-        else:
-            needs_server_proc = (
-                (monitor_resources and is_local
-                 and level != LEVEL_MIN)
-                or self.args.server_log is not None
-            )
-            if needs_server_proc and is_local:
-                self.server_proc = (
-                    EnvironmentValidator.find_local_server(
-                        self.args,
-                    )
+        elif is_local:
+            self.server_proc = (
+                EnvironmentValidator.find_local_server(
+                    self.args,
                 )
-            elif (monitor_resources and is_local
-                  and level == LEVEL_MIN):
-                if EnvironmentValidator.is_port_open(
-                    self.args.host, self.args.port,
-                ):
-                    self.server_proc = (
-                        EnvironmentValidator.find_local_server(
-                            self.args,
-                        )
-                    )
+            )
 
         if self.args.server_log == "auto":
             self.args.server_log = (
@@ -3085,13 +3060,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if self.args.level != LEVEL_ADV:
             return
         if not getattr(self.args, "yes", False):
-            try:
-                answer = input(
-                    "\nSave summary.txt? [y/N] ",
-                )
-            except (EOFError, KeyboardInterrupt):
-                return
-            if answer.strip().lower() != "y":
+            if not Confirm.ask("\nSave summary.txt?"):
                 return
         writer = SummaryFileWriter(
             stage_summaries, self.args,

@@ -466,6 +466,7 @@ Lint status: flake8 clean, pylint 10.00/10.
 tests/load_tests/
   load_test.py                 LoadTestOrchestrator (main entry point)
   config.py                    Constants, TypedDicts, compiled patterns
+  confirm.py                   Confirm (strict y/n prompt)
   cost_estimator.py            CostEstimator (per-model pricing)
 
   monitoring/

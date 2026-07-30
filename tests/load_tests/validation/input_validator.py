@@ -34,6 +34,7 @@ from tests.load_tests.config import DEFAULT_STAGES
 from tests.load_tests.config import LEVEL_ADV
 from tests.load_tests.config import RequestResult
 from tests.load_tests.config import SEPARATOR_WIDTH
+from tests.load_tests.confirm import Confirm
 from tests.load_tests.reporting.system_resources import SystemResources
 
 logger = logging.getLogger(__name__)
@@ -187,22 +188,11 @@ class InputValidator:
 
         logger.info("=" * SEPARATOR_WIDTH)
 
-        prompt = (
-            "\nProceed with remaining "
-            f"{capped - 1} requests? [y/n]: "
-        )
-        while True:
-            try:
-                answer = input(prompt).strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                logger.info("\nAborted by user.")
-                sys.exit(0)
-            if answer in ("y", "yes"):
-                break
-            if answer in ("n", "no"):
-                logger.info("Aborted by user.")
-                sys.exit(0)
-            logger.info("  Please answer 'y' or 'n'.")
+        if not Confirm.ask(
+            f"\nProceed with remaining {capped - 1} requests?"
+        ):
+            logger.info("Aborted by user.")
+            sys.exit(0)
 
         return probe_result
 
