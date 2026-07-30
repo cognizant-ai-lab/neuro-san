@@ -809,6 +809,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 server_counts={},
                 disconnections=[],
                 server_errors=[],
+                tool_warnings=[],
                 network_tokens=[],
                 validation_events=[],
                 has_server_log=has_server_log,
@@ -837,7 +838,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             )
 
         server_counts, disconnections, server_errors, \
-            network_tokens, validation_events, after_server = (
+            tool_warnings, network_tokens, validation_events, \
+            after_server = (
                 self._collect_post_stage_data(
                     actual_requests, monitor_resources,
                     has_server_log,
@@ -866,6 +868,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             server_counts=server_counts,
             disconnections=disconnections,
             server_errors=server_errors,
+            tool_warnings=tool_warnings,
             network_tokens=network_tokens,
             validation_events=validation_events,
             has_server_log=has_server_log,
@@ -975,6 +978,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         server_counts: ServerCounts = {}
         disconnections: List[Dict[str, str]] = []
         server_errors: List[Dict[str, str]] = []
+        tool_warnings: List[Dict[str, str]] = []
         network_tokens: List[NetworkTokenEntry] = []
         after_server = None
 
@@ -1003,7 +1007,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 )
 
         server_counts, disconnections, server_errors, \
-            network_tokens, validation_events = (
+            tool_warnings, network_tokens, validation_events = (
                 self._analyze_server_log(
                     has_server_log,
                     log_pos,
@@ -1032,7 +1036,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         return (
             server_counts, disconnections, server_errors,
-            network_tokens, validation_events,
+            tool_warnings, network_tokens, validation_events,
             after_server,
         )
 
@@ -1042,8 +1046,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             *, stage_num, round_num, actual_requests,
             counts, elapsed, retries, total_retries,
             amplification, results, server_counts,
-            disconnections, server_errors, network_tokens,
-            validation_events,
+            disconnections, server_errors, tool_warnings,
+            network_tokens, validation_events,
             has_server_log, has_tokens,
             monitor_resources, before_server,
             after_server, peak_threads,
@@ -1076,6 +1080,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "total_finished": server_counts.get("total_finished"),
             "disconnections": disconnections,
             "server_errors": server_errors,
+            "tool_warnings": tool_warnings,
             "network_tokens": network_tokens,
             "validation_events": validation_events,
             "has_server_log": has_server_log,
@@ -1163,16 +1168,18 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             log_pos, *, results, actual_requests,
     ) -> Tuple[
         ServerCounts, List[Dict[str, str]], List[Dict[str, str]],
+        List[Dict[str, str]],
         List[NetworkTokenEntry], List[ValidationEvent],
     ]:
         """Analyze server log or report unavailability.
 
         Returns (server_counts, disconnections, server_errors,
-        network_tokens, validation_events).
+        tool_warnings, network_tokens, validation_events).
         """
         server_counts: ServerCounts = {}
         disconnections: List[Dict[str, str]] = []
         server_errors: List[Dict[str, str]] = []
+        tool_warnings: List[Dict[str, str]] = []
         network_tokens: List[NetworkTokenEntry] = []
         validation_events: List[ValidationEvent] = []
         if has_server_log:
@@ -1244,9 +1251,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 self.log_monitor.scan_server_errors_since(log_pos)
             )
             OutputValidator.log_server_errors(server_errors)
-            OutputValidator.log_tool_warnings(
-                self.log_monitor.scan_tool_warnings_since(log_pos),
+            tool_warnings = (
+                self.log_monitor.scan_tool_warnings_since(log_pos)
             )
+            OutputValidator.log_tool_warnings(tool_warnings)
             OutputValidator.log_server_validation(
                 server_counts, actual_requests,
                 self.args.agent,
@@ -1274,7 +1282,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 )
         return (
             server_counts, disconnections, server_errors,
-            network_tokens, validation_events,
+            tool_warnings, network_tokens, validation_events,
         )
 
     def _setup_test_log(self) -> None:
@@ -1928,9 +1936,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             self.log_monitor.scan_server_errors_since(log_pos)
         )
         OutputValidator.log_server_errors(server_errors)
-        OutputValidator.log_tool_warnings(
-            self.log_monitor.scan_tool_warnings_since(log_pos),
+        tool_warnings = (
+            self.log_monitor.scan_tool_warnings_since(log_pos)
         )
+        OutputValidator.log_tool_warnings(tool_warnings)
 
         self._log_server_only_token_usage(log_pos)
 
@@ -1964,6 +1973,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         self._append_server_history_record(
             expected, count, elapsed, peak_server, peak_sys_cpu,
             primary_pairs,
+            server_errors=server_errors,
+            tool_warnings=tool_warnings,
         )
 
         self._archive_server_log_to(round_dir)
@@ -2842,6 +2853,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         avg_first_response = (
             round(sum(ttfts) / len(ttfts), 2) if ttfts else 0.0
         )
+        server_errors: List[Dict[str, str]] = []
+        tool_warnings: List[Dict[str, str]] = []
+        for summary in stage_summaries:
+            server_errors.extend(summary.get("server_errors", []))
+            tool_warnings.extend(summary.get("tool_warnings", []))
         record = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
             "neuro_san_version": self._server_ns_version or "unknown",
@@ -2858,6 +2874,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "wall_time_s": round(
                 sum(s.get("elapsed", 0.0) for s in stage_summaries), 2,
             ),
+            "server_error_count": len(server_errors),
+            "tool_warning_count": len(tool_warnings),
+            "server_errors": server_errors,
+            "tool_warnings": tool_warnings,
         }
         for threshold in HISTORY_THRESHOLDS_SECONDS:
             record[f"completed_within_{int(threshold)}s"] = sum(
@@ -2907,6 +2927,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     def _append_server_history_record(
             self, expected, received, elapsed,
             peak_server, peak_sys_cpu, primary_pairs=None,
+            server_errors=None, tool_warnings=None,
     ) -> None:
         """Append one server-only trend record for plotting later.
 
@@ -2952,6 +2973,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             ),
             "avg_duration_s": avg_duration,
             "wall_time_s": round(elapsed, 2),
+            "server_error_count": len(server_errors or []),
+            "tool_warning_count": len(tool_warnings or []),
+            "server_errors": server_errors or [],
+            "tool_warnings": tool_warnings or [],
         }
         for threshold in HISTORY_THRESHOLDS_SECONDS:
             record[f"completed_within_{int(threshold)}s"] = sum(
