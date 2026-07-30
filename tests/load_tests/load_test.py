@@ -2695,7 +2695,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     s.get("total_started") or 0 for s in stage_summaries
                 )
 
-                self.resource_reporter.log_resource_analysis(
+                self.resource_reporter.log_combined_analysis(
                     total_client_reqs,
                     total_server_calls,
                 )
@@ -2703,9 +2703,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     stage_summaries,
                 )
                 disc_reporter.log_disconnection_summary()
-                self.resource_reporter.log_client_analysis(
-                    total_client_reqs,
-                )
 
             if level == LEVEL_ADV:
                 has_server_log = self.server_log is not None

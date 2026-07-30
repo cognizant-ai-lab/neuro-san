@@ -108,34 +108,75 @@ class ResourceReporter:
         self._client_rows.append(row)
         return row
 
-    def log_resource_analysis(
+    # Placeholder row (Component + 11 metric columns) shown when a
+    # component produced no data at all.
+    _NA_METRICS = ("na",) * 11
+
+    def log_combined_analysis(
             self, total_client_reqs, total_server_calls,
     ) -> None:
-        """Log server resource analysis table."""
-        if not self._resource_rows:
+        """Log one combined server-app + client-app resource table.
+
+        Server-app and client-app rows share a single table.  Columns
+        that don't apply to a component — or a component that produced
+        no data (no local server, or the server-only mode's absent
+        client) — show ``na``.
+        """
+        if not self._resource_rows and not self._client_rows:
             return
-        display_rows = [row[0] for row in self._resource_rows]
-        resource_header = [
-            "Concurrent", "Before RSS", "Settled RSS", "RSS Delta",
-            "FDs", "Threads", "Thread Delta",
-            "Conns", "CPU%", "Children",
+        header = [
+            "Component", "Concurrent", "Before RSS", "Peak RSS",
+            "Settled RSS", "RSS Delta", "CPU%", "FDs",
+            "Threads", "Thread Delta", "Conns", "Children",
         ]
+        rows = self._combined_server_rows() + self._combined_client_rows()
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         if total_server_calls > 0:
             logger.info(
-                "  SERVER RESOURCE ANALYSIS"
+                "  RESOURCE ANALYSIS"
                 " (%s client requests, %s server calls)",
                 total_client_reqs, total_server_calls,
             )
         else:
             logger.info(
-                "  SERVER RESOURCE ANALYSIS"
-                " (%s total requests)",
+                "  RESOURCE ANALYSIS (%s total requests)",
                 total_client_reqs,
             )
         logger.info("=" * SEPARATOR_WIDTH)
-        TableFormatter.log_table(resource_header, display_rows)
+        TableFormatter.log_table(header, rows)
         self._log_resource_deltas()
+        self._log_client_deltas()
+
+    def _combined_server_rows(self) -> List[tuple]:
+        """Server-app rows for the combined table (na when absent)."""
+        if not self._resource_rows:
+            return [("Server app",) + self._NA_METRICS]
+        rows = []
+        for display, _before, _after in self._resource_rows:
+            # display: (concurrent, before_rss, settled_rss, rss_delta,
+            #   fds, threads, thread_delta, conns, cpu, children)
+            rows.append((
+                "Server app", display[0], display[1], "na",
+                display[2], display[3], display[8], display[4],
+                display[5], display[6], display[7], display[9],
+            ))
+        return rows
+
+    def _combined_client_rows(self) -> List[tuple]:
+        """Client-app rows for the combined table (na when absent)."""
+        if not self._client_rows:
+            return [("Client app",) + self._NA_METRICS]
+        rows = []
+        for row in self._client_rows:
+            display = row[0]
+            # display: (concurrent, before_rss, peak_rss, settled_rss,
+            #   rss_delta, cpu, fds, threads)
+            rows.append((
+                "Client app", display[0], display[1], display[2],
+                display[3], display[4], display[5], display[6],
+                display[7], "na", "na", "na",
+            ))
+        return rows
 
     def _log_resource_deltas(self) -> None:
         """Log overall resource deltas if enough data points."""
@@ -153,26 +194,6 @@ class ResourceReporter:
                 ("Children", "children", "%s"),
             ],
         )
-
-    def log_client_analysis(self, total_client_reqs) -> None:
-        """Log client resource analysis table."""
-        if not self._client_rows:
-            return
-        display_rows = [row[0] for row in self._client_rows]
-        client_header = [
-            "Concurrent", "Before RSS", "Peak RSS",
-            "Settled RSS", "RSS Delta",
-            "CPU%", "FDs", "Threads",
-        ]
-        logger.info("\n%s", "=" * SEPARATOR_WIDTH)
-        logger.info(
-            "  CLIENT RESOURCE ANALYSIS"
-            " (%s total requests)",
-            total_client_reqs,
-        )
-        logger.info("=" * SEPARATOR_WIDTH)
-        TableFormatter.log_table(client_header, display_rows)
-        self._log_client_deltas()
 
     def _log_client_deltas(self) -> None:
         """Log overall client resource deltas if enough data points."""
