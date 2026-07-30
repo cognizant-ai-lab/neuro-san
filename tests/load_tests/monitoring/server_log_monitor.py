@@ -40,6 +40,7 @@ from tests.load_tests.config import NetworkTokenEntry
 from tests.load_tests.config import REQUEST_FINISH_PATTERN
 from tests.load_tests.config import REQUEST_START_PATTERN
 from tests.load_tests.config import RETRY_LOG_PATTERN
+from tests.load_tests.config import SERVER_ERROR_PATTERN
 from tests.load_tests.config import STREAM_CLOSED_REQUEST_PATTERN
 from tests.load_tests.config import SharedRef
 from tests.load_tests.config import TASK_CANCELLED_PATTERN
@@ -131,6 +132,30 @@ class ServerLogMonitor:
                     retry_counts.get(error_type, 0) + 1
                 )
         return retry_counts
+
+    def scan_server_errors_since(self, position) -> List[Dict[str, str]]:
+        """Scan for server "Errors detected:" events since position.
+
+        These are logged as JSON with a "message" value that starts
+        with "Errors detected:" and spans literal newlines, so the log
+        window is joined and matched with a DOTALL pattern.  Returns a
+        list of {request_id, message} dicts with the message flattened
+        to a single line.
+        """
+        if self._server_log is None or position is None:
+            return []
+        lines = self._read_lines_since(position, "errors")
+        if not lines:
+            return []
+        text = "".join(lines)
+        errors: List[Dict[str, str]] = []
+        for match in SERVER_ERROR_PATTERN.finditer(text):
+            message = " ".join(match.group(1).split())
+            errors.append({
+                "request_id": match.group(2),
+                "message": message,
+            })
+        return errors
 
     def count_requests_since(self, position,
                              primary_start_pattern,

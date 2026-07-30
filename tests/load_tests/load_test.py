@@ -810,6 +810,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 results=results,
                 server_counts={},
                 disconnections=[],
+                server_errors=[],
                 network_tokens=[],
                 validation_events=[],
                 has_server_log=has_server_log,
@@ -829,13 +830,13 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             )
             return summary_entry, probe_used, True
 
-        if has_server_log:
+        if has_server_log and stage_requests > 0:
             OutputValidator.log_retry_activity(
                 retries, total_retries, stage_requests,
             )
 
-        server_counts, disconnections, network_tokens, \
-            validation_events, after_server = (
+        server_counts, disconnections, server_errors, \
+            network_tokens, validation_events, after_server = (
                 self._collect_post_stage_data(
                     actual_requests, monitor_resources,
                     has_server_log,
@@ -862,6 +863,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             results=results,
             server_counts=server_counts,
             disconnections=disconnections,
+            server_errors=server_errors,
             network_tokens=network_tokens,
             validation_events=validation_events,
             has_server_log=has_server_log,
@@ -967,6 +969,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         """
         server_counts: ServerCounts = {}
         disconnections: List[Dict[str, str]] = []
+        server_errors: List[Dict[str, str]] = []
         network_tokens: List[NetworkTokenEntry] = []
         after_server = None
 
@@ -994,8 +997,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     " (server not running)",
                 )
 
-        server_counts, disconnections, network_tokens, \
-            validation_events = (
+        server_counts, disconnections, server_errors, \
+            network_tokens, validation_events = (
                 self._analyze_server_log(
                     has_server_log,
                     log_pos,
@@ -1023,7 +1026,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             )
 
         return (
-            server_counts, disconnections,
+            server_counts, disconnections, server_errors,
             network_tokens, validation_events,
             after_server,
         )
@@ -1034,7 +1037,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             *, stage_num, round_num, actual_requests,
             counts, elapsed, retries, total_retries,
             amplification, results, server_counts,
-            disconnections, network_tokens,
+            disconnections, server_errors, network_tokens,
             validation_events,
             has_server_log, has_tokens,
             monitor_resources, before_server,
@@ -1064,6 +1067,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "total_started": server_counts.get("total_started"),
             "total_finished": server_counts.get("total_finished"),
             "disconnections": disconnections,
+            "server_errors": server_errors,
             "network_tokens": network_tokens,
             "validation_events": validation_events,
             "has_server_log": has_server_log,
@@ -1131,16 +1135,17 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             self, has_server_log,
             log_pos, *, results, actual_requests,
     ) -> Tuple[
-        ServerCounts, List[Dict[str, str]],
+        ServerCounts, List[Dict[str, str]], List[Dict[str, str]],
         List[NetworkTokenEntry], List[ValidationEvent],
     ]:
         """Analyze server log or report unavailability.
 
-        Returns (server_counts, disconnections, network_tokens,
-        validation_events).
+        Returns (server_counts, disconnections, server_errors,
+        network_tokens, validation_events).
         """
         server_counts: ServerCounts = {}
         disconnections: List[Dict[str, str]] = []
+        server_errors: List[Dict[str, str]] = []
         network_tokens: List[NetworkTokenEntry] = []
         validation_events: List[ValidationEvent] = []
         if has_server_log:
@@ -1194,6 +1199,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     validation_events=validation_events,
                 )
             OutputValidator.log_disconnections(disconnections)
+            server_errors = (
+                self.log_monitor.scan_server_errors_since(log_pos)
+            )
+            OutputValidator.log_server_errors(server_errors)
             OutputValidator.log_server_validation(
                 server_counts, actual_requests,
                 self.args.agent,
@@ -1220,7 +1229,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     "not available (no --server-log)",
                 )
         return (
-            server_counts, disconnections,
+            server_counts, disconnections, server_errors,
             network_tokens, validation_events,
         )
 
@@ -1803,6 +1812,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
         self._log_server_completion_percentiles(primary_pairs)
 
+        server_errors = (
+            self.log_monitor.scan_server_errors_since(log_pos)
+        )
+        OutputValidator.log_server_errors(server_errors)
+
         peak_rss_for_breakdown = 0.0
         if peak_server:
             peak_rss_for_breakdown = (
@@ -1827,6 +1841,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             kernel_breakdown,
             avg_sys_cpu=avg_sys_cpu,
             peak_sys_cpu=peak_sys_cpu,
+            server_errors=server_errors,
         )
 
         self._append_server_history_record(
@@ -2115,6 +2130,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             after_sys_pct, interrupted,
             kernel_breakdown=None,
             avg_sys_cpu=None, peak_sys_cpu=None,
+            server_errors=None,
     ) -> None:
         """Write raw_results.json for a server-only round."""
         server_cpu_seconds = None
@@ -2166,6 +2182,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 ),
             },
         }
+        raw_data["server_errors"] = server_errors or []
         if kernel_breakdown:
             raw_data["kernel_memory_breakdown"] = (
                 kernel_breakdown

@@ -194,6 +194,20 @@ class OutputValidator:
             )
 
     @staticmethod
+    def log_server_errors(server_errors) -> None:
+        """Log server-side "Errors detected:" events for the stage."""
+        if not server_errors:
+            return
+        logger.warning(
+            "\n  Server errors detected: %s",
+            len(server_errors),
+        )
+        for err in server_errors:
+            req_id = err.get("request_id", "unknown")
+            message = err.get("message", "")
+            logger.warning("    %s: %s", req_id, message)
+
+    @staticmethod
     def check_permission_failures(
             results: List[RequestResult], agent_name: str,
     ) -> bool:

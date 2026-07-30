@@ -149,6 +149,7 @@ class StageSummary(TypedDict, total=False):
     total_started: Optional[int]
     total_finished: Optional[int]
     disconnections: List[Dict[str, str]]
+    server_errors: List[Dict[str, str]]
     network_tokens: List[NetworkTokenEntry]
     validation_events: List[ValidationEvent]
     has_server_log: bool
@@ -262,6 +263,15 @@ VALIDATION_REINVOKE_PATTERN = re.compile(
 )
 VALIDATION_REQUEST_ID_PATTERN = re.compile(
     r'"request_id":\s*"(request-\d+)"'
+)
+# Server "Errors detected:" event.  Logged as JSON whose "message"
+# value starts with "Errors detected:" and spans literal newlines,
+# ending just before the "user_id" field; matched with re.DOTALL
+# against the joined log window.  Captures (message, request_id).
+SERVER_ERROR_PATTERN = re.compile(
+    r'"message":\s*"(Errors detected:.*?)",\s*"user_id".*?'
+    r'"request_id":\s*"([^"]+)"',
+    re.DOTALL,
 )
 
 # Model pricing (USD per 1M tokens) — update as providers change rates
