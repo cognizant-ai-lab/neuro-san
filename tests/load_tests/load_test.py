@@ -324,20 +324,14 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             choices=[LEVEL_MIN, LEVEL_NORM, LEVEL_ADV],
             default=LEVEL_NORM,
             help="Test depth level (default: norm). "
-                 "min: traffic + validation only. "
+                 "min: traffic + validation only "
+                 "(only with --client-only/--server-only; "
+                 "not valid for an all-in-one run). "
                  "norm: adds resource monitoring and "
                  "server log analysis (if --server-log given). "
                  "adv: adds pool analysis "
                  "(defaults to 50 requests, 50 workers, "
                  "3 rounds unless overridden).",
-        )
-        parser.add_argument(
-            "--monitor-resources",
-            action="store_true",
-            default=False,
-            help="Enable psutil resource monitoring (CPU, memory, "
-                 "threads, FDs) even at min level. "
-                 "Automatically enabled at norm/adv.",
         )
         parser.add_argument(
             "--no-tokens",
@@ -563,7 +557,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         """Execute all stages of the load test, collecting data per stage."""
         monitor_resources = (
             self.args.level != LEVEL_MIN
-            or self.args.monitor_resources
+            or self.args.client_only
+            or self.args.server_only
         )
         has_server_log = self.server_log is not None
         probe_result = self.probe_result
@@ -2401,7 +2396,15 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         if split_mode:
             level = LEVEL_MIN
             self.args.level = LEVEL_MIN
-            self.args.monitor_resources = True
+        elif level == LEVEL_MIN:
+            logger.error(
+                "--level min is only supported with "
+                "--client-only or --server-only. For an "
+                "all-in-one run use --level norm or "
+                "--level adv (or --client-only for the "
+                "lightweight traffic-only profile).",
+            )
+            raise SystemExit(1)
         if (self.args.client_only
                 and self.args.server_only):
             logger.error(
@@ -2457,8 +2460,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         is_local = self.args.host in LOCAL_HOSTS
         monitor_resources = (
-            level != LEVEL_MIN or self.args.monitor_resources
-            or split_mode
+            level != LEVEL_MIN or split_mode
         )
 
         if self.args.client_only:
@@ -2527,12 +2529,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 )
             return self._run_server_only_monitor()
 
-        if not monitor_resources:
-            logger.info(
-                "Level 'min': resource monitoring disabled. "
-                "Use --monitor-resources to enable.",
-            )
-        elif not is_local:
+        if not is_local:
             logger.info(
                 "Remote mode: targeting %s:%s",
                 self.args.host, self.args.port,

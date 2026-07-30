@@ -34,12 +34,9 @@ Run the load test (from neuro-san):
 ```bash
 export PYTHONPATH=$(pwd)
 
-# Smoke test — does the server respond?
-python -m tests.load_tests.load_test --agent hello_world --level min --yes
-
-# Smoke test with resource monitoring (no server log needed)
-python -m tests.load_tests.load_test --agent hello_world --level min \
-    --monitor-resources --yes
+# Smoke test — does the server respond? (--client-only runs the
+# lightweight min profile against an already-running server)
+python -m tests.load_tests.load_test --agent hello_world --client-only --yes
 
 # Standard — with server log (auto-detect from server process)
 python -m tests.load_tests.load_test --agent hello_world --level norm \
@@ -68,10 +65,16 @@ python -m tests.load_tests.load_test --agent hello_world --level adv \
 |--------------------------------------|-----|------|-----|
 | Fire requests + validate responses   |  Y  |  Y   |  Y  |
 | Server log (retries, disconnections) |     | auto | auto |
-| Resource monitoring (RSS, threads)   | opt |  Y   |  Y  |
+| Resource monitoring (RSS, threads)   |  Y  |  Y   |  Y  |
 | Token accounting (from stdout)       |  Y  |  Y   |  Y  |
 | Pool reuse analysis                  |     |      | opt |
 | JSON export (`raw_results.json`)     |  Y  |  Y   |  Y  |
+
+> **`min` is not selectable for an all-in-one run.** It is the profile
+> used automatically by `--client-only` and `--server-only` (which force
+> `min` and enable resource monitoring). Passing `--level min` without
+> `--client-only`/`--server-only` is rejected — use `norm` or `adv` for a
+> colocated run.
 
 `opt` = available with optional flags; `auto` = on by default when the
 target server is local. `--server-log` enables retry counting,
@@ -82,7 +85,8 @@ quietly to off for a remote host or when no local server is found.
 Pass `--server-log <path>` to use an explicit file, `--server-log`
 alone to force auto-detect (aborts if detection fails), or
 `--no-server-log` to disable it. It stays off by default at `min`.
-`--monitor-resources` enables psutil monitoring at `min` level. Token
+Resource monitoring is on automatically at `norm`/`adv` and in the
+`min` profile used by `--client-only`/`--server-only`. Token
 accounting via `agent_cli --tokens` is enabled at all levels by
 default (disable with `--no-tokens`).
 
@@ -126,10 +130,9 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | Flag                       | Default     | Description                                  |
 |----------------------------|-------------|----------------------------------------------|
 | `--agent`                  | hello_world | Agent name as registered in the server       |
-| `--level`                  | norm        | Test depth: min, norm, or adv                |
+| `--level`                  | norm        | Test depth: norm or adv for an all-in-one run (min is rejected there; min is used automatically by `--client-only`/`--server-only`) |
 | `--server-log [PATH]`      | auto (local, norm/adv) | Server log analysis. Auto-detected by default for a local server at norm/adv (off at min, remote, or if no local server). Pass a path for an explicit file, or the flag alone to force auto-detect. |
 | `--no-server-log`          | off         | Disable server log analysis (overrides the default local auto-detect) |
-| `--monitor-resources`      | off         | Enable psutil monitoring at min level         |
 | `--no-tokens`              | off         | Disable per-request token accounting         |
 | `--profile-path`           | auto        | Directory containing profile JSON files (or `LOAD_TEST_PROFILE_PATH` env var) |
 | `--host`                   | localhost   | Neuro-san server host                        |
@@ -146,7 +149,7 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--total-timeout`          | 0 (disabled)| Hard timeout for entire load test (seconds). Kills run when exceeded |
 | `--settle-time`            | 15          | Wait after each stage for server cleanup     |
 | `--same-prompt`            | off         | Use identical prompt for all requests        |
-| `--yes`                    | off         | Skip cost confirmation (adv only). Auto-matches `--max-workers` to `--num-requests` |
+| `--yes`                    | off         | Bypass the dry-run probe + cost confirmation (which run by default at min/norm; adv skips them already). At adv, also auto-matches `--max-workers` to `--num-requests` |
 | `--scale`                  | 1           | Multiply `--num-requests`, `--max-workers`, `--request-timeout`, `--idle-timeout`, `--stage-timeout`, `--total-timeout` by this factor. `--max-requests` auto-adjusts. |
 | `--skip-reservation-check` | off         | Skip reservation_id validation               |
 | `--output-dir`             | (none)      | Base directory for test output               |
@@ -191,12 +194,14 @@ When server RSS exceeds 80% of total system RAM, a warning is printed:
 
 Before firing the full test, the load test displays a PRE-RUN SUMMARY.
 
-**With `--yes` (adv only):** Shows the summary with any applicable
-warnings and runs immediately (no probe).
+**min / norm (default):** Fires 1 probe request to measure actual token
+usage, cost, and response time, then shows estimated stage duration,
+numbered warnings (if any), and asks the user to confirm. Pass `--yes`
+to bypass the probe and confirmation.
 
-**Without `--yes`:** Fires 1 probe request to measure actual token
-usage, cost, and response time.  Then shows estimated stage duration,
-numbered warnings (if any), and asks the user to confirm:
+**adv (default):** No dry-run probe — adv is treated as an explicit
+stress test, so it shows the summary and runs immediately. (`--yes`
+additionally auto-matches `--max-workers` to `--num-requests`.)
 
 ```
 ============================================================
@@ -223,10 +228,10 @@ numbered warnings (if any), and asks the user to confirm:
   3. Estimated stage duration ~1510s exceeds --stage-timeout (1500s).
      Requests may be killed before completing.
 
-  Tip: use --yes at adv level to skip this confirmation.
+  Tip: use --yes to skip this confirmation.
 ============================================================
 
-Proceed with remaining 149 requests? [y/N]:
+Proceed with remaining 149 requests? [y/n]:
 ```
 
 The probe result counts as request #0 of the first stage (not wasted).
@@ -480,6 +485,7 @@ tests/load_tests/
     pool_analyzer.py           PoolAnalyzer
     resource_reporter.py       ResourceReporter
     summary.py                 SummaryReporter
+    system_resources.py        SystemResources (whole-system mem/cpu/threads)
     table_formatter.py         TableFormatter
 
   traffic/
