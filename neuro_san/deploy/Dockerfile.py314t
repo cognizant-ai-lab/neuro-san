@@ -184,6 +184,19 @@ RUN grep -viE '^[[:space:]]*(leaf-common|leaf-server-common)([[:space:]]|[<>=!~;
     && echo "=== requirements after stripping local leaf deps ===" \
     && cat /build/requirements.nolocal.txt
 
+# orjson (pulled in transitively via langsmith / langgraph-sdk) REFUSES TO COMPILE
+# under a free-threaded interpreter unless this opt-in build env var is set: its
+# build.rs gates free-threaded builds behind `ORJSON_BUILD_FREETHREADED` and exits
+# with "does not support free-threaded Python" otherwise. We opt in here rather than
+# patching the Rust source.
+#
+# Caveat: this only lets orjson BUILD; orjson does not declare itself free-thread
+# safe, so at run time CPython will automatically re-enable the GIL when orjson is
+# imported (with a warning). That is consistent with our choice not to force
+# PYTHON_GIL=0. If/when you force the GIL off, audit orjson (and the other native
+# deps) for actual free-thread safety first.
+ENV ORJSON_BUILD_FREETHREADED=1
+
 RUN SETUPTOOLS_SCM_PRETEND_VERSION_FOR_LEAF_COMMON="${LEAF_COMMON_VERSION}" \
     SETUPTOOLS_SCM_PRETEND_VERSION_FOR_LEAF_SERVER_COMMON="${LEAF_SERVER_COMMON_VERSION}" \
         uv pip install \
