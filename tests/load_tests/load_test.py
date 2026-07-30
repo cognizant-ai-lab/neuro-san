@@ -1978,6 +1978,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             avg_sys_cpu=avg_sys_cpu,
             peak_sys_cpu=peak_sys_cpu,
             server_errors=server_errors,
+            tool_warnings=tool_warnings,
         )
 
         self._append_server_history_record(
@@ -2274,7 +2275,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             after_sys_pct, interrupted,
             kernel_breakdown=None,
             avg_sys_cpu=None, peak_sys_cpu=None,
-            server_errors=None,
+            server_errors=None, tool_warnings=None,
     ) -> None:
         """Write raw_results.json for a server-only round."""
         server_cpu_seconds = None
@@ -2327,6 +2328,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             },
         }
         raw_data["server_errors"] = server_errors or []
+        raw_data["tool_warnings"] = tool_warnings or []
         if kernel_breakdown:
             raw_data["kernel_memory_breakdown"] = (
                 kernel_breakdown
