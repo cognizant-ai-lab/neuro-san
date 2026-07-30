@@ -1244,6 +1244,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 self.log_monitor.scan_server_errors_since(log_pos)
             )
             OutputValidator.log_server_errors(server_errors)
+            OutputValidator.log_tool_warnings(
+                self.log_monitor.scan_tool_warnings_since(log_pos),
+            )
             OutputValidator.log_server_validation(
                 server_counts, actual_requests,
                 self.args.agent,
@@ -1925,6 +1928,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             self.log_monitor.scan_server_errors_since(log_pos)
         )
         OutputValidator.log_server_errors(server_errors)
+        OutputValidator.log_tool_warnings(
+            self.log_monitor.scan_tool_warnings_since(log_pos),
+        )
 
         self._log_server_only_token_usage(log_pos)
 

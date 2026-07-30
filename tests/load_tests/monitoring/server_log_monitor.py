@@ -20,6 +20,7 @@ Interim implementation. May be replaced by neuro-san built-in
 monitoring and telemetry when those features become available.
 """
 
+import json
 import logging
 import os
 import re
@@ -156,6 +157,38 @@ class ServerLogMonitor:
                 "message": message,
             })
         return errors
+
+    def scan_tool_warnings_since(self, position) -> List[Dict[str, str]]:
+        """Scan for "Failed to create Agent/tool" warnings since position.
+
+        These are logged as one-line JSON with message_type "Warning"
+        and mean a requested tool (e.g. web_search) was unavailable to
+        an agent.  They do not affect the created network, but a high
+        count under load may point to tool-creation failures.  Returns
+        a list of {request_id, message} dicts.
+        """
+        if self._server_log is None or position is None:
+            return []
+        lines = self._read_lines_since(position, "tool warnings")
+        warnings: List[Dict[str, str]] = []
+        for line in lines:
+            stripped = line.strip()
+            if "Failed to create Agent/tool" not in stripped:
+                continue
+            try:
+                entry = json.loads(stripped)
+            except (json.JSONDecodeError, ValueError):
+                continue
+            if not isinstance(entry, dict):
+                continue
+            message = entry.get("message", "")
+            if not message.startswith("Failed to create Agent/tool"):
+                continue
+            warnings.append({
+                "request_id": entry.get("request_id", "unknown"),
+                "message": " ".join(message.split()),
+            })
+        return warnings
 
     def count_requests_since(self, position,
                              primary_start_pattern,
@@ -420,7 +453,6 @@ class ServerLogMonitor:
             lines,
     ) -> List[Dict[str, object]]:
         """Match Start/Finish pairs from server log lines."""
-        import json  # pylint: disable=import-outside-toplevel
         from datetime import datetime  # pylint: disable=import-outside-toplevel
 
         starts: Dict[Tuple[str, str], float] = {}

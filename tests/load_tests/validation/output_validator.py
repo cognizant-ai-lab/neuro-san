@@ -208,6 +208,25 @@ class OutputValidator:
             logger.warning("    %s: %s", req_id, message)
 
     @staticmethod
+    def log_tool_warnings(tool_warnings) -> None:
+        """Log server-side tool-creation warnings for the stage.
+
+        These mean a requested tool was unavailable to an agent; they
+        don't affect the created network, but a high count under load
+        may indicate tool-creation failures worth investigating.
+        """
+        if not tool_warnings:
+            return
+        logger.warning(
+            "\n  Tool-creation warnings: %s",
+            len(tool_warnings),
+        )
+        for warn in tool_warnings:
+            req_id = warn.get("request_id", "unknown")
+            message = warn.get("message", "")
+            logger.warning("    %s: %s", req_id, message)
+
+    @staticmethod
     def check_permission_failures(
             results: List[RequestResult], agent_name: str,
     ) -> bool:
