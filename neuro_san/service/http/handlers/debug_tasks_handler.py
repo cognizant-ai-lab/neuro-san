@@ -23,6 +23,7 @@ from typing import Dict
 import json
 import logging
 import os
+import asyncio
 from http import HTTPStatus
 
 from tornado.web import RequestHandler
@@ -87,10 +88,7 @@ class DebugTasksHandler(RequestHandler):
             except ValueError:
                 self.logger.info("Malformed timeout value '%s' in /debug/tasks request; using default %.1f",
                                  raw_timeout, per_loop_timeout_s)
-                # Use the default.
-                pass
 
-        import asyncio  # pylint: disable=import-outside-toplevel
         dump: Dict[str, Any] = await asyncio.to_thread(
             self.server_context.dump_tasks_in_used_executors,
             per_loop_timeout_s=per_loop_timeout_s,
