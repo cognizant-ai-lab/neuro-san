@@ -17,6 +17,7 @@
 
 from collections.abc import Generator
 from contextlib import contextmanager
+from contextvars import Token
 from typing import Any
 from typing import Dict
 
@@ -48,11 +49,18 @@ def get_llm_token_callback(llm_infos: Dict[str, Any]) -> Generator[LlmTokenCallb
     # Create a new callback handler instance for tracking token usage
     cb = LlmTokenCallbackHandler(llm_infos)
 
-    # Set the context variable to the newly created callback handler
-    llm_token_callback_var.set(cb)
+    # Set the context variable to the newly created callback handler,
+    # keeping the token so the previous value can be restored on exit.
+    token: Token = llm_token_callback_var.set(cb)
 
-    # Yield the callback handler to the context block
-    yield cb
-
-    # Reset the context variable to None when the context exits
-    llm_token_callback_var.set(None)
+    try:
+        # Yield the callback handler to the context block
+        yield cb
+    finally:
+        # Restore the context variable to the value it had on entry - even if
+        # the block raised.  In practice each agent scope runs its work in its
+        # own copied Context (see LangChainTokenCounter.count_tokens()), so no
+        # other scope ever observes this mutation, but restoring (rather than
+        # clobbering to None) keeps this context manager correct on its own,
+        # independent of how callers arrange their contexts.
+        llm_token_callback_var.reset(token)

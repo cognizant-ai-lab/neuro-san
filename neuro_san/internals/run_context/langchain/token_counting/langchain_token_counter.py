@@ -260,7 +260,7 @@ class LangChainTokenCounter:
             total_time = total_accounting.get("time_taken_in_seconds", time_taken_in_seconds)
 
         network_token_dict: Dict[str, Any] = self.sum_all_tokens(models_token_dict, total_time)
-        # Provide sligtly different "caveats" for the network token accounting.
+        # Provide slightly different "caveats" for the network token accounting.
         network_token_dict["caveats"] = [TOTAL_CAVEAT] + COMMON_CAVEATS
 
         # Maintain the accounting covering only the main (top-level) agent network.

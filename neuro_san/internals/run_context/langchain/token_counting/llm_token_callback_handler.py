@@ -162,7 +162,7 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
             # handler tracks per-model state for it.
             return
 
-        # Chat moddel class of the LLM is in the last item of the id list
+        # Chat model class of the LLM is in the last item of the id list
         chat_model_class: str = serialized.get("id")[-1]
         # Match the chat model class with neuro-san model class
         self.provider_class = CLASS_TABLE.get(chat_model_class)
