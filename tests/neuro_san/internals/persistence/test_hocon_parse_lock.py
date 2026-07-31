@@ -54,7 +54,9 @@ class TrackingHoconSerializationFormat(HoconSerializationFormat):
         cls.in_flight = 0
         cls.max_in_flight = 0
 
-    def to_object(self, fileobj: BytesIO) -> Dict[str, Any]:
+    def to_object(self, fileobj: BytesIO, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        # Variadics forward any extra parameters so this override tracks the
+        # base class signature across leaf-common versions.
         cls = TrackingHoconSerializationFormat
         with cls.counter_lock:
             cls.in_flight += 1
@@ -62,7 +64,7 @@ class TrackingHoconSerializationFormat(HoconSerializationFormat):
         # Widen the window so that unserialized concurrent parses would overlap.
         time.sleep(0.05)
         try:
-            return super().to_object(fileobj)
+            return super().to_object(fileobj, *args, **kwargs)
         finally:
             with cls.counter_lock:
                 cls.in_flight -= 1
@@ -179,8 +181,12 @@ class TestHoconParseLock:
 
         holder = threading.Thread(target=hold_lock, daemon=True)
         holder.start()
-        # Make sure the holder actually has the lock before forking.
+        # Make sure the holder actually has the lock before forking, with a
+        # deadline so a regression cannot hang the whole pytest run here.
+        acquire_deadline: float = time.monotonic() + 5.0
         while not HoconParseLock.lock.locked():
+            if time.monotonic() > acquire_deadline:
+                pytest.fail("Holder thread never acquired HoconParseLock")
             time.sleep(0.001)
 
         pid: int = os.fork()
