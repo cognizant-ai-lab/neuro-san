@@ -17,8 +17,8 @@
 # END COPYRIGHT
 
 # Create a local virtual environment for running/developing the neuro-san
-# service on FREE-THREADED CPython 3.14t (no-GIL). This is the local-venv analog
-# of neuro_san/deploy/Dockerfile.py314t and mirrors its choices:
+# service on FREE-THREADED CPython 3.14t (no-GIL). This script mirrors the
+# choices made in the py314t deployment container build (where applicable):
 #
 #   * The free-threaded interpreter is provisioned with `uv` (there is no
 #     official python:3.14t image or, usually, a system 3.14t interpreter).
