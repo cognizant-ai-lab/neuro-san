@@ -96,7 +96,10 @@ function ensure_uv() {
     fi
     if [ "${AUTO_INSTALL_UV:-0}" = "1" ]; then
         log "uv not found; installing (AUTO_INSTALL_UV=1)..."
-        curl -LsSf https://astral.sh/uv/install.sh | sh
+        tmp_installer="$(mktemp)"
+        curl -LsSf https://astral.sh/uv/install.sh -o "${tmp_installer}"
+        sh "${tmp_installer}"
+        rm -f "${tmp_installer}"
         # The installer drops uv in ~/.local/bin; make it visible now.
         export PATH="${HOME}/.local/bin:${PATH}"
         command -v uv >/dev/null 2>&1 || die "uv install did not put uv on PATH"
