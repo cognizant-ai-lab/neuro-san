@@ -17,21 +17,17 @@
 
 from collections.abc import Generator
 from contextlib import contextmanager
-from contextvars import ContextVar
 from typing import Any
 from typing import Dict
-from typing import Optional
-
-from langchain_core.tracers.context import register_configure_hook
 
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler \
     import LlmTokenCallbackHandler
-
-
-llm_token_callback_var: ContextVar[Optional[LlmTokenCallbackHandler]] = (
-        ContextVar("llm_token_callback", default=None)
-    )
-register_configure_hook(llm_token_callback_var, inheritable=True)
+# Re-exported for backwards compatibility: the ContextVar (and its langchain
+# configure-hook registration) lives with the handler class so the handler can
+# consult it to attribute events to their owning agent.
+# pylint: disable=unused-import
+from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler \
+    import llm_token_callback_var
 
 
 @contextmanager

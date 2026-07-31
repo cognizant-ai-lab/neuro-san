@@ -114,17 +114,21 @@ class LangChainTokenCounter:
         # Use the context manager to count tokens as per
         #   https://python.langchain.com/docs/how_to/llm_token_usage_tracking/#using-callbacks
         #
-        # Caveats:
-        # * In using this context manager approach, any tool that is called
-        #   also has its token counts contributing to its callers for better or worse.
-        # * As of 2/21/25, it seems that tool-calling agents (branch nodes) are not
-        #   registering their tokens correctly. Not sure if this is a bug in langchain
-        #   or there is something we are not doing in that scenario that we should be.
-        # * As of 8/21/25, placing the journaling callback in the invoke config instead of llm
-        #   appears to change the context manager’s behavior. The returned tokens from callback
-        #   are now limited to the calling agent only, and no longer include those
-        #   from downstream (chained) agents. However, `models_token_dict` is added
-        #   to the `LlmTokenCallbackHandler` to collect token stats of each model call.
+        # How the counting behaves:
+        # * The context manager sets a fresh handler in a ContextVar which langchain's
+        #   register_configure_hook() attaches to runs as an *inheritable* callback.
+        #   Since descendant agent invocations merge the ambient config (see
+        #   RunContextRunnable.run_it()), this agent's handler also receives events for
+        #   LLM calls made by all downstream agents - including agents of same-server
+        #   external networks invoked through direct sessions. The handler's scalar
+        #   totals (total_tokens et al) are therefore cumulative over this agent's
+        #   whole subtree, and a front man's totals cover the entire request.
+        # * The handler's models_token_dict is different: it only counts LLM calls
+        #   belonging to this agent itself (see LlmTokenCallbackHandler._is_own_call()),
+        #   so that report() below can accumulate per-model stats into request_reporting
+        #   with each call counted exactly once, no matter how deeply agents nest.
+        # * External agents on *remote* servers handle their own requests in a separate
+        #   context and are not seen by this handler at all.
         timed_out: bool = False
         with get_llm_token_callback(llm_infos) as callback:
             # Create a new context for different ContextVar values
@@ -186,45 +190,95 @@ class LangChainTokenCounter:
         """
 
         # Accumulate what we learned about tokens to request reporting.
-        # For now we just overwrite the one key because we know
-        # the last one out will be the front man, and as of 2/21/25 his stats
-        # are cumulative.  At some point we might want a finer-grained breakdown
-        # that perhaps contributes to a service/er-wide periodic token stats breakdown
-        # of some kind.  For now, get something going.
         #
-        # Update (8/21/25):
-        # Placing the journaling callback in the invoke config instead of llm changes the context
-        # manager’s behavior. The returned tokens from the callback are now limited
-        # to the calling agent only, not downstream (chained) agents.
-        # Instead, `models` have been added to `request_reporting["token_accounting"]` to collect per-model stats
-        # which are combined into network token stats.
-        # Since the frontman is always the last to finish, by the time it exits,
-        # `request_reporting["token_accounting"]` is complete and ready to report.
+        # Every agent's count_tokens() ends up here when its invocation completes.
+        # callback.models_token_dict contains per-model stats for only this agent's
+        # own LLM calls (see LlmTokenCallbackHandler), so merging each agent's
+        # contribution counts every LLM call in the request exactly once, no matter
+        # how deeply agents nest.  This includes agents of same-server external
+        # networks invoked via direct sessions, whose cloned InvocationContexts
+        # intentionally share this request_reporting dictionary (see
+        # SessionInvocationContext.safe_shallow_copy()).
+        # Since the front man is always the last to finish, by the time it exits,
+        # the request reporting covers the whole request and is ready to report.
+        #
+        # Two accountings are kept in request_reporting - in this order, so the
+        # server log prints the main network first and the request total last:
+        # * "token_accounting": usage from agents of the main (top-level) network
+        #   only, as this key's caveat has always advertised.  No per-model breakdown.
+        # * "total_token_accounting": the request total - everything that ran
+        #   in-process, including same-server external agents - with the
+        #   per-model breakdown.
+        # The front man of the main network streams these two dictionaries verbatim
+        # as its two accounting messages, so the server log and the client-visible
+        # messages read the same.
         request_reporting: Dict[str, Any] = self.invocation_context.get_request_reporting()
-        token_accounting: Dict[str, Any] = request_reporting.get("token_accounting", {})
+        total_accounting: Dict[str, Any] = request_reporting.get("total_token_accounting", {})
         models_token_dict: Dict[str, Any] = \
-            self.merge_dicts(token_accounting.get("models", {}), callback.models_token_dict)
+            self.merge_dicts(total_accounting.get("models", {}), callback.models_token_dict)
         network_token_dict: Dict[str, Any] = self.sum_all_tokens(models_token_dict, time_taken_in_seconds)
         # Provide sligtly different "caveats" for the network token accounting.
         network_token_dict["caveats"] = [
-            "External agent token usage is not included.",
+            "Request total: includes token usage from same-server external agents. "
+            "Usage from external agents on remote servers is not included.",
             "Token counts are approximate and estimated using tiktoken.",
             "time_taken_in_seconds includes overhead from Langchain and Neuro SAN"
         ]
-        request_reporting["token_accounting"] = \
+
+        # Maintain the accounting covering only the main (top-level) agent network.
+        # Agents of external networks invoked via direct sessions run on cloned
+        # InvocationContexts, so they contribute to the totals but not to this one.
+        main_accounting: Dict[str, Any] = request_reporting.get("token_accounting", {})
+        if not self.invocation_context.is_cloned():
+            # This agent's own contribution, summed across its per-model stats.
+            contribution: Dict[str, Any] = self.sum_all_tokens(callback.models_token_dict,
+                                                               time_taken_in_seconds)
+            # Add it to the scalars accumulated so far.  Caveats and time are not
+            # summable: the time stamped below is the latest reporter's, which for
+            # the last one out - the front man - is the whole request's latency.
+            previous: Dict[str, Any] = {key: value for key, value in main_accounting.items()
+                                        if key not in ("caveats", "time_taken_in_seconds")}
+            del contribution["time_taken_in_seconds"]
+            main_accounting = self.merge_dicts(previous, contribution)
+            main_accounting["time_taken_in_seconds"] = time_taken_in_seconds
+            main_accounting["caveats"] = [
+                "Token usage from agents of the main agent network only. "
+                "Usage from external agents is not included.",
+                "Token counts are approximate and estimated using tiktoken.",
+                "time_taken_in_seconds includes overhead from Langchain and Neuro SAN"
+            ]
+
+        # Re-insert both entries to pin their order (main first, total last)
+        # no matter which agent happened to report first.
+        request_reporting.pop("token_accounting", None)
+        request_reporting.pop("total_token_accounting", None)
+        request_reporting["token_accounting"] = main_accounting
+        request_reporting["total_token_accounting"] = \
             {**network_token_dict, "models": models_token_dict}
 
-        # Token counting results are collected in the callback.
-        # Create a token counting dictionary for each agent
-        agent_token_dict: Dict[str, Any] = self._generate_agent_token_dict(callback, time_taken_in_seconds)
         if self.journal is not None:
-            # We actually have a token dictionary to report, so go there.
-            agent_message = AgentMessage(structure=agent_token_dict)
-            await self.journal.write_message(agent_message)
-            # For frontman (origin with no ".") write both network token dict and model token dict
-            if "." not in ORIGIN_INFO.get():
-                network_token_message = AgentMessage(structure=request_reporting["token_accounting"])
-                await self.journal.write_message(network_token_message)
+            # Figure out whether we are the front man of the main network:
+            # * Only front men have origins with no "." in them.
+            # * Front men of same-server external networks invoked via direct sessions
+            #   also have dot-less origins, but they run on a cloned InvocationContext.
+            is_main_front_man: bool = \
+                "." not in ORIGIN_INFO.get() and not self.invocation_context.is_cloned()
+            if is_main_front_man:
+                # The front man of the main network reports the two request-level
+                # accountings as two complementary messages - main network first,
+                # request total second - each stating its coverage in its caveats.
+                # External front men do not do this: their tokens are already merged into
+                # the shared request_reporting above, and a request-level message from them
+                # mid-request would report a partial (and potentially sibling-polluted) total.
+                await self.journal.write_message(
+                    AgentMessage(structure=request_reporting["token_accounting"]))
+                await self.journal.write_message(
+                    AgentMessage(structure=request_reporting["total_token_accounting"]))
+            else:
+                # Every other agent reports the token usage of its own subtree.
+                agent_token_dict: Dict[str, Any] = \
+                    self._generate_agent_token_dict(callback, time_taken_in_seconds)
+                await self.journal.write_message(AgentMessage(structure=agent_token_dict))
 
     def _generate_agent_token_dict(
             self,
@@ -251,7 +305,8 @@ class LangChainTokenCounter:
             "total_cost": callback.total_cost,
             "time_taken_in_seconds": time_taken_in_seconds,
             "caveats": [
-                "Token usage is tracked at the agent level.",
+                "Token usage is tracked at the agent level. "
+                "Counts include usage from any downstream agents called on this agent's behalf.",
                 "Token counts are approximate and estimated using tiktoken.",
                 "time_taken_in_seconds includes overhead from Langchain and Neuro SAN"
             ]
