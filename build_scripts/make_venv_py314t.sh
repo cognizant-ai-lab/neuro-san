@@ -123,7 +123,10 @@ function ensure_build_toolchain() {
     fi
     if [ "${AUTO_INSTALL_RUST:-0}" = "1" ]; then
         log "cargo not found; installing rustup toolchain (AUTO_INSTALL_RUST=1)..."
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+        tmp_installer="$(mktemp)"
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o "${tmp_installer}"
+        sh "${tmp_installer}" -s -- -y --profile minimal
+        rm -f "${tmp_installer}"
         # shellcheck disable=SC1091
         source "${CARGO_HOME:-${HOME}/.cargo}/env"
         command -v cargo >/dev/null 2>&1 || die "rustup install did not put cargo on PATH"
