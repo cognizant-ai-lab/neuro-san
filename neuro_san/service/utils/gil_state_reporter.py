@@ -71,7 +71,7 @@ class GilStateReporter:
         }
 
     @staticmethod
-    def report(logger: logging.Logger = None) -> Dict[str, Any]:
+    def report(logger: Optional[logging.Logger] = None) -> Dict[str, Any]:
         """
         Log a one-line summary of the current GIL state and return the state dict.
         Emits a WARNING when a free-threaded build is running WITH the GIL (i.e.
