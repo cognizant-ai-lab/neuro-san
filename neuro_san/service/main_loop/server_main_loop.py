@@ -48,6 +48,7 @@ from neuro_san.service.watcher.event_initiator.periodic_event_initiator import P
 from neuro_san.service.watcher.event_work.event_work_monitor import EventWorkMonitor
 from neuro_san.service.watcher.main_loop.storage_watcher import StorageWatcher
 from neuro_san.service.watcher.temp_networks.temp_network_storage_updater import TempNetworkStorageUpdater
+from neuro_san.service.utils.gil_state_reporter import GilStateReporter
 from neuro_san.service.utils.server_status import ServerStatus
 from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.service.utils.service_resources import ServiceResources
@@ -293,6 +294,10 @@ class ServerMainLoop:
         for storage_class in StorageClass.ALL_PERMANENT:
             storage: AgentNetworkStorage = network_storage_dict.get(storage_class)
             storage.setup_agent_networks(self.agent_networks.get(storage_class))
+
+        # Report the process's GIL / free-threading state so logs make it
+        # unambiguous whether the server is actually running free-threaded.
+        GilStateReporter.report()
 
         # Start http server:
         self.http_server.start(components_to_start)
