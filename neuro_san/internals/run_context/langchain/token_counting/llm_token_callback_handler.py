@@ -168,7 +168,7 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         self.start_time = time()
 
     @staticmethod
-    def _extract_usage(response: LLMResult) -> Tuple[UsageMetadata, str, bool]:
+    def _extract_usage(response: LLMResult) -> Tuple[Optional[UsageMetadata], str, bool]:
         """
         Pull usage information out of an LLMResult.
         :param response: Output from chat model

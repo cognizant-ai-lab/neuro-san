@@ -272,6 +272,11 @@ class SessionInvocationContext(InvocationContext):
         # in subsequent interactions with the same network.
         self.origination.reset()
 
+        # Token accounting is per-exchange ("Request total"), so clear it for the
+        # next exchange rather than accumulating across turns.  Clear in place:
+        # the dictionary instance is shared by reference with any clones.
+        self.request_reporting.clear()
+
         if self.queue is not None:
             self.queue.reset()
         else:

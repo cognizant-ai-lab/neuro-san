@@ -22,10 +22,9 @@ from typing import Dict
 
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler \
     import LlmTokenCallbackHandler
-# Re-exported for backwards compatibility: the ContextVar (and its langchain
-# configure-hook registration) lives with the handler class so the handler can
-# consult it to attribute events to their owning agent.
-# pylint: disable=unused-import
+# The ContextVar (and its langchain configure-hook registration) lives with the
+# handler class so the handler can consult it to attribute events to their
+# owning agent.
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler \
     import llm_token_callback_var
 

@@ -28,19 +28,6 @@ from langchain_core.messages.ai import AIMessage
 
 from neuro_san.internals.messages.agent_message import AgentMessage
 from neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter import LangChainTokenCounter
-from neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter import ORIGIN_INFO
-
-
-@contextmanager
-def origin_scope(origin_str: str):
-    """
-    Set the ORIGIN_INFO ContextVar the way count_tokens() does before calling report().
-    """
-    token = ORIGIN_INFO.set(origin_str)
-    try:
-        yield
-    finally:
-        ORIGIN_INFO.reset(token)
 
 
 # pylint: disable=too-many-public-methods
@@ -85,6 +72,7 @@ class TestLangChainTokenCounter:
             "prompt_tokens": 80,
             "completion_tokens": 20,
             "successful_requests": 1,
+            "empty_responses": 0,
             "total_cost": 0.05,
             "time_taken_in_seconds": 3.0  # Uses the time_value parameter
         }
@@ -121,6 +109,7 @@ class TestLangChainTokenCounter:
             "prompt_tokens": 230,
             "completion_tokens": 70,
             "successful_requests": 3,
+            "empty_responses": 0,
             "total_cost": 0.08,
             "time_taken_in_seconds": 4.5
         }
@@ -167,6 +156,7 @@ class TestLangChainTokenCounter:
             "prompt_tokens": 340,
             "completion_tokens": 110,
             "successful_requests": 4,
+            "empty_responses": 0,
             "total_cost": 0.20,
             "time_taken_in_seconds": 7.0
         }
@@ -174,19 +164,29 @@ class TestLangChainTokenCounter:
         assert result == expected
 
     def test_sum_all_tokens_empty_dict(self, token_counter):
-        """Test aggregation with empty token dictionary."""
+        """
+        Aggregation of an empty token dictionary yields explicit zeros.
+        The standard metric keys must always be present: downstream consumers
+        (e.g. TokenAccountingMessageFilter) rely on "total_tokens" existing.
+        """
         token_dict = {}
 
         result = token_counter.sum_all_tokens(token_dict, 1.5)
 
         expected = {
+            "total_tokens": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "successful_requests": 0,
+            "empty_responses": 0,
+            "total_cost": 0.0,
             "time_taken_in_seconds": 1.5
         }
 
         assert result == expected
 
     def test_sum_all_tokens_empty_models(self, token_counter):
-        """Test aggregation with empty models in providers."""
+        """Test aggregation with empty models in providers yields explicit zeros."""
         token_dict = {
             "openai": {},
             "anthropic": {}
@@ -195,6 +195,12 @@ class TestLangChainTokenCounter:
         result = token_counter.sum_all_tokens(token_dict, 2.0)
 
         expected = {
+            "total_tokens": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "successful_requests": 0,
+            "empty_responses": 0,
+            "total_cost": 0.0,
             "time_taken_in_seconds": 2.0
         }
 
@@ -239,6 +245,7 @@ class TestLangChainTokenCounter:
             "prompt_tokens": 0,
             "completion_tokens": 0,
             "successful_requests": 0,
+            "empty_responses": 0,
             "total_cost": 0.0,
             "time_taken_in_seconds": 0.1
         }
@@ -439,8 +446,8 @@ class TestLangChainTokenCounter:
             llm=MagicMock(),
             invocation_context=mock_invocation_context,
             journal=mock_journal,
-            # Single-element origin -> no "." in the full name, so report()
-            # exercises both the per-agent and network token-message branches.
+            # Single-element origin on a non-cloned context -> report() takes the
+            # main-front-man branch and writes the two request-level messages.
             origin=[{"tool": "test_agent", "instantiation_index": 0}],
         )
 
@@ -476,15 +483,82 @@ class TestLangChainTokenCounter:
         )
         assert "max_execution_seconds" in first.content
 
-        # 2) Any subsequent messages should be token-accounting AgentMessages
-        #    (report() writes per-agent and, for the frontman, network token messages).
-        assert len(written_messages) >= 2, (
-            "Expected token-accounting AgentMessage(s) after the timeout AIMessage"
+        # 2) The subsequent messages are the front man's two token-accounting
+        #    AgentMessages (main network, then request total).
+        assert len(written_messages) == 3, (
+            "Expected the two request-level AgentMessages after the timeout AIMessage"
         )
         for msg in written_messages[1:]:
             assert isinstance(msg, AgentMessage), (
                 f"Expected AgentMessage after AIMessage, got {type(msg).__name__}"
             )
+
+    @pytest.mark.asyncio
+    async def test_count_tokens_timeout_agent_branch_writes_per_agent_message(self):
+        """
+        A timed-out non-front-man agent (multi-element origin) still writes its
+        per-agent token accounting message after the synthesized AIMessage.
+        """
+        written_messages = []
+
+        async def record(msg, *_args, **_kwargs):
+            written_messages.append(msg)
+
+        mock_journal = MagicMock()
+        mock_journal.write_message = AsyncMock(side_effect=record)
+
+        mock_invocation_context = MagicMock()
+        mock_invocation_context.get_llm_factory.return_value.llm_infos = {}
+        mock_invocation_context.get_request_reporting.return_value = {}
+        mock_invocation_context.is_cloned.return_value = False
+
+        mock_executor = MagicMock()
+        mock_executor.create_task.side_effect = (
+            lambda awaitable, _origin_str: asyncio.create_task(awaitable)
+        )
+        mock_invocation_context.get_asyncio_executor.return_value = mock_executor
+
+        counter = LangChainTokenCounter(
+            llm=MagicMock(),
+            invocation_context=mock_invocation_context,
+            journal=mock_journal,
+            # Multi-element origin -> report() takes the per-agent else-branch.
+            origin=[
+                {"tool": "front_man", "instantiation_index": 0},
+                {"tool": "slow_agent", "instantiation_index": 0},
+            ],
+        )
+
+        async def slow_awaitable():
+            await asyncio.sleep(10)
+
+        @contextmanager
+        def fake_callback_cm(_llm_infos):
+            cb = MagicMock()
+            cb.models_token_dict = {}
+            cb.total_tokens = 0
+            cb.prompt_tokens = 0
+            cb.completion_tokens = 0
+            cb.successful_requests = 0
+            cb.empty_responses = 0
+            cb.total_cost = 0.0
+            yield cb
+
+        callback_path = (
+            "neuro_san.internals.run_context.langchain.token_counting."
+            "langchain_token_counter.get_llm_token_callback"
+        )
+
+        with patch(callback_path, fake_callback_cm):
+            with pytest.raises(asyncio.TimeoutError):
+                await counter.count_tokens(slow_awaitable(), max_execution_seconds=0.05)
+
+        # Timeout AIMessage first, then exactly one per-agent AgentMessage.
+        assert len(written_messages) == 2
+        assert isinstance(written_messages[0], AIMessage)
+        agent_message = written_messages[1]
+        assert isinstance(agent_message, AgentMessage)
+        assert "tracked at the agent level" in agent_message.structure["caveats"][0]
 
     def test_merge_dicts_complex_token_scenario(self, token_counter):
         """Test merging with a realistic token counting scenario."""
@@ -624,6 +698,14 @@ class TestLangChainTokenCounter:
         assert gpt4["total_tokens"] == 150
 
 
+FRONT_MAN_ORIGIN = [{"tool": "front_man", "instantiation_index": 0}]
+INTERNAL_AGENT_ORIGIN = [
+    {"tool": "front_man", "instantiation_index": 0},
+    {"tool": "internal_agent", "instantiation_index": 0},
+]
+EXTERNAL_FRONT_MAN_ORIGIN = [{"tool": "external_front_man", "instantiation_index": 0}]
+
+
 class TestReport:
     """
     Test cases for report(): request-level accumulation and network-message gating.
@@ -631,11 +713,11 @@ class TestReport:
     Each agent's report() merges its callback's models_token_dict (that agent's own
     LLM calls only) into the shared request_reporting, so request-level totals must
     count every LLM call exactly once regardless of agent nesting.  The request-level
-    network message must only be written by the top-level front man: dot-less origin
-    and a non-cloned InvocationContext.
+    messages must only be written by the front man of the main network: a
+    single-element origin and a non-cloned InvocationContext.
     """
 
-    def _make_counter(self, request_reporting, cloned, journal):
+    def _make_counter(self, request_reporting, cloned, journal, origin=None):
         """Build a LangChainTokenCounter around a shared request_reporting dict."""
         mock_invocation_context = MagicMock()
         mock_invocation_context.get_request_reporting.return_value = request_reporting
@@ -644,7 +726,7 @@ class TestReport:
             llm=MagicMock(),
             invocation_context=mock_invocation_context,
             journal=journal,
-            origin=[{"tool": "test_agent", "instantiation_index": 0}],
+            origin=origin if origin is not None else FRONT_MAN_ORIGIN,
         )
 
     def _make_callback(self, own_tokens, own_requests, subtree_tokens=None, subtree_requests=None):
@@ -685,17 +767,16 @@ class TestReport:
         request_reporting = {}
 
         # A downstream agent finishes first: 15 tokens / 1 call of its own.
-        downstream = self._make_counter(request_reporting, cloned=False, journal=None)
-        with origin_scope("front_man.downstream"):
-            await downstream.report(self._make_callback(own_tokens=15, own_requests=1), 1.0)
+        downstream = self._make_counter(request_reporting, cloned=False, journal=None,
+                                        origin=INTERNAL_AGENT_ORIGIN)
+        await downstream.report(self._make_callback(own_tokens=15, own_requests=1), 1.0)
 
         # The front man finishes last: 30 tokens / 2 calls of its own,
         # 45 tokens / 3 calls across its subtree.
         front_man = self._make_counter(request_reporting, cloned=False, journal=None)
-        with origin_scope("front_man"):
-            await front_man.report(
-                self._make_callback(own_tokens=30, own_requests=2, subtree_tokens=45, subtree_requests=3),
-                2.0)
+        await front_man.report(
+            self._make_callback(own_tokens=30, own_requests=2, subtree_tokens=45, subtree_requests=3),
+            2.0)
 
         # Request-level totals equal the sum of each agent's own calls: no double count.
         total_accounting = request_reporting["total_token_accounting"]
@@ -719,16 +800,21 @@ class TestReport:
         request_reporting = {}
 
         # An external network's front man finishes first: 15 tokens / 1 call.
-        external = self._make_counter(request_reporting, cloned=True, journal=None)
-        with origin_scope("external_front_man"):
-            await external.report(self._make_callback(own_tokens=15, own_requests=1), 1.0)
+        external = self._make_counter(request_reporting, cloned=True, journal=None,
+                                      origin=EXTERNAL_FRONT_MAN_ORIGIN)
+        await external.report(self._make_callback(own_tokens=15, own_requests=1), 1.0)
+
+        # Before any main-network agent reports, the main accounting is an
+        # explicit zero entry (not an empty dict), so a request that dies here
+        # still logs well-formed accounting.
+        assert request_reporting["token_accounting"]["total_tokens"] == 0
+        assert "caveats" in request_reporting["token_accounting"]
 
         # The main network's front man finishes last: 30 tokens / 2 calls of its own.
         front_man = self._make_counter(request_reporting, cloned=False, journal=None)
-        with origin_scope("front_man"):
-            await front_man.report(
-                self._make_callback(own_tokens=30, own_requests=2, subtree_tokens=45, subtree_requests=3),
-                2.0)
+        await front_man.report(
+            self._make_callback(own_tokens=30, own_requests=2, subtree_tokens=45, subtree_requests=3),
+            2.0)
 
         # Totals cover main network + same-server external agents, exactly once each.
         total_accounting = request_reporting["total_token_accounting"]
@@ -746,30 +832,73 @@ class TestReport:
             ["token_accounting", "total_token_accounting"]
 
     @pytest.mark.asyncio
+    async def test_report_late_external_does_not_restamp_request_latency(self):
+        """
+        A cloned (external) agent completing after the front man - e.g. an
+        "event" invocation that outlives the request - must not replace the
+        request latency the front man stamped on the total.
+        """
+        request_reporting = {}
+
+        front_man = self._make_counter(request_reporting, cloned=False, journal=None)
+        await front_man.report(self._make_callback(own_tokens=30, own_requests=2), 20.0)
+
+        late_external = self._make_counter(request_reporting, cloned=True, journal=None,
+                                           origin=EXTERNAL_FRONT_MAN_ORIGIN)
+        await late_external.report(self._make_callback(own_tokens=15, own_requests=1), 3.0)
+
+        total_accounting = request_reporting["total_token_accounting"]
+        # The late external's tokens still count toward the total ...
+        assert total_accounting["total_tokens"] == 45
+        # ... but the request latency remains the front man's.
+        assert total_accounting["time_taken_in_seconds"] == 20.0
+
+    @pytest.mark.asyncio
+    async def test_report_flags_unattributed_tokens(self):
+        """
+        When the front man's subtree scalars exceed what completed scopes merged
+        (e.g. agents cancelled mid-run), the total carries an explicit caveat
+        instead of silently under-reporting.
+        """
+        request_reporting = {}
+
+        front_man = self._make_counter(request_reporting, cloned=False, journal=None)
+        # Subtree heard 50 tokens, but only the front man's own 30 were merged:
+        # a downstream agent died before its report().
+        await front_man.report(
+            self._make_callback(own_tokens=30, own_requests=2, subtree_tokens=50, subtree_requests=3),
+            2.0)
+
+        total_accounting = request_reporting["total_token_accounting"]
+        assert total_accounting["total_tokens"] == 30
+        assert any("An additional 20 tokens" in caveat
+                   for caveat in total_accounting["caveats"])
+
+    @pytest.mark.asyncio
     async def test_report_network_message_gating(self):
         """
-        Only the front man of the main network (dot-less origin, non-cloned
+        Only the front man of the main network (single-element origin, non-cloned
         InvocationContext) writes the two complementary accounting messages:
         main network first, request total second.  Every other agent writes its
         per-agent subtree message, and everyone merges into request_reporting.
         """
         cases = [
-            # (origin string, cloned, expected journal writes)
-            ("front_man.internal_agent", False, 1),   # internal agent: agent message only
-            ("external_front_man", True, 1),          # direct-session external front man: agent message only
-            ("front_man", False, 2),                  # main front man: main-network + total messages
+            # (origin, cloned, expected journal writes)
+            (INTERNAL_AGENT_ORIGIN, False, 1),       # internal agent: agent message only
+            (EXTERNAL_FRONT_MAN_ORIGIN, True, 1),    # direct-session external front man: agent message only
+            (FRONT_MAN_ORIGIN, False, 2),            # main front man: main-network + total messages
         ]
-        for origin_str, cloned, expected_writes in cases:
+        for origin, cloned, expected_writes in cases:
             request_reporting = {}
             journal = MagicMock()
             journal.write_message = AsyncMock()
 
-            counter = self._make_counter(request_reporting, cloned=cloned, journal=journal)
-            with origin_scope(origin_str):
-                await counter.report(self._make_callback(own_tokens=10, own_requests=1), 1.0)
+            counter = self._make_counter(request_reporting, cloned=cloned, journal=journal,
+                                         origin=origin)
+            await counter.report(self._make_callback(own_tokens=10, own_requests=1), 1.0)
 
             assert journal.write_message.call_count == expected_writes, \
-                f"origin={origin_str} cloned={cloned}"
+                f"origin={origin} cloned={cloned}"
             # The merge into request_reporting happens for everyone.
             assert request_reporting["total_token_accounting"]["total_tokens"] == 10
 
