@@ -88,7 +88,11 @@ class GilStateReporter:
         env: Optional[str] = state["python_gil_env"]
         env_str: str = "unset" if env is None else env
 
-        if not state["free_threaded_build"]:
+        if state["implementation"] != "CPython":
+            logger.info(
+                "GIL state: non-CPython runtime; free-threading/GIL reporting is CPython-specific. %s. PYTHON_GIL=%s",
+                runtime, env_str)
+        elif not state["free_threaded_build"]:
             logger.info(
                 "GIL state: standard CPython build (GIL always enabled). %s. PYTHON_GIL=%s",
                 runtime, env_str)
