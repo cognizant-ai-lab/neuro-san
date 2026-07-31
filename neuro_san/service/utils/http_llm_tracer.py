@@ -33,6 +33,8 @@ import time
 import uuid
 import httpx
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 
 class HttpxLlmTracer:
     """
@@ -156,6 +158,7 @@ class HttpxLlmTracer:
     _include_bodies: bool = False
     _include_chunks: bool = False
     _logger: Optional[logging.Logger] = None
+    _sensitive_logger: Optional[SensitiveLogger] = None
     # Stash of the pre-patch httpx.AsyncClient.__init__ so the patched
     # replacement can delegate to it.
     _original_httpx_init: Optional[Callable[..., None]] = None
@@ -188,6 +191,7 @@ class HttpxLlmTracer:
         cls._include_bodies = include_bodies
         cls._include_chunks = include_chunks
         cls._logger = logging.getLogger("neuro_san.diagnostics.http_llm_trace")
+        cls._sensitive_logger = SensitiveLogger(cls._logger)
 
         cls._original_httpx_init = httpx.AsyncClient.__init__
         # Assign the class-level replacement. staticmethod descriptor
@@ -457,7 +461,7 @@ class HttpxLlmTracer:
                 "user_req_id": cls._user_req_id_var.get(),
                 **fields,
             }
-            cls._logger.info(json.dumps(payload, default=str))
+            cls._sensitive_logger.info(json.dumps(payload, default=str))
         except Exception:  # pylint: disable=broad-exception-caught
             # Best-effort tracer must never break the request. Silent
             # swallow -- if the tracer itself is broken, the next dev
