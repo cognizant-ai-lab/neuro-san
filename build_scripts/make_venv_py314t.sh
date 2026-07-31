@@ -234,7 +234,7 @@ function main() {
 import sys
 print("  python              :", sys.version.split()[0], "(" + sys.executable + ")")
 gil = getattr(sys, "_is_gil_enabled", None)
-print("  free-threaded build :", bool(__import__("sysconfig").get_config_var("Py_GIL_DISABLED")))
+print("  free-threaded build :", bool(int(__import__("sysconfig").get_config_var("Py_GIL_DISABLED") or 0)))
 print("  GIL enabled now     :", gil() if gil else "n/a")
 import leaf_common, leaf_server_common
 print("  leaf_common         :", leaf_common.__name__, "OK")
