@@ -59,16 +59,18 @@ class LoggingConfigRestorer(Restorer):
             use_file_reference = self.default_file_reference
 
         logging_config: Dict[str, Any] = {}
-        if use_file_reference is not None:
-            if use_file_reference.endswith(".hocon"):
-                # pyhocon parsing mutates process-global pyparsing state and is not
-                # thread-safe. See HoconParseLock.
-                with HoconParseLock():
-                    logging_config = EasyHoconPersistence().restore(file_reference=use_file_reference)
-            if use_file_reference.endswith(".json"):
-                logging_config = EasyJsonPersistence().restore(file_reference=use_file_reference)
-            if use_file_reference.endswith(".yaml") or use_file_reference.endswith(".yml"):
-                logging_config = EasyYamlPersistence().restore(file_reference=use_file_reference)
+        if use_file_reference is None:
+            raise ValueError("No logging config file specified")
+
+        if use_file_reference.endswith(".hocon"):
+            # pyhocon parsing mutates process-global pyparsing state and is not
+            # thread-safe. See HoconParseLock.
+            with HoconParseLock():
+                logging_config = EasyHoconPersistence().restore(file_reference=use_file_reference)
+        elif use_file_reference.endswith(".json"):
+            logging_config = EasyJsonPersistence().restore(file_reference=use_file_reference)
+        elif use_file_reference.endswith(".yaml") or use_file_reference.endswith(".yml"):
+            logging_config = EasyYamlPersistence().restore(file_reference=use_file_reference)
         else:
             raise ValueError(f"Unsupported logging config file type: {use_file_reference}")
 

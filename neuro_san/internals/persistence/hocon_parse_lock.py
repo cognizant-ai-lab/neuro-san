@@ -48,10 +48,23 @@ class HoconParseLock:
     already prevents real parse parallelism between threads.
     ProcessPoolExecutor-based reads are unaffected because each worker process
     has its own copy of the lock.
+
+    Known trade-off: pyhocon resolves "include" directives (file or URL reads)
+    inside the parse, so that I/O happens while the lock is held. Ordinary
+    local-file includes (include "registries/foo.hocon") are fine: their reads
+    are sub-millisecond and their nested parse happens inside pyhocon, below
+    this lock, so there is no reentrancy. The hazard is unbounded I/O: pyhocon
+    fetches "include url(...)" with no timeout, and a file include on a hung
+    network mount blocks the same way, stalling every other HOCON parse (and
+    every fork, per the hooks below) instead of just its own thread. Do not
+    use "include url(...)" in served registries.
     """
 
     # One lock for the whole process, shared by all instances,
     # because the pyparsing state it guards is process-global.
+    # Never rebind this attribute: the register_at_fork hooks below capture
+    # bound methods of this exact object and cannot be re-registered, so a
+    # replacement lock would serialize parses without fork protection.
     lock: ClassVar[Lock] = Lock()
 
     if hasattr(os, "register_at_fork"):
@@ -59,16 +72,22 @@ class HoconParseLock:
         # Without this, an os.fork() happening while some thread holds the lock
         # (e.g. AGENT_MANIFEST_CONCURRENCY_CONTEXT="fork" while a watcher thread
         # is mid-parse) would give the child a lock that can never be released,
-        # deadlocking the child's first HOCON parse. Holding the lock across the
-        # fork means children always start with it released - the same treatment
-        # the standard library logging module gives its module lock.
-        # Windows has no fork, hence the hasattr guard.
-        # The bare "lock" reference is required: the HoconParseLock name is not
-        # bound until the class body finishes executing.
+        # deadlocking the child's first HOCON parse. This mirrors what the
+        # standard library logging module does for its module lock: acquire
+        # before the fork, release in the parent, and _at_fork_reinit() in the
+        # child. The child must reinit rather than release: on CPython <= 3.12
+        # platforms without POSIX semaphores (e.g. macOS), a waiter blocked in
+        # acquire() can hold the lock's internal pthread mutex at the fork
+        # instant, and a child-side release() would hang on that inherited
+        # mutex whose owner is dead (see bpo-40089). Windows has no fork,
+        # hence the hasattr guard.
+        # The bare "lock" references are required: the HoconParseLock name is
+        # not bound until the class body finishes executing.
         os.register_at_fork(
             before=lock.acquire,
             after_in_parent=lock.release,
-            after_in_child=lock.release,
+            # pylint: disable=no-member,protected-access
+            after_in_child=lock._at_fork_reinit,
         )
 
     def __enter__(self) -> "HoconParseLock":
