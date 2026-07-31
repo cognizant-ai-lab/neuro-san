@@ -26,6 +26,7 @@ from leaf_common.persistence.easy.easy_json_persistence import EasyJsonPersisten
 from leaf_common.persistence.easy.easy_yaml_persistence import EasyYamlPersistence
 
 from neuro_san import DEPLOY_DIR
+from neuro_san.internals.persistence.hocon_parse_lock import HoconParseLock
 
 
 class LoggingConfigRestorer(Restorer):
@@ -60,7 +61,10 @@ class LoggingConfigRestorer(Restorer):
         logging_config: Dict[str, Any] = {}
         if use_file_reference is not None:
             if use_file_reference.endswith(".hocon"):
-                logging_config = EasyHoconPersistence().restore(file_reference=use_file_reference)
+                # pyhocon parsing mutates process-global pyparsing state and is not
+                # thread-safe. See HoconParseLock.
+                with HoconParseLock():
+                    logging_config = EasyHoconPersistence().restore(file_reference=use_file_reference)
             if use_file_reference.endswith(".json"):
                 logging_config = EasyJsonPersistence().restore(file_reference=use_file_reference)
             if use_file_reference.endswith(".yaml") or use_file_reference.endswith(".yml"):
