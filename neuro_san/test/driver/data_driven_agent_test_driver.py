@@ -39,6 +39,7 @@ from leaf_common.time.timeout import Timeout
 from neuro_san.client.agent_session_factory import AgentSessionFactory
 from neuro_san.client.streaming_input_processor import StreamingInputProcessor
 from neuro_san.interfaces.agent_session import AgentSession
+from neuro_san.internals.persistence.hocon_parse_lock import HoconParseLock
 from neuro_san.message_processing.basic_message_processor import BasicMessageProcessor
 from neuro_san.session.direct_agent_session import DirectAgentSession
 from neuro_san.test.driver.assert_capture import AssertCapture
@@ -254,7 +255,11 @@ Need at least {num_need_success} to consider {hocon_file} test to be successful.
         if self.fixtures is not None:
             test_path = self.fixtures.get_file_in_basis(hocon_file)
         hocon = EasyHoconPersistence(must_exist=True)
-        test_case: Dict[str, Any] = hocon.restore(file_reference=test_path)
+        # pyhocon parsing mutates process-global pyparsing state and is not
+        # thread-safe. See HoconParseLock. Sessions driven by this class can
+        # leave background threads parsing agent hocons concurrently.
+        with HoconParseLock():
+            test_case: Dict[str, Any] = hocon.restore(file_reference=test_path)
         return test_case
 
     # pylint: disable=too-many-locals,too-many-arguments,too-many-positional-arguments
