@@ -32,6 +32,8 @@ import psutil
 
 from tornado.web import RequestHandler
 
+from neuro_san.service.utils.request_util import RequestUtil
+
 
 class DebugGcHandler(RequestHandler):
     """
@@ -101,6 +103,7 @@ class DebugGcHandler(RequestHandler):
         # args reaching response sinks.
         self.set_header("X-Content-Type-Options", "nosniff")
         response_format: str = self.get_query_argument("format", default="json").lower()
+        response_format = RequestUtil.safe_message(response_format)
         if response_format == "text":
             self.set_header("Content-Type", "text/plain; charset=utf-8")
             self.write(self._format_report(report))
