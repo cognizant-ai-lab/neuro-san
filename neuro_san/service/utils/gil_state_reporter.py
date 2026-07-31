@@ -65,7 +65,7 @@ class GilStateReporter:
         return {
             "implementation": platform.python_implementation(),
             "python_version": platform.python_version(),
-            "free_threaded_build": bool(sysconfig.get_config_var("Py_GIL_DISABLED")),
+            "free_threaded_build": bool(int(sysconfig.get_config_var("Py_GIL_DISABLED") or 0)),
             "gil_enabled": gil_enabled,
             "python_gil_env": os.environ.get("PYTHON_GIL"),
         }
