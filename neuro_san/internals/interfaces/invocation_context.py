@@ -125,12 +125,8 @@ class InvocationContext(LingeringResource):
                 InvocationContext, created to invoke an external agent network
                 on the same server via a direct session.
                 False for the original InvocationContext of a request.
-
-        Note: Not raising NotImplementedError here on purpose.
-        Never being cloned is a reasonable default for implementations
-        that do not deal in same-server external agents.
         """
-        return False
+        raise NotImplementedError
 
     def get_llm_factory(self) -> ContextTypeLlmFactory:
         """

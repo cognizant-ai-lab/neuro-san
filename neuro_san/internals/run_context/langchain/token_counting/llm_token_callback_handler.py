@@ -37,8 +37,13 @@ from langchain_core.tracers.context import register_configure_hook
 # attach the ContextVar's current value to every run as an *inheritable* callback,
 # so an agent's handler also receives events for LLM calls made by any downstream
 # agents it calls.  At event time the ContextVar holds the handler of the *nearest*
-# enclosing agent scope, which is what lets a handler tell its own agent's LLM
-# calls apart from downstream ones (see LlmTokenCallbackHandler._is_own_call()).
+# enclosing agent scope - the call's owner - which is what lets a handler tell its
+# own agent's LLM calls apart from downstream ones (see _is_own_call()).  Since
+# every LLM call has exactly one nearest enclosing scope, exactly one of the
+# handlers listening to that call considers it its own.  This exactly-once
+# ownership is what LangChainTokenCounter.report() relies on to merge each
+# agent's per-model tallies into the request-wide accounting without
+# double-counting, no matter how deeply agents nest.
 llm_token_callback_var: ContextVar[Optional["LlmTokenCallbackHandler"]] = (
         ContextVar("llm_token_callback", default=None)
     )
@@ -134,7 +139,10 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
                 handler's own agent.  False for calls made by downstream agents, whose
                 events this handler also receives because handlers are inheritable
                 callbacks.  At event time, llm_token_callback_var holds the handler
-                of the nearest enclosing agent scope - the call's owner.
+                of the nearest enclosing agent scope - the call's owner - so for any
+                given LLM call this is True for exactly one of the handlers listening
+                to it.  That exactly-once ownership is what keeps the request-wide
+                merge in LangChainTokenCounter.report() free of double-counting.
         """
         return llm_token_callback_var.get() is self
 

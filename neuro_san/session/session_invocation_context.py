@@ -307,6 +307,11 @@ class SessionInvocationContext(InvocationContext):
         # * request_reporting - so token accounting for external agent networks
         #   invoked on this server contributes to the request-wide totals, with
         #   each LLM call counted exactly once (see LangChainTokenCounter.report()).
+        #   Deliberately NOT reset or replaced here: pointing the clone at a fresh
+        #   dictionary would orphan the external network's usage from the request
+        #   totals.  Staleness across exchanges is handled by reset() instead,
+        #   which clears the shared dictionary in place at the start of each
+        #   exchange.
         # * origination - so tool instantiation indices stay consistent across
         #   the whole request.
 
