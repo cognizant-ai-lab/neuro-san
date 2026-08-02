@@ -250,6 +250,22 @@ class TestLangfuseTracingContextRegistration:
         assert fake_handler_class.instances_created == 0
         assert _count_langfuse_hooks() == 1
 
+    def test_adopted_hook_without_langfuse_raises_actionable_error(self, monkeypatch):
+        """
+        A foreign "langfuse_handler" hook skips the constructor's handler
+        check, but if langfuse itself is not importable the local imports
+        that follow must still fail with the actionable ValueError, not leak
+        a raw ImportError.
+        """
+        monkeypatch.setitem(sys.modules, "langfuse", None)
+        monkeypatch.setitem(sys.modules, "langfuse.langchain", None)
+
+        foreign_var = ContextVar(ltc_module.LANGFUSE_HANDLER_VAR_NAME, default=None)
+        register_configure_hook(foreign_var, inheritable=True)
+
+        with pytest.raises(ValueError, match="LANGFUSE_ENABLED"):
+            ltc_module.LangfuseTracingContext(run_target=None, config={})
+
     def test_sdk_kill_switch_derived_from_langfuse_enabled(self, monkeypatch):
         """
         Registration only happens on the LANGFUSE_ENABLED=true path, so the

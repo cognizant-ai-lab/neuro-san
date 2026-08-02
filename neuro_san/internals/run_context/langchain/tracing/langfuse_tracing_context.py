@@ -45,6 +45,18 @@ from neuro_san.internals.run_context.langchain.tracing.langchain_tracing_context
 # registrations detect each other and avoid reporting every span twice.
 LANGFUSE_HANDLER_VAR_NAME: str = "langfuse_handler"
 
+# Actionable guidance for when LANGFUSE_ENABLED asked for langfuse tracing
+# but the langfuse package cannot deliver a handler.
+_MISSING_LANGFUSE_MESSAGE: str = """
+Failed to create Langfuse CallbackHandler. Try one of the following:
+
+If you really wanted to use langfuse for observability, you can install it with
+    pip install langfuse
+
+If you didn't mean to use langfuse for observability, you can do this:
+    export LANGFUSE_ENABLED=false
+"""
+
 
 class LangfuseTracingContext(LangChainTracingContext):
     """
@@ -85,7 +97,8 @@ class LangfuseTracingContext(LangChainTracingContext):
         per-request wrapping (root AGENT span, session/user metadata) - the
         already-registered handler keeps exporting bare traces until the
         process is restarted.  For LANGFUSE_ENABLED to fully disable tracing
-        it must be false when the process starts.
+        it must be false before the process constructs its first
+        LangfuseTracingContext - operationally, false from process start.
 
         :return: The ContextVar carrying the langfuse callback handler.
                 The value inside can be None if langfuse is not installed.
@@ -228,24 +241,23 @@ class LangfuseTracingContext(LangChainTracingContext):
         # mistaken for "langfuse is not installed".
         handler_var: ContextVar = self._ensure_registered()
         if handler_var.get() is None and not self._ADOPTED_FOREIGN_HOOK:
-            raise ValueError("""
-Failed to create Langfuse CallbackHandler. Try one of the following:
-
-If you really wanted to use langfuse for observability, you can install it with
-    pip install langfuse
-
-If you didn't mean to use langfuse for observability, you can do this:
-    export LANGFUSE_ENABLED=false
-""")
+            raise ValueError(_MISSING_LANGFUSE_MESSAGE)
 
         # Keep track of some Langfuse state
 
         # No need to ResolverUtil absolutely everything, but we still need to locally import
         # for the rest of the system to behave without langfuse installed.
         # pylint: disable=import-outside-toplevel
-        from langfuse import Langfuse
-        from langfuse import get_client
-        from opentelemetry.util._decorator import _AgnosticContextManager
+        try:
+            from langfuse import Langfuse
+            from langfuse import get_client
+            from opentelemetry.util._decorator import _AgnosticContextManager
+        except ImportError as error:
+            # Reachable when a foreign "langfuse_handler" hook was adopted
+            # (which skips the check above) but langfuse itself is not
+            # importable. Keep the failure as actionable as the check above
+            # instead of leaking a raw ImportError.
+            raise ValueError(_MISSING_LANGFUSE_MESSAGE) from error
 
         self.langfuse_client: Langfuse = get_client()
         self.main_span: _AgnosticContextManager[Any] = None
