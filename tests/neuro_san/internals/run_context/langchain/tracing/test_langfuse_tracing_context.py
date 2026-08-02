@@ -18,7 +18,7 @@
 # These tests exercise the internal registration machinery directly.
 # pylint: disable=protected-access
 
-import importlib
+import importlib.util
 import os
 import sys
 import threading
@@ -137,9 +137,16 @@ class TestLangfuseTracingContextRegistration:
         monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-lf-test")
 
         hooks_before = _count_langfuse_hooks()
-        reloaded = importlib.reload(ltc_module)
 
-        assert reloaded.LangfuseTracingContext.HANDLER_CONTEXT_VAR is None
+        # Execute the module source into an isolated module object rather than
+        # importlib.reload()-ing it in place: a reload would swap the class out
+        # from under other modules that hold a reference to it, making the
+        # test suite order-dependent.
+        spec = importlib.util.spec_from_file_location("ltc_isolated_reimport", ltc_module.__file__)
+        isolated = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(isolated)
+
+        assert isolated.LangfuseTracingContext.HANDLER_CONTEXT_VAR is None
         assert _count_langfuse_hooks() == hooks_before
 
     def test_registers_once_and_only_once(self, monkeypatch):
@@ -269,17 +276,20 @@ class TestLangfuseTracingContextRegistration:
     def test_missing_langfuse_raises_actionable_error(self, monkeypatch):
         """
         LANGFUSE_ENABLED=true without the langfuse package installed must
-        still raise the actionable ValueError, and must not leave a hook behind.
+        still raise the actionable ValueError, and must not leave a hook or a
+        stray LANGFUSE_TRACING_ENABLED env mutation behind.
         A None entry in sys.modules makes the import fail deterministically,
         whether or not the real package is installed in the test environment.
         """
         monkeypatch.setitem(sys.modules, "langfuse", None)
         monkeypatch.setitem(sys.modules, "langfuse.langchain", None)
+        monkeypatch.delenv("LANGFUSE_TRACING_ENABLED", raising=False)
 
         with pytest.raises(ValueError, match="LANGFUSE_ENABLED"):
             ltc_module.LangfuseTracingContext(run_target=None, config={})
 
         assert _count_langfuse_hooks() == 0
+        assert "LANGFUSE_TRACING_ENABLED" not in os.environ
 
     def test_resolution_failure_is_not_memoized(self, monkeypatch):
         """

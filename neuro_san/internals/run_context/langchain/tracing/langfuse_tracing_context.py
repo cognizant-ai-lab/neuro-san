@@ -64,7 +64,7 @@ class LangfuseTracingContext(LangChainTracingContext):
     _ADOPTED_FOREIGN_HOOK: bool = False
 
     # Guards the one-time registration per process.
-    _REGISTER_LOCK: threading.Lock = threading.Lock()
+    _REGISTER_LOCK = threading.Lock()
 
     @classmethod
     def _ensure_registered(cls) -> ContextVar:
@@ -100,21 +100,9 @@ class LangfuseTracingContext(LangChainTracingContext):
             # a second one.  langchain dedupes hook handlers by object
             # identity only, so a second handler instance would make every
             # span get reported twice.
-            existing: ContextVar = cls._find_existing_handler_hook()
+            existing: Optional[ContextVar] = cls._find_existing_handler_hook()
             if existing is not None:
                 return cls._adopt_existing_handler_hook(existing)
-
-            # We only get here when langfuse tracing is wanted, so keep the
-            # langfuse SDK's own kill switch in agreement, while respecting a
-            # value that was explicitly set in the environment.
-            # Caveats: an explicitly set LANGFUSE_TRACING_ENABLED=false only
-            # mutes export - the SDK makes every span non-recording, but the
-            # handler below is still registered and dispatched on every
-            # langchain event, and create_main_span() still runs.  The SDK
-            # reads this var once, at client construction, so changing it in
-            # a running process has no effect.  To turn tracing fully off,
-            # set LANGFUSE_ENABLED=false and restart the process.
-            os.environ.setdefault("LANGFUSE_TRACING_ENABLED", "true")
 
             # See if we can create a new langfuse handler instance.
             callback_handler_type: Type[BaseCallbackHandler] = \
@@ -123,6 +111,22 @@ class LangfuseTracingContext(LangChainTracingContext):
 
             callback_handler: BaseCallbackHandler = None
             if callback_handler_type is not None:
+                # We only get here when langfuse tracing is wanted, so keep the
+                # langfuse SDK's own kill switch in agreement, while respecting
+                # a value that was explicitly set in the environment.  This
+                # must happen before the handler is instantiated - the SDK
+                # reads the var once, at client construction - and only when a
+                # handler will actually be constructed, so a failed resolution
+                # does not leave a stray env mutation behind.
+                # Caveats: an explicitly set LANGFUSE_TRACING_ENABLED=false
+                # only mutes export - the SDK makes every span non-recording,
+                # but the handler below is still registered and dispatched on
+                # every langchain event, and create_main_span() still runs.
+                # Changing the var in a running process has no effect.  To
+                # turn tracing fully off, set LANGFUSE_ENABLED=false and
+                # restart the process.
+                os.environ.setdefault("LANGFUSE_TRACING_ENABLED", "true")
+
                 # Create the callback handler instance
                 callback_handler = callback_handler_type()
 
