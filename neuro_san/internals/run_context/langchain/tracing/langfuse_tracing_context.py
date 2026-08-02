@@ -18,7 +18,11 @@ from __future__ import annotations
 
 from typing import Any
 from typing import Dict
+from typing import Optional
 from typing import Type
+
+import os
+import threading
 
 from contextvars import ContextVar
 from datetime import datetime
@@ -40,34 +44,109 @@ class LangfuseTracingContext(LangChainTracingContext):
     TracingContext implementation for runs that use Langfuse.
     """
 
-    @staticmethod
-    def register():
-        """
-        Globally register the Langfuse CallbackHandler, if available
-        This is really the only way we can do this with langchain managing span parentage.
-        """
-
-        # Create a context variable for the langfuse handler
-        context_var = ContextVar("langfuse_handler", default=None)
-
-        # See if we can create a new langfuse handler instance.
-        callback_handler_type: Type[BaseCallbackHandler] = None
-        callback_handler_type = ResolverUtil.create_type("langfuse.langchain.CallbackHandler",
-                                                         raise_if_not_found=False)
-        if callback_handler_type is not None:
-
-            # Create the callback handler instance
-            callback_handler: BaseCallbackHandler = callback_handler_type()
-
-            # Register the callback handler via the context variable
-            context_var.set(callback_handler)
-            register_configure_hook(context_var, inheritable=True)
-
-        return context_var
-
     # Global context variable for the langfuse callback handler.
-    # Do the register() once at class load time.
-    HANDLER_CONTEXT_VAR: ContextVar = register()
+    # Populated lazily by _ensure_registered() on first construction so that
+    # merely importing this module (or having langfuse installed with keys in
+    # the environment) has no side effects.  See https://github.com/cognizant-ai-lab/neuro-san/issues/1191
+    HANDLER_CONTEXT_VAR: ContextVar = None
+
+    # Guards the one-time registration per process.
+    _REGISTER_LOCK: threading.Lock = threading.Lock()
+
+    @classmethod
+    def _ensure_registered(cls) -> ContextVar:
+        """
+        Globally register the Langfuse CallbackHandler, if available.
+        This is really the only way we can do this with langchain managing span parentage.
+
+        Called from the constructor rather than at class-load time so that
+        registration (and the Langfuse client the handler constructs from the
+        LANGFUSE_* env vars) only happens when a LangfuseTracingContext is
+        actually created - that is, when LANGFUSE_ENABLED is true per the
+        LangChainTracingContextFactory.  Merely installing langfuse with keys
+        in the environment must not start exporting traces.
+
+        Caveat: registration is a process-lifetime one-way door.  Once the
+        first enabled request has registered the handler with langchain,
+        flipping LANGFUSE_ENABLED to false in the same process only stops the
+        per-request wrapping (root AGENT span, session/user metadata) - the
+        already-registered handler keeps exporting bare traces until the
+        process is restarted.  For LANGFUSE_ENABLED to fully disable tracing
+        it must be false when the process starts.
+
+        :return: The ContextVar carrying the langfuse callback handler.
+                The value inside can be None if langfuse is not installed.
+        """
+        with cls._REGISTER_LOCK:
+            if cls.HANDLER_CONTEXT_VAR is not None:
+                # Already done
+                return cls.HANDLER_CONTEXT_VAR
+
+            # If some other component in this process already registered a
+            # langfuse handler hook, adopt its ContextVar instead of registering
+            # a second handler.  langchain dedupes hook handlers by object
+            # identity only, so a second handler instance would make every
+            # span get reported twice.
+            existing: ContextVar = cls._find_existing_handler_hook()
+            if existing is not None:
+                cls.HANDLER_CONTEXT_VAR = existing
+                return existing
+
+            # We only get here when langfuse tracing is wanted, so keep the
+            # langfuse SDK's own kill switch in agreement, while respecting a
+            # value that was explicitly set in the environment.
+            # Caveats: an explicitly set LANGFUSE_TRACING_ENABLED=false only
+            # mutes export - the SDK makes every span non-recording, but the
+            # handler below is still registered and dispatched on every
+            # langchain event, and create_main_span() still runs.  The SDK
+            # reads this var once, at client construction, so changing it in
+            # a running process has no effect.  To turn tracing fully off,
+            # set LANGFUSE_ENABLED=false and restart the process.
+            os.environ.setdefault("LANGFUSE_TRACING_ENABLED", "true")
+
+            # See if we can create a new langfuse handler instance.
+            callback_handler_type: Type[BaseCallbackHandler] = \
+                ResolverUtil.create_type("langfuse.langchain.CallbackHandler",
+                                         raise_if_not_found=False)
+
+            callback_handler: BaseCallbackHandler = None
+            if callback_handler_type is not None:
+                # Create the callback handler instance
+                callback_handler = callback_handler_type()
+
+            # Carry the handler as the ContextVar default rather than via set():
+            # a set() is only visible in contexts descended from the setting
+            # thread, while a default is visible in every thread.
+            context_var = ContextVar("langfuse_handler", default=callback_handler)
+            if callback_handler is not None:
+                register_configure_hook(context_var, inheritable=True)
+
+            cls.HANDLER_CONTEXT_VAR = context_var
+            return context_var
+
+    @staticmethod
+    def _find_existing_handler_hook() -> Optional[ContextVar]:
+        """
+        :return: The ContextVar of a configure hook that some other component
+                already registered for a langfuse handler, identified by the
+                conventional ContextVar name "langfuse_handler".
+                None if there is no such hook.
+        """
+        try:
+            # Read-only peek at a private langchain structure, with a graceful
+            # fallback if it ever disappears.  There is no public API for
+            # enumerating configure hooks.
+            # pylint: disable=import-outside-toplevel
+            from langchain_core.tracers.context import _configure_hooks
+        except ImportError:
+            return None
+
+        for hook in _configure_hooks:
+            hook_var: ContextVar = hook[0]
+            if getattr(hook_var, "name", None) == "langfuse_handler":
+                return hook_var
+
+        return None
 
     def __init__(self, run_target: RunTarget,
                  config: Dict[str, Any],
@@ -87,10 +166,11 @@ class LangfuseTracingContext(LangChainTracingContext):
         # Keep a session_id for any child TracingContext to use in its langfuse config for the run.
         self.session_id: str = None
 
-        # See if we can get a langfuse handler instance.
-        # handler_type = ResolverUtil.create_type("langfuse.langchain.CallbackHandler", raise_if_not_found=False)
-        # if handler_type is None:
-        if self.HANDLER_CONTEXT_VAR.get() is None:
+        # Register the langfuse handler with langchain (idempotent; first
+        # construction in the process does the work) and see if we actually
+        # got a handler instance.
+        handler_var: ContextVar = self._ensure_registered()
+        if handler_var.get() is None:
             raise ValueError("""
 Failed to create Langfuse CallbackHandler. Try one of the following:
 
