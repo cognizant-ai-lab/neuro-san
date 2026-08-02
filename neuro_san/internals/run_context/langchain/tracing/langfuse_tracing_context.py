@@ -105,11 +105,11 @@ class LangfuseTracingContext(LangChainTracingContext):
                 return cls._adopt_existing_handler_hook(existing)
 
             # See if we can create a new langfuse handler instance.
-            callback_handler_type: Type[BaseCallbackHandler] = \
+            callback_handler_type: Optional[Type[BaseCallbackHandler]] = \
                 ResolverUtil.create_type("langfuse.langchain.CallbackHandler",
                                          raise_if_not_found=False)
 
-            callback_handler: BaseCallbackHandler = None
+            callback_handler: Optional[BaseCallbackHandler] = None
             if callback_handler_type is not None:
                 # We only get here when langfuse tracing is wanted, so keep the
                 # langfuse SDK's own kill switch in agreement, while respecting
@@ -153,7 +153,7 @@ class LangfuseTracingContext(LangChainTracingContext):
         :param existing: The ContextVar of the already-registered hook.
         :return: The ContextVar to cache as HANDLER_CONTEXT_VAR.
         """
-        foreign_handler: BaseCallbackHandler = existing.get()
+        foreign_handler: Optional[BaseCallbackHandler] = existing.get()
         if foreign_handler is not None:
             # Re-carry the same handler instance in our own ContextVar as its
             # default so it is visible in every thread, not only in contexts
