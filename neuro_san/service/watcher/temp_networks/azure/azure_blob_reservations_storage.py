@@ -127,7 +127,7 @@ class AzureBlobReservationsStorage(AbstractReservationsStorage):
 
     def stop(self, timeout: Optional[float] = None):
         """Close connections to Azure Blob Storage."""
-        super().stop()
+        super().stop(timeout)
         try:
             if self.writer:
                 try:

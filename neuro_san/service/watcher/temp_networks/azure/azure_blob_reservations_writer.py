@@ -87,6 +87,7 @@ class AzureBlobReservationsWriter:
         return self.container_client
 
     async def add_reservations(self, reservations_dict: Dict[Reservation, Any], source: str = None):
+        # pylint: disable=unused-argument
         """
         Add/update reservations in Azure Blob Storage.
 

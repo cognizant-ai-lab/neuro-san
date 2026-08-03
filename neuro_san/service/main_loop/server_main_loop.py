@@ -51,6 +51,7 @@ from neuro_san.service.watcher.temp_networks.updater.temp_network_storage_update
 from neuro_san.service.utils.server_status import ServerStatus
 from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.service.utils.service_resources import ServiceResources
+from neuro_san.service.utils.gil_state_reporter import GilStateReporter
 
 
 # pylint: disable=too-many-instance-attributes
@@ -234,6 +235,10 @@ class ServerMainLoop:
 
         logging_config_restorer = LoggingConfigRestorer()
         self.logging_config = logging_config_restorer.restore()
+
+        # Report the process's GIL / free-threading state so logs make it
+        # unambiguous whether the server is actually running free-threaded.
+        print("GIL state at server startup: ", GilStateReporter.report())
 
         # Construct forwarded metadata list as self.forwarded_request_metadata
         metadata_set = set(self.forwarded_request_metadata.split())
