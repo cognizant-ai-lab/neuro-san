@@ -47,7 +47,7 @@ from neuro_san.service.interfaces.agent_server import AgentServer
 from neuro_san.service.watcher.event_initiator.periodic_event_initiator import PeriodicEventInitiator
 from neuro_san.service.watcher.event_work.event_work_monitor import EventWorkMonitor
 from neuro_san.service.watcher.main_loop.storage_watcher import StorageWatcher
-from neuro_san.service.watcher.temp_networks.temp_network_storage_updater import TempNetworkStorageUpdater
+from neuro_san.service.watcher.temp_networks.updater.temp_network_storage_updater import TempNetworkStorageUpdater
 from neuro_san.service.utils.server_status import ServerStatus
 from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.service.utils.service_resources import ServiceResources
