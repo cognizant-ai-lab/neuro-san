@@ -86,3 +86,7 @@ langchain-mcp-adapters>=0.1.7,<0.2.0
 # Ceiling <2.0: avoid breaking changes from the upcoming 2.x line.
 # See https://github.com/modelcontextprotocol/python-sdk/releases/ for changelogs.
 mcp>=1.23.0,<2.0
+
+# Azure Blob Storage for reservations backend
+azure-storage-blob>=12.19.0
+azure-identity>=1.14.0
