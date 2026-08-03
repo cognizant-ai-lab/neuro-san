@@ -20,6 +20,7 @@ from typing import Callable
 from typing import Dict
 from typing import Iterable
 from typing import Optional
+from typing import Type
 
 from time import time
 from functools import partial
@@ -28,8 +29,11 @@ from json.decoder import JSONDecodeError
 from logging import getLogger
 from logging import Logger
 
-from botocore.client import BaseClient
-from botocore.exceptions import ClientError
+from leaf_common.config.resolver_util import ResolverUtil
+
+# Lazily resolve here because this is one of the first places the import happens
+BaseClient: Type[Any] = ResolverUtil.create_type("botocore.client.BaseClient", install_if_missing="botocore")
+ClientError: Type[Any] = ResolverUtil.create_type("botocore.exceptions.ClientError", install_if_missing="botocore")
 
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.service.watcher.temp_networks.s3.aws_sync_client_worker import AwsSyncClientWorker
