@@ -35,10 +35,10 @@ from leaf_common.config.resolver_util import ResolverUtil
 BaseClient: Type[Any] = ResolverUtil.create_type("botocore.client.BaseClient", install_if_missing="botocore")
 ClientError: Type[Any] = ResolverUtil.create_type("botocore.exceptions.ClientError", install_if_missing="botocore")
 
-from neuro_san.interfaces.reservationist import Reservationist
-from neuro_san.service.watcher.temp_networks.s3.aws_sync_client_worker import AwsSyncClientWorker
-from neuro_san.service.watcher.temp_networks.s3.s3_reservations_retriever import S3ReservationsRetriever
-from neuro_san.service.watcher.temp_networks.s3.s3_util import S3Util
+from neuro_san.interfaces.reservationist import Reservationist                                              # noqa: E402
+from neuro_san.service.watcher.temp_networks.s3.aws_sync_client_worker import AwsSyncClientWorker           # noqa: E402
+from neuro_san.service.watcher.temp_networks.s3.s3_reservations_retriever import S3ReservationsRetriever    # noqa: E402
+from neuro_san.service.watcher.temp_networks.s3.s3_util import S3Util                                       # noqa: E402
 
 
 class S3ReservationsExpiration:

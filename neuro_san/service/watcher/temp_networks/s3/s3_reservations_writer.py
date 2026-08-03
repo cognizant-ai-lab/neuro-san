@@ -34,10 +34,11 @@ from leaf_common.config.resolver_util import ResolverUtil
 AioBaseClient: Type[Any] = ResolverUtil.create_type("aiobotocore.client.AioBaseClient",
                                                     install_if_missing="aiobotocore")
 
-from neuro_san.interfaces.reservation import Reservation
-from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
-from neuro_san.service.watcher.temp_networks.s3.aws_async_client_worker import AwsAsyncClientWorker
-from neuro_san.service.watcher.temp_networks.s3.s3_util import S3Util
+from neuro_san.interfaces.reservation import Reservation                                                # noqa: E402
+from neuro_san.internals.reservations.reservation_dictionary_converter \
+    import ReservationDictionaryConverter                                                               # noqa: E402
+from neuro_san.service.watcher.temp_networks.s3.aws_async_client_worker import AwsAsyncClientWorker     # noqa: E402
+from neuro_san.service.watcher.temp_networks.s3.s3_util import S3Util                                   # noqa: E402
 
 
 # pylint: disable=too-many-instance-attributes
