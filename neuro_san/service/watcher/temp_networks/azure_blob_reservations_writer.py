@@ -23,7 +23,7 @@ from json import dumps
 from logging import getLogger, Logger
 
 from azure.storage.blob.aio import ContainerClient
-from azure.core.exceptions import AzureError, ResourceNotFoundError
+from azure.core.exceptions import AzureError
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter

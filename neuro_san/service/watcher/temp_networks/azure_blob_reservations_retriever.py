@@ -15,10 +15,9 @@
 #
 # END COPYRIGHT
 
-from typing import Optional, Tuple
+from typing import Optional
 
 from os import getenv
-from json import loads
 from logging import getLogger, Logger
 
 from azure.storage.blob import ContainerClient

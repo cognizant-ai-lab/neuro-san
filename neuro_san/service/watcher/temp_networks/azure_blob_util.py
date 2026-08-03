@@ -15,8 +15,6 @@
 #
 # END COPYRIGHT
 
-from typing import Any, Dict, Optional
-
 from azure.core.exceptions import AzureError
 
 
