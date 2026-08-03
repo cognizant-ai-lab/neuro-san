@@ -62,7 +62,7 @@ class AzureBlobReservationsRetriever:
                     self.container_name
                 )
             else:
-                from azure.identity import DefaultAzureCredential
+                from azure.identity import DefaultAzureCredential  # pylint: disable=import-outside-toplevel
                 account_url = getenv("AZURE_STORAGE_ACCOUNT_URL", "")
                 if not account_url:
                     raise ValueError(
@@ -101,6 +101,9 @@ class AzureBlobReservationsRetriever:
                 else:
                     self.logger.error("Failed to retrieve blob %s: %s", blob_name, str(err))
                     return None
+
+        # All retries were exhausted on transient errors without returning.
+        return None
 
     def start(self):
         """Initialize the container client and validate connection."""

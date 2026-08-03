@@ -65,7 +65,7 @@ class AzureBlobReservationsExpiration:
                     self.container_name
                 )
             else:
-                from azure.identity import DefaultAzureCredential
+                from azure.identity import DefaultAzureCredential  # pylint: disable=import-outside-toplevel
                 account_url = getenv("AZURE_STORAGE_ACCOUNT_URL", "")
                 if not account_url:
                     raise ValueError(
@@ -101,7 +101,7 @@ class AzureBlobReservationsExpiration:
                         metadata = json_data.get("metadata", {})
                         expiration_time = metadata.get("expiration_time_in_seconds", 0)
 
-                        if expiration_time > 0 and current_time > expiration_time:
+                        if 0 < expiration_time < current_time:
                             blobs_to_delete.append(blob_name)
 
                 except (JSONDecodeError, ValueError, AzureError) as err:

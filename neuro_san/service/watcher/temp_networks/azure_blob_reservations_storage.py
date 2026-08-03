@@ -15,7 +15,9 @@
 #
 # END COPYRIGHT
 
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
+
+import asyncio
 
 from os import getenv
 
@@ -119,12 +121,11 @@ class AzureBlobReservationsStorage(AbstractReservationsStorage):
         """
         self.expiration.expire_reservations()
 
-    def stop(self):
+    def stop(self, timeout: Optional[float] = None):
         """Close connections to Azure Blob Storage."""
-        super().stop()
+        super().stop(timeout)
         try:
             if self.writer:
-                import asyncio
                 try:
                     loop = asyncio.get_running_loop()
                 except RuntimeError:
@@ -134,17 +135,17 @@ class AzureBlobReservationsStorage(AbstractReservationsStorage):
                     loop.create_task(self.writer.close())
                 else:
                     asyncio.run(self.writer.close())
-        except Exception as err:
+        except Exception as err:  # pylint: disable=broad-except
             self.logger.warning("Error closing writer: %s", str(err))
 
         try:
             if self.reader:
                 self.reader.close()
-        except Exception as err:
+        except Exception as err:  # pylint: disable=broad-except
             self.logger.warning("Error closing reader: %s", str(err))
 
         try:
             if self.expiration:
                 self.expiration.close()
-        except Exception as err:
+        except Exception as err:  # pylint: disable=broad-except
             self.logger.warning("Error closing expiration: %s", str(err))

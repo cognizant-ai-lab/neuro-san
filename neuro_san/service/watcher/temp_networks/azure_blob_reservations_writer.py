@@ -72,7 +72,7 @@ class AzureBlobReservationsWriter:
                     self.container_name
                 )
             else:
-                from azure.identity.aio import DefaultAzureCredential
+                from azure.identity.aio import DefaultAzureCredential  # pylint: disable=import-outside-toplevel
                 account_url = getenv("AZURE_STORAGE_ACCOUNT_URL", "")
                 if not account_url:
                     raise ValueError(
@@ -84,6 +84,7 @@ class AzureBlobReservationsWriter:
         return self.container_client
 
     async def add_reservations(self, reservations_dict: Dict[Reservation, Any], source: str = None):
+        # pylint: disable=unused-argument
         """
         Add/update reservations in Azure Blob Storage.
 
@@ -96,10 +97,10 @@ class AzureBlobReservationsWriter:
         container = await self._get_container_client()
         stored_count = 0
 
-        for reservation, reservation_info in reservations_dict.items():
+        for reservation, _reservation_info in reservations_dict.items():
             blob_name = f"{self.prefix}{reservation.id}.json"
 
-            reservation_dict = self.converter.dict_from_reservation(reservation)
+            reservation_dict = self.converter.to_dict(reservation)
             reservation_dict["metadata"] = {
                 "reservation_id": reservation.id,
                 "lifetime_in_seconds": reservation.lifetime_in_seconds,

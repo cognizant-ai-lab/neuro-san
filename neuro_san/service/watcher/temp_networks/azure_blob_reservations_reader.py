@@ -66,18 +66,16 @@ class AzureBlobReservationsReader:
             reservation_dict = json_data
             metadata = reservation_dict.get("metadata", {})
 
-            reservation = Reservation(
-                id=metadata.get("reservation_id", obj_key),
-                lifetime_in_seconds=metadata.get("lifetime_in_seconds", 0),
-                expiration_time_in_seconds=metadata.get("expiration_time_in_seconds", 0)
-            )
+            reservation = Reservation(lifetime_in_seconds=metadata.get("lifetime_in_seconds", 0))
+            reservation.id = metadata.get("reservation_id", obj_key)
+            reservation.expiration_time_in_seconds = metadata.get("expiration_time_in_seconds", 0)
 
             return reservation, metadata
 
         except JSONDecodeError as err:
             self.logger.warning("Failed to parse JSON from blob %s: %s", blob_name, str(err))
             return None, None
-        except Exception as err:
+        except Exception as err:  # pylint: disable=broad-except
             self.logger.error("Error reading reservation blob %s: %s", blob_name, str(err))
             return None, None
 
