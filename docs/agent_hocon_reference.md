@@ -612,8 +612,8 @@ Example networks that advertise that their sly_data_schema needs external API ke
 ##### http_headers
 
 The sly_data dictionary can contain an optional `http_headers` key: a mapping from
-[MCP server](#mcp-servers) URL to the HTTP headers (for example an `Authorization: Bearer <token>`
-credential) that neuro-san sends when it calls that server. See [Authentication](#authentication)
+[MCP server](#mcp-servers) URL to a dictionary of HTTP header names/values (for example
+`{"Authorization": "Bearer <token>"}`) that neuro-san sends when it calls that server. See [Authentication](#authentication)
 under MCP Servers for the header format.
 
 Advertising `http_headers` in your `sly_data_schema` — with a `properties` entry per MCP URL and a
