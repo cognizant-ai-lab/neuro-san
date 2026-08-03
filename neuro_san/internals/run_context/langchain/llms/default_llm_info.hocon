@@ -97,8 +97,10 @@
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "02/16/2026",
-        "price_per_1k_input_tokens": 0.0025,
-        "price_per_1k_output_tokens": 0.015,
+        # The initial price was 0.0025 and 0.015 for input and output tokens, respectively. 
+        # https://openai.com/index/advancing-the-price-performance-frontier-with-gpt-5-6/
+        "price_per_1k_input_tokens": 0.002,
+        "price_per_1k_output_tokens": 0.012,
         "model_launch_date": "2026-07-09",
         "model_retirement_date": null,
     },
@@ -113,8 +115,10 @@
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "02/16/2026",
-        "price_per_1k_input_tokens": 0.001,
-        "price_per_1k_output_tokens": 0.006,
+        # The initial price was 0.001 and 0.006 for input and output tokens, respectively. 
+        # https://openai.com/index/advancing-the-price-performance-frontier-with-gpt-5-6/
+        "price_per_1k_input_tokens": 0.0002,
+        "price_per_1k_output_tokens": 0.0012,
         "model_launch_date": "2026-07-09",
         "model_retirement_date": null,
     },
@@ -576,7 +580,7 @@
         "use_model_name": "claude-sonnet-5"
     },
     "claude-opus": {
-        "use_model_name": "claude-opus-4-8"
+        "use_model_name": "claude-opus-5"
     },
     "claude-fable": {
         "use_model_name": "claude-fable-5"
@@ -760,6 +764,25 @@
         "model_launch_date": "2026-05-28",
         "model_retirement_date": "2027-05-28",
     },
+    "claude-opus-5": {
+        "class": "anthropic",
+        "model_info_url": "https://platform.claude.com/docs/en/about-claude/models/overview",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        # https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-opus-5.html
+        "knowledge_cutoff": "05/2026",
+        # https://platform.claude.com/docs/en/about-claude/pricing
+        "price_per_1k_input_tokens": 0.005,
+        "price_per_1k_output_tokens": 0.025,
+        "model_launch_date": "2026-07-24",
+        "model_retirement_date": null,
+    },
     "claude-fable-5": {
         "class": "anthropic",
         "model_info_url": "https://platform.claude.com/docs/en/about-claude/models/overview",
@@ -813,7 +836,19 @@
     #     global.anthropic.claude-opus-4-8  ->  us.anthropic.claude-opus-4-8
 
     "bedrock-claude-opus": {
-        "use_model_name": "global.anthropic.claude-opus-4-8"
+        "use_model_name": "global.anthropic.claude-opus-5"
+    },
+    "global.anthropic.claude-opus-5": {
+        "class": "anthropic-bedrock",
+        "model_info_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-opus-5.html",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "05/2026",
     },
     "global.anthropic.claude-opus-4-8": {
         "class": "anthropic-bedrock",

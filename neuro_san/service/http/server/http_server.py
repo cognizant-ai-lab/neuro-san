@@ -59,9 +59,12 @@ from neuro_san.service.interfaces.agent_server import AgentServer
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
 from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.service.mcp.handlers.mcp_root_handler import McpRootHandler
+from neuro_san.service.utils.http_llm_tracer import HttpxLlmTracer
 from neuro_san.service.utils.loop_timeline_tracer import LoopTimelineTracer
 from neuro_san.service.utils.server_context import ServerContext
+from neuro_san.service.utils.service_resources import ServiceResources
 from neuro_san.service.utils.server_status import ServerStatus
+from neuro_san.internals.utils.event_loop_lag_monitor import EventLoopLagMonitor
 
 
 DEFAULT_SERVER_NAME: str = 'neuro-san.Agent'
@@ -217,6 +220,19 @@ class HttpServer(AgentStateListener):
                             {}, "Failed to start %s: %s",
                             startable.__class__.__name__, str(exception))
 
+        main_loop = tornado.ioloop.IOLoop.current()
+
+        # Enable event loop lag monitor if requested by environment variable.
+        if ConfigUtil.get_bool(os.environ, "ENABLE_EVENT_LOOP_STATISTICS"):
+            event_loop_monitor = \
+                EventLoopLagMonitor(
+                    sample_interval_seconds=1.0,
+                    report_every_n_samples=30,
+                    break_between_reports_seconds=30
+                )
+            ServiceResources.set_event_loop_monitor(event_loop_monitor)
+            main_loop.spawn_callback(event_loop_monitor.run)
+
         # Optionally enable asyncio debug mode + slow-callback warnings on the
         # Tornado IOLoop's underlying asyncio loop. Off by default to avoid the
         # ~5-10% debug-mode overhead in production. Done after server.start()
@@ -228,6 +244,12 @@ class HttpServer(AgentStateListener):
         # this method runs on that thread and IOLoop.current().start() below
         # runs synchronously on the same thread.
         self._maybe_start_loop_timeline_tracer()
+
+        # Optionally install the httpx-level LLM traffic tracer. Must run
+        # BEFORE any LLM SDK constructs its httpx.AsyncClient, which happens
+        # lazily on first LLM call, so installing here (before IOLoop.start)
+        # is safely ahead of any traffic.
+        self._maybe_install_http_llm_tracer()
 
         tornado.ioloop.IOLoop.current().start()
         self.logger.info({}, "Http server stopped.")
@@ -318,6 +340,49 @@ class HttpServer(AgentStateListener):
 
         # Start LAST so the tracer captures all callbacks executed after the loop starts running.
         self._loop_timeline_tracer.start()
+
+    def _maybe_install_http_llm_tracer(self) -> None:
+        """
+        Install the httpx-level LLM traffic tracer if AGENT_HTTP_LLM_TRACE
+        is truthy. Emits structured JSON events (http_llm_out /
+        http_llm_in / http_llm_end / optional http_llm_chunk) to the
+        dedicated logger "neuro_san.diagnostics.http_llm_trace" so
+        post-run analysis can reconstruct the LLM traffic lifecycle of
+        any user request via the user_req_id field.
+
+        Environment variables:
+          AGENT_HTTP_LLM_TRACE (bool, default false)
+              Enables the tracer. Off by default.
+          AGENT_HTTP_LLM_TRACE_INCLUDE_BODIES (bool, default false)
+              When true, request and response bodies are logged verbatim
+              (capped at 64 KB per body). Prompts + completions are large
+              and sensitive; off by default.
+          AGENT_HTTP_LLM_TRACE_CHUNKS (bool, default false)
+              When true, emits one http_llm_chunk event per received
+              body chunk. Massive log volume; enable only when
+              investigating inter-chunk cadence.
+
+        The tracer overhead is negligible (a few log writes per LLM
+        call). Route the "neuro_san.diagnostics.http_llm_trace" logger
+        to a separate file in logging.hocon for clean offline analysis.
+        """
+        if not ConfigUtil.get_bool(os.environ, "AGENT_HTTP_LLM_TRACE"):
+            return
+
+        include_bodies: bool = ConfigUtil.get_bool(
+            os.environ, "AGENT_HTTP_LLM_TRACE_INCLUDE_BODIES")
+        include_chunks: bool = ConfigUtil.get_bool(
+            os.environ, "AGENT_HTTP_LLM_TRACE_CHUNKS")
+
+        HttpxLlmTracer.install(
+            include_bodies=include_bodies,
+            include_chunks=include_chunks,
+        )
+        self.logger.info(
+            {},
+            "HttpxLlmTracer installed (include_bodies=%s include_chunks=%s)",
+            include_bodies, include_chunks,
+        )
 
     def resolve_health_probe_port(self) -> int:
         """

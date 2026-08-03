@@ -119,6 +119,15 @@ class InvocationContext(LingeringResource):
         """
         raise NotImplementedError
 
+    def is_cloned(self) -> bool:
+        """
+        :return: True if this instance is a clone of a request's original
+                InvocationContext, created to invoke an external agent network
+                on the same server via a direct session.
+                False for the original InvocationContext of a request.
+        """
+        raise NotImplementedError
+
     def get_llm_factory(self) -> ContextTypeLlmFactory:
         """
         :return: The ContextTypeLlmFactory instance for the session

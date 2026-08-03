@@ -266,7 +266,6 @@ ENV AGENT_MAX_CONCURRENT_REQUESTS="0"
 # Default of <= 0 (or unset) indicates system default of (num_cpus + 4).
 ENV AGENT_MAX_WORKERS_PER_REQUEST="0"
 
-
 # Number of requests served before the server shuts down in an orderly fashion.
 # This is useful for testing response handling in clusters with duplicated pods.
 # A value of -1 indicates unlimited requests are handled.
@@ -281,6 +280,28 @@ ENV AGENT_REQUEST_LIMIT="-1"
 # Update will be done every AGENT_MANIFEST_UPDATE_PERIOD_SECONDS seconds;
 # if value is not specified or <= 0, no such dynamic updates will be executed.
 ENV AGENT_MANIFEST_UPDATE_PERIOD_SECONDS="0"
+
+# Describes the concurrency model used for the manifest file updates.
+# Valid values are "thread" (the default) and "spawn" and "fork".
+#
+# "thread":     uses the default threading concurrency model.  It is best for servers who
+#               know their manifest content will be changing over the course of their lifetime.
+#               It is slowest of all options, but has the least amount of overall memory overhead
+#               and is lightweight and generally the safest and problem-free.
+# "spawn":      uses a multi-process based concurrency model.  It is the safest option (avoiding deadlocks)
+#               for environments where the manifest is changing, but some speed is still desired
+#               (like development servers).
+# "forkserver"  Is just like "fork" below, but forks from a clean process for memory conservation,
+#               More process overhead, not as quick but safer than "fork".
+# "fork":       uses a multi-process based concurrency model. It is actually the fastest option,
+#               but has potential to lead to deadlocks over repeated manifest reads.
+#               It can still be a reasonable option for server environments where the manifest
+#               is known never to change at all (AGENT_MANIFEST_UPDATE_PERIOD_SECONDS="0").
+#
+# See https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
+# for more details on "spawn", "fork" and "forkserver" concurrency models.
+# Not all are available on all OSes.
+ENV AGENT_MANIFEST_CONCURRENCY_CONTEXT="thread"
 
 # By default, the HTTP service reports the neuro-san library pip version in its health-check response.
 # It is possible to add other libraries to those results by listing them within this env var
@@ -362,7 +383,7 @@ ENV AGENT_EXTERNAL_SERVER_URL=""
 # neuro_san.internals.interfaces.ReservationsStorage interface.
 # When not set, this defaults to a null implementation.
 # A simple default implementation is provided by the class
-# "neuro_san.service.watcher.temp_networks.s3_reservations_storage.S3ReservationsStorage"
+# "neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage.S3ReservationsStorage"
 ENV AGENT_EXTERNAL_RESERVATIONS_STORAGE=""
 
 # When the AGENT_EXTERNAL_RESERVATIONS_STORAGE (immediately above) is set to the
