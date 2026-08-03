@@ -20,9 +20,9 @@ specific S3 object key. This module pins that key format as a contract.
 """
 import pytest
 
-from neuro_san.service.watcher.temp_networks.s3_util import S3Util
+from neuro_san.service.watcher.temp_networks.s3.s3_util import S3Util
 
-from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
+from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
 
 

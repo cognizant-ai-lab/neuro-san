@@ -27,7 +27,7 @@ Pytest's default test-file pattern is test_*.py, so this file
 module.
 """
 
-from tests.neuro_san.service.watcher.temp_networks.fake_s3_client import FakeS3Client
+from tests.neuro_san.service.watcher.temp_networks.s3.fake_s3_client import FakeS3Client
 
 
 class FakeAsyncS3Client:

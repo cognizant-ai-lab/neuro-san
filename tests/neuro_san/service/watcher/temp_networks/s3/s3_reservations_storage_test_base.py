@@ -34,9 +34,9 @@ from aiobotocore.credentials import AioCredentials
 from botocore.credentials import Credentials
 
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
-from neuro_san.service.watcher.temp_networks.s3_reservations_storage import S3ReservationsStorage
-from tests.neuro_san.service.watcher.temp_networks.fake_s3_client import FakeS3Client
-from tests.neuro_san.service.watcher.temp_networks.fake_async_s3_client import FakeAsyncS3Client
+from neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage import S3ReservationsStorage
+from tests.neuro_san.service.watcher.temp_networks.s3.fake_s3_client import FakeS3Client
+from tests.neuro_san.service.watcher.temp_networks.s3.fake_async_s3_client import FakeAsyncS3Client
 
 
 class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):

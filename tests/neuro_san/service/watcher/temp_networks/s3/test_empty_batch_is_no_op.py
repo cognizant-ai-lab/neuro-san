@@ -23,7 +23,7 @@ objects, and without making any S3 calls.
 """
 import pytest
 
-from tests.neuro_san.service.watcher.temp_networks.s3_reservations_storage_test_base \
+from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
 
 
