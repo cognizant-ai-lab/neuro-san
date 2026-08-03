@@ -17,10 +17,12 @@
 
 from typing import Optional
 
+from logging import getLogger
+from logging import Logger
 from os import getenv
-from logging import getLogger, Logger
 
-from azure.core.exceptions import ResourceNotFoundError, AzureError
+from azure.core.exceptions import AzureError
+from azure.core.exceptions import ResourceNotFoundError
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import ContainerClient
 

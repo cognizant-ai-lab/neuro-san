@@ -22,9 +22,9 @@ from typing import Tuple
 
 from asyncio import get_running_loop
 from asyncio import run
+from logging import getLogger
+from logging import Logger
 from os import getenv
-
-from logging import getLogger, Logger
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.network_providers.abstract_reservations_storage import AbstractReservationsStorage

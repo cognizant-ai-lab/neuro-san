@@ -17,11 +17,12 @@
 
 from typing import Optional
 
-from os import getenv
 from time import time
 from json import loads
 from json.decoder import JSONDecodeError
-from logging import getLogger, Logger
+from logging import getLogger
+from logging import Logger
+from os import getenv
 
 from azure.core.exceptions import AzureError
 from azure.identity import DefaultAzureCredential

@@ -15,12 +15,14 @@
 #
 # END COPYRIGHT
 
-from typing import Any, Dict
+from typing import Any
+from typing import Dict
 
+from json import dumps
+from logging import getLogger
+from logging import Logger
 from os import getenv
 from time import time
-from json import dumps
-from logging import getLogger, Logger
 
 from azure.core.exceptions import AzureError
 from azure.identity.aio import DefaultAzureCredential
