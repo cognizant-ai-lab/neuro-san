@@ -15,7 +15,9 @@
 #
 # END COPYRIGHT
 
+from typing import Any
 from typing import Optional
+from typing import Type
 
 from time import time
 from json import loads
@@ -24,11 +26,16 @@ from logging import getLogger
 from logging import Logger
 from os import getenv
 
-from azure.core.exceptions import AzureError
-from azure.identity import DefaultAzureCredential
-from azure.storage.blob import ContainerClient
+from leaf_common.config.resolver_util import ResolverUtil
 
-# pylint: disable=wrong-import-order
+# Lazily resolve here because this is one of the first places the import happens
+AzureError: Type[Any] = ResolverUtil.create_type("azure.core.exceptions.AzureError",
+                                                 install_if_missing="azure-core")
+DefaultAzureCredential: Type[Any] = ResolverUtil.create_type("azure.identity.DefaultAzureCredential",
+                                                             install_if_missing="azure-identity")
+ContainerClient: Type[Any] = ResolverUtil.create_type("azure.storage.blob.ContainerClient",
+                                                      install_if_missing="azure-storage-blob")
+
 from neuro_san.service.watcher.temp_networks.azure.azure_blob_util import AzureBlobUtil
 
 
