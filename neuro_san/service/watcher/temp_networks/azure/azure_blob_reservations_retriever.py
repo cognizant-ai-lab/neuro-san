@@ -20,9 +20,11 @@ from typing import Optional
 from os import getenv
 from logging import getLogger, Logger
 
-from azure.storage.blob import ContainerClient
 from azure.core.exceptions import ResourceNotFoundError, AzureError
+from azure.identity import DefaultAzureCredential
+from azure.storage.blob import ContainerClient
 
+# pylint: disable=wrong-import-order
 from neuro_san.service.watcher.temp_networks.azure.azure_blob_util import AzureBlobUtil
 
 
@@ -62,7 +64,6 @@ class AzureBlobReservationsRetriever:
                     self.container_name
                 )
             else:
-                from azure.identity import DefaultAzureCredential
                 account_url = getenv("AZURE_STORAGE_ACCOUNT_URL", "")
                 if not account_url:
                     raise ValueError(
@@ -101,6 +102,7 @@ class AzureBlobReservationsRetriever:
                 else:
                     self.logger.error("Failed to retrieve blob %s: %s", blob_name, str(err))
                     return None
+        return None
 
     def start(self):
         """Initialize the container client and validate connection."""

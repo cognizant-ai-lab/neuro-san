@@ -15,15 +15,21 @@
 #
 # END COPYRIGHT
 
-from typing import Optional, Tuple
+from typing import Any
+from typing import Dict
+from typing import Optional
+from typing import Tuple
 
 from json import loads
 from json.decoder import JSONDecodeError
-from logging import getLogger, Logger
+from logging import getLogger
+from logging import Logger
 
 from neuro_san.interfaces.reservation import Reservation
+from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
 from neuro_san.service.watcher.temp_networks.azure.azure_blob_util import AzureBlobUtil
-from neuro_san.service.watcher.temp_networks.azure_blob_reservations_retriever import AzureBlobReservationsRetriever
+from neuro_san.service.watcher.temp_networks.azure.azure_blob_reservations_retriever \
+    import AzureBlobReservationsRetriever
 
 
 class AzureBlobReservationsReader:
@@ -42,6 +48,7 @@ class AzureBlobReservationsReader:
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.prefix: str = prefix
         self.retriever = AzureBlobReservationsRetriever(container_name=container_name, prefix=prefix)
+        self.converter = ReservationDictionaryConverter()
 
     def get_one_reservation(self, obj_key: str) -> Tuple[Optional[Reservation], Optional[dict]]:
         """
@@ -66,18 +73,21 @@ class AzureBlobReservationsReader:
             reservation_dict = json_data
             metadata = reservation_dict.get("metadata", {})
 
-            reservation = Reservation(
-                id=metadata.get("reservation_id", obj_key),
-                lifetime_in_seconds=metadata.get("lifetime_in_seconds", 0),
-                expiration_time_in_seconds=metadata.get("expiration_time_in_seconds", 0)
-            )
+            # DEF: metadata is not where this information lives
+            faux_dict: Dict[str, Any] = {
+                "id": metadata.get("reservation_id", obj_key),
+                "lifetime_in_seconds": metadata.get("lifetime_in_seconds", 0),
+                "expiration_time_in_seconds": metadata.get("expiration_time_in_seconds", 0)
+            }
+
+            reservation: Reservation = self.converter.from_dict(faux_dict)
 
             return reservation, metadata
 
         except JSONDecodeError as err:
             self.logger.warning("Failed to parse JSON from blob %s: %s", blob_name, str(err))
             return None, None
-        except Exception as err:
+        except Exception as err:        # pylint: disable=broad-except
             self.logger.error("Error reading reservation blob %s: %s", blob_name, str(err))
             return None, None
 

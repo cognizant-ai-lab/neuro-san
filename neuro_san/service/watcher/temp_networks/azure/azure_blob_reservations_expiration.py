@@ -23,9 +23,11 @@ from json import loads
 from json.decoder import JSONDecodeError
 from logging import getLogger, Logger
 
-from azure.storage.blob import ContainerClient
 from azure.core.exceptions import AzureError
+from azure.identity import DefaultAzureCredential
+from azure.storage.blob import ContainerClient
 
+# pylint: disable=wrong-import-order
 from neuro_san.service.watcher.temp_networks.azure.azure_blob_util import AzureBlobUtil
 
 
@@ -65,7 +67,6 @@ class AzureBlobReservationsExpiration:
                     self.container_name
                 )
             else:
-                from azure.identity import DefaultAzureCredential
                 account_url = getenv("AZURE_STORAGE_ACCOUNT_URL", "")
                 if not account_url:
                     raise ValueError(
@@ -101,7 +102,7 @@ class AzureBlobReservationsExpiration:
                         metadata = json_data.get("metadata", {})
                         expiration_time = metadata.get("expiration_time_in_seconds", 0)
 
-                        if expiration_time > 0 and current_time > expiration_time:
+                        if current_time > expiration_time > 0:
                             blobs_to_delete.append(blob_name)
 
                 except (JSONDecodeError, ValueError, AzureError) as err:

@@ -22,9 +22,11 @@ from time import time
 from json import dumps
 from logging import getLogger, Logger
 
-from azure.storage.blob.aio import ContainerClient
 from azure.core.exceptions import AzureError
+from azure.identity.aio import DefaultAzureCredential
+from azure.storage.blob.aio import ContainerClient
 
+# pylint: disable=wrong-import-order
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
 from neuro_san.service.watcher.temp_networks.azure.azure_blob_util import AzureBlobUtil
@@ -72,7 +74,6 @@ class AzureBlobReservationsWriter:
                     self.container_name
                 )
             else:
-                from azure.identity.aio import DefaultAzureCredential
                 account_url = getenv("AZURE_STORAGE_ACCOUNT_URL", "")
                 if not account_url:
                     raise ValueError(
@@ -90,6 +91,7 @@ class AzureBlobReservationsWriter:
         :param reservations_dict: Dictionary mapping Reservation objects to their metadata
         :param source: Source identifier for logging
         """
+        _ = source
         if not reservations_dict:
             return
 
@@ -97,9 +99,10 @@ class AzureBlobReservationsWriter:
         stored_count = 0
 
         for reservation, reservation_info in reservations_dict.items():
+            _ = reservation_info
             blob_name = f"{self.prefix}{reservation.id}.json"
 
-            reservation_dict = self.converter.dict_from_reservation(reservation)
+            reservation_dict = self.converter.to_dict(reservation)
             reservation_dict["metadata"] = {
                 "reservation_id": reservation.id,
                 "lifetime_in_seconds": reservation.lifetime_in_seconds,
