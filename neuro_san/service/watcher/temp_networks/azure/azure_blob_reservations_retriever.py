@@ -106,9 +106,6 @@ class AzureBlobReservationsRetriever:
                     return None
         return None
 
-        # All retries were exhausted on transient errors without returning.
-        return None
-
     def start(self):
         """Initialize the container client and validate connection."""
         try:

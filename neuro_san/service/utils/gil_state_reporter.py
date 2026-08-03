@@ -22,7 +22,6 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
-import logging
 import os
 import platform
 import sys
@@ -71,44 +70,26 @@ class GilStateReporter:
         }
 
     @staticmethod
-    def report(logger: Optional[logging.Logger] = None) -> Dict[str, Any]:
+    def report() -> str:
         """
-        Log a one-line summary of the current GIL state and return the state dict.
-        Emits a WARNING when a free-threaded build is running WITH the GIL (i.e.
-        free-threading is not actually in effect); INFO otherwise.
-
-        :param logger: The logger to use. Defaults to this module's logger.
-        :return: The same dict returned by get_state().
+        Returns a one-line summary of the current GIL state, suitable for logging.
+        :return: The one-line summary of the current GIL state.
         """
-        if logger is None:
-            logger = logging.getLogger(__name__)
-
         state: Dict[str, Any] = GilStateReporter.get_state()
         runtime: str = f"{state['implementation']} {state['python_version']}"
         env: Optional[str] = state["python_gil_env"]
         env_str: str = "unset" if env is None else env
 
         if state["implementation"] != "CPython":
-            logger.info(
-                "GIL state: non-CPython runtime; free-threading/GIL reporting is CPython-specific. %s. PYTHON_GIL=%s",
-                runtime, env_str)
+            result = "non-CPython runtime; free-threading/GIL reporting is CPython-specific."
         elif not state["free_threaded_build"]:
-            logger.info(
-                "GIL state: standard CPython build (GIL always enabled). %s. PYTHON_GIL=%s",
-                runtime, env_str)
+            result = "standard CPython build (GIL always enabled)."
         elif state["gil_enabled"] is False:
-            logger.info(
-                "GIL state: free-threaded build, GIL DISABLED - free-threading active. %s. PYTHON_GIL=%s",
-                runtime, env_str)
+            result = "free-threaded build, GIL DISABLED - free-threading active."
         elif state["gil_enabled"] is True:
-            logger.warning(
-                "GIL state: free-threaded build but GIL is ENABLED - free-threading NOT in effect "
-                "(a loaded native extension re-enabled it, or PYTHON_GIL=1). %s. PYTHON_GIL=%s",
-                runtime, env_str)
+            result = "free-threaded build but GIL is ENABLED - free-threading NOT in effect " +\
+                "(a loaded native extension re-enabled it, or PYTHON_GIL=1)."
         else:
-            logger.info(
-                "GIL state: free-threaded build; runtime GIL state not queryable on this interpreter. "
-                "%s. PYTHON_GIL=%s",
-                runtime, env_str)
+            result = "free-threaded build; runtime GIL state not queryable on this interpreter."
 
-        return state
+        return f"{result} {runtime}.  PYTHON_GIL={env_str}"
