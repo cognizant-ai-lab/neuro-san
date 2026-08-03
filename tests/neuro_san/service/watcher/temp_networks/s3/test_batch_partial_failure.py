@@ -102,7 +102,7 @@ class TestBatchPartialFailure(S3ReservationsStorageTestBase):
         # so no sleep should fire, but we patch it so a regression that
         # adds AccessDenied to retryable_codes does not hang the test.
         with patch(
-            "neuro_san.service.watcher.temp_networks.aws_async_client_worker.async_sleep"
+            "neuro_san.service.watcher.temp_networks.s3.aws_async_client_worker.async_sleep"
         ):
 
             with self.assertRaises(ClientError) as ctx:

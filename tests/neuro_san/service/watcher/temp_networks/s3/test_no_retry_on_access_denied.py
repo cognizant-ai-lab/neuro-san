@@ -76,7 +76,7 @@ class TestNoRetryOnAccessDenied(S3ReservationsStorageTestBase):
         # Skip backoff sleep defensively. If a regression makes
         # AccessDenied retryable, we don't want the test to hang.
         with patch(
-            "neuro_san.service.watcher.temp_networks.aws_async_client_worker.async_sleep"
+            "neuro_san.service.watcher.temp_networks.s3.aws_async_client_worker.async_sleep"
         ):
             with self.assertRaises(ClientError) as ctx:
                 await self.storage.add_reservations({reservation: agent_spec})
