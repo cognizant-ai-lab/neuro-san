@@ -36,7 +36,7 @@ DefaultAzureCredential: Type[Any] = ResolverUtil.create_type("azure.identity.Def
 ContainerClient: Type[Any] = ResolverUtil.create_type("azure.storage.blob.ContainerClient",
                                                       install_if_missing="azure-storage-blob")
 
-from neuro_san.service.watcher.temp_networks.azure.azure_blob_util import AzureBlobUtil
+from neuro_san.service.watcher.temp_networks.azure.azure_blob_util import AzureBlobUtil     # noqa: E402
 
 
 class AzureBlobReservationsExpiration:
