@@ -17,21 +17,18 @@
 # END COPYRIGHT
 
 # Create a local virtual environment for running/developing the neuro-san
-# service on FREE-THREADED CPython 3.14t (no-GIL). This script mirrors the
-# choices made in the py314t deployment container build (where applicable):
+# service on FREE-THREADED CPython 3.14t (no-GIL).
 #
 #   * The free-threaded interpreter is provisioned with `uv` (there is no
 #     official python:3.14t image or, usually, a system 3.14t interpreter).
-#   * The in-house libraries leaf-common and leaf-server-common are built and
-#     installed FROM LOCAL SOURCE (never PyPI); their two lines are stripped
-#     from requirements.txt so the resolver does not fetch them from the index.
+#   * All dependencies -- including leaf-common and leaf-server-common -- are
+#     installed from requirements.txt as-is (i.e. from PyPI).
 #   * orjson (transitive via langsmith / langgraph-sdk) refuses to build under a
 #     free-threaded interpreter unless ORJSON_BUILD_FREETHREADED is set, so we
 #     set it.
 #
-# neuro-san itself is NOT installed into the venv (doing so would pull leaf-*
-# from PyPI); run it from the repo source via PYTHONPATH, exactly as the
-# container does. Usage instructions are printed at the end.
+# neuro-san itself is NOT installed into the venv; run it from the repo source
+# via PYTHONPATH. Usage instructions are printed at the end.
 #
 # Usage:
 #   build_scripts/make_venv_py314t.sh [VENV_DIR] [--dev] [--force]
@@ -43,10 +40,9 @@
 #   --force    Recreate VENV_DIR if it already exists.
 #
 # Environment overrides:
-#   PYTHON_VERSION           interpreter to provision (default: 3.14t)
-#   LEAF_COMMON_DIR          path to local leaf-common     (default: ../leaf-common)
-#   LEAF_SERVER_COMMON_DIR   path to local leaf-server-common (default: ../leaf-server-common)
-#   LEAF_COMMON_VERSION / LEAF_SERVER_COMMON_VERSION   pin the built versions
+#   PY314T_PYTHON_VERSION    interpreter to provision (default: 3.14t). Named
+#                            specifically so it cannot collide with a generic
+#                            PYTHON_VERSION that may already be set in your shell.
 #   AUTO_INSTALL_UV=1        install uv automatically if it is missing
 #   AUTO_INSTALL_RUST=1      install a Rust toolchain (rustup) automatically if missing
 
@@ -55,9 +51,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-PYTHON_VERSION="${PYTHON_VERSION:-3.14t}"
-LEAF_COMMON_DIR="${LEAF_COMMON_DIR:-${REPO_ROOT}/../leaf-common}"
-LEAF_SERVER_COMMON_DIR="${LEAF_SERVER_COMMON_DIR:-${REPO_ROOT}/../leaf-server-common}"
+PY314T_PYTHON_VERSION="${PY314T_PYTHON_VERSION:-3.14t}"
 
 VENV_DIR=""
 WITH_DEV=0
@@ -73,7 +67,7 @@ function parse_args() {
             --dev)   WITH_DEV=1 ;;
             --force) FORCE=1 ;;
             -h|--help)
-                sed -n '18,52p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+                sed -n '18,46p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
                 exit 0
                 ;;
             --*) die "unknown option: ${arg}" ;;
@@ -139,43 +133,18 @@ function ensure_build_toolchain() {
     fi
 }
 
-function derive_version() {
-    # Best-effort "X.Y.Z" from a repo's git tags so the built package version
-    # matches reality; falls back to the provided default.
-    local repo_dir="$1"
-    local default_version="$2"
-    local described
-    described="$(git -C "${repo_dir}" describe --tags --abbrev=0 2>/dev/null || true)"
-    described="$(echo "${described}" | sed -E 's/^v//; s/^([0-9]+(\.[0-9]+)*).*/\1/')"
-    if [ -n "${described}" ]; then
-        echo "${described}"
-    else
-        echo "${default_version}"
-    fi
-}
-
 function main() {
     parse_args "$@"
 
     [ -f "${REPO_ROOT}/requirements.txt" ] || die "no requirements.txt at repo root ${REPO_ROOT}"
-    for d in "${LEAF_COMMON_DIR}" "${LEAF_SERVER_COMMON_DIR}"; do
-        [ -f "${d}/pyproject.toml" ] || die "local dependency source not found at '${d}' (no pyproject.toml).
-   Set LEAF_COMMON_DIR / LEAF_SERVER_COMMON_DIR to point at the local repos."
-    done
 
     ensure_uv
     ensure_build_toolchain
 
-    local leaf_common_version leaf_server_common_version
-    leaf_common_version="${LEAF_COMMON_VERSION:-$(derive_version "${LEAF_COMMON_DIR}" "1.2.43")}"
-    leaf_server_common_version="${LEAF_SERVER_COMMON_VERSION:-$(derive_version "${LEAF_SERVER_COMMON_DIR}" "0.1.17")}"
-
-    log "repo root                : ${REPO_ROOT}"
-    log "venv dir                 : ${VENV_DIR}"
-    log "python                   : ${PYTHON_VERSION} (free-threaded)"
-    log "leaf-common source       : ${LEAF_COMMON_DIR} (as ${leaf_common_version})"
-    log "leaf-server-common source: ${LEAF_SERVER_COMMON_DIR} (as ${leaf_server_common_version})"
-    log "install build/dev reqs   : $([ "${WITH_DEV}" = 1 ] && echo yes || echo no)"
+    log "repo root              : ${REPO_ROOT}"
+    log "venv dir               : ${VENV_DIR}"
+    log "python                 : ${PY314T_PYTHON_VERSION} (free-threaded)"
+    log "install build/dev reqs : $([ "${WITH_DEV}" = 1 ] && echo yes || echo no)"
 
     # Handle an existing venv.
     if [ -e "${VENV_DIR}" ]; then
@@ -188,32 +157,32 @@ function main() {
     fi
 
     # 1. Provision the free-threaded interpreter and create the venv.
-    log "installing free-threaded CPython ${PYTHON_VERSION} via uv..."
-    uv python install "${PYTHON_VERSION}"
+    log "installing free-threaded CPython ${PY314T_PYTHON_VERSION} via uv..."
+    uv python install "${PY314T_PYTHON_VERSION}"
 
     log "creating venv at ${VENV_DIR}..."
     # --seed puts pip in the venv for tooling that expects it.
-    uv venv --python "${PYTHON_VERSION}" --seed "${VENV_DIR}"
+    uv venv --python "${PY314T_PYTHON_VERSION}" --seed "${VENV_DIR}"
 
     local venv_python="${VENV_DIR}/bin/python"
 
-    # 2. Build the stripped requirements file (no local leaf lines).
-    local req_nolocal
-    req_nolocal="$(mktemp)"
-    # shellcheck disable=SC2064
-    trap "rm -f '${req_nolocal}'" EXIT
-    grep -viE '^[[:space:]]*(leaf-common|leaf-server-common)([[:space:]]|[<>=!~;[]|$)' \
-        "${REPO_ROOT}/requirements.txt" > "${req_nolocal}"
+    # Fail loudly if uv did NOT give us a free-threaded interpreter, so a silent
+    # fallback to a regular GIL build (e.g. because the requested version resolved
+    # to a non-free-threaded interpreter) can never pass as a successful run.
+    if ! "${venv_python}" -c "import sysconfig, sys; sys.exit(0 if sysconfig.get_config_var('Py_GIL_DISABLED') else 1)"; then
+        local got
+        got="$("${venv_python}" -c 'import sys; print(sys.version.split()[0])')"
+        die "venv interpreter is ${got}, NOT a free-threaded build.
+   uv resolved '${PY314T_PYTHON_VERSION}' to a regular GIL interpreter. Check that
+   PY314T_PYTHON_VERSION (and any UV_PYTHON / .python-version) name a free-threaded
+   interpreter such as 3.14t, and that no stray override is in effect."
+    fi
+    log "confirmed free-threaded interpreter: $("${venv_python}" -c 'import sys; print(sys.version.split()[0])')"
 
-    # 3. Install everything into the venv.
-    #    - local leaf sources are given as paths (pinned; never from PyPI)
-    #    - ORJSON_BUILD_FREETHREADED opts orjson into building under 3.14t
-    #    - SETUPTOOLS_SCM_PRETEND_VERSION_FOR_* stamps the leaf versions
-    local -a install_args=(
-        "${LEAF_COMMON_DIR}"
-        "${LEAF_SERVER_COMMON_DIR}"
-        -r "${req_nolocal}"
-    )
+    # 2. Install dependencies straight from requirements.txt (leaf-common and
+    #    leaf-server-common come from PyPI like everything else).
+    #    ORJSON_BUILD_FREETHREADED opts orjson into building under 3.14t.
+    local -a install_args=(-r "${REPO_ROOT}/requirements.txt")
     if [ "${WITH_DEV}" = 1 ]; then
         if [ -f "${REPO_ROOT}/requirements-build.txt" ]; then
             install_args+=(-r "${REPO_ROOT}/requirements-build.txt")
@@ -224,11 +193,9 @@ function main() {
 
     log "installing dependencies (this compiles orjson and possibly others for cp314t)..."
     ORJSON_BUILD_FREETHREADED=1 \
-    SETUPTOOLS_SCM_PRETEND_VERSION_FOR_LEAF_COMMON="${leaf_common_version}" \
-    SETUPTOOLS_SCM_PRETEND_VERSION_FOR_LEAF_SERVER_COMMON="${leaf_server_common_version}" \
         uv pip install --python "${venv_python}" "${install_args[@]}"
 
-    # 4. Sanity check the resulting environment.
+    # 3. Sanity check the resulting environment.
     log "verifying environment..."
     PYTHONPATH="${REPO_ROOT}" "${venv_python}" - <<'PY'
 import sys
