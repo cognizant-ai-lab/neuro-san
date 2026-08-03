@@ -45,18 +45,6 @@ from neuro_san.internals.run_context.langchain.tracing.langchain_tracing_context
 # registrations detect each other and avoid reporting every span twice.
 LANGFUSE_HANDLER_VAR_NAME: str = "langfuse_handler"
 
-# Actionable guidance for when LANGFUSE_ENABLED asked for langfuse tracing
-# but the langfuse package cannot deliver a handler.
-_MISSING_LANGFUSE_MESSAGE: str = """
-Failed to create Langfuse CallbackHandler. Try one of the following:
-
-If you really wanted to use langfuse for observability, you can install it with
-    pip install langfuse
-
-If you didn't mean to use langfuse for observability, you can do this:
-    export LANGFUSE_ENABLED=false
-"""
-
 
 class LangfuseTracingContext(LangChainTracingContext):
     """
@@ -68,12 +56,6 @@ class LangfuseTracingContext(LangChainTracingContext):
     # merely importing this module (or having langfuse installed with keys in
     # the environment) has no side effects.  See https://github.com/cognizant-ai-lab/neuro-san/issues/1191
     HANDLER_CONTEXT_VAR: Optional[ContextVar] = None
-
-    # True when HANDLER_CONTEXT_VAR was adopted from another component and its
-    # handler is not visible from this context.  In that case get() returning
-    # None does not mean langfuse is missing, so the constructor must not
-    # raise its "pip install langfuse" error.
-    _ADOPTED_FOREIGN_HOOK: bool = False
 
     # Guards the one-time registration per process.
     _REGISTER_LOCK = threading.Lock()
@@ -101,7 +83,12 @@ class LangfuseTracingContext(LangChainTracingContext):
         LangfuseTracingContext - operationally, false from process start.
 
         :return: The ContextVar carrying the langfuse callback handler.
-                The value inside can be None if langfuse is not installed.
+        :raises ValueError: (from ResolverUtil) when langfuse tracing is
+                wanted but the langfuse package is not installed, with the
+                standard "pip install" guidance in the message.  Nothing is
+                cached in that case, so the next construction retries the
+                resolution - a transient import failure must not poison
+                tracing for the rest of the process.
         """
         with cls._REGISTER_LOCK:
             if cls.HANDLER_CONTEXT_VAR is not None:
@@ -118,41 +105,35 @@ class LangfuseTracingContext(LangChainTracingContext):
                 return cls._adopt_existing_handler_hook(existing)
 
             # See if we can create a new langfuse handler instance.
-            callback_handler_type: Optional[Type[BaseCallbackHandler]] = \
+            # Use lazy loading to prevent installing the world.  When the
+            # optional package is missing this raises the standard actionable
+            # error, before anything below mutates the environment or caches
+            # registration state.
+            callback_handler_type: Type[BaseCallbackHandler] = \
                 ResolverUtil.create_type("langfuse.langchain.CallbackHandler",
-                                         raise_if_not_found=False)
+                                         install_if_missing="langfuse")
 
-            callback_handler: Optional[BaseCallbackHandler] = None
-            if callback_handler_type is not None:
-                # We only get here when langfuse tracing is wanted, so keep the
-                # langfuse SDK's own kill switch in agreement, while respecting
-                # a value that was explicitly set in the environment.  This
-                # must happen before the handler is instantiated - the SDK
-                # reads the var once, at client construction - and only when a
-                # handler will actually be constructed, so a failed resolution
-                # does not leave a stray env mutation behind.
-                # Caveats: an explicitly set LANGFUSE_TRACING_ENABLED=false
-                # only mutes export - the SDK makes every span non-recording,
-                # but the handler below is still registered and dispatched on
-                # every langchain event, and create_main_span() still runs.
-                # Changing the var in a running process has no effect.  To
-                # turn tracing fully off, set LANGFUSE_ENABLED=false and
-                # restart the process.
-                os.environ.setdefault("LANGFUSE_TRACING_ENABLED", "true")
+            # We only get here when langfuse tracing is wanted, so keep the
+            # langfuse SDK's own kill switch in agreement, while respecting
+            # a value that was explicitly set in the environment.  This
+            # must happen before the handler is instantiated - the SDK
+            # reads the var once, at client construction.
+            # Caveats: an explicitly set LANGFUSE_TRACING_ENABLED=false
+            # only mutes export - the SDK makes every span non-recording,
+            # but the handler below is still registered and dispatched on
+            # every langchain event, and create_main_span() still runs.
+            # Changing the var in a running process has no effect.  To
+            # turn tracing fully off, set LANGFUSE_ENABLED=false and
+            # restart the process.
+            os.environ.setdefault("LANGFUSE_TRACING_ENABLED", "true")
 
-                # Create the callback handler instance
-                callback_handler = callback_handler_type()
+            # Create the callback handler instance
+            callback_handler: BaseCallbackHandler = callback_handler_type()
 
             # Carry the handler as the ContextVar default rather than via set():
             # a set() is only visible in contexts descended from the setting
             # thread, while a default is visible in every thread.
             context_var = ContextVar(LANGFUSE_HANDLER_VAR_NAME, default=callback_handler)
-            if callback_handler is None:
-                # Leave HANDLER_CONTEXT_VAR unset so a later construction
-                # retries the resolution - a transient import failure must not
-                # poison tracing for the rest of the process.
-                return context_var
-
             register_configure_hook(context_var, inheritable=True)
             cls.HANDLER_CONTEXT_VAR = context_var
             return context_var
@@ -181,13 +162,11 @@ class LangfuseTracingContext(LangChainTracingContext):
 
         # The foreign handler is not visible from this context: it was either
         # populated via set() in another thread, or langchain creates it
-        # lazily from the hook's handler_class.  Use the foreign hook as-is,
-        # and remember that get() returning None here does not mean langfuse
-        # is missing.
+        # lazily from the hook's handler_class.  Use the foreign hook as-is;
+        # get() returning None here does not mean langfuse is missing.
         getLogger(cls.__name__).warning(
             "Adopted an existing langfuse handler hook whose handler is not "
             "visible from this context; tracing may be unavailable on some threads.")
-        cls._ADOPTED_FOREIGN_HOOK = True
         cls.HANDLER_CONTEXT_VAR = existing
         return existing
 
@@ -234,14 +213,10 @@ class LangfuseTracingContext(LangChainTracingContext):
         self.session_id: str = None
 
         # Register the langfuse handler with langchain (idempotent; first
-        # construction in the process does the work) and see if we actually
-        # got a handler instance.  When the hook was adopted from another
-        # component, get() can legitimately return None here (the handler
-        # lives in a context we cannot see), so that case must not be
-        # mistaken for "langfuse is not installed".
-        handler_var: ContextVar = self._ensure_registered()
-        if handler_var.get() is None and not self._ADOPTED_FOREIGN_HOOK:
-            raise ValueError(_MISSING_LANGFUSE_MESSAGE)
+        # construction in the process does the work).  Raises the standard
+        # actionable error if langfuse tracing is wanted but the package is
+        # not installed.
+        self._ensure_registered()
 
         # Keep track of some Langfuse state
 
@@ -252,12 +227,15 @@ class LangfuseTracingContext(LangChainTracingContext):
             from langfuse import Langfuse
             from langfuse import get_client
             from opentelemetry.util._decorator import _AgnosticContextManager
-        except ImportError as error:
+        except ImportError:
             # Reachable when a foreign "langfuse_handler" hook was adopted
-            # (which skips the check above) but langfuse itself is not
-            # importable. Keep the failure as actionable as the check above
-            # instead of leaking a raw ImportError.
-            raise ValueError(_MISSING_LANGFUSE_MESSAGE) from error
+            # (which skips handler resolution above) but langfuse itself is
+            # not importable.  Re-run the standard resolution so the failure
+            # carries the consistent actionable message; if langfuse resolves
+            # (i.e. something else failed to import), re-raise as-is.
+            ResolverUtil.create_type("langfuse.langchain.CallbackHandler",
+                                     install_if_missing="langfuse")
+            raise
 
         self.langfuse_client: Langfuse = get_client()
         self.main_span: _AgnosticContextManager[Any] = None

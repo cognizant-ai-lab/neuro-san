@@ -112,13 +112,10 @@ class TestLangfuseTracingContextRegistration:
         _configure_hooks[:] = [hook for hook in hooks_before
                                if getattr(hook[0], "name", None) != ltc_module.LANGFUSE_HANDLER_VAR_NAME]
         var_before = ltc_module.LangfuseTracingContext.HANDLER_CONTEXT_VAR
-        adopted_before = ltc_module.LangfuseTracingContext._ADOPTED_FOREIGN_HOOK
         ltc_module.LangfuseTracingContext.HANDLER_CONTEXT_VAR = None
-        ltc_module.LangfuseTracingContext._ADOPTED_FOREIGN_HOOK = False
         tracing_enabled_before = os.environ.get("LANGFUSE_TRACING_ENABLED")
         yield
         ltc_module.LangfuseTracingContext.HANDLER_CONTEXT_VAR = var_before
-        ltc_module.LangfuseTracingContext._ADOPTED_FOREIGN_HOOK = adopted_before
         _configure_hooks[:] = hooks_before
         if tracing_enabled_before is None:
             os.environ.pop("LANGFUSE_TRACING_ENABLED", None)
@@ -263,7 +260,7 @@ class TestLangfuseTracingContextRegistration:
         foreign_var = ContextVar(ltc_module.LANGFUSE_HANDLER_VAR_NAME, default=None)
         register_configure_hook(foreign_var, inheritable=True)
 
-        with pytest.raises(ValueError, match="LANGFUSE_ENABLED"):
+        with pytest.raises(ValueError, match="pip installing the package langfuse"):
             ltc_module.LangfuseTracingContext(run_target=None, config={})
 
     def test_sdk_kill_switch_derived_from_langfuse_enabled(self, monkeypatch):
@@ -301,7 +298,7 @@ class TestLangfuseTracingContextRegistration:
         monkeypatch.setitem(sys.modules, "langfuse.langchain", None)
         monkeypatch.delenv("LANGFUSE_TRACING_ENABLED", raising=False)
 
-        with pytest.raises(ValueError, match="LANGFUSE_ENABLED"):
+        with pytest.raises(ValueError, match="pip installing the package langfuse"):
             ltc_module.LangfuseTracingContext(run_target=None, config={})
 
         assert _count_langfuse_hooks() == 0
@@ -315,7 +312,7 @@ class TestLangfuseTracingContextRegistration:
         """
         monkeypatch.setitem(sys.modules, "langfuse", None)
         monkeypatch.setitem(sys.modules, "langfuse.langchain", None)
-        with pytest.raises(ValueError, match="LANGFUSE_ENABLED"):
+        with pytest.raises(ValueError, match="pip installing the package langfuse"):
             ltc_module.LangfuseTracingContext(run_target=None, config={})
         assert ltc_module.LangfuseTracingContext.HANDLER_CONTEXT_VAR is None
 
