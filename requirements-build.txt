@@ -16,7 +16,11 @@ langchain-openrouter>=0.2.3,<1.0
 openfga-sdk
 
 # Optional Observability
-langfuse
+# Floor is the verified version (langfuse.langchain.CallbackHandler path,
+# get_client() per-key singleton, LANGFUSE_TRACING_ENABLED unset == "true");
+# major-version cap because langfuse majors have moved the handler import
+# path before (v2 -> v3).
+langfuse>=4.6.1,<5.0
 
 # These are needed for generating code from .proto files and for the
 # generated *_pb2_grpc.py files which import grpcio
