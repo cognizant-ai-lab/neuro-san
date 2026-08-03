@@ -383,7 +383,7 @@ ENV AGENT_EXTERNAL_SERVER_URL=""
 # neuro_san.internals.interfaces.ReservationsStorage interface.
 # When not set, this defaults to a null implementation.
 # A simple default implementation is provided by the class
-# "neuro_san.service.watcher.temp_networks.s3_reservations_storage.S3ReservationsStorage"
+# "neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage.S3ReservationsStorage"
 ENV AGENT_EXTERNAL_RESERVATIONS_STORAGE=""
 
 # When the AGENT_EXTERNAL_RESERVATIONS_STORAGE (immediately above) is set to the
