@@ -36,7 +36,7 @@ from botocore.session import Session
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 
-from neuro_san.service.watcher.temp_networks.s3_util import S3Util
+from neuro_san.service.watcher.temp_networks.s3.s3_util import S3Util
 
 
 # pylint: disable=too-many-instance-attributes

@@ -31,9 +31,9 @@ from botocore.exceptions import ClientError
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
-from neuro_san.service.watcher.temp_networks.aws_sync_client_worker import AwsSyncClientWorker
-from neuro_san.service.watcher.temp_networks.s3_reservations_retriever import S3ReservationsRetriever
-from neuro_san.service.watcher.temp_networks.s3_util import S3Util
+from neuro_san.service.watcher.temp_networks.s3.aws_sync_client_worker import AwsSyncClientWorker
+from neuro_san.service.watcher.temp_networks.s3.s3_reservations_retriever import S3ReservationsRetriever
+from neuro_san.service.watcher.temp_networks.s3.s3_util import S3Util
 
 
 class S3ReservationsReader:

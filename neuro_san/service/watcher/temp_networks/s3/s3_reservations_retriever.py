@@ -30,8 +30,8 @@ from botocore.client import BaseClient
 from botocore.exceptions import ClientError
 from botocore.exceptions import NoCredentialsError
 
-from neuro_san.service.watcher.temp_networks.aws_sync_client_worker import AwsSyncClientWorker
-from neuro_san.service.watcher.temp_networks.s3_util import S3Util
+from neuro_san.service.watcher.temp_networks.s3.aws_sync_client_worker import AwsSyncClientWorker
+from neuro_san.service.watcher.temp_networks.s3.s3_util import S3Util
 
 
 class S3ReservationsRetriever:

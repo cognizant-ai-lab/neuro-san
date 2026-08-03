@@ -18,23 +18,26 @@
 from typing import Optional
 
 from os import getenv
+from time import time
+from json import loads
+from json.decoder import JSONDecodeError
 from logging import getLogger, Logger
 
 from azure.storage.blob import ContainerClient
-from azure.core.exceptions import ResourceNotFoundError, AzureError
+from azure.core.exceptions import AzureError
 
-from neuro_san.service.watcher.temp_networks.azure_blob_util import AzureBlobUtil
+from neuro_san.service.watcher.temp_networks.azure.azure_blob_util import AzureBlobUtil
 
 
-class AzureBlobReservationsRetriever:
+class AzureBlobReservationsExpiration:
     """
-    Helper class for retrieving individual reservation blobs from Azure.
-    Handles synchronous blob retrieval with retry logic and error handling.
+    Handles expiration of reservations in Azure Blob Storage.
+    Scans the container for expired reservations and deletes them.
     """
 
     def __init__(self, container_name: str = "", prefix: str = AzureBlobUtil.DEFAULT_RESERVATIONS_PREFIX):
         """
-        Initialize Azure Blob Reservations Retriever.
+        Initialize Azure Blob Reservations Expiration handler.
 
         :param container_name: Azure Blob container name
         :param prefix: Blob key prefix for reservation objects
@@ -73,41 +76,55 @@ class AzureBlobReservationsRetriever:
                 self.container_client = ContainerClient(account_url, self.container_name, credential)
         return self.container_client
 
-    def retrieve_blob(self, blob_name: str) -> Optional[bytes]:
+    def expire_reservations(self):
         """
-        Retrieve a blob's content from Azure Storage.
+        Scan all reservation blobs and delete expired ones.
 
-        :param blob_name: Name of the blob to retrieve
-        :return: Blob content as bytes, or None if not found
+        WARNING: This operation lists and downloads metadata for ALL reservation blobs,
+        which can be expensive at scale. Consider using Azure Blob lifecycle policies
+        or index-tag-based deletion instead. Default CHECK_PERIOD is 0 (disabled).
         """
         container = self._get_container_client()
+        current_time = time()
+        blobs_to_delete = []
 
-        retries = 0
-        max_retries = 3
-        while retries < max_retries:
-            try:
-                blob_client = container.get_blob_client(blob_name)
-                blob_data = blob_client.download_blob()
-                return blob_data.readall()
-            except ResourceNotFoundError:
-                return None
-            except AzureError as err:
-                if AzureBlobUtil.is_retryable_client_error(err) and retries < max_retries - 1:
-                    retries += 1
-                    self.logger.warning(
-                        "Transient error retrieving %s, retry %d/%d: %s",
-                        blob_name, retries, max_retries, str(err)
-                    )
-                else:
-                    self.logger.error("Failed to retrieve blob %s: %s", blob_name, str(err))
-                    return None
+        try:
+            for blob_props in container.list_blobs(name_starts_with=self.prefix):
+                blob_name = blob_props.name
+                try:
+                    blob_client = container.get_blob_client(blob_name)
+                    blob_data = blob_client.download_blob()
+                    blob_content = blob_data.readall()
+
+                    json_data = loads(blob_content.decode('utf-8'))
+                    if isinstance(json_data, dict):
+                        metadata = json_data.get("metadata", {})
+                        expiration_time = metadata.get("expiration_time_in_seconds", 0)
+
+                        if expiration_time > 0 and current_time > expiration_time:
+                            blobs_to_delete.append(blob_name)
+
+                except (JSONDecodeError, ValueError, AzureError) as err:
+                    self.logger.warning("Error processing blob %s during expiration: %s", blob_name, str(err))
+
+            if blobs_to_delete:
+                for i in range(0, len(blobs_to_delete), 256):
+                    batch = blobs_to_delete[i:i + 256]
+                    try:
+                        container.delete_blobs(*batch)
+                        self.logger.debug("Deleted %d expired reservation blobs", len(batch))
+                    except AzureError as err:
+                        self.logger.error("Error deleting expired blobs: %s", str(err))
+
+        except AzureError as err:
+            self.logger.error("Error listing blobs during expiration scan: %s", str(err))
 
     def start(self):
-        """Initialize the container client and validate connection."""
+        """Initialize the expiration handler and validate connection."""
         try:
             container = self._get_container_client()
             container.get_container_properties()
-            self.logger.info("Successfully connected to Azure Blob container: %s", self.container_name)
+            self.logger.info("Expiration handler initialized for container: %s", self.container_name)
         except AzureError as err:
             self.logger.error("Failed to connect to Azure Blob container %s: %s", self.container_name, str(err))
             raise

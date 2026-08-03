@@ -27,10 +27,10 @@ from logging import Logger
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.abstract_reservations_storage import AbstractReservationsStorage
-from neuro_san.service.watcher.temp_networks.s3_reservations_expiration import S3ReservationsExpiration
-from neuro_san.service.watcher.temp_networks.s3_reservations_reader import S3ReservationsReader
-from neuro_san.service.watcher.temp_networks.s3_reservations_writer import S3ReservationsWriter
-from neuro_san.service.watcher.temp_networks.s3_util import S3Util
+from neuro_san.service.watcher.temp_networks.s3.s3_reservations_expiration import S3ReservationsExpiration
+from neuro_san.service.watcher.temp_networks.s3.s3_reservations_reader import S3ReservationsReader
+from neuro_san.service.watcher.temp_networks.s3.s3_reservations_writer import S3ReservationsWriter
+from neuro_san.service.watcher.temp_networks.s3.s3_util import S3Util
 
 
 class S3ReservationsStorage(AbstractReservationsStorage):

@@ -22,7 +22,7 @@ from json.decoder import JSONDecodeError
 from logging import getLogger, Logger
 
 from neuro_san.interfaces.reservation import Reservation
-from neuro_san.service.watcher.temp_networks.azure_blob_util import AzureBlobUtil
+from neuro_san.service.watcher.temp_networks.azure.azure_blob_util import AzureBlobUtil
 from neuro_san.service.watcher.temp_networks.azure_blob_reservations_retriever import AzureBlobReservationsRetriever
 
 

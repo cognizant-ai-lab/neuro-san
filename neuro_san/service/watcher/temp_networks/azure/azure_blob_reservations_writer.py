@@ -27,7 +27,7 @@ from azure.core.exceptions import AzureError
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
-from neuro_san.service.watcher.temp_networks.azure_blob_util import AzureBlobUtil
+from neuro_san.service.watcher.temp_networks.azure.azure_blob_util import AzureBlobUtil
 
 
 class AzureBlobReservationsWriter:

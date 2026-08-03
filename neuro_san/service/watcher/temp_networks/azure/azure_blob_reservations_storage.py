@@ -23,10 +23,11 @@ from logging import getLogger, Logger
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.network_providers.abstract_reservations_storage import AbstractReservationsStorage
-from neuro_san.service.watcher.temp_networks.azure_blob_reservations_expiration import AzureBlobReservationsExpiration
-from neuro_san.service.watcher.temp_networks.azure_blob_reservations_reader import AzureBlobReservationsReader
-from neuro_san.service.watcher.temp_networks.azure_blob_reservations_writer import AzureBlobReservationsWriter
-from neuro_san.service.watcher.temp_networks.azure_blob_util import AzureBlobUtil
+from neuro_san.service.watcher.temp_networks.azure.azure_blob_reservations_expiration \
+    import AzureBlobReservationsExpiration
+from neuro_san.service.watcher.temp_networks.azure.azure_blob_reservations_reader import AzureBlobReservationsReader
+from neuro_san.service.watcher.temp_networks.azure.azure_blob_reservations_writer import AzureBlobReservationsWriter
+from neuro_san.service.watcher.temp_networks.azure.azure_blob_util import AzureBlobUtil
 
 
 class AzureBlobReservationsStorage(AbstractReservationsStorage):

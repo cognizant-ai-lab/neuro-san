@@ -31,8 +31,8 @@ from aiobotocore.client import AioBaseClient
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
-from neuro_san.service.watcher.temp_networks.aws_async_client_worker import AwsAsyncClientWorker
-from neuro_san.service.watcher.temp_networks.s3_util import S3Util
+from neuro_san.service.watcher.temp_networks.s3.aws_async_client_worker import AwsAsyncClientWorker
+from neuro_san.service.watcher.temp_networks.s3.s3_util import S3Util
 
 
 # pylint: disable=too-many-instance-attributes
