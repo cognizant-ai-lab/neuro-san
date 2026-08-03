@@ -79,7 +79,7 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
         # Patch boto3_client at the import boundary in s3_reservations_storage
         # so storage.start() receives our fake instead of a real boto3 client.
         boto3_patcher = patch(
-            "neuro_san.service.watcher.temp_networks.aws_sync_client_worker.Session.create_client",
+            "neuro_san.service.watcher.temp_networks.s3.aws_sync_client_worker.Session.create_client",
             return_value=self.fake_s3,
         )
         boto3_patcher.start()
@@ -93,7 +93,7 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
             return Credentials("bogus", "bogus")
 
         credentials_patcher = patch(
-            "neuro_san.service.watcher.temp_networks.aws_sync_client_worker.Session.get_credentials",
+            "neuro_san.service.watcher.temp_networks.s3.aws_sync_client_worker.Session.get_credentials",
             new=_fake_get_credentials,
         )
         credentials_patcher.start()
@@ -105,7 +105,7 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
         # Patch aiobotocore_client at the import boundary in s3_reservations_storage
         # so storage.start() receives our fake instead of a real aiobotocore client.
         aiobotocore_patcher = patch(
-            "neuro_san.service.watcher.temp_networks.aws_async_client_worker.AioSession.create_client",
+            "neuro_san.service.watcher.temp_networks.s3.aws_async_client_worker.AioSession.create_client",
             return_value=self.fake_async_s3,
         )
         aiobotocore_patcher.start()
@@ -119,7 +119,7 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
             return AioCredentials("bogus", "bogus")
 
         credentials_patcher = patch(
-            "neuro_san.service.watcher.temp_networks.aws_async_client_worker.AioSession.get_credentials",
+            "neuro_san.service.watcher.temp_networks.s3.aws_async_client_worker.AioSession.get_credentials",
             new=_async_fake_get_credentials,
         )
         credentials_patcher.start()

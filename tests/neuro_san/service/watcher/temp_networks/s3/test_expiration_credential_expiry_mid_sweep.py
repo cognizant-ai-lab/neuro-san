@@ -156,10 +156,10 @@ class TestExpirationCredentialExpiryMidSweep(S3ReservationsStorageTestBase):
         # ever makes it retryable, this keeps the test from sleeping
         # through 8 exponential-backoff retries per object.
         with patch(
-            "neuro_san.service.watcher.temp_networks.aws_sync_client_worker.Session.create_client",
+            "neuro_san.service.watcher.temp_networks.s3.aws_sync_client_worker.Session.create_client",
             new=create_client_with_refresh,
         ), patch(
-            "neuro_san.service.watcher.temp_networks.aws_sync_client_worker.sync_sleep"
+            "neuro_san.service.watcher.temp_networks.s3.aws_sync_client_worker.sync_sleep"
         ):
             self.storage.expiration.expire_reservations()
 
