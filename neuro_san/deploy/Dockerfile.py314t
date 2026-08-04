@@ -209,8 +209,8 @@ ENV VIRTUAL_ENV="${VENV_DIR}"
 ENV PATH="${VENV_DIR}/bin:${PATH}"
 
 # Copy application code and necessary files
-# Note: The registries directory where agent definitions live is mandatory
-#       The coded_tools directory where agent code lives is optional
+# Note: The registries and coded_tools directories are expected to be present in the build context.
+#       (build_py314t.sh includes the full neuro_san tree in the context)
 COPY neuro_san/registries ${APP_SOURCE}/registries/
 COPY neuro_san/coded_tools ${APP_SOURCE}/coded_tools/
 COPY neuro_san ${APP_SOURCE}/neuro_san
