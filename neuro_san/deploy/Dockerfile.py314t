@@ -187,7 +187,6 @@ ENV APP_SOURCE="${APP_HOME}/myapp"
 
 RUN \
     useradd -ms /bin/bash -d ${APP_HOME} -u 1001 ${USERNAME} \
-    && echo ${USERNAME}:pw | chpasswd \
     && mkdir -p ${APP_HOME}/.ssh \
     && chown -R ${USERNAME}: ${APP_HOME} \
     && chown -R ${USERNAME}: /var/log \
