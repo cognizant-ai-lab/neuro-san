@@ -647,8 +647,10 @@ work being done for the request will be abandoned.
 A value of "event" indicates that the agent is intended to be called as an event handler,
 where the caller will _not_ be waiting for the agent network to complete the conversation.
 Rather, the caller reports information to the agent network, receives a quick acknowledgement
-message that the information has been received and the network's processing continues
-after the caller disconnects.
+message that the information has been received and the network's processing continues after
+the caller disconnects.  Events can also be called periodically by configuration in the manifest.
+See the [periodic key in the manifest documentation](./manifest_hocon_reference.md#periodic) for
+more information.
 
 ### instructions
 

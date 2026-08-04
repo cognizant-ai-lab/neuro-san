@@ -74,25 +74,28 @@ Note that a true value specified for "mcp" key will implicitly set "public" key 
 
 ##### periodic
 
+Agents who have their front man's [invocation](./agent_hocon_reference.md#invocation) set to "event"
+can be called periodically by the server infrastructure.
+
 Multiple interpretations exist for the "periodic" key depending on the value type.
 
 _boolean_: Allows for turning the periodic update feature on or off (primarily off).
            When simply set to true, a basic periodic update of once every minute is enabled
-           with a simple text string to get set the agent in motion.
+           with a simple text string to set the agent in motion.
 
 _string_: a cron string describing the periodic update schedule.
           In short, these strings can have 5 or 6 space-delimited fields:
-    * 1 is Minute (0-59)
-    * 2 is Hour (0-23)
-    * 3 is Day of Month (1-31)
-    * 4 is Month (1-12)
-    * 5 is Day of Week (0-6) where 0 is Sunday
-    * 6 is Second (0-59)
+* 1 is Minute (0-59)
+* 2 is Hour (0-23)
+* 3 is Day of Month (1-31)
+* 4 is Month (1-12)
+* 5 is Day of Week (0-6) where 0 is Sunday
+* 6 is Second (0-59)
 
-    See the following references for more finer-grained information on cron strings:
-    * [croniter github](https://github.com/pallets-eco/croniter)
-    * [wikipedia](https://en.wikipedia.org/wiki/Cron)
-    * [crontab.cronhub.io](https://crontab.cronhub.io/)
+See the following references for finer-grained information on cron strings:
+* [croniter github](https://github.com/pallets-eco/croniter)
+* [wikipedia](https://en.wikipedia.org/wiki/Cron)
+* [crontab.cronhub.io](https://crontab.cronhub.io/)
 
 _dictionary_: allows for the most fine-grained control over the periodic update feature. The keys are:
 
@@ -101,9 +104,9 @@ _dictionary_: allows for the most fine-grained control over the periodic update 
 A list of various incarnations of periodic updates to be performed against the agent.
 Each component of this list is its own dictionary, and each dictionary can have the following keys:
 
+<!-- pyml disable line-length -->
 | Dictionary Key      | Type    | Default | Description |
 | ------------------- | ------- | ------- | ----------- |
-<!-- pyml disable line-length -->
 | enable              | boolean | true    | Exactly like the simple boolean value above allowing enabling/disabling of a specific periodic interaction. |
 | cron_schedule       | string  | "\*/1 \* \* \* \* 0" | Exactly like the string value above, this string is a cron schedule for the periodic interaction.  The default fires once every minute. |
 | second_at_beginning | boolean | false | Specifies where in the cron_schedule the seconds are specified.  By ancient convention, the seconds are specified at the end of the cron_schedule string, but this value allows for specifying the seconds at the beginning of the string allowing for some sanity in reading these strings. |
