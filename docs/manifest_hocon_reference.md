@@ -81,10 +81,11 @@ Multiple interpretations exist for the "periodic" key depending on the value typ
 
 _boolean_: Allows for turning the periodic update feature on or off (primarily off).
            When simply set to true, a basic periodic update of once every minute is enabled
-           with a simple text string to set the agent in motion.
+           with a simple text string ("Do your thing") to set the agent in motion.
 
 _string_: a cron string describing the periodic update schedule.
-          In short, these strings can have 5 or 6 space-delimited fields:
+          If only a cron string is specified, the message sent to the agent network will be
+          the default "Do your thing".  In short, these cron strings can have 5 or 6 space-delimited fields:
 * 1 is Minute (0-59)
 * 2 is Hour (0-23)
 * 3 is Day of Month (1-31)
