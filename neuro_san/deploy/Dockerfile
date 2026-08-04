@@ -384,6 +384,7 @@ ENV AGENT_EXTERNAL_SERVER_URL=""
 # When not set, this defaults to a null implementation.
 # A simple default implementation is provided by the class
 # "neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage.S3ReservationsStorage"
+# Note that you will need to install appropriate botocore and aiobotocore packages to use this class.
 ENV AGENT_EXTERNAL_RESERVATIONS_STORAGE=""
 
 # When the AGENT_EXTERNAL_RESERVATIONS_STORAGE (immediately above) is set to the
