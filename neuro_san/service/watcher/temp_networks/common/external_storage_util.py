@@ -14,6 +14,7 @@
 #
 # END COPYRIGHT
 
+from logging import Logger
 from os import getenv
 
 
@@ -23,7 +24,7 @@ class ExternalStorageUtil:
     """
 
     @staticmethod
-    def get_check_interval_seconds(self) -> float:
+    def get_check_interval_seconds(logger: Logger) -> float:
         """
         Check if expiration interval is set by environment variable,
         and adjust it if so (overriding the constructor parameter)
@@ -40,7 +41,7 @@ class ExternalStorageUtil:
         try:
             check_interval_seconds = float(envvar_value)
         except ValueError as exc:
-            self.logger.error(
+            logger.error(
                 "Invalid value for %s, must be a number. Got: %s. "
                 "Please correct the environment variable or unset it.",
                 envvar_name,

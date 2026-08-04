@@ -69,7 +69,7 @@ class AzureBlobReservationsStorage(AbstractReservationsStorage):
         self.expiration = AzureBlobReservationsExpiration(container_name=container_name, prefix=prefix)
 
         # This can throw ValueError if env var is invalid
-        self._check_interval_seconds = ExternalStorageUtil.get_check_interval_seconds()
+        self._check_interval_seconds = ExternalStorageUtil.get_check_interval_seconds(self.logger)
 
     def start(self):
         """
