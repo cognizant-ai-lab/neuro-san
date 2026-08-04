@@ -127,9 +127,6 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             extra_llm_infos: Dict[str, Any] = restorer.restore(file_reference=self.llm_info_file)
             self.llm_infos = self.overlayer.overlay(self.llm_infos, extra_llm_infos)
 
-        # sanitize the llm_infos keys
-        self.llm_infos = self.sanitize_keys(self.llm_infos)
-
         # Resolve any new llm factories
         extractor = DictionaryExtractor(self.llm_infos)
         llm_factory_classes: List[str] = []
@@ -560,33 +557,6 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             max_prompt_tokens = use_max_tokens
 
         return max_prompt_tokens
-
-    def strip_outer_quotes(self, s: str) -> str:
-        """
-        :param s: The input string to sanitize.
-        :return: The input string without surrounding multiple quotes, if they were present.
-        Otherwise, returns the string unchanged.
-        """
-        if len(s) >= 2 and s[0] in ["'", '"']:
-            quote_char = s[0]
-            unquoted = s[1:-1]
-
-            # Only strip quotes if inner value does not contain the same quote char
-            # and does not start with whitespace
-            if quote_char not in unquoted and not unquoted.startswith(" "):
-                return unquoted
-        return s
-
-    def sanitize_keys(self, d: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Returns a new dictionary with surrounding double quotes stripped from all keys.
-        This is typically used to clean up configuration dictionaries where key names may
-        be quoted (e.g., '"llama3.1"' instead of "llama3.1") due to parsing artifacts.
-        Only the top-level keys are sanitized; nested keys are left unchanged.
-        :param d: The input dictionary with potentially quoted keys.
-        :return: A new dictionary with the same values, but with sanitized keys.
-        """
-        return {self.strip_outer_quotes(k): v for k, v in d.items()}
 
     # pylint: disable=too-many-branches,too-many-locals,too-many-statements
     def create_llm_with_fallbacks(self, config: Dict[str, Any],
