@@ -12,6 +12,14 @@ langchain-nvidia-ai-endpoints>=1.0.0,<2.0
 langchain-ollama>=1.0.0,<2.0
 langchain-openrouter>=0.2.3,<1.0
 
+# Optional ReservationsStorage
+# ... for S3
+botocore>=1.34.51
+aiobotocore>=3.7.0
+# ... for Azure
+azure-storage-blob>=12.19.0
+azure-identity>=1.14.0
+
 # Optional Authorization
 openfga-sdk
 
