@@ -54,6 +54,7 @@ Items in ***bold*** are essentials. Try to understand these first.
             - [required](#required)
         - [sly_data_schema](#sly_data_schema-1)
             - [llm_config](#llm_config-1)
+            - [http_headers](#http_headers)
         - [sly_data_output_schema](#sly_data_output_schema)
     - [***instructions*** - main system prompt for the agent](#instructions)
     - [***tools*** - list of other agents/tools that this agent may access](#tools-agents)
@@ -608,6 +609,21 @@ Example networks that advertise that their sly_data_schema needs external API ke
 
 - [music_nerd_pro_sly_api_key.hocon](../neuro_san/registries/music_nerd_pro_sly_api_key.hocon)
 
+##### http_headers
+
+The sly_data dictionary can contain an optional `http_headers` key: a mapping from
+[MCP server](#mcp-servers) URL to a dictionary of HTTP header names/values (for example
+`{"Authorization": "Bearer <token>"}`) that neuro-san sends when it calls that server. See [Authentication](#authentication)
+under MCP Servers for the header format.
+
+Advertising `http_headers` in your `sly_data_schema` — with a `properties` entry per MCP URL and a
+`required` list — lets an OAuth-capable client (for example
+[nsflow](https://github.com/cognizant-ai-lab/nsflow)) run the sign-in flow, inject the resulting
+bearer token into sly_data on the user's behalf, and prompt the user to connect any URL listed under
+`http_headers.required` before chatting. neuro-san itself only defines the schema and forwards
+whatever `http_headers` arrive in sly_data; the OAuth flow and the connect prompt are the client's
+responsibility.
+
 #### sly_data_output_schema
 
 Similar optional dictionary to [sly_data_schema](#sly_data_schema-1) above, but this specifies the schema
@@ -756,6 +772,10 @@ server. Users may specify different authorization credentials for different MCP 
     `sly_data` takes precedence
 
     - Tool filtering from the configuration file is used only if no tool filtering exists in the agent network HOCON
+
+A client can also populate these `http_headers` on the user's behalf: see [http_headers](#http_headers)
+under `sly_data_schema`, where a network advertises the MCP URLs it needs and an OAuth-capable client
+(e.g. nsflow) signs in and injects the bearer token, gating on `http_headers.required`.
 
 <!--- pyml disable-next-line no-duplicate-heading -->
 ### llm_config
