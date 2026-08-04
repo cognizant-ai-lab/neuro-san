@@ -154,10 +154,10 @@ COPY requirements.txt /build/requirements.txt
 # patching the Rust source.
 #
 # Caveat: this only lets orjson BUILD; orjson does not declare itself free-thread
-# safe, so at run time CPython will automatically re-enable the GIL when orjson is
-# imported (with a warning). That is consistent with our choice not to force
-# PYTHON_GIL=0. If/when you force the GIL off, audit orjson (and the other native
-# deps) for actual free-thread safety first.
+# safe. If you run with the GIL forced off (PYTHON_GIL=0; this image does that
+# by default in the final stage), concurrent use can data-race or crash. Audit
+# orjson (and other native deps) for actual free-thread safety before relying on
+# forced no-GIL in production.
 ENV ORJSON_BUILD_FREETHREADED=1
 
 RUN uv pip install -r /build/requirements.txt \
