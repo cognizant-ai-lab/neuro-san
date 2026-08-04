@@ -637,7 +637,6 @@ Example networks that advertise their sly_data_output_schema:
 #### invocation
 
 _Front Man only_
-
 A string describing how the agent is to be called.
 
 A value of "chatbot" (the default) indicates that the agent is intended to be called as a chatbot,
