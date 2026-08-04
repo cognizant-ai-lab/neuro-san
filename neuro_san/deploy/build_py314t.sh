@@ -59,7 +59,7 @@ function build_main() {
 
     # Parse for a specific arg when debugging
     CACHE_OR_NO_CACHE="--rm"
-    if [ "$1" == "--no-cache" ]; then
+    if [[ "${1:-}" == "--no-cache" ]]; then
         CACHE_OR_NO_CACHE="--no-cache --progress=plain"
     fi
 
