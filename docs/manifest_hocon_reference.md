@@ -103,14 +103,14 @@ Each component of this list is its own dictionary, and each dictionary can have 
 
 | Dictionary Key      | Type    | Default | Description |
 | ------------------- | ------- | ------- | ----------- |
-<!-- markdownlint-disable MD013 -->
+<!-- pyml disable line-length -->
 | enable              | boolean | true    | Exactly like the simple boolean value above allowing enabling/disabling of a specific periodic interaction. |
 | cron_schedule       | string  | "\*/1 \* \* \* \* 0" | Exactly like the string value above, this string is a cron schedule for the periodic interaction.  The default fires once every minute. |
 | second_at_beginning | boolean | false | Specifies where in the cron_schedule the seconds are specified.  By ancient convention, the seconds are specified at the end of the cron_schedule string, but this value allows for specifying the seconds at the beginning of the string allowing for some sanity in reading these strings. |
 | text                | string  | "Do your thing" | The text input to the agent network whenever the periodic interaction is triggered. |
 | sly_data            | dictionary | {} | The dictionary used as sly_data input to the agent network whenever the periodic interaction is triggered. |
 | metadata            | dictionary | {"user_id": "system"} | The dictionary used as metadata (faux-headers) input to the agent network whenever the periodic interaction is triggered. |
-<!-- markdownlint-enable MD013 -->
+<!-- pyml enable line-length -->
 
 ## Server monitoring of agent description files
 
