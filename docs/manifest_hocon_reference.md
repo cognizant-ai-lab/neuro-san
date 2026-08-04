@@ -88,7 +88,11 @@ _string_: a cron string describing the periodic update schedule.
     * 4 is Month (1-12)
     * 5 is Day of Week (0-6) where 0 is Sunday
     * 6 is Second (0-59)
-    See https://en.wikipedia.org/wiki/Cron , https://crontab.cronhub.io/ , https://github.com/pallets-eco/croniter
+
+    See the following references for more finer-grained information on cron strings:
+    * [croniter github](https://github.com/pallets-eco/croniter)
+    * [wikipedia](https://en.wikipedia.org/wiki/Cron)
+    * [crontab.cronhub.io](https://crontab.cronhub.io/)
 
 _dictionary_: allows for the most fine-grained control over the periodic update feature. The keys are:
 
