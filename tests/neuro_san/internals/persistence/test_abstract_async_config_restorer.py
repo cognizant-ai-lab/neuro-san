@@ -27,29 +27,11 @@ from unittest.mock import patch
 
 import pytest
 
-from neuro_san.internals.persistence.abstract_async_config_restorer import AbstractAsyncConfigRestorer
+from tests.neuro_san.internals.persistence.restorer_test_helpers import ConcreteRestorer
+from tests.neuro_san.internals.persistence.restorer_test_helpers import FIXTURES_DIR
+from tests.neuro_san.internals.persistence.restorer_test_helpers import VALID_DICT
 
 T = TypeVar("T")
-
-# ---------------------------------------------------------------------------
-# Concrete subclass used by all tests.
-# AbstractAsyncConfigRestorer inherits from abstract base
-# classes. ConcreteRestorer makes the test intent explicit at no cost.
-# ---------------------------------------------------------------------------
-
-
-class ConcreteRestorer(AbstractAsyncConfigRestorer):
-    """Minimal concrete subclass – inherits all behaviour from the abstract base."""
-
-
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-VALID_DICT: Dict[str, Any] = {"key": "value", "nested": {"a": 1}}
-
-# Directory containing .json and .hocon fixture files used by the tests.
-FIXTURES_DIR: Path = Path(__file__).parent.parent.parent.parent / "fixtures"
 
 
 # pylint: disable=too-many-public-methods

@@ -97,8 +97,10 @@
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "02/16/2026",
-        "price_per_1k_input_tokens": 0.0025,
-        "price_per_1k_output_tokens": 0.015,
+        # The initial price was 0.0025 and 0.015 for input and output tokens, respectively. 
+        # https://openai.com/index/advancing-the-price-performance-frontier-with-gpt-5-6/
+        "price_per_1k_input_tokens": 0.002,
+        "price_per_1k_output_tokens": 0.012,
         "model_launch_date": "2026-07-09",
         "model_retirement_date": null,
     },
@@ -113,8 +115,10 @@
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "02/16/2026",
-        "price_per_1k_input_tokens": 0.001,
-        "price_per_1k_output_tokens": 0.006,
+        # The initial price was 0.001 and 0.006 for input and output tokens, respectively. 
+        # https://openai.com/index/advancing-the-price-performance-frontier-with-gpt-5-6/
+        "price_per_1k_input_tokens": 0.0002,
+        "price_per_1k_output_tokens": 0.0012,
         "model_launch_date": "2026-07-09",
         "model_retirement_date": null,
     },
@@ -1106,6 +1110,24 @@
     # Per Google, the listed shutdown dates are the "earliest possible dates" — exact
     # retirement is communicated with advance notice. For models with no announced
     # retirement, "model_retirement_date" is null.
+    "gemini-3.6-flash": {
+        "class": "gemini",
+        "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash",
+        "modalities": {
+            "input": [ "text", "images", "video", "audio", "pdf"],
+            "output": [ "text"],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1048576,
+        "max_output_tokens": 65536,
+        # https://deepmind.google/models/model-cards/gemini-3-6-flash/
+        "knowledge_cutoff": "03/2026",
+        # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
+        "price_per_1k_input_tokens": 0.0015,
+        "price_per_1k_output_tokens": 0.0075,
+        "model_launch_date": "2026-07-21",
+        "model_retirement_date": null,
+    },
     "gemini-3.5-flash": {
         "class": "gemini",
         "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash",
@@ -1121,6 +1143,24 @@
         "price_per_1k_input_tokens": 0.0015,
         "price_per_1k_output_tokens": 0.009,
         "model_launch_date": "2026-05-19",
+        "model_retirement_date": null,
+    },
+    "gemini-3.5-flash-lite": {
+        "class": "gemini",
+        "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite",
+        "modalities": {
+            "input": [ "text", "images", "video", "audio", "pdf"],
+            "output": [ "text"],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1048576,
+        "max_output_tokens": 65536,
+        # https://deepmind.google/models/model-cards/gemini-3-5-flash-lite/
+        "knowledge_cutoff": "03/2026",
+        # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
+        "price_per_1k_input_tokens": 0.0003,
+        "price_per_1k_output_tokens": 0.0025,
+        "model_launch_date": "2026-07-21",
         "model_retirement_date": null,
     },
     "gemini-3.1-pro": {
