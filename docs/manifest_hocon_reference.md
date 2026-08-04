@@ -101,34 +101,14 @@ _dictionary_: allows for the most fine-grained control over the periodic update 
 A list of various incarnations of periodic updates to be performed against the agent.
 Each component of this list is its own dictionary, and each dictionary can have the following keys:
 
-####### enable
-        Exactly like the simple boolean value above allowing enabling/disabling of a specific periodic interaction.
-        Default is true.
-
-####### cron_schedule
-        Exactly like the string value above, this string is a cron schedule for the periodic interaction.
-        Default is "*/1 * * * * 0", which fires once every minute.
-        See the _string_ value above and its links for more information.
-
-####### second_at_beginning
-        A boolean value (default is false), which specifies where in the cron_schedule the seconds
-        are specified.  By ancient convention, the seconds are specified at the end of the
-        cron_schedule string, but this value allows for specifying the seconds at the beginning of the
-        string allowing for some sanity in reading these strings.
-
-####### text
-        A string value (default is "Do your thing"), which is used as text input to the agent network
-        whenever the periodic interaction is triggered.
-
-####### sly_data
-        An optional dictionary value (default is {}), which is used as sly_data input to the agent network
-        whenever the periodic interaction is triggered.
-
-####### metadata
-        An optional dictionary value which is used as metadata (faux-headers) input to the agent network
-        whenever the periodic interaction is triggered.
-        The default has a single key "user_id" whose value is "system", so that tracing and logging information
-        can be associated with the periodic interaction.
+| Dictionary Key      | Type    | Default | Description |
+| ------------------- | ------- | ------- | ----------- |
+| enable              | boolean | true    | Exactly like the simple boolean value above allowing enabling/disabling of a specific periodic interaction. |
+| cron_schedule       | string  | "\*/1 \* \* \* \* 0" | Exactly like the string value above, this string is a cron schedule for the periodic interaction.  The default fires once every minute. |
+| second_at_beginning | boolean | false | Specifies where in the cron_schedule the seconds are specified.  By ancient convention, the seconds are specified at the end of the cron_schedule string, but this value allows for specifying the seconds at the beginning of the string allowing for some sanity in reading these strings. |
+| text                | string  | "Do your thing" | The text input to the agent network whenever the periodic interaction is triggered. |
+| sly_data            | dictionary | {} | The dictionary used as sly_data input to the agent network whenever the periodic interaction is triggered. |
+| metadata            | dictionary | {"user_id": "system"} | The dictionary used as metadata (faux-headers) input to the agent network whenever the periodic interaction is triggered. |
 
 ## Server monitoring of agent description files
 
