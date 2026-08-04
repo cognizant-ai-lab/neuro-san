@@ -86,6 +86,7 @@ _boolean_: Allows for turning the periodic update feature on or off (primarily o
 _string_: a cron string describing the periodic update schedule.
           If only a cron string is specified, the message sent to the agent network will be
           the default "Do your thing".  In short, these cron strings can have 5 or 6 space-delimited fields:
+
 * 1 is Minute (0-59)
 * 2 is Hour (0-23)
 * 3 is Day of Month (1-31)
@@ -94,6 +95,7 @@ _string_: a cron string describing the periodic update schedule.
 * 6 is Second (0-59)
 
 See the following references for finer-grained information on cron strings:
+
 * [croniter github](https://github.com/pallets-eco/croniter)
 * [wikipedia](https://en.wikipedia.org/wiki/Cron)
 * [crontab.cronhub.io](https://crontab.cronhub.io/)
