@@ -72,6 +72,60 @@ as an MCP tool. In this case, it will be listed by an MCP "tools/list" command.
 A true value implies that the network will be available as an MCP tool.
 Note that a true value specified for "mcp" key will implicitly set "public" key also to true.
 
+##### periodic
+
+Muiltple interpretations for different typed values exist for the "periodic" key.
+
+_boolean_: Allows for turning the periodic update feature on or off (primarily off).
+           When simply set to true, a basic periodic update of once every minute is enabled
+           with a simple text string to get set the agent in motion.
+
+_string_: a cron string describing the periodic update schedule.
+          In short, these strings can have 5 or 6 space-delimited fields:
+    * 1 is Minute (0-59)
+    * 2 is Hour (0-23)
+    * 3 is Day of Month (1-31)
+    * 4 is Month (1-12)
+    * 5 is Day of Week (0-6) where 0 is Sunday
+    * 6 is Second (0-59)
+    See https://en.wikipedia.org/wiki/Cron , https://crontab.cronhub.io/ , https://github.com/pallets-eco/croniter
+
+_dictionary_: allows for the most fine-grained control over the periodic update feature. The keys are:
+
+###### interactions
+
+A list of various incarnations of periodic updates to be performed against the agent.
+Each component of this list is its own dictionary, and each dictionary can have the following keys:
+
+####### enable
+        Exactly like the simple boolean value above allowing enabling/disabling of a specific periodic interaction.
+        Default is true.
+
+####### cron_schedule
+        Exactly like the string value above, this string is a cron schedule for the periodic interaction.
+        Default is "*/1 * * * * 0", which fires once every minute.
+        See the _string_ value above and its links for more information.
+
+####### second_at_beginning
+        A boolean value (default is false), which specifies where in the cron_schedule the seconds
+        are specified.  By ancient convention, the seconds are specified at the end of the
+        cron_schedule string, but this value allows for specifying the seconds at the beginning of the
+        string allowing for some sanity in reading these strings.
+
+####### text
+        A string value (default is "Do your thing"), which is used as text input to the agent network
+        whenever the periodic interaction is triggered.
+
+####### sly_data
+        An optional dictionary value (default is {}), which is used as sly_data input to the agent network
+        whenever the periodic interaction is triggered.
+
+####### metadata
+        An optional dictionary value which is used as metadata (faux-headers) input to the agent network
+        whenever the periodic interaction is triggered.
+        The default has a single key "user_id" whose value is "system", so that tracing and logging information
+        can be associated with the periodic interaction.
+
 ## Server monitoring of agent description files
 
 It is possible for the server infrastructure to detect changes to the agent manifest.hocon and any agent network
