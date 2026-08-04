@@ -109,7 +109,7 @@ class ServerMainLoop:
         preserves the original "-m ... <args>" invocation across the re-exec.
 
         No-op on non-Darwin platforms, and no-op (no re-exec) when the flag is
-        already set -- which is also what stops the re-exec from looping.
+        already set to "YES" -- which is also what stops the re-exec from looping.
         """
         if sys.platform != "darwin":
             return
