@@ -43,7 +43,7 @@ function run() {
     # Environment file should be a simple text file with lines of the form:
     #   VAR_NAME=VAR_VALUE
     # This allows us to pass in any collection of run-specific values
-    env_file_cmd = ""
+    env_file_cmd=""
     if [[ -n "${SERVICE_ENV_FILE:-}" && -f "$SERVICE_ENV_FILE" ]]; then
         echo "Using service environment file: $SERVICE_ENV_FILE"
         cat "$SERVICE_ENV_FILE"
