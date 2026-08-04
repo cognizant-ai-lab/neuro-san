@@ -74,7 +74,7 @@ Note that a true value specified for "mcp" key will implicitly set "public" key 
 
 ##### periodic
 
-Muiltple interpretations for different typed values exist for the "periodic" key.
+Multiple interpretations exist for the "periodic" key depending on the value type.
 
 _boolean_: Allows for turning the periodic update feature on or off (primarily off).
            When simply set to true, a basic periodic update of once every minute is enabled
