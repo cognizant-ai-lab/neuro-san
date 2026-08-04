@@ -19,14 +19,13 @@ from typing import Any
 from typing import Dict
 from typing import Tuple
 
-from os import getenv
-
 from logging import getLogger
 from logging import Logger
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.abstract_reservations_storage import AbstractReservationsStorage
+from neuro_san.service.watcher.temp_networks.common.external_storage_util import ExternalStorageUtil
 from neuro_san.service.watcher.temp_networks.s3.s3_reservations_expiration import S3ReservationsExpiration
 from neuro_san.service.watcher.temp_networks.s3.s3_reservations_reader import S3ReservationsReader
 from neuro_san.service.watcher.temp_networks.s3.s3_reservations_writer import S3ReservationsWriter
@@ -62,23 +61,8 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         self.reader = S3ReservationsReader(bucket_name=bucket_name, prefix=prefix)
         self.expiration = S3ReservationsExpiration(bucket_name=bucket_name, prefix=prefix)
 
-        # Check if expiration interval is set by environment variable,
-        # and adjust it if so (overriding the constructor parameter)
-        envvar_name: str = "AGENT_RESERVATIONS_EXTERNAL_STORAGE_CHECK_PERIOD_SECONDS"
-        envvar_value: str = getenv(envvar_name, "0")
-        try:
-            expiration_check_period_seconds: float = float(envvar_value)
-            self._check_interval_seconds = expiration_check_period_seconds
-        except ValueError as exc:
-            self.logger.error(
-                "Invalid value for %s, must be a number. Got: %s. "
-                "Please correct the environment variable or unset it.",
-                envvar_name,
-                envvar_value,
-            )
-            raise ValueError(
-                f"Invalid value for {envvar_name}: expected a numeric value, got {envvar_value!r}"
-            ) from exc
+        # This can throw ValueError if env var is invalid
+        self._check_interval_seconds = ExternalStorageUtil.get_check_interval_seconds(self.logger)
 
     def start(self):
         """
