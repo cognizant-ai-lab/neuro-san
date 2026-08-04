@@ -16,23 +16,14 @@
 #
 # END COPYRIGHT
 
-# Builds the free-threaded (Python 3.14t) neuro-san server container, building
-# the local in-house libraries leaf-common and leaf-server-common from source
-# under 3.14t (never from PyPI).
+# Builds the free-threaded (Python 3.14t) neuro-san server container.
 #
-# Unlike ./build.sh, this script does NOT use the neuro-san repo directory as
-# the Docker build context. The leaf-common and leaf-server-common source trees
-# live in SIBLING repositories outside the neuro-san repo, so instead we
-# assemble a small, clean temporary build context containing exactly:
-#
-#   <ctx>/requirements.txt
-#   <ctx>/neuro_san/                       (the app source)
-#   <ctx>/leaf_src/leaf-common/            (local leaf-common source, no .git)
-#   <ctx>/leaf_src/leaf-server-common/     (local leaf-server-common source, no .git)
-#
-# and build Dockerfile.py314t against it. This keeps the sibling repos in place
-# and keeps the (otherwise huge, scratch-file-laden) neuro-san working tree out
-# of the build context.
+# All Python dependencies -- including the in-house leaf-common and
+# leaf-server-common -- come from requirements.txt (i.e. from PyPI), so no
+# sibling source repositories are needed. We still assemble a small, clean
+# temporary build context (requirements.txt + the neuro_san app source) rather
+# than using the repo root directly, to keep the otherwise huge,
+# scratch-file-laden neuro-san working tree out of the build context.
 #
 # Usage:
 #   ./neuro_san/deploy/build_py314t.sh [--no-cache]
@@ -40,10 +31,6 @@
 # Run it from the top-level directory of the neuro-san repo.
 #
 # Overridable via environment:
-#   LEAF_COMMON_DIR          path to local leaf-common repo   (default: ../leaf-common)
-#   LEAF_SERVER_COMMON_DIR   path to local leaf-server-common (default: ../leaf-server-common)
-#   LEAF_COMMON_VERSION          version to stamp on the built leaf-common wheel
-#   LEAF_SERVER_COMMON_VERSION   version to stamp on the built leaf-server-common wheel
 #   SERVICE_TAG / SERVICE_VERSION   image name/tag components
 #   TARGET_PLATFORM          docker build target platform (default: linux/amd64)
 #   PYTHON_VERSION           free-threaded interpreter to provision via uv
@@ -59,8 +46,6 @@
 export SERVICE_TAG=${SERVICE_TAG:-neuro-san}
 export SERVICE_VERSION=${SERVICE_VERSION:-0.0.1-py314t}
 
-LEAF_COMMON_DIR=${LEAF_COMMON_DIR:-../leaf-common}
-LEAF_SERVER_COMMON_DIR=${LEAF_SERVER_COMMON_DIR:-../leaf-server-common}
 PYTHON_VERSION=${PYTHON_VERSION:-3.14t}
 BASE_IMAGE=${BASE_IMAGE:-debian:trixie-slim}
 UV_IMAGE=${UV_IMAGE:-ghcr.io/astral-sh/uv:latest}
@@ -69,23 +54,6 @@ echo ">>>>>>>>>>>>>>UV_IMAGE = ${UV_IMAGE}"
 # Where this repo's app source and Dockerfile live, relative to the run dir.
 NEURO_SAN_PKG="neuro_san"
 DOCKERFILE="${NEURO_SAN_PKG}/deploy/Dockerfile.py314t"
-
-function derive_version() {
-    # Best-effort: derive an "X.Y.Z" version from a repo's git tags so the built
-    # wheel version matches reality without shipping .git into the image.
-    # Falls back to the provided default if git metadata is unavailable.
-    local repo_dir="$1"
-    local default_version="$2"
-    local described
-    described=$(git -C "${repo_dir}" describe --tags --abbrev=0 2>/dev/null || true)
-    # Strip any leading "v" and keep a PEP440-friendly leading X.Y.Z
-    described=$(echo "${described}" | sed -E 's/^v//; s/^([0-9]+(\.[0-9]+)*).*/\1/')
-    if [ -n "${described}" ]; then
-        echo "${described}"
-    else
-        echo "${default_version}"
-    fi
-}
 
 function build_main() {
 
@@ -109,34 +77,15 @@ function build_main() {
         echo "ERROR: ${NEURO_SAN_PKG}/deploy/Dockerfile.py314t not found." >&2
         exit 1
     fi
-    for d in "${LEAF_COMMON_DIR}" "${LEAF_SERVER_COMMON_DIR}"; do
-        if [ ! -f "${d}/pyproject.toml" ]; then
-            echo "ERROR: local dependency source not found at '${d}' (no pyproject.toml)." >&2
-            echo "       Set LEAF_COMMON_DIR / LEAF_SERVER_COMMON_DIR to point at the local repos." >&2
-            exit 1
-        fi
-    done
-
-    LEAF_COMMON_VERSION=${LEAF_COMMON_VERSION:-$(derive_version "${LEAF_COMMON_DIR}" "1.2.43")}
-    LEAF_SERVER_COMMON_VERSION=${LEAF_SERVER_COMMON_VERSION:-$(derive_version "${LEAF_SERVER_COMMON_DIR}" "0.1.17")}
-    echo "leaf-common version:        ${LEAF_COMMON_VERSION}"
-    echo "leaf-server-common version: ${LEAF_SERVER_COMMON_VERSION}"
-
     # Assemble a clean, minimal build context in a temp dir.
     CTX=$(mktemp -d)
     # shellcheck disable=SC2064
     trap "rm -rf '${CTX}'" EXIT
     echo "Assembling build context in ${CTX}"
 
-    mkdir -p "${CTX}/leaf_src"
-
     # App source + runtime requirements.
     cp "requirements.txt" "${CTX}/requirements.txt"
     _copy_tree "${NEURO_SAN_PKG}" "${CTX}/${NEURO_SAN_PKG}"
-
-    # Local leaf sources (without .git / build artifacts / venvs).
-    _copy_tree "${LEAF_COMMON_DIR}" "${CTX}/leaf_src/leaf-common"
-    _copy_tree "${LEAF_SERVER_COMMON_DIR}" "${CTX}/leaf_src/leaf-server-common"
 
     # Build the docker image.
     # DOCKER_BUILDKIT gives us modern build behavior.
@@ -148,8 +97,6 @@ function build_main() {
         --build-arg PYTHON_VERSION="${PYTHON_VERSION}" \
         --build-arg BASE_IMAGE="${BASE_IMAGE}" \
         --build-arg UV_IMAGE="${UV_IMAGE}" \
-        --build-arg LEAF_COMMON_VERSION="${LEAF_COMMON_VERSION}" \
-        --build-arg LEAF_SERVER_COMMON_VERSION="${LEAF_SERVER_COMMON_VERSION}" \
         --build-arg PACKAGE_INSTALL="/usr/local/neuro-san/myapp" \
         -f "${DOCKERFILE}" \
         ${CACHE_OR_NO_CACHE} \

@@ -20,13 +20,13 @@
 #
 # This is a variant of ./Dockerfile that:
 #   1. Runs on a FREE-THREADED CPython 3.14t interpreter.
-#   2. Builds the in-house dependencies leaf-common and leaf-server-common
-#      FROM LOCAL SOURCE under 3.14t (never from PyPI), then installs those
-#      locally-built packages in place of the PyPI versions pinned in
-#      requirements.txt.
-#   3. Ships a C/Rust build toolchain in the builder stage, because not every
+#   2. Ships a C/Rust build toolchain in the builder stage, because not every
 #      third-party dependency publishes cp314t wheels yet, so some must be
 #      compiled from source for the free-threaded ABI.
+#
+# All Python dependencies -- including the in-house leaf-common and
+# leaf-server-common -- are installed from requirements.txt (i.e. from PyPI),
+# exactly like ./Dockerfile.
 #
 # WHY NOT `FROM python:3.14t-slim`?
 #   The Docker official `python` images do NOT publish a free-threaded variant
@@ -38,16 +38,9 @@
 #   step below; the rest of the file is provisioning-agnostic.
 #
 # HOW TO BUILD:
-#   This file is NOT meant for `docker build .`, because the leaf-common /
-#   leaf-server-common source trees live in sibling repositories OUTSIDE the
-#   neuro-san repo. Use ./neuro_san/deploy/build_py314t.sh, which assembles a
-#   clean, minimal build context of exactly this shape and builds this file:
-#
-#     <context>/
-#       requirements.txt                     # neuro-san runtime requirements
-#       neuro_san/                           # the neuro-san package (app source)
-#       leaf_src/leaf-common/                # local leaf-common source tree
-#       leaf_src/leaf-server-common/         # local leaf-server-common source tree
+#   Use ./neuro_san/deploy/build_py314t.sh, or build directly from the repo
+#   root against a normal build context:
+#     DOCKER_BUILDKIT=1 docker build -f neuro_san/deploy/Dockerfile.py314t .
 #
 # To find server-oriented environment variables to help you configure things
 # how you want, search for "ENV AGENT_" in this file.
@@ -73,13 +66,6 @@ ARG PYTHON_VERSION="3.14t"
 # reference to its base interpreter stays valid after the copy.
 ARG PYTHON_INSTALL_DIR="/opt/python"
 ARG VENV_DIR="/opt/venv"
-
-# Versions to stamp onto the locally-built leaf packages. These only need to be
-# internally consistent: leaf-server-common requires leaf-common>=1.2.31, so
-# LEAF_COMMON_VERSION must satisfy that. build_py314t.sh derives real values
-# from the local repos and passes them in; these are just fallbacks.
-ARG LEAF_COMMON_VERSION="1.2.43"
-ARG LEAF_SERVER_COMMON_VERSION="0.1.17"
 
 # For the neuro-san server image, application source is copied to APP_SOURCE
 # (see below) rather than pip-installed, so PACKAGE_INSTALL points there.
@@ -123,7 +109,6 @@ RUN apt-get update \
         libssl-dev \
         curl \
         ca-certificates \
-        git \
     && rm -rf /var/lib/apt/lists/*
 
 # Rust toolchain (for pydantic-core and any other maturin/rust-built deps that
@@ -157,32 +142,10 @@ RUN uv python install "${PYTHON_VERSION}" \
 ENV PATH="${VENV_DIR}/bin:${PATH}"
 
 # ---------------------------------------------------------------------------
-# Build & install the in-house leaf libraries from LOCAL source under 3.14t.
-# Both are pure-Python (py3-none-any) setuptools/setuptools-scm projects. The
-# source trees are staged WITHOUT their .git directories, so setuptools-scm
-# cannot derive a version; we supply one explicitly via its per-project
-# pretend-version env vars. Installing from the local paths (not PyPI) pins
-# these two packages, so pip/uv never fetch them from the index.
-# ---------------------------------------------------------------------------
-ARG LEAF_COMMON_VERSION
-ARG LEAF_SERVER_COMMON_VERSION
-
-COPY leaf_src/leaf-common /build/leaf-common
-COPY leaf_src/leaf-server-common /build/leaf-server-common
-
-# ---------------------------------------------------------------------------
-# neuro-san runtime dependencies. The two leaf lines are stripped from
-# requirements.txt so the resolver never reaches out to PyPI for them (the
-# local sources above satisfy those imports instead; note the local versions
-# are intentionally BELOW the PyPI floors pinned in requirements.txt). The
-# leaf source trees are given explicitly so they are pinned while their
-# transitive deps (e.g. opentelemetry) still resolve from PyPI.
+# neuro-san runtime dependencies, installed straight from requirements.txt.
+# leaf-common and leaf-server-common come from PyPI like everything else.
 # ---------------------------------------------------------------------------
 COPY requirements.txt /build/requirements.txt
-RUN grep -viE '^[[:space:]]*(leaf-common|leaf-server-common)([[:space:]]|[<>=!~;[]|$)' \
-        /build/requirements.txt > /build/requirements.nolocal.txt \
-    && echo "=== requirements after stripping local leaf deps ===" \
-    && cat /build/requirements.nolocal.txt
 
 # orjson (pulled in transitively via langsmith / langgraph-sdk) REFUSES TO COMPILE
 # under a free-threaded interpreter unless this opt-in build env var is set: its
@@ -197,12 +160,7 @@ RUN grep -viE '^[[:space:]]*(leaf-common|leaf-server-common)([[:space:]]|[<>=!~;
 # deps) for actual free-thread safety first.
 ENV ORJSON_BUILD_FREETHREADED=1
 
-RUN SETUPTOOLS_SCM_PRETEND_VERSION_FOR_LEAF_COMMON="${LEAF_COMMON_VERSION}" \
-    SETUPTOOLS_SCM_PRETEND_VERSION_FOR_LEAF_SERVER_COMMON="${LEAF_SERVER_COMMON_VERSION}" \
-        uv pip install \
-            /build/leaf-common \
-            /build/leaf-server-common \
-            -r /build/requirements.nolocal.txt \
+RUN uv pip install -r /build/requirements.txt \
     && python -c "import leaf_common, leaf_server_common; print('leaf imports OK')"
 
 # ===========================================================================
