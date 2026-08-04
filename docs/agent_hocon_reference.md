@@ -640,7 +640,7 @@ _Front Man only_
 A string describing how the agent is to be called.
 
 A value of "chatbot" (the default) indicates that the agent is intended to be called as a chatbot,
-which essentially means the the caller will be waiting for the agent network to complete
+which essentially means the caller will be waiting for the agent network to complete
 the conversation in order to get some kind of response.  If the caller disconnects, the
 work being done for the request will be abandoned.
 
