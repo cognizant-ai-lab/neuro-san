@@ -46,8 +46,7 @@ function run() {
     env_file_cmd=""
     if [[ -n "${SERVICE_ENV_FILE:-}" && -f "$SERVICE_ENV_FILE" ]]; then
         echo "Using service environment file: $SERVICE_ENV_FILE"
-        cat "$SERVICE_ENV_FILE"
-        env_file_cmd="--env-file $SERVICE_ENV_FILE"
+        env_file_cmd="--env-file $(printf '%q' "$SERVICE_ENV_FILE")"
     elif [[ -z "${SERVICE_ENV_FILE:-}" ]]; then
         echo "SERVICE_ENV_FILE is not set."
     else
