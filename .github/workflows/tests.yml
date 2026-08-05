@@ -12,15 +12,13 @@ on:
     branches:
       - main
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: true
-
 jobs:
   test:
     if: >
       (github.event_name == 'push' && github.ref != 'refs/heads/main') ||
-      (github.event_name == 'pull_request' && github.base_ref == 'main')
+      (github.event_name == 'pull_request' &&
+       github.base_ref == 'main' &&
+       github.event.pull_request.head.repo.full_name != github.repository)
     # 1.0.8
     uses: cognizant-ai-lab/build-common/.github/workflows/_python-quality-gate.yml@30321843331e00848309b34e08b839e1f6490ba2
     with:
