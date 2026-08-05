@@ -56,6 +56,7 @@ Items in ***bold*** are essentials. Try to understand these first.
             - [llm_config](#llm_config-1)
             - [http_headers](#http_headers)
         - [sly_data_output_schema](#sly_data_output_schema)
+        - [invocation](#invocation)
     - [***instructions*** - main system prompt for the agent](#instructions)
     - [***tools*** - list of other agents/tools that this agent may access](#tools-agents)
         - [External Agents](#external-agents)
@@ -613,8 +614,8 @@ Example networks that advertise that their sly_data_schema needs external API ke
 
 The sly_data dictionary can contain an optional `http_headers` key: a mapping from
 [MCP server](#mcp-servers) URL to a dictionary of HTTP header names/values (for example
-`{"Authorization": "Bearer <token>"}`) that neuro-san sends when it calls that server. See [Authentication](#authentication)
-under MCP Servers for the header format.
+`{"Authorization": "Bearer <token>"}`) that neuro-san sends when it calls that server.
+See [Authentication](#authentication) under MCP Servers for the header format.
 
 Advertising `http_headers` in your `sly_data_schema` — with a `properties` entry per MCP URL and a
 `required` list — lets an OAuth-capable client (for example
@@ -632,6 +633,24 @@ for the sly_data being output by the agent network.
 Example networks that advertise their sly_data_output_schema:
 
 - [math_guy.hocon](../neuro_san/registries/math_guy.hocon)
+
+#### invocation
+
+_Front Man only_
+A string describing how the agent is to be called.
+
+A value of "chatbot" (the default) indicates that the agent is intended to be called as a chatbot,
+which essentially means the caller will be waiting for the agent network to complete
+the conversation in order to get some kind of response.  If the caller disconnects, the
+work being done for the request will be abandoned.
+
+A value of "event" indicates that the agent is intended to be called as an event handler,
+where the caller will _not_ be waiting for the agent network to complete the conversation.
+Rather, the caller reports information to the agent network, receives a quick acknowledgement
+message that the information has been received and the network's processing continues after
+the caller disconnects.  Events can also be called periodically by configuration in the manifest.
+See the [periodic key in the manifest documentation](./manifest_hocon_reference.md#periodic) for
+more information.
 
 ### instructions
 
