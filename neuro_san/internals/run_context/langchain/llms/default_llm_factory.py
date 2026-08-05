@@ -125,6 +125,13 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         # Mix in user-specified llm info, if available.
         if self.llm_info_file:
             extra_llm_infos: Dict[str, Any] = restorer.restore(file_reference=self.llm_info_file)
+            # Each user entry DEEP-MERGES with any same-named default entry, so a
+            # sparse override like {"gpt-4.1": {"class": "x"}} inherits the default
+            # entry's remaining fields (including a "use_model_name" alias redirect).
+            # This holds for .json user files too now that keys are sanitized at
+            # parse time: their dotted model names ("llama3.1") match the default
+            # keys. Before sanitization, such keys missed the quoted default keys
+            # ('"llama3.1"') and accidentally replaced the default entry wholesale.
             self.llm_infos = self.overlayer.overlay(self.llm_infos, extra_llm_infos)
 
         # Resolve any new llm factories
