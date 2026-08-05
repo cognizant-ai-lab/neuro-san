@@ -34,7 +34,6 @@ from tornado.web import RequestHandler
 
 from neuro_san.service.utils.request_util import RequestUtil
 
-
 class DebugGcHandler(RequestHandler):
     """
     Handler class for the /debug/gc endpoint.
@@ -155,14 +154,18 @@ class DebugGcHandler(RequestHandler):
         }
 
     @staticmethod
+    def _mb(n: int) -> str:
+        """
+        Convert a byte count to a human-readable string in MB with two decimal places.
+        """
+        return f"{n / (1024 * 1024):.2f} MB"
+
+    @staticmethod
     def _format_report(report: Dict[str, Any]) -> str:
         """
         Render the report dict as a printable multi-line string.
         """
         mem = report["memory"]
-
-        def _mb(n: int) -> str:
-            return f"{n / (1024 * 1024):.2f} MB"
 
         lines: List[str] = [
             f"pid            : {report['pid']}",
@@ -170,12 +173,12 @@ class DebugGcHandler(RequestHandler):
             f"duration       : {report['duration_ms']:.3f} ms",
             "",
             "memory:",
-            f"  rss  before  : {_mb(mem['rss_before_bytes'])}",
-            f"  rss  after   : {_mb(mem['rss_after_bytes'])}",
-            f"  rss  delta   : {_mb(mem['rss_delta_bytes']):>10} "
+            f"  rss  before  : {DebugGcHandler._mb(mem['rss_before_bytes'])}",
+            f"  rss  after   : {DebugGcHandler._mb(mem['rss_after_bytes'])}",
+            f"  rss  delta   : {DebugGcHandler._mb(mem['rss_delta_bytes']):>10} "
             f"({'+' if mem['rss_delta_bytes'] >= 0 else ''}{mem['rss_delta_bytes']:,} bytes)",
-            f"  vms  before  : {_mb(mem['vms_before_bytes'])}",
-            f"  vms  after   : {_mb(mem['vms_after_bytes'])}",
+            f"  vms  before  : {DebugGcHandler._mb(mem['vms_before_bytes'])}",
+            f"  vms  after   : {DebugGcHandler._mb(mem['vms_after_bytes'])}",
             "",
         ]
         return "\n".join(lines)
