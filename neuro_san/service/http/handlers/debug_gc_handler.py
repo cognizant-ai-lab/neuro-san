@@ -106,7 +106,12 @@ class DebugGcHandler(RequestHandler):
         response_format = RequestUtil.safe_message(response_format)
         if response_format == "text":
             self.set_header("Content-Type", "text/plain; charset=utf-8")
-            self.write(self._format_report(report))
+            # The report body is server-generated GC/memory statistics with no
+            # user input, but we route it through safe_message (html.escape)
+            # anyway: it is a no-op on the numeric content, is defence-in-depth
+            # should the report ever gain user-derived fields, and marks this
+            # write as sanitized for the reflected-XSS static analyzers.
+            self.write(RequestUtil.safe_message(self._format_report(report)))
         else:
             self.set_header("Content-Type", "application/json")
             self.write(json.dumps(report, indent=2))
