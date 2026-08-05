@@ -19,11 +19,12 @@ from __future__ import annotations
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Type
 
 from pydantic import BaseModel
-from pydantic.v1 import Field
-from pydantic.v1 import create_model
+from pydantic import Field
+from pydantic import create_model
 
 from leaf_common.serialization.interface.dictionary_converter import DictionaryConverter
 
@@ -121,6 +122,10 @@ class BaseModelDictionaryConverter(DictionaryConverter):
             # of "Undefined" in place which to agent infra implies a required arg.
             if field_name not in required:
                 field_kwargs["default"] = None
+                # Pydantic v1 implicitly made any field with a None default Optional.
+                # Pydantic v2 does not, so wrap the type explicitly lest an LLM
+                # passing an explicit null for an optional arg fail validation.
+                field_type = Optional[field_type]
             field = Field(**field_kwargs)
 
             # Add the field to our dictionary with its name as key
@@ -140,6 +145,12 @@ class BaseModelDictionaryConverter(DictionaryConverter):
         """
         type_from_dict: str = one_property.get("type")
         field_type: Type = self.TYPE_LOOKUP.get(type_from_dict)
+
+        # Pydantic v1 rejected the None annotation that resulted from an
+        # unrecognized type string, but pydantic v2 accepts None as NoneType,
+        # so raise explicitly to keep bad specs from validating silently.
+        if field_type is None:
+            raise ValueError(f"Unrecognized type '{type_from_dict}' for field '{field_name}'")
 
         if type_from_dict == "object":
 
