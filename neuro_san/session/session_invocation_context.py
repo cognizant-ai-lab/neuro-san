@@ -114,7 +114,7 @@ class SessionInvocationContext(InvocationContext):
         self.resources: List[LingeringResource] = []
         self.work_done_event: Event = Event()
         self.request_finished: bool = False
-        self.is_cloned: bool = False
+        self.cloned: bool = False
 
     def start(self):
         """
@@ -212,7 +212,7 @@ class SessionInvocationContext(InvocationContext):
 
         # Now that we are done, tell the Reservationist that we used for this request
         # that there will be no more Reservations to corral.
-        if not self.is_cloned and \
+        if not self.cloned and \
                 self.reservationist is not None and \
                 isinstance(self.reservationist, LingeringResource):
             await self.reservationist.close_of_work()
@@ -222,6 +222,15 @@ class SessionInvocationContext(InvocationContext):
         :return: The request reporting dictionary
         """
         return self.request_reporting
+
+    def is_cloned(self) -> bool:
+        """
+        :return: True if this instance is a clone created by safe_shallow_copy()
+                to invoke an external agent network on the same server via a
+                direct session.
+                False for the original InvocationContext of a request.
+        """
+        return self.cloned
 
     def get_llm_factory(self) -> ContextTypeLlmFactory:
         """
@@ -263,6 +272,11 @@ class SessionInvocationContext(InvocationContext):
         # in subsequent interactions with the same network.
         self.origination.reset()
 
+        # Token accounting is per-exchange ("Request total"), so clear it for the
+        # next exchange rather than accumulating across turns.  Clear in place:
+        # the dictionary instance is shared by reference with any clones.
+        self.request_reporting.clear()
+
         if self.queue is not None:
             self.queue.reset()
         else:
@@ -288,10 +302,23 @@ class SessionInvocationContext(InvocationContext):
 
         invocation_context: SessionInvocationContext = copy(self)
 
+        # Note: being a *shallow* copy, the clone intentionally shares some state
+        # with the original.  Notably:
+        # * request_reporting - so token accounting for external agent networks
+        #   invoked on this server contributes to the request-wide totals, with
+        #   each LLM call counted exactly once (see LangChainTokenCounter.report()).
+        #   Deliberately NOT reset or replaced here: pointing the clone at a fresh
+        #   dictionary would orphan the external network's usage from the request
+        #   totals.  Staleness across exchanges is handled by reset() instead,
+        #   which clears the shared dictionary in place at the start of each
+        #   exchange.
+        # * origination - so tool instantiation indices stay consistent across
+        #   the whole request.
+
         # Mark the invocation context as cloned
         # This tells us that it is not the original/root and will prevent
         # mis-happenings like returning the executor to the pool too early.
-        invocation_context.is_cloned = True
+        invocation_context.cloned = True
 
         # We need a different Event to signal work is done
         # Work being all done on a sub-invocation is not the same as work all done on the root.
@@ -382,7 +409,7 @@ class SessionInvocationContext(InvocationContext):
         """
         self._run_in_executor_until_complete(submitter_id, self.close_of_work())
 
-        if self.is_cloned:
+        if self.cloned:
             # Clones via safe_shallow_copy() share the same AsyncioExecutor,
             # so don't return it back to the pool just yet. Let the mama do that.
             return
