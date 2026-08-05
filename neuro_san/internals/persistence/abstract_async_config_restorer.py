@@ -163,7 +163,12 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
         if file_path.endswith(".hocon"):
             # Worth noting that includes within hocon files can only be done synchronously
             # The core pyhocon library does not support async includes.
-            serialization = HoconSerializationFormat()
+            #
+            # sanitize_keys=True: without it, keys that had to be quoted in the
+            # HOCON source come back as '"llama3.1"' with the quotes baked into
+            # the string (see the HoconSerializationFormat docstring for details).
+            # Applies at all nesting levels.
+            serialization = HoconSerializationFormat(sanitize_keys=True)
             # pyhocon parsing mutates process-global pyparsing state and is not
             # thread-safe. See HoconParseLock.
             parse_lock = HoconParseLock()
