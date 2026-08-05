@@ -34,9 +34,24 @@ function run() {
 
     check_directory
 
-    CONTAINER_VERSION="0.0.1"
+    CONTAINER_VERSION="${1:-0.0.1}"
     echo "Using CONTAINER_VERSION ${CONTAINER_VERSION}"
     echo "Using args '$*'"
+
+    # Check for an environment file to pass to the docker run command.
+    # This is optional, but if it is set and exists, we will use it.
+    # Environment file should be a simple text file with lines of the form:
+    #   VAR_NAME=VAR_VALUE
+    # This allows us to pass in any collection of run-specific values
+    env_file_cmd=""
+    if [[ -n "${SERVICE_ENV_FILE:-}" && -f "$SERVICE_ENV_FILE" ]]; then
+        echo "Using service environment file: $SERVICE_ENV_FILE"
+        env_file_cmd="--env-file $(printf '%q' "$SERVICE_ENV_FILE")"
+    elif [[ -z "${SERVICE_ENV_FILE:-}" ]]; then
+        echo "SERVICE_ENV_FILE is not set."
+    else
+        echo "WARNING: '$SERVICE_ENV_FILE' does not exist."
+    fi
 
     #
     # Host networking only works on Linux. Get the OS we are running on
@@ -73,6 +88,7 @@ function run() {
         -e ANTHROPIC_API_KEY \
         -e AGENT_SESSION_REQUIRE_HTTPS=false \
         -e LEAF_LOG_SENSITIVE=true \
+        ${env_file_cmd} \
         -p $SERVICE_HTTP_PORT:$SERVICE_HTTP_PORT \
             neuro-san/neuro-san:$CONTAINER_VERSION"
 
