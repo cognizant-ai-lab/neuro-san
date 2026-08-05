@@ -34,6 +34,7 @@ from tornado.web import RequestHandler
 
 from neuro_san.service.utils.request_util import RequestUtil
 
+
 class DebugGcHandler(RequestHandler):
     """
     Handler class for the /debug/gc endpoint.
