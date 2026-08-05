@@ -112,12 +112,35 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Rust toolchain (for pydantic-core and any other maturin/rust-built deps that
-# lack a cp314t wheel). Uses rustup so we get a current stable compiler.
+# lack a cp314t wheel). Rather than pipe https://sh.rustup.rs straight into a
+# shell -- which pulls an unpinned, unverified script over the network on every
+# build -- we download a PINNED rustup-init from the immutable versioned archive
+# and verify its SHA-256 before running it. rustup itself then cryptographically
+# verifies the toolchain it downloads. Bump RUSTUP_VERSION + the two checksums
+# together from https://static.rust-lang.org/rustup/archive/<ver>/<target>/rustup-init.sha256
+# RUST_TOOLCHAIN can be pinned to an exact version (e.g. "1.90.0") for fully
+# reproducible builds; "stable" tracks the latest stable at build time.
 ENV RUSTUP_HOME="/usr/local/rustup" \
     CARGO_HOME="/usr/local/cargo" \
     PATH="/usr/local/cargo/bin:${PATH}"
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-    | sh -s -- -y --profile minimal --default-toolchain stable
+ARG RUSTUP_VERSION="1.29.0"
+ARG RUST_TOOLCHAIN="stable"
+ARG RUSTUP_INIT_SHA256_AMD64="4acc9acc76d5079515b46346a485974457b5a79893cfb01112423c89aeb5aa10"
+ARG RUSTUP_INIT_SHA256_ARM64="9732d6c5e2a098d3521fca8145d826ae0aaa067ef2385ead08e6feac88fa5792"
+RUN dpkgArch="$(dpkg --print-architecture)" \
+    && case "${dpkgArch}" in \
+        amd64) rustArch="x86_64-unknown-linux-gnu"; sha256="${RUSTUP_INIT_SHA256_AMD64}" ;; \
+        arm64) rustArch="aarch64-unknown-linux-gnu"; sha256="${RUSTUP_INIT_SHA256_ARM64}" ;; \
+        *) echo "unsupported architecture: ${dpkgArch}" >&2; exit 1 ;; \
+    esac \
+    && url="https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/${rustArch}/rustup-init" \
+    && curl --proto '=https' --tlsv1.2 -sSfL "${url}" -o /tmp/rustup-init \
+    && echo "${sha256}  /tmp/rustup-init" | sha256sum -c - \
+    && chmod +x /tmp/rustup-init \
+    && /tmp/rustup-init -y --no-modify-path --profile minimal --default-toolchain "${RUST_TOOLCHAIN}" \
+    && rm -f /tmp/rustup-init \
+    && rustc --version \
+    && cargo --version
 
 # Bring in the uv binary (static, no runtime deps).
 COPY --from=uvsrc /uv /usr/local/bin/uv
