@@ -54,9 +54,8 @@ class ManifestKeyConfigFilter(ConfigFilter):
         for key, value in basis_config.items():
 
             # Key here is an agent name in a form that we choose.
-            # Quotes that pyhocon embeds in keys are already removed by
-            # AbstractAsyncConfigRestorer (sanitize_keys=True), so only
-            # whitespace normalization is left to do here.
+            # Keys are quote-sanitized at parse time (sanitize_keys=True),
+            # so only whitespace normalization is left to do here.
             manifest_key: str = key.strip()
 
             filtered[manifest_key] = value

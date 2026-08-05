@@ -49,9 +49,9 @@ class McpServersInfoRestorer(AbstractAsyncConfigRestorer):
         if basis_config is None:
             return None
 
-        # Quotes that pyhocon embeds in keys (MCP endpoint urls must be quoted
-        # in HOCON source) are already removed by AbstractAsyncConfigRestorer
-        # (sanitize_keys=True), so only whitespace normalization is left to do here.
+        # Keys (MCP endpoint urls, quoted in HOCON source) are quote-sanitized
+        # at parse time (sanitize_keys=True), so only whitespace normalization
+        # is left to do here.
         result_dict: Dict[str, Any] = {}
         for key, value in basis_config.items():
             use_key: str = key.strip()
