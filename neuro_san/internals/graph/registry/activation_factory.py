@@ -22,14 +22,11 @@ import os
 
 from pathlib import Path
 
+from leaf_common.config.resolver_util import ResolverUtil
+
 from neuro_san import TOP_LEVEL_DIR
 from neuro_san.internals.graph.activations.front_man_activation import FrontManActivation
 from neuro_san.internals.graph.preppers.activation_prepper import ActivationPrepper
-from neuro_san.internals.graph.preppers.branch_activation_prepper import BranchActivationPrepper
-from neuro_san.internals.graph.preppers.class_activation_prepper import ClassActivationPrepper
-from neuro_san.internals.graph.preppers.external_activation_prepper import ExternalActivationPrepper
-from neuro_san.internals.graph.preppers.front_man_activation_prepper import FrontManActivationPrepper
-from neuro_san.internals.graph.preppers.toolbox_activation_prepper import ToolboxActivationPrepper
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.callable_activation import CallableActivation
@@ -44,12 +41,12 @@ class ActivationFactory(AgentToolFactory):
     """
 
     # Basic list of stateless ActivationPreppers. Order matters.
-    PREPPERS: List[ActivationPrepper] = [
-        ExternalActivationPrepper(),
-        ToolboxActivationPrepper(),
-        ClassActivationPrepper(),
-        BranchActivationPrepper(),
-        FrontManActivationPrepper(),
+    PREPPER_CLASSES: List[str] = [
+        "neuro_san.internals.graph.preppers.external_activation_prepper.ExternalActivationPrepper",
+        "neuro_san.internals.graph.preppers.toolbox_activation_prepper.ToolboxActivationPrepper",
+        "neuro_san.internals.graph.preppers.class_activation_prepper.ClassActivationPrepper",
+        "neuro_san.internals.graph.preppers.branch_activation_prepper.BranchActivationPrepper",
+        "neuro_san.internals.graph.preppers.fron_man_activation_prepper.FrontManActivationPrepper",
     ]
 
     def __init__(self, agent_network: AgentNetwork):
@@ -60,6 +57,7 @@ class ActivationFactory(AgentToolFactory):
         """
         self.agent_network: AgentNetwork = agent_network
         self.agent_tool_path: str = self._determine_agent_tool_path()
+        self.preppers: List[ActivationPrepper] = self._create_preppers()
 
     def _determine_agent_tool_path(self) -> str:
         """
@@ -123,6 +121,39 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
 
         return agent_tool_path
 
+    def _create_preppers(self) -> List[ActivationPrepper]:
+        """
+        :return: A list of ActivationPrepper instances
+        """
+        preppers: List[ActivationPrepper] = []
+
+        prepper_class_name: str = None
+
+        # First read the default list
+        for prepper_class_name in self.PREPPER_CLASSES:
+            prepper: ActivationPrepper = ResolverUtil.create_instance(prepper_class_name,
+                                                                      "ActivationFactory.PREPPER_CLASSES list",
+                                                                      ActivationPrepper)
+            if prepper is not None:
+                preppers.append(prepper)
+
+        # Then read the agent network's prepper list
+        external_preppers: List[ActivationPrepper] = []
+        agent_prepper_classes: List[str] = os.environ.get("AGENT_ACTIVATION_PREPPER_CLASSES") or ""
+        for prepper_class_name in agent_prepper_classes.split(" "):
+            prepper_class_name = prepper_class_name.strip()
+            prepper: ActivationPrepper = ResolverUtil.create_instance(prepper_class_name,
+                                                                      "AGENT_ACTIVATION_PREPPER_CLASSES env var",
+                                                                      ActivationPrepper)
+            if prepper is not None:
+                external_preppers.append(prepper)
+
+        if len(external_preppers) > 0:
+            # Insert external preppers after external agents
+            preppers[1:1] = external_preppers
+
+        return preppers
+
     def get_agent_tool_path(self) -> str:
         """
         :return: The path under which tools for this registry should be looked for.
@@ -159,7 +190,7 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
 
         # Find the appropriate ActivationPrepper given the agent tool spec
         prepper: ActivationPrepper = None
-        for candidate in self.PREPPERS:
+        for candidate in self.preppers:
             if candidate.is_applicable(agent_tool_spec):
                 prepper = candidate
                 break
