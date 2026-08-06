@@ -25,9 +25,9 @@ from neuro_san.internals.interfaces.callable_activation import CallableActivatio
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 
 
-class ClassActivationPrepper(ActivationPrepper):
+class FrontManActivationPrepper(ActivationPrepper):
     """
-    ActivationPrepper implementation for ClassActivations (coded tools).
+    ActivationPrepper implementation for FrontManActivations.
     """
 
     def is_applicable(self, agent_tool_spec: Dict[str, Any]) -> bool:

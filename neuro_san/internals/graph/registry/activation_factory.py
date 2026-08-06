@@ -16,27 +16,25 @@
 # END COPYRIGHT
 from typing import Any
 from typing import Dict
+from typing import List
 
 import os
 
 from pathlib import Path
 
-from leaf_common.config.dictionary_overlay import DictionaryOverlay
-from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
-
 from neuro_san import TOP_LEVEL_DIR
-from neuro_san.internals.graph.activations.branch_activation import BranchActivation
-from neuro_san.internals.graph.activations.class_activation import ClassActivation
-from neuro_san.internals.graph.activations.external_activation import ExternalActivation
 from neuro_san.internals.graph.activations.front_man_activation import FrontManActivation
-from neuro_san.internals.graph.activations.toolbox_activation import ToolboxActivation
+from neuro_san.internals.graph.preppers.activation_prepper import ActivationPrepper
+from neuro_san.internals.graph.preppers.branch_activation_prepper import BranchActivationPrepper
+from neuro_san.internals.graph.preppers.class_activation_prepper import ClassActivationPrepper
+from neuro_san.internals.graph.preppers.external_activation_prepper import ExternalActivationPrepper
+from neuro_san.internals.graph.preppers.front_man_activation_prepper import FrontManActivationPrepper
+from neuro_san.internals.graph.preppers.toolbox_activation_prepper import ToolboxActivationPrepper
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.callable_activation import CallableActivation
 from neuro_san.internals.interfaces.front_man import FrontMan
-from neuro_san.internals.messages.sly_data_redactor import SlyDataRedactor
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
-from neuro_san.internals.run_context.utils.external_agent_parsing import ExternalAgentParsing
 
 
 class ActivationFactory(AgentToolFactory):
@@ -44,6 +42,14 @@ class ActivationFactory(AgentToolFactory):
     A factory class for creating Activations of tools within the agent network graph.
     That is, this is where neuro-san tools are made real.
     """
+
+    PREPPERS: List[ActivationPrepper] = [
+        ExternalActivationPrepper(),
+        ToolboxActivationPrepper(),
+        ClassActivationPrepper(),
+        BranchActivationPrepper(),
+        FrontManActivationPrepper(),
+    ]
 
     def __init__(self, agent_network: AgentNetwork):
         """
@@ -147,49 +153,29 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
         if factory is None:
             factory = self
 
-        agent_activation: CallableActivation = None
-
+        # Find the agent tool spec dictionary given the name
         agent_tool_spec: Dict[str, Any] = self.agent_network.get_agent_tool_spec(name)
-        if agent_tool_spec is None:
 
-            if not ExternalAgentParsing.is_external_agent(name):
-                raise ValueError(f"No agent_tool_spec for {name}")
+        # Find the appropriate ActivationPrepper given the agent tool spec
+        prepper: ActivationPrepper = None
+        for prepper in self.PREPPERS:
+            if prepper.is_applicable(agent_tool_spec):
+                break
 
-            # For external tools, we want to redact the sly data based on
-            # the calling/parent's agent specs.
-            redacted_sly_data: Dict[str, Any] = self._redact_sly_data(parent_run_context, sly_data)
+        if prepper is None:
+            return None
 
-            # Get the spec for allowing upstream data
-            extractor = DictionaryExtractor(parent_agent_spec)
-            empty = {}
-            allow_from_downstream: Dict[str, Any] = extractor.get("allow.from_downstream", empty)
-
-            agent_activation = ExternalActivation(parent_run_context, factory, name, arguments, redacted_sly_data,
-                                                  allow_from_downstream, invocation)
-            return agent_activation
-
-        # Merge the arguments coming in from the LLM with those that were specified
-        # in the hocon file for the agent.
-        use_args: Dict[str, Any] = self._merge_args(arguments, agent_tool_spec)
-
-        if agent_tool_spec.get("toolbox") is not None:
-            # If a toolbox is in the spec, this is a shared coded tool where tool's description and
-            # args schema are defined in either AGENT_TOOLBOX_INFO_FILE or toolbox_info.hocon.
-            agent_activation = ToolboxActivation(parent_run_context, factory, use_args, agent_tool_spec, sly_data)
-            return agent_activation
-
-        if agent_tool_spec.get("function") is not None:
-            # If we have a function in the spec, the agent has arguments
-            # it wants to be called with.
-            if agent_tool_spec.get("class") is not None:
-                # Agent specifically requested a python class to be run,
-                # and tool's description and args schema are defined in agent network hocon.
-                agent_activation = ClassActivation(parent_run_context, factory, use_args, agent_tool_spec, sly_data)
-            else:
-                agent_activation = BranchActivation(parent_run_context, factory, use_args, agent_tool_spec, sly_data)
-        else:
-            # Get the tool to call from the spec.
-            agent_activation = FrontManActivation(parent_run_context, factory, agent_tool_spec, sly_data)
+        # Prepare the activation
+        agent_activation: CallableActivation = prepper.prepare_activation(
+            name,
+            agent_tool_spec,
+            parent_agent_spec,
+            arguments,
+            sly_data,
+            parent_run_context,
+            factory,
+            invocation
+        )
 
         return agent_activation
 
@@ -227,38 +213,3 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
         :return: The agent name as per the spec
         """
         return self.agent_network.get_name_from_spec(agent_spec)
-
-    def _merge_args(self, llm_args: Dict[str, Any], agent_tool_spec: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Merges the args specified by the llm with "hard-coded" args specified in the agent spec.
-        Hard-coded args win over llm-specified args if both are defined.
-        If you want the llm args to win out over the hard-coded args, use a default for
-        the function spec instead of the hard-coded args.
-
-        :param llm_args: argument dictionary that the LLM wants
-        :param agent_tool_spec: The dictionary representing the spec registered agent
-        """
-        config_args: Dict[str, Any] = agent_tool_spec.get("args")
-        if config_args is None:
-            # Nothing to override
-            return llm_args
-
-        overlay = DictionaryOverlay()
-        merged_args: Dict[str, Any] = overlay.overlay(llm_args, config_args)
-        return merged_args
-
-    def _redact_sly_data(self, parent_run_context: RunContext, sly_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Redact the sly_data based on the agent spec associated with the parent run context
-
-        :param parent_run_context: The parent run context of the tool to be created.
-        :param sly_data: The internal representation of the sly_data to be redacted
-        :return: A new sly_data dictionary, redacted as per the parent spec
-        """
-        parent_spec: Dict[str, Any] = None
-        if parent_run_context is not None:
-            parent_spec = parent_run_context.get_agent_tool_spec()
-
-        redactor = SlyDataRedactor(parent_spec, config_keys=["allow.sly_data", "allow.to_downstream.sly_data"])
-        redacted: Dict[str, Any] = redactor.filter_config(sly_data)
-        return redacted
