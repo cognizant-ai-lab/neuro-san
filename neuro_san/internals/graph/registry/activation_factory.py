@@ -130,6 +130,9 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
 
     def _create_preppers(self) -> List[ActivationPrepper]:
         """
+        Create a list of ActivationPrepper instances to use using BASE_PREPPERS as a basis,
+        then add any externally defined preppers.
+
         :return: A list of ActivationPrepper instances
         """
         preppers: List[ActivationPrepper] = shallow_copy(self.BASE_PREPPERS)
