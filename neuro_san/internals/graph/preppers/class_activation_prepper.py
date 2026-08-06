@@ -18,16 +18,16 @@
 from typing import Any
 from typing import Dict
 
-from neuro_san.internals.graph.activations.toolbox_activation import ToolboxActivation
+from neuro_san.internals.graph.activations.class_activation import ClassActivation
 from neuro_san.internals.graph.preppers.activation_prepper import ActivationPrepper
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.callable_activation import CallableActivation
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 
 
-class ToolboxActivationPrepper(ActivationPrepper):
+class ClassActivationPrepper(ActivationPrepper):
     """
-    ActivationPrepper implementation for toolbox activations.
+    ActivationPrepper implementation for ClassActivations (coded tools).
     """
 
     def is_applicable(self, agent_tool_spec: Dict[str, Any]) -> bool:
@@ -35,7 +35,7 @@ class ToolboxActivationPrepper(ActivationPrepper):
         :param agent_tool_spec: the agent tool spec dictionary
         :return: True if this ActivationPrepper is applicable to the given agent tool spec
         """
-        return agent_tool_spec.get("toolbox") is not None
+        return agent_tool_spec.get("function") is not None and agent_tool_spec.get("class") is not None
 
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     def prepare_activation(self,
@@ -62,4 +62,4 @@ class ToolboxActivationPrepper(ActivationPrepper):
         :return: a CallableActivation
         """
         use_args: Dict[str, Any] = self.merge_args(arguments, agent_tool_spec)
-        return ToolboxActivation(parent_run_context, factory, use_args, agent_tool_spec, sly_data)
+        return ClassActivation(parent_run_context, factory, use_args, agent_tool_spec, sly_data)

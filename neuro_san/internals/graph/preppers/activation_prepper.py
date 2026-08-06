@@ -37,6 +37,7 @@ class ActivationPrepper:
         """
         raise NotImplementedError
 
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     def prepare_activation(self,
                            name: str,
                            agent_tool_spec: Dict[str, Any],

@@ -42,6 +42,7 @@ class ExternalActivationPrepper(ActivationPrepper):
         applicable: bool = agent_tool_spec is None
         return applicable
 
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     def prepare_activation(self,
                            name: str,
                            agent_tool_spec: Dict[str, Any],
