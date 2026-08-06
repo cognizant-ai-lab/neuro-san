@@ -28,6 +28,7 @@ from neuro_san.internals.run_context.interfaces.run_context import RunContext
 class ActivationPrepper:
     """
     Interface for policy objects which prepare a particular kind of activation
+    All implementations must be stateless.
     """
 
     def is_applicable(self, agent_tool_spec: Dict[str, Any]) -> bool:

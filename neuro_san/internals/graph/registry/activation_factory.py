@@ -43,6 +43,7 @@ class ActivationFactory(AgentToolFactory):
     That is, this is where neuro-san tools are made real.
     """
 
+    # Basic list of stateless ActivationPreppers. Order matters.
     PREPPERS: List[ActivationPrepper] = [
         ExternalActivationPrepper(),
         ToolboxActivationPrepper(),
