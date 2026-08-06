@@ -158,12 +158,13 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
 
         # Find the appropriate ActivationPrepper given the agent tool spec
         prepper: ActivationPrepper = None
-        for prepper in self.PREPPERS:
-            if prepper.is_applicable(agent_tool_spec):
+        for candidate in self.PREPPERS:
+            if candidate.is_applicable(agent_tool_spec):
+                prepper = candidate
                 break
 
         if prepper is None:
-            return None
+            raise ValueError(f"No activation handler found for {name} (tool spec: {agent_tool_spec})")
 
         # Prepare the activation
         agent_activation: CallableActivation = prepper.prepare_activation(
