@@ -18,8 +18,9 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from copy import copy as shallow_copy
 import os
-
+from os import environ
 from pathlib import Path
 
 from leaf_common.config.resolver_util import ResolverUtil
@@ -27,6 +28,11 @@ from leaf_common.config.resolver_util import ResolverUtil
 from neuro_san import TOP_LEVEL_DIR
 from neuro_san.internals.graph.activations.front_man_activation import FrontManActivation
 from neuro_san.internals.graph.preppers.activation_prepper import ActivationPrepper
+from neuro_san.internals.graph.preppers.external_activation_prepper import ExternalActivationPrepper
+from neuro_san.internals.graph.preppers.toolbox_activation_prepper import ToolboxActivationPrepper
+from neuro_san.internals.graph.preppers.class_activation_prepper import ClassActivationPrepper
+from neuro_san.internals.graph.preppers.branch_activation_prepper import BranchActivationPrepper
+from neuro_san.internals.graph.preppers.front_man_activation_prepper import FrontManActivationPrepper
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.callable_activation import CallableActivation
@@ -41,12 +47,13 @@ class ActivationFactory(AgentToolFactory):
     """
 
     # Basic list of stateless ActivationPreppers. Order matters.
-    PREPPER_CLASSES: List[str] = [
-        "neuro_san.internals.graph.preppers.external_activation_prepper.ExternalActivationPrepper",
-        "neuro_san.internals.graph.preppers.toolbox_activation_prepper.ToolboxActivationPrepper",
-        "neuro_san.internals.graph.preppers.class_activation_prepper.ClassActivationPrepper",
-        "neuro_san.internals.graph.preppers.branch_activation_prepper.BranchActivationPrepper",
-        "neuro_san.internals.graph.preppers.fron_man_activation_prepper.FrontManActivationPrepper",
+    BASE_PREPPERS: List[ActivationPrepper] = [
+        ExternalActivationPrepper(),
+        # Note that external prepper definitions get added at this point.
+        ToolboxActivationPrepper(),
+        ClassActivationPrepper(),
+        BranchActivationPrepper(),
+        FrontManActivationPrepper(),
     ]
 
     def __init__(self, agent_network: AgentNetwork):
@@ -67,7 +74,7 @@ class ActivationFactory(AgentToolFactory):
         :return: the agent tool path to use for source resolution.
         """
         # Try the env var first if nothing to start with
-        agent_tool_path: str = os.environ.get("AGENT_TOOL_PATH")
+        agent_tool_path: str = environ.get("AGENT_TOOL_PATH")
 
         # Try reach-around directory if still nothing to start with
         if agent_tool_path is None:
@@ -79,7 +86,7 @@ class ActivationFactory(AgentToolFactory):
             # Find the best of many resolution paths in the PYTHONPATH
             resolved_tool_path: str = str(Path(agent_tool_path).resolve())
             best_path = ""
-            pythonpath: str = os.environ.get("PYTHONPATH")
+            pythonpath: str = environ.get("PYTHONPATH")
             if pythonpath is None:
                 # Trust what we have already
                 best_path = agent_tool_path
@@ -125,21 +132,13 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
         """
         :return: A list of ActivationPrepper instances
         """
-        preppers: List[ActivationPrepper] = []
-
-        prepper_class_name: str = None
-
-        # First read the default list
-        for prepper_class_name in self.PREPPER_CLASSES:
-            prepper: ActivationPrepper = ResolverUtil.create_instance(prepper_class_name,
-                                                                      "ActivationFactory.PREPPER_CLASSES list",
-                                                                      ActivationPrepper)
-            if prepper is not None:
-                preppers.append(prepper)
+        preppers: List[ActivationPrepper] = shallow_copy(self.BASE_PREPPERS)
 
         # Then read the agent network's prepper list
         external_preppers: List[ActivationPrepper] = []
-        agent_prepper_classes: List[str] = os.environ.get("AGENT_ACTIVATION_PREPPER_CLASSES") or ""
+
+        prepper_class_name: str = None
+        agent_prepper_classes: List[str] = environ.get("AGENT_ACTIVATION_PREPPER_CLASSES") or ""
         for prepper_class_name in agent_prepper_classes.split(" "):
             prepper_class_name = prepper_class_name.strip()
             prepper: ActivationPrepper = ResolverUtil.create_instance(prepper_class_name,
