@@ -234,6 +234,10 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         if self.front_man is None:
             try:
                 await self.set_up(self.invocation_context, sly_data, chat_context)
+            except ValueError as exc:
+                # This can happen if we have problems with LLM clients API keys:
+                # Construct a message to send back to the client with the error information.
+                message = AgentFrameworkMessage(content=str(exc))
             except Exception as exc:    # pylint: disable=broad-exception-caught
                 # set_up() can fail for several authoring/environment reasons:
                 # missing LLM API keys (ValueError), bad function specs in tools
