@@ -147,8 +147,8 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
             if prepper is not None:
                 external_preppers.append(prepper)
 
+        # Insert any externally defined preppers after external agents
         if len(external_preppers) > 0:
-            # Insert external preppers after external agents
             preppers[1:1] = external_preppers
 
         return preppers
