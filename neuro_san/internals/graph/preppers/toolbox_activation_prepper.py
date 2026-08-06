@@ -18,14 +18,14 @@
 from typing import Any
 from typing import Dict
 
-from leaf_common.config.dictionary_overlay import DictionaryOverlay
-
+from neuro_san.internals.graph.actications.toolbox_activation import ToolboxActivation
+from neuro_san.internals.graph.preppers.activation_prepper import ActivationPrepper
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.callable_activation import CallableActivation
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 
 
-class ActivationPrepper:
+class ToolboxActivationPrepper(ActivationPrepper):
     """
     Interface for policy objects which prepare a particular kind of activation
     """
@@ -35,7 +35,7 @@ class ActivationPrepper:
         :param agent_tool_spec: the agent tool spec dictionary
         :return: True if this ActivationPrepper is applicable to the given agent tool spec
         """
-        raise NotImplementedError
+        return agent_tool_spec.get("toolbox") is not None
 
     def prepare_activation(self,
                            name: str,
@@ -60,23 +60,5 @@ class ActivationPrepper:
         :param invocation: the invocation string ("chatbot" or "event")
         :return: a CallableActivation
         """
-        raise NotImplementedError
-
-    def merge_args(self, llm_args: Dict[str, Any], agent_tool_spec: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Merges the args specified by the llm with "hard-coded" args specified in the agent spec.
-        Hard-coded args win over llm-specified args if both are defined.
-        If you want the llm args to win out over the hard-coded args, use a default for
-        the function spec instead of the hard-coded args.
-
-        :param llm_args: argument dictionary that the LLM wants
-        :param agent_tool_spec: The dictionary representing the spec registered agent
-        """
-        config_args: Dict[str, Any] = agent_tool_spec.get("args")
-        if config_args is None:
-            # Nothing to override
-            return llm_args
-
-        overlay = DictionaryOverlay()
-        merged_args: Dict[str, Any] = overlay.overlay(llm_args, config_args)
-        return merged_args
+        use_args: Dict[str, Any] = self.merge_args(arguments, agent_tool_spec)
+        return ToolboxActivation(parent_run_context, factory, use_args, agent_tool_spec, sly_data)

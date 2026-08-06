@@ -21,6 +21,7 @@ from typing import Dict
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.internals.graph.activations.external_activation import ExternalActivation
+from neuro_san.internals.graph.preppers.activation_prepper import ActivationPrepper
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.callable_activation import CallableActivation
 from neuro_san.internals.messages.sly_data_redactor import SlyDataRedactor
@@ -28,9 +29,9 @@ from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.internals.run_context.utils.external_agent_parsing import ExternalAgentParsing
 
 
-class ActivationPrepper:
+class ExternalActivationPrepper(ActivationPrepper):
     """
-    Interface for policy objects which prepare a particular kind of activation
+    ActivationPrepper implementation for external agent networks.
     """
 
     def is_applicable(self, agent_tool_spec: Dict[str, Any]) -> bool:
