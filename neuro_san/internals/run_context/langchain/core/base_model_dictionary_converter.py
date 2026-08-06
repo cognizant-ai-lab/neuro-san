@@ -38,9 +38,7 @@ class BaseModelDictionaryConverter(DictionaryConverter):
     TYPE_LOOKUP: Dict[str, Type] = {
         "string": str,
         "int": int,
-        "integer": int,         # JSON Schema alias for int
         "float": float,
-        "number": float,        # JSON Schema alias for float
         "boolean": bool,
         "array": List,
 
