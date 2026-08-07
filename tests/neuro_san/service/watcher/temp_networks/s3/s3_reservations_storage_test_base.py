@@ -85,6 +85,11 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
                 "AWS_SESSION_TOKEN": "testing",
                 "AWS_DEFAULT_REGION": "us-east-1",
                 "AWS_EC2_METADATA_DISABLED": "true",
+                # Keep botocore away from the host's real config/credentials
+                # files: a config file can carry profile/SSO settings that
+                # break hermeticity even with the fake credentials above.
+                "AWS_CONFIG_FILE": os.devnull,
+                "AWS_SHARED_CREDENTIALS_FILE": os.devnull,
             },
             clear=False,
         )
@@ -95,14 +100,26 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
         # is restored to "5", and a previously unset key is removed.
         self.addCleanup(env_patcher.stop)
 
+        # patch.dict with clear=False can only OVERRIDE variables, not delete
+        # them, so the profile selectors are popped manually (and restored by
+        # addCleanup). With AWS_PROFILE set, botocore raises ProfileNotFound
+        # from its config load when the profile is missing from the host's
+        # ~/.aws/config - BEFORE any credential provider (including the fake
+        # env credentials above) is consulted - which would fail every
+        # inheriting test in setUp on such a machine.
+        for profile_var in ("AWS_PROFILE", "AWS_DEFAULT_PROFILE"):
+            if profile_var in os.environ:
+                self.addCleanup(os.environ.__setitem__, profile_var, os.environ.pop(profile_var))
+
         self.fake_s3: FakeS3Client = FakeS3Client()
 
         # Patch Session.create_client at the import boundary in
         # aws_sync_client_worker so the workers receive our fake instead of a
         # real boto3 client. The workers create their clients WITHOUT explicit
-        # keys and never consult Session.get_credentials themselves (credential
-        # resolution/refresh happens inside real clients at request-signing
-        # time), so intercepting create_client is the only seam needed.
+        # keys, so create_client is the seam that swaps in the fake. The sync
+        # worker has one other credential touchpoint - its empty-chain guard
+        # calls Session.get_credentials() before each client build - which is
+        # answered by the fake env credentials above, not by this patch.
         boto3_patcher = patch(
             "neuro_san.service.watcher.temp_networks.s3.aws_sync_client_worker.Session.create_client",
             return_value=self.fake_s3,
@@ -116,8 +133,9 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
 
         # Patch AioSession.create_client at the import boundary in
         # aws_async_client_worker so the writer receives our fake instead of a
-        # real aiobotocore client. Same reasoning as the sync patch above: the
-        # keyless-client design leaves create_client as the only seam.
+        # real aiobotocore client. Same seam as the sync patch above; the
+        # async worker has no get_credentials() guard, so create_client is
+        # its only credential touchpoint.
         aiobotocore_patcher = patch(
             "neuro_san.service.watcher.temp_networks.s3.aws_async_client_worker.AioSession.create_client",
             return_value=self.fake_async_s3,

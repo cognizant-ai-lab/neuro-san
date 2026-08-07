@@ -248,7 +248,8 @@ class S3ReservationsExpiration:
                 self.logger.debug("%s: Reservation %s was already removed by another process", self.name, obj_key)
                 expired = True  # Object is gone, which is the desired outcome for expiration
             elif S3Util.is_credential_rejection_error(exception):
-                # Credential rejection (ExpiredToken / InvalidToken) must NOT be
+                # Credential rejection (ExpiredToken / InvalidToken /
+                # TokenRefreshRequired) must NOT be
                 # swallowed here. The sweep's client is keyless and long-lived (see
                 # AwsSyncClientWorker), so token-based credentials refresh at signing
                 # time and this path stays dormant for them - but it can still fire

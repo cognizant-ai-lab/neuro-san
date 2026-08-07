@@ -22,6 +22,8 @@ from typing import Optional
 from random import random
 
 from botocore.exceptions import ClientError
+from botocore.exceptions import NoCredentialsError
+from botocore.exceptions import PartialCredentialsError
 
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
@@ -98,11 +100,12 @@ class S3Util:
         return "ExpiredToken" in S3Util.get_error_code(err)
 
     @staticmethod
-    def is_credential_rejection_error(err: ClientError) -> bool:
+    def is_credential_rejection_error(err: Exception) -> bool:
         """
-        :param err: The ClientError exception to evaluate
-        :return: True if S3 rejected the credentials the request was signed
-                 with, in a way that discarding the Session + client and
+        :param err: The exception to evaluate (a botocore ClientError or
+                 BotoCoreError; anything else classifies False)
+        :return: True if the error means the resolved credential state is
+                 unusable in a way that discarding the Session + client and
                  re-resolving the credential chain can plausibly fix:
 
                  * ExpiredToken / ExpiredTokenException - the session token
@@ -122,13 +125,33 @@ class S3Util:
                    Exact match on purpose; there is no InvalidTokenException
                    variant for S3, and near-misses like InvalidClientTokenId
                    belong to other services.
+                 * TokenRefreshRequired - "the provided token must be
+                   refreshed": S3's third temporary-token rejection code.
+                   Same remedy as its siblings - only a re-resolved chain
+                   can supply a refreshed token. Exact match, like
+                   InvalidToken.
+                 * NoCredentialsError / PartialCredentialsError - raised
+                   locally by botocore (not sent by S3) when the chain
+                   resolves to nothing or to an incomplete key set: the
+                   other face of the same rotation window, a credentials
+                   file caught empty or half-written mid-rewrite. These are
+                   BotoCoreErrors, NOT ClientErrors, so callers must catch
+                   them alongside ClientError for this classification to
+                   matter (a plain "except ClientError" gate never sees
+                   them). botocore never caches a None resolution, so
+                   retrying once the rewrite lands heals the state.
 
                  Deliberately NOT matched: InvalidAccessKeyId and
                  SignatureDoesNotMatch. Those indicate rotated long-lived
                  key pairs or genuine signing bugs - retrying would mask
                  real misconfiguration (see the workers' retry docstrings).
         """
-        return S3Util.is_expired_token_error(err) or S3Util.get_error_code(err) == "InvalidToken"
+        if isinstance(err, (NoCredentialsError, PartialCredentialsError)):
+            return True
+        if not isinstance(err, ClientError):
+            return False
+        return S3Util.is_expired_token_error(err) \
+            or S3Util.get_error_code(err) in ("InvalidToken", "TokenRefreshRequired")
 
     @staticmethod
     def extract_reservation_data(agent_spec: Any) -> Optional[Dict[str, Any]]:

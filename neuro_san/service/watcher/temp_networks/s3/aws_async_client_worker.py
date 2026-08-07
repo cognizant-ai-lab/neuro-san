@@ -35,6 +35,7 @@ from aiobotocore.session import ClientCreatorContext
 from botocore.exceptions import BotoCoreError
 from botocore.exceptions import ClientError
 from botocore.exceptions import NoCredentialsError
+from botocore.exceptions import PartialCredentialsError
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 
@@ -111,20 +112,26 @@ class AwsAsyncClientWorker:
 
         Because clients are created keyless (see class docstring),
         token-based credentials refresh at signing time and this retry path
-        stays dormant for them. It fires when S3 rejects the credentials a
-        request was signed with (see S3Util.is_credential_rejection_error):
+        stays dormant for them. It fires when the resolved credential state
+        is unusable (see S3Util.is_credential_rejection_error):
         ExpiredToken (static session tokens rotated externally - e.g. a
         credentials file rewritten by another process, which the chain
-        resolves once per Session and never re-reads on its own) and
+        resolves once per Session and never re-reads on its own),
         InvalidToken (a malformed/mismatched credential state - our code
         never assembles key/secret/token triples itself, so this can only
         mean the resolved credential state is bad; observed in production
-        as neuro-san-studio issue #1310). Two rotation cases deliberately
-        do NOT recover here: environment variables (a process's
-        environment cannot be changed from outside, so re-resolving would
-        re-read the same values), and rotated access KEY PAIRS (S3 rejects
-        those with InvalidAccessKeyId or SignatureDoesNotMatch). Both
-        require a process restart.
+        as neuro-san-studio issue #1310), TokenRefreshRequired (S3's third
+        temporary-token rejection code; same remedy), and
+        NoCredentialsError/PartialCredentialsError (BotoCoreErrors raised
+        locally when the chain resolves empty or half-written - that same
+        credentials file caught mid-rewrite - which a ClientError-only
+        gate would let escape and lose the whole write batch with retry
+        budget unused). Two rotation cases deliberately do NOT recover
+        here: environment variables (a process's environment cannot be
+        changed from outside, so re-resolving would re-read the same
+        values), and rotated access KEY PAIRS (S3 rejects those with
+        InvalidAccessKeyId or SignatureDoesNotMatch). Both require a
+        process restart.
 
         NOTE: mirrored in AwsSyncClientWorker.retry_with_new_client() -
         keep the retry policies in sync when editing.
@@ -148,7 +155,13 @@ class AwsAsyncClientWorker:
                 retval: Any = await self.do_work_with_new_client(session, work_function, attempt=attempt)
                 return retval
 
-            except ClientError as err:
+            # NoCredentialsError/PartialCredentialsError are BotoCoreErrors,
+            # not ClientErrors - a keyless client whose chain resolved empty
+            # raises the former at signing time (do_with_retries re-raises
+            # it immediately) - so an "except ClientError" alone would let
+            # the mid-rewrite phase of the very rotation window this loop
+            # exists to ride out escape with retry budget unused.
+            except (ClientError, NoCredentialsError, PartialCredentialsError) as err:
                 # S3Util.is_credential_rejection_error() is used instead of
                 # raw DictionaryExtractor access: the extractor returns a
                 # stored None in preference to its default, and substring
@@ -169,10 +182,15 @@ class AwsAsyncClientWorker:
                     self.session = None
                 if source is None:
                     source = self.name
-                self.logger.warning("%s (%d): %s rejected the request's credentials (%s). Retrying with a "
+                if isinstance(err, ClientError):
+                    error_label: str = S3Util.get_error_code(err)
+                else:
+                    # Local chain-resolution failures carry no S3 error code.
+                    error_label = type(err).__name__
+                self.logger.warning("%s (%d): %s credentials rejected or unresolvable (%s). Retrying with a "
                                     "re-resolved credential chain. If you believe you have valid non-expiring "
                                     "%s credentials, be sure they are correct.",
-                                    source, attempt, self.aws_service, S3Util.get_error_code(err),
+                                    source, attempt, self.aws_service, error_label,
                                     self.aws_service)
                 if attempt < self.CREDENTIAL_RETRY_MAX_ATTEMPTS:
                     # Jittered backoff gives an in-progress external rotation
@@ -309,7 +327,9 @@ class AwsAsyncClientWorker:
                 # subclass): missing credentials cannot heal within this
                 # loop - the calling client's credential state is fixed -
                 # so backing off through 8 attempts (~16-48s of sleeps)
-                # would only stall the write queue before failing anyway.
+                # would only stall the write queue. Re-raising immediately
+                # routes it to retry_with_new_client()'s credential retry,
+                # which discards the session and CAN heal it.
                 raise
             except BotoCoreError as err:
                 # Often transient network/serialization issues

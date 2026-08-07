@@ -30,6 +30,7 @@ from botocore.config import Config
 from botocore.exceptions import BotoCoreError
 from botocore.exceptions import ClientError
 from botocore.exceptions import NoCredentialsError
+from botocore.exceptions import PartialCredentialsError
 from botocore.session import get_session
 from botocore.session import Session
 
@@ -124,8 +125,8 @@ class AwsSyncClientWorker:
 
         Because the client is keyless (see class docstring), token-based
         credentials refresh at signing time and this retry path stays
-        dormant for them. It fires when S3 rejects the credentials a
-        request was signed with (see S3Util.is_credential_rejection_error):
+        dormant for them. It fires when the resolved credential state is
+        unusable (see S3Util.is_credential_rejection_error):
           * ExpiredToken - static session tokens rotated externally, e.g.
             temporary credentials in a credentials file that another
             process rewrites. botocore resolves the credential chain once
@@ -139,6 +140,16 @@ class AwsSyncClientWorker:
             is the only remedy. Observed in production (neuro-san-studio
             issue #1310): such a state persisted across reads precisely
             because the previous design's gate matched only ExpiredToken.
+          * TokenRefreshRequired - S3's third temporary-token rejection
+            code ("the provided token must be refreshed"); same remedy
+            as its siblings above.
+          * NoCredentialsError / PartialCredentialsError - BotoCoreErrors
+            raised locally when the chain resolves empty or half-written
+            (that same credentials file caught mid-rewrite): the other
+            face of the rotation window the codes above catch after the
+            fact. Caught here alongside ClientError - a ClientError-only
+            gate would let them escape with retry budget unused and fail
+            the request outright.
         Two rotation cases deliberately do NOT recover here: environment
         variables (a process's environment cannot be changed from outside,
         so re-resolving would re-read the same values), and rotated access
@@ -158,12 +169,21 @@ class AwsSyncClientWorker:
         last_err: Exception = None
 
         for attempt in range(1, self.CREDENTIAL_RETRY_MAX_ATTEMPTS + 1):
+            # Bound before the try so the except block below always sees a
+            # real value: None means get_client() itself raised (nothing was
+            # built), a client means the failure came from work_function.
+            sync_aws_client: BaseClient = None
             try:
-                sync_aws_client: BaseClient = self.get_client()
+                sync_aws_client = self.get_client()
                 retval: Any = work_function(sync_aws_client=sync_aws_client)
                 return retval
 
-            except ClientError as err:
+            # NoCredentialsError/PartialCredentialsError are BotoCoreErrors,
+            # not ClientErrors - get_client()'s empty-chain guard raises the
+            # former - so an "except ClientError" alone would let the
+            # mid-rewrite phase of the very rotation window this loop exists
+            # to ride out escape with retry budget unused.
+            except (ClientError, NoCredentialsError, PartialCredentialsError) as err:
                 # S3Util.is_credential_rejection_error() is used instead of
                 # raw DictionaryExtractor access: the extractor returns a
                 # stored None in preference to its default, and substring
@@ -179,13 +199,22 @@ class AwsSyncClientWorker:
                 # the credential chain from scratch. Passing the client this
                 # attempt actually failed with lets reset_client() skip the
                 # reset when a concurrent thread already rebuilt a fresh one.
-                self.reset_client(failed_client=sync_aws_client)
+                # When get_client() itself raised, there is nothing cached to
+                # discard: it leaves the cache empty on failure, and botocore
+                # re-resolves a None result on the next call by itself.
+                if sync_aws_client is not None:
+                    self.reset_client(failed_client=sync_aws_client)
                 if source is None:
                     source = self.name
-                self.logger.warning("%s (%d): %s rejected the request's credentials (%s). Retrying with a "
+                if isinstance(err, ClientError):
+                    error_label: str = S3Util.get_error_code(err)
+                else:
+                    # Local chain-resolution failures carry no S3 error code.
+                    error_label = type(err).__name__
+                self.logger.warning("%s (%d): %s credentials rejected or unresolvable (%s). Retrying with a "
                                     "re-resolved credential chain. If you believe you have valid non-expiring "
                                     "%s credentials, be sure they are correct.",
-                                    source, attempt, self.aws_service, S3Util.get_error_code(err),
+                                    source, attempt, self.aws_service, error_label,
                                     self.aws_service)
                 if attempt < self.CREDENTIAL_RETRY_MAX_ATTEMPTS:
                     # Jittered backoff gives an in-progress external rotation
@@ -233,13 +262,13 @@ class AwsSyncClientWorker:
                 # whatever the chain resolves RIGHT NOW into the client -
                 # including None (an empty chain, e.g. a credentials file
                 # mid-rewrite during rotation). A client pinned with None
-                # raises NoCredentialsError - a BotoCoreError the
-                # ExpiredToken retry above can never see - on every request,
-                # so caching it would wedge this worker until restart.
-                # Raising here instead leaves the cache empty, and
+                # raises NoCredentialsError on every request, so caching it
+                # would wedge this worker until restart. Raising here instead
+                # leaves the cache empty; retry_with_new_client() treats it
+                # as a credential rejection (backoff + retry), and
                 # Session.get_credentials() re-resolves whenever its previous
-                # resolution came back None, so the worker self-heals on the
-                # next call once credentials are available again.
+                # resolution came back None, so the worker self-heals as soon
+                # as credentials are available again.
                 if self.session.get_credentials() is None:
                     raise NoCredentialsError()
 
@@ -304,7 +333,9 @@ class AwsSyncClientWorker:
                 # subclass): missing credentials cannot heal within this
                 # loop - the calling client's credential state is fixed -
                 # so backing off through 8 attempts (~16-48s of sleeps)
-                # would only stall the request path before failing anyway.
+                # would only stall the request path. Re-raising immediately
+                # routes it to retry_with_new_client()'s credential retry,
+                # which discards the session and CAN heal it.
                 raise
             except BotoCoreError as err:
                 # Often transient network/serialization issues

@@ -47,7 +47,11 @@ from typing import Dict
 from unittest import TestCase
 from unittest.mock import patch
 
+from botocore.exceptions import BotoCoreError
 from botocore.exceptions import ClientError
+from botocore.exceptions import EndpointConnectionError
+from botocore.exceptions import NoCredentialsError
+from botocore.exceptions import PartialCredentialsError
 
 from neuro_san.service.watcher.temp_networks.s3.s3_util import S3Util
 from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_test_base \
@@ -81,11 +85,12 @@ class TestCredentialRejectionGate(TestCase):
 
     def test_codes_that_trigger_re_resolution(self):
         """
-        Expired and malformed/mismatched token codes must trigger a rebuild:
-        with keyless clients, both can only mean the resolved credential
-        state is bad, and re-resolving the chain is the only remedy.
+        Expired, malformed/mismatched, and refresh-required token codes must
+        trigger a rebuild: with keyless clients, each can only mean the
+        resolved credential state is bad, and re-resolving the chain is the
+        only remedy.
         """
-        for code in ("ExpiredToken", "ExpiredTokenException", "InvalidToken"):
+        for code in ("ExpiredToken", "ExpiredTokenException", "InvalidToken", "TokenRefreshRequired"):
             with self.subTest(code=code):
                 self.assertTrue(
                     S3Util.is_credential_rejection_error(_make_client_error(code)),
@@ -104,6 +109,31 @@ class TestCredentialRejectionGate(TestCase):
                     S3Util.is_credential_rejection_error(_make_client_error(code)),
                     f"Expected {code} NOT to trigger credential re-resolution.",
                 )
+
+    def test_local_resolution_failures_trigger_re_resolution(self):
+        """
+        NoCredentialsError / PartialCredentialsError are raised locally by
+        botocore when the chain resolves empty or half-written (e.g. a
+        credentials file caught mid-rewrite). They are BotoCoreErrors, not
+        ClientErrors, and must classify as credential rejections so the
+        workers' retry loops - which catch them alongside ClientError -
+        ride out the rewrite instead of failing the read or losing the
+        write batch.
+        """
+        self.assertTrue(S3Util.is_credential_rejection_error(NoCredentialsError()))
+        self.assertTrue(S3Util.is_credential_rejection_error(
+            PartialCredentialsError(provider="shared-credentials-file",
+                                    cred_var="aws_secret_access_key")))
+
+    def test_other_local_errors_must_surface(self):
+        """
+        Generic BotoCoreErrors (network trouble, endpoint problems) are not
+        credential rejections: re-resolving the chain cannot fix them, so
+        they must surface to their own (transient-retry or fail) handling.
+        """
+        self.assertFalse(S3Util.is_credential_rejection_error(BotoCoreError()))
+        self.assertFalse(S3Util.is_credential_rejection_error(
+            EndpointConnectionError(endpoint_url="https://s3.us-east-1.amazonaws.com")))
 
 
 class _InvalidTokenClient:
