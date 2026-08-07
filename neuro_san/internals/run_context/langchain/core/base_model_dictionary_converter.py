@@ -55,13 +55,32 @@ class BaseModelDictionaryConverter(DictionaryConverter):
         "number": Union[int, float],
         "bool": bool,
 
-        # Note: "Any" produces a pydantic BaseModel object whose fields
-        #       are direct members when passed as an argument to a CodedTool
-        #       or any other Tool.  If you really want a dictionary,
-        #       you need to turn it into one using foo = dict(my_object_arg)
-        #       See: https://docs.pydantic.dev/1.10/usage/exporting_models/#dictmodel-and-iteration
-        #       This is what the PydanticArgumentDictionaryConverter is for.
-        "object": Any
+        # Note: This entry only applies to "object" properties that do not
+        #       declare "properties" of their own.  Objects that do declare
+        #       them never reach this lookup - get_type_from_property_dict()
+        #       below converts those into nested pydantic BaseModels, and
+        #       PydanticArgumentDictionaryConverter flattens any such nested
+        #       models back into plain dictionaries before tool arguments
+        #       are passed along, so CodedTools always receive dictionaries.
+        #
+        #       Dict[str, Any] is used here rather than bare Any because of
+        #       the JSON schema each produces for the LLM provider:
+        #       * Any yields an empty schema ({}), which provider adapters
+        #         cannot represent faithfully.  Notably langchain-google-genai
+        #         (every version tested, 2.1.8 through 4.3.2) defaults such
+        #         untyped properties to STRING, after which Gemini sends
+        #         JSON-encoded strings where tools expect dictionaries.
+        #       * Dict[str, Any] yields
+        #         {"type": "object", "additionalProperties": true},
+        #         which converts to a proper OBJECT declaration everywhere.
+        #
+        #       For well-formed arguments the two behave identically: a
+        #       dictionary sent by the LLM reaches the tool as the same
+        #       plain dict.  Non-dict values (e.g. a JSON-encoded string),
+        #       which Any silently passed through with the wrong type, now
+        #       fail pydantic validation and are reported back to the LLM
+        #       as a correctable tool error instead.
+        "object": Dict[str, Any]
     }
 
     def __init__(self, top_level_field_name: str):
@@ -216,9 +235,10 @@ class BaseModelDictionaryConverter(DictionaryConverter):
                 field_type = self.openai_function_to_pydantic(field_name, one_property)
 
             # If there are no properties, we use the default in the TYPE_LOOKUP
-            # which is Any.  Any passes a dynamically constructed pydantic object
-            # whose fields can be accessed like regular fields.  This is nice
-            # and fancy, but what we really want is a dictionary.
+            # which is Dict[str, Any]: the argument reaches the tool as a plain
+            # dictionary and is advertised to the LLM provider as a real JSON
+            # object type.  See the note on TYPE_LOOKUP above for why this is
+            # deliberately not Any.
 
         elif type_from_dict == "array":
 
