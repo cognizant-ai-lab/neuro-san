@@ -33,7 +33,7 @@ from neuro_san.internals.run_context.interfaces.run import Run
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.internals.run_context.interfaces.tool_call import ToolCall
 from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
-from neuro_san.internals.run_context.utils.external_agent_parsing import ExternalAgentParsing
+from neuro_san.message.utils.external_agent_parsing import ExternalAgentParsing
 
 
 class CallingActivation(AbstractCallableActivation, ToolCaller):

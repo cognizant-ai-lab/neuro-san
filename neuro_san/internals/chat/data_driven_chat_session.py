@@ -53,7 +53,7 @@ from neuro_san.message.processors.answer_message_processor import AnswerMessageP
 from neuro_san.message.processors.message_processor import MessageProcessor
 from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
 from neuro_san.message.types.base_message_dictionary_converter import BaseMessageDictionaryConverter
-from neuro_san.message.types.sly_data_redactor import SlyDataRedactor
+from neuro_san.message.utils.sly_data_redactor import SlyDataRedactor
 
 # Lazily import specific errors from llm providers
 PATIENCE_ERRORS: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
