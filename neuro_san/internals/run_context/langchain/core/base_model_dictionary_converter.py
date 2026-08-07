@@ -153,6 +153,11 @@ class BaseModelDictionaryConverter(DictionaryConverter):
             # "required": "city") would substring-match unrelated field
             # names instead of naming one required field.
             raise ToolSpecError(f"'required' must be a list of field names, got {type(required).__name__}")
+        if any(not isinstance(entry, str) for entry in required):
+            # Non-string entries match nothing in the "in" test below, so
+            # every field would silently become optional; they also crash
+            # downstream validators that use the entries as keys.
+            raise ToolSpecError(f"'required' must contain only field-name strings, got {required!r}")
 
         fields: Dict[str, Any] = {}
         for field_name, one_property in properties.items():

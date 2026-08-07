@@ -174,6 +174,17 @@ class TestMalformedSpecHandling:
                 "required": "city",
             })
 
+    def test_non_string_required_entries_raise_tool_spec_error(self):
+        """
+        Non-string "required" entries match nothing in the required test,
+        silently making every field optional, so they are rejected.
+        """
+        with pytest.raises(ToolSpecError, match="'required' must contain only field-name strings"):
+            self._convert({
+                "properties": {"x": {"type": "string"}},
+                "required": [{}],
+            })
+
     def test_non_dict_property_spec_raises_tool_spec_error(self):
         """A property whose spec is not a dict is a clean spec error, not a crash."""
         with pytest.raises(ToolSpecError, match="Property 'x' must be an object"):
