@@ -172,6 +172,14 @@ It's function_json is described thusly:
         # function again later on in langchain agent-land.
         converter = BaseModelDictionaryConverter("parameters")
         schema_source: Dict[str, Any] = use_function_json if use_function_json != function_json else {}
+        if schema_source is None:
+            # An explicit "parameters": null (expressible in the JSON specs
+            # external agents send over the network) must still produce an
+            # explicit empty args_schema: from_dict(None) honors the
+            # DictionaryConverter None -> None contract, and a None
+            # args_schema would re-enable the langchain schema inference
+            # this block exists to avoid.
+            schema_source = {}
         tool.args_schema = converter.from_dict(schema_source)
 
         tool.tool_caller = tool_caller
