@@ -105,6 +105,17 @@ class TestPydanticParametersNetworkValidator(TestCase, AbstractNetworkValidatorT
         self.assertIn("agent_e", errors[0])
         self.assertIn("pydantic model conversion failed", errors[0])
 
+    def test_json_schema_type_aliases_are_accepted(self):
+        """
+        Standard JSON Schema / OpenAI function spec type names
+        ("integer", "number", "bool") are accepted via TYPE_LOOKUP aliases,
+        both as scalar property types and inside array "items".
+        """
+        config: Dict[str, Any] = self._restore_fixture(
+            "json_schema_type_aliases.hocon",
+        )
+        self.assertEqual(self.validator.validate(config), [])
+
     def test_string_items_commondef_resolved_before_pydantic(self):
         """
         String ``items`` commondef references are resolved to their actual

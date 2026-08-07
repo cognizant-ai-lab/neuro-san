@@ -21,6 +21,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Type
+from typing import Union
 
 from pydantic import BaseModel
 from pydantic import Field
@@ -42,6 +43,15 @@ class BaseModelDictionaryConverter(DictionaryConverter):
         "float": float,
         "boolean": bool,
         "array": List,
+
+        # Aliases so that standard JSON Schema / OpenAI function spec type
+        # names work as well as the HOCON-native names above.
+        # "number" maps to a union because JSON Schema's number covers both
+        # integers and floats, and pydantic's smart-mode union preserves
+        # whichever one the caller actually sent.
+        "integer": int,
+        "number": Union[int, float],
+        "bool": bool,
 
         # Note: "Any" produces a pydantic BaseModel object whose fields
         #       are direct members when passed as an argument to a CodedTool
