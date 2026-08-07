@@ -15,10 +15,13 @@
 #
 # END COPYRIGHT
 
+import pytest
+
 from pydantic import BaseModel
 
 from neuro_san.internals.run_context.langchain.core.langchain_openai_function_tool \
     import LangChainOpenAIFunctionTool
+from neuro_san.internals.run_context.langchain.core.tool_spec_error import ToolSpecError
 
 
 class TestLangChainOpenAIFunctionTool:
@@ -49,3 +52,12 @@ class TestLangChainOpenAIFunctionTool:
         tool = LangChainOpenAIFunctionTool.from_function_json(function_json, None)
         assert tool.args_schema is not None
         assert issubclass(tool.args_schema, BaseModel)
+
+    def test_non_dict_parameters_raises_tool_spec_error(self):
+        """
+        A truthy non-dict "parameters" value follows the invalid-spec error
+        path instead of raising a raw AttributeError from parameters.get().
+        """
+        function_json = {"name": "ext_agent", "description": "d", "parameters": "not-a-dict"}
+        with pytest.raises(ToolSpecError, match="'parameters' to be a dictionary"):
+            LangChainOpenAIFunctionTool.from_function_json(function_json, None)

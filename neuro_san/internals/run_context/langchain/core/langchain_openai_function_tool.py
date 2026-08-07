@@ -103,7 +103,13 @@ class LangChainOpenAIFunctionTool(BaseTool):
             message = f"Function for {name} has no description.\n"
 
         parameters: Dict[str, Any] = function_json.get("parameters")
-        if parameters:
+        if parameters and not isinstance(parameters, Dict):
+            # Validate the container itself before reading its keys below, so a
+            # malformed spec follows the same invalid-spec error path as the
+            # other problems here instead of raising a raw AttributeError.
+            message = f"Function for {name} needs 'parameters' to be a dictionary, " \
+                      f"got {type(parameters).__name__}.\n"
+        elif parameters:
             if parameters.get("type") is None:
                 message = f"Function for {name} needs to have a parameters.type set to 'object'.\n"
             properties: Dict[str, Any] = parameters.get("properties")
