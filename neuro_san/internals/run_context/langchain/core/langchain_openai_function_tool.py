@@ -36,6 +36,7 @@ from neuro_san.internals.run_context.langchain.core.base_model_dictionary_conver
     import BaseModelDictionaryConverter
 from neuro_san.internals.run_context.langchain.core.pydantic_argument_dictionary_converter \
     import PydanticArgumentDictionaryConverter
+from neuro_san.internals.run_context.langchain.core.tool_spec_error import ToolSpecError
 from neuro_san.internals.run_context.utils.external_agent_parsing import ExternalAgentParsing
 
 
@@ -96,7 +97,7 @@ class LangChainOpenAIFunctionTool(BaseTool):
         name: str = function_json.get("name")
         if name is None:
             message = "function dictionary has no 'name' defined."
-            raise ValueError(message)
+            raise ToolSpecError(message)
 
         if function_json.get("description") is None:
             message = f"Function for {name} has no description.\n"
@@ -117,7 +118,7 @@ This most often happens when calling an /external agent for the first time
 and the hocon file for the agent network does not have a full function definition
 specified for its front man for it to be called by another agent.
 """
-            raise ValueError(message)
+            raise ToolSpecError(message)
 
     @staticmethod
     def from_function_json(function_json: Dict[str, Any],
@@ -140,7 +141,7 @@ Could not create tool to call extenal agent {function_json.get("name")}.
 It's function_json is described thusly:
 {function_json}
 """
-            raise ValueError(message) from exception
+            raise ToolSpecError(message) from exception
 
         # Check for external tools.
         name: str = function_json.get("name")

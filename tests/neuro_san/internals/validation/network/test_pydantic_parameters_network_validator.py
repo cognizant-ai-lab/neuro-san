@@ -116,6 +116,24 @@ class TestPydanticParametersNetworkValidator(TestCase, AbstractNetworkValidatorT
         )
         self.assertEqual(self.validator.validate(config), [])
 
+    def test_invalid_pydantic_field_names_caught(self):
+        """
+        Parameter names that pydantic v2 cannot accept as field names
+        ("model_config", leading underscores) are rejected with a clear
+        error instead of pydantic's cryptic TypeError/NameError.
+        """
+        config: Dict[str, Any] = self._restore_fixture(
+            "invalid_param_names.hocon",
+        )
+        errors = self.validator.validate(config)
+        self.assertEqual(len(errors), 2)
+        self.assertIn("agent_f", errors[0])
+        self.assertIn("model_config", errors[0])
+        self.assertIn("agent_g", errors[1])
+        self.assertIn("_private", errors[1])
+        for error in errors:
+            self.assertIn("pydantic model conversion failed", error)
+
     def test_string_items_commondef_resolved_before_pydantic(self):
         """
         String ``items`` commondef references are resolved to their actual

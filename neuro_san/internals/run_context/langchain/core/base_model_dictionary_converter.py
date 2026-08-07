@@ -29,6 +29,8 @@ from pydantic import create_model
 
 from leaf_common.serialization.interface.dictionary_converter import DictionaryConverter
 
+from neuro_san.internals.run_context.langchain.core.tool_spec_error import ToolSpecError
+
 
 class BaseModelDictionaryConverter(DictionaryConverter):
     """
@@ -114,6 +116,10 @@ class BaseModelDictionaryConverter(DictionaryConverter):
         fields: Dict[str, Any] = {}
         for field_name, one_property in properties.items():
 
+            # Reject parameter names pydantic cannot make fields for
+            # before they reach create_model() below.
+            self.validate_field_name(field_name)
+
             # Get bits we need to assemble a pydantic Field description
             description: str = one_property.get("description")
             field_type: Type = self.get_type_from_property_dict(field_name, one_property)
@@ -142,8 +148,46 @@ class BaseModelDictionaryConverter(DictionaryConverter):
             fields[field_name] = (field_type, field)
 
         # Create the pydantic BaseModel for the type dynamically
-        model: BaseModel = create_model(name, **fields)
+        try:
+            model: BaseModel = create_model(name, **fields)
+        except (NameError, TypeError) as exception:
+            # Safety net for anything validate_field_name() does not cover:
+            # report whatever create_model() rejects as the same spec-error
+            # type the rest of the pipeline knows how to handle cleanly.
+            raise ToolSpecError(f"Could not create pydantic model '{name}': {exception}") from exception
         return model
+
+    def validate_field_name(self, field_name: str):
+        """
+        :param field_name: The string name of a single parameter/field.
+                Raises ToolSpecError for parameter names that pydantic v2's
+                create_model() cannot accept as field names.
+
+        Pydantic v1 tolerated all of the names rejected here (it merely
+        warned about and dropped underscore-prefixed names), but pydantic v2
+        fails on them with cryptic NameError/TypeError at model-creation
+        time.  The invalid names are:
+
+        * Names with a leading underscore (e.g. "_internal", "__config__"):
+          pydantic v2 reserves these for private attributes, and dunder
+          names collide with create_model()'s own keyword arguments.
+        * "model_config": silently consumed as create_model()'s model
+          configuration argument instead of becoming a field.
+        * Names that shadow a BaseModel method inside pydantic's protected
+          namespaces "model_dump" and "model_validate" (e.g. "model_dump",
+          "model_dump_json", "model_validate_json").  Other "model_"-prefixed
+          names (e.g. "model_name") are fine.
+        """
+        message: str = None
+        if field_name.startswith("_"):
+            message = f"Parameter name '{field_name}' must not start with an underscore."
+        elif field_name == "model_config":
+            message = "Parameter name 'model_config' is reserved by pydantic for model configuration."
+        elif field_name.startswith(("model_dump", "model_validate")) and hasattr(BaseModel, field_name):
+            message = f"Parameter name '{field_name}' shadows a pydantic BaseModel method."
+
+        if message is not None:
+            raise ToolSpecError(message)
 
     def get_type_from_property_dict(self, field_name: str, one_property: Dict[str, Any]) -> Type:
         """
@@ -160,7 +204,7 @@ class BaseModelDictionaryConverter(DictionaryConverter):
         # unrecognized type string, but pydantic v2 accepts None as NoneType,
         # so raise explicitly to keep bad specs from validating silently.
         if field_type is None:
-            raise ValueError(f"Unrecognized type '{type_from_dict}' for field '{field_name}'")
+            raise ToolSpecError(f"Unrecognized type '{type_from_dict}' for field '{field_name}'")
 
         if type_from_dict == "object":
 
