@@ -129,6 +129,12 @@ class LangfuseTracingContext(LangChainTracingContext):
 
             # Create the callback handler instance
             callback_handler: BaseCallbackHandler = callback_handler_type()
+            # Langfuse's handler is synchronous, so LangChain routes every trace event through
+            # a thread pool. Each of those ThreadPoolExecutor.submit calls grabs a process-global lock,
+            # and with thousands of events × 50 requests, threads just queued on it — 76% of active time
+            # in the profile. This run_inline = True tells LangChain to call the handler directly,
+            # skipping the thread pool entirely.
+            callback_handler.run_inline = True
 
             # Carry the handler as the ContextVar default rather than via set():
             # a set() is only visible in contexts descended from the setting
@@ -347,5 +353,13 @@ class LangfuseTracingContext(LangChainTracingContext):
         """
         Flush the tracing context.
         """
-        if self.langfuse_client is not None:
-            self.langfuse_client.flush()
+        # Do nothing.
+        # At the end of every request, a call to Langfuse's SDK flush(), is a blocking HTTP upload.
+        # It drains the whole process's span queue, not just that request's.
+        # It runs on a shared event loop, so while it runs, other requests freeze.
+        # The more concurrent requests, the bigger the queue, the longer everyone waited.
+        # What you lose: the guarantee that a request's traces are uploaded before the request is marked done.
+        # The Langfuse SDK's background thread uploads them anyway; the only real exposure is the final batch if
+        # the process is killed — which is what a shutdown drain would cover.
+        # if self.langfuse_client is not None:
+        #    self.langfuse_client.flush()
