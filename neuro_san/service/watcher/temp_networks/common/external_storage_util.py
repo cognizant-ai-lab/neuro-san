@@ -59,7 +59,7 @@ class ExternalStorageUtil:
     def set_check_interval_seconds(check_interval_seconds: float, logger: Logger) -> None:
         """
         Set expiration interval defined by environment variable
-        to value of check_interval_seconds paarmeter.
+        to value of check_interval_seconds parameter.
         :param check_interval_seconds: The check interval in seconds to set in the env var.
         :logger: Logger instance for logging.
         :return: Nothing.
