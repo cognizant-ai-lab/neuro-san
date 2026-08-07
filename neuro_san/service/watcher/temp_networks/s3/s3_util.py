@@ -98,6 +98,40 @@ class S3Util:
         return "ExpiredToken" in S3Util.get_error_code(err)
 
     @staticmethod
+    def is_credential_rejection_error(err: ClientError) -> bool:
+        """
+        :param err: The ClientError exception to evaluate
+        :return: True if S3 rejected the credentials the request was signed
+                 with, in a way that discarding the cached credential state
+                 and re-resolving it can plausibly fix:
+
+                 * ExpiredToken / ExpiredTokenException - the session token
+                   has expired.
+                 * InvalidToken - "malformed or otherwise invalid", e.g. a
+                   credential state captured mid-rotation or a revoked role
+                   session. Observed in production (neuro-san-studio issue
+                   #1310): a stale cached credential snapshot was rejected
+                   with InvalidToken on every read, and because the retry
+                   gate matched only ExpiredToken, the snapshot was never
+                   invalidated - every S3 read of the affected network
+                   failed (surfacing as a 404 for a network that exists in
+                   S3) until a pod restart. Exact match on purpose; there
+                   is no InvalidTokenException variant for S3, and
+                   near-misses like InvalidClientTokenId belong to other
+                   services.
+                 * TokenRefreshRequired - "the provided token must be
+                   refreshed": the third member of the same temporary-token
+                   rejection family; same remedy.
+
+                 Deliberately NOT matched: InvalidAccessKeyId and
+                 SignatureDoesNotMatch. Those indicate rotated long-lived
+                 key pairs or genuine signing bugs - re-resolution cannot
+                 fix them, and retrying would mask real misconfiguration.
+        """
+        return S3Util.is_expired_token_error(err) \
+            or S3Util.get_error_code(err) in ("InvalidToken", "TokenRefreshRequired")
+
+    @staticmethod
     def extract_reservation_data(agent_spec: Any) -> Optional[Dict[str, Any]]:
         """
         Single, shared policy point for parsing the reservation block out of an
