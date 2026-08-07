@@ -151,10 +151,12 @@ class TestMalformedSpecHandling:
         assert model.model_validate({}) is not None
 
     def test_non_dict_properties_raises_tool_spec_error(self):
+        """A wrong-typed "properties" value is a clean spec error, not a crash."""
         with pytest.raises(ToolSpecError, match="'properties' must be an object"):
             self._convert({"properties": "not-a-dict"})
 
     def test_explicit_null_required_treated_as_no_required(self):
+        """An explicit "required": null is treated like a missing key: nothing is required."""
         model = self._convert({
             "properties": {"x": {"type": "string"}},
             "required": None,
@@ -173,6 +175,7 @@ class TestMalformedSpecHandling:
             })
 
     def test_non_dict_property_spec_raises_tool_spec_error(self):
+        """A property whose spec is not a dict is a clean spec error, not a crash."""
         with pytest.raises(ToolSpecError, match="Property 'x' must be an object"):
             self._convert({"properties": {"x": "string"}})
 
