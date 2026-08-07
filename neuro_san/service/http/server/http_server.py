@@ -188,8 +188,18 @@ class HttpServer(AgentStateListener):
         # Bind the socket with a custom backlog
         server.bind(self.http_port, backlog=self.server_config.http_connections_backlog)
 
-        # Start N child processes (0 = one per CPU core)
-        server.start(self.server_config.http_server_instances)
+        # Determine the number of worker processes to start.
+        # If http_server_instances is 0, use the number of CPU cores.
+        num_workers: int = self.server_config.http_server_instances
+        if num_workers <= 0:
+            num_workers = os.cpu_count() or 1
+
+        # Do not create or access an asyncio/Tornado event loop before this call.
+        worker_id: int = tornado.process.fork_processes(num_workers)
+        self.logger.info({}, "Starting %d worker processes (worker_id=%d, pid=%d)",
+                         num_workers, worker_id, os.getpid())
+        # Register this worker's ID and total number of workers in the server context for use by other components.
+        self.server_context.set_worker_info(worker_id, num_workers)
 
         server_status: ServerStatus = self.server_context.get_server_status()
         server_status.http_service.set_status(True)

@@ -16,12 +16,14 @@
 
 from logging import Logger
 from os import getenv
+from os import environ
 
 
 class ExternalStorageUtil:
     """
     Utility class for common external storage policy
     """
+    EXTERNAL_STORAGE_CHECK_PERIOD_SECONDS_ENV_VAR = "AGENT_RESERVATIONS_EXTERNAL_STORAGE_CHECK_PERIOD_SECONDS"
 
     @staticmethod
     def get_check_interval_seconds(logger: Logger) -> float:
@@ -36,7 +38,7 @@ class ExternalStorageUtil:
 
         # Check if expiration interval is set by environment variable,
         # and adjust it if so (overriding the constructor parameter)
-        envvar_name: str = "AGENT_RESERVATIONS_EXTERNAL_STORAGE_CHECK_PERIOD_SECONDS"
+        envvar_name: str = ExternalStorageUtil.EXTERNAL_STORAGE_CHECK_PERIOD_SECONDS_ENV_VAR
         envvar_value: str = getenv(envvar_name, "0")
         try:
             check_interval_seconds = float(envvar_value)
@@ -52,3 +54,16 @@ class ExternalStorageUtil:
             ) from exc
 
         return check_interval_seconds
+
+    @staticmethod
+    def set_check_interval_seconds(check_interval_seconds: float, logger: Logger) -> float:
+        """
+        Set expiration interval defined by environment variable
+        to value of check_interval_seconds paarmeter.
+        :param check_interval_seconds: The check interval in seconds to set in the env var.
+        :logger: Logger instance for logging.
+        :return: Nothing.
+        """
+        envvar_name: str = ExternalStorageUtil.EXTERNAL_STORAGE_CHECK_PERIOD_SECONDS_ENV_VAR
+        environ[envvar_name] = str(check_interval_seconds)
+        logger.info("%s is set to %s seconds.", envvar_name, check_interval_seconds)

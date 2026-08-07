@@ -17,6 +17,7 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Tuple
 
 import os
 import sys
@@ -303,7 +304,7 @@ class ServerMainLoop:
 
         # Another component to start is the temporary networks updater
         temp_networks_updater: TempNetworkStorageUpdater =\
-            TempNetworkStorageUpdater(self.server_context.get_network_storage_dict(), self.server_context.get_queues())
+            TempNetworkStorageUpdater(self.server_context)
         components_to_start.append(temp_networks_updater)
 
         # Create the event work monitor:

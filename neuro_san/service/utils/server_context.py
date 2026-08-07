@@ -64,6 +64,11 @@ class ServerContext(ServerContextLite):
         self.server_port: int = AgentSessionConstants.DEFAULT_HTTP_PORT
         self.event_work_queue: AsyncCollatingQueue = AsyncCollatingQueue()
 
+        # Number of worker processes for the server. To be set by the server initialization code.
+        self.num_workers: int = 0
+        # Id of the current worker process. To be set by the server initialization code.
+        self.worker_id: int = 0
+
         # Dictionary is string key (describing scope) to AgentNetworkStorage grouping.
         self.network_storage_dict: Dict[str, AgentNetworkStorage] = {}
         for storage_class in StorageClass.ALL_PERMANENT:
@@ -109,6 +114,27 @@ class ServerContext(ServerContextLite):
                                                              idle_timeout_seconds=30,
                                                              max_workers=max_workers)
         return self.executor_pool
+
+    def set_worker_info(self, worker_id: int, num_workers: int):
+        """
+        Sets the worker id and total number of workers for this server instance.
+        :param worker_id: The id of the current worker process (0-based).
+        :param num_workers: The total number of worker processes for the server.
+        """
+        self.worker_id = worker_id
+        self.num_workers = num_workers
+
+    def get_worker_id(self) -> int:
+        """
+        :return: The id of the current worker process (0-based).
+        """
+        return self.worker_id
+
+    def get_num_workers(self) -> int:
+        """
+        :return: The total number of worker processes for the server.
+        """
+        return self.num_workers
 
     def set_server_status(self, server_status: ServerStatus):
         """
