@@ -61,7 +61,7 @@ class ExternalStorageUtil:
         Set expiration interval defined by environment variable
         to value of check_interval_seconds parameter.
         :param check_interval_seconds: The check interval in seconds to set in the env var.
-        :logger: Logger instance for logging.
+        :param logger: Logger instance for logging.
         :return: Nothing.
         """
         envvar_name: str = ExternalStorageUtil.EXTERNAL_STORAGE_CHECK_PERIOD_SECONDS_ENV_VAR

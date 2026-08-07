@@ -29,6 +29,7 @@ import random
 from threading import Lock
 
 import tornado
+import tornado.netutil
 
 from leaf_common.serialization.util.text_file_reader import TextFileReader
 
@@ -187,14 +188,16 @@ class HttpServer(AgentStateListener):
                 logging_config=self.logging_config,
             ))
 
-        # Bind the socket with a custom backlog
-        server.bind(self.http_port, backlog=self.server_config.http_connections_backlog)
-
         # Determine the number of worker processes to start.
         # If http_server_instances is 0, use the number of CPU cores.
         num_workers: int = self.server_config.http_server_instances
         if num_workers <= 0:
             num_workers = os.cpu_count() or 1
+
+        # Bind the listening socket(s) BEFORE forking so every worker inherits
+        # the same bound fd. Do NOT create/touch an IOLoop before fork_processes.
+        sockets = tornado.netutil.bind_sockets(
+            self.http_port, backlog=self.server_config.http_connections_backlog)
 
         # Do not create or access an asyncio/Tornado event loop before this call.
         worker_id: int = tornado.process.fork_processes(num_workers)
@@ -203,10 +206,15 @@ class HttpServer(AgentStateListener):
         # Register this worker's ID and total number of workers in the server context for use by other components.
         self.server_context.set_worker_info(worker_id, num_workers)
 
+        # CRITICAL: attach the inherited sockets to THIS worker's IOLoop so it
+        # actually accepts connections. server.start(N) did fork + add_sockets;
+        # a bare fork_processes() does the fork but not the add_sockets.
+        server.add_sockets(sockets)
+
         server_status: ServerStatus = self.server_context.get_server_status()
         server_status.http_service.set_status(True)
         self.logger.info({}, "HTTP server is running %d instances on port %d with backlog %d",
-                         self.server_config.http_server_instances,
+                         num_workers,
                          self.http_port,
                          self.server_config.http_connections_backlog)
         self.logger.info({}, "HTTP server idle connections timeout: %d seconds",
