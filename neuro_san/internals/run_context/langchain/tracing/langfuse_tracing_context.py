@@ -357,7 +357,7 @@ class LangfuseTracingContext(LangChainTracingContext):
         # At the end of every request, a call to Langfuse's SDK flush(), is a blocking HTTP upload.
         # It drains the whole process's span queue, not just that request's.
         # It runs on a shared event loop, so while it runs, other requests freeze.
-        # The more concurrent requests, the bigger the queue, the longer everyone waited.
+        # The more concurrent requests, the bigger the queue, the longer everyone waits.
         # What you lose: the guarantee that a request's traces are uploaded before the request is marked done.
         # The Langfuse SDK's background thread uploads them anyway; the only real exposure is the final batch if
         # the process is killed — which is what a shutdown drain would cover.
