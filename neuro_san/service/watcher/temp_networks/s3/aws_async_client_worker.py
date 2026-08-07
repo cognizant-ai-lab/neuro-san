@@ -95,13 +95,13 @@ class AwsAsyncClientWorker:
                 return retval
 
             except ClientError as err:
-                # S3Util.is_expired_token_error() is used instead of raw
-                # DictionaryExtractor access: the extractor returns a stored
-                # None in preference to its default, and
-                # '"ExpiredToken" not in None' would raise TypeError inside
+                # S3Util.is_credential_rejection_error() is used instead of
+                # raw DictionaryExtractor access: the extractor returns a
+                # stored None in preference to its default, and substring
+                # checks against a None code would raise TypeError inside
                 # this handler, masking the original ClientError
                 # (see S3Util.get_error_code for details).
-                if not S3Util.is_expired_token_error(err):
+                if not S3Util.is_credential_rejection_error(err):
                     raise
 
                 last_err = err
@@ -110,13 +110,17 @@ class AwsAsyncClientWorker:
                 #             profiles have token-based credentials that may expire.
                 #             See: https://docs.aws.amazon.com/boto3/latest/guide/configuration.html
 
-                # Reset the cached credentials as they are likely expired and try again.
+                # Reset the cached credentials - S3 rejected them (expired,
+                # or malformed/mismatched, e.g. captured mid-rotation; see
+                # S3Util.is_credential_rejection_error) - and try again.
                 self.frozen_credentials = None
                 if source is None:
                     source = self.name
-                self.logger.warning("%s (%d): %s credentials seem to have expired. Retrying. "
-                                    "If you believe you have non-expiring %s credentials, be sure they are correct.",
-                                    source, attempt, self.aws_service, self.aws_service)
+                self.logger.warning("%s (%d): %s rejected the request's credentials (%s). Retrying with "
+                                    "re-resolved credentials. If you believe you have valid non-expiring "
+                                    "%s credentials, be sure they are correct.",
+                                    source, attempt, self.aws_service, S3Util.get_error_code(err),
+                                    self.aws_service)
 
         # Exhausted retries
         if last_err is not None:
