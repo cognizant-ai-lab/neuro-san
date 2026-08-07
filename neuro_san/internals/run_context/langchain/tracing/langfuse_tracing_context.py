@@ -131,8 +131,8 @@ class LangfuseTracingContext(LangChainTracingContext):
             callback_handler: BaseCallbackHandler = callback_handler_type()
             # Langfuse's handler is synchronous, so LangChain routes every trace event through
             # a thread pool. Each of those ThreadPoolExecutor.submit calls grabs a process-global lock,
-            # and with thousands of events × 50 requests, threads just queued on it — 76% of active time
-            # in the profile. This run_inline = True tells LangChain to call the handler directly,
+            # and with thousands of events, threads just queue on it.
+            # This run_inline = True tells LangChain to call the handler directly,
             # skipping the thread pool entirely.
             callback_handler.run_inline = True
 
@@ -161,6 +161,11 @@ class LangfuseTracingContext(LangChainTracingContext):
             # Registering a second hook with the same instance is safe:
             # langchain adds a hook's handler only if that exact object is
             # not already among the run's handlers.
+
+            # Also set run_inline = True to skip the thread pool entirely with the foreign handler.
+            # This is safe since run_inline only changes how langchain dispatches events, not what it does.
+            # See other run_inline comment in _ensure_registered() above.
+            foreign_handler.run_inline = True
             context_var = ContextVar(LANGFUSE_HANDLER_VAR_NAME, default=foreign_handler)
             register_configure_hook(context_var, inheritable=True)
             cls.HANDLER_CONTEXT_VAR = context_var
@@ -354,12 +359,11 @@ class LangfuseTracingContext(LangChainTracingContext):
         Flush the tracing context.
         """
         # Do nothing.
-        # At the end of every request, a call to Langfuse's SDK flush(), is a blocking HTTP upload.
-        # It drains the whole process's span queue, not just that request's.
-        # It runs on a shared event loop, so while it runs, other requests freeze.
+        #
+        # You might think we should flush() here for Langfuse.
+        # At the end of every request, a call to Langfuse's SDK flush(), is a blocking call
+        # waiting for the backgroun thread to drains the whole process's span queue, not just the request's.
         # The more concurrent requests, the bigger the queue, the longer everyone waits.
         # What you lose: the guarantee that a request's traces are uploaded before the request is marked done.
         # The Langfuse SDK's background thread uploads them anyway; the only real exposure is the final batch if
-        # the process is killed — which is what a shutdown drain would cover.
-        # if self.langfuse_client is not None:
-        #    self.langfuse_client.flush()
+        # the process is killed.
