@@ -554,8 +554,12 @@ This dictionary has the following keys:
 | type         | A string describing the type of the property. (See below) |
 | default      | An optional default value for the property |
 
-Scalar types here can be "int", "float", "string", "bool".
+Scalar types here can be "int", "float", "string", "bool" or "boolean".
+The standard JSON Schema spellings are also accepted: "integer" (same as "int")
+and "number" (accepts both integers and floats), so function specs copied from
+OpenAI- or MCP-style tool definitions work as-is.
 It is possible that a properties' type can be "array"s for lists or "object"s for nested dictionaries.
+An "array" property must also carry an "items" dictionary describing the type of its elements.
 
 Any sample agent hocon with more than one agent will have some example of a simple properties dictionary.
 For a concrete, more complex properties definition, with nested objects and arrays,

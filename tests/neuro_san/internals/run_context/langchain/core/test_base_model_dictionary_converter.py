@@ -25,6 +25,7 @@ from pydantic import ValidationError
 
 from neuro_san.internals.run_context.langchain.core.base_model_dictionary_converter \
     import BaseModelDictionaryConverter
+from neuro_san.internals.run_context.langchain.core.tool_spec_error import ToolSpecError
 
 
 class TestBaseModelDictionaryConverter:
@@ -121,3 +122,93 @@ class TestBaseModelDictionaryConverter:
         assert instance.records == [{"a": 1}, {"b": 2}]
         with pytest.raises(ValidationError):
             model.model_validate({"records": ["not-a-dict"]})
+
+
+class TestMalformedSpecHandling:
+    """
+    Malformed specs produce clean ToolSpecErrors (or honor documented
+    contracts) instead of raw AttributeError/TypeError crashes.
+
+    Explicit nulls and wrong-typed values are reachable from both hocon
+    registries (pyhocon preserves explicit nulls) and the unvalidated
+    JSON function specs external agents send over the network.
+    """
+
+    def _convert(self, parameters):
+        converter = BaseModelDictionaryConverter("parameters")
+        return converter.from_dict(parameters)
+
+    def test_from_dict_none_returns_none(self):
+        """The DictionaryConverter contract: None in -> None out."""
+        assert self._convert(None) is None
+
+    def test_explicit_null_properties_builds_empty_model(self):
+        """
+        "properties": null is treated like a missing key, matching how the
+        nested-object branch already handles the same case.
+        """
+        model = self._convert({"properties": None})
+        assert model.model_validate({}) is not None
+
+    def test_non_dict_properties_raises_tool_spec_error(self):
+        with pytest.raises(ToolSpecError, match="'properties' must be an object"):
+            self._convert({"properties": "not-a-dict"})
+
+    def test_explicit_null_required_treated_as_no_required(self):
+        model = self._convert({
+            "properties": {"x": {"type": "string"}},
+            "required": None,
+        })
+        assert model.model_validate({}).x is None
+
+    def test_string_required_raises_tool_spec_error(self):
+        """
+        A string "required" would substring-match unrelated field names
+        (e.g. field "it" against "required": "city"), so it is rejected.
+        """
+        with pytest.raises(ToolSpecError, match="'required' must be a list"):
+            self._convert({
+                "properties": {"city": {"type": "string"}, "it": {"type": "string"}},
+                "required": "city",
+            })
+
+    def test_non_dict_property_spec_raises_tool_spec_error(self):
+        with pytest.raises(ToolSpecError, match="Property 'x' must be an object"):
+            self._convert({"properties": {"x": "string"}})
+
+    def test_missing_type_key_gets_honest_message(self):
+        """
+        anyOf/enum/$ref-style property specs have no "type" key; the error
+        must say so rather than report an unrecognized type named 'None'.
+        """
+        with pytest.raises(ToolSpecError, match="has no 'type' key"):
+            self._convert({
+                "properties": {"choice": {"anyOf": [{"type": "string"}, {"type": "int"}]}},
+            })
+
+    def test_union_type_list_raises_tool_spec_error(self):
+        """
+        JSON Schema union lists ("type": ["string", "null"]) used to crash
+        the TYPE_LOOKUP dict lookup with an unhashable-key TypeError.
+        """
+        with pytest.raises(ToolSpecError, match="non-string 'type'"):
+            self._convert({
+                "properties": {"maybe": {"type": ["string", "null"]}},
+            })
+
+    def test_array_without_items_raises_tool_spec_error(self):
+        """A missing "items" key used to crash with None.get AttributeError."""
+        with pytest.raises(ToolSpecError, match="needs an 'items' object"):
+            self._convert({
+                "properties": {"tags": {"type": "array"}},
+            })
+
+    def test_array_with_string_items_raises_tool_spec_error(self):
+        """
+        An unresolved commondef reference ("items": "cao_item") can reach
+        the converter at runtime via the unvalidated external-agent path.
+        """
+        with pytest.raises(ToolSpecError, match="needs an 'items' object"):
+            self._convert({
+                "properties": {"tags": {"type": "array", "items": "cao_item"}},
+            })

@@ -112,6 +112,11 @@ class BaseModelDictionaryConverter(DictionaryConverter):
                 If obj_dict is not the correct type, it is also reasonable
                 to return None.
         """
+        # Honor the DictionaryConverter contract stated above.  None reaches
+        # here when an external agent reports "parameters": null.
+        if obj_dict is None:
+            return None
+
         base_model: BaseModel = self.openai_function_to_pydantic(self.top_level_field_name, obj_dict)
         return base_model
 
@@ -127,10 +132,27 @@ class BaseModelDictionaryConverter(DictionaryConverter):
         """
 
         # Get stuff from the object-level function dictionary
-        # from the OpenAI function spec
-        properties: Dict[str, Any] = function_dict.get("properties", {})
-        required: List[str] = []
-        required = function_dict.get("required", required)
+        # from the OpenAI function spec.
+        #
+        # Explicit nulls are expressible both in hocon registries and in the
+        # JSON function specs external agents send over the network, and
+        # .get() defaults do not apply to them - so treat an explicit null
+        # the same as a missing key rather than crashing on it, and reject
+        # other wrong-typed values with a clean spec error.
+        properties: Dict[str, Any] = function_dict.get("properties")
+        if properties is None:
+            properties = {}
+        if not isinstance(properties, Dict):
+            raise ToolSpecError(f"'properties' must be an object, got {type(properties).__name__}")
+
+        required: List[str] = function_dict.get("required")
+        if required is None:
+            required = []
+        if not isinstance(required, List):
+            # Also guards the "in" test below: a string here (e.g.
+            # "required": "city") would substring-match unrelated field
+            # names instead of naming one required field.
+            raise ToolSpecError(f"'required' must be a list of field names, got {type(required).__name__}")
 
         fields: Dict[str, Any] = {}
         for field_name, one_property in properties.items():
@@ -138,6 +160,10 @@ class BaseModelDictionaryConverter(DictionaryConverter):
             # Reject parameter names pydantic cannot make fields for
             # before they reach create_model() below.
             self.validate_field_name(field_name)
+
+            if not isinstance(one_property, Dict):
+                raise ToolSpecError(f"Property '{field_name}' must be an object describing the field, "
+                                    f"got {type(one_property).__name__}")
 
             # Get bits we need to assemble a pydantic Field description
             description: str = one_property.get("description")
@@ -252,6 +278,21 @@ class BaseModelDictionaryConverter(DictionaryConverter):
                 deep enough.
         """
         type_from_dict: str = one_property.get("type")
+
+        # Distinguish a missing "type" key from an unrecognized type string,
+        # lest the error below read "Unrecognized type 'None'" and send the
+        # user hunting for a type literally called None.
+        if type_from_dict is None:
+            raise ToolSpecError(f"Field '{field_name}' has no 'type' key. "
+                                "Composite schemas (anyOf/oneOf/enum/$ref) are not supported.")
+
+        # JSON Schema also allows a list here ("type": ["string", "null"]),
+        # which is unsupported and would crash the dict lookup below with
+        # an unhashable-key TypeError, so reject it cleanly first.
+        if not isinstance(type_from_dict, str):
+            raise ToolSpecError(f"Field '{field_name}' has a non-string 'type' ({type_from_dict!r}). "
+                                "Union type lists are not supported; use a single type name.")
+
         field_type: Type = self.TYPE_LOOKUP.get(type_from_dict)
 
         # Pydantic v1 rejected the None annotation that resulted from an
@@ -279,6 +320,17 @@ class BaseModelDictionaryConverter(DictionaryConverter):
 
             # Get the type of the list components/items
             items: Dict[str, Any] = one_property.get("items")
+
+            # A missing "items" key used to crash the recursion below with an
+            # opaque AttributeError (None.get).  A non-dict value can also
+            # arrive at runtime: the registry filter chain resolves string
+            # commondef references like "items": "cao_item" at load, but the
+            # unvalidated external-agent path does not.
+            if not isinstance(items, Dict):
+                got: str = "nothing" if items is None else type(items).__name__
+                raise ToolSpecError(f"Array field '{field_name}' needs an 'items' object "
+                                    f"describing its element type, got {got}")
+
             item_type: Type = self.get_type_from_property_dict(f"{field_name}_component", items)
 
             # Set the field_type as a properly typed generic List
