@@ -33,7 +33,7 @@ from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.graph.persistence.periodic_manifest_dict_config_filter import PeriodicManifestDictConfigFilter
 from neuro_san.internals.graph.utils.invocation_util import InvocationUtil
 from neuro_san.internals.interfaces.invocations import Invocations
-from neuro_san.messages.types.chat_message_type import ChatMessageType
+from neuro_san.message.types.chat_message_type import ChatMessageType
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer

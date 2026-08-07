@@ -30,7 +30,7 @@ from time import time
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from neuro_san.message.processors.message_processor import MessageProcessor
 from neuro_san.message.types.chat_message_type import ChatMessageType
-from neuro_san.message.types.origination import Origination
+from neuro_san.message.utils.origination import Origination
 
 
 # pylint: disable=too-many-arguments,too-many-positional-arguments

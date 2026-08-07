@@ -28,7 +28,7 @@ from neuro_san.client.thinking_file_message_processor import ThinkingFileMessage
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
 from neuro_san.message.types.chat_message_type import ChatMessageType
-from neuro_san.message.types.origination import Origination
+from neuro_san.message.utils.origination import Origination
 from neuro_san.session.direct_agent_session import DirectAgentSession
 from neuro_san.session.mcp_service_agent_session import McpServiceAgentSession
 
