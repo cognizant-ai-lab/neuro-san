@@ -322,14 +322,15 @@ class AwsAsyncClientWorker:
                 _SENSITIVE_LOGGER.warning("%s: Retryable async ClientError (%s). attempt=%d", source, err, attempt)
                 await async_sleep(sleep)
                 attempt += 1
-            except NoCredentialsError:
-                # Must precede the BotoCoreError catch below (it is a
-                # subclass): missing credentials cannot heal within this
-                # loop - the calling client's credential state is fixed -
-                # so backing off through 8 attempts (~16-48s of sleeps)
-                # would only stall the write queue. Re-raising immediately
-                # routes it to retry_with_new_client()'s credential retry,
-                # which discards the session and CAN heal it.
+            except (NoCredentialsError, PartialCredentialsError):
+                # Must precede the BotoCoreError catch below (both are
+                # subclasses): missing/half-written credentials cannot heal
+                # within this loop - the calling client's credential state
+                # is fixed - so backing off through 8 attempts (~16-48s of
+                # sleeps) would only stall the write queue. Re-raising
+                # immediately routes them to retry_with_new_client()'s
+                # credential retry, which discards the session and CAN heal
+                # them.
                 raise
             except BotoCoreError as err:
                 # Often transient network/serialization issues
