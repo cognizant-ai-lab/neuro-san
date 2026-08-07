@@ -98,6 +98,39 @@ class S3Util:
         return "ExpiredToken" in S3Util.get_error_code(err)
 
     @staticmethod
+    def is_credential_rejection_error(err: ClientError) -> bool:
+        """
+        :param err: The ClientError exception to evaluate
+        :return: True if S3 rejected the credentials the request was signed
+                 with, in a way that discarding the Session + client and
+                 re-resolving the credential chain can plausibly fix:
+
+                 * ExpiredToken / ExpiredTokenException - the session token
+                   has expired. For keyless clients this stays dormant for
+                   role/SSO sources (they refresh at signing time) and fires
+                   for static session tokens rotated externally.
+                 * InvalidToken - "malformed or otherwise invalid": the token
+                   S3 received does not hang together, e.g. a credential
+                   state captured mid-rotation or a revoked role session.
+                   Clients are created WITHOUT explicit keys, so our code
+                   never assembles a key/secret/token triple itself - this
+                   code can only mean the resolved credential state is bad,
+                   and re-resolution is the only remedy. Observed in
+                   production (neuro-san-studio issue #1310): an InvalidToken
+                   state persisted across reads precisely because the
+                   previous design's reset gate matched only ExpiredToken.
+                   Exact match on purpose; there is no InvalidTokenException
+                   variant for S3, and near-misses like InvalidClientTokenId
+                   belong to other services.
+
+                 Deliberately NOT matched: InvalidAccessKeyId and
+                 SignatureDoesNotMatch. Those indicate rotated long-lived
+                 key pairs or genuine signing bugs - retrying would mask
+                 real misconfiguration (see the workers' retry docstrings).
+        """
+        return S3Util.is_expired_token_error(err) or S3Util.get_error_code(err) == "InvalidToken"
+
+    @staticmethod
     def extract_reservation_data(agent_spec: Any) -> Optional[Dict[str, Any]]:
         """
         Single, shared policy point for parsing the reservation block out of an

@@ -111,17 +111,20 @@ class AwsAsyncClientWorker:
 
         Because clients are created keyless (see class docstring),
         token-based credentials refresh at signing time and this retry path
-        stays dormant for them. It exists for static SESSION TOKENS rotated
-        externally - temporary credentials in a credentials file that
-        another process rewrites. The credential chain is resolved once per
-        Session and that file is never re-read on its own, so the only way
-        to pick up the new values is to discard the session and re-resolve
-        from scratch. Two rotation cases deliberately do NOT recover here:
-        environment variables (a process's environment cannot be changed
-        from outside, so re-resolving would re-read the same values), and
-        rotated access KEY PAIRS (S3 rejects those with InvalidAccessKeyId
-        or SignatureDoesNotMatch, not ExpiredToken). Both require a
-        process restart.
+        stays dormant for them. It fires when S3 rejects the credentials a
+        request was signed with (see S3Util.is_credential_rejection_error):
+        ExpiredToken (static session tokens rotated externally - e.g. a
+        credentials file rewritten by another process, which the chain
+        resolves once per Session and never re-reads on its own) and
+        InvalidToken (a malformed/mismatched credential state - our code
+        never assembles key/secret/token triples itself, so this can only
+        mean the resolved credential state is bad; observed in production
+        as neuro-san-studio issue #1310). Two rotation cases deliberately
+        do NOT recover here: environment variables (a process's
+        environment cannot be changed from outside, so re-resolving would
+        re-read the same values), and rotated access KEY PAIRS (S3 rejects
+        those with InvalidAccessKeyId or SignatureDoesNotMatch). Both
+        require a process restart.
 
         NOTE: mirrored in AwsSyncClientWorker.retry_with_new_client() -
         keep the retry policies in sync when editing.
@@ -146,13 +149,13 @@ class AwsAsyncClientWorker:
                 return retval
 
             except ClientError as err:
-                # S3Util.is_expired_token_error() is used instead of raw
-                # DictionaryExtractor access: the extractor returns a stored
-                # None in preference to its default, and
-                # '"ExpiredToken" not in None' would raise TypeError inside
+                # S3Util.is_credential_rejection_error() is used instead of
+                # raw DictionaryExtractor access: the extractor returns a
+                # stored None in preference to its default, and substring
+                # checks against a None code would raise TypeError inside
                 # this handler, masking the original ClientError
                 # (see S3Util.get_error_code for details).
-                if not S3Util.is_expired_token_error(err):
+                if not S3Util.is_credential_rejection_error(err):
                     raise
 
                 last_err = err
@@ -166,9 +169,11 @@ class AwsAsyncClientWorker:
                     self.session = None
                 if source is None:
                     source = self.name
-                self.logger.warning("%s (%d): %s credentials seem to have expired. Retrying. "
-                                    "If you believe you have non-expiring %s credentials, be sure they are correct.",
-                                    source, attempt, self.aws_service, self.aws_service)
+                self.logger.warning("%s (%d): %s rejected the request's credentials (%s). Retrying with a "
+                                    "re-resolved credential chain. If you believe you have valid non-expiring "
+                                    "%s credentials, be sure they are correct.",
+                                    source, attempt, self.aws_service, S3Util.get_error_code(err),
+                                    self.aws_service)
                 if attempt < self.CREDENTIAL_RETRY_MAX_ATTEMPTS:
                     # Jittered backoff gives an in-progress external rotation
                     # time to land and keeps concurrent retries from hammering

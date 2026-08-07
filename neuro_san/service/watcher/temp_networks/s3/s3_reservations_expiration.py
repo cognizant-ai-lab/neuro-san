@@ -247,16 +247,19 @@ class S3ReservationsExpiration:
             if error_code in ("NoSuchKey", "404"):
                 self.logger.debug("%s: Reservation %s was already removed by another process", self.name, obj_key)
                 expired = True  # Object is gone, which is the desired outcome for expiration
-            elif S3Util.is_expired_token_error(exception):
-                # Credential expiry must NOT be swallowed here. The sweep's client is
-                # keyless and long-lived (see AwsSyncClientWorker), so token-based
-                # credentials refresh at signing time and this path stays dormant for
-                # them - but it can still fire for static session tokens rotated
-                # externally (a credentials file rewritten by another process), which
-                # botocore resolves once per Session and never re-reads. The only
-                # code that can recover is retry_with_new_client() wrapping
+            elif S3Util.is_credential_rejection_error(exception):
+                # Credential rejection (ExpiredToken / InvalidToken) must NOT be
+                # swallowed here. The sweep's client is keyless and long-lived (see
+                # AwsSyncClientWorker), so token-based credentials refresh at signing
+                # time and this path stays dormant for them - but it can still fire
+                # for static session tokens rotated externally (a credentials file
+                # rewritten by another process), which botocore resolves once per
+                # Session and never re-reads, or for a malformed/mismatched
+                # credential state (InvalidToken - see
+                # S3Util.is_credential_rejection_error). The only code that can
+                # recover is retry_with_new_client() wrapping
                 # expire_any_reservations() at the top of the sweep - and it can only
-                # react to ClientErrors that actually reach it. If ExpiredToken were
+                # react to ClientErrors that actually reach it. If these errors were
                 # merely logged like the codes below, every remaining key in the
                 # sweep would make one doomed S3 call, nothing would be expired, and
                 # the sweep would still report success. Re-raising lets the wrapper
