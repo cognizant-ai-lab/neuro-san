@@ -155,18 +155,45 @@ class BaseModelDictionaryConverter(DictionaryConverter):
             # when a value is not there.  By contrast, we do not set a default
             # for something that is required, which leaves the pydantic definition
             # of "Undefined" in place which to agent infra implies a required arg.
+            #
+            # Note: pydantic v2 enforces required-ness for every type.  Under
+            # the pydantic v1 models this converter used to build, fields with
+            # an Any annotation (bare "object" parameters) were implicitly
+            # optional even when listed in "required", so tool calls omitting
+            # them slipped through.  Such calls now fail validation, which
+            # langchain reports back to the LLM as a correctable tool error.
             if field_name not in required:
                 field_kwargs["default"] = None
                 # Pydantic v1 implicitly made any field with a None default Optional.
                 # Pydantic v2 does not, so wrap the type explicitly lest an LLM
                 # passing an explicit null for an optional arg fail validation.
+                #
+                # This wrap also changes the JSON schema advertised to LLM
+                # providers for every non-required field: pydantic v1 emitted a
+                # flat {"type": X}, while v2 emits
+                # {"anyOf": [{"type": X}, {"type": "null"}], "default": null}.
+                # Provider adapters handle the anyOf-with-null shape (Gemini's
+                # converts it to a nullable declaration), but note that
+                # OpenAI's *strict* structured-output mode does not accept the
+                # "default" keyword and langchain does not strip it.  neuro-san
+                # never enables strict mode itself; this only matters for
+                # schema-strict gateways or user code that opts into it.
                 field_type = Optional[field_type]
             field = Field(**field_kwargs)
 
             # Add the field to our dictionary with its name as key
             fields[field_name] = (field_type, field)
 
-        # Create the pydantic BaseModel for the type dynamically
+        # Create the pydantic BaseModel for the type dynamically.
+        #
+        # Note: pydantic v2 models validate LLM-supplied arguments more
+        # strictly than the v1 models this converter used to build.
+        # Sensible coercions still happen ("5" -> 5 for an int field), but
+        # the lossy ones v1 performed silently are now rejected: an int for
+        # a "string" field is no longer stringified, and a fractional float
+        # for an "int" field is no longer truncated.  Rejections do not
+        # crash the run - langchain surfaces them to the calling LLM as a
+        # correctable tool-error message, at the cost of a retry round-trip.
         try:
             model: BaseModel = create_model(name, **fields)
         except (NameError, TypeError) as exception:
@@ -196,6 +223,14 @@ class BaseModelDictionaryConverter(DictionaryConverter):
           namespaces "model_dump" and "model_validate" (e.g. "model_dump",
           "model_dump_json", "model_validate_json").  Other "model_"-prefixed
           names (e.g. "model_name") are fine.
+
+        Deliberately NOT rejected here: names that shadow BaseModel
+        attributes outside the protected namespaces, such as "schema",
+        "json", "dict" or "copy".  Pydantic v2 creates those fields and only
+        emits a shadowing UserWarning, so they work.  This is itself a
+        behavior change from the v1-based converter: v1's create_model
+        raised NameError for them, which made network validation reject
+        such specs - they now pass.
         """
         message: str = None
         if field_name.startswith("_"):
