@@ -27,11 +27,11 @@ from langchain_core.messages.tool import ToolMessage
 
 from leaf_common.serialization.interface.dictionary_converter import DictionaryConverter
 
-from neuro_san.internals.messages.agent_message import AgentMessage
-from neuro_san.internals.messages.agent_framework_message import AgentFrameworkMessage
-from neuro_san.internals.messages.agent_progress_message import AgentProgressMessage
-from neuro_san.internals.messages.agent_tool_result_message import AgentToolResultMessage
-from neuro_san.internals.messages.chat_message_type import ChatMessageType
+from neuro_san.message.types.agent_message import AgentMessage
+from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
+from neuro_san.message.types.agent_progress_message import AgentProgressMessage
+from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
+from neuro_san.message.types.chat_message_type import ChatMessageType
 
 
 class BaseMessageDictionaryConverter(DictionaryConverter):

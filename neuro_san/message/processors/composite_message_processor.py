@@ -18,9 +18,9 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-from neuro_san.internals.filters.message_filter import MessageFilter
-from neuro_san.internals.messages.chat_message_type import ChatMessageType
-from neuro_san.message_processing.message_processor import MessageProcessor
+from neuro_san.message.filters.message_filter import MessageFilter
+from neuro_san.message.processors.message_processor import MessageProcessor
+from neuro_san.message.types.chat_message_type import ChatMessageType
 
 
 class CompositeMessageProcessor(MessageProcessor):

@@ -20,11 +20,11 @@ from typing import List
 
 import json
 
-from neuro_san.message_processing.answer_message_processor import AnswerMessageProcessor
-from neuro_san.message_processing.chat_context_message_processor import ChatContextMessageProcessor
-from neuro_san.message_processing.composite_message_processor import CompositeMessageProcessor
-from neuro_san.message_processing.message_processor import MessageProcessor
-from neuro_san.message_processing.token_accounting_message_processor import TokenAccountingMessageProcessor
+from neuro_san.message.processors.answer_message_processor import AnswerMessageProcessor
+from neuro_san.message.processors.chat_context_message_processor import ChatContextMessageProcessor
+from neuro_san.message.processors.composite_message_processor import CompositeMessageProcessor
+from neuro_san.message.processors.message_processor import MessageProcessor
+from neuro_san.message.processors.token_accounting_message_processor import TokenAccountingMessageProcessor
 
 
 class BasicMessageProcessor(CompositeMessageProcessor):

@@ -25,7 +25,7 @@ from typing import Tuple
 from json.decoder import JSONDecodeError
 from json_repair import loads
 
-from neuro_san.internals.parsers.structure.structure_parser import StructureParser
+from neuro_san.message.parsers.structure.structure_parser import StructureParser
 
 
 class JsonStructureParser(StructureParser):

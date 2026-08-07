@@ -23,7 +23,7 @@ from typing import Literal
 from typing import Optional
 from typing import Union
 
-from neuro_san.internals.messages.traced_message import TracedMessage
+from neuro_san.message.types.traced_message import TracedMessage
 
 
 class AgentProgressMessage(TracedMessage):

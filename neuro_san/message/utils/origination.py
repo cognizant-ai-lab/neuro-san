@@ -20,7 +20,7 @@ from typing import List
 
 from copy import copy
 
-from neuro_san.internals.run_context.utils.external_agent_parsing import ExternalAgentParsing
+from neuro_san.message.utils.external_agent_parsing import ExternalAgentParsing
 
 
 class Origination:

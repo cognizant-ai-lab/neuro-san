@@ -19,8 +19,8 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-from neuro_san.internals.parsers.structure.structure_parser import StructureParser
-from neuro_san.internals.parsers.structure.structure_parser_factory import StructureParserFactory
+from neuro_san.message.parsers.structure.structure_parser import StructureParser
+from neuro_san.message.parsers.structure.structure_parser_factory import StructureParserFactory
 
 
 class FirstAvailableStructureParser(StructureParser):

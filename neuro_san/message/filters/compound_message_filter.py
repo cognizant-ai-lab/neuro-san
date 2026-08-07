@@ -16,42 +16,45 @@
 # END COPYRIGHT
 from typing import Any
 from typing import Dict
+from typing import List
 
-from neuro_san.internals.messages.chat_message_type import ChatMessageType
+from neuro_san.message.filters.message_filter import MessageFilter
+from neuro_san.message.types.chat_message_type import ChatMessageType
 
 
-class MessageFilter:
+class CompoundMessageFilter(MessageFilter):
     """
-    An interface for filtering a single message.
+    A MessageFilter implementation that can service multiple other MessageFilter instances
     """
 
-    def allow(self, chat_message_dict: Dict[str, Any]) -> bool:
+    def __init__(self, filters: List[MessageFilter] = None):
         """
-        Determine whether to allow the message through.
-        This is the main entry point for most clients.
-        """
-        message_type: ChatMessageType = self.get_message_type(chat_message_dict)
-        return self.allow_message(chat_message_dict, message_type)
+        Constructor
 
-    @staticmethod
-    def get_message_type(chat_message_dict: Dict[str, Any]) -> ChatMessageType:
+        :param filters: A List of MessageFilter instances to simultaneously service
         """
-        Convert the message type in the ChatMessage dictionary to the enum we want to work with
-        :param chat_message_dict: The ChatMessage dictionary to consider.
-        :return: The ChatMessageType of the chat_message_dict
-        """
-        response_type: str = chat_message_dict.get("type")
-        message_type: ChatMessageType = ChatMessageType.from_response_type(response_type)
-        return message_type
+        self.filters: List[MessageFilter] = filters
+        if self.filters is None:
+            self.filters = []
 
     def allow_message(self, chat_message_dict: Dict[str, Any], message_type: ChatMessageType) -> bool:
         """
         Determine whether to allow the message through.
-        This is what subclasses should implement.
-        MessageProcessors also call this interface directly.
-
         :param chat_message_dict: The ChatMessage dictionary to process.
         :param message_type: The ChatMessageType of the chat_message_dictionary to process.
         :return: True if the message should be allowed through to the client. False otherwise.
         """
-        raise NotImplementedError
+        # If any one filter says to let a message through, then let it through.
+        for one_filter in self.filters:
+            if one_filter.allow_message(chat_message_dict, message_type):
+                return True
+
+        # Nobody wanted it.
+        return False
+
+    def add_message_filter(self, message_filter: MessageFilter):
+        """
+        Adds a message_filter to the list
+        :param message_filter: A MessageFilter instance to service
+        """
+        self.filters.append(message_filter)

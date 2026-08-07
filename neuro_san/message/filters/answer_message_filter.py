@@ -16,14 +16,15 @@
 # END COPYRIGHT
 from typing import Any
 from typing import Dict
+from typing import List
 
-from neuro_san.internals.filters.message_filter import MessageFilter
-from neuro_san.internals.messages.chat_message_type import ChatMessageType
+from neuro_san.message.filters.message_filter import MessageFilter
+from neuro_san.message.types.chat_message_type import ChatMessageType
 
 
-class ChatContextMessageFilter(MessageFilter):
+class AnswerMessageFilter(MessageFilter):
     """
-    MessageFilter implementation for a message with "the chat_context" in it.
+    MessageFilter implementation for a message with "the answer" in it.
     """
 
     def allow_message(self, chat_message_dict: Dict[str, Any], message_type: ChatMessageType) -> bool:
@@ -34,11 +35,21 @@ class ChatContextMessageFilter(MessageFilter):
         :param message_type: The ChatMessageType of the chat_message_dictionary to process.
         :return: True if the message should be allowed through to the client. False otherwise.
         """
-        if message_type != ChatMessageType.AGENT_FRAMEWORK:
-            # Final chat_contexts are only ever AI Messages
+        if message_type not in (ChatMessageType.AI, ChatMessageType.AGENT_FRAMEWORK):
+            # Final answers are only ever AI or AgentFramework Messages
             return False
 
-        if chat_message_dict.get("chat_context") is None:
+        origin: List[Dict[str, Any]] = chat_message_dict.get("origin")
+        if origin is not None and len(origin) > 1:
+            # Final answers only come from the FrontMan,
+            # whose origin length is the only one of length 1.
+            return False
+
+        text: str = chat_message_dict.get("text")
+        structure: Dict[str, Any] = chat_message_dict.get("structure")
+        if text is None and structure is None:
+            # Final answers need to be text or structure.
+            # There might be more options in the future.
             return False
 
         # Meets all our criteria. Let it through.

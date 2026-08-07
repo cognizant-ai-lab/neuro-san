@@ -16,9 +16,9 @@
 # END COPYRIGHT
 from typing import List
 
-from neuro_san.internals.filters.chat_context_message_filter import ChatContextMessageFilter
-from neuro_san.internals.filters.compound_message_filter import CompoundMessageFilter
-from neuro_san.internals.filters.message_filter import MessageFilter
+from neuro_san.message.filters.chat_context_message_filter import ChatContextMessageFilter
+from neuro_san.message.filters.compound_message_filter import CompoundMessageFilter
+from neuro_san.message.filters.message_filter import MessageFilter
 
 
 class MinimalMessageFilter(CompoundMessageFilter):

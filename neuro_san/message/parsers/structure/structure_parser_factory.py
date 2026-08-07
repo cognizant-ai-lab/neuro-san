@@ -15,8 +15,8 @@
 #
 # END COPYRIGHT
 
-from neuro_san.internals.parsers.structure.json_structure_parser import JsonStructureParser
-from neuro_san.internals.parsers.structure.structure_parser import StructureParser
+from neuro_san.message.parsers.structure.json_structure_parser import JsonStructureParser
+from neuro_san.message.parsers.structure.structure_parser import StructureParser
 
 
 class StructureParserFactory:

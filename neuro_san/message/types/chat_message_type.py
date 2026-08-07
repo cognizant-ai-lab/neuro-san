@@ -26,10 +26,10 @@ from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.human import HumanMessage
 from langchain_core.messages.system import SystemMessage
 
-from neuro_san.internals.messages.agent_framework_message import AgentFrameworkMessage
-from neuro_san.internals.messages.agent_message import AgentMessage
-from neuro_san.internals.messages.agent_progress_message import AgentProgressMessage
-from neuro_san.internals.messages.agent_tool_result_message import AgentToolResultMessage
+from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
+from neuro_san.message.types.agent_message import AgentMessage
+from neuro_san.message.types.agent_progress_message import AgentProgressMessage
+from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
 
 
 class ChatMessageType(IntEnum):

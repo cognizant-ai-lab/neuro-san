@@ -25,7 +25,7 @@ from typing import Union
 
 from langchain_core.messages.ai import AIMessage
 
-from neuro_san.internals.messages.traced_message import TracedMessage
+from neuro_san.message.types.traced_message import TracedMessage
 
 
 class AgentToolResultMessage(AIMessage, TracedMessage):

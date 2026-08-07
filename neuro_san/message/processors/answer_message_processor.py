@@ -19,11 +19,10 @@ from typing import Dict
 from typing import List
 from typing import Union
 
-from neuro_san.internals.filters.answer_message_filter import AnswerMessageFilter
-from neuro_san.internals.messages.chat_message_type import ChatMessageType
-from neuro_san.internals.parsers.structure.first_available_structure_parser \
-    import FirstAvailableStructureParser
-from neuro_san.message_processing.message_processor import MessageProcessor
+from neuro_san.message.filters.answer_message_filter import AnswerMessageFilter
+from neuro_san.message.parsers.structure.first_available_structure_parser import FirstAvailableStructureParser
+from neuro_san.message.processors.message_processor import MessageProcessor
+from neuro_san.message.types.chat_message_type import ChatMessageType
 
 
 class AnswerMessageProcessor(MessageProcessor):

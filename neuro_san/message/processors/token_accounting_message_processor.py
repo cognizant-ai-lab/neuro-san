@@ -17,9 +17,9 @@
 from typing import Any
 from typing import Dict
 
-from neuro_san.internals.filters.token_accounting_message_filter import TokenAccountingMessageFilter
-from neuro_san.internals.messages.chat_message_type import ChatMessageType
-from neuro_san.message_processing.message_processor import MessageProcessor
+from neuro_san.message.filters.token_accounting_message_filter import TokenAccountingMessageFilter
+from neuro_san.message.processors.message_processor import MessageProcessor
+from neuro_san.message.types.chat_message_type import ChatMessageType
 
 
 class TokenAccountingMessageProcessor(MessageProcessor):
