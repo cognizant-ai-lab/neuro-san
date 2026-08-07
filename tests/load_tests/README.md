@@ -135,6 +135,7 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--server-log [PATH]`      | auto (local, norm/adv) | Server log analysis. Auto-detected for a local server at norm/adv; if not found you're prompted to continue without it (remote host aborts — use `--client-only`). Pass a path for an explicit file, or the flag alone to force auto-detect. |
 | `--no-server-log`          | off         | Skip the missing-log prompt at norm/adv and run without server-log analysis; overrides the local auto-detect |
 | `--no-tokens`              | off         | Disable per-request token accounting         |
+| `--chat-filter`            | maximal     | Server-side message filter: `maximal` streams all messages; `minimal` suppresses progress messages |
 | `--profile-path`           | auto        | Directory containing profile JSON files (or `LOAD_TEST_PROFILE_PATH` env var) |
 | `--host`                   | localhost   | Neuro-san server host                        |
 | `--port`                   | 8080        | Neuro-san server port                        |
