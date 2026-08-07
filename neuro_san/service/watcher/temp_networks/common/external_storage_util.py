@@ -56,7 +56,7 @@ class ExternalStorageUtil:
         return check_interval_seconds
 
     @staticmethod
-    def set_check_interval_seconds(check_interval_seconds: float, logger: Logger) -> float:
+    def set_check_interval_seconds(check_interval_seconds: float, logger: Logger) -> None:
         """
         Set expiration interval defined by environment variable
         to value of check_interval_seconds paarmeter.
