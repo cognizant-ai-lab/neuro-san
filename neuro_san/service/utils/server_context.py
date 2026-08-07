@@ -136,6 +136,55 @@ class ServerContext(ServerContextLite):
         """
         return self.num_workers
 
+    def dump_tasks_in_used_executors(self, per_loop_timeout_s: float = 2.0) -> Dict[str, Any]:
+        """
+        Debug helper: snapshot the asyncio tasks currently living on every
+        AsyncioExecutor in the pool's "used" list. For each executor, this
+        schedules a one-shot coroutine on that executor's event loop that
+        enumerates asyncio.all_tasks() and captures each task's name, coro
+        qualname, done/cancelled state, and suspended stack. Results are
+        collected across loops via run_coroutine_threadsafe.
+
+        If a loop is unresponsive within per_loop_timeout_s -- for example,
+        because it is CPU-bound on a synchronous hog and cannot service any
+        new callback -- that executor's entry is marked as "unresponsive"
+        rather than blocking indefinitely. An unresponsive loop is itself a
+        strong diagnostic signal ("this loop cannot even run our probe").
+
+        Intended for on-demand invocation from a debug endpoint or a signal
+        handler while the server is wedged. Do NOT call from performance-
+        sensitive paths: it walks every task frame on every used executor.
+
+        :param per_loop_timeout_s: How long to wait for a single loop's
+                    probe coroutine to run. Loops that don't respond by
+                    then are recorded as unresponsive.
+        :return: A dict keyed by str(id(executor)) with per-executor entries
+                 describing loop status and (when responsive) the list of
+                 tasks with their suspended stacks. See format_task_dump()
+                 for a printable rendering.
+        """
+        result: Dict[str, Any] = {}
+        if self.executor_pool is None:
+            # Nothing has ever asked for an executor in this worker.
+            return result
+
+        result = self.executor_pool.dump_tasks_in_used_executors(per_loop_timeout_s=per_loop_timeout_s)
+        return result
+
+    @staticmethod
+    def format_task_dump(dump: Dict[str, Any]) -> str:
+        """
+        Render the output of dump_tasks_in_used_executors() as a printable
+        multi-line string. Useful for logging or writing into a debug HTTP
+        response.
+
+        :param dump: A dict returned by dump_tasks_in_used_executors().
+        :return: A human-readable multi-line string.
+        """
+        if not dump:
+            return "(no used executors)"
+        return AsyncioExecutorPool.format_task_dump(dump)
+
     def set_server_status(self, server_status: ServerStatus):
         """
         Sets the server status
