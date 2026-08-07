@@ -19,8 +19,9 @@ from typing import Dict
 from typing import List
 
 from copy import copy as shallow_copy
-import os
 from os import environ
+from os import pathsep as os_path_separator
+from os import sep as os_separator
 from pathlib import Path
 
 from leaf_common.config.resolver_util import ResolverUtil
@@ -50,6 +51,7 @@ class ActivationFactory(AgentToolFactory):
     BASE_PREPPERS: List[ActivationPrepper] = [
         ExternalActivationPrepper(),
         # Note that external prepper definitions get added at this point.
+        # The idea is to extend the regular tool spec, not our contract with external tools.
         ToolboxActivationPrepper(),
         ClassActivationPrepper(),
         BranchActivationPrepper(),
@@ -81,7 +83,7 @@ class ActivationFactory(AgentToolFactory):
             agent_tool_path = TOP_LEVEL_DIR.get_file_in_basis("coded_tools")
 
         # If we are dealing with file paths, convert that to something resolvable
-        if agent_tool_path.find(os.sep) >= 0:
+        if agent_tool_path.find(os_separator) >= 0:
 
             # Find the best of many resolution paths in the PYTHONPATH
             resolved_tool_path: str = str(Path(agent_tool_path).resolve())
@@ -91,7 +93,7 @@ class ActivationFactory(AgentToolFactory):
                 # Trust what we have already
                 best_path = agent_tool_path
             else:
-                pythonpath_split = pythonpath.split(os.pathsep)
+                pythonpath_split = pythonpath.split(os_path_separator)
                 for one_path in pythonpath_split:
                     resolved_path: str = str(Path(one_path).resolve())
                     if resolved_tool_path.startswith(resolved_path) and \
@@ -111,7 +113,7 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
             resolve_path = path_split[1]
 
             # Replace separators with python delimiters for later resolution
-            agent_tool_path = resolve_path.replace(os.sep, ".")
+            agent_tool_path = resolve_path.replace(os_separator, ".")
 
             # Remove any leading .s
             while agent_tool_path.startswith("."):
@@ -141,8 +143,8 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
         external_preppers: List[ActivationPrepper] = []
 
         prepper_class_name: str = None
-        agent_prepper_classes: List[str] = environ.get("AGENT_ACTIVATION_PREPPER_CLASSES") or ""
-        for prepper_class_name in agent_prepper_classes.split(" "):
+        agent_prepper_classes: str = environ.get("AGENT_ACTIVATION_PREPPER_CLASSES") or ""
+        for prepper_class_name in agent_prepper_classes.split():
             prepper_class_name = prepper_class_name.strip()
             prepper: ActivationPrepper = ResolverUtil.create_instance(prepper_class_name,
                                                                       "AGENT_ACTIVATION_PREPPER_CLASSES env var",

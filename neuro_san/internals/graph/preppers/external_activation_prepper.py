@@ -36,7 +36,7 @@ class ExternalActivationPrepper(ActivationPrepper):
 
     def is_applicable(self, agent_tool_spec: Dict[str, Any]) -> bool:
         """
-        :param agent_tool_spec: the agent tool spec dictionary
+        :param agent_tool_spec: the agent tool spec dictionary. Can be None for external agents.
         :return: True if this ActivationPrepper is applicable to the given agent tool spec
         """
         applicable: bool = agent_tool_spec is None
