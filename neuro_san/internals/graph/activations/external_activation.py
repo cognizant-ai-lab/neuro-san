@@ -40,13 +40,13 @@ from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.journal import Journal
-from neuro_san.internals.messages.agent_message import AgentMessage
-from neuro_san.internals.messages.chat_message_type import ChatMessageType
-from neuro_san.internals.messages.origination import Origination
-from neuro_san.internals.messages.sly_data_redactor import SlyDataRedactor
 from neuro_san.internals.run_context.factory.run_context_factory import RunContextFactory
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
-from neuro_san.message_processing.basic_message_processor import BasicMessageProcessor
+from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
+from neuro_san.message.types.agent_message import AgentMessage
+from neuro_san.message.types.chat_message_type import ChatMessageType
+from neuro_san.message.utils.origination import Origination
+from neuro_san.message.utils.sly_data_redactor import SlyDataRedactor
 
 
 # pylint: disable=too-many-instance-attributes

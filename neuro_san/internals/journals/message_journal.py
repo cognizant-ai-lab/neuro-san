@@ -20,13 +20,13 @@ from typing import List
 
 from langchain_core.messages.base import BaseMessage
 
-from neuro_san.internals.filters.maximal_message_filter import MaximalMessageFilter
-from neuro_san.internals.filters.message_filter import MessageFilter
 from neuro_san.internals.interfaces.async_hopper import AsyncHopper
 from neuro_san.internals.journals.journal import Journal
-from neuro_san.internals.messages.base_message_dictionary_converter import BaseMessageDictionaryConverter
-from neuro_san.internals.messages.chat_message_type import ChatMessageType
-from neuro_san.message_processing.message_processor import MessageProcessor
+from neuro_san.message.filters.maximal_message_filter import MaximalMessageFilter
+from neuro_san.message.filters.message_filter import MessageFilter
+from neuro_san.message.processors.message_processor import MessageProcessor
+from neuro_san.message.types.base_message_dictionary_converter import BaseMessageDictionaryConverter
+from neuro_san.message.types.chat_message_type import ChatMessageType
 
 
 class MessageJournal(Journal):

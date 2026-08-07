@@ -20,12 +20,12 @@ from typing import Dict
 from typing import List
 from typing import Union
 
-from neuro_san.internals.filters.message_filter import MessageFilter
-from neuro_san.internals.filters.message_filter_factory import MessageFilterFactory
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.journals.message_journal import MessageJournal
-from neuro_san.message_processing.message_processor import MessageProcessor
-from neuro_san.message_processing.structure_message_processor import StructureMessageProcessor
+from neuro_san.message.filters.message_filter import MessageFilter
+from neuro_san.message.filters.message_filter_factory import MessageFilterFactory
+from neuro_san.message.processors.message_processor import MessageProcessor
+from neuro_san.message.processors.structure_message_processor import StructureMessageProcessor
 
 
 class QueueFilter:
