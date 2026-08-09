@@ -209,7 +209,11 @@ It's function_json is described thusly:
         ("a" is for asynchronous).
 
         :return: The content of the BaseMessage that tells us the "answer"
-                 from the tool. Can be None if the tool produced no message.
+                 from the tool - a string today, though langchain also allows
+                 lists of content blocks.
+                 Can be None if the tool produced no message.
+                 On failure, returns the string form of the exception so the
+                 calling LLM can verbally recognize the problem.
         """
         run: LangChainRun = None
         try:
