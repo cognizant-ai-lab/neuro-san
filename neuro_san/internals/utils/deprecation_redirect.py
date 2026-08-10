@@ -30,7 +30,7 @@ class DeprecationRedirect:
     """
     Utilities for redirecting deprecated classes based on a single dictionary of the format:
         {
-            "<old_class_module>.<old_class_name>": "<fully_qualified_new_class_name>",
+            "<fully_qualified_old_class_name>": "<fully_qualified_new_class_name>",
             ...
         }
     """
