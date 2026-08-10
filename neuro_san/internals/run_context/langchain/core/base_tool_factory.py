@@ -30,7 +30,6 @@ from leaf_common.logging.sensitive_logger import SensitiveLogger
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
-from neuro_san.internals.journals.external_agent_parsing import ExternalAgentParsing
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
@@ -38,6 +37,7 @@ from neuro_san.internals.run_context.langchain.core.langchain_openai_function_to
 from neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter import LangChainMcpAdapter
 from neuro_san.internals.run_context.utils.external_tool_adapter import ExternalToolAdapter
 from neuro_san.internals.utils.exception_util import ExceptionUtil
+from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
 from neuro_san.message.types.agent_message import AgentMessage
 
 

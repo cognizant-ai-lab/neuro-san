@@ -30,12 +30,12 @@ from langchain_core.tools import BaseTool
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 
-from neuro_san.internals.journals.external_agent_parsing import ExternalAgentParsing
 from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
 from neuro_san.internals.run_context.langchain.core.langchain_run import LangChainRun
 from neuro_san.internals.run_context.langchain.core.base_model_dictionary_converter import BaseModelDictionaryConverter
 from neuro_san.internals.run_context.langchain.core.pydantic_argument_dictionary_converter \
     import PydanticArgumentDictionaryConverter
+from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
 
 
 class LangChainOpenAIFunctionTool(BaseTool):
