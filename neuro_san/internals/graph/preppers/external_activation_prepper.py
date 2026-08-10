@@ -24,9 +24,9 @@ from neuro_san.internals.graph.activations.external_activation import ExternalAc
 from neuro_san.internals.graph.preppers.activation_prepper import ActivationPrepper
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.callable_activation import CallableActivation
+from neuro_san.internals.journals.external_agent_parsing import ExternalAgentParsing
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.message.utils.sly_data_redactor import SlyDataRedactor
-from neuro_san.message.utils.external_agent_parsing import ExternalAgentParsing
 
 
 class ExternalActivationPrepper(ActivationPrepper):
