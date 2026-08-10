@@ -35,7 +35,7 @@ _DEPRECATION_REDIRECT = DeprecationRedirect(
         "internals.messages.chat_message_type.ChatMessageType":
             "neuro_san.message.types.chat_message_type.ChatMessageType",
         "internals.messages.origination.Origination":
-            "neuro_san.message.utils.origination.Origination",
+            "neuro_san.internals.journals.origination.Origination",
         "internals.parsers.structure.json_structure_parser.JsonStructureParser":
             "neuro_san.message.parsers.structure.json_structure_parser.JsonStructureParser",
         "message_processors.message_processor.MessageProcessor":

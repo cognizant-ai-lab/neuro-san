@@ -33,10 +33,10 @@ from langchain_core.outputs.chat_generation import ChatGeneration
 
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.journals.originating_journal import OriginatingJournal
+from neuro_san.internals.journals.origination import Origination
 from neuro_san.internals.journals.tool_argument_reporting import ToolArgumentReporting
 from neuro_san.message.types.agent_message import AgentMessage
 from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
-from neuro_san.message.utils.origination import Origination
 
 
 # pylint: disable=too-many-ancestors

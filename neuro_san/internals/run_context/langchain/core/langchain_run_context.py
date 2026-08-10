@@ -47,6 +47,7 @@ from neuro_san.internals.interfaces.tracing_context import TracingContext
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.journals.intercepting_journal import InterceptingJournal
 from neuro_san.internals.journals.originating_journal import OriginatingJournal
+from neuro_san.internals.journals.origination import Origination
 from neuro_san.internals.run_context.interfaces.run import Run
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
@@ -58,7 +59,6 @@ from neuro_san.internals.run_context.langchain.middleware.middleware_factory imp
 from neuro_san.internals.run_context.utils.activation_capsule import ActivationCapsule
 from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
 from neuro_san.message.types.base_message_dictionary_converter import BaseMessageDictionaryConverter
-from neuro_san.message.utils.origination import Origination
 
 
 # pylint: disable=too-many-instance-attributes,too-many-public-methods
