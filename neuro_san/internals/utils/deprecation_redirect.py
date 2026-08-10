@@ -35,18 +35,22 @@ class DeprecationRedirect:
         }
     """
 
-    def __init__(self, module_name: str, old_class_to_new_class: Dict[str, str]):
+    def __init__(self, module_name: str, old_class_to_new_class: Dict[str, str],
+                 do_not_redirect_modules_for_testing: bool = False):
         """
         Constructor
 
         :param module_name: The name of module doing the redirecting
         :param old_class_to_new_class: Data dictionary described in the class comment
+        :param do_not_redirect_modules_for_testing: If true, do not redirect deprecated modules
         """
         self.module_name: str = module_name
         self.old_class_to_new_class: Dict[str, str] = old_class_to_new_class
         self.warned: Set[str] = set()
+        self.do_not_redirect_modules_for_testing: bool = do_not_redirect_modules_for_testing
 
-        self.redirect_modules()
+        if not self.do_not_redirect_modules_for_testing:
+            self.redirect_modules()
 
     def redirect_modules(self):
         """
