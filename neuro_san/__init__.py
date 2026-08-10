@@ -32,15 +32,15 @@ _DEPRECATION_REDIRECT = DeprecationRedirect(
     __name__,
     # A map from old class name to new class name for compatibility
     {
-        "internals.messages.chat_message_type.ChatMessageType":
+        "neuro_san.internals.messages.chat_message_type.ChatMessageType":
             "neuro_san.message.types.chat_message_type.ChatMessageType",
-        "internals.messages.origination.Origination":
+        "neuro_san.internals.messages.origination.Origination":
             "neuro_san.internals.journals.origination.Origination",
-        "internals.parsers.structure.json_structure_parser.JsonStructureParser":
+        "neuro_san.internals.parsers.structure.json_structure_parser.JsonStructureParser":
             "neuro_san.message.parsers.structure.json_structure_parser.JsonStructureParser",
-        "message_processors.message_processor.MessageProcessor":
+        "neuro_san.message_processors.message_processor.MessageProcessor":
             "neuro_san.message.processors.message_processor.MessageProcessor",
-        "message_processors.basic_message_processor.BasicMessageProcessor":
+        "neuro_san.message_processors.basic_message_processor.BasicMessageProcessor":
             "neuro_san.message.processors.basic_message_processor.BasicMessageProcessor",
     },
     next_version="0.7.0"

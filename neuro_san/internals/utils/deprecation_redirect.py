@@ -52,8 +52,24 @@ class DeprecationRedirect:
 
         self.warned: Set[str] = set()
 
+        self.clean_keys()
         if not self.do_not_redirect_modules_for_testing:
             self.redirect_modules()
+
+    def clean_keys(self):
+        """
+        Remove the module name from the keys
+        """
+        existing_keys: Set[str] = set(self.old_class_to_new_class.keys())
+        for key in existing_keys:
+
+            if not key.startswith(f"{self.module_name}."):
+                # The key class referenced is not based in this module. Leave it alone.
+                continue
+
+            existing_value: str = self.old_class_to_new_class.pop(key)
+            self.old_class_to_new_class[key.replace(f"{self.module_name}.", "")] = existing_value
+
 
     def redirect_modules(self):
         """
