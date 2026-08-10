@@ -7,14 +7,8 @@ _DEPRECATION_REDIRECT = DeprecationRedirect(
     __name__,
     # A map from old class name to new class name for compatibility
     {
-        "ChatMessageType": {
-            "old_module": "chat_message_type",
-            "new_class": "neuro_san.message.types.chat_message_type.ChatMessageType",
-        },
-        "Origination": {
-            "old_module": "origination",
-            "new_class": "neuro_san.message.utils.origination.Origination",
-        },
+        "chat_message_type.ChatMessageType": "neuro_san.message.types.chat_message_type.ChatMessageType",
+        "origination.Origination": "neuro_san.message.utils.origination.Origination",
     }
 )
 

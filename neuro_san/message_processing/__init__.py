@@ -7,14 +7,10 @@ _DEPRECATION_REDIRECT = DeprecationRedirect(
     __name__,
     # A map from old class name to new class name for compatibility
     {
-        "MessageProcessor": {
-            "old_module": "message_processor",
-            "new_class": "neuro_san.message.processors.message_processor.MessageProcessor",
-        },
-        "BasicMessageProcessor": {
-            "old_module": "basic_message_processor",
-            "new_class": "neuro_san.message.processors.basic_message_processor.BasicMessageProcessor",
-        },
+        "message_processor.MessageProcessor":
+            "neuro_san.message.processors.message_processor.MessageProcessor",
+        "basic_message_processor.BasicMessageProcessor":
+            "neuro_san.message.processors.basic_message_processor.BasicMessageProcessor",
     }
 )
 

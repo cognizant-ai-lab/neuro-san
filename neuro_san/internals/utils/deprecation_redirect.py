@@ -30,15 +30,12 @@ class DeprecationRedirect:
     """
     Utilities for redirecting deprecated classes based on a single dictionary of the format:
         {
-            "<old_class_name>": {
-                "old_module": "<old_module_name>",
-                "new_class": "<fully_qualified_new_class_name>",
-            },
+            "<old_class_module>.<old_class_name>": "<fully_qualified_new_class_name>",
             ...
         }
     """
 
-    def __init__(self, module_name: str, old_class_to_new_class: Dict[str, Dict[str, str]]):
+    def __init__(self, module_name: str, old_class_to_new_class: Dict[str, str]):
         """
         Constructor
 
@@ -46,7 +43,7 @@ class DeprecationRedirect:
         :param old_class_to_new_class: Data dictionary described in the class comment
         """
         self.module_name: str = module_name
-        self.old_class_to_new_class: Dict[str, Dict[str, str]] = old_class_to_new_class
+        self.old_class_to_new_class: Dict[str, str] = old_class_to_new_class
         self.warned: Set[str] = set()
 
         self.redirect_modules()
@@ -56,9 +53,8 @@ class DeprecationRedirect:
         Redirect deprecated classes and their modules
         """
         old_class: str = None
-        old_class_dict: Dict[str, str] = None
-        for old_class, old_class_dict in self.old_class_to_new_class.items():
-            old_module: str = old_class_dict.get("old_module")
+        for old_class in self.old_class_to_new_class.keys():
+            old_module: str = self.get_module_from_fully_qualified(old_class)
             modules[f"{self.module_name}.{old_module}"] = modules[self.module_name]
 
     def redirect_class(self, old_class: str) -> Type[Any]:
@@ -67,22 +63,57 @@ class DeprecationRedirect:
 
         :param old_class: The old class name
         """
-        old_class_dict: Dict[str, str] = self.old_class_to_new_class.get(old_class)
-        if old_class_dict is None:
+        fully_qualified_old_class: str = self.find_old_class_key(old_class)
+        if fully_qualified_old_class is None:
             # The new class name is not in the map, so this is not a deprecated class but simply its own error
             raise AttributeError(f"module {self.module_name} has no attribute {old_class}")
 
         # The new class name is in the map, return the type with a warning
-        new_class: str = old_class_dict.get("new_class")
+        new_class: str = self.old_class_to_new_class.get(fully_qualified_old_class)
         new_type: Type[Any] = ResolverUtil.create_type(new_class)
 
-        if not old_class in self.warned:
+        if old_class not in self.warned:
             # Only warn once
             self.warned.add(old_class)
 
             # Emit the deprecation warning
-            old_module: str = old_class_dict.get("old_module")
+            old_module: str = self.get_module_from_fully_qualified(fully_qualified_old_class)
             full_ref: str = f"{self.module_name}.{old_module}.{old_class}"
             warn(f"{full_ref} is deprecated, use {new_class} instead.", DeprecationWarning, stacklevel=3)
 
         return new_type
+
+    def find_old_class_key(self, old_class: str) -> str:
+        """
+        Find the old class key
+        :param old_class: The old class name without the module
+        :return: The old class key with the module
+        """
+        ends_with: str = f".{old_class}"
+        for key in self.old_class_to_new_class.keys():
+            if key.endswith(ends_with):
+                return key
+        return None
+
+    @staticmethod
+    def get_class_from_fully_qualified(fully_qualified_class: str) -> str:
+        """
+        Get the class name from the fully qualified class name
+        :param fully_qualified_class: The fully qualified class name
+        :return: The class name only
+        """
+        if fully_qualified_class is None:
+            return None
+        return fully_qualified_class.split(".")[-1]
+
+    @staticmethod
+    def get_module_from_fully_qualified(fully_qualified_class: str) -> str:
+        """
+        Get the module name from the fully qualified class name
+        :param fully_qualified_class: The fully qualified class name
+        :return: The module name only
+        """
+        if fully_qualified_class is None:
+            return None
+
+        return ".".join(fully_qualified_class.split(".")[:-1])

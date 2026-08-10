@@ -7,10 +7,8 @@ _DEPRECATION_REDIRECT = DeprecationRedirect(
     __name__,
     # A map from old class name to new class name for compatibility
     {
-        "JsonStructureParser": {
-            "old_module": "structure.json_structure_parser",
-            "new_class": "neuro_san.message.parsers.structure.json_structure_parser.JsonStructureParser",
-        },
+        "structure.json_structure_parser.JsonStructureParser":
+            "neuro_san.message.parsers.structure.json_structure_parser.JsonStructureParser",
     }
 )
 
