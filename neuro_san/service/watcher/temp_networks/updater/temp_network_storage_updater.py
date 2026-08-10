@@ -93,19 +93,23 @@ class TempNetworkStorageUpdater(Startable):
             if external_storage is not None:
                 self.temp_storage.set_base_storage(external_storage)
             self.reservationist = AbstractAgentReservationist({self.temp_storage})
-
-            self.incoming: Queue[AsyncCollatingQueue] = self.server_context.get_queues()
+            self.incoming: Queue[AsyncCollatingQueue] = None
         else:
             # We don't have a temp storage, so we won't be doing any processing,
             # close the incoming queues and don't start any processing threads.
             self.logger.info("No temp storage configured, closing incoming queues without processing")
-            self.server_context.get_queues().close()
+            self.incoming = self.server_context.get_queues()
+            if self.incoming is not None:
+                self.incoming.close()
+                self.incoming = None
 
     def start(self):
         """
         Perform start up.
         """
-        if self.temp_storage is None:
+        if self.temp_storage is not None:
+            self.incoming = self.server_context.get_queues()
+        else:
             self.logger.info("TempNetworkStorageUpdater is not started: no temp storage configured.")
             return
 

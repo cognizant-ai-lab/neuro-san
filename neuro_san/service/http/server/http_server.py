@@ -211,6 +211,10 @@ class HttpServer(AgentStateListener):
         # a bare fork_processes() does the fork but not the add_sockets.
         server.add_sockets(sockets)
 
+        # Create all server context resources that need to be created after fork,
+        # and start them if necessary.
+        self.server_context.start()
+
         server_status: ServerStatus = self.server_context.get_server_status()
         server_status.http_service.set_status(True)
         self.logger.info({}, "HTTP server is running %d instances on port %d with backlog %d",

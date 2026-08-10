@@ -59,10 +59,10 @@ class ServerContext(ServerContextLite):
         # Lazy-construct in get_executor_pool() so each worker builds its own.
         self.executor_pool: Optional[AsyncioExecutorPool] = None
         self._executor_pool_lock: Lock = Lock()
-        self.queues: Queue[AsyncCollatingQueue] = Queue()
+        self.queues: Queue[AsyncCollatingQueue] = None
         self.mcp_server_context: McpServerContext = McpServerContext()
         self.server_port: int = AgentSessionConstants.DEFAULT_HTTP_PORT
-        self.event_work_queue: AsyncCollatingQueue = AsyncCollatingQueue()
+        self.event_work_queue: AsyncCollatingQueue = None
 
         # Number of worker processes for the server. To be set by the server initialization code.
         self.num_workers: int = 0
@@ -77,6 +77,14 @@ class ServerContext(ServerContextLite):
 
         self.periodic_configs: Dict[str, Dict[str, Any]] = {}
         self.agent_authorizer: AgentAuthorizer = None
+
+    def start(self):
+        """
+        Create and start any process fork-sensitive resources
+        needed by this server context.
+        """
+        self.queues = Queue()
+        self.event_work_queue = AsyncCollatingQueue()
 
     def set_temp_storage_max_items(self, max_items: int):
         """
