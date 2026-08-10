@@ -38,9 +38,9 @@ _DEPRECATION_REDIRECT = DeprecationRedirect(
             "neuro_san.internals.journals.origination.Origination",
         "neuro_san.internals.parsers.structure.json_structure_parser.JsonStructureParser":
             "neuro_san.message.parsers.structure.json_structure_parser.JsonStructureParser",
-        "neuro_san.message_processors.message_processor.MessageProcessor":
+        "neuro_san.message_processing.message_processor.MessageProcessor":
             "neuro_san.message.processors.message_processor.MessageProcessor",
-        "neuro_san.message_processors.basic_message_processor.BasicMessageProcessor":
+        "neuro_san.message_processing.basic_message_processor.BasicMessageProcessor":
             "neuro_san.message.processors.basic_message_processor.BasicMessageProcessor",
     },
     next_version="0.7.0"
