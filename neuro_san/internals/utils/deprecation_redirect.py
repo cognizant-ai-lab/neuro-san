@@ -33,6 +33,9 @@ class DeprecationRedirect:
             "<fully_qualified_old_class_name>": "<fully_qualified_new_class_name>",
             ...
         }
+    The idea is that one global instance of this class lives in a module's __init__.py file
+    and is initialized with a dictionary described above and manages class redirections and
+    deprecation warnings from there.
     """
 
     def __init__(self, module_name: str, old_class_to_new_class: Dict[str, str], next_version: str = None,
