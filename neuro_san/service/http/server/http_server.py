@@ -201,7 +201,11 @@ class HttpServer(AgentStateListener):
             self.http_port, backlog=self.server_config.http_connections_backlog)
 
         # Do not create or access an asyncio/Tornado event loop before this call.
-        worker_id: int = tornado.process.fork_processes(num_workers)
+        worker_id: int = 0
+        if num_workers > 1:
+            worker_id: int = tornado.process.fork_processes(num_workers)
+
+        # If num_workers == 1, we don't fork and worker_id of our single server process remains 0.
         self.logger.info({}, "Starting %d worker processes (worker_id=%d, pid=%d)",
                          num_workers, worker_id, os.getpid())
         # Register this worker's ID and total number of workers in the server context for use by other components.
