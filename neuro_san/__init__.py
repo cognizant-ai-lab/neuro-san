@@ -42,7 +42,8 @@ _DEPRECATION_REDIRECT = DeprecationRedirect(
             "neuro_san.message.processors.message_processor.MessageProcessor",
         "message_processors.basic_message_processor.BasicMessageProcessor":
             "neuro_san.message.processors.basic_message_processor.BasicMessageProcessor",
-    }
+    },
+    next_version="0.7.0"
 )
 
 
