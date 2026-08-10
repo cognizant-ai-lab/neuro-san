@@ -207,8 +207,12 @@ It's function_json is described thusly:
         calls to another llm/agent instance happen asynchronously.
         ("a" is for asynchronous).
 
-        :return: The result of the tool in the form of the BaseMessage
-                 that tells us the "answer" from the tool.
+        :return: The content of the BaseMessage that tells us the "answer"
+                 from the tool - a string today, though langchain also allows
+                 lists of content blocks.
+                 Can be None if the tool produced no message.
+                 On failure, returns the string form of the exception so the
+                 calling LLM can verbally recognize the problem.
         """
         run: LangChainRun = None
         try:
@@ -245,4 +249,12 @@ It's function_json is described thusly:
 
         # Assume the answer is latest tool message in the Run.
         the_answer: BaseMessage = run.get_tool_message()
-        return the_answer
+        if the_answer is None:
+            return None
+
+        # Return the message's content rather than the message object itself.
+        # Langchain passes str (and content-block list) tool returns through
+        # to the calling LLM's ToolMessage as-is, but falls back to str() for
+        # any other object - which for a BaseMessage is its pydantic repr
+        # ("content='...' additional_kwargs={} ..."), not the answer.
+        return the_answer.content
