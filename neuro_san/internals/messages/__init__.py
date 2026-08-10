@@ -11,7 +11,12 @@ DEPRECATION_REDIRECT = DeprecationRedirect(
             "old_module": "chat_message_type",
             "new_class": "neuro_san.message.types.chat_message_type.ChatMessageType",
             "warned": False,
-        }
+        },
+        "Origination": {
+            "old_module": "origination",
+            "new_class": "neuro_san.message.utils.origination.Origination",
+            "warned": False,
+        },
     }
 )
 
