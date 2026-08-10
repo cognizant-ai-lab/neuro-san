@@ -43,6 +43,7 @@ class ServerContext(ServerContextLite):
     """
     Class that contains global-ish state for each instance of a server.
     """
+    # pylint: disable=too-many-public-methods
 
     def __init__(self):
         """
