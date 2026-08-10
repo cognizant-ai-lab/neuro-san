@@ -68,7 +68,7 @@ class ExternalStorageUtil:
         # so we also set it through env variable.
         # Note that after fork, each worker process has its own copy of env variables,
         # so setting variable value after fork doesn't affect other workers,
-        # making its valye worker process specific.
+        # making its value worker process specific.
         envvar_name: str = ExternalStorageUtil.EXTERNAL_STORAGE_CHECK_PERIOD_SECONDS_ENV_VAR
         environ[envvar_name] = str(check_interval_seconds)
         logger.info("%s is set to %s seconds.", envvar_name, check_interval_seconds)
