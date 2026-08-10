@@ -44,8 +44,15 @@ class EventWorkMonitor(WatcherThread):
         """
         super().__init__(server_context)
         self.update_period_in_seconds = 0.5
-        self.event_work_queue: AsyncCollatingQueue = server_context.get_event_work_queue()
+        self.event_work_queue: AsyncCollatingQueue = None
         self.invocation_context_pool: Set[SessionInvocationContext] = set()
+
+    def start(self):
+        """
+        Perform start up.
+        """
+        self.event_work_queue = self.server_context.get_event_work_queue()
+        super().start()
 
     def run(self):
         """

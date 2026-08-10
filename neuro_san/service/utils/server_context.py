@@ -43,6 +43,7 @@ class ServerContext(ServerContextLite):
     """
     Class that contains global-ish state for each instance of a server.
     """
+    # pylint: disable=too-many-public-methods
 
     def __init__(self):
         """
@@ -59,10 +60,15 @@ class ServerContext(ServerContextLite):
         # Lazy-construct in get_executor_pool() so each worker builds its own.
         self.executor_pool: Optional[AsyncioExecutorPool] = None
         self._executor_pool_lock: Lock = Lock()
-        self.queues: Queue[AsyncCollatingQueue] = Queue()
+        self.queues: Queue[AsyncCollatingQueue] = None
         self.mcp_server_context: McpServerContext = McpServerContext()
         self.server_port: int = AgentSessionConstants.DEFAULT_HTTP_PORT
-        self.event_work_queue: AsyncCollatingQueue = AsyncCollatingQueue()
+        self.event_work_queue: AsyncCollatingQueue = None
+
+        # Number of worker processes for the server. To be set by the server initialization code.
+        self.num_workers: int = 0
+        # Id of the current worker process. To be set by the server initialization code.
+        self.worker_id: int = 0
 
         # Dictionary is string key (describing scope) to AgentNetworkStorage grouping.
         self.network_storage_dict: Dict[str, AgentNetworkStorage] = {}
@@ -72,6 +78,14 @@ class ServerContext(ServerContextLite):
 
         self.periodic_configs: Dict[str, Dict[str, Any]] = {}
         self.agent_authorizer: AgentAuthorizer = None
+
+    def start(self):
+        """
+        Create and start any process fork-sensitive resources
+        needed by this server context.
+        """
+        self.queues = Queue()
+        self.event_work_queue = AsyncCollatingQueue()
 
     def set_temp_storage_max_items(self, max_items: int):
         """
@@ -109,6 +123,27 @@ class ServerContext(ServerContextLite):
                                                              idle_timeout_seconds=30,
                                                              max_workers=max_workers)
         return self.executor_pool
+
+    def set_worker_info(self, worker_id: int, num_workers: int):
+        """
+        Sets the worker id and total number of workers for this server instance.
+        :param worker_id: The id of the current worker process (0-based).
+        :param num_workers: The total number of worker processes for the server.
+        """
+        self.worker_id = worker_id
+        self.num_workers = num_workers
+
+    def get_worker_id(self) -> int:
+        """
+        :return: The id of the current worker process (0-based).
+        """
+        return self.worker_id
+
+    def get_num_workers(self) -> int:
+        """
+        :return: The total number of worker processes for the server.
+        """
+        return self.num_workers
 
     def dump_tasks_in_used_executors(self, per_loop_timeout_s: float = 2.0) -> Dict[str, Any]:
         """
