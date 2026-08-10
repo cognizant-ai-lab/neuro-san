@@ -10,7 +10,6 @@ _DEPRECATION_REDIRECT = DeprecationRedirect(
         "JsonStructureParser": {
             "old_module": "structure.json_structure_parser",
             "new_class": "neuro_san.message.parsers.structure.json_structure_parser.JsonStructureParser",
-            "warned": False,
         },
     }
 )

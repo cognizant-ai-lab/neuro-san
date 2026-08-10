@@ -32,7 +32,6 @@ class DeprecationRedirect:
             "<old_class_name>": {
                 "old_module": "<old_module_name>",
                 "new_class": "<fully_qualified_new_class_name>",
-                "warned": False     # boolean flag to prevent duplicate warnings
             },
             ...
         }
@@ -58,6 +57,8 @@ class DeprecationRedirect:
         for old_class, old_class_dict in self.old_class_to_new_class.items():
             old_module: str = old_class_dict.get("old_module")
             modules[f"{self.module_name}.{old_module}"] = modules[self.module_name]
+            # Keep a boolean flag to warn only once
+            old_class_dict["warned"] = False
 
     def redirect_class(self, old_class: str) -> Type[Any]:
         """
