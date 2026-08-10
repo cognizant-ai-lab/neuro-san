@@ -3,7 +3,7 @@ from typing import Type
 
 from neuro_san.internals.utils.deprecation_redirect import DeprecationRedirect
 
-DEPRECATION_REDIRECT = DeprecationRedirect(
+_DEPRECATION_REDIRECT = DeprecationRedirect(
     __name__,
     # A map from old class name to new class name for compatibility
     {
@@ -27,4 +27,4 @@ def __getattr__(old_class: str) -> Type[Any]:
     :param old_class: The old class name
     :return: The redirected class
     """
-    return DEPRECATION_REDIRECT.redirect_class(old_class)
+    return _DEPRECATION_REDIRECT.redirect_class(old_class)
