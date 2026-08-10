@@ -11,7 +11,12 @@ DEPRECATION_REDIRECT = DeprecationRedirect(
             "old_module": "message_processor",
             "new_class": "neuro_san.message.processors.message_processor.MessageProcessor",
             "warned": False,
-        }
+        },
+        "BasicMessageProcessor": {
+            "old_module": "basic_message_processor",
+            "new_class": "neuro_san.message.processors.basic_message_processor.BasicMessageProcessor",
+            "warned": False,
+        },
     }
 )
 
