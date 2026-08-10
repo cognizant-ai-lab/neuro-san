@@ -151,6 +151,7 @@ class HttpServer(AgentStateListener):
         :param startables: List of Startable instances to start once server
             has forked its multiple running instances.
         """
+        # pylint: disable=too-many-statements
         app = self.make_app(self.requests_limit, self.concurrent_requests_limit, self.logger)
 
         self.logger.debug({}, "Serving agents: %s", repr(self.allowed_agents.keys()))
