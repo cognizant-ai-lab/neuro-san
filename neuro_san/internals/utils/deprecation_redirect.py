@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import Set
 from typing import Type
 
 from sys import modules
@@ -37,7 +38,7 @@ class DeprecationRedirect:
         }
     """
 
-    def __init__(self, module_name: str, old_class_to_new_class: Dict[str, Dict[str, Any]]):
+    def __init__(self, module_name: str, old_class_to_new_class: Dict[str, Dict[str, str]]):
         """
         Constructor
 
@@ -45,7 +46,9 @@ class DeprecationRedirect:
         :param old_class_to_new_class: Data dictionary described in the class comment
         """
         self.module_name: str = module_name
-        self.old_class_to_new_class: Dict[str, Dict[str, Any]] = old_class_to_new_class
+        self.old_class_to_new_class: Dict[str, Dict[str, str]] = old_class_to_new_class
+        self.warned: Set[str] = set()
+
         self.redirect_modules()
 
     def redirect_modules(self):
@@ -53,12 +56,10 @@ class DeprecationRedirect:
         Redirect deprecated classes and their modules
         """
         old_class: str = None
-        old_class_dict: Dict[str, Any] = None
+        old_class_dict: Dict[str, str] = None
         for old_class, old_class_dict in self.old_class_to_new_class.items():
             old_module: str = old_class_dict.get("old_module")
             modules[f"{self.module_name}.{old_module}"] = modules[self.module_name]
-            # Keep a boolean flag to warn only once
-            old_class_dict["warned"] = False
 
     def redirect_class(self, old_class: str) -> Type[Any]:
         """
@@ -75,9 +76,9 @@ class DeprecationRedirect:
         new_class: str = old_class_dict.get("new_class")
         new_type: Type[Any] = ResolverUtil.create_type(new_class)
 
-        # Only warn once
-        if not old_class_dict.get("warned"):
-            old_class_dict["warned"] = True
+        if not old_class in self.warned:
+            # Only warn once
+            self.warned.add(old_class)
 
             # Emit the deprecation warning
             old_module: str = old_class_dict.get("old_module")
