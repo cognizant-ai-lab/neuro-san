@@ -61,15 +61,16 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         self.reader = S3ReservationsReader(bucket_name=bucket_name, prefix=prefix)
         self.expiration = S3ReservationsExpiration(bucket_name=bucket_name, prefix=prefix)
 
-        # This can throw ValueError if env var is invalid
-        self._check_interval_seconds = ExternalStorageUtil.get_check_interval_seconds(self.logger)
-
     def start(self):
         """
         Initialize the S3 client and validate connection to the bucket.
 
         This method can be called to re-initialize the connection if needed.
         """
+        # Set check interval seconds when we start: value could be overridden by now.
+        # This can throw ValueError if env var is invalid
+        self._check_interval_seconds = ExternalStorageUtil.get_check_interval_seconds(self.logger)
+
         self.reader.start()
         self.expiration.start()
 

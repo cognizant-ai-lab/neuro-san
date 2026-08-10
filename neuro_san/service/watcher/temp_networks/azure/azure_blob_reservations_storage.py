@@ -68,13 +68,13 @@ class AzureBlobReservationsStorage(AbstractReservationsStorage):
         self.reader = AzureBlobReservationsReader(container_name=container_name, prefix=prefix)
         self.expiration = AzureBlobReservationsExpiration(container_name=container_name, prefix=prefix)
 
-        # This can throw ValueError if env var is invalid
-        self._check_interval_seconds = ExternalStorageUtil.get_check_interval_seconds(self.logger)
-
     def start(self):
         """
         Initialize Azure Blob Storage client and validate connection to container.
         """
+        # This can throw ValueError if env var is invalid
+        self._check_interval_seconds = ExternalStorageUtil.get_check_interval_seconds(self.logger)
+
         self.reader.start()
         self.expiration.start()
 
