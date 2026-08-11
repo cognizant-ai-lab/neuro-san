@@ -39,7 +39,8 @@ class TestDeprecationRedirect(TestCase):
         """
         Can we redirect deprecated modules?
         """
-        redirect = DeprecationRedirect("neuro_san",
+        redirect = DeprecationRedirect(
+            "neuro_san",
             {
                 "neuro_san.bogus.batty.Batty": "neuro_san.interfaces.coded_tool.CodedTool"
             }
