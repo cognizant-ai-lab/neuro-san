@@ -194,13 +194,27 @@ class BaseToolFactory:
             return function_json
 
         parameters: Dict[str, Any] = function_json.get("parameters") or {}
+        if not isinstance(parameters, Dict):
+            # Not a schema we can reason about.
+            # Let verify_function_json() report it as invalid.
+            return function_json
+
         properties: Dict[str, Any] = parameters.get("properties") or {}
         if properties:
             return function_json
 
+        # A parameters block carrying anything beyond an empty properties
+        # declaration is a declared schema in an unsupported dialect
+        # (e.g. additionalProperties, anyOf, $ref). Let verify_function_json()
+        # report it rather than silently replacing the declared contract
+        # with the synthesized one.
+        if parameters and not {"type", "properties", "required"}.issuperset(parameters.keys()):
+            return function_json
+
         message: str = (
-            f"The front-man of external agent {name} declares no function.parameters, "
-            f"so a single required '{self.DEFAULT_EXTERNAL_PARAMETER_NAME}' string parameter "
+            f"The front-man of external agent {name} declares no parameters "
+            f"in its function definition, so a single required "
+            f"'{self.DEFAULT_EXTERNAL_PARAMETER_NAME}' string parameter "
             "is being synthesized for it to receive the calling agent's request. "
             "To control what this agent network receives, declare at least one parameter "
             "in the function definition of its front-man."

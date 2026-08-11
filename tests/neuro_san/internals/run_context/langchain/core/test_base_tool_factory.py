@@ -159,6 +159,49 @@ class TestBaseToolFactory:
         assert "unreachable" not in str(reported.content)
 
     @pytest.mark.asyncio
+    async def test_unsupported_schema_dialect_is_not_replaced(self):
+        """
+        A declared parameters schema in an unsupported JSON Schema dialect
+        (no properties, but e.g. additionalProperties) is a declared contract,
+        not an absent one. It must be rejected as invalid - never silently
+        replaced with the synthesized default.
+        """
+        factory = self.make_factory({
+            "description": "Answers music questions.",
+            "parameters": {
+                "type": "object",
+                "additionalProperties": {"type": "string"}
+            }
+        })
+
+        tool = await factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
+
+        assert tool is None
+        factory.journal.write_message.assert_awaited_once()
+        reported = factory.journal.write_message.await_args.args[0]
+        assert "invalid function definition" in str(reported.content)
+        assert "synthesized" not in str(reported.content)
+
+    @pytest.mark.asyncio
+    async def test_non_dict_parameters_reported_as_invalid(self):
+        """
+        A malformed spec whose "parameters" is not a dictionary must be
+        reported as an invalid function definition, not crash the calling
+        agent's resource setup with an AttributeError.
+        """
+        factory = self.make_factory({
+            "description": "Answers music questions.",
+            "parameters": "none"
+        })
+
+        tool = await factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
+
+        assert tool is None
+        factory.journal.write_message.assert_awaited_once()
+        reported = factory.journal.write_message.await_args.args[0]
+        assert "invalid function definition" in str(reported.content)
+
+    @pytest.mark.asyncio
     async def test_unreachable_external_tool_reported_as_unreachable(self):
         """
         A transport-level failure fetching the external agent's function spec
