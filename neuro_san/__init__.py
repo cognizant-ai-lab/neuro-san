@@ -18,8 +18,7 @@ from typing import Any
 from typing import Type
 
 from leaf_common.config.file_of_class import FileOfClass
-
-from neuro_san.internals.utils.deprecation_redirect import DeprecationRedirect
+from leaf_common.resolution.deprecation_redirect import DeprecationRedirect
 
 # Normally we don't use __init__.py files to define anything,
 # but here we define some constants that point to important directories in the distribution.

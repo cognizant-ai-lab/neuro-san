@@ -33,8 +33,8 @@ from janus import Queue
 from janus import SyncQueueShutDown
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
-from leaf_common.config.resolver_util import ResolverUtil
 from leaf_common.logging.sensitive_logger import SensitiveLogger
+from leaf_common.resolution.resolver_util import ResolverUtil
 
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage

@@ -34,7 +34,7 @@ from langchain_core.tools.base import BaseToolkit
 from pydantic import BaseModel
 
 from leaf_common.config.dictionary_overlay import DictionaryOverlay
-from leaf_common.config.resolver import Resolver
+from leaf_common.resolution.resolver import Resolver
 
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.run_context.langchain.toolbox.toolbox_info_restorer import ToolboxInfoRestorer

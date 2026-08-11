@@ -33,9 +33,9 @@ from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
-from leaf_common.config.resolver import Resolver
-from leaf_common.config.resolver_util import ResolverUtil
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
+from leaf_common.resolution.resolver import Resolver
+from leaf_common.resolution.resolver_util import ResolverUtil
 
 from neuro_san.interfaces.coded_tool import CodedTool
 from neuro_san.interfaces.reservationist import Reservationist

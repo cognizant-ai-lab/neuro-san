@@ -27,8 +27,8 @@ from logging import Logger
 from langchain.agents.middleware.types import AgentMiddleware
 from langchain_core.messages import BaseMessage
 
-from leaf_common.config.resolver_util import ResolverUtil
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
+from leaf_common.resolution.resolver_util import ResolverUtil
 
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.interfaces.invocation_context import InvocationContext

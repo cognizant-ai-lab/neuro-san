@@ -32,9 +32,10 @@ import tornado
 import tornado.netutil
 import tornado.process
 
+from leaf_common.asyncio.event_loop_lag_monitor import EventiLoopLagMonitor
+from leaf_common.config.config_util import ConfigUtil
 from leaf_common.serialization.util.text_file_reader import TextFileReader
 
-from neuro_san.internals.utils.config_util import ConfigUtil
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
@@ -68,7 +69,6 @@ from neuro_san.service.utils.loop_timeline_tracer import LoopTimelineTracer
 from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.service.utils.service_resources import ServiceResources
 from neuro_san.service.utils.server_status import ServerStatus
-from neuro_san.internals.utils.event_loop_lag_monitor import EventLoopLagMonitor
 
 
 DEFAULT_SERVER_NAME: str = 'neuro-san.Agent'
