@@ -199,12 +199,14 @@ class BaseToolFactory:
             # followed by the tool being dropped.
             return function_json
 
-        parameters: Dict[str, Any] = function_json.get("parameters") or {}
-        if not isinstance(parameters, Dict):
-            # Not a schema we can reason about.
+        raw_parameters: Any = function_json.get("parameters")
+        if raw_parameters is not None and not isinstance(raw_parameters, Dict):
+            # Not a schema we can reason about, however truthy or falsy
+            # (e.g. a string, a list, a boolean).
             # Let verify_function_json() report it as invalid.
             return function_json
 
+        parameters: Dict[str, Any] = raw_parameters or {}
         properties: Dict[str, Any] = parameters.get("properties") or {}
         if properties:
             # The network declares its own parameters. Re-arm the synthesis

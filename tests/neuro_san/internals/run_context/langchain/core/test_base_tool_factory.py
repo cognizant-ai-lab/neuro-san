@@ -243,15 +243,17 @@ class TestBaseToolFactory:
         assert "synthesized" not in str(reported.content)
 
     @pytest.mark.asyncio
-    async def test_non_dict_parameters_reported_as_invalid(self):
+    @pytest.mark.parametrize("bad_parameters", ["none", [], "", False, 0])
+    async def test_non_dict_parameters_reported_as_invalid(self, bad_parameters):
         """
-        A malformed spec whose "parameters" is not a dictionary must be
-        reported as an invalid function definition, not crash the calling
-        agent's resource setup with an AttributeError.
+        A malformed spec whose "parameters" is not a dictionary - truthy or
+        falsy - must be reported as an invalid function definition: neither
+        crashing the calling agent's resource setup with an AttributeError,
+        nor being silently repaired with the synthesized default.
         """
         factory = self.make_factory({
             "description": "Answers music questions.",
-            "parameters": "none"
+            "parameters": bad_parameters
         })
 
         tool = await factory.create_external_tool(self.EXTERNAL_AGENT_NAME)

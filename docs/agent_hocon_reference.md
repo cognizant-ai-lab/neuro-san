@@ -534,8 +534,10 @@ For a user-facing front-man, what is contained in this description often suffice
 Parameters contains an optional [JSON Schema](https://json-schema.org) dictionary describing what
 specific information the agent needs as input arguments when it is called.
 Only the `type: object` + `properties` form described below is supported.
-A schema expressed with other JSON Schema constructs (such as `additionalProperties`,
-`anyOf`, or `$ref`) is rejected as invalid when the agent is called as a tool.
+JSON Schema constructs outside this form (such as `additionalProperties`,
+`anyOf`, or `$ref`) are not honored: a schema without a `properties` dictionary
+is rejected as invalid when the agent is called as a tool, and unsupported
+constructs appearing alongside a `properties` dictionary are ignored.
 
 A front-man typically does not need parameters defined when its agent network is only
 ever talked to directly by a user.
