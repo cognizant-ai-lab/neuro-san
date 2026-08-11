@@ -47,8 +47,9 @@ class BaseToolFactory:
     Creates langchain BaseTools.
     """
 
-    # The tool-call arguments are the only channel through which a calling
-    # agent passes anything to an external agent network.  A front-man that
+    # The tool-call arguments are the only message channel through which a
+    # calling agent passes its request to an external agent network
+    # (sly_data is a separate, opt-in channel for private data).  A front-man that
     # declares no function.parameters would be presented to the calling LLM
     # as a zero-argument tool, which the LLM would then invoke with {} -
     # the external network would never receive the caller's request.

@@ -542,8 +542,10 @@ ever talked to directly by a user.
 
 When the agent network is anticipated as being called from other agent networks
 (that is, referenced as an external tool), the front-man's parameters are how a
-calling agent passes its request along — the tool-call arguments are the only channel
-through which anything reaches the external network. Declare at least one parameter
+calling agent passes its request along — the tool-call arguments are the only message
+channel through which a caller's request reaches the external network.
+(Private data can separately flow through the opt-in `sly_data` channel —
+see [to_downstream](#to_downstream).) Declare at least one parameter
 (for example, a single required `inquiry` string) for any network intended to be
 referenced externally. If no parameters are declared, neuro-san synthesizes a default
 required `inquiry` string parameter on the calling side (and logs a warning) so the

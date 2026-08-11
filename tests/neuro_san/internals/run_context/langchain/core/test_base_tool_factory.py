@@ -30,8 +30,9 @@ class TestBaseToolFactory:
     Test cases for BaseToolFactory.
 
     The cases here currently center on how external agents are presented
-    as tools: the tool-call arguments are the only channel through which a
-    calling agent passes anything to an external agent network.  An external
+    as tools: the tool-call arguments are the only message channel through
+    which a calling agent passes its request to an external agent network.
+    An external
     front-man that declares no function.parameters used to be presented to
     the calling LLM as a zero-argument tool, which the LLM would invoke
     with {} - the external network silently never received the caller's
