@@ -23,7 +23,7 @@ from typing import List
 
 import jsonschema
 
-from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
+from leaf_common.validation.dictionary_validator import DictionaryValidator
 
 
 class McpRequestValidator(DictionaryValidator):

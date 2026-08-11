@@ -25,7 +25,8 @@ from typing import Tuple
 
 from http import HTTPStatus
 
-from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
+from leaf_common.validation.dictionary_validator import DictionaryValidator
+
 from neuro_san.internals.network_providers.agent_network_storage import AgentNetworkStorage
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
 from neuro_san.service.utils.mcp_server_context import McpServerContext
