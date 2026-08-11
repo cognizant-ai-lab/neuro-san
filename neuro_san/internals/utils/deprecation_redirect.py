@@ -17,11 +17,9 @@
 
 from typing import Any
 from typing import Dict
-from typing import List
 from typing import Set
 from typing import Type
 
-from copy import copy as shallow_copy
 from sys import modules
 from warnings import warn
 
@@ -51,7 +49,7 @@ class DeprecationRedirect:
         :param do_not_redirect_modules_for_testing: If true, do not redirect deprecated modules
         """
         self.module_name: str = module_name
-        self.old_class_to_new_class: Dict[str, str] = shallow_copy(old_class_to_new_class)
+        self.old_class_to_new_class: Dict[str, str] = old_class_to_new_class
         self.next_version: str = next_version
         self.do_not_redirect_modules_for_testing: bool = do_not_redirect_modules_for_testing
 
@@ -65,16 +63,19 @@ class DeprecationRedirect:
         """
         Remove the module name from the keys
         """
-        existing_keys: List[str] = list(self.old_class_to_new_class.keys())
-        for key in existing_keys:
-
+        new_dict: Dict[str, str] = {}
+        key: str = None
+        existing_value: str = None
+        for key, existing_value in self.old_class_to_new_class.items():
             if not key.startswith(f"{self.module_name}."):
                 # The key class referenced is not based in this module. Leave it alone.
+                new_dict[key] = existing_value
                 continue
 
-            existing_value: str = self.old_class_to_new_class.pop(key)
             new_key: str = key.removeprefix(f"{self.module_name}.")
-            self.old_class_to_new_class[new_key] = existing_value
+            new_dict[new_key] = existing_value
+
+        self.old_class_to_new_class = new_dict
 
     def redirect_modules(self):
         """
