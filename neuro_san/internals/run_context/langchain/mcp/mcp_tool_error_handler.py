@@ -25,8 +25,7 @@ import traceback
 from langchain_core.tools import BaseTool
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
-
-from neuro_san.internals.utils.exception_util import ExceptionUtil
+from leaf_common.utils.exception_util import ExceptionUtil
 
 
 class McpToolErrorHandler:

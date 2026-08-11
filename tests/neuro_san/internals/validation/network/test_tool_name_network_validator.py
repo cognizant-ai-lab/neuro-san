@@ -20,7 +20,8 @@ from typing import List
 
 from unittest import TestCase
 
-from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
+from leaf_common.validation.dictionary_validator import DictionaryValidator
+
 from neuro_san.internals.validation.network.tool_name_network_validator import ToolNameNetworkValidator
 
 from tests.neuro_san.internals.validation.network.abstract_network_validator_test import AbstractNetworkValidatorTest

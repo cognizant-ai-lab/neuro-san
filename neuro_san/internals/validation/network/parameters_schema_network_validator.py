@@ -19,9 +19,10 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from leaf_common.validation.dictionary_validator import DictionaryValidator
+from leaf_common.validation.composite_dictionary_validator import CompositeDictionaryValidator
+
 from neuro_san.internals.graph.filters.network_config_filter_chain import NetworkConfigFilterChain
-from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
-from neuro_san.internals.validation.common.composite_dictionary_validator import CompositeDictionaryValidator
 from neuro_san.internals.validation.network.pydantic_parameters_network_validator import \
     PydanticParametersNetworkValidator
 from neuro_san.internals.validation.network.semantic_parameters_network_validator import \

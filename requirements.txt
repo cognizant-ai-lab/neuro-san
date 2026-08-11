@@ -6,9 +6,7 @@
 # requirements-build.txt
 
 # In-house dependencies
-# Floor 1.2.51: HoconSerializationFormat(sanitize_keys=True) used by
-# AbstractAsyncConfigRestorer to strip pyhocon's embedded quotes from keys.
-leaf-common>=1.2.51
+leaf-common>=1.2.52
 leaf-server-common>=0.1.25
 
 # Downgraded secondary dependencies for error-free pip installs

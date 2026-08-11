@@ -98,3 +98,20 @@ class TestLangChainOpenAIFunctionTool:
         result = await tool._arun()   # pylint: disable=protected-access
 
         assert result == "something broke"
+
+    def test_from_function_json_without_parameters_builds_empty_args_schema(self):
+        """
+        An internal tool with no "parameters" block must still get an explicit,
+        empty args_schema. Leaving args_schema unset lets langchain auto-derive
+        a schema from _arun(*args, **kwargs), which produces an "args" array
+        property with no "items" field - Gemini rejects that with
+        INVALID_ARGUMENT (see commit 2836c3cf).
+        """
+        function_json = {
+            "name": "date_time",
+            "description": "Returns the current date and time."
+        }
+        tool = LangChainOpenAIFunctionTool.from_function_json(function_json, MagicMock())
+
+        assert tool.args_schema is not None
+        assert len(tool.args_schema.__fields__) == 0

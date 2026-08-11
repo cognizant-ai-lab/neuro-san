@@ -19,10 +19,11 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from leaf_common.validation.dictionary_validator import DictionaryValidator
+
 from neuro_san import REGISTRIES_DIR
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
-from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
 from neuro_san.test.interfaces.assert_forwarder import AssertForwarder
 
 

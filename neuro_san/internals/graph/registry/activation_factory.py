@@ -24,7 +24,7 @@ from os import pathsep as os_path_separator
 from os import sep as os_separator
 from pathlib import Path
 
-from leaf_common.config.resolver_util import ResolverUtil
+from leaf_common.resolution.resolver_util import ResolverUtil
 
 from neuro_san import TOP_LEVEL_DIR
 from neuro_san.internals.graph.activations.front_man_activation import FrontManActivation

@@ -22,7 +22,7 @@ from typing import Tuple
 
 from langchain_core.language_models.base import BaseLanguageModel
 
-from leaf_common.config.resolver import Resolver
+from leaf_common.resolution.resolver import Resolver
 
 from neuro_san.internals.interfaces.environment_configuration import EnvironmentConfiguration
 
