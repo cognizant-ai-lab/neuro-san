@@ -25,10 +25,10 @@ import time
 import threading
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
+from leaf_common.utils.startable import Startable
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
-from neuro_san.internals.interfaces.startable import Startable
 
 
 class AbstractReservationsStorage(ReservationsStorage, Startable):

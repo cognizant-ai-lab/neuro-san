@@ -23,11 +23,11 @@ import sys
 
 from argparse import ArgumentParser
 
+from leaf_common.utils.startable import Startable
 from leaf_server_common.logging.logging_setup import setup_logging
 
 from neuro_san import TOP_LEVEL_DIR
 from neuro_san.interfaces.agent_session import AgentSession
-from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.storage_class import StorageClass

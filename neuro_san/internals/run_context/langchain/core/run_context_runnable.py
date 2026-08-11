@@ -37,7 +37,7 @@ from langchain_core.runnables.config import merge_configs
 from langchain_core.runnables.utils import Input
 from langchain_core.runnables.utils import Output
 
-from leaf_common.config.resolver_util import ResolverUtil
+from leaf_common.resolution.resolver_util import ResolverUtil
 
 from neuro_san.internals.errors.error_detector import ErrorDetector
 from neuro_san.internals.journals.journal import Journal

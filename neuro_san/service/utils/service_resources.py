@@ -28,8 +28,9 @@ from typing import Optional
 from typing import Tuple
 import psutil
 
+from leaf_common.asyncio.event_loop_lag_monitor import EventLoopLagMonitor
+
 from neuro_san.service.utils.server_context import ServerContext
-from neuro_san.internals.utils.event_loop_lag_monitor import EventLoopLagMonitor
 
 # Unix-only
 try:

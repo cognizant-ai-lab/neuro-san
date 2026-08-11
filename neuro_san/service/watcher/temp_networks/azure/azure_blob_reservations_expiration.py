@@ -26,7 +26,7 @@ from logging import getLogger
 from logging import Logger
 from os import getenv
 
-from leaf_common.config.resolver_util import ResolverUtil
+from leaf_common.resolution.resolver_util import ResolverUtil
 
 # Lazily resolve here because this is one of the first places the import happens
 AzureError: Type[Any] = ResolverUtil.create_type("azure.core.exceptions.AzureError",

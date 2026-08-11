@@ -33,7 +33,7 @@ from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.runnables.base import Runnable
 from langchain_core.tracers.context import register_configure_hook
 
-from leaf_common.config.resolver_util import ResolverUtil
+from leaf_common.resolution.resolver_util import ResolverUtil
 
 from neuro_san.internals.interfaces.run_target import RunTarget
 from neuro_san.internals.interfaces.tracing_context import TracingContext
