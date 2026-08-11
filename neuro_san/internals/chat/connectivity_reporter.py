@@ -26,7 +26,7 @@ from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.run_context.factory.master_toolbox_factory import MasterToolboxFactory
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
-from neuro_san.internals.run_context.utils.external_agent_parsing import ExternalAgentParsing
+from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
 from neuro_san.internals.validation.network.abstract_network_validator import AbstractNetworkValidator
 
 

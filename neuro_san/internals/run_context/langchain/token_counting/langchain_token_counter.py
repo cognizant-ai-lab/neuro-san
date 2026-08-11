@@ -38,10 +38,10 @@ from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.journal import Journal
-from neuro_san.internals.messages.agent_message import AgentMessage
-from neuro_san.internals.messages.origination import Origination
+from neuro_san.internals.journals.origination import Origination
 from neuro_san.internals.run_context.langchain.token_counting.get_llm_token_callback import get_llm_token_callback
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import llm_token_callback_var
+from neuro_san.message.types.agent_message import AgentMessage
 
 # Keep a ContextVar for the origin info.  We do this because the
 # langchain callbacks this stuff is based on also uses ContextVars

@@ -42,7 +42,7 @@ from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.run_target import RunTarget
 from neuro_san.internals.interfaces.tracing_context import TracingContext
 from neuro_san.internals.journals.intercepting_journal import InterceptingJournal
-from neuro_san.internals.messages.origination import Origination
+from neuro_san.internals.journals.origination import Origination
 from neuro_san.internals.utils.metadata_util import MetadataUtil
 
 

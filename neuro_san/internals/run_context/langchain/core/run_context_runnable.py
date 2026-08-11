@@ -41,13 +41,13 @@ from leaf_common.config.resolver_util import ResolverUtil
 
 from neuro_san.internals.errors.error_detector import ErrorDetector
 from neuro_san.internals.journals.journal import Journal
-from neuro_san.internals.messages.agent_framework_message import AgentFrameworkMessage
-from neuro_san.internals.messages.origination import Origination
+from neuro_san.internals.journals.origination import Origination
 from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
 from neuro_san.internals.run_context.langchain.journaling.journaling_callback_handler import JournalingCallbackHandler
 from neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter import LangChainTokenCounter
 from neuro_san.internals.run_context.langchain.tracing.neuro_san_runnable import NeuroSanRunnable
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
+from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
 
 MINUTES: float = 60.0
 

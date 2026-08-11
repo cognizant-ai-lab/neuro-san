@@ -15,31 +15,109 @@
 #
 # END COPYRIGHT
 
+from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
+
 import pytest
 
 from pydantic import BaseModel
 
 from neuro_san.internals.run_context.langchain.core.langchain_openai_function_tool \
     import LangChainOpenAIFunctionTool
+from neuro_san.internals.run_context.langchain.core.langchain_run import LangChainRun
 from neuro_san.internals.run_context.langchain.core.tool_spec_error import ToolSpecError
+from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
 
 
 class TestLangChainOpenAIFunctionTool:
     """
-    Test cases for creating tools from OpenAI function specs.
+    Test cases for what _arun() hands back to langchain as the tool output.
+
+    Whatever _arun() returns becomes the ToolMessage content the calling LLM
+    sees: langchain passes str and content-block list returns through as-is,
+    but falls back to str() for any other object.  Returning a BaseMessage
+    would therefore expose its pydantic repr ("content='...'
+    additional_kwargs={} ...") to the calling LLM instead of the answer.
     """
 
-    def test_missing_parameters_builds_explicit_empty_args_schema(self):
+    @staticmethod
+    def make_tool(run_to_return: LangChainRun = None,
+                  exception: Exception = None) -> LangChainOpenAIFunctionTool:
         """
-        A spec with no parameters block still gets an explicit (empty)
-        args_schema.  Leaving args_schema unset would let langchain derive
-        a schema from _arun(*args, **kwargs), which emits an "args" array
-        property without "items" that Gemini rejects.
+        :param run_to_return: The Run for the mock ToolCaller to hand back
+        :param exception: Optional exception for the mock ToolCaller to raise instead
+        :return: A minimal LangChainOpenAIFunctionTool wired to the mock ToolCaller
         """
-        function_json = {"name": "ext_agent", "description": "d"}
-        tool = LangChainOpenAIFunctionTool.from_function_json(function_json, None)
+        tool_caller = MagicMock()
+        if exception is not None:
+            tool_caller.make_tool_function_calls = AsyncMock(side_effect=exception)
+        else:
+            tool_caller.make_tool_function_calls = AsyncMock(return_value=run_to_return)
+
+        return LangChainOpenAIFunctionTool.model_construct(
+            name="test_tool",
+            description="a test tool",
+            tool_caller=tool_caller)
+
+    @pytest.mark.asyncio
+    async def test_arun_returns_message_content_not_message_object(self):
+        """
+        The sub-agent's answer must come back as the message content,
+        not as the AgentToolResultMessage object itself.
+        """
+        the_message = AgentToolResultMessage(content="the answer",
+                                             tool_result_origin=[{"tool": "test_tool",
+                                                                  "instantiation_index": 0}])
+        run = LangChainRun("tool_base", [], tool_message=the_message)
+        tool = self.make_tool(run_to_return=run)
+
+        result = await tool._arun()   # pylint: disable=protected-access
+
+        assert result == "the answer"
+        assert isinstance(result, str)
+
+    @pytest.mark.asyncio
+    async def test_arun_returns_none_when_run_has_no_tool_message(self):
+        """
+        A Run can legitimately carry no tool message (see submit_tool_outputs()
+        when there are no parseable tool outputs). _arun() must not blow up
+        dereferencing content on None.
+        """
+        run = LangChainRun("tool_base", [], tool_message=None)
+        tool = self.make_tool(run_to_return=run)
+
+        result = await tool._arun()   # pylint: disable=protected-access
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_arun_returns_exception_string_on_failure(self):
+        """
+        Exceptions from the tool call are reported back to the calling LLM
+        as their string form so it can verbally recognize the problem.
+        """
+        tool = self.make_tool(exception=ValueError("something broke"))
+
+        result = await tool._arun()   # pylint: disable=protected-access
+
+        assert result == "something broke"
+
+    def test_from_function_json_without_parameters_builds_empty_args_schema(self):
+        """
+        An internal tool with no "parameters" block must still get an explicit,
+        empty args_schema. Leaving args_schema unset lets langchain auto-derive
+        a schema from _arun(*args, **kwargs), which produces an "args" array
+        property with no "items" field - Gemini rejects that with
+        INVALID_ARGUMENT (see commit 2836c3cf).
+        """
+        function_json = {
+            "name": "date_time",
+            "description": "Returns the current date and time."
+        }
+        tool = LangChainOpenAIFunctionTool.from_function_json(function_json, MagicMock())
+
         assert tool.args_schema is not None
-        assert issubclass(tool.args_schema, BaseModel)
+        assert len(tool.args_schema.__fields__) == 0
 
     def test_explicit_null_parameters_builds_explicit_empty_args_schema(self):
         """
@@ -47,17 +125,20 @@ class TestLangChainOpenAIFunctionTool:
         external agents send over the network - is normalized to the same
         explicit empty args_schema as a missing parameters block, now that
         the converter honors the DictionaryConverter None -> None contract.
+        (External agents get parameters synthesized by
+        ensure_external_parameters() before reaching this code; this covers
+        every other caller.)
         """
         function_json = {"name": "ext_agent", "description": "d", "parameters": None}
-        tool = LangChainOpenAIFunctionTool.from_function_json(function_json, None)
+        tool = LangChainOpenAIFunctionTool.from_function_json(function_json, MagicMock())
         assert tool.args_schema is not None
         assert issubclass(tool.args_schema, BaseModel)
 
     def test_non_dict_parameters_raises_tool_spec_error(self):
         """
-        A truthy non-dict "parameters" value follows the invalid-spec error
-        path instead of raising a raw AttributeError from parameters.get().
+        A non-dict "parameters" value follows the invalid-spec error path
+        instead of raising a raw AttributeError from parameters.get().
         """
         function_json = {"name": "ext_agent", "description": "d", "parameters": "not-a-dict"}
-        with pytest.raises(ToolSpecError, match="'parameters' to be a dictionary"):
-            LangChainOpenAIFunctionTool.from_function_json(function_json, None)
+        with pytest.raises(ToolSpecError, match="parameters to be a dictionary"):
+            LangChainOpenAIFunctionTool.from_function_json(function_json, MagicMock())

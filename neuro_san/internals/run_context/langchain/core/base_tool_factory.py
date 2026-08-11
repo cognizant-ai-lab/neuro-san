@@ -20,6 +20,7 @@ from typing import List
 from typing import Set
 from typing import Union
 
+from copy import deepcopy
 from logging import Logger
 from logging import getLogger
 
@@ -31,22 +32,43 @@ from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgen
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.journal import Journal
-from neuro_san.internals.messages.agent_message import AgentMessage
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
-from neuro_san.internals.run_context.langchain.core.langchain_openai_function_tool \
-    import LangChainOpenAIFunctionTool
+from neuro_san.internals.run_context.langchain.core.langchain_openai_function_tool import LangChainOpenAIFunctionTool
 from neuro_san.internals.run_context.langchain.core.tool_spec_error import ToolSpecError
 from neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter import LangChainMcpAdapter
-from neuro_san.internals.run_context.utils.external_agent_parsing import ExternalAgentParsing
 from neuro_san.internals.run_context.utils.external_tool_adapter import ExternalToolAdapter
 from neuro_san.internals.utils.exception_util import ExceptionUtil
+from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
+from neuro_san.message.types.agent_message import AgentMessage
 
 
 class BaseToolFactory:
     """
     Creates langchain BaseTools.
     """
+
+    # Parameters substituted for an external agent whose front-man declares
+    # none of its own. See ensure_external_parameters() for the full rationale.
+    DEFAULT_EXTERNAL_PARAMETER_NAME: str = "inquiry"
+    DEFAULT_EXTERNAL_PARAMETERS: Dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            DEFAULT_EXTERNAL_PARAMETER_NAME: {
+                "type": "string",
+                "description": "The request to send to this agent network."
+            }
+        },
+        "required": [DEFAULT_EXTERNAL_PARAMETER_NAME]
+    }
+
+    # Class-level because BaseToolFactory instances are per-request: remembers
+    # which external agents this process has already warned about synthesizing
+    # parameters for, so the warning is not repeated on every request.
+    # An agent later observed with declared parameters is removed again, so a
+    # network that is fixed and then regresses warns anew - hocon files can be
+    # edited and hot-reloaded without a server restart.
+    synthesis_warned: Set[str] = set()
 
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     def __init__(self,
@@ -115,25 +137,109 @@ class BaseToolFactory:
         adapter = ExternalToolAdapter(session_factory, name)
         try:
             function_json: Dict[str, Any] = await adapter.get_function_json(self.invocation_context)
-            return self.create_function_tool(function_json, name)
-        except ToolSpecError as exception:
-            # The external agent was reachable, but the function spec it reported
-            # could not be turned into a tool.  Report the spec problem as such
-            # so it is not mistaken for the connectivity trouble reported below.
-            message: str = f"Agent/tool {name} reported an invalid function spec. Not including it as a tool.\n"
-            message += str(exception)
-            agent_message = AgentMessage(content=message)
-            await self.journal.write_message(agent_message)
-            self.sensitive_logger.warning(message)
-            return None
         except ValueError as exception:
             # Could not reach the server for the external agent, so tell about it
             message: str = f"Agent/tool {name} was unreachable. Not including it as a tool.\n"
             message += str(exception)
+            await self.report_tool_exclusion(message)
+            return None
+
+        try:
+            function_json = await self.ensure_external_parameters(function_json, name)
+            return self.create_function_tool(function_json, name)
+        except ValueError as exception:
+            # The agent was reachable, but what it reported cannot be made into a tool.
+            message: str = f"Agent/tool {name} reported an invalid function definition. " + \
+                           "Not including it as a tool.\n"
+            message += str(exception)
+            await self.report_tool_exclusion(message)
+            return None
+
+    async def report_tool_exclusion(self, message: str):
+        """
+        Report to both the client journal and the server logs that a tool
+        is being left out of the calling agent's tool list.
+
+        :param message: The message describing which tool and why
+        """
+        agent_message = AgentMessage(content=message)
+        await self.journal.write_message(agent_message)
+        self.sensitive_logger.info(message)
+
+    async def ensure_external_parameters(self, function_json: Dict[str, Any], name: str) -> Dict[str, Any]:
+        """
+        Guarantee that an external agent's function spec declares parameters.
+
+        The tool-call arguments are the only message channel through which a
+        calling agent passes its request to an external agent network
+        (sly_data is a separate, opt-in channel for private data).
+        An external front-man that declares no function.parameters would
+        therefore be presented to the calling LLM as a zero-argument tool,
+        which the LLM would invoke with an empty {} - and the external network
+        would silently never receive the caller's request (issue #1228).
+
+        Note this is external-tools-only on purpose: internal tools without
+        parameters (e.g. no-argument coded tools) legitimately take no
+        arguments and are left alone.
+
+        :param function_json: The function spec reported by the external agent.
+                    Can be None when the agent was unreachable.
+        :param name: The name of the external agent, for reporting.
+        :return: The function_json as-is when it already declares parameters,
+                    otherwise a copy with DEFAULT_EXTERNAL_PARAMETERS substituted in.
+        """
+        if function_json is None:
+            # Unreachable external agent. create_function_tool() reports this case.
+            return None
+
+        if function_json.get("description") is None:
+            # A spec with no description fails verify_function_json() no matter
+            # what parameters it has. Leave it alone so that validation reports
+            # the real problem, instead of journaling a promise here that a
+            # synthesized parameter will get the request through, immediately
+            # followed by the tool being dropped.
+            return function_json
+
+        raw_parameters: Any = function_json.get("parameters")
+        if raw_parameters is not None and not isinstance(raw_parameters, Dict):
+            # Not a schema we can reason about, however truthy or falsy
+            # (e.g. a string, a list, a boolean).
+            # Let verify_function_json() report it as invalid.
+            return function_json
+
+        parameters: Dict[str, Any] = raw_parameters or {}
+        properties: Dict[str, Any] = parameters.get("properties") or {}
+        if properties:
+            # The network declares its own parameters. Re-arm the synthesis
+            # warning in case the network regresses later.
+            BaseToolFactory.synthesis_warned.discard(name)
+            return function_json
+
+        # A parameters block carrying anything beyond an empty properties
+        # declaration is a declared schema in an unsupported dialect
+        # (e.g. additionalProperties, anyOf, $ref). Let verify_function_json()
+        # report it rather than silently replacing the declared contract
+        # with the synthesized one.
+        if parameters and not {"type", "properties", "required"}.issuperset(parameters.keys()):
+            return function_json
+
+        if name not in BaseToolFactory.synthesis_warned:
+            BaseToolFactory.synthesis_warned.add(name)
+            message: str = (
+                f"The front-man of external agent {name} declares no parameters "
+                f"in its function definition, so a single required "
+                f"'{self.DEFAULT_EXTERNAL_PARAMETER_NAME}' string parameter "
+                "is being synthesized for it to receive the calling agent's request. "
+                "To control what this agent network receives, declare at least one parameter "
+                "in the function definition of its front-man."
+            )
             agent_message = AgentMessage(content=message)
             await self.journal.write_message(agent_message)
-            self.sensitive_logger.info(message)
-            return None
+            self.logger.warning(message)
+
+        function_json = dict(function_json)
+        function_json["parameters"] = deepcopy(self.DEFAULT_EXTERNAL_PARAMETERS)
+        return function_json
 
     async def create_internal_tool(self, name: str, agent_spec: Dict[str, Any]) -> BaseTool:
         """
@@ -256,9 +362,9 @@ class BaseToolFactory:
         # JSON, which is required.  Use the agent name we are using for look-up for that
         # regardless of intent.
         if function_json is None:
-            # An external agent that couldn't be reached has no function_json.
-            # Raise ValueError so create_external_tool's existing handler turns this
-            # into a user-facing "Agent/tool X was unreachable" message instead of
+            # An external agent that responded without reporting a function has
+            # no function_json. Raise ValueError so create_external_tool's
+            # invalid-function-definition handler reports this instead of
             # the TypeError that the assignment below would otherwise raise.
             message: str = f"Could not create tool to call external agent '{name}'. Its function_json is None."
             raise ValueError(message)

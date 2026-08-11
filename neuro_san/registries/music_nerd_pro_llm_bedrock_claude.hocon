@@ -94,8 +94,10 @@
             "name": "MusicNerdPro",
 
             # Note that there are no parameters defined for this guy's "function" key.
-            # This is the primary way to identify this tool as a front-man,
-            # distinguishing it from the rest of the tools.
+            # This is fine for a front-man that only takes direct user input, but a
+            # network that is to be referenced as an external tool by another network
+            # should declare at least one parameter so the calling agent knows what
+            # to pass. (The front-man is simply the first agent in the "tools" list.)
 
             "function": {
 
