@@ -39,26 +39,22 @@ class DeprecationRedirect:
     deprecation warnings from there.
     """
 
-    def __init__(self, module_name: str, old_class_to_new_class: Dict[str, str], next_version: str = None,
-                 do_not_redirect_modules_for_testing: bool = False):
+    def __init__(self, module_name: str, old_class_to_new_class: Dict[str, str], next_version: str = None):
         """
         Constructor
 
         :param module_name: The name of module doing the redirecting
         :param old_class_to_new_class: Data dictionary described in the class comment
         :param next_version: The next version where the deprecation will be removed
-        :param do_not_redirect_modules_for_testing: If true, do not redirect deprecated modules
         """
         self.module_name: str = module_name
         self.old_class_to_new_class: Dict[str, str] = old_class_to_new_class
         self.next_version: str = next_version
-        self.do_not_redirect_modules_for_testing: bool = do_not_redirect_modules_for_testing
 
         self.warned: Set[str] = set()
 
         self.clean_keys()
-        if not self.do_not_redirect_modules_for_testing:
-            self.redirect_modules()
+        self.redirect_modules()
 
     def clean_keys(self):
         """
