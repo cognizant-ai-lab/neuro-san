@@ -20,6 +20,7 @@ from typing import List
 from typing import Set
 from typing import Union
 
+from copy import deepcopy
 from logging import Logger
 from logging import getLogger
 
@@ -45,6 +46,25 @@ class BaseToolFactory:
     """
     Creates langchain BaseTools.
     """
+
+    # The tool-call arguments are the only channel through which a calling
+    # agent passes anything to an external agent network.  A front-man that
+    # declares no function.parameters would be presented to the calling LLM
+    # as a zero-argument tool, which the LLM would then invoke with {} -
+    # the external network would never receive the caller's request.
+    # When that happens we substitute this schema so the request still
+    # gets through.
+    DEFAULT_EXTERNAL_PARAMETER_NAME: str = "inquiry"
+    DEFAULT_EXTERNAL_PARAMETERS: Dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            DEFAULT_EXTERNAL_PARAMETER_NAME: {
+                "type": "string",
+                "description": "The request to send to this agent network."
+            }
+        },
+        "required": [DEFAULT_EXTERNAL_PARAMETER_NAME]
+    }
 
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     def __init__(self,
@@ -113,6 +133,7 @@ class BaseToolFactory:
         adapter = ExternalToolAdapter(session_factory, name)
         try:
             function_json: Dict[str, Any] = await adapter.get_function_json(self.invocation_context)
+            function_json = await self.ensure_external_parameters(function_json, name)
             return self.create_function_tool(function_json, name)
         except ValueError as exception:
             # Could not reach the server for the external agent, so tell about it
@@ -122,6 +143,49 @@ class BaseToolFactory:
             await self.journal.write_message(agent_message)
             self.sensitive_logger.info(message)
             return None
+
+    async def ensure_external_parameters(self, function_json: Dict[str, Any], name: str) -> Dict[str, Any]:
+        """
+        Guarantee that an external agent's function spec declares parameters.
+
+        An external front-man that declares no function.parameters would
+        otherwise be presented to the calling LLM as a zero-argument tool,
+        which the LLM would invoke with an empty {} - and the external network
+        would silently never receive the caller's request (issue #1228).
+
+        Note this is external-tools-only on purpose: internal tools without
+        parameters (e.g. no-argument coded tools) legitimately take no
+        arguments and are left alone.
+
+        :param function_json: The function spec reported by the external agent.
+                    Can be None when the agent was unreachable.
+        :param name: The name of the external agent, for reporting.
+        :return: The function_json as-is when it already declares parameters,
+                    otherwise a copy with DEFAULT_EXTERNAL_PARAMETERS substituted in.
+        """
+        if function_json is None:
+            # Unreachable external agent. create_function_tool() reports this case.
+            return None
+
+        parameters: Dict[str, Any] = function_json.get("parameters") or {}
+        properties: Dict[str, Any] = parameters.get("properties") or {}
+        if properties:
+            return function_json
+
+        message: str = (
+            f"The front-man of external agent {name} declares no function.parameters, "
+            f"so a single required '{self.DEFAULT_EXTERNAL_PARAMETER_NAME}' string parameter "
+            "is being synthesized for it to receive the calling agent's request. "
+            "To control what this agent network receives, declare at least one parameter "
+            "in the function definition of its front-man."
+        )
+        agent_message = AgentMessage(content=message)
+        await self.journal.write_message(agent_message)
+        self.logger.warning(message)
+
+        function_json = dict(function_json)
+        function_json["parameters"] = deepcopy(self.DEFAULT_EXTERNAL_PARAMETERS)
+        return function_json
 
     async def create_internal_tool(self, name: str, agent_spec: Dict[str, Any]) -> BaseTool:
         """
