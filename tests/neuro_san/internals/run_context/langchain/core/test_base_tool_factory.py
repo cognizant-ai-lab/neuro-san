@@ -135,6 +135,48 @@ class TestBaseToolFactory:
         factory.journal.write_message.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_external_tool_without_description_is_not_synthesized(self):
+        """
+        A front-man spec with no description fails validation no matter what
+        parameters it has (e.g. a hocon with no "function" block at all, for
+        which the server reports {}). No synthesis message may be journaled
+        for it - the client would see a promise that the request will get
+        through, immediately followed by the tool being dropped.
+        """
+        factory = self.make_factory({})
+
+        tool = await factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
+
+        assert tool is None
+
+        # Only the validation-failure report, never the synthesis message,
+        # and under the invalid-definition banner rather than "unreachable" -
+        # the agent did respond.
+        factory.journal.write_message.assert_awaited_once()
+        reported = factory.journal.write_message.await_args.args[0]
+        assert "synthesized" not in str(reported.content)
+        assert "invalid function definition" in str(reported.content)
+        assert "unreachable" not in str(reported.content)
+
+    @pytest.mark.asyncio
+    async def test_unreachable_external_tool_reported_as_unreachable(self):
+        """
+        A transport-level failure fetching the external agent's function spec
+        is a connectivity problem and must keep the "unreachable" banner.
+        """
+        factory = self.make_factory({})
+        session = factory.invocation_context.get_async_session_factory().create_session()
+        session.function = AsyncMock(side_effect=ValueError("connection refused"))
+
+        tool = await factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
+
+        assert tool is None
+        factory.journal.write_message.assert_awaited_once()
+        reported = factory.journal.write_message.await_args.args[0]
+        assert "unreachable" in str(reported.content)
+        assert "invalid function definition" not in str(reported.content)
+
+    @pytest.mark.asyncio
     async def test_ensure_external_parameters_passes_none_through(self):
         """
         An unreachable external agent has no function_json at all.

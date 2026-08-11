@@ -133,16 +133,34 @@ class BaseToolFactory:
         adapter = ExternalToolAdapter(session_factory, name)
         try:
             function_json: Dict[str, Any] = await adapter.get_function_json(self.invocation_context)
-            function_json = await self.ensure_external_parameters(function_json, name)
-            return self.create_function_tool(function_json, name)
         except ValueError as exception:
             # Could not reach the server for the external agent, so tell about it
             message: str = f"Agent/tool {name} was unreachable. Not including it as a tool.\n"
             message += str(exception)
-            agent_message = AgentMessage(content=message)
-            await self.journal.write_message(agent_message)
-            self.sensitive_logger.info(message)
+            await self.report_tool_exclusion(message)
             return None
+
+        try:
+            function_json = await self.ensure_external_parameters(function_json, name)
+            return self.create_function_tool(function_json, name)
+        except ValueError as exception:
+            # The agent was reachable, but what it reported cannot be made into a tool.
+            message: str = f"Agent/tool {name} reported an invalid function definition. " + \
+                           "Not including it as a tool.\n"
+            message += str(exception)
+            await self.report_tool_exclusion(message)
+            return None
+
+    async def report_tool_exclusion(self, message: str):
+        """
+        Report to both the client journal and the server logs that a tool
+        is being left out of the calling agent's tool list.
+
+        :param message: The message describing which tool and why
+        """
+        agent_message = AgentMessage(content=message)
+        await self.journal.write_message(agent_message)
+        self.sensitive_logger.info(message)
 
     async def ensure_external_parameters(self, function_json: Dict[str, Any], name: str) -> Dict[str, Any]:
         """
@@ -166,6 +184,14 @@ class BaseToolFactory:
         if function_json is None:
             # Unreachable external agent. create_function_tool() reports this case.
             return None
+
+        if function_json.get("description") is None:
+            # A spec with no description fails verify_function_json() no matter
+            # what parameters it has. Leave it alone so that validation reports
+            # the real problem, instead of journaling a promise here that a
+            # synthesized parameter will get the request through, immediately
+            # followed by the tool being dropped.
+            return function_json
 
         parameters: Dict[str, Any] = function_json.get("parameters") or {}
         properties: Dict[str, Any] = parameters.get("properties") or {}
@@ -298,9 +324,9 @@ class BaseToolFactory:
         # JSON, which is required.  Use the agent name we are using for look-up for that
         # regardless of intent.
         if function_json is None:
-            # An external agent that couldn't be reached has no function_json.
-            # Raise ValueError so create_external_tool's existing handler turns this
-            # into a user-facing "Agent/tool X was unreachable" message instead of
+            # An external agent that responded without reporting a function has
+            # no function_json. Raise ValueError so create_external_tool's
+            # invalid-function-definition handler reports this instead of
             # the TypeError that the assignment below would otherwise raise.
             message: str = f"Could not create tool to call external agent '{name}'. Its function_json is None."
             raise ValueError(message)
