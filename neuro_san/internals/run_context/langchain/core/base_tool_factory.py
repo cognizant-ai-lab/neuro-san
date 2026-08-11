@@ -66,6 +66,14 @@ class BaseToolFactory:
         "required": [DEFAULT_EXTERNAL_PARAMETER_NAME]
     }
 
+    # Class-level because BaseToolFactory instances are per-request: remembers
+    # which external agents this process has already warned about synthesizing
+    # parameters for, so the warning is not repeated on every request.
+    # An agent later observed with declared parameters is removed again, so a
+    # network that is fixed and then regresses warns anew - hocon files can be
+    # edited and hot-reloaded without a server restart.
+    synthesis_warned: Set[str] = set()
+
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     def __init__(self,
                  tool_caller: ToolCaller,
@@ -201,6 +209,9 @@ class BaseToolFactory:
 
         properties: Dict[str, Any] = parameters.get("properties") or {}
         if properties:
+            # The network declares its own parameters. Re-arm the synthesis
+            # warning in case the network regresses later.
+            BaseToolFactory.synthesis_warned.discard(name)
             return function_json
 
         # A parameters block carrying anything beyond an empty properties
@@ -211,17 +222,19 @@ class BaseToolFactory:
         if parameters and not {"type", "properties", "required"}.issuperset(parameters.keys()):
             return function_json
 
-        message: str = (
-            f"The front-man of external agent {name} declares no parameters "
-            f"in its function definition, so a single required "
-            f"'{self.DEFAULT_EXTERNAL_PARAMETER_NAME}' string parameter "
-            "is being synthesized for it to receive the calling agent's request. "
-            "To control what this agent network receives, declare at least one parameter "
-            "in the function definition of its front-man."
-        )
-        agent_message = AgentMessage(content=message)
-        await self.journal.write_message(agent_message)
-        self.logger.warning(message)
+        if name not in BaseToolFactory.synthesis_warned:
+            BaseToolFactory.synthesis_warned.add(name)
+            message: str = (
+                f"The front-man of external agent {name} declares no parameters "
+                f"in its function definition, so a single required "
+                f"'{self.DEFAULT_EXTERNAL_PARAMETER_NAME}' string parameter "
+                "is being synthesized for it to receive the calling agent's request. "
+                "To control what this agent network receives, declare at least one parameter "
+                "in the function definition of its front-man."
+            )
+            agent_message = AgentMessage(content=message)
+            await self.journal.write_message(agent_message)
+            self.logger.warning(message)
 
         function_json = dict(function_json)
         function_json["parameters"] = deepcopy(self.DEFAULT_EXTERNAL_PARAMETERS)

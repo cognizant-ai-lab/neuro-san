@@ -41,6 +41,16 @@ class TestBaseToolFactory:
 
     EXTERNAL_AGENT_NAME: str = "/network_b"
 
+    @pytest.fixture(autouse=True)
+    def clear_synthesis_warned(self):
+        """
+        The synthesis warning is deduplicated per-process via a class-level
+        set. Clear it around each test so tests stay order-independent.
+        """
+        BaseToolFactory.synthesis_warned.clear()
+        yield
+        BaseToolFactory.synthesis_warned.clear()
+
     @staticmethod
     def make_factory(function_json: Dict[str, Any]) -> BaseToolFactory:
         """
@@ -157,6 +167,60 @@ class TestBaseToolFactory:
         assert "synthesized" not in str(reported.content)
         assert "invalid function definition" in str(reported.content)
         assert "unreachable" not in str(reported.content)
+
+    @pytest.mark.asyncio
+    async def test_synthesis_warns_once_per_agent(self):
+        """
+        Tool resources are rebuilt on every request, but the synthesis
+        warning describes a static config condition - it must be reported
+        once per process for a given agent, not once per request.
+        The synthesis itself must still happen every time.
+        """
+        parameterless: Dict[str, Any] = {"description": "Answers music questions."}
+
+        first_factory = self.make_factory(parameterless)
+        first_tool = await first_factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
+        assert first_tool.parameters == BaseToolFactory.DEFAULT_EXTERNAL_PARAMETERS
+        first_factory.journal.write_message.assert_awaited_once()
+
+        second_factory = self.make_factory(parameterless)
+        second_tool = await second_factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
+        assert second_tool.parameters == BaseToolFactory.DEFAULT_EXTERNAL_PARAMETERS
+        second_factory.journal.write_message.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_synthesis_warning_rearms_when_agent_is_fixed(self):
+        """
+        Hocon files can be edited and hot-reloaded without a server restart.
+        Observing the agent with declared parameters must re-arm the warning,
+        so a later regression back to parameterless warns anew.
+        """
+        parameterless: Dict[str, Any] = {"description": "Answers music questions."}
+        declared: Dict[str, Any] = {
+            "description": "Answers music questions.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "The question to answer."
+                    }
+                },
+                "required": ["question"]
+            }
+        }
+
+        broken_factory = self.make_factory(parameterless)
+        await broken_factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
+        broken_factory.journal.write_message.assert_awaited_once()
+
+        fixed_factory = self.make_factory(declared)
+        await fixed_factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
+        fixed_factory.journal.write_message.assert_not_awaited()
+
+        regressed_factory = self.make_factory(parameterless)
+        await regressed_factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
+        regressed_factory.journal.write_message.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_unsupported_schema_dialect_is_not_replaced(self):
