@@ -97,6 +97,42 @@ class Cassette:
         self.entries[key] = entry
         self.save()
 
+    def append_response(self, key: str, meta: Dict[str, Any], response: Dict[str, Any]) -> None:
+        """
+        Multi-response record: append a distinct response for a key, keeping all
+        variants under a "responses" list for round-robin playback. Responses
+        whose content matches an existing one (ignoring timing fields) are not
+        duplicated. Persists the whole cassette.
+        :param key: The request signature key.
+        :param meta: Request metadata (method, path, request) for a new entry.
+        :param response: The response dict to append.
+        """
+        entry: Optional[Dict[str, Any]] = self.entries.get(key)
+        if entry is None:
+            entry = dict(meta)
+            entry["key"] = key
+            entry["responses"] = [response]
+            self.entries[key] = entry
+            self._order.append(key)
+        else:
+            responses: List[Dict[str, Any]] = entry.setdefault("responses", [])
+            if not any(self._same_content(existing, response) for existing in responses):
+                responses.append(response)
+        self.save()
+
+    @staticmethod
+    def _same_content(first: Dict[str, Any], second: Dict[str, Any]) -> bool:
+        """Compare two responses for equality ignoring per-call timing fields."""
+        return Cassette._content_key(first) == Cassette._content_key(second)
+
+    @staticmethod
+    def _content_key(response: Dict[str, Any]) -> str:
+        """Serialize a response for de-duplication, stripping volatile timing fields."""
+        trimmed: Dict[str, Any] = dict(response)
+        trimmed.pop("latency_seconds", None)
+        trimmed.pop("first_byte_seconds", None)
+        return json.dumps(trimmed, sort_keys=True)
+
     def save(self) -> None:
         """
         Write the cassette to disk atomically (temp file + os.replace) so a
