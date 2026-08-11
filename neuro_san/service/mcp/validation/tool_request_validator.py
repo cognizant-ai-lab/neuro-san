@@ -26,7 +26,7 @@ import copy
 import re
 import jsonschema
 
-from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
+from leaf_common.validation.dictionary_validator import DictionaryValidator
 
 
 class ToolRequestValidator(DictionaryValidator):

@@ -16,8 +16,9 @@
 # END COPYRIGHT
 from typing import List
 
-from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
-from neuro_san.internals.validation.common.composite_dictionary_validator import CompositeDictionaryValidator
+from leaf_common.validation.dictionary_validator import DictionaryValidator
+from leaf_common.validation.composite_dictionary_validator import CompositeDictionaryValidator
+
 from neuro_san.internals.validation.network.keyword_network_validator import KeywordNetworkValidator
 from neuro_san.internals.validation.network.missing_nodes_network_validator import MissingNodesNetworkValidator
 from neuro_san.internals.validation.network.parameters_schema_network_validator import \
