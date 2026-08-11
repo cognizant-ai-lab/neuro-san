@@ -24,7 +24,7 @@ from langchain_core.tools.base import BaseToolkit
 
 from neuro_san.internals.run_context.langchain.toolbox.toolbox_factory import ToolboxFactory
 
-RESOLVER_PATH = "leaf_common.config.resolver.Resolver.resolve_class_in_module"
+RESOLVER_PATH = "leaf_common.resolution.resolver.Resolver.resolve_class_in_module"
 VALIDATIOR_PATH = (
     "neuro_san.internals.run_context.langchain.util.argument_validator."
     "ArgumentValidator.check_invalid_args"
