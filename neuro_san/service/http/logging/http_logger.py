@@ -25,9 +25,8 @@ import copy
 import logging
 import pathlib
 
+from leaf_common.logging.logging_setup import LoggingSetup
 from leaf_common.logging.sensitive_logger import SensitiveLogger
-
-from leaf_server_common.logging.logging_setup import setup_logging
 
 from neuro_san.service.http.logging.log_context_filter import LogContextFilter
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
@@ -114,11 +113,11 @@ class HttpLogger(EventLoopLogger):
         # Need to initialize the forwarded metadata default values before our first
         # call to a logger.
         current_dir: str = pathlib.Path(__file__).parent.parent.resolve()
-        setup_logging(HttpLogger.HTTP_LOGGER_NAME,
-                      default_log_dir=current_dir,
-                      log_level_env="AGENT_SERVICE_LOG_LEVEL",
-                      extra_logging_fields_defaults=self.base_metadata,
-                      logging_config=logging_config)
+        LoggingSetup.setup_logging(HttpLogger.HTTP_LOGGER_NAME,
+                                   default_log_dir=current_dir,
+                                   log_level_env="AGENT_SERVICE_LOG_LEVEL",
+                                   extra_logging_fields_defaults=self.base_metadata,
+                                   logging_config=logging_config)
 
         # This module within openai library can be quite chatty w/rt http requests
         logging.getLogger("httpx").setLevel(logging.WARNING)

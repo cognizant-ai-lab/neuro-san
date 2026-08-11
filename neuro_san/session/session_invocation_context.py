@@ -32,7 +32,7 @@ from threading import Event
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
-from leaf_server_common.logging.logging_setup import setup_extra_logging_fields
+from leaf_common.logging.logging_setup import LoggingSetup
 
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
@@ -125,7 +125,7 @@ class SessionInvocationContext(InvocationContext):
         """
         # Wrap it up into a single function with no parameters
         # for easier handling downstream.
-        logging_setup: Callable = partial(setup_extra_logging_fields, metadata_dict=self.metadata)
+        logging_setup: Callable = partial(LoggingSetup.setup_extra_logging_fields, metadata_dict=self.metadata)
         self.asyncio_executor.start()
         # Run logging setup as event-loop initialization step -
         # make sure it is finished before we start to use this AsyncioExecutor instance.
