@@ -8,7 +8,12 @@
 # In-house dependencies
 # Floor 1.2.51: HoconSerializationFormat(sanitize_keys=True) used by
 # AbstractAsyncConfigRestorer to strip pyhocon's embedded quotes from keys.
-leaf-common>=1.2.51
+# Ceiling <1.2.52: 1.2.52 moved resolver/resolver_util from
+# leaf_common.config to leaf_common.resolution, and its deprecation shim
+# only covers attribute access, not the "from leaf_common.config.resolver
+# import Resolver" module-import form used throughout this repo. Lift the
+# ceiling when those imports are migrated to leaf_common.resolution.
+leaf-common>=1.2.51,<1.2.52
 leaf-server-common>=0.1.25
 
 # Downgraded secondary dependencies for error-free pip installs
