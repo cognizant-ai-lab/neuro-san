@@ -43,7 +43,7 @@ from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.journals.message_journal import MessageJournal
 from neuro_san.internals.journals.journal import Journal
-from neuro_san.internals.messages.origination import Origination
+from neuro_san.internals.journals.origination import Origination
 
 
 # pylint: disable=too-many-instance-attributes,too-many-public-methods

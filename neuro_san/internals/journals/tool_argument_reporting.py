@@ -18,7 +18,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-from neuro_san.internals.messages.origination import Origination
+from neuro_san.internals.journals.origination import Origination
 
 
 class ToolArgumentReporting:

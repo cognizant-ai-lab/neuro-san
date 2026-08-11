@@ -20,10 +20,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from neuro_san.internals.messages.agent_tool_result_message import AgentToolResultMessage
 from neuro_san.internals.run_context.langchain.core.langchain_openai_function_tool \
     import LangChainOpenAIFunctionTool
 from neuro_san.internals.run_context.langchain.core.langchain_run import LangChainRun
+from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
 
 
 class TestLangChainOpenAIFunctionTool:

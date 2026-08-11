@@ -44,13 +44,13 @@ from neuro_san.internals.graph.activations.branch_activation import BranchActiva
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.journal import Journal
+from neuro_san.internals.journals.origination import Origination
 from neuro_san.internals.journals.progress_journal import ProgressJournal
 from neuro_san.internals.journals.tool_argument_reporting import ToolArgumentReporting
-from neuro_san.internals.messages.agent_message import AgentMessage
-from neuro_san.internals.messages.origination import Origination
 from neuro_san.internals.reservations.accumulating_agent_reservationist import AccumulatingAgentReservationist
 from neuro_san.internals.run_context.factory.run_context_factory import RunContextFactory
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
+from neuro_san.message.types.agent_message import AgentMessage
 
 
 class AbstractClassActivation(AbstractCallableActivation):

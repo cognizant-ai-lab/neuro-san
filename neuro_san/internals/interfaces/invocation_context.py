@@ -29,7 +29,7 @@ from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextT
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.journals.journal import Journal
-from neuro_san.internals.messages.origination import Origination
+from neuro_san.internals.journals.origination import Origination
 
 
 class InvocationContext(LingeringResource):
