@@ -16,23 +16,40 @@ agent network configured for `class = "openai"` can be redirected at it with a
 single `openai_api_base` change — the same seam the sibling `mock_llm_server`
 uses.
 
-There is **no synthetic mode** here: every response is either forwarded from
-the real host (record) or served from a prior recording (playback).
-
 ## Modes
+
+Selected with `--mode`:
 
 | Mode | What it does |
 |---|---|
-| `record` | Forwards each request to the external LLM host (endpoint + key from env vars), relays the real response back to neuro-san, and tees it into the cassette file. |
+| `record` | Forwards each request to the external LLM host (endpoint + key from env vars), relays the real response back to neuro-san, and tees it into the cassette file (capturing wall-clock latency). |
 | `playback` | Serves responses from the cassette by matching the canonical request signature. No network, no tokens. An unmatched request fails hard with HTTP 504. |
+| `hybrid` | Like `playback`, but a cache **miss** falls through to the real host (when an upstream is configured via the env vars below), records the result into the **current** cassette, and returns it — a self-healing cassette that fills in gaps on demand. With no upstream configured, a miss behaves like plain playback (504). |
 
-## External host configuration (record mode)
+### Multi-response (round-robin)
 
-The external LLM host is configured **only** via environment variables:
+The `--multi-response` flag is orthogonal to `record`/`playback`:
+
+- In **record**, every *distinct* response seen for a given request is
+  accumulated under that request's key (identical repeats are de-duplicated,
+  ignoring latency). Because recording forwards each occurrence to the real
+  host, this captures the LLM's natural variability — at the cost of one real
+  call per occurrence.
+- In **playback**, the recorded responses for a key are served **round-robin**.
+
+Without the flag (the default), a request maps to a single response
+(last-writer-wins on record, deterministic on playback). Under concurrency the
+round-robin order is not guaranteed stable — use the default when strict
+determinism matters.
+
+## External host configuration (record and hybrid modes)
+
+The external LLM host is configured **only** via environment variables. It is
+required in `record` mode and used for cache-miss fetches in `hybrid` mode:
 
 | Variable | Purpose |
 |---|---|
-| `RECORD_PLAYBACK_UPSTREAM_BASE_URL` | Base URL of the real host, including the version segment. e.g. `https://api.openai.com/v1`. Required in record mode. |
+| `RECORD_PLAYBACK_UPSTREAM_BASE_URL` | Base URL of the real host, including the version segment. e.g. `https://api.openai.com/v1`. Required in record mode; optional in hybrid mode. |
 | `RECORD_PLAYBACK_UPSTREAM_API_KEY` | Bearer credential for that host. Optional (a warning is logged if absent, for hosts that need no auth). |
 | `RECORD_PLAYBACK_UPSTREAM_REQUEST_TIMEOUT_SECONDS` | Whole-request timeout when forwarding to the real host. Default `600`. |
 | `RECORD_PLAYBACK_UPSTREAM_CONNECT_TIMEOUT_SECONDS` | Connection timeout when forwarding to the real host. Default `30`. |
@@ -42,8 +59,9 @@ The incoming request's own `openai_api_key` (pointed at this proxy) is ignored
 and replaced with the real credential above.
 
 All timeout/limit variables accept a positive number; an invalid or
-non-positive value logs a warning and falls back to the default. They apply in
-**record mode only** (playback never contacts the network).
+non-positive value logs a warning and falls back to the default. They apply
+whenever the proxy contacts the network (record mode, and hybrid-mode
+misses); plain playback never does.
 
 > **If you are seeing timeout errors while recording under load**, raising
 > `RECORD_PLAYBACK_UPSTREAM_REQUEST_TIMEOUT_SECONDS` alone may not be enough:
@@ -69,6 +87,18 @@ python -m tests.record_playback_llm_server.record_playback_llm_server \
 # 2) Replay it forever, for free, deterministically (no env vars needed).
 python -m tests.record_playback_llm_server.record_playback_llm_server \
     --mode playback --port 8899 --cassette ./session.cassette.json
+
+# Or self-healing playback: serve from the cassette, but fetch+record any miss.
+export RECORD_PLAYBACK_UPSTREAM_BASE_URL="https://api.openai.com/v1"
+export RECORD_PLAYBACK_UPSTREAM_API_KEY="sk-..."
+python -m tests.record_playback_llm_server.record_playback_llm_server \
+    --mode hybrid --cassette ./session.cassette.json
+
+# Capture response variability and replay it round-robin:
+python -m tests.record_playback_llm_server.record_playback_llm_server \
+    --mode record --multi-response --cassette ./session.cassette.json
+python -m tests.record_playback_llm_server.record_playback_llm_server \
+    --mode playback --multi-response --cassette ./session.cassette.json
 ```
 
 ### CLI options
@@ -77,9 +107,42 @@ python -m tests.record_playback_llm_server.record_playback_llm_server \
 |---|---|---|
 | `--host` | `localhost` | Bind interface. |
 | `--port` | `8899` | Bind port (differs from the mock's 8888 so both can run at once). |
-| `--mode` | _(required)_ | `record` or `playback`. |
+| `--mode` | _(required)_ | `record`, `playback`, or `hybrid` (playback + record-on-miss). |
 | `--cassette` | `./llm_cassette.json` | Path to the cassette JSON file. |
+| `--multi-response` | off | Record (and hybrid misses) save every distinct response per request; playback serves them round-robin. |
 | `--stream-replay-delay` | `0.0` | Seconds between streamed SSE frames during playback, to emulate inter-token cadence. `0` replays as fast as possible. |
+| `--delay-mode` | `none` | Up-front per-response delay before serving a cache hit: `none`, `recorded`, `fixed`, `random`. |
+| `--delay-seconds` | `0.0` | Delay for `--delay-mode fixed`. |
+| `--delay-min` / `--delay-max` | `0.0` / `0.0` | Range for `--delay-mode random` (uniform). |
+
+### Playback delay
+
+`--delay-mode` emulates how long the real LLM took, applied as an up-front
+sleep **before serving each cache hit** (playback mode, and hybrid hits). It is
+independent of `--stream-replay-delay` (which paces the gaps *between* streamed
+SSE frames):
+
+| `--delay-mode` | Delay applied per response |
+|---|---|
+| `none` (default) | None — serve immediately. |
+| `recorded` | The response's own recorded wall-clock latency: `first_byte_seconds` (time-to-first-token) for streams, `latency_seconds` for one-shot responses. |
+| `fixed` | A constant `--delay-seconds`. |
+| `random` | Uniform in `[--delay-min, --delay-max]`. |
+
+With `--multi-response`, `recorded` honors **each variant's own** recorded
+latency: since playback rotates through the responses and each carries its own
+`latency_seconds`, each turn is delayed by exactly what that recording took.
+
+```bash
+# Replay with each response delayed by exactly what it took to record:
+python -m tests.record_playback_llm_server.record_playback_llm_server \
+    --mode playback --cassette ./session.cassette.json --delay-mode recorded
+
+# Replay with a random 0.5–2.0s delay per response:
+python -m tests.record_playback_llm_server.record_playback_llm_server \
+    --mode playback --cassette ./session.cassette.json \
+    --delay-mode random --delay-min 0.5 --delay-max 2.0
+```
 
 ## Pointing a neuro-san agent network at the proxy
 
@@ -134,7 +197,8 @@ An ordered, human-diffable JSON array — commit it to git as a test fixture:
       "response": {
         "kind": "json",
         "status": 200,
-        "body": { "id": "chatcmpl-...", "choices": [ ... ] }
+        "body": { "id": "chatcmpl-...", "choices": [ ... ] },
+        "latency_seconds": 1.732
       }
     }
   ]
@@ -143,7 +207,21 @@ An ordered, human-diffable JSON array — commit it to git as a test fixture:
 
 A streamed response is stored with `"kind": "stream"` and a `"chunks"` array
 of the individual SSE frames (`data: {...}\n\n`, terminated by
-`data: [DONE]\n\n`), re-emitted verbatim on playback.
+`data: [DONE]\n\n`), re-emitted verbatim on playback. Stream responses also
+record `"first_byte_seconds"` (time to the first chunk — the LLM's
+time-to-first-token) alongside `"latency_seconds"` (total).
+
+**Latency** (`latency_seconds`, and `first_byte_seconds` for streams) is the
+wall-clock time the real host took, captured during recording. `--delay-mode
+recorded` reproduces per-response timing on playback (see
+[Playback delay](#playback-delay)), using `first_byte_seconds` for streams and
+`latency_seconds` for one-shot responses. `--stream-replay-delay` remains an
+independent knob for inter-frame pacing.
+
+**Multi-response** entries replace the single `"response"` with a `"responses"`
+array holding each distinct variant (each with its own latency); playback
+rotates through them. Single-response cassettes (with `"response"`) still
+replay unchanged, so existing fixtures keep working.
 
 ## Internal layout
 
@@ -152,13 +230,14 @@ One class per file:
 | File | Class | Responsibility |
 |---|---|---|
 | `record_playback_llm_server.py` | `RecordPlaybackLlmServer` | CLI entry point; reads env config, builds the app, runs the loop. |
-| `proxy_state.py` | `ProxyState` | Process-wide state: mode, cassette, upstream client, replay pacing. |
-| `proxy_handler.py` | `ProxyHandler` | Shared record/playback logic for both proxied endpoints (base class). |
+| `proxy_state.py` | `ProxyState` | Process-wide state: mode, cassette, upstream client, hybrid responder, replay pacing, round-robin cursors. |
+| `proxy_handler.py` | `ProxyHandler` | Shared record/playback/hybrid logic for both proxied endpoints (base class). |
 | `chat_completions_handler.py` | `ChatCompletionsHandler` | `POST /v1/chat/completions`. |
 | `models_handler.py` | `ModelsHandler` | `GET /v1/models`. |
 | `health_handler.py` | `HealthHandler` | `GET /healthz`. |
 | `upstream_client.py` | `UpstreamClient` | Async HTTP client to the real host (record mode), one-shot and streaming. |
-| `cassette.py` | `Cassette` | Load/lookup/store/atomic-save of recorded interactions. |
+| `cassette.py` | `Cassette` | Load/lookup/store/atomic-save of recorded interactions (single and multi-response). |
+| `playback_delay.py` | `PlaybackDelay` | Per-response up-front delay policy (none/recorded/fixed/random). |
 | `request_canonicalizer.py` | `RequestCanonicalizer` | Canonical request string + sha256 cassette key. |
 
 ## Known limitations
@@ -169,7 +248,9 @@ One class per file:
 - **Playback miss = hard 504.** By design, so tests surface gaps
   deterministically rather than silently faking a response. Re-record when the
   agent network or inputs change.
-- **One key → one response.** Identical requests replay the same recorded
-  response. Recorded response variety for the same request is not preserved.
+- **Round-robin order isn't concurrency-stable.** With `--multi-response`,
+  which recorded variant a given concurrent request receives is not
+  guaranteed run-to-run. Use single-response mode when strict determinism
+  matters.
 - **Single process, single event loop.** A test tool: no supervisor, no
   metrics, no auth. Bind to `localhost`.

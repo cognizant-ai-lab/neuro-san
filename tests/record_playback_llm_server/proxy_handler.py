@@ -24,6 +24,7 @@ import difflib
 import json
 import logging
 import os
+import time
 
 from typing import Any
 from typing import Dict
@@ -41,17 +42,24 @@ from tests.record_playback_llm_server.request_canonicalizer import RequestCanoni
 
 class ProxyHandler(tornado.web.RequestHandler):
     """
-    Shared record/playback logic for the proxy endpoints.
+    Shared record/playback/hybrid logic for the proxy endpoints.
 
     In RECORD mode the handler forwards the request to the real external LLM
-    host, tees the response into the cassette, and relays it back to the
-    caller (both one-shot JSON and streamed SSE). In PLAYBACK mode it looks
-    the request up in the cassette by its canonical signature and replays the
-    recorded response, never touching the network.
+    host, tees the response into the cassette (capturing wall-clock latency),
+    and relays it back to the caller (both one-shot JSON and streamed SSE). In
+    PLAYBACK mode it looks the request up in the cassette by its canonical
+    signature and replays the recorded response, never touching the network. In
+    HYBRID mode it behaves like playback, except a miss falls through to the
+    real host (when one is configured), records the result into the current
+    cassette, and returns it -- a self-healing cassette.
 
-    On a playback miss the handler fails hard with HTTP 504 so a
-    load/regression test surfaces the gap deterministically rather than
-    silently substituting fabricated data.
+    With multi-response enabled, RECORD (and hybrid-mode record-on-miss)
+    accumulate every distinct response for a request and PLAYBACK serves them
+    round-robin; otherwise a request maps to a single response.
+
+    On a genuine playback miss (playback mode, or hybrid mode with no
+    upstream) the handler fails hard with HTTP 504 so a load/regression test
+    surfaces the gap deterministically rather than silently faking data.
     """
 
     SSE_FRAME_DELIMITER: str = "\n\n"
@@ -79,10 +87,12 @@ class ProxyHandler(tornado.web.RequestHandler):
         :param body_bytes: Raw request body bytes (may be empty).
         """
         key: str = RequestCanonicalizer.key(method, self.upstream_path, body_bytes)
-        if self.state.is_playback():
-            await self._playback(key)
-        else:
+        if self.state.is_record():
             await self._record(method, body_bytes, key)
+        else:
+            # playback and hybrid both serve from the cassette; they differ
+            # only in what happens on a miss (see _playback).
+            await self._playback(method, body_bytes, key)
 
     def _wants_stream(self, body_bytes: bytes) -> bool:
         """:return: True if the request body asks for a streamed (SSE) response."""
@@ -103,40 +113,44 @@ class ProxyHandler(tornado.web.RequestHandler):
             await self._record_json(method, body_bytes, key)
 
     async def _record_json(self, method: str, body_bytes: bytes, key: str) -> None:
-        """Record and relay a one-shot JSON response."""
+        """Record and relay a one-shot JSON response, capturing upstream latency."""
+        started: float = time.monotonic()
         try:
             response: tornado.httpclient.HTTPResponse = \
                 await self.state.upstream.fetch(self.upstream_path, method, body_bytes)
         except (OSError, tornado.httpclient.HTTPError) as exception:
             self._fail_upstream(exception)
             return
+        latency_seconds: float = time.monotonic() - started
 
         raw_body: bytes = response.body or b""
         self.set_status(response.code)
         self.set_header("Content-Type", "application/json")
         self.write(bytes(raw_body))
 
-        self.state.cassette.put(key, {
-            "method": method.upper(),
-            "path": self.upstream_path,
-            "request": RequestCanonicalizer.canonical_string(method, self.upstream_path, body_bytes),
-            "response": {
-                "kind": "json",
-                "status": response.code,
-                "body": self._decode_body(raw_body),
-            },
+        self._store(method, body_bytes, key, {
+            "kind": "json",
+            "status": response.code,
+            "body": self._decode_body(raw_body),
+            "latency_seconds": round(latency_seconds, 6),
         })
-        self.logger.info("recorded json response (%d bytes) key=%s", len(raw_body), key[:12])
+        self.logger.info("recorded json response (%d bytes, %.3fs) key=%s",
+                         len(raw_body), latency_seconds, key[:12])
 
     async def _record_stream(self, method: str, body_bytes: bytes, key: str) -> None:
-        """Record and relay a streamed SSE response, teeing chunks to disk."""
+        """Record and relay a streamed SSE response, teeing chunks to disk with latency."""
         self.set_header("Content-Type", "text/event-stream")
         self.set_header("Cache-Control", "no-cache")
         self.set_header("X-Accel-Buffering", "no")
 
         accumulated = bytearray()
+        started: float = time.monotonic()
+        # One-element list so the sync on_chunk callback can record time-to-first-byte.
+        first_byte: List[Optional[float]] = [None]
 
         def on_chunk(chunk: bytes) -> None:
+            if first_byte[0] is None:
+                first_byte[0] = time.monotonic() - started
             accumulated.extend(chunk)
             self.write(bytes(chunk))
             # Flush must happen on the event loop; schedule it as a coroutine so
@@ -149,25 +163,50 @@ class ProxyHandler(tornado.web.RequestHandler):
         except (OSError, tornado.httpclient.HTTPError) as exception:
             self._fail_upstream(exception)
             return
+        latency_seconds: float = time.monotonic() - started
 
         await self._safe_flush()
         frames: List[str] = self._split_sse_frames(bytes(accumulated))
-        self.state.cassette.put(key, {
+        self._store(method, body_bytes, key, {
+            "kind": "stream",
+            "status": response.code,
+            "chunks": frames,
+            "latency_seconds": round(latency_seconds, 6),
+            "first_byte_seconds": round(first_byte[0], 6) if first_byte[0] is not None else None,
+        })
+        self.logger.info("recorded stream response (%d frames, %.3fs) key=%s",
+                         len(frames), latency_seconds, key[:12])
+
+    def _store(self, method: str, body_bytes: bytes, key: str, response: Dict[str, Any]) -> None:
+        """
+        Persist a recorded response. In single-response mode the entry keeps one
+        "response"; in multi-response mode distinct responses accumulate under a
+        "responses" list for round-robin playback.
+        """
+        meta: Dict[str, Any] = {
             "method": method.upper(),
             "path": self.upstream_path,
             "request": RequestCanonicalizer.canonical_string(method, self.upstream_path, body_bytes),
-            "response": {
-                "kind": "stream",
-                "status": response.code,
-                "chunks": frames,
-            },
-        })
-        self.logger.info("recorded stream response (%d frames) key=%s", len(frames), key[:12])
+        }
+        if self.state.multi_response:
+            self.state.cassette.append_response(key, meta, response)
+        else:
+            entry: Dict[str, Any] = dict(meta)
+            entry["response"] = response
+            self.state.cassette.put(key, entry)
 
-    async def _playback(self, key: str) -> None:
-        """Replay a recorded response, or fail hard on a miss."""
+    async def _playback(self, method: str, body_bytes: bytes, key: str) -> None:
+        """
+        Serve a recorded response. On a miss: in hybrid mode with an upstream
+        configured, fall through to the real host and record the result into the
+        current cassette (self-healing); otherwise fail hard with 504.
+        """
         entry: Dict[str, Any] = self.state.cassette.get(key)
         if entry is None:
+            if self.state.is_hybrid() and self.state.upstream is not None:
+                self.logger.info("hybrid miss key=%s -> forwarding to upstream and recording", key[:12])
+                await self._record(method, body_bytes, key)
+                return
             self.logger.warning("playback miss for key=%s (%s %s)", key[:12], self.request.method, self.upstream_path)
             self._dump_miss_diff(key)
             self.set_status(504)
@@ -178,11 +217,30 @@ class ProxyHandler(tornado.web.RequestHandler):
             }}))
             return
 
-        response: Dict[str, Any] = entry.get("response", {})
+        response: Dict[str, Any] = self._select_response(entry, key)
+
+        # Up-front latency emulation before serving the hit. Each response
+        # carries its own recorded latency, so in multi-response round-robin the
+        # per-response recorded delay is honored.
+        delay_seconds: float = self.state.playback_delay.seconds_for(response)
+        if delay_seconds > 0:
+            await asyncio.sleep(delay_seconds)
+
         if response.get("kind") == "stream":
             await self._replay_stream(response)
         else:
             self._replay_json(response)
+
+    def _select_response(self, entry: Dict[str, Any], key: str) -> Dict[str, Any]:
+        """
+        Pick the response to replay. Multi-response entries carry a "responses"
+        list served round-robin; single-response entries carry one "response".
+        """
+        responses: Any = entry.get("responses")
+        if isinstance(responses, list) and responses:
+            index: int = self.state.next_rotation_index(key, len(responses))
+            return responses[index]
+        return entry.get("response", {})
 
     async def _replay_stream(self, response: Dict[str, Any]) -> None:
         """Re-emit recorded SSE frames, optionally pacing between them."""
