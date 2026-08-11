@@ -199,7 +199,10 @@ class HttpServer(AgentStateListener):
         # Bind the listening socket(s) BEFORE forking so every worker inherits
         # the same bound fd. Do NOT create/touch an IOLoop before fork_processes.
         sockets = tornado.netutil.bind_sockets(
-            self.http_port, backlog=self.server_config.http_connections_backlog)
+            self.http_port,
+            backlog=self.server_config.http_connections_backlog,
+            reuse_port=self.server_config.http_reuse_port,
+        )
 
         # Do not create or access an asyncio/Tornado event loop before this call.
         worker_id: int = 0
