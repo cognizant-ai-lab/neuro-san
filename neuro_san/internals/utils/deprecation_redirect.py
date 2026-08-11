@@ -84,11 +84,12 @@ class DeprecationRedirect:
             use_class: str = old_class
             while "." in use_class:
                 old_module: str = self.get_module_from_fully_qualified(use_class)
-                module_found = resolver.resolve_class_in_module(module_name=old_module, raise_if_not_found=False)
+                resolve_to: str = f"{self.module_name}.{old_module}"
+                module_found = resolver.resolve_class_in_module(module_name=resolve_to, raise_if_not_found=False)
                 if module_found:
                     # Don't need to replace something that already exists
                     break
-                modules[f"{self.module_name}.{old_module}"] = modules[self.module_name]
+                modules[resolve_to] = modules[self.module_name]
                 use_class = old_module
 
     def redirect_class(self, old_class: str) -> Type[Any]:
