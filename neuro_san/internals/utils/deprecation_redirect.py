@@ -17,9 +17,11 @@
 
 from typing import Any
 from typing import Dict
+from typing import List
 from typing import Set
 from typing import Type
 
+from copy import copy as shallow_copy
 from sys import modules
 from warnings import warn
 
@@ -49,7 +51,7 @@ class DeprecationRedirect:
         :param do_not_redirect_modules_for_testing: If true, do not redirect deprecated modules
         """
         self.module_name: str = module_name
-        self.old_class_to_new_class: Dict[str, str] = old_class_to_new_class
+        self.old_class_to_new_class: Dict[str, str] = shallow_copy(old_class_to_new_class)
         self.next_version: str = next_version
         self.do_not_redirect_modules_for_testing: bool = do_not_redirect_modules_for_testing
 
@@ -63,7 +65,7 @@ class DeprecationRedirect:
         """
         Remove the module name from the keys
         """
-        existing_keys: Set[str] = set(self.old_class_to_new_class.keys())
+        existing_keys: List[str] = list(self.old_class_to_new_class.keys())
         for key in existing_keys:
 
             if not key.startswith(f"{self.module_name}."):
@@ -71,7 +73,8 @@ class DeprecationRedirect:
                 continue
 
             existing_value: str = self.old_class_to_new_class.pop(key)
-            self.old_class_to_new_class[key.replace(f"{self.module_name}.", "")] = existing_value
+            new_key: str = key.removeprefix(f"{self.module_name}.")
+            self.old_class_to_new_class[new_key] = existing_value
 
     def redirect_modules(self):
         """
