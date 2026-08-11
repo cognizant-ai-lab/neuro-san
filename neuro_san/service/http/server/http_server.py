@@ -32,7 +32,7 @@ import tornado
 import tornado.netutil
 import tornado.process
 
-from leaf_common.asyncio.event_loop_lag_monitor import EventiLoopLagMonitor
+from leaf_common.asyncio.event_loop_lag_monitor import EventLoopLagMonitor
 from leaf_common.config.config_util import ConfigUtil
 from leaf_common.serialization.util.text_file_reader import TextFileReader
 
