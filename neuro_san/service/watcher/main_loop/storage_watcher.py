@@ -25,7 +25,8 @@ from threading import Thread
 from time import sleep
 from time import time
 
-from neuro_san.internals.interfaces.startable import Startable
+from leaf_common.utils.startable import Startable
+
 from neuro_san.service.watcher.interfaces.storage_updater import StorageUpdater
 from neuro_san.service.watcher.registries.registry_storage_updater import RegistryStorageUpdater
 from neuro_san.service.utils.server_context import ServerContext

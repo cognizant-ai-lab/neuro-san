@@ -35,6 +35,7 @@ import tornado.process
 from leaf_common.asyncio.event_loop_lag_monitor import EventLoopLagMonitor
 from leaf_common.config.config_util import ConfigUtil
 from leaf_common.serialization.util.text_file_reader import TextFileReader
+from leaf_common.utils.startable import Startable
 
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
@@ -62,7 +63,6 @@ from neuro_san.service.http.server.resources_usage_logger import ResourcesUsageL
 from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
 from neuro_san.service.interfaces.agent_server import AgentServer
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
-from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.service.mcp.handlers.mcp_root_handler import McpRootHandler
 from neuro_san.service.utils.http_llm_tracer import HttpxLlmTracer
 from neuro_san.service.utils.loop_timeline_tracer import LoopTimelineTracer
