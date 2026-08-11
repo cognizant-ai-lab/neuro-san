@@ -20,8 +20,9 @@ from typing import Dict
 
 from langchain_core.language_models.base import BaseLanguageModel
 
+from leaf_common.config.config_util import ConfigUtil
+
 from neuro_san.internals.run_context.langchain.llms.llm_policy import LlmPolicy
-from neuro_san.internals.utils.config_util import ConfigUtil
 
 
 class BedrockLlmPolicy(LlmPolicy):
