@@ -81,9 +81,11 @@ an agent network by that name. Try these hints:
        which must also have an entry in the manifest.hocon file for the server.
     c. There is one and only one "front man" agent note in each network described
        by a hocon file that receives input on behalf of the network.
-    d. In order to be called by external agents, that front man must have a full
-       "function" definition, which includes a description, and at least one parameter
-       defined.  These are how calling agents know how to interact with the agent network.
+    d. In order to be called by external agents, that front man must have a
+       "function" definition which includes a description. Declaring at least
+       one parameter is recommended, as parameters are how calling agents know
+       what to pass; when none are declared, a single "inquiry" string parameter
+       is synthesized on the calling side so the caller's request still gets through.
 """
                 )
                 raise ValueError(message) from exception

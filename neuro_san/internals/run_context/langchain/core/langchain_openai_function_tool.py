@@ -101,7 +101,9 @@ class LangChainOpenAIFunctionTool(BaseTool):
             message = f"Function for {name} has no description.\n"
 
         parameters: Dict[str, Any] = function_json.get("parameters")
-        if parameters:
+        if parameters is not None and not isinstance(parameters, Dict):
+            message = f"Function for {name} needs its parameters to be a dictionary.\n"
+        elif parameters:
             if parameters.get("type") is None:
                 message = f"Function for {name} needs to have a parameters.type set to 'object'.\n"
             properties: Dict[str, Any] = parameters.get("properties")
