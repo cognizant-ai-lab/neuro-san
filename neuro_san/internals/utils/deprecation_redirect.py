@@ -23,6 +23,7 @@ from typing import Type
 from sys import modules
 from warnings import warn
 
+from leaf_common.config.resolver import Resolver
 from leaf_common.config.resolver_util import ResolverUtil
 
 
@@ -81,10 +82,18 @@ class DeprecationRedirect:
         """
         Redirect deprecated classes and their modules
         """
+        resolver = Resolver()
         old_class: str = None
         for old_class in self.old_class_to_new_class.keys():
-            old_module: str = self.get_module_from_fully_qualified(old_class)
-            modules[f"{self.module_name}.{old_module}"] = modules[self.module_name]
+            use_class: str = old_class
+            while "." in use_class:
+                old_module: str = self.get_module_from_fully_qualified(use_class)
+                module_found = resolver.resolve_class_in_module(module_name=old_module, raise_if_not_found=False)
+                if module_found:
+                    # Don't need to replace something that already exists
+                    break
+                modules[f"{self.module_name}.{old_module}"] = modules[self.module_name]
+                use_class = old_module
 
     def redirect_class(self, old_class: str) -> Type[Any]:
         """
