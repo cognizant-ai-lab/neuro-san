@@ -47,14 +47,8 @@ class BaseToolFactory:
     Creates langchain BaseTools.
     """
 
-    # The tool-call arguments are the only message channel through which a
-    # calling agent passes its request to an external agent network
-    # (sly_data is a separate, opt-in channel for private data).  A front-man that
-    # declares no function.parameters would be presented to the calling LLM
-    # as a zero-argument tool, which the LLM would then invoke with {} -
-    # the external network would never receive the caller's request.
-    # When that happens we substitute this schema so the request still
-    # gets through.
+    # Parameters substituted for an external agent whose front-man declares
+    # none of its own. See ensure_external_parameters() for the full rationale.
     DEFAULT_EXTERNAL_PARAMETER_NAME: str = "inquiry"
     DEFAULT_EXTERNAL_PARAMETERS: Dict[str, Any] = {
         "type": "object",
@@ -175,8 +169,11 @@ class BaseToolFactory:
         """
         Guarantee that an external agent's function spec declares parameters.
 
+        The tool-call arguments are the only message channel through which a
+        calling agent passes its request to an external agent network
+        (sly_data is a separate, opt-in channel for private data).
         An external front-man that declares no function.parameters would
-        otherwise be presented to the calling LLM as a zero-argument tool,
+        therefore be presented to the calling LLM as a zero-argument tool,
         which the LLM would invoke with an empty {} - and the external network
         would silently never receive the caller's request (issue #1228).
 

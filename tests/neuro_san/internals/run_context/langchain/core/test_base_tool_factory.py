@@ -29,15 +29,10 @@ class TestBaseToolFactory:
     """
     Test cases for BaseToolFactory.
 
-    The cases here currently center on how external agents are presented
-    as tools: the tool-call arguments are the only message channel through
-    which a calling agent passes its request to an external agent network.
-    An external
-    front-man that declares no function.parameters used to be presented to
-    the calling LLM as a zero-argument tool, which the LLM would invoke
-    with {} - the external network silently never received the caller's
-    request (issue #1228).  A default "inquiry" parameter is now
-    synthesized for that case.
+    The cases here currently center on how external agents are presented as
+    tools - in particular the default "inquiry" parameter synthesized for a
+    front-man that declares no parameters of its own (issue #1228).
+    See BaseToolFactory.ensure_external_parameters() for the full rationale.
     """
 
     EXTERNAL_AGENT_NAME: str = "/network_b"
