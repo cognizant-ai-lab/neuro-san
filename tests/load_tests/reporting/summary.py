@@ -148,7 +148,7 @@ class SummaryReporter:
                 (total_requests + total_retries) / total_requests
                 if total_requests > 0 else 1.0
             )
-            logger.info("\n  Overall max_attempts retry totals:")
+            logger.info("\n  Overall retry totals:")
             logger.info("    Total retries:   %s", total_retries)
             logger.info(
                 "    Amplification:   %.2fx", amplification,

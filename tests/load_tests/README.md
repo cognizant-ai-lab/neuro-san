@@ -79,7 +79,11 @@ python -m tests.load_tests.load_test --agent hello_world --level adv \
 `opt` = available with optional flags; `auto` = on by default when the
 target server is local. `--server-log` enables retry counting,
 server-side validation, disconnection detection, and pool reuse
-analysis. At `norm`/`adv` (all-in-one) a server log is expected: it is
+analysis. Retry counting covers both neuro-san's own `max_attempts`
+retries (`retrying from <ErrorType>`) and retries the LLM provider SDK
+performs internally (`Retrying request to ... in ... seconds`, reported
+as `Provider SDK retries`); both feed the amplification factor.
+At `norm`/`adv` (all-in-one) a server log is expected: it is
 auto-detected for a local server (no flag needed when colocated). If a
 local log isn't found, the run **prompts** you to continue without it
 (or abort); a **remote** host aborts with a pointer to

@@ -38,6 +38,7 @@ from tests.load_tests.config import CLIENT_DISCONNECT_PATTERN
 from tests.load_tests.config import DONE_STREAMING_PATTERN
 from tests.load_tests.config import NETWORK_LOOKAHEAD_LINES
 from tests.load_tests.config import NetworkTokenEntry
+from tests.load_tests.config import PROVIDER_RETRY_PATTERN
 from tests.load_tests.config import REQUEST_FINISH_PATTERN
 from tests.load_tests.config import REQUEST_START_PATTERN
 from tests.load_tests.config import RETRY_LOG_PATTERN
@@ -117,9 +118,16 @@ class ServerLogMonitor:
             return []
 
     def count_retries_since(self, position) -> Dict[str, int]:
-        """Count max_attempts retry log entries since the given position.
+        """Count retry log entries since the given position.
 
-        Returns a dict of error_type -> count for each tracked error type.
+        Covers both neuro-san's own max_attempts retries ("retrying
+        from <ErrorType>") and retries the LLM provider SDK performs
+        internally ("Retrying request to ... in ... seconds"), counted
+        under the "ProviderRetry" key.  The latter are invisible to
+        neuro-san but are still extra LLM attempts, so they belong in
+        the amplification factor.
+
+        Returns a dict of error_type -> count for each tracked type.
         """
         if self._server_log is None or position is None:
             return {}
@@ -131,6 +139,10 @@ class ServerLogMonitor:
                 error_type = match.group(2)
                 retry_counts[error_type] = (
                     retry_counts.get(error_type, 0) + 1
+                )
+            elif PROVIDER_RETRY_PATTERN.search(line):
+                retry_counts["ProviderRetry"] = (
+                    retry_counts.get("ProviderRetry", 0) + 1
                 )
         return retry_counts
 

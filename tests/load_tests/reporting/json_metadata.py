@@ -60,8 +60,10 @@ class JsonMetadata:
                 "TIMEOUT=hit hard timeout cap, "
                 "KILLED=no output for idle_timeout.",
             "stage_summaries[].retries":
-                "Server-side max_attempts retries by error type "
-                "(e.g. RateLimitError, APIError). "
+                "Server-side retries by type: neuro-san max_attempts "
+                "retries (e.g. RateLimitError, APIError) plus "
+                "ProviderRetry for retries the LLM provider SDK "
+                "performed internally. "
                 "Empty dict means zero retries.",
             "stage_summaries[].amplification":
                 "Ratio of total server LLM attempts to client "

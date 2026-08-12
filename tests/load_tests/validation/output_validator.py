@@ -28,6 +28,7 @@ from typing import List
 from tests.load_tests.config import Formatters
 from tests.load_tests.config import RequestResult
 from tests.load_tests.config import RETRY_ERROR_TYPES
+from tests.load_tests.config import RETRY_LABELS
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
@@ -106,11 +107,12 @@ class OutputValidator:
     ) -> None:
         """Log retry activity from server log."""
         logger.info(
-            "\n  max_attempts retry activity (from server log):",
+            "\n  Retry activity (from server log):",
         )
         for error_type in RETRY_ERROR_TYPES:
             count = retries.get(error_type, 0)
-            logger.info("    %s retries: %s", error_type, count)
+            label = RETRY_LABELS.get(error_type, f"{error_type} retries")
+            logger.info("    %s: %s", label, count)
         logger.info("    Total retries:  %s", total_retries)
         amplification = Formatters.compute_amplification(
             actual_requests, total_retries,
