@@ -26,6 +26,37 @@ Selected with `--mode`:
 | `playback` | Serves responses from the cassette by matching the canonical request signature. No network, no tokens. An unmatched request fails hard with HTTP 504. |
 | `hybrid` | Like `playback`, but a cache **miss** falls through to the real host (when an upstream is configured via the env vars below), records the result into the **current** cassette, and returns it — a self-healing cassette that fills in gaps on demand. With no upstream configured, a miss behaves like plain playback (504). |
 
+**Only successful responses are recorded.** In `record` and `hybrid` modes a
+non-2xx upstream response (rate limit `429`, auth `401`, upstream `5xx`, …) is
+relayed back to the caller but **not** written to the cassette, so a transient
+failure can't poison it — a later retry records a good response instead. To
+repair a cassette recorded before this behavior existed, see
+[Cleaning a cassette](#cleaning-a-cassette).
+
+### Cleaning a cassette
+
+`cleanup_cassette.py` repairs a cassette left with failure responses by an
+interrupted or throttled recording session, making it safe for playback/hybrid:
+
+- Single-response entries with a non-2xx status are dropped.
+- Multi-response entries have their non-2xx variants removed; the entry is
+  dropped only if no successful variant remains.
+- All other data (requests, keys, latencies, unknown fields, `version`) is
+  preserved.
+
+```bash
+export PYTHONPATH=$(pwd)
+# Non-destructive: writes <cassette>.clean.json next to the input.
+python -m tests.record_playback_llm_server.cleanup_cassette session.cassette.json
+# Overwrite in place (a <cassette>.bak is made first).
+python -m tests.record_playback_llm_server.cleanup_cassette session.cassette.json --in-place
+# Report what would be removed without writing anything.
+python -m tests.record_playback_llm_server.cleanup_cassette session.cassette.json --dry-run
+```
+
+Note: cleanup is status-based; a provider that returns HTTP 200 with an error
+body is not detected.
+
 ### Multi-response (round-robin)
 
 The `--multi-response` flag is orthogonal to `record`/`playback`:
@@ -239,6 +270,7 @@ One class per file:
 | `cassette.py` | `Cassette` | Load/lookup/store/atomic-save of recorded interactions (single and multi-response). |
 | `playback_delay.py` | `PlaybackDelay` | Per-response up-front delay policy (none/recorded/fixed/random). |
 | `request_canonicalizer.py` | `RequestCanonicalizer` | Canonical request string + sha256 cassette key. |
+| `cleanup_cassette.py` | `CassetteCleaner` | Standalone tool: strip non-2xx (failure) responses from a cassette. |
 
 ## Known limitations
 

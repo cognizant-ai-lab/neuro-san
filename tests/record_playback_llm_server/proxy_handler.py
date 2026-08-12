@@ -128,14 +128,14 @@ class ProxyHandler(tornado.web.RequestHandler):
         self.set_header("Content-Type", "application/json")
         self.write(bytes(raw_body))
 
-        self._store(method, body_bytes, key, {
+        if self._store(method, body_bytes, key, {
             "kind": "json",
             "status": response.code,
             "body": self._decode_body(raw_body),
             "latency_seconds": round(latency_seconds, 6),
-        })
-        self.logger.info("recorded json response (%d bytes, %.3fs) key=%s",
-                         len(raw_body), latency_seconds, key[:12])
+        }):
+            self.logger.info("recorded json response (%d bytes, %.3fs) key=%s",
+                             len(raw_body), latency_seconds, key[:12])
 
     async def _record_stream(self, method: str, body_bytes: bytes, key: str) -> None:
         """Record and relay a streamed SSE response, teeing chunks to disk with latency."""
@@ -167,22 +167,31 @@ class ProxyHandler(tornado.web.RequestHandler):
 
         await self._safe_flush()
         frames: List[str] = self._split_sse_frames(bytes(accumulated))
-        self._store(method, body_bytes, key, {
+        if self._store(method, body_bytes, key, {
             "kind": "stream",
             "status": response.code,
             "chunks": frames,
             "latency_seconds": round(latency_seconds, 6),
             "first_byte_seconds": round(first_byte[0], 6) if first_byte[0] is not None else None,
-        })
-        self.logger.info("recorded stream response (%d frames, %.3fs) key=%s",
-                         len(frames), latency_seconds, key[:12])
+        }):
+            self.logger.info("recorded stream response (%d frames, %.3fs) key=%s",
+                             len(frames), latency_seconds, key[:12])
 
-    def _store(self, method: str, body_bytes: bytes, key: str, response: Dict[str, Any]) -> None:
+    def _store(self, method: str, body_bytes: bytes, key: str, response: Dict[str, Any]) -> bool:
         """
-        Persist a recorded response. In single-response mode the entry keeps one
-        "response"; in multi-response mode distinct responses accumulate under a
-        "responses" list for round-robin playback.
+        Persist a recorded response, but only when it is a success (HTTP 2xx).
+        Non-2xx responses (rate limits, auth errors, upstream 5xx, ...) are
+        relayed to the caller but never cached, so a transient failure cannot
+        poison the cassette; a later retry can record a good response instead.
+
+        In single-response mode the entry keeps one "response"; in multi-response
+        mode distinct responses accumulate under a "responses" list.
+        :return: True if the response was persisted, False if skipped as non-2xx.
         """
+        status: int = response.get("status", 0)
+        if not self._is_success(status):
+            self.logger.warning("not recording non-2xx response (status=%s) key=%s", status, key[:12])
+            return False
         meta: Dict[str, Any] = {
             "method": method.upper(),
             "path": self.upstream_path,
@@ -194,6 +203,12 @@ class ProxyHandler(tornado.web.RequestHandler):
             entry: Dict[str, Any] = dict(meta)
             entry["response"] = response
             self.state.cassette.put(key, entry)
+        return True
+
+    @staticmethod
+    def _is_success(status: int) -> bool:
+        """:return: True if the HTTP status is a 2xx success."""
+        return 200 <= status < 300
 
     async def _playback(self, method: str, body_bytes: bytes, key: str) -> None:
         """
