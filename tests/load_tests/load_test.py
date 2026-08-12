@@ -362,7 +362,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                  "messages including AGENT_PROGRESS (default). "
                  "minimal: stream only the final answer message, "
                  "which reduces server-to-client traffic and the "
-                 "server-side work of producing progress events.",
+                 "server-side work of producing progress events, but "
+                 "also drops the token-accounting message and so "
+                 "disables client-side LLM/token reporting (tokens "
+                 "then come only from the server log).",
         )
         parser.add_argument(
             "--skip-reservation-check",

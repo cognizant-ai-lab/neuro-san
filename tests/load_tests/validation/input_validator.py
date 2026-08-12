@@ -312,6 +312,8 @@ class InputValidator:
                 f"(last modified {stale_log_age}m ago)"
             )
 
+        warnings.extend(self._token_reporting_warnings())
+
         mem_warning = self._check_memory_headroom(
             capped,
             http_client=getattr(
@@ -322,6 +324,36 @@ class InputValidator:
             warnings.append(mem_warning)
 
         return warnings
+
+    def _token_reporting_warnings(self) -> List[str]:
+        """Warn when the chat filter will suppress token reporting.
+
+        Client-side LLM/token numbers arrive as a token-accounting
+        message in the chat stream, which the server's MINIMAL filter
+        drops.  Without a server log to fall back on, the run then
+        reports no LLM or token usage at all.
+        """
+        args = self._args
+        if getattr(args, "chat_filter", "maximal") != "minimal":
+            return []
+        if not getattr(args, "include_tokens", False):
+            return []
+        if (getattr(args, "client_only", False)
+                or getattr(args, "no_server_log", False)):
+            return [
+                "--chat-filter minimal drops the token-accounting"
+                " message, and this run has no server log to fall"
+                " back on:\n"
+                "     no LLM or token usage will be reported.\n"
+                "     Use --chat-filter maximal to report them."
+            ]
+        return [
+            "--chat-filter minimal drops the token-accounting"
+            " message:\n"
+            "     client-side LLM/token numbers will be"
+            " unavailable (server-log values still apply).\n"
+            "     Use --chat-filter maximal to report both."
+        ]
 
     @staticmethod
     def _check_memory_headroom(

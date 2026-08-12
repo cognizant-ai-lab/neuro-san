@@ -96,6 +96,15 @@ Resource monitoring is on automatically at `norm`/`adv` and in the
 accounting via `agent_cli --tokens` is enabled at all levels by
 default (disable with `--no-tokens`).
 
+**Where LLM/token numbers come from.** Client-side counts arrive in the
+chat stream as a token-accounting message, so they require
+`--chat-filter maximal` (the default); `minimal` filters that message
+out server-side and the `LLM & TOKEN USAGE` section is then omitted for
+want of data. Server-side counts are parsed from the server log
+instead, so they are unaffected by the filter. A `--client-only` run
+against a remote host has no server log to fall back on: with
+`minimal` it reports no tokens at all.
+
 **`adv` level defaults:** 50 requests, 3 rounds (150 total requests).
 With `--yes`, workers auto-match to 50 (full concurrency). Without
 `--yes`, workers default to 3 with a warning. These are applied
@@ -139,6 +148,7 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--server-log [PATH]`      | auto (local, norm/adv) | Server log analysis. Auto-detected for a local server at norm/adv; if not found you're prompted to continue without it (remote host aborts — use `--client-only`). Pass a path for an explicit file, or the flag alone to force auto-detect. |
 | `--no-server-log`          | off         | Skip the missing-log prompt at norm/adv and run without server-log analysis; overrides the local auto-detect |
 | `--no-tokens`              | off         | Disable per-request token accounting         |
+| `--chat-filter`            | maximal     | Server-side message filter. `maximal` streams all messages; `minimal` streams only the final answer, cutting traffic and progress-event work — but it also drops the token-accounting message, so client-side LLM/token reporting is unavailable (tokens then come only from the server log) |
 | `--profile-path`           | auto        | Directory containing profile JSON files (or `LOAD_TEST_PROFILE_PATH` env var) |
 | `--host`                   | localhost   | Neuro-san server host                        |
 | `--port`                   | 8080        | Neuro-san server port                        |
