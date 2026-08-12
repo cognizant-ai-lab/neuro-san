@@ -25,6 +25,7 @@ import logging
 import time
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
+from leaf_common.utils.startable import Startable
 
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -34,7 +35,6 @@ from neuro_san.internals.network_providers.agent_network_storage import AgentNet
 from neuro_san.internals.network_providers.abstract_reservations_storage \
     import AbstractReservationsStorage
 from neuro_san.internals.network_providers.fixed_agent_network_provider import FixedAgentNetworkProvider
-from neuro_san.internals.interfaces.startable import Startable
 
 
 class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStorage):

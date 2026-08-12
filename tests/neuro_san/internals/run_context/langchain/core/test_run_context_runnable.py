@@ -24,8 +24,8 @@ import pytest
 from langchain_core.messages.ai import AIMessage
 from openai import RateLimitError
 
-from neuro_san.internals.messages.agent_framework_message import AgentFrameworkMessage
 from neuro_san.internals.run_context.langchain.core.run_context_runnable import RunContextRunnable
+from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
 
 
 class TestRunContextRunnable:

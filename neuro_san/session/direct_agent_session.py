@@ -19,6 +19,7 @@ from typing import Any
 from typing import Dict
 from typing import Generator
 from typing import List
+from typing import Optional
 
 from asyncio import Task
 from contextlib import suppress
@@ -33,6 +34,7 @@ from neuro_san.internals.chat.connectivity_reporter import ConnectivityReporter
 from neuro_san.internals.chat.data_driven_chat_session import DataDrivenChatSession
 from neuro_san.internals.chat.queue_filter import QueueFilter
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.session.session_invocation_context import SessionInvocationContext
 
 
@@ -45,16 +47,22 @@ class DirectAgentSession(AgentSession):
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self,
                  agent_network: AgentNetwork,
-                 invocation_context: SessionInvocationContext,
+                 invocation_context: Optional[SessionInvocationContext],
                  metadata: Dict[str, Any] = None,
                  security_cfg: Dict[str, Any] = None,
-                 umbrella_timeout: Timeout = None):
+                 umbrella_timeout: Timeout = None,
+                 # Keyword-only: the sync and async session signatures diverge
+                 # above this point, so positional passing would misbind.
+                 *,
+                 toolbox_factory: ContextTypeToolboxFactory = None):
         """
         Constructor
 
         :param agent_network: The AgentNetwork to use for the session.
         :param invocation_context: The SessionInvocationContext to use to consult
                         for policy objects scoped at the invocation level.
+                        May be None for sessions that only serve connectivity()
+                        or function(); chat methods require a real instance.
         :param metadata: A dictionary of request metadata to be forwarded
                         to subsequent yet-to-be-made requests.
         :param security_cfg: A dictionary of parameters used to
@@ -63,6 +71,14 @@ class DirectAgentSession(AgentSession):
                         GRPC Channel.  If None, uses insecure channel.
         :param umbrella_timeout: A Timeout object to periodically check in loops.
                         Default is None (no timeout).
+        :param toolbox_factory: An optional ContextTypeToolboxFactory built from
+                        the same agent network's config, so connectivity reporting
+                        does not have to re-read toolbox info files per request.
+                        May be passed pre-loaded; connectivity reporting will
+                        load() it (a no-op if already loaded).
+                        If None, the invocation_context's toolbox factory is used
+                        when available; failing that, connectivity reporting
+                        builds one from the agent network's config.
         """
         # These aren't used yet
         self._metadata: Dict[str, Any] = metadata
@@ -72,6 +88,13 @@ class DirectAgentSession(AgentSession):
         self.agent_network: AgentNetwork = agent_network
         self.request_id: str = None
         self.umbrella_timeout: Timeout = umbrella_timeout
+        # Resolve the toolbox factory once at construction: an invocation
+        # context's factory is fixed when the context is built, and resolving
+        # here keeps connectivity() working even after close() sets
+        # self.invocation_context to None.
+        self.toolbox_factory: ContextTypeToolboxFactory = toolbox_factory
+        if self.toolbox_factory is None and invocation_context is not None:
+            self.toolbox_factory = invocation_context.get_toolbox_factory()
         if metadata is not None:
             self.request_id = metadata.get("request_id")
 
@@ -114,7 +137,7 @@ class DirectAgentSession(AgentSession):
         response_dict: Dict[str, Any] = {
         }
 
-        reporter = ConnectivityReporter(self.agent_network)
+        reporter = ConnectivityReporter(self.agent_network, self.toolbox_factory)
         config: Dict[str, Any] = self.agent_network.get_config()
         metadata: Dict[str, Any] = config.get("metadata")
         connectivity_info: List[Dict[str, Any]] = reporter.report_network_connectivity()
@@ -164,6 +187,10 @@ class DirectAgentSession(AgentSession):
         chat_context: Dict[str, Any] = request_dict.get("chat_context")
         sly_data: Dict[str, Any] = request_dict.get("sly_data")
 
+        # Task for late-stage conversions for any and all messages
+        queue_filter = QueueFilter(chat_filter, self.agent_network)
+        queue_filter.apply_to_journal(self.invocation_context.get_journal())
+
         # Create an asynchronous background task to process the user input.
         # This might take a few minutes, which can be longer than some
         # sockets stay open.
@@ -171,12 +198,6 @@ class DirectAgentSession(AgentSession):
         task: Task = asyncio_executor.submit(self.request_id, chat_session.streaming_chat,
                                              user_input, self.invocation_context, sly_data,
                                              chat_context)
-        # Ignore the future. Live in the now.
-        _ = task
-
-        # Task for late-stage conversions for any and all messages
-        queue_filter = QueueFilter(self.invocation_context, template_response_dict, chat_filter, self.agent_network)
-        task: Task = asyncio_executor.submit(self.request_id, queue_filter.filter_queue)
         # Ignore the future. Live in the now.
         _ = task
 
@@ -198,7 +219,7 @@ class DirectAgentSession(AgentSession):
             #    interrupted by caller-side "close" method.
             # 3. And we suppress all exceptions while deleting resources to keep things quieter.
             message: Dict[str, Any] = None
-            for message in generator.synchronously_iterate(self.invocation_context.get_filtered_queue()):
+            for message in generator.synchronously_iterate(self.invocation_context.get_queue()):
                 if message is not None:
                     yield message
         finally:

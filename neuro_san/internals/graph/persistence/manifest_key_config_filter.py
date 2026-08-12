@@ -54,9 +54,9 @@ class ManifestKeyConfigFilter(ConfigFilter):
         for key, value in basis_config.items():
 
             # Key here is an agent name in a form that we choose.
-            # Keys sometimes come with quotes.
-            manifest_key: str = key.replace(r'"', "")
-            manifest_key = manifest_key.strip()
+            # Keys are quote-sanitized at parse time (sanitize_keys=True),
+            # so only whitespace normalization is left to do here.
+            manifest_key: str = key.strip()
 
             filtered[manifest_key] = value
 

@@ -21,8 +21,8 @@ from uuid import uuid4
 
 import pytest
 
-from neuro_san.internals.messages.agent_message import AgentMessage
 from neuro_san.internals.run_context.langchain.journaling.journaling_callback_handler import JournalingCallbackHandler
+from neuro_san.message.types.agent_message import AgentMessage
 
 
 class TestOnToolStartInvokingLabel:

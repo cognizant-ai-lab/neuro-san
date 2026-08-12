@@ -23,8 +23,8 @@ from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.system import SystemMessage
 
 from neuro_san.internals.journals.journal import Journal
-from neuro_san.internals.messages.agent_tool_result_message import AgentToolResultMessage
-from neuro_san.internals.messages.base_message_dictionary_converter import BaseMessageDictionaryConverter
+from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
+from neuro_san.message.types.base_message_dictionary_converter import BaseMessageDictionaryConverter
 
 
 class OriginatingJournal(Journal):

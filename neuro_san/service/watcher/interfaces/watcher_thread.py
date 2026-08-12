@@ -22,7 +22,8 @@ from logging import Logger
 from threading import Thread
 from time import sleep
 
-from neuro_san.internals.interfaces.startable import Startable
+from leaf_common.utils.startable import Startable
+
 from neuro_san.service.utils.server_context import ServerContext
 
 

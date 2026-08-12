@@ -32,8 +32,8 @@ import tornado.ioloop
 import tornado.web
 
 from leaf_common.asyncio.event_loop_factory import EventLoopFactory
+from leaf_common.utils.startable import Startable
 
-from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.service.http.handlers.health_check_handler import HealthCheckHandler
 from neuro_san.service.utils.server_context import ServerContext
 

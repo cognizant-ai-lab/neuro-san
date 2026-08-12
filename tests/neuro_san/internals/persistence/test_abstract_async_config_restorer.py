@@ -27,29 +27,11 @@ from unittest.mock import patch
 
 import pytest
 
-from neuro_san.internals.persistence.abstract_async_config_restorer import AbstractAsyncConfigRestorer
+from tests.neuro_san.internals.persistence.restorer_test_helpers import ConcreteRestorer
+from tests.neuro_san.internals.persistence.restorer_test_helpers import FIXTURES_DIR
+from tests.neuro_san.internals.persistence.restorer_test_helpers import VALID_DICT
 
 T = TypeVar("T")
-
-# ---------------------------------------------------------------------------
-# Concrete subclass used by all tests.
-# AbstractAsyncConfigRestorer inherits from abstract base
-# classes. ConcreteRestorer makes the test intent explicit at no cost.
-# ---------------------------------------------------------------------------
-
-
-class ConcreteRestorer(AbstractAsyncConfigRestorer):
-    """Minimal concrete subclass – inherits all behaviour from the abstract base."""
-
-
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-VALID_DICT: Dict[str, Any] = {"key": "value", "nested": {"a": 1}}
-
-# Directory containing .json and .hocon fixture files used by the tests.
-FIXTURES_DIR: Path = Path(__file__).parent.parent.parent.parent / "fixtures"
 
 
 # pylint: disable=too-many-public-methods
@@ -217,6 +199,35 @@ class TestAbstractAsyncConfigRestorer:
             (FIXTURES_DIR / "valid.hocon").read_bytes(),
         )
         assert result == VALID_DICT
+
+    def test_deserialize_hocon_sanitizes_quoted_keys(self) -> None:
+        """
+        Keys that must be quoted in HOCON source (containing e.g. "." or ":")
+        come back without pyhocon's embedded quotes, at every nesting level.
+        See cognizant-ai-lab/neuro-san#451 and cognizant-ai-lab/leaf-common#172.
+        """
+        hocon: str = """
+        {
+            "llama3.1": {
+                "class": "ollama",
+                "nested": {
+                    "http://localhost:8080/mcp": true
+                }
+            }
+            plain_key = 1
+        }
+        """
+        r: ConcreteRestorer = self.make_restorer()
+        result: Dict[str, Any] = r.deserialize_file_contents("config.hocon", hocon.encode("utf-8"))
+        assert result == {
+            "llama3.1": {
+                "class": "ollama",
+                "nested": {
+                    "http://localhost:8080/mcp": True
+                }
+            },
+            "plain_key": 1,
+        }
 
     def test_deserialize_raises_value_error_for_unsupported_extension(self) -> None:
         """A ValueError is raised for file extensions other than .json and .hocon."""

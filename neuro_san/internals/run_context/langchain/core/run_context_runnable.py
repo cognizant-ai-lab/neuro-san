@@ -27,7 +27,6 @@ import traceback
 
 from pydantic import ConfigDict
 
-from langchain_classic.callbacks.tracers.logging import LoggingCallbackHandler
 from langchain_core.agents import AgentFinish
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.messages.ai import AIMessage
@@ -38,17 +37,17 @@ from langchain_core.runnables.config import merge_configs
 from langchain_core.runnables.utils import Input
 from langchain_core.runnables.utils import Output
 
-from leaf_common.config.resolver_util import ResolverUtil
+from leaf_common.resolution.resolver_util import ResolverUtil
 
 from neuro_san.internals.errors.error_detector import ErrorDetector
 from neuro_san.internals.journals.journal import Journal
-from neuro_san.internals.messages.agent_framework_message import AgentFrameworkMessage
-from neuro_san.internals.messages.origination import Origination
+from neuro_san.internals.journals.origination import Origination
 from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
 from neuro_san.internals.run_context.langchain.journaling.journaling_callback_handler import JournalingCallbackHandler
 from neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter import LangChainTokenCounter
 from neuro_san.internals.run_context.langchain.tracing.neuro_san_runnable import NeuroSanRunnable
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
+from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
 
 MINUTES: float = 60.0
 
@@ -162,6 +161,16 @@ class RunContextRunnable(NeuroSanRunnable):
         if isinstance(verbose, str) and verbose.lower() in ("true", "extra", "logging"):
             # This particular class adds a *lot* of very detailed messages
             # to the logs.  Add this because some people are interested in it.
+            # If you find yourself curious about this setting, what you probably
+            # are really looking for is an Observability setup like:
+            #       LangSmith, Langfuse, HoneyHive, or Arize Phoenix.
+            # See the docs for Observability plugins in neuro-san-studio.
+            # This was our only tie to langchain-classic, so make it optional in this case.
+            # pylint: disable=invalid-name
+            LoggingCallbackHandler: Type[BaseCallbackHandler] = ResolverUtil.create_type(
+                "langchain_classic.callbacks.tracers.logging.LoggingCallbackHandler",
+                install_if_missing="langchain-classic"
+            )
             callbacks.append(LoggingCallbackHandler(self.logger))
 
         # Get the number of attempts from the spec.

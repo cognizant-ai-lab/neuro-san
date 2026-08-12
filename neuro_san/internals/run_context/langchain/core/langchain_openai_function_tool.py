@@ -32,11 +32,10 @@ from leaf_common.logging.sensitive_logger import SensitiveLogger
 
 from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
 from neuro_san.internals.run_context.langchain.core.langchain_run import LangChainRun
-from neuro_san.internals.run_context.langchain.core.base_model_dictionary_converter \
-    import BaseModelDictionaryConverter
+from neuro_san.internals.run_context.langchain.core.base_model_dictionary_converter import BaseModelDictionaryConverter
 from neuro_san.internals.run_context.langchain.core.pydantic_argument_dictionary_converter \
     import PydanticArgumentDictionaryConverter
-from neuro_san.internals.run_context.utils.external_agent_parsing import ExternalAgentParsing
+from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
 
 
 class LangChainOpenAIFunctionTool(BaseTool):
@@ -102,7 +101,9 @@ class LangChainOpenAIFunctionTool(BaseTool):
             message = f"Function for {name} has no description.\n"
 
         parameters: Dict[str, Any] = function_json.get("parameters")
-        if parameters:
+        if parameters is not None and not isinstance(parameters, Dict):
+            message = f"Function for {name} needs its parameters to be a dictionary.\n"
+        elif parameters:
             if parameters.get("type") is None:
                 message = f"Function for {name} needs to have a parameters.type set to 'object'.\n"
             properties: Dict[str, Any] = parameters.get("properties")
@@ -208,8 +209,12 @@ It's function_json is described thusly:
         calls to another llm/agent instance happen asynchronously.
         ("a" is for asynchronous).
 
-        :return: The result of the tool in the form of the BaseMessage
-                 that tells us the "answer" from the tool.
+        :return: The content of the BaseMessage that tells us the "answer"
+                 from the tool - a string today, though langchain also allows
+                 lists of content blocks.
+                 Can be None if the tool produced no message.
+                 On failure, returns the string form of the exception so the
+                 calling LLM can verbally recognize the problem.
         """
         run: LangChainRun = None
         try:
@@ -246,4 +251,12 @@ It's function_json is described thusly:
 
         # Assume the answer is latest tool message in the Run.
         the_answer: BaseMessage = run.get_tool_message()
-        return the_answer
+        if the_answer is None:
+            return None
+
+        # Return the message's content rather than the message object itself.
+        # Langchain passes str (and content-block list) tool returns through
+        # to the calling LLM's ToolMessage as-is, but falls back to str() for
+        # any other object - which for a BaseMessage is its pydantic repr
+        # ("content='...' additional_kwargs={} ..."), not the answer.
+        return the_answer.content

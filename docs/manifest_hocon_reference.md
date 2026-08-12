@@ -72,6 +72,52 @@ as an MCP tool. In this case, it will be listed by an MCP "tools/list" command.
 A true value implies that the network will be available as an MCP tool.
 Note that a true value specified for "mcp" key will implicitly set "public" key also to true.
 
+##### periodic
+
+Agents who have their front man's [invocation](./agent_hocon_reference.md#invocation) set to "event"
+can be called periodically by the server infrastructure.
+
+Multiple interpretations exist for the "periodic" key depending on the value type.
+
+_boolean_: Allows for turning the periodic update feature on or off (primarily off).
+           When simply set to true, a basic periodic update of once every minute is enabled
+           with a simple text string ("Do your thing") to set the agent in motion.
+
+_string_: a cron string describing the periodic update schedule.
+          If only a cron string is specified, the message sent to the agent network will be
+          the default "Do your thing".  In short, these cron strings can have 5 or 6 space-delimited fields:
+
+* 1 is Minute (0-59)
+* 2 is Hour (0-23)
+* 3 is Day of Month (1-31)
+* 4 is Month (1-12)
+* 5 is Day of Week (0-6) where 0 is Sunday
+* 6 is Second (0-59)
+
+See the following references for finer-grained information on cron strings:
+
+* [croniter github](https://github.com/pallets-eco/croniter)
+* [wikipedia](https://en.wikipedia.org/wiki/Cron)
+* [crontab.cronhub.io](https://crontab.cronhub.io/)
+
+_dictionary_: allows for the most fine-grained control over the periodic update feature. The keys are:
+
+###### interactions
+
+A list of various incarnations of periodic updates to be performed against the agent.
+Each component of this list is its own dictionary, and each dictionary can have the following keys:
+
+<!-- pyml disable line-length -->
+| Dictionary Key      | Type    | Default | Description |
+| ------------------- | ------- | ------- | ----------- |
+| enable              | boolean | true    | Exactly like the simple boolean value above allowing enabling/disabling of a specific periodic interaction. |
+| cron_schedule       | string  | "\*/1 \* \* \* \* 0" | Exactly like the string value above, this string is a cron schedule for the periodic interaction.  The default fires once every minute. |
+| second_at_beginning | boolean | false | Specifies where in the cron_schedule the seconds are specified.  By ancient convention, the seconds are specified at the end of the cron_schedule string, but this value allows for specifying the seconds at the beginning of the string allowing for some sanity in reading these strings. |
+| text                | string  | "Do your thing" | The text input to the agent network whenever the periodic interaction is triggered. |
+| sly_data            | dictionary | {} | The dictionary used as sly_data input to the agent network whenever the periodic interaction is triggered. |
+| metadata            | dictionary | {"user_id": "system"} | The dictionary used as metadata (faux-headers) input to the agent network whenever the periodic interaction is triggered. |
+<!-- pyml enable line-length -->
+
 ## Server monitoring of agent description files
 
 It is possible for the server infrastructure to detect changes to the agent manifest.hocon and any agent network

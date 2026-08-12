@@ -16,27 +16,29 @@
 # END COPYRIGHT
 from typing import Any
 from typing import Dict
+from typing import List
 
-import os
-
+from copy import copy as shallow_copy
+from os import environ
+from os import pathsep as os_path_separator
+from os import sep as os_separator
 from pathlib import Path
 
-from leaf_common.config.dictionary_overlay import DictionaryOverlay
-from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
+from leaf_common.resolution.resolver_util import ResolverUtil
 
 from neuro_san import TOP_LEVEL_DIR
-from neuro_san.internals.graph.activations.branch_activation import BranchActivation
-from neuro_san.internals.graph.activations.class_activation import ClassActivation
-from neuro_san.internals.graph.activations.external_activation import ExternalActivation
 from neuro_san.internals.graph.activations.front_man_activation import FrontManActivation
-from neuro_san.internals.graph.activations.toolbox_activation import ToolboxActivation
+from neuro_san.internals.graph.preppers.activation_prepper import ActivationPrepper
+from neuro_san.internals.graph.preppers.external_activation_prepper import ExternalActivationPrepper
+from neuro_san.internals.graph.preppers.toolbox_activation_prepper import ToolboxActivationPrepper
+from neuro_san.internals.graph.preppers.class_activation_prepper import ClassActivationPrepper
+from neuro_san.internals.graph.preppers.branch_activation_prepper import BranchActivationPrepper
+from neuro_san.internals.graph.preppers.front_man_activation_prepper import FrontManActivationPrepper
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.callable_activation import CallableActivation
 from neuro_san.internals.interfaces.front_man import FrontMan
-from neuro_san.internals.messages.sly_data_redactor import SlyDataRedactor
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
-from neuro_san.internals.run_context.utils.external_agent_parsing import ExternalAgentParsing
 
 
 class ActivationFactory(AgentToolFactory):
@@ -44,6 +46,17 @@ class ActivationFactory(AgentToolFactory):
     A factory class for creating Activations of tools within the agent network graph.
     That is, this is where neuro-san tools are made real.
     """
+
+    # Basic list of stateless ActivationPreppers. Order matters.
+    BASE_PREPPERS: List[ActivationPrepper] = [
+        ExternalActivationPrepper(),
+        # Note that external prepper definitions get added at this point.
+        # The idea is to extend the regular tool spec, not our contract with external tools.
+        ToolboxActivationPrepper(),
+        ClassActivationPrepper(),
+        BranchActivationPrepper(),
+        FrontManActivationPrepper(),
+    ]
 
     def __init__(self, agent_network: AgentNetwork):
         """
@@ -53,6 +66,7 @@ class ActivationFactory(AgentToolFactory):
         """
         self.agent_network: AgentNetwork = agent_network
         self.agent_tool_path: str = self._determine_agent_tool_path()
+        self.preppers: List[ActivationPrepper] = self._create_preppers()
 
     def _determine_agent_tool_path(self) -> str:
         """
@@ -62,24 +76,24 @@ class ActivationFactory(AgentToolFactory):
         :return: the agent tool path to use for source resolution.
         """
         # Try the env var first if nothing to start with
-        agent_tool_path: str = os.environ.get("AGENT_TOOL_PATH")
+        agent_tool_path: str = environ.get("AGENT_TOOL_PATH")
 
         # Try reach-around directory if still nothing to start with
         if agent_tool_path is None:
             agent_tool_path = TOP_LEVEL_DIR.get_file_in_basis("coded_tools")
 
         # If we are dealing with file paths, convert that to something resolvable
-        if agent_tool_path.find(os.sep) >= 0:
+        if agent_tool_path.find(os_separator) >= 0:
 
             # Find the best of many resolution paths in the PYTHONPATH
             resolved_tool_path: str = str(Path(agent_tool_path).resolve())
             best_path = ""
-            pythonpath: str = os.environ.get("PYTHONPATH")
+            pythonpath: str = environ.get("PYTHONPATH")
             if pythonpath is None:
                 # Trust what we have already
                 best_path = agent_tool_path
             else:
-                pythonpath_split = pythonpath.split(os.pathsep)
+                pythonpath_split = pythonpath.split(os_path_separator)
                 for one_path in pythonpath_split:
                     resolved_path: str = str(Path(one_path).resolve())
                     if resolved_tool_path.startswith(resolved_path) and \
@@ -99,7 +113,7 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
             resolve_path = path_split[1]
 
             # Replace separators with python delimiters for later resolution
-            agent_tool_path = resolve_path.replace(os.sep, ".")
+            agent_tool_path = resolve_path.replace(os_separator, ".")
 
             # Remove any leading .s
             while agent_tool_path.startswith("."):
@@ -115,6 +129,34 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
             agent_tool_path = f"{agent_tool_path}.{agent_network_path}"
 
         return agent_tool_path
+
+    def _create_preppers(self) -> List[ActivationPrepper]:
+        """
+        Create a list of ActivationPrepper instances to use using BASE_PREPPERS as a basis,
+        then add any externally defined preppers.
+
+        :return: A list of ActivationPrepper instances
+        """
+        preppers: List[ActivationPrepper] = shallow_copy(self.BASE_PREPPERS)
+
+        # Then read the agent network's prepper list
+        external_preppers: List[ActivationPrepper] = []
+
+        prepper_class_name: str = None
+        agent_prepper_classes: str = environ.get("AGENT_ACTIVATION_PREPPER_CLASSES") or ""
+        for prepper_class_name in agent_prepper_classes.split():
+            prepper_class_name = prepper_class_name.strip()
+            prepper: ActivationPrepper = ResolverUtil.create_instance(prepper_class_name,
+                                                                      "AGENT_ACTIVATION_PREPPER_CLASSES env var",
+                                                                      ActivationPrepper)
+            if prepper is not None:
+                external_preppers.append(prepper)
+
+        # Insert any externally defined preppers after external agents
+        if len(external_preppers) > 0:
+            preppers[1:1] = external_preppers
+
+        return preppers
 
     def get_agent_tool_path(self) -> str:
         """
@@ -147,49 +189,30 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
         if factory is None:
             factory = self
 
-        agent_activation: CallableActivation = None
-
+        # Find the agent tool spec dictionary given the name
         agent_tool_spec: Dict[str, Any] = self.agent_network.get_agent_tool_spec(name)
-        if agent_tool_spec is None:
 
-            if not ExternalAgentParsing.is_external_agent(name):
-                raise ValueError(f"No agent_tool_spec for {name}")
+        # Find the appropriate ActivationPrepper given the agent tool spec
+        prepper: ActivationPrepper = None
+        for candidate in self.preppers:
+            if candidate.is_applicable(agent_tool_spec):
+                prepper = candidate
+                break
 
-            # For external tools, we want to redact the sly data based on
-            # the calling/parent's agent specs.
-            redacted_sly_data: Dict[str, Any] = self._redact_sly_data(parent_run_context, sly_data)
+        if prepper is None:
+            raise ValueError(f"No activation handler found for {name} (tool spec: {agent_tool_spec})")
 
-            # Get the spec for allowing upstream data
-            extractor = DictionaryExtractor(parent_agent_spec)
-            empty = {}
-            allow_from_downstream: Dict[str, Any] = extractor.get("allow.from_downstream", empty)
-
-            agent_activation = ExternalActivation(parent_run_context, factory, name, arguments, redacted_sly_data,
-                                                  allow_from_downstream, invocation)
-            return agent_activation
-
-        # Merge the arguments coming in from the LLM with those that were specified
-        # in the hocon file for the agent.
-        use_args: Dict[str, Any] = self._merge_args(arguments, agent_tool_spec)
-
-        if agent_tool_spec.get("toolbox") is not None:
-            # If a toolbox is in the spec, this is a shared coded tool where tool's description and
-            # args schema are defined in either AGENT_TOOLBOX_INFO_FILE or toolbox_info.hocon.
-            agent_activation = ToolboxActivation(parent_run_context, factory, use_args, agent_tool_spec, sly_data)
-            return agent_activation
-
-        if agent_tool_spec.get("function") is not None:
-            # If we have a function in the spec, the agent has arguments
-            # it wants to be called with.
-            if agent_tool_spec.get("class") is not None:
-                # Agent specifically requested a python class to be run,
-                # and tool's description and args schema are defined in agent network hocon.
-                agent_activation = ClassActivation(parent_run_context, factory, use_args, agent_tool_spec, sly_data)
-            else:
-                agent_activation = BranchActivation(parent_run_context, factory, use_args, agent_tool_spec, sly_data)
-        else:
-            # Get the tool to call from the spec.
-            agent_activation = FrontManActivation(parent_run_context, factory, agent_tool_spec, sly_data)
+        # Prepare the activation
+        agent_activation: CallableActivation = prepper.prepare_activation(
+            name,
+            agent_tool_spec,
+            parent_agent_spec,
+            arguments,
+            sly_data,
+            parent_run_context,
+            factory,
+            invocation
+        )
 
         return agent_activation
 
@@ -227,38 +250,3 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
         :return: The agent name as per the spec
         """
         return self.agent_network.get_name_from_spec(agent_spec)
-
-    def _merge_args(self, llm_args: Dict[str, Any], agent_tool_spec: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Merges the args specified by the llm with "hard-coded" args specified in the agent spec.
-        Hard-coded args win over llm-specified args if both are defined.
-        If you want the llm args to win out over the hard-coded args, use a default for
-        the function spec instead of the hard-coded args.
-
-        :param llm_args: argument dictionary that the LLM wants
-        :param agent_tool_spec: The dictionary representing the spec registered agent
-        """
-        config_args: Dict[str, Any] = agent_tool_spec.get("args")
-        if config_args is None:
-            # Nothing to override
-            return llm_args
-
-        overlay = DictionaryOverlay()
-        merged_args: Dict[str, Any] = overlay.overlay(llm_args, config_args)
-        return merged_args
-
-    def _redact_sly_data(self, parent_run_context: RunContext, sly_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Redact the sly_data based on the agent spec associated with the parent run context
-
-        :param parent_run_context: The parent run context of the tool to be created.
-        :param sly_data: The internal representation of the sly_data to be redacted
-        :return: A new sly_data dictionary, redacted as per the parent spec
-        """
-        parent_spec: Dict[str, Any] = None
-        if parent_run_context is not None:
-            parent_spec = parent_run_context.get_agent_tool_spec()
-
-        redactor = SlyDataRedactor(parent_spec, config_keys=["allow.sly_data", "allow.to_downstream.sly_data"])
-        redacted: Dict[str, Any] = redactor.filter_config(sly_data)
-        return redacted

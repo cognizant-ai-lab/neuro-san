@@ -24,7 +24,7 @@ from langchain_core.tools.base import BaseToolkit
 
 from neuro_san.internals.run_context.langchain.toolbox.toolbox_factory import ToolboxFactory
 
-RESOLVER_PATH = "leaf_common.config.resolver.Resolver.resolve_class_in_module"
+RESOLVER_PATH = "leaf_common.resolution.resolver.Resolver.resolve_class_in_module"
 VALIDATIOR_PATH = (
     "neuro_san.internals.run_context.langchain.util.argument_validator."
     "ArgumentValidator.check_invalid_args"
@@ -38,6 +38,29 @@ class TestToolboxFactory:
     def factory(self):
         """Fixture to provide a fresh instance of ToolboxFactory."""
         return ToolboxFactory()
+
+    def test_load_only_loads_once(self, factory):
+        """Test that load() reads hocon files on the first call only."""
+        # Keep the test hermetic: no user toolbox info file from the environment.
+        factory.toolbox_info_file = None
+        restorer_path = (
+            "neuro_san.internals.run_context.langchain.toolbox."
+            "toolbox_factory.ToolboxInfoRestorer"
+        )
+        infos = {"some_tool": {"class": "mock_package.mock_module.SomeTool"}}
+        with patch(restorer_path) as mock_restorer:
+            mock_restorer.return_value.restore.return_value = infos
+
+            assert not factory.loaded
+            factory.load()
+            assert factory.loaded
+            assert factory.toolbox_infos == infos
+
+            # A second load() must be a no-op: no further file reads,
+            # and the previously loaded infos are kept.
+            factory.load()
+            mock_restorer.return_value.restore.assert_called_once()
+            assert factory.toolbox_infos == infos
 
     def test_create_toolbox_returns_single_base_tool(self, factory):
         """Test that the tool is resolved with correct arguments."""
