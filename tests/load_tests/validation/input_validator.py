@@ -129,8 +129,8 @@ class InputValidator:
         """Display PRE-RUN SUMMARY and optionally run a dry-run probe.
 
         The dry-run probe + cost confirmation runs by default at min
-        and norm levels; --yes bypasses it. At adv level it does not
-        run by default (adv is an explicit stress test).
+        and norm levels; --no-dry-run bypasses it. At adv level it does
+        not run by default (adv is an explicit stress test).
 
         When skipped, shows the summary and returns immediately.
         Otherwise fires one probe request with --tokens to measure
@@ -144,7 +144,7 @@ class InputValidator:
 
         self._print_summary_header(stages, total_planned, capped)
 
-        if self._args.yes or self._args.level == LEVEL_ADV:
+        if self._args.no_dry_run or self._args.level == LEVEL_ADV:
             warnings = self._collect_warnings(
                 capped=capped,
                 total_planned=total_planned,
@@ -182,8 +182,8 @@ class InputValidator:
         self._print_warnings(warnings)
 
         logger.info(
-            "\n  Tip: use --yes to skip this confirmation.\n"
-            "       --yes does not auto-adjust timeouts.",
+            "\n  Tip: use --no-dry-run to skip this confirmation.\n"
+            "       --no-dry-run does not auto-adjust timeouts.",
         )
 
         logger.info("=" * SEPARATOR_WIDTH)

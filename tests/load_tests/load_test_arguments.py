@@ -94,7 +94,7 @@ class LoadTestArguments:
             type=int,
             default=3,
             help="Max concurrent workers in flat mode "
-                 "(default: 3). At adv level with --yes, "
+                 "(default: 3). At adv level with --no-dry-run, "
                  "auto-matches --num-requests unless "
                  "explicitly set. "
                  "Ignored when --ramp is used.",
@@ -208,12 +208,13 @@ class LoadTestArguments:
                  "prompts from the agent's prompt pool.",
         )
         parser.add_argument(
-            "--yes",
+            "--no-dry-run",
             action="store_true",
             default=False,
-            help="Skip the dry-run cost-confirmation probe "
-                 "(runs by default at min/norm; adv skips it "
-                 "by default). Also auto-matches --max-workers "
+            help="Skip the dry-run probe, which otherwise fires one "
+                 "real request first and asks you to confirm the "
+                 "estimated cost (it runs by default at min/norm; adv "
+                 "skips it already). Also auto-matches --max-workers "
                  "to --num-requests at adv level.",
         )
         parser.add_argument(

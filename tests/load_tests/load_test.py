@@ -1133,7 +1133,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
         norm/adv expect a server log; if auto-detect fails, offer to
         run without it or abort. --no-server-log skips this prompt;
-        --yes does not (it only bypasses the cost confirmation).
+        --no-dry-run does not (it only bypasses the cost confirmation).
         """
         logger.warning(
             "Server log not found for --level %s. Without it: "
@@ -1154,8 +1154,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         Only applies when the user did not explicitly set the flag.
         adv: 50 requests, 3 rounds (stress test).
 
-        At adv level with --yes, workers auto-match num-requests
-        (power user mode).  Otherwise workers default to 3
+        At adv level with --no-dry-run, workers auto-match
+        num-requests (power user mode).  Otherwise workers default to 3
         (conservative) and a warning is shown if
         max-workers < num-requests.
         """
@@ -1166,7 +1166,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 args.num_rounds = 3
 
         if ("max_workers" not in explicit_args
-                and args.yes
+                and args.no_dry_run
                 and args.level == LEVEL_ADV):
             args.max_workers = args.num_requests
 
@@ -2771,11 +2771,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     ) -> None:
         """Write summary.txt for adv level only.
 
-        With --yes: auto-write.  Without --yes: prompt the user.
+        With --no-dry-run: auto-write.  Otherwise prompt the user.
         """
         if self.args.level != LEVEL_ADV:
             return
-        if not getattr(self.args, "yes", False):
+        if not self.args.no_dry_run:
             if not Confirm.ask("\nSave summary.txt?"):
                 return
         writer = SummaryFileWriter(

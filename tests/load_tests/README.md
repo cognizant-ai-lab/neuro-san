@@ -38,27 +38,27 @@ export PYTHONPATH=$(pwd)
 
 # Smoke test — does the server respond? (--client-only runs the
 # lightweight min profile against an already-running server)
-python -m tests.load_tests.load_test --agent hello_world --client-only --yes
+python -m tests.load_tests.load_test --agent hello_world --client-only --no-dry-run
 
 # Standard — with server log (auto-detect from server process)
 python -m tests.load_tests.load_test --agent hello_world --level norm \
-    --server-log --yes
+    --server-log --no-dry-run
 
 # Standard — with server log (explicit path)
 python -m tests.load_tests.load_test --agent hello_world --level norm \
-    --server-log /path/to/logs/server.log --yes
+    --server-log /path/to/logs/server.log --no-dry-run
 
 # Standard — without server log (resources + tokens)
-python -m tests.load_tests.load_test --agent hello_world --level norm --yes
+python -m tests.load_tests.load_test --agent hello_world --level norm --no-dry-run
 
 # Full analysis — with server log
 python -m tests.load_tests.load_test --agent hello_world --level adv \
     --ramp --stages 2,4,8 \
-    --server-log /path/to/logs/server.log --yes
+    --server-log /path/to/logs/server.log --no-dry-run
 
 # Full analysis — without server log (JSON + tokens, no retries)
 python -m tests.load_tests.load_test --agent hello_world --level adv \
-    --ramp --stages 2,4,8 --yes
+    --ramp --stages 2,4,8 --no-dry-run
 ```
 
 ## Test Levels (`--level`)
@@ -108,18 +108,18 @@ against a remote host has no server log to fall back on: with
 `minimal` it reports no tokens at all.
 
 **`adv` level defaults:** 50 requests, 3 rounds (150 total requests).
-With `--yes`, workers auto-match to 50 (full concurrency). Without
-`--yes`, workers default to 3 with a warning. These are applied
+With `--no-dry-run`, workers auto-match to 50 (full concurrency). Without
+`--no-dry-run`, workers default to 3 with a warning. These are applied
 automatically unless overridden with `--num-requests`, `--max-workers`,
 or `--num-rounds`.
 
-**`--max-workers` auto-matching:** At adv level with `--yes` (power
+**`--max-workers` auto-matching:** At adv level with `--no-dry-run` (power
 user mode), `--max-workers` auto-matches `--num-requests` so all
-requests fire concurrently. At other levels or without `--yes`,
+requests fire concurrently. At other levels or without `--no-dry-run`,
 `--max-workers` defaults to 3 (conservative). A warning is shown
 during the cost confirmation on all levels if
 `max-workers < num-requests`. Explicit `--max-workers` is always
-respected regardless of `--yes`.
+respected regardless of `--no-dry-run`.
 
 At `norm`/`adv`, server-log analysis is expected: it is auto-detected
 for a local server. If a local log isn't found you're prompted to
@@ -132,7 +132,7 @@ analysis is always off.
 ## Traffic Modes
 
 **Flat** (default): `--num-requests 10` — fixed concurrency.
-`--max-workers` defaults to 3; at adv level with `--yes` it auto-matches
+`--max-workers` defaults to 3; at adv level with `--no-dry-run` it auto-matches
 `--num-requests`. Set `--max-workers` explicitly to control concurrency:
 `--num-requests 100 --max-workers 10` fires 100 requests, 10 at a time.
 Flat mode output labels each iteration as a "round" (no stage numbers).
@@ -155,7 +155,7 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--host`                   | localhost   | Neuro-san server host                        |
 | `--port`                   | 8080        | Neuro-san server port                        |
 | `--num-requests`           | 3           | Requests per round in flat mode              |
-| `--max-workers`            | 3             | Concurrent workers in flat mode. At adv + `--yes`, auto-matches `--num-requests` |
+| `--max-workers`            | 3             | Concurrent workers in flat mode. At adv + `--no-dry-run`, auto-matches `--num-requests` |
 | `--ramp`                   | off         | Enable ramp-up mode                          |
 | `--stages`                 | 10,30,50,100| Concurrency per stage in ramp mode           |
 | `--num-rounds`             | 1           | Repeat the full sequence N times             |
@@ -166,7 +166,7 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--total-timeout`          | 0 (disabled)| Hard timeout for entire load test. Accepts seconds or an `s`/`m`/`h` suffix. Kills run when exceeded |
 | `--settle-time`            | 15 (15s)    | Wait after each stage for server cleanup. Accepts seconds or an `s`/`m`/`h` suffix |
 | `--same-prompt`            | off         | Use identical prompt for all requests        |
-| `--yes`                    | off         | Bypass the dry-run probe + cost confirmation (which run by default at min/norm; adv skips them already). At adv, also auto-matches `--max-workers` to `--num-requests` |
+| `--no-dry-run`             | off         | Skip the dry-run probe + cost confirmation (which run by default at min/norm; adv skips them already). At adv, also auto-matches `--max-workers` to `--num-requests` |
 | `--scale`                  | 1           | Multiply `--num-requests`, `--max-workers`, `--request-timeout`, `--idle-timeout`, `--stage-timeout`, `--total-timeout` by this factor. `--max-requests` auto-adjusts. |
 | `--skip-reservation-check` | off         | Skip reservation_id validation               |
 | `--output-dir`             | (none)      | Base directory for test output               |
@@ -227,11 +227,11 @@ Before firing the full test, the load test displays a PRE-RUN SUMMARY.
 
 **min / norm (default):** Fires 1 probe request to measure actual token
 usage, cost, and response time, then shows estimated stage duration,
-numbered warnings (if any), and asks the user to confirm. Pass `--yes`
+numbered warnings (if any), and asks the user to confirm. Pass `--no-dry-run`
 to bypass the probe and confirmation.
 
 **adv (default):** No dry-run probe — adv is treated as an explicit
-stress test, so it shows the summary and runs immediately. (`--yes`
+stress test, so it shows the summary and runs immediately. (`--no-dry-run`
 additionally auto-matches `--max-workers` to `--num-requests`.)
 
 ```
@@ -259,7 +259,7 @@ additionally auto-matches `--max-workers` to `--num-requests`.)
   3. Estimated stage duration ~1510s exceeds --stage-timeout (1500s).
      Requests may be killed before completing.
 
-  Tip: use --yes to skip this confirmation.
+  Tip: use --no-dry-run to skip this confirmation.
 ============================================================
 
 Proceed with remaining 149 requests? [y/n]:
@@ -411,8 +411,8 @@ whether the LLM serializes concurrent requests:
 ### Summary file (`--level adv` only)
 
 At `adv` level, a human-readable `summary.txt` is written to the
-output directory. With `--yes` it is written automatically; without
-`--yes` the user is prompted.
+output directory. With `--no-dry-run` it is written automatically; without
+`--no-dry-run` the user is prompted.
 
 The summary includes per-request results, completion timeline, and
 (when `--server-log` is provided) a per-request server timing
@@ -519,8 +519,8 @@ This framework follows three review playbooks:
   fallbacks (`num_fds`/`select.select`/closed-pipe guards/temp dir),
   clean error on invalid `--stages`, `ServerCounts` partial TypedDict,
   auto-resolve profile from agent name, `--max-workers` auto-matches
-  `--num-requests` at adv + `--yes`, `adv` level defaults (50×3),
-  `--yes` restricted to adv level, flat mode hides stage labels and
+  `--num-requests` at adv + `--no-dry-run`, `adv` level defaults (50×3),
+  `--no-dry-run` restricted to adv level, flat mode hides stage labels and
   uses round-based output, PRE-RUN SUMMARY with numbered warnings
   and estimated stage duration.
 
