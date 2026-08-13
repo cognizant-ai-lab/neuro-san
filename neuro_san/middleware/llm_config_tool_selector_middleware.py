@@ -321,7 +321,7 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
         return self._make_denial(
             tool_name, call_id,
             f"Error: tool '{tool_name}' was not among the tools selected for this request "
-            "and was not executed. Use one of the available tools instead.")
+            f"and was not executed. Try one of [{', '.join(advertised)}].")
 
     @staticmethod
     def _make_denial(tool_name: str, call_id: str, content: str) -> ToolMessage:

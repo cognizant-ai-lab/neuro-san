@@ -194,6 +194,8 @@ class TestLlmConfigToolSelectorMiddleware(TestCase):
         self.assertIsInstance(denial, ToolMessage)
         self.assertEqual(denial.status, "error")
         self.assertEqual(denial.tool_call_id, "call_1")
+        # The denial names the advertised tools so the model can retry with a valid one.
+        self.assertIn("Try one of [safe_echo]", denial.content)
 
     def test_deny_tool_call_without_id(self):
         """
