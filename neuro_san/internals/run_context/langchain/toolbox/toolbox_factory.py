@@ -178,21 +178,7 @@ class ToolboxFactory(ContextTypeToolboxFactory):
 
         empty: Dict[str, Any] = {}
 
-        tool_info: Dict[str, Any] = self.toolbox_infos.get(tool_name)
-        if not tool_info:
-            if tool_name in self.REMOVED_TOOLS:
-                raise ValueError(
-                    f"Tool '{tool_name}' was removed from the default toolbox because it was "
-                    "built on the deprecated langchain-community package. To keep using it, "
-                    "define it in your own toolbox info file and register that file with the "
-                    "AGENT_TOOLBOX_INFO_FILE environment variable or the 'toolbox_info_file' "
-                    "key in the agent network hocon file. See "
-                    "https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/toolbox_info_hocon_reference.md"
-                )
-            sources: str = "the default toolbox info file"
-            if self.toolbox_info_file:
-                sources += f" or in {self.toolbox_info_file}"
-            raise ValueError(f"Tool '{tool_name}' is not defined in {sources}.")
+        tool_info: Dict[str, Any] = self._require_tool_info(tool_name)
 
         if not isinstance(tool_info, Dict):
             raise ValueError(f"The value for the {tool_name} key must be a dictionary.")
@@ -257,6 +243,34 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         # Add "langchain_tool" tags so journal callback can idenitify it
         instance.tags = ["langchain_tool"]
         return instance
+
+    def _require_tool_info(self, tool_name: str) -> Dict[str, Any]:
+        """
+        Looks up a tool's entry in the loaded toolbox infos, raising when absent
+        so that every toolbox entry point reports unknown names the same way.
+
+        :param tool_name: The name of the tool to look up.
+        :return: The toolbox dictionary entry for the tool name.
+                Can raise a ValueError with migration guidance if the tool was
+                removed from the default toolbox, or one naming the searched
+                sources if the tool is simply unknown.
+        """
+        tool_info: Dict[str, Any] = self.toolbox_infos.get(tool_name)
+        if not tool_info:
+            if tool_name in self.REMOVED_TOOLS:
+                raise ValueError(
+                    f"Tool '{tool_name}' was removed from the default toolbox because it was "
+                    "built on the deprecated langchain-community package. To keep using it, "
+                    "define it in your own toolbox info file and register that file with the "
+                    "AGENT_TOOLBOX_INFO_FILE environment variable or the 'toolbox_info_file' "
+                    "key in the agent network hocon file. See "
+                    "https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/toolbox_info_hocon_reference.md"
+                )
+            sources: str = "the default toolbox info file"
+            if self.toolbox_info_file:
+                sources += f" or in {self.toolbox_info_file}"
+            raise ValueError(f"Tool '{tool_name}' is not defined in {sources}.")
+        return tool_info
 
     def _resolve_args(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -328,9 +342,11 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         Get class of the shared coded tool
 
         :param tool_name: The name of the tool
-        :return: The class of the coded tool
+        :return: The class of the coded tool.
+                Can raise a ValueError if the tool_name is unknown to the toolbox,
+                just like create_tool_from_toolbox().
         """
-        tool_info: Dict[str, Any] = self.toolbox_infos.get(tool_name)
+        tool_info: Dict[str, Any] = self._require_tool_info(tool_name)
         return tool_info.get("class")
 
     def get_tool_info(self, tool_name: str) -> Dict[str, Any]:

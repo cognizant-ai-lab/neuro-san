@@ -124,6 +124,23 @@ class TestToolboxFactory:
         with pytest.raises(ValueError, match="or in /path/to/user_toolbox.hocon"):
             factory.create_tool_from_toolbox("no_such_tool", {})
 
+    def test_get_shared_coded_tool_class_unknown_tool_raises(self, factory):
+        """Test that unknown and removed tool names raise the same clear
+        ValueErrors as create_tool_from_toolbox(), instead of crashing with
+        AttributeError on the missing toolbox entry."""
+        factory.toolbox_infos = {
+            "known_tool": {"class": "some_module.SomeCodedTool"},
+        }
+        factory.toolbox_info_file = None
+
+        assert factory.get_shared_coded_tool_class("known_tool") == "some_module.SomeCodedTool"
+
+        with pytest.raises(ValueError, match="not defined in the default toolbox info file."):
+            factory.get_shared_coded_tool_class("no_such_tool")
+
+        with pytest.raises(ValueError, match="deprecated langchain-community"):
+            factory.get_shared_coded_tool_class("requests_get")
+
     @pytest.mark.parametrize("bad_class", [None, 123, ""])
     def test_create_toolbox_with_invalid_class_value(self, factory, bad_class):
         """Test that a non-string or empty 'class' value raises a clear ValueError."""
