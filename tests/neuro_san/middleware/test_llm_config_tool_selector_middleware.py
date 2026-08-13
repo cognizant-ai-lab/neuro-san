@@ -90,7 +90,8 @@ class MetadataStrippingMiddleware(AgentMiddleware):
 
 def build_middleware(selected: List[str],
                      sly_data: Dict[str, Any] = None,
-                     origin_str: str = None) -> LlmConfigToolSelectorMiddleware:
+                     origin_str: str = None,
+                     unadvertised_policy: str = "allow") -> LlmConfigToolSelectorMiddleware:
     """
     Construct the middleware without an ActivationCapsule/real LLM by initializing
     through the langchain superclass directly with a scripted selection model.
@@ -99,7 +100,7 @@ def build_middleware(selected: List[str],
     selection_model = FakeSelectionModel(responses=[], selected=selected)
     LLMToolSelectorMiddleware.__init__(middleware, model=selection_model)
     middleware.logger = getLogger("test")
-    middleware._initialize_advertised_tools(sly_data, origin_str)
+    middleware._initialize_enforcement(sly_data, origin_str, unadvertised_policy)
     return middleware
 
 
@@ -222,13 +223,35 @@ class TestLlmConfigToolSelectorMiddleware(TestCase):
 
     def test_allow_unrecorded_tool_call(self):
         """
-        Tool calls with no recorded advertisement (e.g. produced by another middleware
-        short-circuiting the model call) are allowed for backward compatibility.
+        With the default "allow" policy, tool calls with no recorded advertisement
+        (e.g. produced by another middleware short-circuiting the model call)
+        are allowed for backward compatibility.
         """
         middleware = build_middleware(selected=["safe_echo"])
         request = self._tool_call_request(name="canary", call_id="call_1")
 
         self.assertIsNone(middleware._deny_unadvertised_tool_call(request))
+
+    def test_deny_unrecorded_tool_call_with_deny_policy(self):
+        """
+        With unadvertised_policy="deny", tool calls with no recorded advertisement
+        are rejected instead of allowed.
+        """
+        middleware = build_middleware(selected=["safe_echo"], unadvertised_policy="deny")
+        request = self._tool_call_request(name="canary", call_id="call_1")
+
+        denial = middleware._deny_unadvertised_tool_call(request)
+
+        self.assertIsInstance(denial, ToolMessage)
+        self.assertEqual(denial.status, "error")
+        self.assertIn("no recorded tool selection", denial.content)
+
+    def test_invalid_unadvertised_policy_raises(self):
+        """
+        A typo in unadvertised_policy fails at construction time, not silently at runtime.
+        """
+        with self.assertRaises(ValueError):
+            build_middleware(selected=["safe_echo"], unadvertised_policy="denny")
 
 
 class TestLlmConfigToolSelectorMiddlewareAsync(IsolatedAsyncioTestCase):

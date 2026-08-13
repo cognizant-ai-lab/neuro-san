@@ -77,8 +77,11 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
       instead of executing, so the model can retry.
 
     Tool calls with no recorded advertisement (e.g. produced by another middleware
-    short-circuiting the model call) are allowed through with a warning, since we
-    cannot know what was advertised for them.
+    short-circuiting the model call) are allowed through with a warning by default,
+    since we cannot know what was advertised for them.  Set unadvertised_policy to
+    "deny" to reject such tool calls instead — recommended for agents exposed to
+    untrusted input, at the cost of rejecting tool calls fabricated by co-resident
+    middleware that bypass the model.
 
     This middleware does not support dynamic tools: the enforcement records the tool
     list as narrowed at this middleware's layer, so any middleware listed after it
@@ -106,6 +109,7 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
                 llm_config: Dict[str, Any],
                 sly_data: Dict[str, Any] = None,
                 origin_str: str = None,
+                unadvertised_policy: str = "allow",
                 system_prompt: str = DEFAULT_SYSTEM_PROMPT,
                 max_tools: int | None = None,
                 always_include: List[str] | None = None,
@@ -124,6 +128,9 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
                         Used to namespace the advertised-tools bookkeeping within the sly_data
                         shared by all agents of the network for the request.
                         When not provided, a per-instance namespace is used.
+        :param unadvertised_policy: What to do with a tool call that has no recorded
+                        advertisement: "allow" (the default) executes it with a warning,
+                        "deny" rejects it with an error ToolMessage.
 
         ... the rest of the args come from the langchain superclass.
 
@@ -135,7 +142,7 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
         """
 
         self.logger: Logger = getLogger(self.__class__.__name__)
-        self._initialize_advertised_tools(sly_data, origin_str)
+        self._initialize_enforcement(sly_data, origin_str, unadvertised_policy)
 
         if activation_capsule is None:
             raise ValueError("activation_capsule is required")
@@ -164,9 +171,10 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
         # Now subvert the superclass model with our RunnableWithFallbacks.
         self.model = my_model
 
-    def _initialize_advertised_tools(self, sly_data: Dict[str, Any], origin_str: str) -> None:
+    def _initialize_enforcement(self, sly_data: Dict[str, Any], origin_str: str,
+                                unadvertised_policy: str) -> None:
         """
-        Set up the advertised-tools bookkeeping used for execution-time enforcement.
+        Set up the advertised-tools bookkeeping and policy used for execution-time enforcement.
 
         :param sly_data: The private sly_data dictionary for the request, shared by all
                         agents of the network.  Can be None, in which case a private
@@ -174,7 +182,13 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
         :param origin_str: A string namespacing this middleware instance within the shared
                         sly_data.  Can be None, in which case a per-instance namespace
                         is used to avoid tool call id collisions between agents.
+        :param unadvertised_policy: "allow" or "deny" for tool calls with no
+                        recorded advertisement.
         """
+        if unadvertised_policy not in ("allow", "deny"):
+            raise ValueError(f"unadvertised_policy must be 'allow' or 'deny', got '{unadvertised_policy}'")
+        self.unadvertised_policy: str = unadvertised_policy
+
         holder: Dict[str, Any] = sly_data if sly_data is not None else {}
         namespace: str = origin_str if origin_str else f"instance-{id(self)}"
         per_request: Dict[str, Dict[str, List[str]]] = holder.setdefault(ADVERTISED_TOOLS_KEY, {})
@@ -291,16 +305,36 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
         advertised: List[str] = self.advertised_tools.get(call_id)
         if advertised is None:
             # No recorded advertisement for this tool call. See docstring above.
-            self.logger.warning("Tool call for %s has no recorded advertised tools. Allowing.", tool_name)
-            return None
+            if self.unadvertised_policy == "allow":
+                self.logger.warning("Tool call for %s has no recorded advertised tools. Allowing.", tool_name)
+                return None
+            self.logger.warning("Tool call for %s has no recorded advertised tools. Denying per policy.", tool_name)
+            return self._make_denial(
+                tool_name, call_id,
+                f"Error: the tool call for '{tool_name}' has no recorded tool selection "
+                "and was not executed.")
 
         if tool_name in advertised:
             return None
 
         self.logger.warning("Denying tool call for %s: not among advertised tools %s", tool_name, advertised)
+        return self._make_denial(
+            tool_name, call_id,
+            f"Error: tool '{tool_name}' was not among the tools selected for this request "
+            "and was not executed. Use one of the available tools instead.")
+
+    @staticmethod
+    def _make_denial(tool_name: str, call_id: str, content: str) -> ToolMessage:
+        """
+        Construct the error ToolMessage for a denied tool call.
+
+        :param tool_name: The name of the tool whose call is being denied.
+        :param call_id: The id of the tool call being denied. Can be None.
+        :param content: The error message content for the model to read.
+        :return: A ToolMessage carrying the denial.
+        """
         return ToolMessage(
-            content=f"Error: tool '{tool_name}' was not among the tools selected for this request "
-                    "and was not executed. Use one of the available tools instead.",
+            content=content,
             # ToolMessage requires a string tool_call_id, but providers may omit ids
             # from tool calls (ToolCall.id is Optional).
             tool_call_id=call_id if call_id is not None else "unknown",

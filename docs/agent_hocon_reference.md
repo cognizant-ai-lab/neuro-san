@@ -1216,6 +1216,11 @@ Passing the [sly_data](#sly_data) and [origin_str](#origin_str) special args to 
 recommended: it makes the bookkeeping observable in sly_data (namespaced per agent), and sly_data
 is additionally needed for bring-your-own-key scenarios.
 
+A tool call with no recorded tool selection at all (e.g. one fabricated by another middleware
+that bypasses the model) is allowed through with a warning by default. Set the constructor arg
+`"unadvertised_policy": "deny"` in the middleware args to reject such tool calls instead —
+recommended for agents exposed to untrusted input.
+
 This middleware does not support dynamic tools. The enforcement records the tool list as it stands
 at this middleware's position in the [middleware](#middleware) list, and middleware are composed
 first-in-list-outermost. Any middleware listed *after* the tool selector that adds or removes tools
