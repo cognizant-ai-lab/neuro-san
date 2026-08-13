@@ -1197,3 +1197,22 @@ A ProgressReporter instance that can be used to report progress dictionaries via
 ##### sly_data
 
 The agent's sly_data dictionary which is common to all middleware and coded tools for the request.
+
+#### Tool selection middleware
+
+Neuro SAN provides `neuro_san.middleware.llm_config_tool_selector_middleware.LlmConfigToolSelectorMiddleware`,
+a subclass of langchain's
+[LLMToolSelectorMiddleware](https://docs.langchain.com/oss/python/langchain/middleware/built-in#llm-tool-selector)
+that understands neuro-san LLM Configs. It uses an LLM (typically a smaller, cheaper one) to narrow
+the list of tools advertised to the agent's model on each call, which can significantly reduce token
+and time costs for agents with many tools.
+
+The neuro-san implementation also enforces its selection at tool-execution time: a tool call naming
+a tool that was not among those advertised on the model call that produced it is rejected with an
+error message instead of being executed, and the model may then retry with an available tool.
+
+Note that LLM-based tool selection is a token/latency optimization, **not** a security boundary.
+The selection is driven by the (possibly untrusted) last user message, so it can be steered toward
+any tool configured for the agent. The set of tools configured for an agent remains the actual
+capability boundary: do not wire sensitive tools into agents exposed to untrusted input and rely on
+tool selection to keep those tools out of reach.
