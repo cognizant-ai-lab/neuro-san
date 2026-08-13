@@ -356,6 +356,18 @@ class LoadTestArguments:
                  "cross-run comparison table.",
         )
         parser.add_argument(
+            "--trend",
+            type=str,
+            default=None,
+            metavar="PATH",
+            help="Skip load test; print one row per recorded run "
+                 "from the --history-file JSONL, oldest first, so "
+                 "throughput can be compared across neuro-san "
+                 "versions. PATH is the history file or a directory "
+                 "containing history.jsonl. Filtered by "
+                 "--compare-agent.",
+        )
+        parser.add_argument(
             "--compare-agent",
             type=str,
             default=None,

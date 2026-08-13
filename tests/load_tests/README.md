@@ -19,6 +19,7 @@ subprocesses (default) or direct HTTP streaming (`--http-client`).
 - [Code Quality](#code-quality)
 - [Architecture](#architecture)
 - [Cross-Run Comparison](#cross-run-comparison)
+- [Trend History](#trend-history)
 - [Notes](#notes)
 
 ## Quick Start
@@ -170,6 +171,7 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--skip-reservation-check` | off         | Skip reservation_id validation               |
 | `--output-dir`             | (none)      | Base directory for test output               |
 | `--compare DIR`            | (none)      | Skip load test; scan DIR for previous runs and print a comparison table |
+| `--trend PATH`             | (none)      | Skip load test; print one row per run from the history file, oldest first |
 | `--project-root`           | (none)      | Project root for profile discovery           |
 
 ### Abort on timeout
@@ -451,6 +453,42 @@ Output:
 No load test is executed — the command reads `raw_results.json` from
 each subdirectory, extracts key metrics, and sorts by request count.
 
+## Trend History
+
+Use `--trend` to see repeated runs in the order they happened, which is
+how a slowdown between neuro-san versions becomes visible:
+
+```bash
+python -m tests.load_tests.load_test --trend /tmp/load_test/adv/history.jsonl
+```
+
+Output:
+
+```text
+TREND HISTORY (/tmp/load_test/adv/history.jsonl, 3 run(s))
+       timestamp  neuro-san        agent    mode   via  reqs  done  <70s  <300s  ttfr    avg    wall  err  warn
+---------------------------------------------------------------------------------------------------------------
+2026-07-20 14:02     0.5.51  hello_world  client  http   200   200   181    200  2.1s  41.2s  612.0s    0     0
+2026-07-24 09:15     0.5.52  hello_world  client  http   200   200   176    200  2.3s  44.8s  659.1s    0     0
+2026-07-25 18:31     0.5.52  hello_world  client  http   200   188   120    188  3.9s  61.5s  812.7s    7     0
+```
+
+`PATH` may be the history file or a directory containing
+`history.jsonl`, so the path printed at the end of a run works as-is.
+Filter to one agent with `--compare-agent`.
+
+Choose between the two views by the question being asked:
+
+| Question                                          | Use         |
+| ------------------------------------------------- | ----------- |
+| How does the system behave as concurrency rises?  | `--compare` |
+| Did the same load get slower than it used to be?  | `--trend`   |
+
+Only `--trend` shows `neuro_san_version`, which `raw_results.json` does
+not record. Server-only runs appear with `mode=server-only`, and their
+`ttfr` is blank because a server log cannot measure the client's time to
+first response.
+
 ## Exit Codes
 
 - `0` — All requests completed successfully
@@ -517,6 +555,7 @@ tests/load_tests/
     summary.py                 SummaryReporter
     system_resources.py        SystemResources (whole-system mem/cpu/threads)
     table_formatter.py         TableFormatter
+    trend_history.py           TrendHistory (--trend output)
 
   traffic/
     cli_builder.py             CliBuilder (agent_cli commands)

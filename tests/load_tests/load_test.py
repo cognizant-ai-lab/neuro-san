@@ -82,6 +82,7 @@ from tests.load_tests.reporting.resource_reporter import ResourceReporter
 from tests.load_tests.reporting.summary import SummaryReporter
 from tests.load_tests.reporting.system_resources import SystemResources
 from tests.load_tests.reporting.summary_file_writer import SummaryFileWriter
+from tests.load_tests.reporting.trend_history import TrendHistory
 from tests.load_tests.traffic.runner import TrafficRunner
 from tests.load_tests.validation.environment_validator import EnvironmentValidator
 from tests.load_tests.validation.input_validator import InputValidator
@@ -2859,6 +2860,16 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         return "_".join(parts)
 
     @staticmethod
+    def _agent_filter(args) -> Optional[List[str]]:
+        """Split --compare-agent into a list of agent names."""
+        if not args.compare_agent:
+            return None
+        return [
+            name.strip()
+            for name in args.compare_agent.split(",")
+        ]
+
+    @staticmethod
     def main() -> None:
         """Entry point for the load test script."""
         args = LoadTestArguments.parse_args(__doc__)
@@ -2868,13 +2879,14 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 force=args.rebuild_all,
             ).run()
             return
+        if args.trend:
+            TrendHistory(
+                args.trend,
+                agent_filter=LoadTestOrchestrator._agent_filter(args),
+            ).run()
+            return
         if args.compare:
-            agent_filter = None
-            if args.compare_agent:
-                agent_filter = [
-                    a.strip()
-                    for a in args.compare_agent.split(",")
-                ]
+            agent_filter = LoadTestOrchestrator._agent_filter(args)
             run_filter = None
             if args.compare_runs:
                 run_filter = [
