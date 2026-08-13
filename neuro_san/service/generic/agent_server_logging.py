@@ -23,7 +23,6 @@ import logging
 import os
 
 from leaf_common.logging.logging_setup import LoggingSetup
-from leaf_server_common.server.grpc_metadata_forwarder import GrpcMetadataForwarder
 
 
 class AgentServerLogging:
@@ -47,13 +46,6 @@ class AgentServerLogging:
         self.server_name_for_logs: str = server_name_for_logs
         self.forwarded_request_metadata: List[str] = forwarded_request_metadata_str.split(" ")
         self.logging_config: Dict[str, Any] = logging_config
-
-    def get_forwarder(self) -> GrpcMetadataForwarder:
-        """
-        :return: A GrpcMetadataForwarder instance initialized with
-                 the list of forwarded request metadata keys
-        """
-        return GrpcMetadataForwarder(self.forwarded_request_metadata)
 
     def setup_logging(self, metadata: Dict[str, str] = None, request_id: str = "None"):
         """
