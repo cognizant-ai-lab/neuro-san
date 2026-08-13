@@ -1216,6 +1216,14 @@ Passing the [sly_data](#sly_data) and [origin_str](#origin_str) special args to 
 recommended: it makes the bookkeeping observable in sly_data (namespaced per agent), and sly_data
 is additionally needed for bring-your-own-key scenarios.
 
+This middleware does not support dynamic tools. The enforcement records the tool list as it stands
+at this middleware's position in the [middleware](#middleware) list, and middleware are composed
+first-in-list-outermost. Any middleware listed *after* the tool selector that adds or removes tools
+on the model request will make the enforcement diverge from what the model actually saw: calls to
+tools added by such middleware are falsely rejected, and further narrowing is not enforced. If you
+combine the tool selector with other tool-modifying middleware, list those middleware before the
+tool selector, never after it.
+
 Note that LLM-based tool selection is a token/latency optimization, **not** a security boundary.
 The selection is driven by the (possibly untrusted) last user message, so it can be steered toward
 any tool configured for the agent. The set of tools configured for an agent remains the actual

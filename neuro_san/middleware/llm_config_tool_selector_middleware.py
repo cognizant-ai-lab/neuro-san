@@ -80,6 +80,14 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
     short-circuiting the model call) are allowed through with a warning, since we
     cannot know what was advertised for them.
 
+    This middleware does not support dynamic tools: the enforcement records the tool
+    list as narrowed at this middleware's layer, so any middleware listed after it
+    (composed inside it) that adds or removes tools via request.override(tools=...)
+    will make the record diverge from what the model actually saw — added tools get
+    falsely denied, removals go unenforced.  If other tool-modifying middleware must
+    be combined with this one, list them before this middleware, and do not list any
+    tool-modifying middleware after it.
+
     Only the async hooks are overridden, as neuro-san always drives agents through
     the async path. Synchronous agent invocation raises NotImplementedError from the
     langchain superclass machinery at the first tool call.
