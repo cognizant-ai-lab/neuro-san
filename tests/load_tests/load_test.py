@@ -41,6 +41,7 @@ import urllib.request
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Set
 from typing import Tuple
 
 import psutil
@@ -461,18 +462,33 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         args = parser.parse_args()
         # Track which args the user explicitly provided so
         # level-based defaults do not override them.
-        explicit = set()
-        for action in parser._actions:  # pylint: disable=protected-access
-            for opt in action.option_strings:
-                if opt in sys.argv:
-                    explicit.add(action.dest)
-                    break
-        args._explicit = explicit  # pylint: disable=protected-access
+        explicit = LoadTestOrchestrator._explicit_args(parser, args)
+        args.explicit_args = explicit
         # When targeting https and no explicit port was given,
         # default to the standard TLS port.
         if args.https and "port" not in explicit:
             args.port = 443
         return args
+
+    @staticmethod
+    def _explicit_args(parser, args) -> Set[str]:
+        """Return the dest names the user actually passed.
+
+        Re-parses the command line with every default replaced by a
+        sentinel, so anything still holding the sentinel was not
+        supplied.  This recognizes "--port=8080" as well as
+        "--port 8080", and still counts a value that happens to equal
+        the default.
+        """
+        sentinel = object()
+        parser.set_defaults(
+            **{name: sentinel for name in vars(args)}
+        )
+        return {
+            name
+            for name, value in vars(parser.parse_args()).items()
+            if value is not sentinel
+        }
 
     @staticmethod
     def _token_sort_key(rid) -> int:
@@ -2546,8 +2562,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 )
                 raise SystemExit(1)
             self._confirm_no_server_log(level)
-        explicit = getattr(self.args, "_explicit", set())
-        self._apply_level_defaults(self.args, explicit)
+        self._apply_level_defaults(self.args, self.args.explicit_args)
         self._apply_scale(self.args)
         self.input_validator.validate_agent_name()
         EnvironmentValidator.validate_environment()
