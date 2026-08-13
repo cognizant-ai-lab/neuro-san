@@ -39,10 +39,16 @@ from langgraph.types import Command
 
 from neuro_san.internals.run_context.utils.activation_capsule import ActivationCapsule
 
-# Key under which the list of tool names advertised to the model is recorded
-# on each AIMessage's response_metadata. The stamp travels with the message
-# through agent state and checkpoints, so tool calls can be validated against
-# the exact tool set that was advertised on the model call that produced them.
+# Key under which advertised-tools bookkeeping is recorded in sly_data.
+# The value is a dictionary keyed by a per-middleware-instance namespace,
+# whose values map tool call ids to the list of tool names that were
+# advertised to the model on the call that produced them.
+#
+# This bookkeeping deliberately lives OUTSIDE of langgraph agent state:
+# message-rewriting middleware (summarization, PII redaction, etc.) can
+# rebuild AIMessages and would silently destroy any bookkeeping carried
+# on the messages themselves. sly_data is request-scoped, server-side only,
+# and redacted from clients and external tools by default.
 ADVERTISED_TOOLS_KEY: str = "neuro_san_advertised_tools"
 
 
@@ -58,17 +64,25 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
     Unlike the langchain superclass, this middleware also enforces the selection at
     tool-execution time.  The superclass only narrows the tool list *advertised* to the
     model per call; the agent executor is still built with the full tool list, so a tool
-    call naming a de-selected tool (e.g. a name the model remembered from an earlier turn,
-    or replayed from checkpointed state) would otherwise still execute.  To close that gap:
+    call naming a de-selected tool (e.g. a name the model remembered from an earlier turn)
+    would otherwise still execute.  To close that gap:
 
-    * awrap_model_call() stamps the advertised tool names onto each AIMessage the
-      model produces (in response_metadata).
+    * awrap_model_call() records, per tool call id, the tool names that were advertised
+      to the model on the call that produced it.  The record is kept in sly_data
+      (or a private per-instance dictionary when sly_data is not provided), outside
+      of langgraph agent state, so other middleware that rewrite messages cannot
+      disturb it.
     * awrap_tool_call() rejects any tool call whose name was not among the tools
       advertised on the model call that produced it, returning an error ToolMessage
       instead of executing, so the model can retry.
 
+    Tool calls with no recorded advertisement (e.g. produced by another middleware
+    short-circuiting the model call) are allowed through with a warning, since we
+    cannot know what was advertised for them.
+
     Only the async hooks are overridden, as neuro-san always drives agents through
-    the async path. Synchronous agent invocation would bypass this enforcement.
+    the async path. Synchronous agent invocation raises NotImplementedError from the
+    langchain superclass machinery at the first tool call.
 
     Note that LLM-based tool selection remains a token/latency optimization, not a
     security boundary: the selection model chooses tools based on the (untrusted) last
@@ -83,6 +97,7 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
                 activation_capsule: ActivationCapsule,
                 llm_config: Dict[str, Any],
                 sly_data: Dict[str, Any] = None,
+                origin_str: str = None,
                 system_prompt: str = DEFAULT_SYSTEM_PROMPT,
                 max_tools: int | None = None,
                 always_include: List[str] | None = None,
@@ -95,6 +110,12 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
         :param llm_config: The LLM Config to use to create model instances.
         :param sly_data: A dictionary of private data that can be passed to the model factory creating the LLMs.
                         Not strictly necessary for all cases, but definitely needed for bring-your-own-key scenarios.
+                        Also used to keep the advertised-tools bookkeeping for execution-time enforcement.
+                        When not provided, a private per-instance dictionary is used for that instead.
+        :param origin_str: A string representation of where this middleware sits in the agent network.
+                        Used to namespace the advertised-tools bookkeeping within the sly_data
+                        shared by all agents of the network for the request.
+                        When not provided, a per-instance namespace is used.
 
         ... the rest of the args come from the langchain superclass.
 
@@ -106,6 +127,7 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
         """
 
         self.logger: Logger = getLogger(self.__class__.__name__)
+        self._initialize_advertised_tools(sly_data, origin_str)
 
         if activation_capsule is None:
             raise ValueError("activation_capsule is required")
@@ -134,22 +156,41 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
         # Now subvert the superclass model with our RunnableWithFallbacks.
         self.model = my_model
 
+    def _initialize_advertised_tools(self, sly_data: Dict[str, Any], origin_str: str) -> None:
+        """
+        Set up the advertised-tools bookkeeping used for execution-time enforcement.
+
+        :param sly_data: The private sly_data dictionary for the request, shared by all
+                        agents of the network.  Can be None, in which case a private
+                        per-instance dictionary is used instead.
+        :param origin_str: A string namespacing this middleware instance within the shared
+                        sly_data.  Can be None, in which case a per-instance namespace
+                        is used to avoid tool call id collisions between agents.
+        """
+        holder: Dict[str, Any] = sly_data if sly_data is not None else {}
+        namespace: str = origin_str if origin_str else f"instance-{id(self)}"
+        per_request: Dict[str, Dict[str, List[str]]] = holder.setdefault(ADVERTISED_TOOLS_KEY, {})
+
+        # Maps tool call id -> list of tool names advertised on the model call
+        # that produced that tool call.
+        self.advertised_tools: Dict[str, List[str]] = per_request.setdefault(namespace, {})
+
     async def awrap_model_call(
                 self,
                 request: ModelRequest,
                 handler: Callable[[ModelRequest], Awaitable[ModelResponse]],
             ) -> Union[ModelResponse, AIMessage]:
         """
-        Superclass override which stamps the advertised tool names onto the model output.
+        Superclass override which records the advertised tool names for each tool call.
 
         The superclass narrows request.tools to the selected subset before invoking the
         handler.  We wrap the handler so that whatever tool list actually reached the
-        model gets recorded on the resulting AIMessage(s), for later enforcement in
+        model gets recorded per emitted tool call, for later enforcement in
         awrap_tool_call().
 
         :param request: The ModelRequest to execute
         :param handler: Async callback that executes the (possibly narrowed) model request
-        :return: The model call result, with advertised tool names stamped on it
+        :return: The model call result
         """
         stamping_handler: Callable[[ModelRequest], Awaitable[ModelResponse]] = \
             partial(self._astamping_handler, handler)
@@ -161,12 +202,12 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
                 narrowed_request: ModelRequest,
             ) -> ModelResponse:
         """
-        Model-request handler which stamps advertised tool names onto the model output.
+        Model-request handler which records the advertised tool names for each tool call.
         Bound with the real handler via functools.partial in awrap_model_call().
 
         :param handler: Async callback that executes the model request
         :param narrowed_request: The ModelRequest as narrowed by tool selection
-        :return: The model call result, with advertised tool names stamped on it
+        :return: The model call result
         """
         response: ModelResponse = await handler(narrowed_request)
         self._stamp_advertised_tools(narrowed_request, response)
@@ -196,7 +237,8 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
 
     def _stamp_advertised_tools(self, narrowed_request: ModelRequest, response: Any) -> None:
         """
-        Record the tool names advertised to the model on each AIMessage it produced.
+        Record, per tool call the model emitted, the tool names that were advertised
+        to the model on the call that produced it.
 
         :param narrowed_request: The ModelRequest that was actually executed,
                                  whose tools list is the advertised (selected) tool set.
@@ -217,34 +259,31 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
             messages = [response]
 
         for message in messages:
-            if isinstance(message, AIMessage):
-                message.response_metadata[ADVERTISED_TOOLS_KEY] = advertised
+            if not isinstance(message, AIMessage):
+                continue
+            for tool_call in message.tool_calls or []:
+                self.advertised_tools[tool_call.get("id")] = advertised
 
     def _deny_unadvertised_tool_call(self, request: ToolCallRequest) -> ToolMessage:
         """
         Determine whether a tool call should be denied because its tool was not
         advertised to the model on the call that produced it.
 
-        Tool calls whose originating AIMessage carries no advertised-tools stamp are
-        allowed through: they were produced outside this middleware's model wrapping
-        (e.g. chat history checkpointed before this enforcement existed, or another
-        middleware short-circuiting the model call), and we cannot know what was
-        advertised for them.
+        Tool calls with no recorded advertisement are allowed through: they were
+        produced outside this middleware's model wrapping (e.g. another middleware
+        short-circuiting the model call), and we cannot know what was advertised
+        for them.
 
         :param request: The ToolCallRequest describing the tool call to execute
         :return: An error ToolMessage if the call should be denied, or None to allow it.
         """
         tool_name: str = request.tool_call.get("name")
+        call_id: str = request.tool_call.get("id")
 
-        origin: AIMessage = self._find_origin_message(request)
-        if origin is None:
-            self.logger.warning("Could not attribute tool call for %s to an AIMessage. Allowing.", tool_name)
-            return None
-
-        advertised: List[str] = origin.response_metadata.get(ADVERTISED_TOOLS_KEY)
+        advertised: List[str] = self.advertised_tools.get(call_id)
         if advertised is None:
-            # Unstamped message. See docstring above.
-            self.logger.warning("Tool call for %s came from an unstamped AIMessage. Allowing.", tool_name)
+            # No recorded advertisement for this tool call. See docstring above.
+            self.logger.warning("Tool call for %s has no recorded advertised tools. Allowing.", tool_name)
             return None
 
         if tool_name in advertised:
@@ -254,38 +293,7 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
         return ToolMessage(
             content=f"Error: tool '{tool_name}' was not among the tools selected for this request "
                     "and was not executed. Use one of the available tools instead.",
-            tool_call_id=request.tool_call.get("id"),
+            tool_call_id=call_id,
             name=tool_name,
             status="error",
         )
-
-    @staticmethod
-    def _find_origin_message(request: ToolCallRequest) -> AIMessage:
-        """
-        Find the AIMessage in agent state that produced the given tool call.
-
-        :param request: The ToolCallRequest describing the tool call to execute
-        :return: The AIMessage that emitted this tool call, matched by tool call id
-                 when available, otherwise the most recent AIMessage bearing tool calls.
-                 Returns None if no candidate is found.
-        """
-        state: Any = request.state
-        if isinstance(state, dict):
-            messages: List[Any] = state.get("messages", [])
-        else:
-            messages = getattr(state, "messages", [])
-
-        call_id: str = request.tool_call.get("id")
-
-        fallback: AIMessage = None
-        for message in reversed(messages):
-            if not isinstance(message, AIMessage) or not message.tool_calls:
-                continue
-            if fallback is None:
-                fallback = message
-            if call_id is not None:
-                for tool_call in message.tool_calls:
-                    if tool_call.get("id") == call_id:
-                        return message
-
-        return fallback

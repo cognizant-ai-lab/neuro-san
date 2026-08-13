@@ -17,11 +17,13 @@
 # pylint: disable=protected-access
 from logging import getLogger
 from typing import Any
+from typing import Dict
 from typing import List
 from unittest import IsolatedAsyncioTestCase
 from unittest import TestCase
 
 from langchain.agents import create_agent
+from langchain.agents.middleware import AgentMiddleware
 from langchain.agents.middleware import LLMToolSelectorMiddleware
 from langchain.agents.middleware.types import ModelRequest
 from langchain.agents.middleware.types import ModelResponse
@@ -67,7 +69,28 @@ class FakeSelectionModel(FakeMessagesListChatModel):
         return RunnableLambda(lambda _input: {"tools": list(self.selected)})
 
 
-def build_middleware(selected: List[str]) -> LlmConfigToolSelectorMiddleware:
+class MetadataStrippingMiddleware(AgentMiddleware):
+    """
+    Mimics langchain's PIIMiddleware redaction behavior: after the model runs,
+    the last AIMessage is rebuilt (same id and tool_calls) WITHOUT copying
+    response_metadata, and replaces the original in state by id.
+    """
+
+    async def aafter_model(self, state: Any, runtime: Any) -> Any:
+        """
+        Rebuild the last AIMessage without its response_metadata.
+        """
+        _ = runtime
+        last: Any = state["messages"][-1]
+        if not isinstance(last, AIMessage):
+            return None
+        rebuilt = AIMessage(content=last.content, id=last.id, tool_calls=last.tool_calls)
+        return {"messages": [rebuilt]}
+
+
+def build_middleware(selected: List[str],
+                     sly_data: Dict[str, Any] = None,
+                     origin_str: str = None) -> LlmConfigToolSelectorMiddleware:
     """
     Construct the middleware without an ActivationCapsule/real LLM by initializing
     through the langchain superclass directly with a scripted selection model.
@@ -76,6 +99,7 @@ def build_middleware(selected: List[str]) -> LlmConfigToolSelectorMiddleware:
     selection_model = FakeSelectionModel(responses=[], selected=selected)
     LLMToolSelectorMiddleware.__init__(middleware, model=selection_model)
     middleware.logger = getLogger("test")
+    middleware._initialize_advertised_tools(sly_data, origin_str)
     return middleware
 
 
@@ -85,62 +109,84 @@ def safe_echo(text: str) -> str:
     return text
 
 
+@tool
+def canary() -> str:
+    """A sensitive tool that should not run when de-selected."""
+    return "canary executed"
+
+
 class TestLlmConfigToolSelectorMiddleware(TestCase):
     """
     Unit tests for execution-time enforcement of tool selection.
     """
 
-    def setUp(self):
-        self.canary_ran: bool = False
-
-        @tool
-        def canary() -> str:
-            """A sensitive tool that should not run when de-selected."""
-            self.canary_ran = True
-            return "canary executed"
-
-        self.canary = canary
-
     def test_stamp_advertised_tools(self):
         """
-        awrap_model_call's handler wrapper records the advertised tool names
-        on the AIMessage the model produced.
+        The advertised tool names are recorded per tool call id the model emitted.
         """
         middleware = build_middleware(selected=["safe_echo"])
         request = ModelRequest(
             model=ToolCallingFakeModel(responses=[]),
             messages=[HumanMessage("hi")],
-            tools=[safe_echo, self.canary],
+            tools=[safe_echo, canary],
+        )
+        response = ModelResponse(result=[
+            AIMessage(
+                content="",
+                tool_calls=[{"name": "canary", "args": {}, "id": "call_1", "type": "tool_call"}],
+            ),
+        ])
+
+        middleware._stamp_advertised_tools(request, response)
+
+        self.assertEqual(middleware.advertised_tools, {"call_1": ["safe_echo", "canary"]})
+
+    def test_stamp_records_nothing_without_tool_calls(self):
+        """
+        AIMessages without tool calls leave no bookkeeping behind.
+        """
+        middleware = build_middleware(selected=["safe_echo"])
+        request = ModelRequest(
+            model=ToolCallingFakeModel(responses=[]),
+            messages=[HumanMessage("hi")],
+            tools=[safe_echo],
         )
         response = ModelResponse(result=[AIMessage("hello")])
 
         middleware._stamp_advertised_tools(request, response)
 
-        self.assertEqual(response.result[0].response_metadata[ADVERTISED_TOOLS_KEY],
-                         ["safe_echo", "canary"])
+        self.assertEqual(middleware.advertised_tools, {})
 
-    def _tool_call_request(self, messages: List[Any], name: str, call_id: str) -> ToolCallRequest:
+    def test_stamp_uses_shared_sly_data(self):
         """
-        Helper to build a ToolCallRequest with the given state messages.
+        When sly_data and origin_str are provided, the bookkeeping lives in the
+        shared sly_data dictionary under the middleware's namespace.
+        """
+        sly_data: Dict[str, Any] = {}
+        middleware = build_middleware(selected=["safe_echo"], sly_data=sly_data, origin_str="network.agent")
+
+        middleware.advertised_tools["call_1"] = ["safe_echo"]
+
+        self.assertEqual(sly_data, {ADVERTISED_TOOLS_KEY: {"network.agent": {"call_1": ["safe_echo"]}}})
+
+    def _tool_call_request(self, name: str, call_id: str) -> ToolCallRequest:
+        """
+        Helper to build a ToolCallRequest for the given tool call.
         """
         return ToolCallRequest(
             tool_call={"name": name, "args": {}, "id": call_id, "type": "tool_call"},
             tool=None,
-            state={"messages": messages},
+            state={"messages": []},
             runtime=None,
         )
 
     def test_deny_unadvertised_tool_call(self):
         """
-        A tool call whose origin AIMessage was stamped without the tool's name is denied.
+        A tool call whose recorded advertisement omits the tool's name is denied.
         """
         middleware = build_middleware(selected=["safe_echo"])
-        origin = AIMessage(
-            content="",
-            tool_calls=[{"name": "canary", "args": {}, "id": "call_1", "type": "tool_call"}],
-            response_metadata={ADVERTISED_TOOLS_KEY: ["safe_echo"]},
-        )
-        request = self._tool_call_request([origin], name="canary", call_id="call_1")
+        middleware.advertised_tools["call_1"] = ["safe_echo"]
+        request = self._tool_call_request(name="canary", call_id="call_1")
 
         denial = middleware._deny_unadvertised_tool_call(request)
 
@@ -153,78 +199,97 @@ class TestLlmConfigToolSelectorMiddleware(TestCase):
         A tool call whose name was advertised on its originating model call is allowed.
         """
         middleware = build_middleware(selected=["safe_echo"])
-        origin = AIMessage(
-            content="",
-            tool_calls=[{"name": "safe_echo", "args": {"text": "x"}, "id": "call_1", "type": "tool_call"}],
-            response_metadata={ADVERTISED_TOOLS_KEY: ["safe_echo"]},
-        )
-        request = self._tool_call_request([origin], name="safe_echo", call_id="call_1")
+        middleware.advertised_tools["call_1"] = ["safe_echo"]
+        request = self._tool_call_request(name="safe_echo", call_id="call_1")
 
         self.assertIsNone(middleware._deny_unadvertised_tool_call(request))
 
-    def test_allow_unstamped_tool_call(self):
+    def test_allow_unrecorded_tool_call(self):
         """
-        Tool calls from AIMessages without a stamp (e.g. pre-upgrade checkpointed
-        history) are allowed for backward compatibility.
+        Tool calls with no recorded advertisement (e.g. produced by another middleware
+        short-circuiting the model call) are allowed for backward compatibility.
         """
         middleware = build_middleware(selected=["safe_echo"])
-        origin = AIMessage(
-            content="",
-            tool_calls=[{"name": "canary", "args": {}, "id": "call_1", "type": "tool_call"}],
-        )
-        request = self._tool_call_request([origin], name="canary", call_id="call_1")
+        request = self._tool_call_request(name="canary", call_id="call_1")
 
         self.assertIsNone(middleware._deny_unadvertised_tool_call(request))
 
 
 class TestLlmConfigToolSelectorMiddlewareAsync(IsolatedAsyncioTestCase):
     """
-    End-to-end enforcement test through the async path
+    End-to-end enforcement tests through the async path
     (awrap_model_call/awrap_tool_call), which is how neuro-san invokes agents.
     """
 
-    async def test_deselected_tool_does_not_execute_in_agent_async(self):
-        """
-        End-to-end through create_agent: the selection model selects only safe_echo,
-        the (scripted) main model nonetheless emits a tool call for the de-selected
-        canary tool, and the executor must not run it.
-
-        This is the advertise-only desync from GHSA-3xg4-wfwr-gc2g Finding 1:
-        without enforcement, the executor runs every configured tool regardless
-        of what the selector advertised.
-        """
-        canary_ran: List[bool] = []
+    def setUp(self):
+        self.canary_ran: List[bool] = []
 
         @tool
-        def canary() -> str:
+        def counting_canary() -> str:
             """A sensitive tool that should not run when de-selected."""
-            canary_ran.append(True)
+            self.canary_ran.append(True)
             return "canary executed"
 
-        middleware = build_middleware(selected=["safe_echo"])
-        main_model = ToolCallingFakeModel(responses=[
+        self.counting_canary = counting_canary
+
+        self.main_model = ToolCallingFakeModel(responses=[
             AIMessage(
                 content="",
-                tool_calls=[{"name": "canary", "args": {}, "id": "call_1", "type": "tool_call"}],
+                tool_calls=[{"name": "counting_canary", "args": {}, "id": "call_1", "type": "tool_call"}],
             ),
             AIMessage(content="done"),
         ])
-        agent = create_agent(
-            model=main_model,
-            tools=[safe_echo, canary],
-            middleware=[middleware],
-        )
 
-        result = await agent.ainvoke({"messages": [HumanMessage("please run the canary tool")]})
-
-        self.assertEqual(canary_ran, [], "De-selected tool must not execute")
+    def assert_canary_denied(self, result: Dict[str, Any]):
+        """
+        Assert the de-selected tool did not run and the model got the error ToolMessage.
+        """
+        self.assertEqual(self.canary_ran, [], "De-selected tool must not execute")
 
         tool_messages = [message for message in result["messages"] if isinstance(message, ToolMessage)]
         self.assertEqual(len(tool_messages), 1)
         self.assertEqual(tool_messages[0].status, "error")
         self.assertIn("was not among the tools selected", tool_messages[0].content)
 
-        # The AIMessage that emitted the tool call carries the advertisement stamp.
-        stamped = [message for message in result["messages"]
-                   if isinstance(message, AIMessage) and message.tool_calls]
-        self.assertEqual(stamped[0].response_metadata.get(ADVERTISED_TOOLS_KEY), ["safe_echo"])
+    async def test_deselected_tool_does_not_execute_in_agent(self):
+        """
+        End-to-end through create_agent: the selection model selects only safe_echo,
+        the (scripted) main model nonetheless emits a tool call for the de-selected
+        counting_canary tool, and the executor must not run it.
+
+        This is the advertise-only desync from GHSA-3xg4-wfwr-gc2g Finding 1:
+        without enforcement, the executor runs every configured tool regardless
+        of what the selector advertised.
+        """
+        sly_data: Dict[str, Any] = {}
+        middleware = build_middleware(selected=["safe_echo"], sly_data=sly_data, origin_str="test.agent")
+        agent = create_agent(
+            model=self.main_model,
+            tools=[safe_echo, self.counting_canary],
+            middleware=[middleware],
+        )
+
+        result = await agent.ainvoke({"messages": [HumanMessage("please run the canary tool")]})
+
+        self.assert_canary_denied(result)
+
+        # The bookkeeping for the tool call lives in the shared sly_data.
+        self.assertEqual(sly_data[ADVERTISED_TOOLS_KEY]["test.agent"], {"call_1": ["safe_echo"]})
+
+    async def test_enforcement_survives_message_rewriting_middleware(self):
+        """
+        Regression test: middleware that rebuild the tool-calling AIMessage without
+        copying response_metadata (langchain's PIIMiddleware redaction does exactly
+        this) must not disable enforcement.  The bookkeeping lives in sly_data,
+        outside of langgraph agent state, so message rewriting cannot disturb it.
+        """
+        middleware = build_middleware(selected=["safe_echo"])
+        agent = create_agent(
+            model=self.main_model,
+            tools=[safe_echo, self.counting_canary],
+            middleware=[middleware, MetadataStrippingMiddleware()],
+        )
+
+        result = await agent.ainvoke({"messages": [HumanMessage("please run the canary tool")]})
+
+        self.assert_canary_denied(result)

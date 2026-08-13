@@ -1210,6 +1210,11 @@ and time costs for agents with many tools.
 The neuro-san implementation also enforces its selection at tool-execution time: a tool call naming
 a tool that was not among those advertised on the model call that produced it is rejected with an
 error message instead of being executed, and the model may then retry with an available tool.
+The bookkeeping for this enforcement is kept server-side, outside of the agent's message state,
+so other middleware that rewrite messages (summarization, PII redaction, etc.) cannot disturb it.
+Passing the [sly_data](#sly_data) and [origin_str](#origin_str) special args to the middleware is
+recommended: it makes the bookkeeping observable in sly_data (namespaced per agent), and sly_data
+is additionally needed for bring-your-own-key scenarios.
 
 Note that LLM-based tool selection is a token/latency optimization, **not** a security boundary.
 The selection is driven by the (possibly untrusted) last user message, so it can be steered toward
