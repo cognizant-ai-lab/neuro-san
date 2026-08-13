@@ -303,15 +303,18 @@ HTTP, so keys are only needed on the server side.
 
 ## Output
 
-Results go to `{tempdir}/load_test/{level}/{timestamp}_{requests}/` by
-default (where `{tempdir}` is the system temp directory, e.g. `/tmp` on
-Linux), or to the path specified by `--output-dir`. The request count is
-appended to the directory name for quick identification:
+Results go to `{tempdir}/load_test_{user}/{level}/{timestamp}_{requests}/`
+by default (where `{tempdir}` is the system temp directory, e.g. `/tmp` on
+Linux), or to the path specified by `--output-dir`. The base directory is
+per-user because the temp directory is shared: a fixed `load_test` would
+belong to whoever ran first, and everyone else would get
+`PermissionError`. The request count is appended to the directory name
+for quick identification:
 
 ```
-/tmp/load_test/adv/20260622_151428_50/
-/tmp/load_test/adv/20260622_151531_100/
-/tmp/load_test/adv/20260622_151648_150/
+/tmp/load_test_alice/adv/20260622_151428_50/
+/tmp/load_test_alice/adv/20260622_151531_100/
+/tmp/load_test_alice/adv/20260622_151648_150/
 ```
 
 At `adv` level this includes:
@@ -435,7 +438,7 @@ Use `--compare` to scan a directory of previous runs and print a
 side-by-side comparison table:
 
 ```bash
-python -m tests.load_tests.load_test_cli --compare /tmp/load_test/adv/
+python -m tests.load_tests.load_test_cli --compare /tmp/load_test_alice/adv/
 ```
 
 Output:
@@ -460,13 +463,13 @@ Use `--trend` to see repeated runs in the order they happened, which is
 how a slowdown between neuro-san versions becomes visible:
 
 ```bash
-python -m tests.load_tests.load_test_cli --trend /tmp/load_test/adv/history.jsonl
+python -m tests.load_tests.load_test_cli --trend /tmp/load_test_alice/adv/history.jsonl
 ```
 
 Output:
 
 ```text
-TREND HISTORY (/tmp/load_test/adv/history.jsonl, 3 run(s))
+TREND HISTORY (/tmp/load_test_alice/adv/history.jsonl, 3 run(s))
        timestamp  neuro-san        agent    mode   via  reqs  done  <70s  <300s  ttfr    avg    wall  err  warn
 ---------------------------------------------------------------------------------------------------------------
 2026-07-20 14:02     0.5.51  hello_world  client  http   200   200   181    200  2.1s  41.2s  612.0s    0     0

@@ -21,6 +21,7 @@ See tests/load_tests/README.md for prerequisites, test levels, and
 usage examples.
 """
 
+import getpass
 import gzip
 import importlib.metadata as _pkg_meta
 import json
@@ -921,12 +922,29 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             tool_warnings, network_tokens, validation_events,
         )
 
+    def _output_base(self) -> str:
+        """Return the base output directory.
+
+        The default is per-user because the temp directory is shared:
+        whoever ran first would otherwise own ``load_test`` and lock
+        everyone else out of it.
+        """
+        if self.args.output_dir:
+            return self.args.output_dir
+        try:
+            user = getpass.getuser()
+        except (KeyError, OSError):
+            # No passwd entry for this uid (some containers).
+            user = str(os.getuid())
+        user = re.sub(r"[^A-Za-z0-9._-]", "_", user)
+        return os.path.join(
+            tempfile.gettempdir(), f"load_test_{user}",
+        )
+
     def _setup_test_log(self) -> None:
         """Create output directory and add a file handler for logging."""
         timestamp = time.strftime("%Y%m%d_%H%M%S")
-        base = self.args.output_dir or os.path.join(
-            tempfile.gettempdir(), "load_test",
-        )
+        base = self._output_base()
         folder_name = self._run_folder_name(
             timestamp, self.args.num_requests,
         )
@@ -1400,9 +1418,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     ) -> str:
         """Create an output directory for a server-only round."""
         timestamp = time.strftime("%Y%m%d_%H%M%S")
-        base = self.args.output_dir or os.path.join(
-            tempfile.gettempdir(), "load_test",
-        )
+        base = self._output_base()
         folder_name = self._run_folder_name(timestamp, expected)
         round_dir = os.path.join(
             base, "server_only", folder_name,
@@ -2447,9 +2463,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 return self.args.history_file
             root, ext = os.path.splitext(self.args.history_file)
             return f"{root}_unknown{ext or '.jsonl'}"
-        base = self.args.output_dir or os.path.join(
-            tempfile.gettempdir(), "load_test",
-        )
+        base = self._output_base()
         name = (
             HISTORY_FILE_NAME if successful
             else HISTORY_UNKNOWN_FILE_NAME

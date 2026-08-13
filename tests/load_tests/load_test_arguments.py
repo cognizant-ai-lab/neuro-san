@@ -345,7 +345,9 @@ class LoadTestArguments:
             type=str,
             default=None,
             help="Base directory for test output. Defaults to "
-                 "/tmp/load_test/{level}/{timestamp}.",
+                 "/tmp/load_test_{user}/{level}/{timestamp}, which is "
+                 "per-user so a shared temp directory cannot be owned "
+                 "by whoever ran first.",
         )
         parser.add_argument(
             "--history-file",
