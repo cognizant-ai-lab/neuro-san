@@ -48,13 +48,12 @@ import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
-from typing import Dict
 from typing import List
-from typing import Optional
 from typing import Tuple
 
 import psutil
+
+from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
@@ -186,46 +185,6 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             help="Mock LLM server port (default: 8888). Used with --auto-start.",
         )
         return parser.parse_args()
-
-    @staticmethod
-    def _find_process(keyword):
-        """Find a running process whose command line contains the given keyword."""
-        for proc in psutil.process_iter(["pid", "cmdline"]):
-            try:
-                cmdline = " ".join(proc.info.get("cmdline") or [])
-                if keyword in cmdline:
-                    return psutil.Process(proc.info.get("pid"))
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                continue
-        return None
-
-    @staticmethod
-    def _snapshot(proc) -> Optional[Dict[str, Any]]:
-        """Capture a point-in-time resource snapshot of a process."""
-        try:
-            mem = proc.memory_info()
-            return {
-                "rss": mem.rss / 1024 / 1024,
-                "fds": proc.num_fds(),
-                "threads": proc.num_threads(),
-                "connections": len(proc.net_connections()),
-                "children": len(proc.children()),
-                "cpu": proc.cpu_percent(interval=0.1),
-            }
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            return None
-
-    @staticmethod
-    def _log_snapshot(label, snap):
-        """Log a single resource snapshot."""
-        if snap is None:
-            logger.info("  %s: process not found", label)
-            return
-        logger.info(
-            "  %s: RSS=%.1f MB, FDs=%s, Threads=%s, Conns=%s, CPU=%.1f%%, Children=%s",
-            label, snap.get("rss"), snap.get("fds"), snap.get("threads"),
-            snap.get("connections"), snap.get("cpu"), snap.get("children"),
-        )
 
     def _build_cli_command(self):
         """
@@ -385,8 +344,8 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         Exits with an error if either is not found.
         Also validates the server's OPENAI_API_BASE matches the mock port.
         """
-        self.server_proc = self._find_process("server_main_loop")
-        self.mock_proc = self._find_process("mock_llm_server")
+        self.server_proc = ResourceMonitor.find_process("server_main_loop")
+        self.mock_proc = ResourceMonitor.find_process("mock_llm_server")
 
         if self.server_proc is None:
             logger.error(
@@ -526,10 +485,10 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             )
             logger.info("=" * 60)
 
-            before_server = self._snapshot(self.server_proc) if self.server_proc else None
-            before_mock = self._snapshot(self.mock_proc) if self.mock_proc else None
+            before_server = ResourceMonitor.snapshot(self.server_proc)
+            before_mock = ResourceMonitor.snapshot(self.mock_proc)
             if before_server:
-                self._log_snapshot("Server BEFORE", before_server)
+                ResourceMonitor.log_snapshot("Server BEFORE", before_server)
 
             logger.info(
                 "\nFiring %s concurrent requests with %s workers...",
@@ -545,10 +504,10 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             logger.info("\nWaiting %ss for server cleanup...", self.args.settle_time)
             time.sleep(self.args.settle_time)
 
-            after_server = self._snapshot(self.server_proc) if self.server_proc else None
-            after_mock = self._snapshot(self.mock_proc) if self.mock_proc else None
+            after_server = ResourceMonitor.snapshot(self.server_proc)
+            after_mock = ResourceMonitor.snapshot(self.mock_proc)
             if after_server:
-                self._log_snapshot("Server AFTER", after_server)
+                ResourceMonitor.log_snapshot("Server AFTER", after_server)
 
             if before_server and after_server:
                 server_rows.append(
