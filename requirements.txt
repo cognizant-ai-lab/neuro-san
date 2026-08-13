@@ -7,7 +7,6 @@
 
 # In-house dependencies
 leaf-common>=1.2.53
-leaf-server-common>=0.1.25
 
 # Downgraded secondary dependencies for error-free pip installs
 pyhocon>=0.3.60
