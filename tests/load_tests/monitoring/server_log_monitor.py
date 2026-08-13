@@ -28,11 +28,12 @@ import sys
 import threading
 import time
 
-import psutil
 from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
+
+import psutil
 
 from tests.load_tests.config import CLIENT_DISCONNECT_PATTERN
 from tests.load_tests.config import DONE_STREAMING_PATTERN

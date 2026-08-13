@@ -94,9 +94,8 @@ class LoadTestArguments:
             type=int,
             default=3,
             help="Max concurrent workers in flat mode "
-                 "(default: 3). At adv level with --no-dry-run, "
-                 "auto-matches --num-requests unless "
-                 "explicitly set. "
+                 "(default: 3). Use --full-concurrency to match "
+                 "--num-requests instead. "
                  "Ignored when --ramp is used.",
         )
         parser.add_argument(
@@ -214,8 +213,17 @@ class LoadTestArguments:
             help="Skip the dry-run probe, which otherwise fires one "
                  "real request first and asks you to confirm the "
                  "estimated cost (it runs by default at min/norm; adv "
-                 "skips it already). Also auto-matches --max-workers "
-                 "to --num-requests at adv level.",
+                 "skips it already).",
+        )
+        parser.add_argument(
+            "--full-concurrency",
+            action="store_true",
+            default=False,
+            help="Fire every request at once by matching "
+                 "--max-workers to --num-requests, instead of the "
+                 "conservative default of 3 workers. An explicit "
+                 "--max-workers wins, and --ramp ignores this since "
+                 "its stages set their own concurrency.",
         )
         parser.add_argument(
             "--server-log",

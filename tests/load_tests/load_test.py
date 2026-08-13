@@ -1154,9 +1154,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         Only applies when the user did not explicitly set the flag.
         adv: 50 requests, 3 rounds (stress test).
 
-        At adv level with --no-dry-run, workers auto-match
-        num-requests (power user mode).  Otherwise workers default to 3
-        (conservative) and a warning is shown if
+        --full-concurrency matches workers to num-requests so every
+        request fires at once.  Otherwise workers stay at the
+        conservative default of 3 and a warning is shown if
         max-workers < num-requests.
         """
         if args.level == LEVEL_ADV:
@@ -1166,8 +1166,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 args.num_rounds = 3
 
         if ("max_workers" not in explicit_args
-                and args.no_dry_run
-                and args.level == LEVEL_ADV):
+                and args.full_concurrency):
             args.max_workers = args.num_requests
 
     @staticmethod
@@ -1395,7 +1394,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             )
 
     def _setup_round_output_dir(
-            self, expected, round_num,
+            self, expected,
     ) -> str:
         """Create an output directory for a server-only round."""
         timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -1419,9 +1418,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         handler so each server-only round captures its own console
         output (heartbeats + summary) in its output directory.
         """
-        round_dir = self._setup_round_output_dir(
-            expected, round_num,
-        )
+        round_dir = self._setup_round_output_dir(expected)
         log_pos = self.log_monitor.read_position()
         round_log_path = os.path.join(round_dir, "stdout.log")
         round_handler = logging.FileHandler(
@@ -1504,7 +1501,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "cpu_pct": before_sys_cpu,
             "threads": before_sys_threads,
         }
-        before_kernel = self._read_kernel_memory()
 
         logger.info(
             "\nWaiting for %d request(s) in server"
@@ -1587,7 +1583,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 after_server.get("rss", 0)
             )
         kernel_breakdown = self._log_kernel_breakdown(
-            before_kernel, after_kernel,
+            after_kernel,
             peak_rss_for_breakdown,
             log=False,
         )
@@ -1809,23 +1805,23 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                             cur_threads = snap.get(
                                 "threads", 0,
                             )
-                            if cur_threads > peak_threads:
-                                peak_threads = cur_threads
+                            peak_threads = max(
+                                peak_threads, cur_threads,
+                            )
                         cur_mem = (
                             psutil.virtual_memory()
                         )
-                        if (cur_mem.percent
-                                > peak_sys_mem_pct):
-                            peak_sys_mem_pct = (
-                                cur_mem.percent
-                            )
+                        peak_sys_mem_pct = max(
+                            peak_sys_mem_pct, cur_mem.percent,
+                        )
                         cur_sys_cpu = psutil.cpu_percent(
                             interval=None,
                         )
                         sys_cpu_sum += cur_sys_cpu
                         sys_cpu_n += 1
-                        if cur_sys_cpu > peak_sys_cpu:
-                            peak_sys_cpu = cur_sys_cpu
+                        peak_sys_cpu = max(
+                            peak_sys_cpu, cur_sys_cpu,
+                        )
                         peak_sys_threads = max(
                             peak_sys_threads,
                             SystemResources.total_threads(),
@@ -2009,10 +2005,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
 
     @staticmethod
     def _log_kernel_breakdown(
-            before_kernel, after_kernel, server_rss_peak,
+            after_kernel, server_rss_peak,
             *, log=True,
     ) -> Dict[str, float]:
-        """Compute the kernel memory breakdown (delta).
+        """Compute the kernel memory breakdown.
 
         When ``log`` is False the values are still returned for JSON
         export but nothing is printed to the console.
@@ -2541,8 +2537,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
         if not durations:
             return
-        parts = " / ".join(
-            "p%s %s" % (
+        milestones = [
+            (
                 pct,
                 Formatters.fmt_duration(
                     # pylint: disable=protected-access
@@ -2551,6 +2547,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 ),
             )
             for pct in COMPLETION_MILESTONES
+        ]
+        parts = " / ".join(
+            f"p{pct} {value}" for pct, value in milestones
         )
         logger.info(
             "\n  Server-side completion percentiles"

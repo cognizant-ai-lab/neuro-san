@@ -107,19 +107,16 @@ unaffected by the filter. A `--client-only` run against a remote host
 has no server log to fall back on: with `--minimal` it reports no
 tokens at all.
 
-**`adv` level defaults:** 50 requests, 3 rounds (150 total requests).
-With `--no-dry-run`, workers auto-match to 50 (full concurrency). Without
-`--no-dry-run`, workers default to 3 with a warning. These are applied
-automatically unless overridden with `--num-requests`, `--max-workers`,
-or `--num-rounds`.
+**`adv` level defaults:** 50 requests, 3 rounds (150 total requests),
+applied automatically unless overridden with `--num-requests`,
+`--max-workers`, or `--num-rounds`.
 
-**`--max-workers` auto-matching:** At adv level with `--no-dry-run` (power
-user mode), `--max-workers` auto-matches `--num-requests` so all
-requests fire concurrently. At other levels or without `--no-dry-run`,
-`--max-workers` defaults to 3 (conservative). A warning is shown
-during the cost confirmation on all levels if
-`max-workers < num-requests`. Explicit `--max-workers` is always
-respected regardless of `--no-dry-run`.
+**`--max-workers` auto-matching:** `--full-concurrency` matches
+`--max-workers` to `--num-requests` so all requests fire at once, at any
+level. Otherwise `--max-workers` stays at its conservative default of 3
+and a warning is shown during the cost confirmation if
+`max-workers < num-requests`. An explicit `--max-workers` always wins,
+and `--ramp` ignores both since its stages set their own concurrency.
 
 At `norm`/`adv`, server-log analysis is expected: it is auto-detected
 for a local server. If a local log isn't found you're prompted to
@@ -132,7 +129,7 @@ analysis is always off.
 ## Traffic Modes
 
 **Flat** (default): `--num-requests 10` — fixed concurrency.
-`--max-workers` defaults to 3; at adv level with `--no-dry-run` it auto-matches
+`--max-workers` defaults to 3; `--full-concurrency` matches it to
 `--num-requests`. Set `--max-workers` explicitly to control concurrency:
 `--num-requests 100 --max-workers 10` fires 100 requests, 10 at a time.
 Flat mode output labels each iteration as a "round" (no stage numbers).
@@ -155,7 +152,7 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--host`                   | localhost   | Neuro-san server host                        |
 | `--port`                   | 8080        | Neuro-san server port                        |
 | `--num-requests`           | 3           | Requests per round in flat mode              |
-| `--max-workers`            | 3             | Concurrent workers in flat mode. At adv + `--no-dry-run`, auto-matches `--num-requests` |
+| `--max-workers`            | 3             | Concurrent workers in flat mode. See `--full-concurrency` to match `--num-requests` |
 | `--ramp`                   | off         | Enable ramp-up mode                          |
 | `--stages`                 | 10,30,50,100| Concurrency per stage in ramp mode           |
 | `--num-rounds`             | 1           | Repeat the full sequence N times             |
@@ -166,7 +163,8 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--total-timeout`          | 0 (disabled)| Hard timeout for entire load test. Accepts seconds or an `s`/`m`/`h` suffix. Kills run when exceeded |
 | `--settle-time`            | 15 (15s)    | Wait after each stage for server cleanup. Accepts seconds or an `s`/`m`/`h` suffix |
 | `--same-prompt`            | off         | Use identical prompt for all requests        |
-| `--no-dry-run`             | off         | Skip the dry-run probe + cost confirmation (which run by default at min/norm; adv skips them already). At adv, also auto-matches `--max-workers` to `--num-requests` |
+| `--no-dry-run`             | off         | Skip the dry-run probe + cost confirmation (which run by default at min/norm; adv skips them already) |
+| `--full-concurrency`       | off         | Match `--max-workers` to `--num-requests` so all fire at once |
 | `--scale`                  | 1           | Multiply `--num-requests`, `--max-workers`, `--request-timeout`, `--idle-timeout`, `--stage-timeout`, `--total-timeout` by this factor. `--max-requests` auto-adjusts. |
 | `--skip-reservation-check` | off         | Skip reservation_id validation               |
 | `--output-dir`             | (none)      | Base directory for test output               |
@@ -231,8 +229,7 @@ numbered warnings (if any), and asks the user to confirm. Pass `--no-dry-run`
 to bypass the probe and confirmation.
 
 **adv (default):** No dry-run probe — adv is treated as an explicit
-stress test, so it shows the summary and runs immediately. (`--no-dry-run`
-additionally auto-matches `--max-workers` to `--num-requests`.)
+stress test, so it shows the summary and runs immediately.
 
 ```
 ============================================================
@@ -518,9 +515,9 @@ This framework follows three review playbooks:
   signed delta formatting (no more `+-3.0M`), Windows compatibility
   fallbacks (`num_fds`/`select.select`/closed-pipe guards/temp dir),
   clean error on invalid `--stages`, `ServerCounts` partial TypedDict,
-  auto-resolve profile from agent name, `--max-workers` auto-matches
-  `--num-requests` at adv + `--no-dry-run`, `adv` level defaults (50×3),
-  `--no-dry-run` restricted to adv level, flat mode hides stage labels and
+  auto-resolve profile from agent name, `--full-concurrency` matches
+  `--max-workers` to `--num-requests`, `adv` level defaults (50×3),
+  flat mode hides stage labels and
   uses round-based output, PRE-RUN SUMMARY with numbered warnings
   and estimated stage duration.
 
