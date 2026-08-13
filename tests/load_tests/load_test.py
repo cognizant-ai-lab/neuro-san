@@ -333,13 +333,21 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             probe_result=probe_result,
         )
 
+        # If a dry-run probe ran, inject it into stage 1.  The probe
+        # fired before log_pos was captured, so only stage_requests of
+        # them appear in the server log from here on.
+        stage_requests = actual_requests
+        probe_used = probe_result is not None
+        if probe_used:
+            stage_requests = max(actual_requests - 1, 0)
+
         stop_event = None
         monitor = None
         if has_server_log:
             stop_event, monitor, _peak = (
                 self.log_monitor.start_log_monitor(
                     log_pos,
-                    actual_requests, time.time(),
+                    stage_requests, time.time(),
                     client_proc=client_proc,
                     primary_start_pattern=(
                         self.profile.primary_start_pattern
@@ -347,12 +355,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     output_dir=self._output_dir,
                 )
             )
-
-        # If a dry-run probe ran, inject it into stage 1
-        stage_requests = actual_requests
-        probe_used = probe_result is not None
-        if probe_used:
-            stage_requests = max(actual_requests - 1, 0)
 
         sys_before = SystemResources.snapshot()
         before_sys_mem_pct = sys_before["mem_pct"]
