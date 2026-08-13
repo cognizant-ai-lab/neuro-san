@@ -1,4 +1,3 @@
-
 # Copyright © 2023-2026 Cognizant Technology Solutions Corp, www.cognizant.com.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,20 +14,33 @@
 #
 # END COPYRIGHT
 
-# Error: "str" is neither a HOCON-native type name nor a standard
-# JSON Schema alias in TYPE_LOOKUP. Caught by pydantic conversion.
-# (Standard JSON Schema names like "integer" and "number" are accepted
-# via TYPE_LOOKUP aliases and are covered by json_schema_type_aliases.hocon.)
-# Expected result: 1 error mentioning "pydantic model conversion failed".
+# Error: parameter names that pydantic v2 cannot accept as field names.
+# "model_config" is reserved by pydantic for model configuration and
+# "_private" has a leading underscore.  Pydantic v1 tolerated both;
+# BaseModelDictionaryConverter.validate_field_name() rejects them with
+# a clear ToolSpecError instead of pydantic v2's cryptic TypeError/NameError.
+# Expected result: 2 errors mentioning "pydantic model conversion failed".
 {
     "tools": [
         {
-            "name": "agent_e",
+            "name": "agent_f",
             "function": {
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "count": {"type": "str"}
+                        "model_config": {"type": "string"}
+                    }
+                }
+            },
+            "instructions": "test"
+        },
+        {
+            "name": "agent_g",
+            "function": {
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "_private": {"type": "string"}
                     }
                 }
             },

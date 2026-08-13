@@ -10,6 +10,11 @@ langchain-aws[anthropic]>=1.0.0,<2.0
 langchain-google-genai>=4.1.2,<5.0
 langchain-nvidia-ai-endpoints>=1.0.0,<2.0
 langchain-ollama>=1.0.0,<2.0
+# langchain-openrouter depends on the openrouter SDK, which pins pydantic<2.13
+# (as of openrouter 1.1.47). That pin is what keeps requirements.txt's pydantic
+# floor below 2.13 (see the "Python 3.14 note" there) and is why pip resolves
+# pydantic to 2.12.x when installing both requirements files together.
+# Revisit both comments when openrouter lifts its cap.
 langchain-openrouter>=0.2.3,<1.0
 
 # Optional ReservationsStorage
