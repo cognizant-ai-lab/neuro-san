@@ -108,8 +108,8 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
                 *,
                 activation_capsule: ActivationCapsule,
                 llm_config: Dict[str, Any],
-                sly_data: Dict[str, Any] = None,
-                origin_str: str = None,
+                sly_data: Optional[Dict[str, Any]] = None,
+                origin_str: Optional[str] = None,
                 unadvertised_policy: str = "allow",
                 system_prompt: str = DEFAULT_SYSTEM_PROMPT,
                 max_tools: int | None = None,
@@ -175,7 +175,7 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
         # Now subvert the superclass model with our RunnableWithFallbacks.
         self.model = my_model
 
-    def _initialize_enforcement(self, sly_data: Dict[str, Any], origin_str: str,
+    def _initialize_enforcement(self, sly_data: Optional[Dict[str, Any]], origin_str: Optional[str],
                                 unadvertised_policy: str) -> None:
         """
         Set up the advertised-tools bookkeeping and policy used for execution-time enforcement.

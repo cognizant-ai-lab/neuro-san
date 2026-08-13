@@ -90,8 +90,8 @@ class MetadataStrippingMiddleware(AgentMiddleware):
 
 
 def build_middleware(selected: List[str],
-                     sly_data: Dict[str, Any] = None,
-                     origin_str: str = None,
+                     sly_data: Optional[Dict[str, Any]] = None,
+                     origin_str: Optional[str] = None,
                      unadvertised_policy: str = "allow") -> LlmConfigToolSelectorMiddleware:
     """
     Construct the middleware without an ActivationCapsule/real LLM by initializing
