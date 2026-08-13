@@ -24,8 +24,8 @@
 #      third-party dependency publishes cp314t wheels yet, so some must be
 #      compiled from source for the free-threaded ABI.
 #
-# All Python dependencies -- including the in-house leaf-common and
-# leaf-server-common -- are installed from requirements.txt (i.e. from PyPI),
+# All Python dependencies -- including the in-house leaf-common
+# -- are installed from requirements.txt (i.e. from PyPI),
 # exactly like ./Dockerfile.
 #
 # WHY NOT `FROM python:3.14t-slim`?
@@ -166,7 +166,7 @@ ENV PATH="${VENV_DIR}/bin:${PATH}"
 
 # ---------------------------------------------------------------------------
 # neuro-san runtime dependencies, installed straight from requirements.txt.
-# leaf-common and leaf-server-common come from PyPI like everything else.
+# leaf-common comes from PyPI like everything else.
 # ---------------------------------------------------------------------------
 COPY requirements.txt /build/requirements.txt
 
@@ -184,7 +184,7 @@ COPY requirements.txt /build/requirements.txt
 ENV ORJSON_BUILD_FREETHREADED=1
 
 RUN uv pip install -r /build/requirements.txt \
-    && python -c "import leaf_common, leaf_server_common; print('leaf imports OK')"
+    && python -c "import leaf_common; print('leaf imports OK')"
 
 # ===========================================================================
 # Stage 2: Final - slim runtime image carrying the 3.14t venv
