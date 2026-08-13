@@ -314,9 +314,31 @@ class TestLlmConfigToolSelectorMiddlewareAsync(IsolatedAsyncioTestCase):
         # The bookkeeping for the tool call lives in the shared sly_data.
         self.assertEqual(sly_data[ADVERTISED_TOOLS_KEY]["test.agent"], {"call_1": ["safe_echo"]})
 
+    async def test_bookkeeping_cleaned_after_execution(self):
+        """
+        An allowed tool call's bookkeeping entry is removed once it has executed,
+        so the map does not grow over long requests.
+        """
+        middleware = build_middleware(selected=["safe_echo"])
+        middleware.advertised_tools["call_1"] = ["safe_echo"]
+        request = ToolCallRequest(
+            tool_call={"name": "safe_echo", "args": {"text": "x"}, "id": "call_1", "type": "tool_call"},
+            tool=None,
+            state={"messages": []},
+            runtime=None,
+        )
+
+        async def handler(_request: ToolCallRequest) -> ToolMessage:
+            return ToolMessage(content="ok", tool_call_id="call_1", name="safe_echo")
+
+        result = await middleware.awrap_tool_call(request, handler)
+
+        self.assertEqual(result.content, "ok")
+        self.assertEqual(middleware.advertised_tools, {})
+
     async def test_enforcement_survives_message_rewriting_middleware(self):
         """
-        Regression test: middleware that rebuild the tool-calling AIMessage without
+        Regression test: middleware that rebuilds the tool-calling AIMessage without
         copying response_metadata (langchain's PIIMiddleware redaction does exactly
         this) must not disable enforcement.  The bookkeeping lives in sly_data,
         outside of langgraph agent state, so message rewriting cannot disturb it.

@@ -260,7 +260,19 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
         denial: Optional[ToolMessage] = self._deny_unadvertised_tool_call(request)
         if denial is not None:
             return denial
-        return await handler(request)
+
+        result: Union[ToolMessage, Command] = await handler(request)
+
+        # The tool call is done with its bookkeeping entry, so clean it up to keep
+        # the map from growing over long requests and to avoid stale context should
+        # a tool call id ever be reused. None ids are kept, as multiple tool calls
+        # can share None. The entry is popped only after successful execution so
+        # that a retrying outer middleware still finds it.
+        call_id: Optional[str] = request.tool_call.get("id")
+        if call_id is not None:
+            self.advertised_tools.pop(call_id, None)
+
+        return result
 
     def _stamp_advertised_tools(self, narrowed_request: ModelRequest, response: Any) -> None:
         """
