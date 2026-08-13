@@ -1221,13 +1221,19 @@ that bypasses the model) is allowed through with a warning by default. Set the c
 `"unadvertised_policy": "deny"` in the middleware args to reject such tool calls instead —
 recommended for agents exposed to untrusted input.
 
-This middleware does not support dynamic tools. The enforcement records the tool list as it stands
-at this middleware's position in the [middleware](#middleware) list, and middleware are composed
+This middleware handles the static tool set the agent gets from its HOCON configuration; it does
+not support dynamic tools. The enforcement records the tool list as it stands at this middleware's
+position in the [middleware](#middleware) list, and middleware are composed
 first-in-list-outermost. Any middleware listed *after* the tool selector that adds or removes tools
 on the model request will make the enforcement diverge from what the model actually saw: calls to
 tools added by such middleware are falsely rejected, and further narrowing is not enforced. If you
 combine the tool selector with other tool-modifying middleware, list those middleware before the
 tool selector, never after it.
+
+Execution-time enforcement is a feature of `LlmConfigToolSelectorMiddleware` specifically. Other
+tool-selection middleware configured by class name (including langchain's own
+`LLMToolSelectorMiddleware`) only narrow what the model is shown and provide no execution-time
+enforcement.
 
 Note that LLM-based tool selection is a token/latency optimization, **not** a security boundary.
 The selection is driven by the (possibly untrusted) last user message, so it can be steered toward
