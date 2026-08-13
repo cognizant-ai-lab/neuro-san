@@ -19,6 +19,7 @@ from typing import Awaitable
 from typing import Callable
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Union
 
 from functools import partial
@@ -142,13 +143,16 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
         """
 
         self.logger: Logger = getLogger(self.__class__.__name__)
-        self._initialize_enforcement(sly_data, origin_str, unadvertised_policy)
 
         if activation_capsule is None:
             raise ValueError("activation_capsule is required")
 
         if llm_config is None:
             raise ValueError("llm_config is required")
+
+        # Set up after the validations above, so the constructor does not mutate
+        # the caller-provided sly_data when it is going to raise.
+        self._initialize_enforcement(sly_data, origin_str, unadvertised_policy)
 
         my_model: RunnableSerializable = activation_capsule.create_chat_model(llm_config, sly_data)
 
@@ -191,11 +195,12 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
 
         holder: Dict[str, Any] = sly_data if sly_data is not None else {}
         namespace: str = origin_str if origin_str else f"instance-{id(self)}"
-        per_request: Dict[str, Dict[str, List[str]]] = holder.setdefault(ADVERTISED_TOOLS_KEY, {})
+        per_request: Dict[str, Dict[Optional[str], List[str]]] = holder.setdefault(ADVERTISED_TOOLS_KEY, {})
 
         # Maps tool call id -> list of tool names advertised on the model call
-        # that produced that tool call.
-        self.advertised_tools: Dict[str, List[str]] = per_request.setdefault(namespace, {})
+        # that produced that tool call. Keys can be None, as providers may omit
+        # tool call ids (ToolCall.id is Optional).
+        self.advertised_tools: Dict[Optional[str], List[str]] = per_request.setdefault(namespace, {})
 
     async def awrap_model_call(
                 self,
@@ -252,7 +257,7 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
         :return: The ToolMessage or Command resulting from the tool call,
                  or an error ToolMessage if the tool was not advertised.
         """
-        denial: ToolMessage = self._deny_unadvertised_tool_call(request)
+        denial: Optional[ToolMessage] = self._deny_unadvertised_tool_call(request)
         if denial is not None:
             return denial
         return await handler(request)
@@ -270,7 +275,7 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
         for tool in narrowed_request.tools:
             if isinstance(tool, dict):
                 # Provider-specific tool dicts may or may not carry a name
-                name: str = tool.get("name")
+                name: Optional[str] = tool.get("name")
             else:
                 name = tool.name
             if name is not None:
@@ -286,7 +291,7 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
             for tool_call in message.tool_calls or []:
                 self.advertised_tools[tool_call.get("id")] = advertised
 
-    def _deny_unadvertised_tool_call(self, request: ToolCallRequest) -> ToolMessage:
+    def _deny_unadvertised_tool_call(self, request: ToolCallRequest) -> Optional[ToolMessage]:
         """
         Determine whether a tool call should be denied because its tool was not
         advertised to the model on the call that produced it.
@@ -299,10 +304,10 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
         :param request: The ToolCallRequest describing the tool call to execute
         :return: An error ToolMessage if the call should be denied, or None to allow it.
         """
-        tool_name: str = request.tool_call.get("name")
-        call_id: str = request.tool_call.get("id")
+        tool_name: Optional[str] = request.tool_call.get("name")
+        call_id: Optional[str] = request.tool_call.get("id")
 
-        advertised: List[str] = self.advertised_tools.get(call_id)
+        advertised: Optional[List[str]] = self.advertised_tools.get(call_id)
         if advertised is None:
             # No recorded advertisement for this tool call. See docstring above.
             if self.unadvertised_policy == "allow":
@@ -324,7 +329,7 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
             f"and was not executed. Try one of [{', '.join(advertised)}].")
 
     @staticmethod
-    def _make_denial(tool_name: str, call_id: str, content: str) -> ToolMessage:
+    def _make_denial(tool_name: Optional[str], call_id: Optional[str], content: str) -> ToolMessage:
         """
         Construct the error ToolMessage for a denied tool call.
 

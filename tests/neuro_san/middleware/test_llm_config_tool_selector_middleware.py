@@ -19,6 +19,7 @@ from logging import getLogger
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from unittest import IsolatedAsyncioTestCase
 from unittest import TestCase
 
@@ -110,12 +111,6 @@ def safe_echo(text: str) -> str:
     return text
 
 
-@tool
-def canary() -> str:
-    """A sensitive tool that should not run when de-selected."""
-    return "canary executed"
-
-
 class TestLlmConfigToolSelectorMiddleware(TestCase):
     """
     Unit tests for execution-time enforcement of tool selection.
@@ -124,12 +119,14 @@ class TestLlmConfigToolSelectorMiddleware(TestCase):
     def test_stamp_advertised_tools(self):
         """
         The advertised tool names are recorded per tool call id the model emitted.
+        _stamp_advertised_tools() receives the request as already narrowed by tool
+        selection, so its tools list models the narrowed (advertised) set.
         """
         middleware = build_middleware(selected=["safe_echo"])
         request = ModelRequest(
             model=ToolCallingFakeModel(responses=[]),
             messages=[HumanMessage("hi")],
-            tools=[safe_echo, canary],
+            tools=[safe_echo],
         )
         response = ModelResponse(result=[
             AIMessage(
@@ -140,7 +137,7 @@ class TestLlmConfigToolSelectorMiddleware(TestCase):
 
         middleware._stamp_advertised_tools(request, response)
 
-        self.assertEqual(middleware.advertised_tools, {"call_1": ["safe_echo", "canary"]})
+        self.assertEqual(middleware.advertised_tools, {"call_1": ["safe_echo"]})
 
     def test_stamp_records_nothing_without_tool_calls(self):
         """
@@ -170,7 +167,7 @@ class TestLlmConfigToolSelectorMiddleware(TestCase):
 
         self.assertEqual(sly_data, {ADVERTISED_TOOLS_KEY: {"network.agent": {"call_1": ["safe_echo"]}}})
 
-    def _tool_call_request(self, name: str, call_id: str) -> ToolCallRequest:
+    def _tool_call_request(self, name: str, call_id: Optional[str]) -> ToolCallRequest:
         """
         Helper to build a ToolCallRequest for the given tool call.
         """
