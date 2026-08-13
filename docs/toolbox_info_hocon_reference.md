@@ -63,12 +63,16 @@ The value for each key is a dictionary describing the tool's properties. The sch
 
 These tools extend from the Langchain's `BaseTool` class.
 
-> [!WARNING]
-> The [langchain-community](https://github.com/langchain-ai/langchain-community/issues/674) package has been sunset
-> and its repository archived. The default request tools in `toolbox_info.hocon`, which are built on
-> `langchain_community` classes (as in the examples below), will be removed in a future release.
-> Prefer tools from maintained, dedicated integration packages — see the
-> [LangChain tool integrations](https://docs.langchain.com/oss/python/integrations/tools) for what is available.
+> [!IMPORTANT]
+> The former default HTTP tools (`requests_get`, `requests_post`, `requests_put`, `requests_patch`,
+> `requests_delete`, and `requests_toolkit`) have been **removed** from the default toolbox. They were built on the
+> sunset [langchain-community](https://github.com/langchain-ai/langchain-community/issues/674) package and shipped
+> with `allow_dangerous_requests=true`. Operators who need HTTP tools must now define them in their own toolbox
+> info file (see [Extending Toolbox Info](#extending-toolbox-info)), which makes any dangerous-request opt-in an
+> explicit, informed decision. When such a tool is reachable from untrusted input, prefer an implementation that
+> by default denies requests to link-local/cloud-metadata addresses (e.g. `169.254.169.254`) and private
+> (RFC 1918) ranges. For maintained tools, see the
+> [LangChain tool integrations](https://docs.langchain.com/oss/python/integrations/tools).
 
 #### `class`
 
@@ -77,10 +81,10 @@ Fully qualified class name of the tool. It must exist in the server's `PYTHONPAT
 Example:
 
 ```hocon
-"class": "langchain_community.tools.requests.tool.RequestsGetTool"
+"class": "langchain_tavily.TavilySearch"
 ```
 
-If the class is a Langchain **toolkit** (such as `RequestsToolkit`), it must implement a `get_tools()` method. When instantiated,
+If the class is a Langchain **toolkit**, it must implement a `get_tools()` method. When instantiated,
 the toolkit returns a list of individual tools via this method — each of which will be available for the agent to call.
 
 #### `args` *(optional)*
@@ -93,26 +97,27 @@ Example:
 
 ```hocon
 "args": {
-    "allow_dangerous_requests": true
+    "max_results": 5
 }
 ```
 
-May include nested configurations.
+May include nested configurations: an argument value that is itself a dictionary with a `class` key is
+instantiated (with its own `args`) and passed to the outer tool's constructor.
 
 Example:
 
 ```hocon
 "args": {
-    "requests_wrapper": {
-        "class": "langchain_community.utilities.requests.TextRequestsWrapper",
+    "api_wrapper": {
+        "class": "some_integration_package.utilities.SomeApiWrapper",
         "args": {
-            "headers": {}
+            "timeout": 30
         }
     }
 }
 ```
 
-This instantiates `RequestsGetTool(requests_wrapper=TextRequestsWrapper(headers={}), allow_dangerous_requests=True)`.
+This instantiates `SomeTool(api_wrapper=SomeApiWrapper(timeout=30))`.
 
 #### `base_tool_info_url` *(optional)*
 

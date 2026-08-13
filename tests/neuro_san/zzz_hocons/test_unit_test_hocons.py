@@ -47,7 +47,6 @@ class TestUnitTestHocons(TestCase):
         "music_nerd_pro_sly_api_key/no_user_api_key.hocon",
         "music_nerd_pro_sly_api_key/with_user_api_key.hocon",
         "music_nerd_summarize/beatles_with_history_summarize.hocon",
-        "requests_get/get_example.hocon",
         "pii_middleware/jenny_phone.hocon",
 
         # List more hocon files as they become available here.

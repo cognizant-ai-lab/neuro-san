@@ -193,8 +193,8 @@ class ToolboxFactory(ContextTypeToolboxFactory):
             logging.warning(
                 "Tool '%s' uses a class from langchain-community, which has been sunset "
                 "(https://github.com/langchain-ai/langchain-community/issues/674). "
-                "Tools based on langchain-community will be removed from the default toolbox "
-                "in a future release.",
+                "Consider a tool from a maintained, dedicated integration package instead: "
+                "https://docs.langchain.com/oss/python/integrations/tools",
                 tool_name
             )
 

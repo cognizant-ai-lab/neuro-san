@@ -107,14 +107,14 @@ class TestConnectivityReporter(TestCase):
         Tests that display_as information comes from the injected factory's
         toolbox infos, not from a factory built behind the scenes.
         """
-        agent_network: AgentNetwork = self.get_sample_registry("requests_get.hocon")
+        agent_network: AgentNetwork = self.get_sample_registry("date_time_timezone.hocon")
         toolbox_factory = ToolboxFactory()
         # Keep the test hermetic: no user toolbox info file from the environment.
         toolbox_factory.toolbox_info_file = None
         # Seed distinctive tool info and mark loaded so load() keeps it as-is.
-        # A self-built or bundled factory would report "langchain_tool" instead.
+        # A self-built or bundled factory would report "coded_tool" instead.
         toolbox_factory.toolbox_infos = {
-            "requests_get": {
+            "get_current_date_time": {
                 "class": "mock_package.mock_module.MockTool",
                 "display_as": "injected_tool",
             }
@@ -127,7 +127,7 @@ class TestConnectivityReporter(TestCase):
         display_as_by_origin: Dict[str, str] = {
             message.get("origin"): message.get("display_as") for message in messages
         }
-        self.assertEqual(display_as_by_origin.get("web_browse_tool"), "injected_tool")
+        self.assertEqual(display_as_by_origin.get("current_date_time"), "injected_tool")
 
     def test_assemble_tool_list_args_tools_dict(self):
         """
