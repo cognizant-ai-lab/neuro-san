@@ -341,18 +341,18 @@ class InputValidator:
         if (getattr(args, "client_only", False)
                 or getattr(args, "no_server_log", False)):
             return [
-                "--chat-filter minimal drops the token-accounting"
+                "--minimal drops the token-accounting"
                 " message, and this run has no server log to fall"
                 " back on:\n"
                 "     no LLM or token usage will be reported.\n"
-                "     Use --chat-filter maximal to report them."
+                "     Omit --minimal to report them."
             ]
         return [
-            "--chat-filter minimal drops the token-accounting"
+            "--minimal drops the token-accounting"
             " message:\n"
             "     client-side LLM/token numbers will be"
             " unavailable (server-log values still apply).\n"
-            "     Use --chat-filter maximal to report both."
+            "     Omit --minimal to report both."
         ]
 
     @staticmethod

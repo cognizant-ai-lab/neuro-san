@@ -297,14 +297,15 @@ class LoadTestArguments:
                  "all levels.",
         )
         parser.add_argument(
-            "--chat-filter",
-            type=str,
-            choices=["maximal", "minimal"],
+            "--minimal",
+            dest="chat_filter",
+            action="store_const",
+            const="minimal",
             default="maximal",
-            help="Server-side chat message filter (both subprocess "
-                 "and --http-client modes). maximal: stream all "
-                 "messages including AGENT_PROGRESS (default). "
-                 "minimal: stream only the final answer message, "
+            help="Ask the server for the bare minimum of messages, "
+                 "as agent_cli's --minimal does (both subprocess and "
+                 "--http-client modes). Streams only the final answer "
+                 "instead of all messages including AGENT_PROGRESS, "
                  "which reduces server-to-client traffic and the "
                  "server-side work of producing progress events, but "
                  "also drops the token-accounting message and so "
