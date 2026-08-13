@@ -10,6 +10,7 @@ subprocesses (default) or direct HTTP streaming (`--http-client`).
 - [Test Levels](#test-levels---level)
 - [Traffic Modes](#traffic-modes)
 - [Flags](#flags)
+- [Environment Variables](#environment-variables)
 - [Pre-Run Summary and Dry-Run Probe](#pre-run-summary-and-dry-run-probe)
 - [Agent Profiles](#agent-profiles)
 - [Output](#output)
@@ -204,6 +205,19 @@ When server RSS exceeds 80% of total system RAM, a warning is printed:
 ```
   WARNING: Server RSS 12.8G / 16.0G (80%) — risk of OOM kill
 ```
+
+## Environment Variables
+
+| Variable                 | Effect                                     |
+| ------------------------ | ------------------------------------------ |
+| `OPENAI_API_BASE`        | **Aborts the run if set** (see below)      |
+| `LOAD_TEST_PROFILE_PATH` | Default for `--profile-path`               |
+| `PYTHONPATH`             | Repo root, so `tests.load_tests` imports   |
+
+This test requires real LLM calls, so a set `OPENAI_API_BASE` is taken as
+a mock environment and the run aborts before firing anything (a running
+`mock_llm_server` process aborts it too). Unset it, or use
+`load_test_mock_llm_service.py` for mock-based load testing.
 
 ## Pre-Run Summary and Dry-Run Probe
 
