@@ -301,7 +301,9 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
         return ToolMessage(
             content=f"Error: tool '{tool_name}' was not among the tools selected for this request "
                     "and was not executed. Use one of the available tools instead.",
-            tool_call_id=call_id,
+            # ToolMessage requires a string tool_call_id, but providers may omit ids
+            # from tool calls (ToolCall.id is Optional).
+            tool_call_id=call_id if call_id is not None else "unknown",
             name=tool_name,
             status="error",
         )

@@ -194,6 +194,22 @@ class TestLlmConfigToolSelectorMiddleware(TestCase):
         self.assertEqual(denial.status, "error")
         self.assertEqual(denial.tool_call_id, "call_1")
 
+    def test_deny_tool_call_without_id(self):
+        """
+        Providers may omit tool call ids (ToolCall.id is Optional). The denial path
+        must still return a valid error ToolMessage instead of raising a pydantic
+        ValidationError over its required string tool_call_id.
+        """
+        middleware = build_middleware(selected=["safe_echo"])
+        middleware.advertised_tools[None] = ["safe_echo"]
+        request = self._tool_call_request(name="canary", call_id=None)
+
+        denial = middleware._deny_unadvertised_tool_call(request)
+
+        self.assertIsInstance(denial, ToolMessage)
+        self.assertEqual(denial.status, "error")
+        self.assertEqual(denial.tool_call_id, "unknown")
+
     def test_allow_advertised_tool_call(self):
         """
         A tool call whose name was advertised on its originating model call is allowed.
