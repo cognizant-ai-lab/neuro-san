@@ -139,6 +139,31 @@ class TestLlmConfigToolSelectorMiddleware(TestCase):
 
         self.assertEqual(middleware.advertised_tools, {"call_1": ["safe_echo"]})
 
+    def test_stamp_records_dict_tool_names(self):
+        """
+        Provider-specific dict tools are recorded by name, whether the name is at
+        the top level or nested in OpenAI function format.
+        """
+        middleware = build_middleware(selected=["safe_echo"])
+        request = ModelRequest(
+            model=ToolCallingFakeModel(responses=[]),
+            messages=[HumanMessage("hi")],
+            tools=[
+                {"name": "top_level_tool"},
+                {"type": "function", "function": {"name": "nested_tool"}},
+            ],
+        )
+        response = ModelResponse(result=[
+            AIMessage(
+                content="",
+                tool_calls=[{"name": "nested_tool", "args": {}, "id": "call_1", "type": "tool_call"}],
+            ),
+        ])
+
+        middleware._stamp_advertised_tools(request, response)
+
+        self.assertEqual(middleware.advertised_tools, {"call_1": ["top_level_tool", "nested_tool"]})
+
     def test_stamp_records_nothing_without_tool_calls(self):
         """
         AIMessages without tool calls leave no bookkeeping behind.

@@ -286,8 +286,12 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
         advertised: List[str] = []
         for tool in narrowed_request.tools:
             if isinstance(tool, dict):
-                # Provider-specific tool dicts may or may not carry a name
+                # Provider-specific tool dicts may carry the name at the top level
+                # or nested in OpenAI function format ({"function": {"name": ...}}).
                 name: Optional[str] = tool.get("name")
+                function_spec: Any = tool.get("function")
+                if name is None and isinstance(function_spec, dict):
+                    name = function_spec.get("name")
             else:
                 name = tool.name
             if name is not None:
