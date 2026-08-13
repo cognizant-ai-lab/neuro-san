@@ -570,9 +570,9 @@ This dictionary has the following keys:
 | type         | A string describing the type of the property. (See below) |
 | default      | An optional default value for the property |
 
-Scalar types here can be "int", "float", "string", "bool" or "boolean".
-The standard JSON Schema spellings are also accepted: "integer" (same as "int")
-and "number" (accepts both integers and floats), so function specs copied from
+Scalar types here can be "int" or "integer", "float", "number" (accepts both
+integers and floats), "string", and "bool" or "boolean".
+These include the standard JSON Schema spellings, so function specs copied from
 OpenAI- or MCP-style tool definitions work as-is.
 It is possible that a properties' type can be "array"s for lists or "object"s for nested dictionaries.
 An "array" property must also carry an "items" dictionary describing the type of its elements.
