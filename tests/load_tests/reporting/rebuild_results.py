@@ -28,6 +28,8 @@ import re
 
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
+from tests.load_tests.config import STATUS_KILLED
+from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.reporting.json_metadata import JsonMetadata
 from tests.load_tests.traffic.cli_builder import CliBuilder
 
@@ -258,9 +260,7 @@ class ResultsRebuilder:
 
         timing_info = timing.get(req_id, {})
         elapsed = timing_info.get("elapsed", 0)
-        status = ResultsRebuilder._resolve_status(
-            timing_info, parsed_fields,
-        )
+        status = ResultsRebuilder._resolve_status(timing_info)
 
         result = {
             "request_id": f"request-{req_id}",
@@ -374,15 +374,21 @@ class ResultsRebuilder:
             )
 
     @staticmethod
-    def _resolve_status(timing_info, parsed_fields):
-        """Determine request status from log or parsed fields."""
+    def _resolve_status(timing_info):
+        """Determine request status from the log line for the request.
+
+        Every status the runner reports is preserved, including TIMEOUT
+        and KILLED: a rebuild that collapsed those into CREATED or
+        FAILED would misstate what happened.  A request with no log
+        line was never observed to finish -- failures past
+        FAILURE_LOG_LIMIT are never printed -- so it counts as failed
+        rather than being guessed at from its partial output.
+        """
         log_status = timing_info.get("status", "")
-        if log_status == STATUS_CREATED:
-            return STATUS_CREATED
-        if log_status == STATUS_FAILED:
-            return STATUS_FAILED
-        if parsed_fields.get("reservation_id"):
-            return STATUS_CREATED
+        if log_status in (
+            STATUS_CREATED, STATUS_FAILED, STATUS_TIMEOUT, STATUS_KILLED,
+        ):
+            return log_status
         return STATUS_FAILED
 
     @staticmethod
