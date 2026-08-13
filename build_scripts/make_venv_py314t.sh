@@ -21,7 +21,7 @@
 #
 #   * The free-threaded interpreter is provisioned with `uv` (there is no
 #     official python:3.14t image or, usually, a system 3.14t interpreter).
-#   * All dependencies -- including leaf-common and leaf-server-common -- are
+#   * All dependencies -- including leaf-common -- are
 #     installed from requirements.txt as-is (i.e. from PyPI).
 #   * orjson (transitive via langsmith / langgraph-sdk) refuses to build under a
 #     free-threaded interpreter unless ORJSON_BUILD_FREETHREADED is set, so we
@@ -179,8 +179,8 @@ function main() {
     fi
     log "confirmed free-threaded interpreter: $("${venv_python}" -c 'import sys; print(sys.version.split()[0])')"
 
-    # 2. Install dependencies straight from requirements.txt (leaf-common and
-    #    leaf-server-common come from PyPI like everything else).
+    # 2. Install dependencies straight from requirements.txt (leaf-common
+    #    comes from PyPI like everything else).
     #    ORJSON_BUILD_FREETHREADED opts orjson into building under 3.14t.
     local -a install_args=(-r "${REPO_ROOT}/requirements.txt")
     if [ "${WITH_DEV}" = 1 ]; then
@@ -203,9 +203,8 @@ print("  python              :", sys.version.split()[0], "(" + sys.executable + 
 gil = getattr(sys, "_is_gil_enabled", None)
 print("  free-threaded build :", bool(int(__import__("sysconfig").get_config_var("Py_GIL_DISABLED") or 0)))
 print("  GIL enabled now     :", gil() if gil else "n/a")
-import leaf_common, leaf_server_common
+import leaf_common
 print("  leaf_common         :", leaf_common.__name__, "OK")
-print("  leaf_server_common  :", leaf_server_common.__name__, "OK")
 import neuro_san
 print("  neuro_san import    : OK (from repo source)")
 PY
