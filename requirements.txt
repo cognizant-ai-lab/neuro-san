@@ -28,6 +28,15 @@ langchain>=1.2.0,<2.0
 # (with bind_tools) for the Gemini AFC-disable in gemini_llm_policy.py to activate.
 langchain-core>=1.4.0,<2.0
 bs4>=0.0.2,<0.1
+# Python 3.14 note: install pydantic>=2.13 to silence langchain-core's
+# "Core Pydantic V1 functionality isn't compatible with Python 3.14" UserWarning.
+# langchain-core imports pydantic.v1 for backwards compatibility, and
+# pydantic<2.13 warns on that import even when no v1 models are used
+# (pydantic#12618, fixed in 2.13 by bundling a 3.14-compatible v1;
+# see also langchain#34441). The floor cannot move to 2.13 yet: the
+# openrouter SDK (pulled in via requirements-build.txt's langchain-openrouter)
+# pins pydantic<2.13, which would make dev/CI installs unresolvable.
+# Keep this rationale in sync with the langchain-openrouter comment there.
 pydantic>=2.9.2,<3.0
 
 # OpenAI is the only LLM provider we require out of the box so that users
