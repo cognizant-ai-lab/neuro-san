@@ -76,12 +76,15 @@ These tools extend from the Langchain's `BaseTool` class.
 
 #### `class`
 
-Fully qualified class name of the tool. It must exist in the server's `PYTHONPATH`.
+Fully qualified class name of the tool. It must exist in the server's `PYTHONPATH` and must have at least
+three dot-separated segments: `<package_name>.<module_name>.<ClassName>`. Point at the module that actually
+defines the class — the shorter top-level re-export that many integration packages offer
+(e.g. `langchain_tavily.TavilySearch`) is rejected.
 
 Example:
 
 ```hocon
-"class": "langchain_tavily.TavilySearch"
+"class": "langchain_tavily.tavily_search.TavilySearch"
 ```
 
 If the class is a Langchain **toolkit**, it must implement a `get_tools()` method. When instantiated,
@@ -101,8 +104,9 @@ Example:
 }
 ```
 
-May include nested configurations: an argument value that is itself a dictionary with a `class` key is
-instantiated (with its own `args`) and passed to the outer tool's constructor.
+May include nested configurations: an argument value that is itself a dictionary with a `class` key
+(same three-segment form as [`class`](#class) above) is instantiated (with its own `args`) and passed
+to the outer tool's constructor.
 
 Example:
 

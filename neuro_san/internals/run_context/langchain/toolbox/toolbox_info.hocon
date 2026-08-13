@@ -49,6 +49,9 @@
     #
     # Requirements for langchain tools configured here:
     # - Each tool or toolkit must have a "class" key.
+    # - "class" must be of the form "<package_name>.<module_name>.<ClassName>" (at least three
+    #   dot-separated segments), naming the module that defines the class — not a top-level
+    #   re-export like "langchain_tavily.TavilySearch".
     # - The specified class must be available in the server's PYTHONPATH.
     # - Additional dependencies must be installed separately.
     # - Browse maintained integrations at: https://docs.langchain.com/oss/python/integrations/tools

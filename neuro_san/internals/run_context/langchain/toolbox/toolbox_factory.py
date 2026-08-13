@@ -61,7 +61,8 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         for langchain's tools:
         - The tool name serves as a key.
         - The corresponding value should be a dictionary with:
-        - "class": The fully qualified class name of the tool.
+        - "class": The fully qualified class name of the tool in the form
+            "<package_name>.<module_name>.<ClassName>".
         - "args": A dictionary of arguments required for the tool's initialization,
             which may include nested class configurations.
 
