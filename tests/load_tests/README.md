@@ -38,26 +38,26 @@ export PYTHONPATH=$(pwd)
 
 # Smoke test — does the server respond? (--client-only runs the
 # lightweight min profile against an already-running server)
-python -m tests.load_tests.load_test --agent hello_world --client-only --no-dry-run
+python -m tests.load_tests.load_test_cli --agent hello_world --client-only --no-dry-run
 
 # Standard — with server log (auto-detect from server process)
-python -m tests.load_tests.load_test --agent hello_world --level norm \
+python -m tests.load_tests.load_test_cli --agent hello_world --level norm \
     --server-log --no-dry-run
 
 # Standard — with server log (explicit path)
-python -m tests.load_tests.load_test --agent hello_world --level norm \
+python -m tests.load_tests.load_test_cli --agent hello_world --level norm \
     --server-log /path/to/logs/server.log --no-dry-run
 
 # Standard — without server log (resources + tokens)
-python -m tests.load_tests.load_test --agent hello_world --level norm --no-dry-run
+python -m tests.load_tests.load_test_cli --agent hello_world --level norm --no-dry-run
 
 # Full analysis — with server log
-python -m tests.load_tests.load_test --agent hello_world --level adv \
+python -m tests.load_tests.load_test_cli --agent hello_world --level adv \
     --ramp --stages 2,4,8 \
     --server-log /path/to/logs/server.log --no-dry-run
 
 # Full analysis — without server log (JSON + tokens, no retries)
-python -m tests.load_tests.load_test --agent hello_world --level adv \
+python -m tests.load_tests.load_test_cli --agent hello_world --level adv \
     --ramp --stages 2,4,8 --no-dry-run
 ```
 
@@ -435,7 +435,7 @@ Use `--compare` to scan a directory of previous runs and print a
 side-by-side comparison table:
 
 ```bash
-python -m tests.load_tests.load_test --compare /tmp/load_test/adv/
+python -m tests.load_tests.load_test_cli --compare /tmp/load_test/adv/
 ```
 
 Output:
@@ -460,7 +460,7 @@ Use `--trend` to see repeated runs in the order they happened, which is
 how a slowdown between neuro-san versions becomes visible:
 
 ```bash
-python -m tests.load_tests.load_test --trend /tmp/load_test/adv/history.jsonl
+python -m tests.load_tests.load_test_cli --trend /tmp/load_test/adv/history.jsonl
 ```
 
 Output:
@@ -531,7 +531,7 @@ Lint status: flake8 clean, pylint 10.00/10.
 
 ```
 tests/load_tests/
-  load_test.py                 LoadTestOrchestrator (main entry point)
+  load_test_cli.py             LoadTestOrchestrator (main entry point)
   config.py                    Constants, TypedDicts, compiled patterns
   confirm.py                   Confirm (strict y/n prompt)
   cost_estimator.py            CostEstimator (per-model pricing)
