@@ -101,6 +101,29 @@ class TestToolboxFactory:
             # Ensure the returned tool is an instance of the mocked class
             assert tool is mock_instance
 
+    def test_create_toolbox_with_removed_tool_gives_migration_error(self, factory):
+        """Test that a reference to a removed requests_* tool explains the removal
+        and how to migrate, rather than raising a generic 'not defined' error."""
+        factory.toolbox_infos = {}
+
+        with pytest.raises(ValueError, match="deprecated langchain-community") as exc_info:
+            factory.create_tool_from_toolbox("requests_get", {})
+        assert "AGENT_TOOLBOX_INFO_FILE" in str(exc_info.value)
+
+    def test_create_toolbox_with_unknown_tool_names_sources(self, factory):
+        """Test that an unknown tool name reports the searched sources by name.
+        Previously the message rendered 'not defined in None' when no user
+        toolbox info file was configured."""
+        factory.toolbox_infos = {}
+
+        factory.toolbox_info_file = None
+        with pytest.raises(ValueError, match="not defined in the default toolbox info file."):
+            factory.create_tool_from_toolbox("no_such_tool", {})
+
+        factory.toolbox_info_file = "/path/to/user_toolbox.hocon"
+        with pytest.raises(ValueError, match="or in /path/to/user_toolbox.hocon"):
+            factory.create_tool_from_toolbox("no_such_tool", {})
+
     @pytest.mark.parametrize("bad_class", [None, 123, ""])
     def test_create_toolbox_with_invalid_class_value(self, factory, bad_class):
         """Test that a non-string or empty 'class' value raises a clear ValueError."""

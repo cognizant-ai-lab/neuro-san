@@ -19,6 +19,7 @@
 from typing import Any
 from typing import Callable
 from typing import Dict
+from typing import FrozenSet
 from typing import List
 from typing import Optional
 from typing import Type
@@ -76,6 +77,19 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         The default toolbox config file can be seen at
         "neuro_san/internals/run_context/langchain/toolbox/toolbox_info.hocon"
     """
+
+    # Tools that used to ship in the default toolbox info file but were removed
+    # because they were built on the deprecated langchain-community package.
+    # A stale reference to one of these gets a targeted migration message
+    # instead of the generic "not defined" error.
+    REMOVED_TOOLS: FrozenSet[str] = frozenset({
+        "requests_get",
+        "requests_post",
+        "requests_patch",
+        "requests_put",
+        "requests_delete",
+        "requests_toolkit",
+    })
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         """
@@ -166,7 +180,19 @@ class ToolboxFactory(ContextTypeToolboxFactory):
 
         tool_info: Dict[str, Any] = self.toolbox_infos.get(tool_name)
         if not tool_info:
-            raise ValueError(f"Tool '{tool_name}' is not defined in {self.toolbox_info_file}.")
+            if tool_name in self.REMOVED_TOOLS:
+                raise ValueError(
+                    f"Tool '{tool_name}' was removed from the default toolbox because it was "
+                    "built on the deprecated langchain-community package. To keep using it, "
+                    "define it in your own toolbox info file and register that file with the "
+                    "AGENT_TOOLBOX_INFO_FILE environment variable or the 'toolbox_info_file' "
+                    "key in the agent network hocon file. See "
+                    "https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/toolbox_info_hocon_reference.md"
+                )
+            sources: str = "the default toolbox info file"
+            if self.toolbox_info_file:
+                sources += f" or in {self.toolbox_info_file}"
+            raise ValueError(f"Tool '{tool_name}' is not defined in {sources}.")
 
         if not isinstance(tool_info, Dict):
             raise ValueError(f"The value for the {tool_name} key must be a dictionary.")
