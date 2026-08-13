@@ -157,7 +157,7 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--stages`                 | 10,30,50,100| Concurrency per stage in ramp mode           |
 | `--num-rounds`             | 1           | Repeat the full sequence N times             |
 | `--max-requests`           | sum(stages) * num_rounds | Hard cap on total requests |
-| `--request-timeout`        | 1200 (20m)  | Hard timeout per request. Accepts a bare number (seconds) or an `s`/`m`/`h` suffix (e.g. `90s`, `20m`, `2h`) |
+| `--request-timeout`        | 1200 (20m)  | Hard timeout per request (subprocess mode; see [Abort on timeout](#abort-on-timeout) for `--http-client`). Accepts a bare number (seconds) or an `s`/`m`/`h` suffix (e.g. `90s`, `20m`, `2h`) |
 | `--idle-timeout`           | 900 (15m)   | Abort a request that is idle for this long (resets on activity). Accepts seconds or an `s`/`m`/`h` suffix. Subprocess mode: no `agent_cli` output; HTTP mode (`--http-client`): no next stream chunk |
 | `--stage-timeout`          | 1500 (25m)  | Hard timeout for entire stage/round. Accepts seconds or an `s`/`m`/`h` suffix. Kills remaining in-flight requests |
 | `--total-timeout`          | 0 (disabled)| Hard timeout for entire load test. Accepts seconds or an `s`/`m`/`h` suffix. Kills run when exceeded |
@@ -181,7 +181,11 @@ collected so far:
   Idle means no `agent_cli` output (subprocess mode) or no next
   stream chunk (HTTP mode, `--http-client`).
 - **`--request-timeout`**: A request exceeds its hard time limit →
-  abort.
+  abort. Subprocess mode kills the `agent_cli` process at the limit.
+  HTTP mode (`--http-client`) cannot interrupt the in-thread stream,
+  so it marks the request `TIMEOUT` once the stream ends; a slow but
+  still-streaming request is bounded by `--idle-timeout` and
+  `--stage-timeout` instead.
 - **`--stage-timeout`**: A stage/round exceeds its limit, remaining
   requests killed → abort.
 - **`--total-timeout`**: Overall test elapsed time exceeded → abort
