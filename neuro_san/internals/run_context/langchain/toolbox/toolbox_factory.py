@@ -255,7 +255,7 @@ class ToolboxFactory(ContextTypeToolboxFactory):
                 sources += f" or in {self.toolbox_info_file}"
             raise ValueError(f"Tool '{tool_name}' is not defined in {sources}.")
 
-        if not isinstance(tool_info, Dict):
+        if not isinstance(tool_info, dict):
             raise ValueError(f"The value for the {tool_name} key must be a dictionary.")
 
         if "class" not in tool_info:
