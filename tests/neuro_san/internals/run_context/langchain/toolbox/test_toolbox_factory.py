@@ -15,6 +15,8 @@
 #
 # END COPYRIGHT
 
+import logging
+
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -23,6 +25,8 @@ from langchain_core.tools.base import BaseTool
 from langchain_core.tools.base import BaseToolkit
 
 from neuro_san.internals.run_context.langchain.toolbox.toolbox_factory import ToolboxFactory
+
+FIXTURE_MODULE = "tests.neuro_san.internals.run_context.langchain.toolbox.real_tool_fixture"
 
 RESOLVER_PATH = "leaf_common.resolution.resolver.Resolver.resolve_class_in_module"
 VALIDATIOR_PATH = (
@@ -123,6 +127,55 @@ class TestToolboxFactory:
         factory.toolbox_info_file = "/path/to/user_toolbox.hocon"
         with pytest.raises(ValueError, match="or in /path/to/user_toolbox.hocon"):
             factory.create_tool_from_toolbox("no_such_tool", {})
+
+    def test_create_toolbox_real_tool_unmocked(self, factory):
+        """Test tool creation with no mocks: a real BaseTool subclass and a real
+        nested wrapper class are resolved from their class paths, validated,
+        instantiated, and tagged — the same path an operator's toolbox info
+        file entry takes."""
+        factory.toolbox_infos = {
+            "real_tool": {
+                "class": f"{FIXTURE_MODULE}.RealTool",
+                "args": {
+                    "max_results": 3,
+                    "api_wrapper": {
+                        "class": f"{FIXTURE_MODULE}.RealApiWrapper",
+                        "args": {"timeout": 30},
+                    },
+                },
+            }
+        }
+
+        tool = factory.create_tool_from_toolbox("real_tool", user_args={"max_results": 7}, agent_name="my_agent")
+
+        assert isinstance(tool, BaseTool)
+        assert tool.name == "my_agent"
+        assert tool.tags == ["langchain_tool"]
+        # user_args override the toolbox-file args; nested wrapper args survive
+        assert tool.max_results == 7
+        assert tool.api_wrapper.timeout == 30
+
+    def test_langchain_community_class_logs_sunset_warning(self, factory, caplog):
+        """Test that a tool whose class comes from langchain-community logs the
+        sunset warning on creation."""
+        factory.toolbox_infos = {
+            "community_tool": {"class": "langchain_community.some_module.SomeTool"},
+        }
+
+        with patch(RESOLVER_PATH) as mock_resolver, patch(VALIDATIOR_PATH):
+            mock_tool_class = MagicMock(spec=BaseTool)
+            mock_resolver.return_value = mock_tool_class
+
+            mock_instance = MagicMock(spec=BaseTool)
+            mock_instance.name = MagicMock(spec=str)
+            mock_instance.tags = MagicMock(spec=list)
+            mock_tool_class.return_value = mock_instance
+
+            with caplog.at_level(logging.WARNING):
+                factory.create_tool_from_toolbox("community_tool", {})
+
+        assert "langchain-community" in caplog.text
+        assert "sunset" in caplog.text
 
     def test_get_shared_coded_tool_class_unknown_tool_raises(self, factory):
         """Test that unknown and removed tool names raise the same clear
