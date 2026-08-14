@@ -29,9 +29,7 @@
         ]
     },
     "llm_config": {
-#        "model_name": "gpt-5.2"
-        "model_name": "gpt-5.2",
-        "openai_api_base": "http://localhost:8899/v1"
+        "model_name": "gpt-5.2"
     },
     "tools": [
         # This first agent definition is regarded as the "Front Man", which
