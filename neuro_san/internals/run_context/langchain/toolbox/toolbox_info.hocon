@@ -21,31 +21,24 @@
 {
     # ------------------------------------------------------------------------------------------
     # Overview:
-    # - This file defines configurations for langchain's tools and toolkits as well as shared coded tools.
-    # - More details about LangChain tools and toolkits can be found at:
-    #   https://docs.langchain.com/oss/python/integrations/tools
+    # - This file defines the tools that ship with the default neuro-san toolbox. The format
+    #   supports both langchain tools/toolkits and shared coded tools; the default entries
+    #   below are all coded tools.
     # - See https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md for more informations on coded tools.
     #
     # Customization via Agent HOCON File:
-    # - In the agent HOCON file, users can define an "args" section to **add or override** 
+    # - In the agent HOCON file, users can define an "args" section to **add or override**
     #   arguments from this tool configuration file dynamically at runtime.
     # ------------------------------------------------------------------------------------------
 
     # --------------------------- Langchain's Tools and Toolkits -------------------------------
-    # No langchain tools ship in this default toolbox.
-    #
-    # The former requests_get/post/put/patch/delete tools and requests_toolkit were removed:
-    # they were built on the sunset langchain-community package
-    # (https://github.com/langchain-ai/langchain-community/issues/674) and shipped with
-    # allow_dangerous_requests=true. Operators who need HTTP tools must now define them in
-    # their own toolbox info file (via the AGENT_TOOLBOX_INFO_FILE environment variable or
-    # the "toolbox_info_file" key in the agent network hocon), which makes any
-    # dangerous-request opt-in an explicit, informed decision.
-    #
-    # If you add an HTTP tool that is reachable from untrusted input, prefer an
-    # implementation that by default denies requests to link-local/cloud-metadata
-    # addresses (e.g. 169.254.169.254) and private (RFC 1918) ranges, with explicit
-    # opt-in for internal ranges (SSRF hardening).
+    # No langchain tools ship in this default toolbox. The former requests_* tools and
+    # requests_toolkit were removed because they were built on the deprecated
+    # langchain-community package and shipped with allow_dangerous_requests=true.
+    # Operators who need HTTP tools must define them in their own toolbox info file
+    # (via the AGENT_TOOLBOX_INFO_FILE environment variable or the "toolbox_info_file"
+    # key in the agent network hocon). See the schema reference linked at the top of this
+    # file for migration guidance and SSRF hardening recommendations.
     #
     # Requirements for langchain tools configured here:
     # - Each tool or toolkit must have a "class" key.

@@ -85,14 +85,10 @@
             # However, the values provided in "args" here will have precedence over those provided at runtime.
             #
             # -------------------------------------------------------------------------------
-            # CURRENTLY AVAILABLE TOOLS IN TOOLBOX
-            # The following tools can be used as values for "toolbox":
-            #
-            # Coded Tools
-            #
-            #   - "get_current_date_time": Return current date and time for a specified timezone.
-            #
-            # Langchain tools can be added via a custom toolbox info file (see EXTENSIBILITY below).
+            # AVAILABLE TOOLS
+            # For the current list of tools that can be used as values for "toolbox",
+            # see the default tool configuration file referenced under EXTENSIBILITY below.
+            # Langchain tools can be added via a custom toolbox info file.
             # Each tool may require specific arguments in the "args" section.
             # Refer to the tool's documentation for more details.
             # -------------------------------------------------------------------------------

@@ -40,7 +40,9 @@ The default configuration file used by the system is:
 
 This file defines all tools that the system can recognize and use at runtime. It supports two primary categories:
 
-- **Langchain tools** – Based on LangChain's `BaseTool`, typically prebuilt utilities like search and HTTP tools.
+- **Langchain tools** – Based on LangChain's `BaseTool`, such as search or HTTP utilities from integration packages.
+  The default file no longer ships any; add them via your own toolbox info file
+  (see [Extending Toolbox Info](#extending-toolbox-info)).
 - **Coded tools** – Custom Python tools implemented using the `CodedTool` interface.
 
 The specific tools included by default may change over time. For the most up-to-date list, refer directly to the source file
@@ -106,22 +108,31 @@ Example:
 
 May include nested configurations: an argument value that is itself a dictionary with a `class` key
 (same three-segment form as [`class`](#class) above) is instantiated (with its own `args`) and passed
-to the outer tool's constructor.
+as an argument to the outer tool.
 
 Example:
 
 ```hocon
-"args": {
-    "api_wrapper": {
-        "class": "some_integration_package.utilities.SomeApiWrapper",
-        "args": {
-            "timeout": 30
+"some_tool": {
+    "class": "some_integration_package.tools.SomeTool",
+    "args": {
+        "api_wrapper": {
+            "class": "some_integration_package.utilities.SomeApiWrapper",
+            "args": {
+                "timeout": 30
+            }
         }
     }
 }
 ```
 
 This instantiates `SomeTool(api_wrapper=SomeApiWrapper(timeout=30))`.
+
+> [!NOTE]
+> If the tool class defines a `from..._api_wrapper` classmethod (several langchain toolkits do, e.g.
+> `GitHubToolkit.from_github_api_wrapper`), the factory calls that classmethod instead of the constructor,
+> and the argument names must match the classmethod's signature — for `GitHubToolkit` that argument is
+> `github_api_wrapper`, not `api_wrapper`.
 
 #### `base_tool_info_url` *(optional)*
 
