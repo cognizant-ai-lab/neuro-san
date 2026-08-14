@@ -66,6 +66,10 @@ class AbstractClassActivation(AbstractCallableActivation):
     - ToolboxActivation: looks up the class reference from a predefined toolbox.
     """
 
+    # Process-wide guard so the notice that class resolution is unrestricted
+    # is logged only once, not on every tool invocation.
+    _unrestricted_notice_logged: bool = False
+
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self, parent_run_context: RunContext,
                  factory: AgentToolFactory,
@@ -228,6 +232,13 @@ class AbstractClassActivation(AbstractCallableActivation):
         # If we exhausted all levels without success, warn and raise an error
         agent_name: str = self.factory.get_name_from_spec(self.agent_tool_spec)
         agent_tool_path: str = ".".join(this_agent_tool_path_parts[:-len(agent_network_name_parts)])
+        strict_note: str = ""
+        if self.is_agent_tool_path_only():
+            strict_note = """
+Note: AGENT_TOOL_PATH_ONLY is enabled, so fully-qualified class references
+to modules outside of AGENT_TOOL_PATH are not resolvable.
+The class must live under the AGENT_TOOL_PATH hierarchy described above.
+"""
         message = f"""
 Could not find class "{class_name}"
 in module "{module_name}"
@@ -250,7 +261,7 @@ Check these things:
     e)  If an agent network contains both specific and global CodedTools,
         the global module must not have the same name as the agent network.
 3. Is AGENT_TOOL_PATH findable from what is set for your PYTHONPATH?
-"""
+{strict_note}"""
         self.logger.error(message)
         raise ValueError(message) from last_exception
 
@@ -269,11 +280,23 @@ Check these things:
         :param agent_network_name_parts: The agent network name split into parts
         :return: The resolved Python class
         """
-        # Phase 1 - Try the simplest thing first - a direct import from a fully-qualified path
-        fully_qualified_name: str = f"{module_name}.{class_name}"
-        python_class: Type[Any] = ResolverUtil.create_type(fully_qualified_name, raise_if_not_found=False)
-        if python_class is not None:
-            return python_class
+        python_class: Type[Any] = None
+        if self.is_agent_tool_path_only():
+            # Phase 1 is skipped: importing a module executes its top-level code,
+            # so a fully-qualified "class" reference in an agent network hocon
+            # could otherwise run import-time code from any module on the
+            # server's PYTHONPATH. Phase 2 below roots every import under the
+            # AGENT_TOOL_PATH hierarchy, so a reference cannot escape it.
+            self.logger.debug("AGENT_TOOL_PATH_ONLY is enabled: "
+                              "skipping fully-qualified class resolution")
+        else:
+            self._log_unrestricted_resolution_notice_once()
+
+            # Phase 1 - Try the simplest thing first - a direct import from a fully-qualified path
+            fully_qualified_name: str = f"{module_name}.{class_name}"
+            python_class = ResolverUtil.create_type(fully_qualified_name, raise_if_not_found=False)
+            if python_class is not None:
+                return python_class
 
         # Phase 2 - Try resolving from most specific to most general (root level)
         last_exception: Union[ValueError, AttributeError] = None
@@ -306,6 +329,28 @@ Check these things:
             raise last_exception
 
         raise ValueError(f'Could not resolve class "{class_name}" in module "{module_name}".')
+
+    @staticmethod
+    def is_agent_tool_path_only() -> bool:
+        """
+        :return: True if the AGENT_TOOL_PATH_ONLY environment variable restricts
+                CodedTool class resolution to the AGENT_TOOL_PATH hierarchy only.
+                Defaults to False for backwards compatibility, where fully-qualified
+                references can resolve to any class on the server's PYTHONPATH.
+        """
+        return environ.get("AGENT_TOOL_PATH_ONLY", "false").lower() == "true"
+
+    def _log_unrestricted_resolution_notice_once(self):
+        """
+        Logs a one-time notice that CodedTool class resolution is unrestricted.
+        """
+        if not AbstractClassActivation._unrestricted_notice_logged:
+            AbstractClassActivation._unrestricted_notice_logged = True
+            self.logger.info(
+                "AGENT_TOOL_PATH_ONLY is not enabled: CodedTool 'class' references "
+                "can resolve via fully-qualified import from anywhere on the PYTHONPATH. "
+                "Set AGENT_TOOL_PATH_ONLY=true to restrict resolution to the "
+                "AGENT_TOOL_PATH hierarchy.")
 
     def instantiate_coded_tool(self, python_class) -> CodedTool:
         """

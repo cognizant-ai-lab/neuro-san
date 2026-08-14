@@ -17,6 +17,11 @@
 
 from typing import Any
 from typing import Dict
+
+import logging
+import os
+import sys
+
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
@@ -404,3 +409,118 @@ class TestAbstractClassActivation:
 
                 assert activation.reservationist is not None
                 assert activation.arguments.get("reservationist") is not None
+
+
+FIXTURE_TOOL_PATH_PACKAGE = "tests.neuro_san.internals.graph.activations.tool_path_fixture"
+CANARY_PACKAGE = "tests.neuro_san.internals.graph.activations"
+
+
+@pytest.fixture
+def fixture_factory():
+    """Create a mock AgentToolFactory whose tool path points at real fixture modules."""
+    factory = MagicMock()
+    factory.get_agent_tool_path.return_value = f"{FIXTURE_TOOL_PATH_PACKAGE}.my_network"
+    factory.agent_network.get_network_name.return_value = "my_network"
+    factory.get_name_from_spec.return_value = "test_agent"
+    return factory
+
+
+@pytest.fixture
+def fixture_activation(mock_run_context, fixture_factory, basic_agent_tool_spec):
+    """Create an activation whose class resolution runs unmocked against fixture modules."""
+    with patch(CREATE_RUN_CONTEXT_PATH, return_value=mock_run_context):
+        with patch(GET_FULL_NAME_FROM_ORIGIN_PATH, return_value="test_full_name"):
+            return ConcreteClassActivation(
+                parent_run_context=mock_run_context,
+                factory=fixture_factory,
+                arguments={},
+                agent_tool_spec=basic_agent_tool_spec,
+                sly_data={},
+                class_ref="unused.Unused"
+            )
+
+
+class TestToolPathOnlyResolution:
+    """
+    Tests for the AGENT_TOOL_PATH_ONLY environment variable, run against real
+    fixture modules with no Resolver mocks so that actual import behavior is
+    what is asserted.
+    """
+
+    def test_default_mode_resolves_fully_qualified_ref(self, fixture_activation):
+        """Test that with the flag off, a fully-qualified ref to a module outside
+        AGENT_TOOL_PATH resolves by direct import (backwards-compatible behavior)."""
+        with patch.dict(os.environ):
+            os.environ.pop("AGENT_TOOL_PATH_ONLY", None)
+            cls = fixture_activation.resolve_class(
+                "CanaryTool", f"{CANARY_PACKAGE}.resolution_canary_default")
+        assert cls.__name__ == "CanaryTool"
+
+    def test_tool_path_only_blocks_fully_qualified_ref_without_importing(self, fixture_activation):
+        """Test that strict mode rejects a fully-qualified ref outside AGENT_TOOL_PATH
+        and, critically, never imports the referenced module — importing executes
+        module-level code, which is the vulnerability the flag closes."""
+        module_path = f"{CANARY_PACKAGE}.resolution_canary_strict"
+        sys.modules.pop(module_path, None)
+
+        with patch.dict(os.environ, {"AGENT_TOOL_PATH_ONLY": "true"}):
+            with pytest.raises(ValueError) as exc_info:
+                fixture_activation.resolve_class("CanaryTool", module_path)
+
+        assert module_path not in sys.modules
+        assert "AGENT_TOOL_PATH_ONLY" in str(exc_info.value)
+
+    def test_tool_path_only_resolves_network_specific_tool(self, fixture_activation):
+        """Test that strict mode still resolves a tool at the network-specific level."""
+        with patch.dict(os.environ, {"AGENT_TOOL_PATH_ONLY": "true"}):
+            cls = fixture_activation.resolve_class("NetworkTool", "network_tool")
+        assert cls.__name__ == "NetworkTool"
+
+    def test_tool_path_only_resolves_shared_tool(self, fixture_activation):
+        """Test that strict mode still resolves a shared tool one level up the hierarchy."""
+        with patch.dict(os.environ, {"AGENT_TOOL_PATH_ONLY": "true"}):
+            cls = fixture_activation.resolve_class("SharedTool", "shared_tool")
+        assert cls.__name__ == "SharedTool"
+
+    def test_tool_path_only_resolves_shipped_toolbox_coded_tool(
+            self, mock_run_context, basic_agent_tool_spec):
+        """Test that strict mode still resolves the coded tools shipped in
+        neuro_san/coded_tools, as referenced by the default toolbox info file."""
+        factory = MagicMock()
+        factory.get_agent_tool_path.return_value = "neuro_san.coded_tools.date_time_timezone"
+        factory.agent_network.get_network_name.return_value = "date_time_timezone"
+        factory.get_name_from_spec.return_value = "current_date_time"
+
+        with patch(CREATE_RUN_CONTEXT_PATH, return_value=mock_run_context):
+            with patch(GET_FULL_NAME_FROM_ORIGIN_PATH, return_value="test_full_name"):
+                activation = ConcreteClassActivation(
+                    parent_run_context=mock_run_context,
+                    factory=factory,
+                    arguments={},
+                    agent_tool_spec=basic_agent_tool_spec,
+                    sly_data={},
+                    class_ref="unused.Unused"
+                )
+
+        with patch.dict(os.environ, {"AGENT_TOOL_PATH_ONLY": "true"}):
+            cls = activation.resolve_class("GetCurrentDateTime", "get_current_date_time")
+        assert cls.__name__ == "GetCurrentDateTime"
+
+    def test_default_mode_still_resolves_tool_path_refs(self, fixture_activation):
+        """Test that with the flag off, tool-path-relative refs resolve as before."""
+        with patch.dict(os.environ):
+            os.environ.pop("AGENT_TOOL_PATH_ONLY", None)
+            cls = fixture_activation.resolve_class("NetworkTool", "network_tool")
+        assert cls.__name__ == "NetworkTool"
+
+    def test_unrestricted_resolution_notice_logged_once(self, fixture_activation, caplog):
+        """Test that the flag-off notice is logged exactly once per process."""
+        # pylint: disable=protected-access
+        AbstractClassActivation._unrestricted_notice_logged = False
+        with patch.dict(os.environ):
+            os.environ.pop("AGENT_TOOL_PATH_ONLY", None)
+            with caplog.at_level(logging.INFO):
+                fixture_activation.resolve_class("NetworkTool", "network_tool")
+                fixture_activation.resolve_class("SharedTool", "shared_tool")
+
+        assert caplog.text.count("AGENT_TOOL_PATH_ONLY is not enabled") == 1

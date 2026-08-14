@@ -853,6 +853,20 @@ If the agent is called `math_guy` and the class is valued as `calculator.Calcula
 The python file math_guy/calculator.py under `AGENT_TOOL_PATH` is expected to have
 a class called Calculator which implements the CodedTool interface.
 
+> [!IMPORTANT]
+> A fully-qualified `class` reference can name any module importable from the server's `PYTHONPATH`,
+> and importing a module executes its top-level code. Agent network hocon files and coded tools are
+> therefore code-equivalent: anyone with write access to the registry directory or `AGENT_TOOL_PATH`
+> can effectively run code as the server process. Restrict write access to both locations, review
+> registry changes as you would code changes, and prefer least-privilege deployments.
+>
+> Setting the `AGENT_TOOL_PATH_ONLY` environment variable to `true` (default `false`) disables
+> fully-qualified resolution entirely: `class` references then resolve only under the
+> `AGENT_TOOL_PATH` hierarchy described above. The same flag governs shared coded tools referenced
+> through the [toolbox](#toolbox). Langchain tools defined in a toolbox info file are part of the
+> server operator's startup configuration rather than agent hocon content, and are not governed by
+> this flag. When the flag is off, the server logs a one-time notice that resolution is unrestricted.
+
 Implementations of the CodedTool interface must have implementations which:
 
 - have a no-args constructor

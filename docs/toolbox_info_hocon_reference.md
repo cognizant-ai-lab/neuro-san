@@ -158,7 +158,9 @@ These tools extend from the `CodedTool` class.
 #### [`class`](./agent_hocon_reference.md#class)
 
 Fully qualified class name in the format `tool_module.ToolClass`. The `class` must point to a module available in your
-`AGENT_TOOL_PATH` and server `PYTHONPATH`.
+`AGENT_TOOL_PATH` and server `PYTHONPATH`. When the `AGENT_TOOL_PATH_ONLY` environment variable is `true`, resolution
+is restricted to the `AGENT_TOOL_PATH` hierarchy: fully-qualified references to modules elsewhere on the `PYTHONPATH`
+are rejected.
 
 Example:
 
