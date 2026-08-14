@@ -33,6 +33,7 @@ from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
+from leaf_common.config.config_util import ConfigUtil
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.resolution.resolver import Resolver
 from leaf_common.resolution.resolver_util import ResolverUtil
@@ -235,9 +236,11 @@ class AbstractClassActivation(AbstractCallableActivation):
         strict_note: str = ""
         if self.is_agent_tool_path_only():
             strict_note = """
-Note: AGENT_TOOL_PATH_ONLY is enabled, so fully-qualified class references
-to modules outside of AGENT_TOOL_PATH are not resolvable.
-The class must live under the AGENT_TOOL_PATH hierarchy described above.
+Note: AGENT_TOOL_PATH_ONLY is enabled, so fully-qualified class references are
+not resolved at all — even ones that point inside AGENT_TOOL_PATH. Reference the
+class relative to the AGENT_TOOL_PATH hierarchy instead, e.g. "<module>.<ClassName>"
+for a shared tool or "<agent_network>.<module>.<ClassName>" for a network-specific
+tool, rather than by its full package path.
 """
         message = f"""
 Could not find class "{class_name}"
@@ -280,25 +283,22 @@ Check these things:
         :param agent_network_name_parts: The agent network name split into parts
         :return: The resolved Python class
         """
-        python_class: Type[Any] = None
-        if self.is_agent_tool_path_only():
-            # Phase 1 is skipped: importing a module executes its top-level code,
-            # so a fully-qualified "class" reference in an agent network hocon
-            # could otherwise run import-time code from any module on the
-            # server's PYTHONPATH. Phase 2 below roots every import under the
-            # AGENT_TOOL_PATH hierarchy, so a reference cannot escape it.
-            self.logger.debug("AGENT_TOOL_PATH_ONLY is enabled: "
-                              "skipping fully-qualified class resolution")
-        else:
+        # Phase 1 - Try the simplest thing first - a direct import from a fully-qualified path.
+        # This is skipped when AGENT_TOOL_PATH_ONLY is set: importing a module executes its
+        # top-level code, so a fully-qualified "class" reference in an agent network hocon
+        # could otherwise run import-time code from any module on the server's PYTHONPATH.
+        # Phase 2 below roots every import under the AGENT_TOOL_PATH hierarchy, so a
+        # reference cannot escape it.
+        if not self.is_agent_tool_path_only():
             self._log_unrestricted_resolution_notice_once()
 
-            # Phase 1 - Try the simplest thing first - a direct import from a fully-qualified path
-            fully_qualified_name: str = f"{module_name}.{class_name}"
-            python_class = ResolverUtil.create_type(fully_qualified_name, raise_if_not_found=False)
-            if python_class is not None:
-                return python_class
+            phase1_class: Type[Any] = ResolverUtil.create_type(
+                f"{module_name}.{class_name}", raise_if_not_found=False)
+            if phase1_class is not None:
+                return phase1_class
 
         # Phase 2 - Try resolving from most specific to most general (root level)
+        python_class: Type[Any] = None
         last_exception: Union[ValueError, AttributeError] = None
         for i in range(len(agent_network_name_parts) + 1):
             if i == 0:
@@ -338,7 +338,11 @@ Check these things:
                 Defaults to False for backwards compatibility, where fully-qualified
                 references can resolve to any class on the server's PYTHONPATH.
         """
-        return environ.get("AGENT_TOOL_PATH_ONLY", "false").lower() == "true"
+        # ConfigUtil.get_bool accepts the boolean-like spellings used elsewhere for
+        # neuro-san env flags (true/yes, case-insensitive, whitespace-trimmed), so an
+        # operator setting this security flag the way other flags are set gets the
+        # behavior they expect rather than a silent fail-open.
+        return ConfigUtil.get_bool(environ, "AGENT_TOOL_PATH_ONLY", default=False)
 
     def _log_unrestricted_resolution_notice_once(self):
         """

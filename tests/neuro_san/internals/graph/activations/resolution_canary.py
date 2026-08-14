@@ -16,14 +16,15 @@
 # END COPYRIGHT
 """
 Canary module deliberately OUTSIDE any AGENT_TOOL_PATH used in tests.
-Resolution tests reference it fully-qualified to prove that default-mode
-(Phase 1) resolution imports modules from anywhere on the PYTHONPATH.
-Nothing else may import this module.
-"""
 
-# Module-level code runs on import; tests use module presence in sys.modules
-# to detect whether resolution imported this module.
-IMPORTED: bool = True
+Resolution tests reference it fully-qualified two ways:
+- default mode resolves it (proving Phase 1 imports from anywhere on PYTHONPATH);
+- strict mode must NOT import it (importing executes top-level code, which is
+  the vulnerability the flag closes), asserted via absence from sys.modules.
+
+Nothing else may import this module, or the strict test's never-imported
+assertion loses its meaning.
+"""
 
 
 class CanaryTool:
