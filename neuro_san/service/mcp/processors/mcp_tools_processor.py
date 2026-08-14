@@ -80,7 +80,7 @@ class McpToolsProcessor:
             if provider is not None:
                 agent_network: AgentNetwork = provider.get_agent_network()
                 if agent_network.is_mcp_tool():
-                    tool_dict: Dict[str, Any] = \
+                    tool_dict: Optional[Dict[str, Any]] = \
                         await self._get_tool_description(agent_name, agent_network, metadata)
                     if tool_dict is not None:
                         tools_description.append(tool_dict)

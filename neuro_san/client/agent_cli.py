@@ -284,7 +284,7 @@ Some suggestions:
         group = arg_parser.add_argument_group(title="Session Type",
                                               description="How will we connect to neuro-san?")
         group.add_argument("--connection", default="direct", type=str,
-                           choices=["direct", "http", "https"],
+                           choices=["direct", "http", "https", "mcp"],
                            help="""
 The type of connection to initiate. Choices are to connect to:
     "http"      - an agent service via HTTP. Needs host and port.
