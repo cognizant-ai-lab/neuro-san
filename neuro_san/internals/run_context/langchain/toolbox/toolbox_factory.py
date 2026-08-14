@@ -186,9 +186,8 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         if "description" in tool_info:
             return tool_info
 
+        # Validated as a non-empty string by _require_tool_info() above.
         tool_class_name: str = tool_info.get("class")
-        if not isinstance(tool_class_name, str) or not tool_class_name:
-            raise ValueError(f"Value for '{tool_name}.class' must be a non-empty string.")
 
         if tool_class_name.startswith("langchain_community."):
             logging.warning(
@@ -271,6 +270,10 @@ class ToolboxFactory(ContextTypeToolboxFactory):
                 "(e.g., 'some_package.some_module.SomeTool')\n"
                 "- For shared CodedTools: use 'module.Class' format (e.g., 'some_module.SomeCodedTool')"
             )
+
+        tool_class_name: Any = tool_info.get("class")
+        if not isinstance(tool_class_name, str) or not tool_class_name:
+            raise ValueError(f"Value for '{tool_name}.class' must be a non-empty string.")
         return tool_info
 
     @staticmethod

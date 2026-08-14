@@ -230,7 +230,8 @@ class TestToolboxFactory:
 
     @pytest.mark.parametrize("bad_class", [None, 123, ""])
     def test_create_toolbox_with_invalid_class_value(self, factory, bad_class):
-        """Test that a non-string or empty 'class' value raises a clear ValueError."""
+        """Test that a non-string or empty 'class' value raises a clear ValueError
+        from both toolbox entry points."""
         factory.toolbox_infos = {
             "bad_tool": {
                 "class": bad_class
@@ -239,6 +240,9 @@ class TestToolboxFactory:
 
         with pytest.raises(ValueError, match="must be a non-empty string"):
             factory.create_tool_from_toolbox("bad_tool", {})
+
+        with pytest.raises(ValueError, match="must be a non-empty string"):
+            factory.get_shared_coded_tool_class("bad_tool")
 
     def test_create_toolbox_with_toolkit_constructor(self, factory):
         """Test the toolkit instantiates with constructor."""
