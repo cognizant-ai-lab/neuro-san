@@ -52,6 +52,7 @@ import time
 from typing import Any
 from typing import Dict
 from typing import Iterable
+from typing import Optional
 from typing import Tuple
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
@@ -214,7 +215,6 @@ class LocalReservationsStorage(AbstractReservationsStorage):
     # Read path
     # ---------------------------------------------------------------------
 
-    # pylint: disable=too-many-return-statements
     def get_one_reservation(self, obj_key: str) -> Tuple[Reservation, AgentNetwork]:
         """
         Retrieve a single reservation by its reservation_id.
@@ -230,23 +230,13 @@ class LocalReservationsStorage(AbstractReservationsStorage):
 
         try:
             path: str = self._path_for(reservation_id)
-            with open(path, "r", encoding="utf-8") as fh:
-                agent_spec: Dict[str, Any] = json.load(fh)
-        except FileNotFoundError:
-            self.logger.debug("%s: reservation %s not found (path=%s)",
-                              self._name, reservation_id, path)
-            return None, None
-        except OSError as exc:
-            sensitive_logger.error("%s: I/O error reading reservation %s: %s",
-                                   self._name, reservation_id, exc)
-            return None, None
-        except json.JSONDecodeError as exc:
-            sensitive_logger.error("%s: JSON decode error reading reservation %s: %s",
-                                   self._name, reservation_id, exc)
-            return None, None
         except ValueError as exc:
             sensitive_logger.debug("%s: invalid reservation_id %r: %s",
                                    self._name, reservation_id, exc)
+            return None, None
+
+        agent_spec: Any = self._read_reservation_file(path, context="read")
+        if agent_spec is None:
             return None, None
 
         try:
@@ -320,19 +310,8 @@ class LocalReservationsStorage(AbstractReservationsStorage):
         """
         # pylint: disable=too-many-return-statements
         sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
-        try:
-            with open(path, "r", encoding="utf-8") as fh:
-                agent_spec: Dict[str, Any] = json.load(fh)
-        except FileNotFoundError:
-            # Race with another expiration/writer -- fine.
-            return False
-        except OSError as exc:
-            sensitive_logger.error("%s: I/O error reading %s during expiration: %s",
-                                   self._name, path, exc)
-            return False
-        except json.JSONDecodeError as exc:
-            sensitive_logger.error("%s: JSON decode error on %s during expiration: %s",
-                                   self._name, path, exc)
+        agent_spec: Any = self._read_reservation_file(path, context="expiration")
+        if agent_spec is None:
             return False
 
         if not isinstance(agent_spec, dict):
@@ -377,6 +356,39 @@ class LocalReservationsStorage(AbstractReservationsStorage):
     # ---------------------------------------------------------------------
     # Internal helpers
     # ---------------------------------------------------------------------
+
+    def _read_reservation_file(self, path: str, context: str) -> Optional[Any]:
+        """
+        Open and JSON-parse a reservation file, returning the parsed object or
+        None. Shared by the read (get_one_reservation) and expiration
+        (_expire_one_file) paths, which handle a missing/unreadable/corrupt file
+        identically: skip it rather than abort.
+
+        A missing file (FileNotFoundError) is a benign absence or a race with a
+        concurrent writer/expirer and is logged at debug; I/O and JSON errors are
+        logged at error through a SensitiveLogger. All failures return None.
+
+        :param path: Full path to the reservation JSON file.
+        :param context: Short label for the calling operation (e.g. "read" or
+                        "expiration"), included in log messages.
+        :return: The parsed JSON object, or None on any read/parse failure.
+        """
+        sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+        try:
+            with open(path, "r", encoding="utf-8") as file_handle:
+                return json.load(file_handle)
+        except FileNotFoundError:
+            self.logger.debug("%s: reservation file not found during %s: %s",
+                              self._name, context, path)
+            return None
+        except OSError as exc:
+            sensitive_logger.error("%s: I/O error reading %s during %s: %s",
+                                   self._name, path, context, exc)
+            return None
+        except json.JSONDecodeError as exc:
+            sensitive_logger.error("%s: JSON decode error reading %s during %s: %s",
+                                   self._name, path, context, exc)
+            return None
 
     def _path_for(self, reservation_id: str) -> str:
         """
