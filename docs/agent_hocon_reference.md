@@ -853,6 +853,23 @@ If the agent is called `math_guy` and the class is valued as `calculator.Calcula
 The python file math_guy/calculator.py under `AGENT_TOOL_PATH` is expected to have
 a class called Calculator which implements the CodedTool interface.
 
+> [!IMPORTANT]
+> Loading a class imports its module, and importing a module executes the module's top-level code.
+> Because agent network hocon files can name classes to load, hocon files and coded tools are
+> code-equivalent: anyone who can write to the registry directory or `AGENT_TOOL_PATH` can
+> effectively run code as the server process. Restrict write access to both locations, review
+> registry changes as you would code changes, and prefer least-privilege deployments.
+>
+> Setting the `AGENT_TOOL_PATH_ONLY` environment variable to `true` (default `false`) hardens the
+> CodedTool `class` path specifically: fully-qualified references are no longer resolved, so a
+> CodedTool `class` resolves only under the `AGENT_TOOL_PATH` hierarchy described above and cannot
+> import an arbitrary module elsewhere on the `PYTHONPATH`. The same flag governs shared coded
+> tools referenced through the [toolbox](#toolbox). It does **not** restrict other class references
+> an agent network can make — `llm_config.class`, middleware classes, and langchain toolbox tool
+> classes are still resolved fully-qualified — so it narrows one vector rather than replacing the
+> trust boundary above. When the flag is off, the server logs a one-time notice at first CodedTool
+> resolution that resolution is unrestricted.
+
 Implementations of the CodedTool interface must have implementations which:
 
 - have a no-args constructor
