@@ -244,9 +244,16 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession, Conc
         path: str = self.get_request_path("list")
         try:
             with requests.post(path, json=mcp_payload, headers=headers,
+<<<<<<< HEAD
                                timeout=self.timeout_in_seconds) as response:
                 response.raise_for_status()
                 result_dict = response.json()
+=======
+                               timeout=self.streaming_timeout_in_seconds) as response:
+                response.raise_for_status()
+                result_dict = response.json()
+                #result_dict = McpChatResponseDictionaryConverter().to_dict(result_dict)
+>>>>>>> 7de2be21 (WIP.)
                 return result_dict
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(self.help_message(path)) from exc
