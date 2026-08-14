@@ -25,15 +25,17 @@ from asyncio import AbstractEventLoop
 from copy import deepcopy
 from logging import getLogger
 from logging import Logger
+from os import environ
+from time import perf_counter
 import traceback
 
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
-from leaf_common.config.resolver import Resolver
-from leaf_common.config.resolver_util import ResolverUtil
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
+from leaf_common.resolution.resolver import Resolver
+from leaf_common.resolution.resolver_util import ResolverUtil
 
 from neuro_san.interfaces.coded_tool import CodedTool
 from neuro_san.interfaces.reservationist import Reservationist
@@ -42,13 +44,13 @@ from neuro_san.internals.graph.activations.branch_activation import BranchActiva
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.journal import Journal
+from neuro_san.internals.journals.origination import Origination
 from neuro_san.internals.journals.progress_journal import ProgressJournal
 from neuro_san.internals.journals.tool_argument_reporting import ToolArgumentReporting
-from neuro_san.internals.messages.agent_message import AgentMessage
-from neuro_san.internals.messages.origination import Origination
 from neuro_san.internals.reservations.accumulating_agent_reservationist import AccumulatingAgentReservationist
 from neuro_san.internals.run_context.factory.run_context_factory import RunContextFactory
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
+from neuro_san.message.types.agent_message import AgentMessage
 
 
 class AbstractClassActivation(AbstractCallableActivation):
@@ -159,6 +161,8 @@ class AbstractClassActivation(AbstractCallableActivation):
         while module_name.endswith("."):
             module_name = module_name[:-1]
 
+        start: float = perf_counter()
+
         # Resolve the class and the method
         python_class: Type[Any] = self.resolve_class(class_name, module_name)
 
@@ -170,6 +174,20 @@ class AbstractClassActivation(AbstractCallableActivation):
             retval: Any = await self.attempt_invoke(coded_tool, self.arguments, self.sly_data)
         else:
             retval = f"Error: {full_class_ref} is not a CodedTool"
+
+        stop: float = perf_counter()
+        duration: float = stop - start
+
+        threshold_str: str = environ.get("AGENT_TOOL_EXECUTION_LOG_THRESHOLD_SECONDS", "0")
+        threshold: float = 0.0
+        try:
+            threshold = float(threshold_str)
+        except ValueError:
+            # String not parseable as float. Fine, just ignore.
+            pass
+
+        if duration > threshold > 0.0:
+            self.logger.info("Execution of %s took %f seconds", full_class_ref, duration)
 
         # Change the result into a message
         retval_str: str = f"{retval}"

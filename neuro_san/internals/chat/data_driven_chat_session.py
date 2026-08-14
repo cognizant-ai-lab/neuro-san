@@ -32,7 +32,7 @@ from inspect import iscoroutinefunction
 
 from langchain_core.messages.base import BaseMessage
 
-from leaf_common.config.resolver_util import ResolverUtil
+from leaf_common.resolution.resolver_util import ResolverUtil
 
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.chat.chat_history_message_processor import ChatHistoryMessageProcessor
@@ -46,15 +46,14 @@ from neuro_san.internals.interfaces.run_target import RunTarget
 from neuro_san.internals.interfaces.tracing_context import TracingContext
 from neuro_san.internals.journals.intercepting_journal import InterceptingJournal
 from neuro_san.internals.journals.journal import Journal
-from neuro_san.internals.messages.agent_framework_message import AgentFrameworkMessage
-from neuro_san.internals.messages.base_message_dictionary_converter import BaseMessageDictionaryConverter
-from neuro_san.internals.messages.sly_data_redactor import SlyDataRedactor
 from neuro_san.internals.run_context.factory.run_context_factory import RunContextFactory
 from neuro_san.internals.run_context.factory.master_tracing_context_factory import MasterTracingContextFactory
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
-from neuro_san.message_processing.message_processor import MessageProcessor
-from neuro_san.message_processing.answer_message_processor import AnswerMessageProcessor
-from neuro_san.message_processing.structure_message_processor import StructureMessageProcessor
+from neuro_san.message.processors.answer_message_processor import AnswerMessageProcessor
+from neuro_san.message.processors.message_processor import MessageProcessor
+from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
+from neuro_san.message.types.base_message_dictionary_converter import BaseMessageDictionaryConverter
+from neuro_san.message.utils.sly_data_redactor import SlyDataRedactor
 
 # Lazily import specific errors from llm providers
 PATIENCE_ERRORS: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
@@ -398,27 +397,6 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         }
 
         return chat_context
-
-    def create_outgoing_message_processor(self) -> MessageProcessor:
-        """
-        :return: A MessageProcessor that filters messages outgoing to the client.
-                How this works is based on settings on the front man.
-                Can be None.
-        """
-        message_processor: MessageProcessor = None
-
-        front_man_name: str = self.registry.find_front_man()
-        front_man_spec: Dict[str, Any] = self.registry.get_agent_tool_spec(front_man_name)
-
-        # Get the formats we should parse from the final answer from the config for the network.
-        # As of 6/24/25, this is an unadvertised experimental feature.
-        structure_formats: Union[str, List[str]] = front_man_spec.get("structure_formats")
-        if structure_formats is None:
-            return message_processor
-
-        # Eventually this might be a CompositeMessageProcessor
-        message_processor = StructureMessageProcessor(structure_formats)
-        return message_processor
 
     async def close_of_work(self, parent_resource: LingeringResource = None):
         """

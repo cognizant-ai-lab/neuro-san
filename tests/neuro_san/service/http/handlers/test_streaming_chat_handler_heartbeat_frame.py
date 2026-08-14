@@ -26,7 +26,7 @@ do not silently change what clients see.
 
 import json
 
-from neuro_san.internals.messages.chat_message_type import ChatMessageType
+from neuro_san.message.types.chat_message_type import ChatMessageType
 from neuro_san.service.http.handlers.streaming_chat_handler import StreamingChatHandler
 
 

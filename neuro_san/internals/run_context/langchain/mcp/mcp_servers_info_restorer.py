@@ -49,11 +49,12 @@ class McpServersInfoRestorer(AbstractAsyncConfigRestorer):
         if basis_config is None:
             return None
 
-        # Now, MCP endpoints urls could put in quotes, so strip them out.
+        # Keys (MCP endpoint urls, quoted in HOCON source) are quote-sanitized
+        # at parse time (sanitize_keys=True), so only whitespace normalization
+        # is left to do here.
         result_dict: Dict[str, Any] = {}
         for key, value in basis_config.items():
-            use_key: str = key.replace(r'"', "")
-            use_key = use_key.strip()
+            use_key: str = key.strip()
             result_dict[use_key] = value
 
         return result_dict

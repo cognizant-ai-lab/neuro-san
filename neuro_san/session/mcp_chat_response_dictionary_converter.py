@@ -21,7 +21,7 @@ from typing import Sequence
 
 from leaf_common.serialization.interface.dictionary_converter import DictionaryConverter
 
-from neuro_san.internals.messages.chat_message_type import ChatMessageType
+from neuro_san.message.types.chat_message_type import ChatMessageType
 
 
 class McpChatResponseDictionaryConverter(DictionaryConverter):

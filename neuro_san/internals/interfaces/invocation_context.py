@@ -29,7 +29,7 @@ from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextT
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.interfaces.lingering_resource import LingeringResource
 from neuro_san.internals.journals.journal import Journal
-from neuro_san.internals.messages.origination import Origination
+from neuro_san.internals.journals.origination import Origination
 
 
 class InvocationContext(LingeringResource):
@@ -85,7 +85,7 @@ class InvocationContext(LingeringResource):
     def get_queue(self) -> AsyncCollatingQueue:
         """
         :return: The AsyncCollatingQueue instance via which messages are streamed to the
-                AgentSession mechanics
+                QueueFilter mechanics
         """
         raise NotImplementedError
 
@@ -116,6 +116,15 @@ class InvocationContext(LingeringResource):
     def get_request_reporting(self) -> Dict[str, Any]:
         """
         :return: The request reporting dictionary
+        """
+        raise NotImplementedError
+
+    def is_cloned(self) -> bool:
+        """
+        :return: True if this instance is a clone of a request's original
+                InvocationContext, created to invoke an external agent network
+                on the same server via a direct session.
+                False for the original InvocationContext of a request.
         """
         raise NotImplementedError
 
