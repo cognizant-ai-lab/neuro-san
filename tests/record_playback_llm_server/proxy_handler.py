@@ -354,7 +354,7 @@ class ProxyHandler(tornado.web.RequestHandler):
         self.logger.error("upstream request to %s failed: %s", self.upstream_path, str(exception))
         self.set_status(502)
         self.set_header("Content-Type", "application/json")
-        self.write(json.dumps({"error": {"message": f"upstream request failed: {exception}"}}))
+        self.write(json.dumps({"error": {"message": "upstream request failed"}}))
 
     @staticmethod
     def _decode_body(raw_body: bytes) -> Any:
