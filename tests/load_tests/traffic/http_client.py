@@ -81,8 +81,9 @@ class HttpClient:
         Returns (status, parsed_fields, response_text, ttft,
         token_accounting).
         """
-        # pylint: disable=too-many-arguments
-        # pylint: disable=too-many-locals
+        # Mirrors the agent_cli request surface, so the argument list and
+        # local state track that interface rather than an internal design.
+        # pylint: disable=too-many-arguments,too-many-locals
         start = time.time()
 
         security_cfg: Dict[str, Any] = {} if use_https else None
