@@ -23,7 +23,7 @@ raises ValueError.
 """
 import pytest
 
-from neuro_san.service.watcher.temp_networks.local_reservations_storage import LocalReservationsStorage
+from neuro_san.service.watcher.temp_networks.local.local_reservations_storage import LocalReservationsStorage
 
 
 class TestLocalReservationsStorageConstructor:

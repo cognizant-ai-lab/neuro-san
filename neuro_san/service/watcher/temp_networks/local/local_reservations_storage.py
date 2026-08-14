@@ -54,6 +54,8 @@ from typing import Dict
 from typing import Iterable
 from typing import Tuple
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.abstract_reservations_storage import AbstractReservationsStorage
@@ -221,6 +223,7 @@ class LocalReservationsStorage(AbstractReservationsStorage):
         :return: (reservation, agent_network) on success, (None, None) if the
                  file is missing, malformed, or the reservation has expired.
         """
+        sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
         reservation_id: str = obj_key
         reservation: Reservation = None
         agent_network: AgentNetwork = None
@@ -234,15 +237,15 @@ class LocalReservationsStorage(AbstractReservationsStorage):
                               self._name, reservation_id, path)
             return None, None
         except OSError as exc:
-            self.logger.error("%s: I/O error reading reservation %s: %s",
+            sensitive_logger.error("%s: I/O error reading reservation %s: %s",
                               self._name, reservation_id, exc)
             return None, None
         except json.JSONDecodeError as exc:
-            self.logger.error("%s: JSON decode error reading reservation %s: %s",
+            sensitive_logger.error("%s: JSON decode error reading reservation %s: %s",
                               self._name, reservation_id, exc)
             return None, None
         except ValueError as exc:
-            self.logger.debug("%s: invalid reservation_id %r: %s",
+            sensitive_logger.debug("%s: invalid reservation_id %r: %s",
                               self._name, reservation_id, exc)
             return None, None
 
@@ -261,8 +264,8 @@ class LocalReservationsStorage(AbstractReservationsStorage):
         except Exception as exc:  # pylint: disable=broad-exception-caught
             # Any shape error during reconstruction -- treat as "not present"
             # rather than crashing the caller. Matches the S3 reader's behavior.
-            self.logger.error("%s: failed to reconstruct reservation %s: %s",
-                              self._name, reservation_id, exc)
+            sensitive_logger.error("%s: failed to reconstruct reservation %s: %s",
+                                    self._name, reservation_id, exc)
             return None, None
 
         return reservation, agent_network
@@ -316,6 +319,7 @@ class LocalReservationsStorage(AbstractReservationsStorage):
         the S3 expiration path's tolerance for concurrent writers.
         """
         # pylint: disable=too-many-return-statements
+        sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
         try:
             with open(path, "r", encoding="utf-8") as fh:
                 agent_spec: Dict[str, Any] = json.load(fh)
@@ -323,35 +327,35 @@ class LocalReservationsStorage(AbstractReservationsStorage):
             # Race with another expiration/writer -- fine.
             return False
         except OSError as exc:
-            self.logger.error("%s: I/O error reading %s during expiration: %s",
-                              self._name, path, exc)
+            sensitive_logger.error("%s: I/O error reading %s during expiration: %s",
+                                    self._name, path, exc)
             return False
         except json.JSONDecodeError as exc:
-            self.logger.error("%s: JSON decode error on %s during expiration: %s",
-                              self._name, path, exc)
+            sensitive_logger.error("%s: JSON decode error on %s during expiration: %s",
+                                    self._name, path, exc)
             return False
 
         if not isinstance(agent_spec, dict):
-            self.logger.debug("%s: skipping non-dict json file during expiration: %s",
-                              self._name, path)
+            sensitive_logger.debug("%s: skipping non-dict json file during expiration: %s",
+                                   self._name, path)
             return False
 
         metadata: Any = agent_spec.get("metadata") or {}
         if not isinstance(metadata, dict):
-            self.logger.debug("%s: skipping json file with non-dict metadata during expiration: %s",
+            sensitive_logger.debug("%s: skipping json file with non-dict metadata during expiration: %s",
                               self._name, path)
             return False
 
         reservation_data = metadata.get("reservation")
         if not isinstance(reservation_data, dict):
-            self.logger.debug("%s: skipping non-reservation json file during expiration: %s",
-                              self._name, path)
+            sensitive_logger.debug("%s: skipping non-reservation json file during expiration: %s",
+                                   self._name, path)
             return False
         try:
             expiration_time: float = float(reservation_data["expiration_time_in_seconds"])
         except (KeyError, TypeError, ValueError) as exc:
-            self.logger.error("%s: invalid expiration_time_in_seconds in %s: %s",
-                              self._name, path, exc)
+            sensitive_logger.error("%s: invalid expiration_time_in_seconds in %s: %s",
+                                    self._name, path, exc)
             return False
         if current_time <= expiration_time:
             return False
@@ -362,12 +366,12 @@ class LocalReservationsStorage(AbstractReservationsStorage):
             # Already gone -- another sweeper won the race. Count it as expired.
             return True
         except OSError as exc:
-            self.logger.error("%s: failed to delete expired reservation %s: %s",
-                              self._name, path, exc)
+            sensitive_logger.error("%s: failed to delete expired reservation %s: %s",
+                                    self._name, path, exc)
             return False
 
         reservation_id: str = reservation_data.get("id") or os.path.basename(path)
-        self.logger.debug("%s: expired reservation %s", self._name, reservation_id)
+        sensitive_logger.debug("%s: expired reservation %s", self._name, reservation_id)
         return True
 
     # ---------------------------------------------------------------------

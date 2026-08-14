@@ -20,7 +20,7 @@ start() lifecycle tests for LocalReservationsStorage.
 Verifies that start() creates the storage directory if it does not exist
 and is idempotent against an existing directory.
 """
-from neuro_san.service.watcher.temp_networks.local_reservations_storage import LocalReservationsStorage
+from neuro_san.service.watcher.temp_networks.local.local_reservations_storage import LocalReservationsStorage
 
 
 class TestLocalReservationsStorageStart:

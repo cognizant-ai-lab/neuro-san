@@ -23,8 +23,8 @@ start()).
 """
 import pytest
 
-from neuro_san.service.watcher.temp_networks.local_reservations_storage import LocalReservationsStorage
-from tests.neuro_san.service.watcher.temp_networks.local_reservations_test_helpers \
+from neuro_san.service.watcher.temp_networks.local.local_reservations_storage import LocalReservationsStorage
+from tests.neuro_san.service.watcher.temp_networks.local.local_reservations_test_helpers \
     import LocalReservationsTestHelpers
 
 
