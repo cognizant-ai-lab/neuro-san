@@ -185,8 +185,12 @@ class ToolboxFactory(ContextTypeToolboxFactory):
             raise ValueError(f"The value for the {tool_name} key must be a dictionary.")
 
         if "class" not in tool_info:
+            if tool_name in self.REMOVED_TOOLS:
+                # A user toolbox file that overrides only part of a removed
+                # entry used to inherit "class" from the bundled default.
+                raise self._removed_tool_error(tool_name)
             raise ValueError(
-                "Missing required key: 'class'.\n"
+                f"Tool '{tool_name}' is missing required key: 'class'.\n"
                 "Each tool must include a 'class' key:\n"
                 "- For Langchain base tools: use the full class path "
                 "(e.g., 'some_package.some_module.SomeTool')\n"
@@ -259,19 +263,27 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         tool_info: Dict[str, Any] = self.toolbox_infos.get(tool_name)
         if not tool_info:
             if tool_name in self.REMOVED_TOOLS:
-                raise ValueError(
-                    f"Tool '{tool_name}' was removed from the default toolbox because it was "
-                    "built on the deprecated langchain-community package. To keep using it, "
-                    "define it in your own toolbox info file and register that file with the "
-                    "AGENT_TOOLBOX_INFO_FILE environment variable or the 'toolbox_info_file' "
-                    "key in the agent network hocon file. See "
-                    "https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/toolbox_info_hocon_reference.md"
-                )
+                raise self._removed_tool_error(tool_name)
             sources: str = "the default toolbox info file"
             if self.toolbox_info_file:
                 sources += f" or in {self.toolbox_info_file}"
             raise ValueError(f"Tool '{tool_name}' is not defined in {sources}.")
         return tool_info
+
+    @staticmethod
+    def _removed_tool_error(tool_name: str) -> ValueError:
+        """
+        :param tool_name: The name of a tool in REMOVED_TOOLS.
+        :return: A ValueError explaining the removal and how to migrate.
+        """
+        return ValueError(
+            f"Tool '{tool_name}' was removed from the default toolbox because it was "
+            "built on the deprecated langchain-community package. To keep using it, "
+            "define it in your own toolbox info file and register that file with the "
+            "AGENT_TOOLBOX_INFO_FILE environment variable or the 'toolbox_info_file' "
+            "key in the agent network hocon file. See "
+            "https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/toolbox_info_hocon_reference.md"
+        )
 
     def _resolve_args(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """

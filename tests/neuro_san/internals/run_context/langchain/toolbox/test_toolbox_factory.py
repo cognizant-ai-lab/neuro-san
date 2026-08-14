@@ -114,6 +114,27 @@ class TestToolboxFactory:
             factory.create_tool_from_toolbox("requests_get", {})
         assert "AGENT_TOOLBOX_INFO_FILE" in str(exc_info.value)
 
+    def test_create_toolbox_with_partial_override_of_removed_tool(self, factory):
+        """Test that a class-less entry for a removed tool also gets the migration
+        error. A user toolbox file that overrides only the args of a removed
+        entry used to inherit 'class' from the bundled default via the overlay;
+        it should not die on a generic missing-'class' message."""
+        factory.toolbox_infos = {
+            "requests_get": {"args": {"headers": {"Authorization": "Bearer token"}}},
+        }
+
+        with pytest.raises(ValueError, match="deprecated langchain-community"):
+            factory.create_tool_from_toolbox("requests_get", {})
+
+    def test_create_toolbox_missing_class_names_the_tool(self, factory):
+        """Test that the missing-'class' error names the offending tool."""
+        factory.toolbox_infos = {
+            "my_tool": {"args": {"param": "value"}},
+        }
+
+        with pytest.raises(ValueError, match="Tool 'my_tool' is missing required key: 'class'"):
+            factory.create_tool_from_toolbox("my_tool", {})
+
     def test_create_toolbox_with_unknown_tool_names_sources(self, factory):
         """Test that an unknown tool name reports the searched sources by name.
         Previously the message rendered 'not defined in None' when no user
