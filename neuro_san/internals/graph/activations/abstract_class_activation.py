@@ -238,9 +238,10 @@ class AbstractClassActivation(AbstractCallableActivation):
             strict_note = """
 Note: AGENT_TOOL_PATH_ONLY is enabled, so fully-qualified class references are
 not resolved at all — even ones that point inside AGENT_TOOL_PATH. Reference the
-class relative to the AGENT_TOOL_PATH hierarchy instead, e.g. "<module>.<ClassName>"
-for a shared tool or "<agent_network>.<module>.<ClassName>" for a network-specific
-tool, rather than by its full package path.
+class as "<module>.<ClassName>" relative to AGENT_TOOL_PATH, not by its full
+package path: resolution searches the agent network's own directory first and
+then walks up to the shared AGENT_TOOL_PATH root, so the agent network name does
+not belong in the reference.
 """
         message = f"""
 Could not find class "{class_name}"
