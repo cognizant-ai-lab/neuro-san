@@ -54,8 +54,6 @@ class _RequestTimeout(Exception):
 class HttpClient:
     """Runs agent_cli logic in-thread via HttpServiceAgentSession."""
 
-    # pylint: disable=too-many-arguments
-    # pylint: disable=too-many-locals
     @staticmethod
     def execute_request(
             host, port, agent, prompt, *,
@@ -83,6 +81,8 @@ class HttpClient:
         Returns (status, parsed_fields, response_text, ttft,
         token_accounting).
         """
+        # pylint: disable=too-many-arguments
+        # pylint: disable=too-many-locals
         start = time.time()
 
         security_cfg: Dict[str, Any] = {} if use_https else None
