@@ -132,8 +132,11 @@ class OutputValidator:
         """Log server-side request validation from log counts.
 
         Compares the number of requests the server received (from the
-        server log) against the number the client sent, flagging any
-        mismatch.
+        server log) against the number the client sent, flagging only
+        the case of too few: the log belongs to the server, not to this
+        run, so another client testing the same agent inflates the
+        count.  Extra starts are therefore not treated as a mismatch,
+        while missing ones always are.
         """
         if server_counts.get("primary_started") is None:
             return

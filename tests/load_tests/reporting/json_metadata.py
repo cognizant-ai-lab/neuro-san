@@ -53,7 +53,8 @@ class JsonMetadata:
             "aggregates.total_elapsed_seconds":
                 "Sum of wall-clock time across all stages.",
             "aggregates.avg_latency_seconds":
-                "Total elapsed / total requests.",
+                "Mean per-request duration. Requests overlap, so this "
+                "is not total elapsed / total requests.",
             "stage_summaries[].counts":
                 "Per-status request counts: "
                 "CREATED=success, FAILED=error/crash, "

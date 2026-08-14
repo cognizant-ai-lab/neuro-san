@@ -2699,6 +2699,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             1 for r in all_results
             if r.get("status") == STATUS_CREATED
         )
+        avg_latency = sum(
+            r.get("elapsed", 0) for r in all_results
+        ) / total_requests if total_requests else 0
 
         raw_data = {
             "test_metadata": {
@@ -2740,9 +2743,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 "passed": passed,
                 "failed": total_requests - passed,
                 "total_elapsed_seconds": round(total_elapsed, 2),
-                "avg_latency_seconds": round(
-                    total_elapsed / total_requests, 2,
-                ) if total_requests > 0 else 0,
+                "avg_latency_seconds": round(avg_latency, 2),
                 "total_tokens": total_tokens,
                 "total_cost_usd": round(total_cost, 6),
             },

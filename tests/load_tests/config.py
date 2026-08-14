@@ -69,6 +69,7 @@ class ResourceSnapshot(TypedDict):
     connections: int
     children: int
     cpu: float
+    cpu_seconds: float
 
 
 class ServerCounts(TypedDict, total=False):

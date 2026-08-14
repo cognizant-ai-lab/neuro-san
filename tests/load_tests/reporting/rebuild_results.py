@@ -129,9 +129,14 @@ class ResultsRebuilder:
             if r.get("status") == STATUS_CREATED
         )
         total = len(results)
+        # The slowest request stands in for the run's wall-clock time,
+        # which is not recoverable from per-request files alone.
         total_elapsed = max(
             r.get("elapsed", 0) for r in results
         )
+        avg_latency = sum(
+            r.get("elapsed", 0) for r in results
+        ) / total if total > 0 else 0
         total_tokens = sum(
             r.get("total_tokens", 0) for r in results
         )
@@ -156,9 +161,7 @@ class ResultsRebuilder:
                 "total_elapsed_seconds": round(
                     total_elapsed, 2,
                 ),
-                "avg_latency_seconds": round(
-                    total_elapsed / total, 2,
-                ) if total > 0 else 0,
+                "avg_latency_seconds": round(avg_latency, 2),
                 "total_tokens": total_tokens,
                 "total_cost_usd": round(total_cost, 6),
             },
