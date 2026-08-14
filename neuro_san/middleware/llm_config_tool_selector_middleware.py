@@ -98,8 +98,11 @@ class LlmConfigToolSelectorMiddleware(LLMToolSelectorMiddleware):
 
     Note that LLM-based tool selection remains a token/latency optimization, not a
     security boundary: the selection model chooses tools based on the (untrusted) last
-    user message, so it can be steered toward any configured tool.  The set of tools
-    configured for the agent is the actual capability boundary.
+    user message, so it can be steered toward any configured tool.  Enforcement makes
+    "advertised" equal "executable"; it does not make the selector an access-control
+    mechanism.  The set of tools configured for the agent is the actual capability
+    boundary: do not configure sensitive tools on agents exposed to untrusted input
+    and rely on tool selection to keep those tools out of reach.
     """
 
     # pylint: disable=too-many-arguments
