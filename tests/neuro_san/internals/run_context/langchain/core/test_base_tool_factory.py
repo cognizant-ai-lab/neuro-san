@@ -87,7 +87,9 @@ class TestBaseToolFactory:
         param_name: str = BaseToolFactory.DEFAULT_EXTERNAL_PARAMETER_NAME
         fields = tool.args_schema.__fields__
         assert list(fields.keys()) == [param_name]
-        assert fields[param_name].required is True
+        # is_required() is the pydantic v2 FieldInfo API; the v1 models this
+        # converter used to build exposed a .required attribute instead.
+        assert fields[param_name].is_required() is True
 
         # The substitution must not be silent.
         factory.journal.write_message.assert_awaited_once()

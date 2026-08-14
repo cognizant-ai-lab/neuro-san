@@ -82,5 +82,13 @@ class PydanticArgumentDictionaryConverter(DictionaryConverter):
         """
         :param value: the value to test
         :return: True if the object is a pydantic object. False otherwise.
+
+        An isinstance() check is correct now that BaseModelDictionaryConverter
+        creates native pydantic v2 models.  The previous duck-typed check
+        (hasattr(value, "parse_obj")) dated from when the values here were
+        pydantic v1 models: it keyed off an API that is deprecated in
+        pydantic v2 and slated for removal in v3, and it returned a wrong
+        False whenever a model had a field literally named "parse_obj"
+        (buildable under v2), which let nested models through unflattened.
         """
-        return hasattr(value, "parse_obj") and callable(value.parse_obj)
+        return isinstance(value, BaseModel)
