@@ -28,6 +28,7 @@ import time
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Tuple
 
 from neuro_san.client.streaming_input_processor import (
@@ -81,9 +82,12 @@ class HttpClient:
         Returns (status, parsed_fields, response_text, ttft,
         token_accounting).
         """
+        # Mirrors the agent_cli request surface, so the argument list and
+        # the local state track that interface rather than an internal design.
+        # pylint: disable=too-many-arguments,too-many-locals
         start = time.time()
 
-        security_cfg: Dict[str, Any] = {} if use_https else None
+        security_cfg: Optional[Dict[str, Any]] = {} if use_https else None
         session = HttpServiceAgentSession(
             host=host,
             port=str(port),
