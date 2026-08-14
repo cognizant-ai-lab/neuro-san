@@ -10,6 +10,7 @@ subprocesses (default) or direct HTTP streaming (`--http-client`).
 - [Test Levels](#test-levels---level)
 - [Traffic Modes](#traffic-modes)
 - [Flags](#flags)
+- [Environment Variables](#environment-variables)
 - [Pre-Run Summary and Dry-Run Probe](#pre-run-summary-and-dry-run-probe)
 - [Agent Profiles](#agent-profiles)
 - [Output](#output)
@@ -18,6 +19,7 @@ subprocesses (default) or direct HTTP streaming (`--http-client`).
 - [Code Quality](#code-quality)
 - [Architecture](#architecture)
 - [Cross-Run Comparison](#cross-run-comparison)
+- [Trend History](#trend-history)
 - [Notes](#notes)
 
 ## Quick Start
@@ -36,27 +38,27 @@ export PYTHONPATH=$(pwd)
 
 # Smoke test — does the server respond? (--client-only runs the
 # lightweight min profile against an already-running server)
-python -m tests.load_tests.load_test --agent hello_world --client-only --yes
+python -m tests.load_tests.load_test_cli --agent hello_world --client-only --no-dry-run
 
 # Standard — with server log (auto-detect from server process)
-python -m tests.load_tests.load_test --agent hello_world --level norm \
-    --server-log --yes
+python -m tests.load_tests.load_test_cli --agent hello_world --level norm \
+    --server-log --no-dry-run
 
 # Standard — with server log (explicit path)
-python -m tests.load_tests.load_test --agent hello_world --level norm \
-    --server-log /path/to/logs/server.log --yes
+python -m tests.load_tests.load_test_cli --agent hello_world --level norm \
+    --server-log /path/to/logs/server.log --no-dry-run
 
 # Standard — without server log (resources + tokens)
-python -m tests.load_tests.load_test --agent hello_world --level norm --yes
+python -m tests.load_tests.load_test_cli --agent hello_world --level norm --no-dry-run
 
 # Full analysis — with server log
-python -m tests.load_tests.load_test --agent hello_world --level adv \
+python -m tests.load_tests.load_test_cli --agent hello_world --level adv \
     --ramp --stages 2,4,8 \
-    --server-log /path/to/logs/server.log --yes
+    --server-log /path/to/logs/server.log --no-dry-run
 
 # Full analysis — without server log (JSON + tokens, no retries)
-python -m tests.load_tests.load_test --agent hello_world --level adv \
-    --ramp --stages 2,4,8 --yes
+python -m tests.load_tests.load_test_cli --agent hello_world --level adv \
+    --ramp --stages 2,4,8 --no-dry-run
 ```
 
 ## Test Levels (`--level`)
@@ -79,7 +81,11 @@ python -m tests.load_tests.load_test --agent hello_world --level adv \
 `opt` = available with optional flags; `auto` = on by default when the
 target server is local. `--server-log` enables retry counting,
 server-side validation, disconnection detection, and pool reuse
-analysis. At `norm`/`adv` (all-in-one) a server log is expected: it is
+analysis. Retry counting covers both neuro-san's own `max_attempts`
+retries (`retrying from <ErrorType>`) and retries the LLM provider SDK
+performs internally (`Retrying request to ... in ... seconds`, reported
+as `Provider SDK retries`); both feed the amplification factor.
+At `norm`/`adv` (all-in-one) a server log is expected: it is
 auto-detected for a local server (no flag needed when colocated). If a
 local log isn't found, the run **prompts** you to continue without it
 (or abort); a **remote** host aborts with a pointer to
@@ -92,19 +98,25 @@ Resource monitoring is on automatically at `norm`/`adv` and in the
 accounting via `agent_cli --tokens` is enabled at all levels by
 default (disable with `--no-tokens`).
 
-**`adv` level defaults:** 50 requests, 3 rounds (150 total requests).
-With `--yes`, workers auto-match to 50 (full concurrency). Without
-`--yes`, workers default to 3 with a warning. These are applied
-automatically unless overridden with `--num-requests`, `--max-workers`,
-or `--num-rounds`.
+**Where LLM/token numbers come from.** Client-side counts arrive in the
+chat stream as a token-accounting message, so they require the default
+(no `--minimal`); `--minimal` filters that message out server-side and
+the `LLM & TOKEN USAGE` section is then omitted for want of data.
+Server-side counts are parsed from the server log instead, so they are
+unaffected by the filter. A `--client-only` run against a remote host
+has no server log to fall back on: with `--minimal` it reports no
+tokens at all.
 
-**`--max-workers` auto-matching:** At adv level with `--yes` (power
-user mode), `--max-workers` auto-matches `--num-requests` so all
-requests fire concurrently. At other levels or without `--yes`,
-`--max-workers` defaults to 3 (conservative). A warning is shown
-during the cost confirmation on all levels if
-`max-workers < num-requests`. Explicit `--max-workers` is always
-respected regardless of `--yes`.
+**`adv` level defaults:** 50 requests, 3 rounds (150 total requests),
+applied automatically unless overridden with `--num-requests`,
+`--max-workers`, or `--num-rounds`.
+
+**`--max-workers` auto-matching:** `--full-concurrency` matches
+`--max-workers` to `--num-requests` so all requests fire at once, at any
+level. Otherwise `--max-workers` stays at its conservative default of 3
+and a warning is shown during the cost confirmation if
+`max-workers < num-requests`. An explicit `--max-workers` always wins,
+and `--ramp` ignores both since its stages set their own concurrency.
 
 At `norm`/`adv`, server-log analysis is expected: it is auto-detected
 for a local server. If a local log isn't found you're prompted to
@@ -117,7 +129,7 @@ analysis is always off.
 ## Traffic Modes
 
 **Flat** (default): `--num-requests 10` — fixed concurrency.
-`--max-workers` defaults to 3; at adv level with `--yes` it auto-matches
+`--max-workers` defaults to 3; `--full-concurrency` matches it to
 `--num-requests`. Set `--max-workers` explicitly to control concurrency:
 `--num-requests 100 --max-workers 10` fires 100 requests, 10 at a time.
 Flat mode output labels each iteration as a "round" (no stage numbers).
@@ -135,27 +147,29 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--server-log [PATH]`      | auto (local, norm/adv) | Server log analysis. Auto-detected for a local server at norm/adv; if not found you're prompted to continue without it (remote host aborts — use `--client-only`). Pass a path for an explicit file, or the flag alone to force auto-detect. |
 | `--no-server-log`          | off         | Skip the missing-log prompt at norm/adv and run without server-log analysis; overrides the local auto-detect |
 | `--no-tokens`              | off         | Disable per-request token accounting         |
-| `--chat-filter`            | maximal     | Server-side message filter: `maximal` streams all messages; `minimal` suppresses progress messages |
+| `--minimal`                | off         | Ask the server for the bare minimum of messages, as `agent_cli --minimal` does: only the final answer, cutting traffic and progress-event work — but it also drops the token-accounting message, so client-side LLM/token reporting is unavailable (tokens then come only from the server log) |
 | `--profile-path`           | auto        | Directory containing profile JSON files (or `LOAD_TEST_PROFILE_PATH` env var) |
 | `--host`                   | localhost   | Neuro-san server host                        |
 | `--port`                   | 8080        | Neuro-san server port                        |
 | `--num-requests`           | 3           | Requests per round in flat mode              |
-| `--max-workers`            | 3             | Concurrent workers in flat mode. At adv + `--yes`, auto-matches `--num-requests` |
+| `--max-workers`            | 3             | Concurrent workers in flat mode. See `--full-concurrency` to match `--num-requests` |
 | `--ramp`                   | off         | Enable ramp-up mode                          |
 | `--stages`                 | 10,30,50,100| Concurrency per stage in ramp mode           |
 | `--num-rounds`             | 1           | Repeat the full sequence N times             |
 | `--max-requests`           | sum(stages) * num_rounds | Hard cap on total requests |
-| `--request-timeout`        | 1200 (20m)  | Hard timeout per request. Accepts a bare number (seconds) or an `s`/`m`/`h` suffix (e.g. `90s`, `20m`, `2h`) |
+| `--request-timeout`        | 1200 (20m)  | Hard timeout per request (subprocess mode; see [Abort on timeout](#abort-on-timeout) for `--http-client`). Accepts a bare number (seconds) or an `s`/`m`/`h` suffix (e.g. `90s`, `20m`, `2h`) |
 | `--idle-timeout`           | 900 (15m)   | Abort a request that is idle for this long (resets on activity). Accepts seconds or an `s`/`m`/`h` suffix. Subprocess mode: no `agent_cli` output; HTTP mode (`--http-client`): no next stream chunk |
 | `--stage-timeout`          | 1500 (25m)  | Hard timeout for entire stage/round. Accepts seconds or an `s`/`m`/`h` suffix. Kills remaining in-flight requests |
 | `--total-timeout`          | 0 (disabled)| Hard timeout for entire load test. Accepts seconds or an `s`/`m`/`h` suffix. Kills run when exceeded |
 | `--settle-time`            | 15 (15s)    | Wait after each stage for server cleanup. Accepts seconds or an `s`/`m`/`h` suffix |
 | `--same-prompt`            | off         | Use identical prompt for all requests        |
-| `--yes`                    | off         | Bypass the dry-run probe + cost confirmation (which run by default at min/norm; adv skips them already). At adv, also auto-matches `--max-workers` to `--num-requests` |
+| `--no-dry-run`             | off         | Skip the dry-run probe + cost confirmation (which run by default at min/norm; adv skips them already) |
+| `--full-concurrency`       | off         | Match `--max-workers` to `--num-requests` so all fire at once |
 | `--scale`                  | 1           | Multiply `--num-requests`, `--max-workers`, `--request-timeout`, `--idle-timeout`, `--stage-timeout`, `--total-timeout` by this factor. `--max-requests` auto-adjusts. |
 | `--skip-reservation-check` | off         | Skip reservation_id validation               |
 | `--output-dir`             | (none)      | Base directory for test output               |
 | `--compare DIR`            | (none)      | Skip load test; scan DIR for previous runs and print a comparison table |
+| `--trend PATH`             | (none)      | Skip load test; print one row per run from the history file, oldest first |
 | `--project-root`           | (none)      | Project root for profile discovery           |
 
 ### Abort on timeout
@@ -167,7 +181,11 @@ collected so far:
   Idle means no `agent_cli` output (subprocess mode) or no next
   stream chunk (HTTP mode, `--http-client`).
 - **`--request-timeout`**: A request exceeds its hard time limit →
-  abort.
+  abort. Subprocess mode kills the `agent_cli` process at the limit.
+  HTTP mode (`--http-client`) cannot interrupt the in-thread stream,
+  so it marks the request `TIMEOUT` once the stream ends; a slow but
+  still-streaming request is bounded by `--idle-timeout` and
+  `--stage-timeout` instead.
 - **`--stage-timeout`**: A stage/round exceeds its limit, remaining
   requests killed → abort.
 - **`--total-timeout`**: Overall test elapsed time exceeded → abort
@@ -192,18 +210,30 @@ When server RSS exceeds 80% of total system RAM, a warning is printed:
   WARNING: Server RSS 12.8G / 16.0G (80%) — risk of OOM kill
 ```
 
+## Environment Variables
+
+| Variable                 | Effect                                     |
+| ------------------------ | ------------------------------------------ |
+| `OPENAI_API_BASE`        | **Aborts the run if set** (see below)      |
+| `LOAD_TEST_PROFILE_PATH` | Default for `--profile-path`               |
+| `PYTHONPATH`             | Repo root, so `tests.load_tests` imports   |
+
+This test requires real LLM calls, so a set `OPENAI_API_BASE` is taken as
+a mock environment and the run aborts before firing anything (a running
+`mock_llm_server` process aborts it too). Unset it, or use
+`load_test_mock_llm_service.py` for mock-based load testing.
+
 ## Pre-Run Summary and Dry-Run Probe
 
 Before firing the full test, the load test displays a PRE-RUN SUMMARY.
 
 **min / norm (default):** Fires 1 probe request to measure actual token
 usage, cost, and response time, then shows estimated stage duration,
-numbered warnings (if any), and asks the user to confirm. Pass `--yes`
+numbered warnings (if any), and asks the user to confirm. Pass `--no-dry-run`
 to bypass the probe and confirmation.
 
 **adv (default):** No dry-run probe — adv is treated as an explicit
-stress test, so it shows the summary and runs immediately. (`--yes`
-additionally auto-matches `--max-workers` to `--num-requests`.)
+stress test, so it shows the summary and runs immediately.
 
 ```
 ============================================================
@@ -230,7 +260,7 @@ additionally auto-matches `--max-workers` to `--num-requests`.)
   3. Estimated stage duration ~1510s exceeds --stage-timeout (1500s).
      Requests may be killed before completing.
 
-  Tip: use --yes to skip this confirmation.
+  Tip: use --no-dry-run to skip this confirmation.
 ============================================================
 
 Proceed with remaining 149 requests? [y/n]:
@@ -273,15 +303,18 @@ HTTP, so keys are only needed on the server side.
 
 ## Output
 
-Results go to `{tempdir}/load_test/{level}/{timestamp}_{requests}/` by
-default (where `{tempdir}` is the system temp directory, e.g. `/tmp` on
-Linux), or to the path specified by `--output-dir`. The request count is
-appended to the directory name for quick identification:
+Results go to `{tempdir}/load_test_{user}/{level}/{timestamp}_{requests}/`
+by default (where `{tempdir}` is the system temp directory, e.g. `/tmp` on
+Linux), or to the path specified by `--output-dir`. The base directory is
+per-user because the temp directory is shared: a fixed `load_test` would
+belong to whoever ran first, and everyone else would get
+`PermissionError`. The request count is appended to the directory name
+for quick identification:
 
 ```
-/tmp/load_test/adv/20260622_151428_50/
-/tmp/load_test/adv/20260622_151531_100/
-/tmp/load_test/adv/20260622_151648_150/
+/tmp/load_test_alice/adv/20260622_151428_50/
+/tmp/load_test_alice/adv/20260622_151531_100/
+/tmp/load_test_alice/adv/20260622_151648_150/
 ```
 
 At `adv` level this includes:
@@ -382,8 +415,8 @@ whether the LLM serializes concurrent requests:
 ### Summary file (`--level adv` only)
 
 At `adv` level, a human-readable `summary.txt` is written to the
-output directory. With `--yes` it is written automatically; without
-`--yes` the user is prompted.
+output directory. With `--no-dry-run` it is written automatically; without
+`--no-dry-run` the user is prompted.
 
 The summary includes per-request results, completion timeline, and
 (when `--server-log` is provided) a per-request server timing
@@ -405,7 +438,7 @@ Use `--compare` to scan a directory of previous runs and print a
 side-by-side comparison table:
 
 ```bash
-python -m tests.load_tests.load_test --compare /tmp/load_test/adv/
+python -m tests.load_tests.load_test_cli --compare /tmp/load_test_alice/adv/
 ```
 
 Output:
@@ -423,6 +456,42 @@ Output:
 
 No load test is executed — the command reads `raw_results.json` from
 each subdirectory, extracts key metrics, and sorts by request count.
+
+## Trend History
+
+Use `--trend` to see repeated runs in the order they happened, which is
+how a slowdown between neuro-san versions becomes visible:
+
+```bash
+python -m tests.load_tests.load_test_cli --trend /tmp/load_test_alice/adv/history.jsonl
+```
+
+Output:
+
+```text
+TREND HISTORY (/tmp/load_test_alice/adv/history.jsonl, 3 run(s))
+       timestamp  neuro-san        agent    mode   via  reqs  done  <70s  <300s  ttfr    avg    wall  err  warn
+---------------------------------------------------------------------------------------------------------------
+2026-07-20 14:02     0.5.51  hello_world  client  http   200   200   181    200  2.1s  41.2s  612.0s    0     0
+2026-07-24 09:15     0.5.52  hello_world  client  http   200   200   176    200  2.3s  44.8s  659.1s    0     0
+2026-07-25 18:31     0.5.52  hello_world  client  http   200   188   120    188  3.9s  61.5s  812.7s    7     0
+```
+
+`PATH` may be the history file or a directory containing
+`history.jsonl`, so the path printed at the end of a run works as-is.
+Filter to one agent with `--compare-agent`.
+
+Choose between the two views by the question being asked:
+
+| Question                                          | Use         |
+| ------------------------------------------------- | ----------- |
+| How does the system behave as concurrency rises?  | `--compare` |
+| Did the same load get slower than it used to be?  | `--trend`   |
+
+Only `--trend` shows `neuro_san_version`, which `raw_results.json` does
+not record. Server-only runs appear with `mode=server-only`, and their
+`ttfr` is blank because a server log cannot measure the client's time to
+first response.
 
 ## Exit Codes
 
@@ -453,9 +522,9 @@ This framework follows three review playbooks:
   signed delta formatting (no more `+-3.0M`), Windows compatibility
   fallbacks (`num_fds`/`select.select`/closed-pipe guards/temp dir),
   clean error on invalid `--stages`, `ServerCounts` partial TypedDict,
-  auto-resolve profile from agent name, `--max-workers` auto-matches
-  `--num-requests` at adv + `--yes`, `adv` level defaults (50×3),
-  `--yes` restricted to adv level, flat mode hides stage labels and
+  auto-resolve profile from agent name, `--full-concurrency` matches
+  `--max-workers` to `--num-requests`, `adv` level defaults (50×3),
+  flat mode hides stage labels and
   uses round-based output, PRE-RUN SUMMARY with numbered warnings
   and estimated stage duration.
 
@@ -465,7 +534,7 @@ Lint status: flake8 clean, pylint 10.00/10.
 
 ```
 tests/load_tests/
-  load_test.py                 LoadTestOrchestrator (main entry point)
+  load_test_cli.py             LoadTestOrchestrator (main entry point)
   config.py                    Constants, TypedDicts, compiled patterns
   confirm.py                   Confirm (strict y/n prompt)
   cost_estimator.py            CostEstimator (per-model pricing)
@@ -490,6 +559,7 @@ tests/load_tests/
     summary.py                 SummaryReporter
     system_resources.py        SystemResources (whole-system mem/cpu/threads)
     table_formatter.py         TableFormatter
+    trend_history.py           TrendHistory (--trend output)
 
   traffic/
     cli_builder.py             CliBuilder (agent_cli commands)

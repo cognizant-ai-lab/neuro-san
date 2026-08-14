@@ -22,7 +22,8 @@ from typing import List
 
 from unittest import TestCase
 
-from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
+from leaf_common.validation.dictionary_validator import DictionaryValidator
+
 from neuro_san.internals.validation.network.semantic_parameters_network_validator import \
     SemanticParametersNetworkValidator
 

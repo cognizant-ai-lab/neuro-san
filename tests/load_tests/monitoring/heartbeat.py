@@ -125,7 +125,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
             return False
 
     def _check_memory_warnings(
-            self, rss_mb, swap_mb, progress_file,
+            self, swap_mb, progress_file,
     ) -> None:
         """Warn if system memory or swap exceeds thresholds."""
         self._check_system_memory_warning(progress_file)
@@ -324,8 +324,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         all cores.
         """
         cur = psutil.cpu_percent(interval=None)
-        if cur > self._peak_sys_cpu:
-            self._peak_sys_cpu = cur
+        self._peak_sys_cpu = max(self._peak_sys_cpu, cur)
         return f"  syscpu: {cur:.0f}% (peak {self._peak_sys_cpu:.0f}%)"
 
     @staticmethod
@@ -448,7 +447,7 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
             if rss_mb > peak_server_rss:
                 peak_server_rss_ref.value = rss_mb
             self._check_memory_warnings(
-                rss_mb, swap_mb, progress_file,
+                swap_mb, progress_file,
             )
         return thread_info, server_rss_info
 

@@ -26,13 +26,17 @@ import asyncio
 import json
 import os
 import random
-import threading
+from threading import Lock
 
 import tornado
+import tornado.netutil
+import tornado.process
 
+from leaf_common.asyncio.event_loop_lag_monitor import EventLoopLagMonitor
+from leaf_common.config.config_util import ConfigUtil
 from leaf_common.serialization.util.text_file_reader import TextFileReader
+from leaf_common.utils.startable import Startable
 
-from neuro_san.internals.utils.config_util import ConfigUtil
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.agent_state_listener import AgentStateListener
 from neuro_san.internals.interfaces.agent_storage_source import AgentStorageSource
@@ -43,6 +47,8 @@ from neuro_san.service.http.config.http_server_config import ENV_HEALTH_PROBE_PO
 from neuro_san.service.http.config.http_server_config import HttpServerConfig
 from neuro_san.service.http.handlers.concierge_handler import ConciergeHandler
 from neuro_san.service.http.handlers.connectivity_handler import ConnectivityHandler
+from neuro_san.service.http.handlers.debug_gc_handler import DebugGcHandler
+from neuro_san.service.http.handlers.debug_tasks_handler import DebugTasksHandler
 from neuro_san.service.http.handlers.function_handler import FunctionHandler
 from neuro_san.service.http.handlers.health_check_handler import HealthCheckHandler
 from neuro_san.service.http.handlers.openapi_publish_handler import OpenApiPublishHandler
@@ -57,10 +63,11 @@ from neuro_san.service.http.server.resources_usage_logger import ResourcesUsageL
 from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
 from neuro_san.service.interfaces.agent_server import AgentServer
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
-from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.service.mcp.handlers.mcp_root_handler import McpRootHandler
+from neuro_san.service.utils.http_llm_tracer import HttpxLlmTracer
 from neuro_san.service.utils.loop_timeline_tracer import LoopTimelineTracer
 from neuro_san.service.utils.server_context import ServerContext
+from neuro_san.service.utils.service_resources import ServiceResources
 from neuro_san.service.utils.server_status import ServerStatus
 
 
@@ -127,7 +134,7 @@ class HttpServer(AgentStateListener):
         self.logger = HttpLogger(self.forwarded_request_metadata, self.logging_config)
         self.allowed_agents: Dict[str, AsyncAgentServiceProvider] = {}
         self.authorization_policy: AgentAuthorizer = AgentAuthorizationPolicy(self.allowed_agents)
-        self.lock = threading.Lock()
+        self.lock = Lock()
 
         # Add listener to handle adding per-agent http service
         # (services map is defined by self.allowed_agents dictionary)
@@ -144,6 +151,7 @@ class HttpServer(AgentStateListener):
         :param startables: List of Startable instances to start once server
             has forked its multiple running instances.
         """
+        # pylint: disable=too-many-statements
         app = self.make_app(self.requests_limit, self.concurrent_requests_limit, self.logger)
 
         self.logger.debug({}, "Serving agents: %s", repr(self.allowed_agents.keys()))
@@ -182,16 +190,41 @@ class HttpServer(AgentStateListener):
                 logging_config=self.logging_config,
             ))
 
-        # Bind the socket with a custom backlog
-        server.bind(self.http_port, backlog=self.server_config.http_connections_backlog)
+        # Determine the number of worker processes to start.
+        # If http_server_instances is 0, use the number of CPU cores.
+        num_workers: int = self.server_config.http_server_instances
+        if num_workers <= 0:
+            num_workers = os.cpu_count() or 1
 
-        # Start N child processes (0 = one per CPU core)
-        server.start(self.server_config.http_server_instances)
+        # Bind the listening socket(s) BEFORE forking so every worker inherits
+        # the same bound fd. Do NOT create/touch an IOLoop before fork_processes.
+        sockets = tornado.netutil.bind_sockets(
+            self.http_port, backlog=self.server_config.http_connections_backlog)
+
+        # Do not create or access an asyncio/Tornado event loop before this call.
+        worker_id: int = 0
+        if num_workers > 1:
+            worker_id = tornado.process.fork_processes(num_workers)
+
+        # If num_workers == 1, we don't fork and worker_id of our single server process remains 0.
+        self.logger.info({}, "Starting %d worker processes (worker_id=%d, pid=%d)",
+                         num_workers, worker_id, os.getpid())
+        # Register this worker's ID and total number of workers in the server context for use by other components.
+        self.server_context.set_worker_info(worker_id, num_workers)
+
+        # CRITICAL: attach the inherited sockets to THIS worker's IOLoop so it
+        # actually accepts connections. server.start(N) did fork + add_sockets;
+        # a bare fork_processes() does the fork but not the add_sockets.
+        server.add_sockets(sockets)
+
+        # Create all server context resources that need to be created after fork,
+        # and start them if necessary.
+        self.server_context.start()
 
         server_status: ServerStatus = self.server_context.get_server_status()
         server_status.http_service.set_status(True)
         self.logger.info({}, "HTTP server is running %d instances on port %d with backlog %d",
-                         self.server_config.http_server_instances,
+                         num_workers,
                          self.http_port,
                          self.server_config.http_connections_backlog)
         self.logger.info({}, "HTTP server idle connections timeout: %d seconds",
@@ -217,6 +250,19 @@ class HttpServer(AgentStateListener):
                             {}, "Failed to start %s: %s",
                             startable.__class__.__name__, str(exception))
 
+        main_loop = tornado.ioloop.IOLoop.current()
+
+        # Enable event loop lag monitor if requested by environment variable.
+        if ConfigUtil.get_bool(os.environ, "ENABLE_EVENT_LOOP_STATISTICS"):
+            event_loop_monitor = \
+                EventLoopLagMonitor(
+                    sample_interval_seconds=1.0,
+                    report_every_n_samples=30,
+                    break_between_reports_seconds=30
+                )
+            ServiceResources.set_event_loop_monitor(event_loop_monitor)
+            main_loop.spawn_callback(event_loop_monitor.run)
+
         # Optionally enable asyncio debug mode + slow-callback warnings on the
         # Tornado IOLoop's underlying asyncio loop. Off by default to avoid the
         # ~5-10% debug-mode overhead in production. Done after server.start()
@@ -228,6 +274,12 @@ class HttpServer(AgentStateListener):
         # this method runs on that thread and IOLoop.current().start() below
         # runs synchronously on the same thread.
         self._maybe_start_loop_timeline_tracer()
+
+        # Optionally install the httpx-level LLM traffic tracer. Must run
+        # BEFORE any LLM SDK constructs its httpx.AsyncClient, which happens
+        # lazily on first LLM call, so installing here (before IOLoop.start)
+        # is safely ahead of any traffic.
+        self._maybe_install_http_llm_tracer()
 
         tornado.ioloop.IOLoop.current().start()
         self.logger.info({}, "Http server stopped.")
@@ -319,6 +371,49 @@ class HttpServer(AgentStateListener):
         # Start LAST so the tracer captures all callbacks executed after the loop starts running.
         self._loop_timeline_tracer.start()
 
+    def _maybe_install_http_llm_tracer(self) -> None:
+        """
+        Install the httpx-level LLM traffic tracer if AGENT_HTTP_LLM_TRACE
+        is truthy. Emits structured JSON events (http_llm_out /
+        http_llm_in / http_llm_end / optional http_llm_chunk) to the
+        dedicated logger "neuro_san.diagnostics.http_llm_trace" so
+        post-run analysis can reconstruct the LLM traffic lifecycle of
+        any user request via the user_req_id field.
+
+        Environment variables:
+          AGENT_HTTP_LLM_TRACE (bool, default false)
+              Enables the tracer. Off by default.
+          AGENT_HTTP_LLM_TRACE_INCLUDE_BODIES (bool, default false)
+              When true, request and response bodies are logged verbatim
+              (capped at 64 KB per body). Prompts + completions are large
+              and sensitive; off by default.
+          AGENT_HTTP_LLM_TRACE_CHUNKS (bool, default false)
+              When true, emits one http_llm_chunk event per received
+              body chunk. Massive log volume; enable only when
+              investigating inter-chunk cadence.
+
+        The tracer overhead is negligible (a few log writes per LLM
+        call). Route the "neuro_san.diagnostics.http_llm_trace" logger
+        to a separate file in logging.hocon for clean offline analysis.
+        """
+        if not ConfigUtil.get_bool(os.environ, "AGENT_HTTP_LLM_TRACE"):
+            return
+
+        include_bodies: bool = ConfigUtil.get_bool(
+            os.environ, "AGENT_HTTP_LLM_TRACE_INCLUDE_BODIES")
+        include_chunks: bool = ConfigUtil.get_bool(
+            os.environ, "AGENT_HTTP_LLM_TRACE_CHUNKS")
+
+        HttpxLlmTracer.install(
+            include_bodies=include_bodies,
+            include_chunks=include_chunks,
+        )
+        self.logger.info(
+            {},
+            "HttpxLlmTracer installed (include_bodies=%s include_chunks=%s)",
+            include_bodies, include_chunks,
+        )
+
     def resolve_health_probe_port(self) -> int:
         """
         Resolve the port for the isolated HealthProbeServer.
@@ -378,6 +473,15 @@ class HttpServer(AgentStateListener):
 
         # Setup handler for system snapshot query:
         handlers.append(("/resources_utilization", SnapshotHandler, {"http_port": self.http_port}))
+
+        # Setup handler for on-demand asyncio-task dump across used AsyncioExecutors.
+        # Gated behind ENABLE_RUN_TIME_STATISTICS (same as /profiler and /resources_utilization).
+        handlers.append(("/debug/tasks", DebugTasksHandler, {"server_context": self.server_context}))
+
+        # Setup handler for on-demand full Python garbage collection.
+        # Reports collected object count + before/after process memory.
+        # Same env-var gate as the other /debug endpoints.
+        handlers.append(("/debug/gc", DebugGcHandler))
 
         if enable_http_handlers:
             handlers.append(("/api/v1/list", ConciergeHandler, request_initialize_data))

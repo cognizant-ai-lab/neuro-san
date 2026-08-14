@@ -23,10 +23,15 @@ copies across the input validator, load test, and summary reporter.
 """
 
 import logging
-import resource
 from typing import Dict
 from typing import Optional
 from typing import Tuple
+
+try:
+    import resource
+except ImportError:
+    # Unix-only module.  Thread limits report "n/a" without it.
+    resource = None
 
 import psutil
 
@@ -55,15 +60,17 @@ class SystemResources:
     @staticmethod
     def thread_limits() -> Tuple[str, str]:
         """Return (per-user limit, system max) as display strings."""
-        try:
-            soft, _ = resource.getrlimit(resource.RLIMIT_NPROC)
-            user_limit = (
-                "unlimited"
-                if soft == resource.RLIM_INFINITY
-                else f"{soft:,}"
-            )
-        except (ValueError, OSError, AttributeError):
-            user_limit = "n/a"
+        user_limit = "n/a"
+        if resource is not None:
+            try:
+                soft, _ = resource.getrlimit(resource.RLIMIT_NPROC)
+                user_limit = (
+                    "unlimited"
+                    if soft == resource.RLIM_INFINITY
+                    else f"{soft:,}"
+                )
+            except (ValueError, OSError, AttributeError):
+                user_limit = "n/a"
         sys_max = "n/a"
         try:
             with open(

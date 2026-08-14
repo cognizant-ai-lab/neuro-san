@@ -69,6 +69,7 @@ class ResourceSnapshot(TypedDict):
     connections: int
     children: int
     cpu: float
+    cpu_seconds: float
 
 
 class ServerCounts(TypedDict, total=False):
@@ -182,13 +183,20 @@ LEVEL_MIN = "min"
 LEVEL_NORM = "norm"
 LEVEL_ADV = "adv"
 
-# Tracked retry error types
+# Tracked retry error types.  All but ProviderRetry are neuro-san's own
+# max_attempts retries; ProviderRetry counts retries the LLM provider
+# SDK performs internally.
 RETRY_ERROR_TYPES = [
     "RateLimitError",
     "APIError",
     "KeyError",
     "ValueError",
+    "ProviderRetry",
 ]
+# Console labels for retry types whose key alone reads poorly.
+RETRY_LABELS = {
+    "ProviderRetry": "Provider SDK retries",
+}
 
 # Console formatting
 SEPARATOR_WIDTH = 60
@@ -240,6 +248,12 @@ READ_BUFFER_SIZE = 4096
 # Server log regex patterns
 RETRY_LOG_PATTERN = re.compile(
     r"retrying from (RateLimit error |)(\w+)"
+)
+# Retries performed inside the LLM provider SDK (e.g. openai's
+# "Retrying request to /chat/completions in 0.45 seconds"), which
+# neuro-san never sees and so never logs as "retrying from ...".
+PROVIDER_RETRY_PATTERN = re.compile(
+    r"Retrying request to (\S+) in "
 )
 REQUEST_START_PATTERN = re.compile(
     r"Start .*/streaming_chat"

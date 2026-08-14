@@ -19,14 +19,15 @@ from typing import Dict
 from typing import List
 
 import os
+import sys
 
 from argparse import ArgumentParser
 
-from leaf_server_common.logging.logging_setup import setup_logging
+from leaf_common.logging.logging_setup import LoggingSetup
+from leaf_common.utils.startable import Startable
 
 from neuro_san import TOP_LEVEL_DIR
 from neuro_san.interfaces.agent_session import AgentSession
-from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.storage_class import StorageClass
@@ -47,10 +48,11 @@ from neuro_san.service.interfaces.agent_server import AgentServer
 from neuro_san.service.watcher.event_initiator.periodic_event_initiator import PeriodicEventInitiator
 from neuro_san.service.watcher.event_work.event_work_monitor import EventWorkMonitor
 from neuro_san.service.watcher.main_loop.storage_watcher import StorageWatcher
-from neuro_san.service.watcher.temp_networks.temp_network_storage_updater import TempNetworkStorageUpdater
+from neuro_san.service.watcher.temp_networks.updater.temp_network_storage_updater import TempNetworkStorageUpdater
 from neuro_san.service.utils.server_status import ServerStatus
 from neuro_san.service.utils.server_context import ServerContext
 from neuro_san.service.utils.service_resources import ServiceResources
+from neuro_san.service.utils.gil_state_reporter import GilStateReporter
 
 
 # pylint: disable=too-many-instance-attributes
@@ -80,6 +82,41 @@ class ServerMainLoop:
         self.http_server_config = HttpServerConfig()
         self.watcher_config: Dict[str, Any] = {}
         self.logging_config: Dict[str, Any] = {}
+
+    @staticmethod
+    def ensure_macos_fork_safety():
+        """
+        Make Tornado's multi-instance (forking) mode safe on macOS.
+
+        macOS's Objective-C runtime is not fork()-safe. When neuro-san runs more
+        than one HTTP instance (AGENT_HTTP_SERVER_INSTANCES > 1) Tornado forks
+        worker processes via server.start(N); on macOS a forked child aborts with
+            objc[...]: +[NSNumber initialize] may have been in progress in another
+            thread when fork() was called. ... Crashing instead.
+        the first time it touches an Obj-C framework -- which for a worker is
+        typically the first streaming_chat request, whose LLM call reaches
+        through httpx into macOS SystemConfiguration/Security (proxy + trust
+        store). Single-instance mode never forks, so it is unaffected, and Linux
+        (production) has no Obj-C runtime, so it forks safely.
+
+        The documented fix is OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES. The catch:
+        libobjc reads that variable exactly ONCE, at interpreter launch, and
+        forked children inherit that cached decision -- so setting os.environ
+        from inside the already-running process is too late to prevent the abort.
+        To make "just run it from the CLI" work without the caller exporting
+        anything, we therefore set the flag and re-exec this same interpreter so
+        the freshly launched process reads it at libobjc init time. sys.orig_argv
+        preserves the original "-m ... <args>" invocation across the re-exec.
+
+        No-op on non-Darwin platforms, and no-op (no re-exec) when the flag is
+        already set to "YES" -- which is also what stops the re-exec from looping.
+        """
+        if sys.platform != "darwin":
+            return
+        if os.environ.get("OBJC_DISABLE_INITIALIZE_FORK_SAFETY") == "YES":
+            return
+        os.environ["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
+        os.execve(sys.executable, sys.orig_argv, os.environ)
 
     def prepare_args(self) -> ArgumentParser:
         """
@@ -235,6 +272,10 @@ class ServerMainLoop:
         logging_config_restorer = LoggingConfigRestorer()
         self.logging_config = logging_config_restorer.restore()
 
+        # Report the process's GIL / free-threading state so logs make it
+        # unambiguous whether the server is actually running free-threaded.
+        print("GIL state at server startup: ", GilStateReporter.report())
+
         # Construct forwarded metadata list as self.forwarded_request_metadata
         metadata_set = set(self.forwarded_request_metadata.split())
         metadata_str: str = " ".join(sorted(metadata_set))
@@ -253,16 +294,16 @@ class ServerMainLoop:
 
         if server_status.updater.is_requested():
             current_dir: str = os.path.dirname(os.path.abspath(__file__))
-            setup_logging(server_status.updater.get_service_name(),
-                          default_log_dir=current_dir,
-                          log_level_env="AGENT_SERVICE_LOG_LEVEL",
-                          logging_config=self.logging_config)
+            LoggingSetup.setup_logging(server_status.updater.get_service_name(),
+                                       default_log_dir=current_dir,
+                                       log_level_env="AGENT_SERVICE_LOG_LEVEL",
+                                       logging_config=self.logging_config)
             watcher = StorageWatcher(self.watcher_config, self.server_context)
             components_to_start.append(watcher)
 
         # Another component to start is the temporary networks updater
         temp_networks_updater: TempNetworkStorageUpdater =\
-            TempNetworkStorageUpdater(self.server_context.get_network_storage_dict(), self.server_context.get_queues())
+            TempNetworkStorageUpdater(self.server_context)
         components_to_start.append(temp_networks_updater)
 
         # Create the event work monitor:
@@ -299,4 +340,8 @@ class ServerMainLoop:
 
 
 if __name__ == '__main__':
+    # On macOS, ensure the Obj-C runtime won't abort in Tornado's forked
+    # worker processes. Runs before anything is constructed or forked, and may
+    # re-exec this interpreter (see ensure_macos_fork_safety for the why).
+    ServerMainLoop.ensure_macos_fork_safety()
     ServerMainLoop().main_loop()

@@ -76,12 +76,6 @@
     # These tools are also predefined in the toolbox.
     "date_time_timezone.hocon": true,
 
-    # The next one is an example of agents calling langchain base tools from toolbox.
-    # This network generate HTTP requests using the Requests Get tool.
-    # Note that there are inherent risks in giving models discretion to execute real-world actions. 
-    # Make sure to implement appropriate safeguards and monitoring when deploying such agents.
-    "requests_get.hocon": true,
-
     # Reservations example
     "copy_cat.hocon": true,
     "copy_cat_middleware.hocon": true,

@@ -111,6 +111,12 @@ class InputValidator:
 
     def resolve_max_requests(self, stages) -> int:
         """Return the effective max-requests cap."""
+        if self._args.num_rounds <= 0:
+            logger.error(
+                "--num-rounds must be a positive integer. Got: %s",
+                self._args.num_rounds,
+            )
+            sys.exit(1)
         if self._args.max_requests is not None:
             if self._args.max_requests <= 0:
                 logger.error(
@@ -129,8 +135,8 @@ class InputValidator:
         """Display PRE-RUN SUMMARY and optionally run a dry-run probe.
 
         The dry-run probe + cost confirmation runs by default at min
-        and norm levels; --yes bypasses it. At adv level it does not
-        run by default (adv is an explicit stress test).
+        and norm levels; --no-dry-run bypasses it. At adv level it does
+        not run by default (adv is an explicit stress test).
 
         When skipped, shows the summary and returns immediately.
         Otherwise fires one probe request with --tokens to measure
@@ -144,7 +150,7 @@ class InputValidator:
 
         self._print_summary_header(stages, total_planned, capped)
 
-        if self._args.yes or self._args.level == LEVEL_ADV:
+        if self._args.no_dry_run or self._args.level == LEVEL_ADV:
             warnings = self._collect_warnings(
                 capped=capped,
                 total_planned=total_planned,
@@ -182,8 +188,8 @@ class InputValidator:
         self._print_warnings(warnings)
 
         logger.info(
-            "\n  Tip: use --yes to skip this confirmation.\n"
-            "       --yes does not auto-adjust timeouts.",
+            "\n  Tip: use --no-dry-run to skip this confirmation.\n"
+            "       --no-dry-run does not auto-adjust timeouts.",
         )
 
         logger.info("=" * SEPARATOR_WIDTH)
@@ -312,6 +318,8 @@ class InputValidator:
                 f"(last modified {stale_log_age}m ago)"
             )
 
+        warnings.extend(self._token_reporting_warnings())
+
         mem_warning = self._check_memory_headroom(
             capped,
             http_client=getattr(
@@ -322,6 +330,36 @@ class InputValidator:
             warnings.append(mem_warning)
 
         return warnings
+
+    def _token_reporting_warnings(self) -> List[str]:
+        """Warn when the chat filter will suppress token reporting.
+
+        Client-side LLM/token numbers arrive as a token-accounting
+        message in the chat stream, which the server's MINIMAL filter
+        drops.  Without a server log to fall back on, the run then
+        reports no LLM or token usage at all.
+        """
+        args = self._args
+        if getattr(args, "chat_filter", "maximal") != "minimal":
+            return []
+        if not getattr(args, "include_tokens", False):
+            return []
+        if (getattr(args, "client_only", False)
+                or getattr(args, "no_server_log", False)):
+            return [
+                "--minimal drops the token-accounting"
+                " message, and this run has no server log to fall"
+                " back on:\n"
+                "     no LLM or token usage will be reported.\n"
+                "     Omit --minimal to report them."
+            ]
+        return [
+            "--minimal drops the token-accounting"
+            " message:\n"
+            "     client-side LLM/token numbers will be"
+            " unavailable (server-log values still apply).\n"
+            "     Omit --minimal to report both."
+        ]
 
     @staticmethod
     def _check_memory_headroom(

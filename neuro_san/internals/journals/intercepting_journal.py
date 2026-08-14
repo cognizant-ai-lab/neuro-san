@@ -21,7 +21,7 @@ from typing import List
 from langchain_core.messages.base import BaseMessage
 
 from neuro_san.internals.journals.journal import Journal
-from neuro_san.internals.messages.traced_message import TracedMessage
+from neuro_san.message.types.traced_message import TracedMessage
 
 
 class InterceptingJournal(Journal):

@@ -19,7 +19,7 @@ from typing import Dict
 
 from neuro_san.interfaces.agent_progress_reporter import AgentProgressReporter
 from neuro_san.internals.journals.journal import Journal
-from neuro_san.internals.messages.agent_progress_message import AgentProgressMessage
+from neuro_san.message.types.agent_progress_message import AgentProgressMessage
 
 
 class ProgressJournal(AgentProgressReporter):

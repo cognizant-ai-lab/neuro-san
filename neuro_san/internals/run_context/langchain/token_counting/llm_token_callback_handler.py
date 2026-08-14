@@ -15,12 +15,14 @@
 #
 # END COPYRIGHT
 
-import asyncio
+from asyncio import Lock as AsyncLock
+from contextvars import ContextVar
 import logging
 from time import time
 from typing import Any
 from typing import Dict
 from typing import Optional
+from typing import Tuple
 from typing_extensions import override
 
 from langchain_core.callbacks import AsyncCallbackHandler
@@ -28,6 +30,24 @@ from langchain_core.messages import AIMessage
 from langchain_core.messages import BaseMessage
 from langchain_core.messages.ai import UsageMetadata
 from langchain_core.outputs import ChatGeneration, LLMResult
+from langchain_core.tracers.context import register_configure_hook
+
+# Each agent's token counting scope sets this ContextVar to its own handler
+# (see get_llm_token_callback()).  register_configure_hook() below makes langchain
+# attach the ContextVar's current value to every run as an *inheritable* callback,
+# so an agent's handler also receives events for LLM calls made by any downstream
+# agents it calls.  At event time the ContextVar holds the handler of the *nearest*
+# enclosing agent scope - the call's owner - which is what lets a handler tell its
+# own agent's LLM calls apart from downstream ones (see _is_own_call()).  Since
+# every LLM call has exactly one nearest enclosing scope, exactly one of the
+# handlers listening to that call considers it its own.  This exactly-once
+# ownership is what LangChainTokenCounter.report() relies on to merge each
+# agent's per-model tallies into the request-wide accounting without
+# double-counting, no matter how deeply agents nest.
+llm_token_callback_var: ContextVar[Optional["LlmTokenCallbackHandler"]] = (
+        ContextVar("llm_token_callback", default=None)
+    )
+register_configure_hook(llm_token_callback_var, inheritable=True)
 
 EMPTY = ""
 CLASS_TABLE = {
@@ -63,6 +83,17 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
     This handler tracks these values internally and is compatible with models that populate "usage_metadata",
     regardless of provider.
 
+    Attribution semantics:
+    Because handlers are registered as inheritable langchain callbacks (see llm_token_callback_var above),
+    one instance receives events both for its own agent's LLM calls and for calls made by downstream
+    agents.  The two kinds of tallies kept here treat those differently:
+    - The scalar totals ("total_tokens", "successful_requests", etc.) count *every* event received,
+      so they are cumulative over the agent's whole subtree.  These feed the per-agent accounting
+      messages, where a front man's totals cover the entire request.
+    - "models_token_dict" only counts the agent's *own* LLM calls (see _is_own_call()), so that
+      LangChainTokenCounter.report() can merge each agent's contribution into the request-wide
+      accounting with every LLM call counted exactly once, no matter how deeply agents nest.
+
     Note:
     Token cost is calculated using prices from the LLM info file
     ("price_per_1k_input_tokens" / "price_per_1k_output_tokens") when available.
@@ -80,7 +111,7 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
     def __init__(self, llm_infos: Dict[str, Any]):
         """Initialize the CallbackHandler."""
         super().__init__()
-        self._lock = asyncio.Lock()
+        self._lock = AsyncLock()
         self.llm_infos: Dict[str, Any] = llm_infos
         self.provider_class: str = None
         self.start_time: float = None
@@ -102,6 +133,19 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
             f"Model Info: {self.models_token_dict}"
         )
 
+    def _is_own_call(self) -> bool:
+        """
+        :return: True if the event being handled belongs to an LLM call made by this
+                handler's own agent.  False for calls made by downstream agents, whose
+                events this handler also receives because handlers are inheritable
+                callbacks.  At event time, llm_token_callback_var holds the handler
+                of the nearest enclosing agent scope - the call's owner - so for any
+                given LLM call this is True for exactly one of the handlers listening
+                to it.  That exactly-once ownership is what keeps the request-wide
+                merge in LangChainTokenCounter.report() free of double-counting.
+        """
+        return llm_token_callback_var.get() is self
+
     @override
     async def on_chat_model_start(
         self,
@@ -113,7 +157,12 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         Extract the LLM class and start timer when chat model starts.
         :param serialized: Dictionary of metadata of the invoked model
         """
-        # Chat moddel class of the LLM is in the last item of the id list
+        if not self._is_own_call():
+            # A downstream agent's chat model is starting.  Only that agent's own
+            # handler tracks per-model state for it.
+            return
+
+        # Chat model class of the LLM is in the last item of the id list
         chat_model_class: str = serialized.get("id")[-1]
         # Match the chat model class with neuro-san model class
         self.provider_class = CLASS_TABLE.get(chat_model_class)
@@ -126,16 +175,14 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         # Start timer
         self.start_time = time()
 
-    @override
-    async def on_llm_end(self, response: LLMResult, **kwargs: Any):
+    @staticmethod
+    def _extract_usage(response: LLMResult) -> Tuple[Optional[UsageMetadata], str, bool]:
         """
-        Collect token usage when llm ends.
+        Pull usage information out of an LLMResult.
         :param response: Output from chat model
+        :return: A tuple of (usage_metadata, model_name, is_empty_response).
+                usage_metadata is None when the response carries none.
         """
-        # Calculate time latency for each llm
-        # Note that this will be slightly lower time taken by the agent
-        time_taken_in_seconds: float = time() - self.start_time
-
         # Check for usage_metadata (Only work for langchain-core >= 0.2.2)
         try:
             generation = response.generations[0][0]
@@ -152,7 +199,7 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
                 if isinstance(message, AIMessage):
                     # Token info is in an attribute of AIMessage called "usage_metadata".
                     usage_metadata = message.usage_metadata
-                    is_empty_response = self._is_empty_response(message)
+                    is_empty_response = LlmTokenCallbackHandler._is_empty_response(message)
                     # Get model name so that cost can be determined if needed.
                     response_metadata = message.response_metadata
                     if response_metadata:
@@ -165,6 +212,27 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
             except AttributeError:
                 pass
 
+        return usage_metadata, model_name, is_empty_response
+
+    @override
+    async def on_llm_end(self, response: LLMResult, **kwargs: Any):
+        """
+        Collect token usage when llm ends.
+        :param response: Output from chat model
+        """
+        # Per-model stats are only tracked for this agent's own LLM calls.
+        # Downstream agents' calls still contribute to the scalar subtree totals below.
+        is_own_call: bool = self._is_own_call()
+
+        # Calculate time latency for each llm
+        # Note that this will be slightly lower time taken by the agent
+        # The timer is only started (on_chat_model_start) for this agent's own calls.
+        time_taken_in_seconds: float = 0.0
+        if is_own_call and self.start_time is not None:
+            time_taken_in_seconds = time() - self.start_time
+
+        usage_metadata, model_name, is_empty_response = self._extract_usage(response)
+
         if usage_metadata:
             total_tokens: int = usage_metadata.get("total_tokens", 0)
             completion_tokens: int = usage_metadata.get("output_tokens", 0)
@@ -175,23 +243,24 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
 
             # Update shared state behind lock
             async with self._lock:
-                # Initialize model entry if this is the first time we see this model
-                if model_name not in self.models_token_dict[self.provider_class]:
-                    self._init_model_entry(model_name)
+                if is_own_call:
+                    # Initialize model entry if this is the first time we see this model
+                    if model_name not in self.models_token_dict[self.provider_class]:
+                        self._init_model_entry(model_name)
 
-                # Update per-model stats.
-                self.models_token_dict[self.provider_class][model_name]["total_tokens"] += total_tokens
-                self.models_token_dict[self.provider_class][model_name]["prompt_tokens"] += prompt_tokens
-                self.models_token_dict[self.provider_class][model_name]["completion_tokens"] += \
-                    completion_tokens
-                self.models_token_dict[self.provider_class][model_name]["successful_requests"] += 1
-                self.models_token_dict[self.provider_class][model_name]["empty_responses"] += \
-                    int(is_empty_response)
-                self.models_token_dict[self.provider_class][model_name]["total_cost"] += total_cost
-                self.models_token_dict[self.provider_class][model_name]["time_taken_in_seconds"] += \
-                    time_taken_in_seconds
+                    # Update per-model stats (this agent's own calls only).
+                    self.models_token_dict[self.provider_class][model_name]["total_tokens"] += total_tokens
+                    self.models_token_dict[self.provider_class][model_name]["prompt_tokens"] += prompt_tokens
+                    self.models_token_dict[self.provider_class][model_name]["completion_tokens"] += \
+                        completion_tokens
+                    self.models_token_dict[self.provider_class][model_name]["successful_requests"] += 1
+                    self.models_token_dict[self.provider_class][model_name]["empty_responses"] += \
+                        int(is_empty_response)
+                    self.models_token_dict[self.provider_class][model_name]["total_cost"] += total_cost
+                    self.models_token_dict[self.provider_class][model_name]["time_taken_in_seconds"] += \
+                        time_taken_in_seconds
 
-                # Update per-agent stats
+                # Update per-agent stats (own + downstream agents' calls)
                 self.total_tokens += total_tokens
                 self.prompt_tokens += prompt_tokens
                 self.completion_tokens += completion_tokens

@@ -53,15 +53,18 @@ class JsonMetadata:
             "aggregates.total_elapsed_seconds":
                 "Sum of wall-clock time across all stages.",
             "aggregates.avg_latency_seconds":
-                "Total elapsed / total requests.",
+                "Mean per-request duration. Requests overlap, so this "
+                "is not total elapsed / total requests.",
             "stage_summaries[].counts":
                 "Per-status request counts: "
                 "CREATED=success, FAILED=error/crash, "
                 "TIMEOUT=hit hard timeout cap, "
                 "KILLED=no output for idle_timeout.",
             "stage_summaries[].retries":
-                "Server-side max_attempts retries by error type "
-                "(e.g. RateLimitError, APIError). "
+                "Server-side retries by type: neuro-san max_attempts "
+                "retries (e.g. RateLimitError, APIError) plus "
+                "ProviderRetry for retries the LLM provider SDK "
+                "performed internally. "
                 "Empty dict means zero retries.",
             "stage_summaries[].amplification":
                 "Ratio of total server LLM attempts to client "

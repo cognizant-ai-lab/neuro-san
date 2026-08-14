@@ -47,6 +47,10 @@ logger = logging.getLogger(__name__)
 _CONNECT_TIMEOUT = 30
 
 
+class _RequestTimeout(Exception):
+    """Raised to abandon a request that outran --request-timeout."""
+
+
 class HttpClient:
     """Runs agent_cli logic in-thread via HttpServiceAgentSession."""
 
@@ -66,6 +70,13 @@ class HttpClient:
         and extract sly_data fields.  When ``use_https`` is True,
         a ``security_cfg`` is supplied so the session connects
         over HTTPS/TLS instead of plain HTTP.
+
+        ``timeout`` (from ``--request-timeout``) is enforced while the
+        response streams, so a request that keeps producing messages
+        cannot outlive the cap.  The check happens per streamed
+        message, so a request is abandoned within one message of the
+        cap rather than exactly at it; the wait for that message is
+        itself bounded by ``idle_timeout``.
 
         Returns (status, parsed_fields, response_text, ttft,
         token_accounting).
@@ -96,6 +107,8 @@ class HttpClient:
             for chat_response in original_streaming_chat(request_dict):
                 if not first_response:
                     first_response.append(time.time() - start)
+                if time.time() - start >= timeout:
+                    raise _RequestTimeout()
                 yield chat_response
 
         session.streaming_chat = timed_streaming_chat
@@ -119,6 +132,8 @@ class HttpClient:
 
         try:
             state = processor.process_once(state)
+        except _RequestTimeout:
+            return (STATUS_TIMEOUT, {}, "", 0.0, {})
         # Broad by design: process_once() drives the third-party
         # HTTP/streaming stack, whose failure surface (connection,
         # decode, gRPC/transport errors) is not enumerable here.  This
