@@ -1,0 +1,50 @@
+# Copyright © 2023-2026 Cognizant Technology Solutions Corp, www.cognizant.com.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# END COPYRIGHT
+
+# Error: parameter names that pydantic v2 cannot accept as field names.
+# "model_config" is reserved by pydantic for model configuration and
+# "_private" has a leading underscore.  Pydantic v1 tolerated both;
+# BaseModelDictionaryConverter.validate_field_name() rejects them with
+# a clear ToolSpecError instead of pydantic v2's cryptic TypeError/NameError.
+# Expected result: 2 errors mentioning "pydantic model conversion failed".
+{
+    "tools": [
+        {
+            "name": "agent_f",
+            "function": {
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "model_config": {"type": "string"}
+                    }
+                }
+            },
+            "instructions": "test"
+        },
+        {
+            "name": "agent_g",
+            "function": {
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "_private": {"type": "string"}
+                    }
+                }
+            },
+            "instructions": "test"
+        }
+    ]
+}

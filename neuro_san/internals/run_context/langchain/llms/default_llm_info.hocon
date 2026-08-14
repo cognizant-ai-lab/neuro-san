@@ -586,28 +586,6 @@
         "use_model_name": "claude-fable-5"
     },
 
-    "claude-opus-4-1": {
-        "use_model_name": "claude-opus-4-1-20250805"
-    },
-    "claude-opus-4-1-20250805": {
-        "class": "anthropic",
-        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
-        "modalities": {
-            "input": [ "text", "image" ],
-            "output": [ "text" ],
-        },
-        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
-        "capabilities": [ "tools" ],
-        "context_window_size": 200000,
-        "max_output_tokens": 32000,
-        "knowledge_cutoff": "03/2025",
-        # https://platform.claude.com/docs/en/about-claude/pricing
-        "price_per_1k_input_tokens": 0.015,
-        "price_per_1k_output_tokens": 0.075,
-        "model_launch_date": "2025-08-05",
-        "model_retirement_date": "2026-08-05",
-    },
-
     "claude-haiku-4-5": {
         "use_model_name": "claude-haiku-4-5-20251001"
     },

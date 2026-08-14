@@ -14,21 +14,18 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-from typing import Any
-from typing import Dict
-from typing import List
+"""
+Canary module deliberately OUTSIDE any AGENT_TOOL_PATH used in tests.
+
+Resolution tests reference it fully-qualified two ways:
+- default mode resolves it (proving Phase 1 imports from anywhere on PYTHONPATH);
+- strict mode must NOT import it (importing executes top-level code, which is
+  the vulnerability the flag closes), asserted via absence from sys.modules.
+
+Nothing else may import this module, or the strict test's never-imported
+assertion loses its meaning.
+"""
 
 
-class DictionaryValidator:
-    """
-    An interface for validating dictionaries of various meanings.
-    """
-
-    def validate(self, candidate: Dict[str, Any]) -> List[str]:
-        """
-        Validate the given dictionary
-
-        :param candidate: The dictionary to validate
-        :return: A list of error messages
-        """
-        raise NotImplementedError
+class CanaryTool:
+    """A fixture class resolvable only by fully-qualified (Phase 1) import."""

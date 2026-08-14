@@ -21,7 +21,7 @@ from typing import List
 from logging import getLogger
 from logging import Logger
 
-from leaf_common.config.resolver import Resolver
+from leaf_common.resolution.resolver import Resolver
 
 from neuro_san.internals.authorization.interfaces.authorizer import Authorizer
 

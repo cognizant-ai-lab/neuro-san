@@ -6,10 +6,7 @@
 # requirements-build.txt
 
 # In-house dependencies
-# Floor 1.2.51: HoconSerializationFormat(sanitize_keys=True) used by
-# AbstractAsyncConfigRestorer to strip pyhocon's embedded quotes from keys.
-leaf-common>=1.2.51
-leaf-server-common>=0.1.25
+leaf-common>=1.3.1
 
 # Downgraded secondary dependencies for error-free pip installs
 pyhocon>=0.3.60
@@ -27,10 +24,21 @@ ruamel.yaml>=0.18.6
 # Keep all these guys limited for now, as it can be the wild wild west out there
 # We don't want to be on a dependencies treadmill with timing not of our choosing.
 langchain>=1.2.0,<2.0
+
 # Floor 1.4.0: bind() on a chat model must return a chat-model-aware binding
 # (with bind_tools) for the Gemini AFC-disable in gemini_llm_policy.py to activate.
 langchain-core>=1.4.0,<2.0
 bs4>=0.0.2,<0.1
+
+# Python 3.14 note: install pydantic>=2.13 to silence langchain-core's
+# "Core Pydantic V1 functionality isn't compatible with Python 3.14" UserWarning.
+# langchain-core imports pydantic.v1 for backwards compatibility, and
+# pydantic<2.13 warns on that import even when no v1 models are used
+# (pydantic#12618, fixed in 2.13 by bundling a 3.14-compatible v1;
+# see also langchain#34441). The floor cannot move to 2.13 yet: the
+# openrouter SDK (pulled in via requirements-build.txt's langchain-openrouter)
+# pins pydantic<2.13, which would make dev/CI installs unresolvable.
+# Keep this rationale in sync with the langchain-openrouter comment there.
 pydantic>=2.9.2,<3.0
 
 # OpenAI is the only LLM provider we require out of the box so that users

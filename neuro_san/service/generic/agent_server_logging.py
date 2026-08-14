@@ -22,8 +22,7 @@ from typing import List
 import logging
 import os
 
-from leaf_server_common.logging.logging_setup import setup_logging
-from leaf_server_common.server.grpc_metadata_forwarder import GrpcMetadataForwarder
+from leaf_common.logging.logging_setup import LoggingSetup
 
 
 class AgentServerLogging:
@@ -48,13 +47,6 @@ class AgentServerLogging:
         self.forwarded_request_metadata: List[str] = forwarded_request_metadata_str.split(" ")
         self.logging_config: Dict[str, Any] = logging_config
 
-    def get_forwarder(self) -> GrpcMetadataForwarder:
-        """
-        :return: A GrpcMetadataForwarder instance initialized with
-                 the list of forwarded request metadata keys
-        """
-        return GrpcMetadataForwarder(self.forwarded_request_metadata)
-
     def setup_logging(self, metadata: Dict[str, str] = None, request_id: str = "None"):
         """
         Set up logging for agent server threads.
@@ -78,11 +70,11 @@ class AgentServerLogging:
                     extra_logging_defaults[key] = "None"
 
         current_dir: str = os.path.dirname(os.path.abspath(__file__))
-        setup_logging(self.server_name_for_logs,
-                      default_log_dir=current_dir,
-                      log_level_env="AGENT_SERVICE_LOG_LEVEL",
-                      extra_logging_fields_defaults=extra_logging_defaults,
-                      logging_config=self.logging_config)
+        LoggingSetup.setup_logging(self.server_name_for_logs,
+                                   default_log_dir=current_dir,
+                                   log_level_env="AGENT_SERVICE_LOG_LEVEL",
+                                   extra_logging_fields_defaults=extra_logging_defaults,
+                                   logging_config=self.logging_config)
 
         # This module within openai library can be quite chatty w/rt http requests
         logging.getLogger("httpx").setLevel(logging.WARNING)

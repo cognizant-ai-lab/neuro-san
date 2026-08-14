@@ -19,8 +19,7 @@ from typing import Dict
 from typing import List
 
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
-
-from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
+from leaf_common.validation.dictionary_validator import DictionaryValidator
 
 
 class AbstractNetworkValidator(DictionaryValidator):

@@ -28,7 +28,7 @@ from json import dumps
 from logging import getLogger
 from logging import Logger
 
-from leaf_common.config.resolver_util import ResolverUtil
+from leaf_common.resolution.resolver_util import ResolverUtil
 
 # Lazily resolve here because this is one of the first places the import happens
 AioBaseClient: Type[Any] = ResolverUtil.create_type("aiobotocore.client.AioBaseClient",

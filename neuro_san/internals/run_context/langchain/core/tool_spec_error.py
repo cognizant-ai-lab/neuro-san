@@ -16,19 +16,15 @@
 # END COPYRIGHT
 
 
-class Startable:
+class ToolSpecError(ValueError):
     """
-    Interface for objects which have a specific starting phase.
+    Raised when a tool's function spec (an OpenAI-function-style dictionary)
+    cannot be converted into a working tool - for example an unrecognized
+    parameter type string or a parameter name that pydantic cannot accept
+    as a field name.
+
+    Subclasses ValueError so that existing broad handlers and the network
+    validators keep catching it, while callers that need to distinguish
+    "the spec is bad" from other ValueErrors (like the connectivity errors
+    reported by external agent adapters) can catch this type specifically.
     """
-
-    def start(self):
-        """
-        Perform start up.
-        """
-        raise NotImplementedError
-
-    def stop(self):
-        """
-        Perform steps to stop/shut-down
-        By default this does nothing
-        """

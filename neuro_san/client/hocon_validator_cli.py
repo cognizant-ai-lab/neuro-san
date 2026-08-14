@@ -28,7 +28,8 @@ import sys
 from pyparsing.exceptions import ParseException
 from pyparsing.exceptions import ParseSyntaxException
 
-from neuro_san.internals.interfaces.dictionary_validator import DictionaryValidator
+from leaf_common.validation.dictionary_validator import DictionaryValidator
+
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
 from neuro_san.internals.validation.network.manifest_network_validator import ManifestNetworkValidator
 

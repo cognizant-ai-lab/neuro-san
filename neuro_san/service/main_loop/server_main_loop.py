@@ -23,11 +23,11 @@ import sys
 
 from argparse import ArgumentParser
 
-from leaf_server_common.logging.logging_setup import setup_logging
+from leaf_common.logging.logging_setup import LoggingSetup
+from leaf_common.utils.startable import Startable
 
 from neuro_san import TOP_LEVEL_DIR
 from neuro_san.interfaces.agent_session import AgentSession
-from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.internals.graph.persistence.registry_manifest_restorer import RegistryManifestRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.storage_class import StorageClass
@@ -263,10 +263,10 @@ class ServerMainLoop:
 
         if server_status.updater.is_requested():
             current_dir: str = os.path.dirname(os.path.abspath(__file__))
-            setup_logging(server_status.updater.get_service_name(),
-                          default_log_dir=current_dir,
-                          log_level_env="AGENT_SERVICE_LOG_LEVEL",
-                          logging_config=self.logging_config)
+            LoggingSetup.setup_logging(server_status.updater.get_service_name(),
+                                       default_log_dir=current_dir,
+                                       log_level_env="AGENT_SERVICE_LOG_LEVEL",
+                                       logging_config=self.logging_config)
             watcher = StorageWatcher(self.watcher_config, self.server_context)
             components_to_start.append(watcher)
 

@@ -20,9 +20,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from pydantic import BaseModel
+
 from neuro_san.internals.run_context.langchain.core.langchain_openai_function_tool \
     import LangChainOpenAIFunctionTool
 from neuro_san.internals.run_context.langchain.core.langchain_run import LangChainRun
+from neuro_san.internals.run_context.langchain.core.tool_spec_error import ToolSpecError
 from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
 
 
@@ -98,3 +101,44 @@ class TestLangChainOpenAIFunctionTool:
         result = await tool._arun()   # pylint: disable=protected-access
 
         assert result == "something broke"
+
+    def test_from_function_json_without_parameters_builds_empty_args_schema(self):
+        """
+        An internal tool with no "parameters" block must still get an explicit,
+        empty args_schema. Leaving args_schema unset lets langchain auto-derive
+        a schema from _arun(*args, **kwargs), which produces an "args" array
+        property with no "items" field - Gemini rejects that with
+        INVALID_ARGUMENT (see commit 2836c3cf).
+        """
+        function_json = {
+            "name": "date_time",
+            "description": "Returns the current date and time."
+        }
+        tool = LangChainOpenAIFunctionTool.from_function_json(function_json, MagicMock())
+
+        assert tool.args_schema is not None
+        assert len(tool.args_schema.__fields__) == 0
+
+    def test_explicit_null_parameters_builds_explicit_empty_args_schema(self):
+        """
+        An explicit "parameters": null - expressible in the JSON specs
+        external agents send over the network - is normalized to the same
+        explicit empty args_schema as a missing parameters block, now that
+        the converter honors the DictionaryConverter None -> None contract.
+        (External agents get parameters synthesized by
+        ensure_external_parameters() before reaching this code; this covers
+        every other caller.)
+        """
+        function_json = {"name": "ext_agent", "description": "d", "parameters": None}
+        tool = LangChainOpenAIFunctionTool.from_function_json(function_json, MagicMock())
+        assert tool.args_schema is not None
+        assert issubclass(tool.args_schema, BaseModel)
+
+    def test_non_dict_parameters_raises_tool_spec_error(self):
+        """
+        A non-dict "parameters" value follows the invalid-spec error path
+        instead of raising a raw AttributeError from parameters.get().
+        """
+        function_json = {"name": "ext_agent", "description": "d", "parameters": "not-a-dict"}
+        with pytest.raises(ToolSpecError, match="parameters to be a dictionary"):
+            LangChainOpenAIFunctionTool.from_function_json(function_json, MagicMock())

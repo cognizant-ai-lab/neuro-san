@@ -93,12 +93,16 @@ class TestConnectivityReporter(TestCase):
         """
         agent_network: AgentNetwork = self.get_sample_registry("hello_world.hocon")
         toolbox_factory = ToolboxFactory()
-        # Keep the test hermetic: no user toolbox info file from the environment.
+        # Keep the test hermetic: no user toolbox info file on the injected
+        # factory, nor from the environment should a self-built factory
+        # ever be constructed (the regression this test guards against).
         toolbox_factory.toolbox_info_file = None
-        reporter = ConnectivityReporter(agent_network, toolbox_factory)
-        self.assertIs(reporter.toolbox_factory, toolbox_factory)
+        with patch.dict(os.environ):
+            os.environ.pop("AGENT_TOOLBOX_INFO_FILE", None)
+            reporter = ConnectivityReporter(agent_network, toolbox_factory)
+            self.assertIs(reporter.toolbox_factory, toolbox_factory)
 
-        messages: List[Dict[str, Any]] = reporter.report_network_connectivity()
+            messages: List[Dict[str, Any]] = reporter.report_network_connectivity()
         self.assertEqual(len(messages), 2)
         self.assertTrue(toolbox_factory.loaded)
 
@@ -107,27 +111,31 @@ class TestConnectivityReporter(TestCase):
         Tests that display_as information comes from the injected factory's
         toolbox infos, not from a factory built behind the scenes.
         """
-        agent_network: AgentNetwork = self.get_sample_registry("requests_get.hocon")
+        agent_network: AgentNetwork = self.get_sample_registry("date_time_timezone.hocon")
         toolbox_factory = ToolboxFactory()
-        # Keep the test hermetic: no user toolbox info file from the environment.
+        # Keep the test hermetic: no user toolbox info file on the injected
+        # factory, nor from the environment should a self-built factory
+        # ever be constructed (the regression this test guards against).
         toolbox_factory.toolbox_info_file = None
         # Seed distinctive tool info and mark loaded so load() keeps it as-is.
-        # A self-built or bundled factory would report "langchain_tool" instead.
+        # A self-built or bundled factory would report "coded_tool" instead.
         toolbox_factory.toolbox_infos = {
-            "requests_get": {
+            "get_current_date_time": {
                 "class": "mock_package.mock_module.MockTool",
                 "display_as": "injected_tool",
             }
         }
         toolbox_factory.loaded = True
 
-        reporter = ConnectivityReporter(agent_network, toolbox_factory)
-        messages: List[Dict[str, Any]] = reporter.report_network_connectivity()
+        with patch.dict(os.environ):
+            os.environ.pop("AGENT_TOOLBOX_INFO_FILE", None)
+            reporter = ConnectivityReporter(agent_network, toolbox_factory)
+            messages: List[Dict[str, Any]] = reporter.report_network_connectivity()
 
         display_as_by_origin: Dict[str, str] = {
             message.get("origin"): message.get("display_as") for message in messages
         }
-        self.assertEqual(display_as_by_origin.get("web_browse_tool"), "injected_tool")
+        self.assertEqual(display_as_by_origin.get("current_date_time"), "injected_tool")
 
     def test_assemble_tool_list_args_tools_dict(self):
         """
