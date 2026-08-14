@@ -36,6 +36,7 @@ from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
 from neuro_san.internals.run_context.langchain.core.langchain_openai_function_tool import LangChainOpenAIFunctionTool
+from neuro_san.internals.run_context.langchain.core.tool_spec_error import ToolSpecError
 from neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter import LangChainMcpAdapter
 from neuro_san.internals.run_context.utils.external_tool_adapter import ExternalToolAdapter
 from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
@@ -334,6 +335,16 @@ class BaseToolFactory:
             # Otherwise, it is a shared coded tool.
             return self.create_function_tool(tool_from_toolbox, name)
 
+        except ToolSpecError as tool_spec_exception:
+            # The toolbox entry itself was found, but its function spec could
+            # not be turned into a tool.  Toolbox specs are not covered by the
+            # registry-load validators, so this is the first place the problem
+            # can be reported.
+            message: str = f"Agent/tool '{name}' has an invalid function spec: {tool_spec_exception}"
+            agent_message = AgentMessage(content=message)
+            await self.journal.write_message(agent_message)
+            self.sensitive_logger.warning(message)
+            return None
         except ValueError as tool_creation_exception:
             # There are errors in tool creation process
             message: str = f"Failed to create Agent/tool '{name}': {tool_creation_exception}"
