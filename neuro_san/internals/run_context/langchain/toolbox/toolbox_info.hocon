@@ -24,7 +24,7 @@
     # - This file defines the tools that ship with the default neuro-san toolbox. The format
     #   supports both langchain tools/toolkits and shared coded tools; the default entries
     #   below are all coded tools.
-    # - See https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md for more informations on coded tools.
+    # - See https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md for more information on coded tools.
     #
     # Customization via Agent HOCON File:
     # - In the agent HOCON file, users can define an "args" section to **add or override**

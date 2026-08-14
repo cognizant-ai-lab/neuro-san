@@ -135,6 +135,19 @@ class TestToolboxFactory:
         with pytest.raises(ValueError, match="Tool 'my_tool' is missing required key: 'class'"):
             factory.create_tool_from_toolbox("my_tool", {})
 
+    def test_empty_tool_entry_reports_missing_class(self, factory):
+        """Test that an empty (but present) tool entry is reported as missing
+        'class' rather than as not defined, from both toolbox entry points."""
+        factory.toolbox_infos = {
+            "empty_tool": {},
+        }
+
+        with pytest.raises(ValueError, match="Tool 'empty_tool' is missing required key: 'class'"):
+            factory.create_tool_from_toolbox("empty_tool", {})
+
+        with pytest.raises(ValueError, match="Tool 'empty_tool' is missing required key: 'class'"):
+            factory.get_shared_coded_tool_class("empty_tool")
+
     def test_create_toolbox_with_unknown_tool_names_sources(self, factory):
         """Test that an unknown tool name reports the searched sources by name.
         Previously the message rendered 'not defined in None' when no user

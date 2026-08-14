@@ -181,22 +181,6 @@ class ToolboxFactory(ContextTypeToolboxFactory):
 
         tool_info: Dict[str, Any] = self._require_tool_info(tool_name)
 
-        if not isinstance(tool_info, Dict):
-            raise ValueError(f"The value for the {tool_name} key must be a dictionary.")
-
-        if "class" not in tool_info:
-            if tool_name in self.REMOVED_TOOLS:
-                # A user toolbox file that overrides only part of a removed
-                # entry used to inherit "class" from the bundled default.
-                raise self._removed_tool_error(tool_name)
-            raise ValueError(
-                f"Tool '{tool_name}' is missing required key: 'class'.\n"
-                "Each tool must include a 'class' key:\n"
-                "- For Langchain base tools: use the full class path "
-                "(e.g., 'some_package.some_module.SomeTool')\n"
-                "- For shared CodedTools: use 'module.Class' format (e.g., 'some_module.SomeCodedTool')"
-            )
-
         # If "description" in the tool info, then it is a shared coded tool.
         # Return dictionary of tool's description and parameters.
         if "description" in tool_info:
@@ -252,22 +236,41 @@ class ToolboxFactory(ContextTypeToolboxFactory):
     def _require_tool_info(self, tool_name: str) -> Dict[str, Any]:
         """
         Looks up a tool's entry in the loaded toolbox infos, raising when absent
-        so that every toolbox entry point reports unknown names the same way.
+        or malformed so that every toolbox entry point reports problems the
+        same way.
 
         :param tool_name: The name of the tool to look up.
-        :return: The toolbox dictionary entry for the tool name.
+        :return: The toolbox dictionary entry for the tool name, guaranteed
+                to be a dictionary with a "class" key.
                 Can raise a ValueError with migration guidance if the tool was
-                removed from the default toolbox, or one naming the searched
-                sources if the tool is simply unknown.
+                removed from the default toolbox, one naming the searched
+                sources if the tool is simply unknown, or one describing how
+                the entry is malformed.
         """
         tool_info: Dict[str, Any] = self.toolbox_infos.get(tool_name)
-        if not tool_info:
+        if tool_info is None:
             if tool_name in self.REMOVED_TOOLS:
                 raise self._removed_tool_error(tool_name)
             sources: str = "the default toolbox info file"
             if self.toolbox_info_file:
                 sources += f" or in {self.toolbox_info_file}"
             raise ValueError(f"Tool '{tool_name}' is not defined in {sources}.")
+
+        if not isinstance(tool_info, Dict):
+            raise ValueError(f"The value for the {tool_name} key must be a dictionary.")
+
+        if "class" not in tool_info:
+            if tool_name in self.REMOVED_TOOLS:
+                # A user toolbox file that overrides only part of a removed
+                # entry used to inherit "class" from the bundled default.
+                raise self._removed_tool_error(tool_name)
+            raise ValueError(
+                f"Tool '{tool_name}' is missing required key: 'class'.\n"
+                "Each tool must include a 'class' key:\n"
+                "- For Langchain base tools: use the full class path "
+                "(e.g., 'some_package.some_module.SomeTool')\n"
+                "- For shared CodedTools: use 'module.Class' format (e.g., 'some_module.SomeCodedTool')"
+            )
         return tool_info
 
     @staticmethod
