@@ -238,15 +238,15 @@ class LocalReservationsStorage(AbstractReservationsStorage):
             return None, None
         except OSError as exc:
             sensitive_logger.error("%s: I/O error reading reservation %s: %s",
-                              self._name, reservation_id, exc)
+                                   self._name, reservation_id, exc)
             return None, None
         except json.JSONDecodeError as exc:
             sensitive_logger.error("%s: JSON decode error reading reservation %s: %s",
-                              self._name, reservation_id, exc)
+                                   self._name, reservation_id, exc)
             return None, None
         except ValueError as exc:
             sensitive_logger.debug("%s: invalid reservation_id %r: %s",
-                              self._name, reservation_id, exc)
+                                   self._name, reservation_id, exc)
             return None, None
 
         try:
@@ -265,7 +265,7 @@ class LocalReservationsStorage(AbstractReservationsStorage):
             # Any shape error during reconstruction -- treat as "not present"
             # rather than crashing the caller. Matches the S3 reader's behavior.
             sensitive_logger.error("%s: failed to reconstruct reservation %s: %s",
-                                    self._name, reservation_id, exc)
+                                   self._name, reservation_id, exc)
             return None, None
 
         return reservation, agent_network
@@ -328,11 +328,11 @@ class LocalReservationsStorage(AbstractReservationsStorage):
             return False
         except OSError as exc:
             sensitive_logger.error("%s: I/O error reading %s during expiration: %s",
-                                    self._name, path, exc)
+                                   self._name, path, exc)
             return False
         except json.JSONDecodeError as exc:
             sensitive_logger.error("%s: JSON decode error on %s during expiration: %s",
-                                    self._name, path, exc)
+                                   self._name, path, exc)
             return False
 
         if not isinstance(agent_spec, dict):
@@ -343,7 +343,7 @@ class LocalReservationsStorage(AbstractReservationsStorage):
         metadata: Any = agent_spec.get("metadata") or {}
         if not isinstance(metadata, dict):
             sensitive_logger.debug("%s: skipping json file with non-dict metadata during expiration: %s",
-                              self._name, path)
+                                   self._name, path)
             return False
 
         reservation_data = metadata.get("reservation")
@@ -355,7 +355,7 @@ class LocalReservationsStorage(AbstractReservationsStorage):
             expiration_time: float = float(reservation_data["expiration_time_in_seconds"])
         except (KeyError, TypeError, ValueError) as exc:
             sensitive_logger.error("%s: invalid expiration_time_in_seconds in %s: %s",
-                                    self._name, path, exc)
+                                   self._name, path, exc)
             return False
         if current_time <= expiration_time:
             return False
@@ -367,7 +367,7 @@ class LocalReservationsStorage(AbstractReservationsStorage):
             return True
         except OSError as exc:
             sensitive_logger.error("%s: failed to delete expired reservation %s: %s",
-                                    self._name, path, exc)
+                                   self._name, path, exc)
             return False
 
         reservation_id: str = reservation_data.get("id") or os.path.basename(path)
