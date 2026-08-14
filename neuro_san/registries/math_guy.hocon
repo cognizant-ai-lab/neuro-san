@@ -148,10 +148,14 @@ Return verbatim whatever real_calculator returns.
                     "required": ["operator"]
                 }
             },
-            # Most of the time you could just use "calculator.Calculator" for brevity and the system
-            # will find it given the AGENT_TOOL_PATH and the agent name combo.
-            # But this one is a test for fully-qualified class name.
-            "class": "neuro_san.coded_tools.math_guy.calculator.Calculator"
+            # The "<module>.<ClassName>" form is relative to AGENT_TOOL_PATH: the system
+            # finds it given the AGENT_TOOL_PATH and the agent name combo.
+            # This is the recommended form, and the only form that resolves when the
+            # AGENT_TOOL_PATH_ONLY server hardening flag is enabled.
+            "class": "calculator.Calculator"
+            # When AGENT_TOOL_PATH_ONLY is off (the library default), a fully-qualified
+            # reference to a module on the server's PYTHONPATH works as well:
+            # "class": "neuro_san.coded_tools.math_guy.calculator.Calculator"
         }
     ]
 }
