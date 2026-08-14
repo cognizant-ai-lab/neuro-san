@@ -95,13 +95,16 @@ class CassetteCleaner:
                     response for response in responses
                     if isinstance(response, dict) and cls._is_success(response.get("status"))
                 ]
-                stats["variants_removed"] += len(responses) - len(good)
                 if good:
+                    # Partial trim of a surviving entry: count the removed variants.
+                    stats["variants_removed"] += len(responses) - len(good)
                     new_entry: Dict[str, Any] = dict(entry)
                     new_entry["responses"] = good
                     cleaned.append(new_entry)
                     stats["kept"] += 1
                 else:
+                    # No successful variant: the whole entry is dropped, counted
+                    # as a dropped entry (not as trimmed variants).
                     stats["dropped_failure"] += 1
                 continue
 
