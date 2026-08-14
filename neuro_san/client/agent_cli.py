@@ -516,7 +516,7 @@ Have external tools that can be found in the local agent manifest use a service 
             metadata: Dict[str, Any] = tool.get("_meta", {})
             tool_description: Dict[str, Any] = {
                 "agent_name": tool.get("name", "<Unnamed Tool>"),
-                "description": metadata.get("description", ""),
+                "description": metadata.get("description", tool.get("description", "")),
                 "tags": metadata.get("tags", [])
             }
             tools_description.append(tool_description)
