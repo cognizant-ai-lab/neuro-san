@@ -22,7 +22,7 @@ from typing import Type
 from os import environ
 from threading import Lock
 
-from leaf_common.config.resolver_util import ResolverUtil
+from leaf_common.resolution.resolver_util import ResolverUtil
 
 # Lazy loading of optional openfga_sdk types.
 OpenFgaClient: Type[Any] = ResolverUtil.create_type("openfga_sdk.client.client.OpenFgaClient",

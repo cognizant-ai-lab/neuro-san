@@ -533,9 +533,25 @@ For a user-facing front-man, what is contained in this description often suffice
 
 Parameters contains an optional [JSON Schema](https://json-schema.org) dictionary describing what
 specific information the agent needs as input arguments when it is called.
+Only the `type: object` + `properties` form described below is supported.
+JSON Schema constructs outside this form (such as `additionalProperties`,
+`anyOf`, or `$ref`) are not honored: a schema without a `properties` dictionary
+is rejected as invalid when the agent is called as a tool, and unsupported
+constructs appearing alongside a `properties` dictionary are ignored.
 
-A front-man typically does not need parameters defined, unless the agent network being described
-is anticipated as being called from other agent networks.
+A front-man typically does not need parameters defined when its agent network is only
+ever talked to directly by a user.
+
+When the agent network is anticipated as being called from other agent networks
+(that is, referenced as an external tool), the front-man's parameters are how a
+calling agent passes its request along — the tool-call arguments are the only message
+channel through which a caller's request reaches the external network.
+(Private data can separately flow through the opt-in `sly_data` channel —
+see [to_downstream](#to_downstream).) Declare at least one parameter
+(for example, a single required `inquiry` string) for any network intended to be
+referenced externally. If no parameters are declared, neuro-san synthesizes a default
+required `inquiry` string parameter on the calling side (and logs a warning) so the
+caller's request still gets through.
 
 ##### type
 
@@ -554,8 +570,12 @@ This dictionary has the following keys:
 | type         | A string describing the type of the property. (See below) |
 | default      | An optional default value for the property |
 
-Scalar types here can be "int", "float", "string", "bool".
+Scalar types here can be "int" or "integer", "float", "number" (accepts both
+integers and floats), "string", and "bool" or "boolean".
+These include the standard JSON Schema spellings, so function specs copied from
+OpenAI- or MCP-style tool definitions work as-is.
 It is possible that a properties' type can be "array"s for lists or "object"s for nested dictionaries.
+An "array" property must also carry an "items" dictionary describing the type of its elements.
 
 Any sample agent hocon with more than one agent will have some example of a simple properties dictionary.
 For a concrete, more complex properties definition, with nested objects and arrays,

@@ -19,6 +19,7 @@
 from typing import Any
 from typing import Callable
 from typing import Dict
+from typing import FrozenSet
 from typing import List
 from typing import Optional
 from typing import Type
@@ -34,7 +35,7 @@ from langchain_core.tools.base import BaseToolkit
 from pydantic import BaseModel
 
 from leaf_common.config.dictionary_overlay import DictionaryOverlay
-from leaf_common.config.resolver import Resolver
+from leaf_common.resolution.resolver import Resolver
 
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.run_context.langchain.toolbox.toolbox_info_restorer import ToolboxInfoRestorer
@@ -60,7 +61,8 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         for langchain's tools:
         - The tool name serves as a key.
         - The corresponding value should be a dictionary with:
-        - "class": The fully qualified class name of the tool.
+        - "class": The fully qualified class name of the tool in the form
+            "<package_name>.<module_name>.<ClassName>".
         - "args": A dictionary of arguments required for the tool's initialization,
             which may include nested class configurations.
 
@@ -76,6 +78,19 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         The default toolbox config file can be seen at
         "neuro_san/internals/run_context/langchain/toolbox/toolbox_info.hocon"
     """
+
+    # Tools that used to ship in the default toolbox info file but were removed
+    # because they were built on the deprecated langchain-community package.
+    # A stale reference to one of these gets a targeted migration message
+    # instead of the generic "not defined" error.
+    REMOVED_TOOLS: FrozenSet[str] = frozenset({
+        "requests_get",
+        "requests_post",
+        "requests_patch",
+        "requests_put",
+        "requests_delete",
+        "requests_toolkit",
+    })
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         """
@@ -164,37 +179,22 @@ class ToolboxFactory(ContextTypeToolboxFactory):
 
         empty: Dict[str, Any] = {}
 
-        tool_info: Dict[str, Any] = self.toolbox_infos.get(tool_name)
-        if not tool_info:
-            raise ValueError(f"Tool '{tool_name}' is not defined in {self.toolbox_info_file}.")
-
-        if not isinstance(tool_info, Dict):
-            raise ValueError(f"The value for the {tool_name} key must be a dictionary.")
-
-        if "class" not in tool_info:
-            raise ValueError(
-                "Missing required key: 'class'.\n"
-                "Each tool must include a 'class' key:\n"
-                "- For Langchain base tools: use the full class path "
-                "(e.g., 'some_package.some_module.SomeTool')\n"
-                "- For shared CodedTools: use 'module.Class' format (e.g., 'some_module.SomeCodedTool')"
-            )
+        tool_info: Dict[str, Any] = self._require_tool_info(tool_name)
 
         # If "description" in the tool info, then it is a shared coded tool.
         # Return dictionary of tool's description and parameters.
         if "description" in tool_info:
             return tool_info
 
+        # Validated as a non-empty string by _require_tool_info() above.
         tool_class_name: str = tool_info.get("class")
-        if not isinstance(tool_class_name, str) or not tool_class_name:
-            raise ValueError(f"Value for '{tool_name}.class' must be a non-empty string.")
 
         if tool_class_name.startswith("langchain_community."):
             logging.warning(
                 "Tool '%s' uses a class from langchain-community, which has been sunset "
                 "(https://github.com/langchain-ai/langchain-community/issues/674). "
-                "Tools based on langchain-community will be removed from the default toolbox "
-                "in a future release.",
+                "Consider a tool from a maintained, dedicated integration package instead: "
+                "https://docs.langchain.com/oss/python/integrations/tools",
                 tool_name
             )
 
@@ -231,6 +231,65 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         # Add "langchain_tool" tags so journal callback can idenitify it
         instance.tags = ["langchain_tool"]
         return instance
+
+    def _require_tool_info(self, tool_name: str) -> Dict[str, Any]:
+        """
+        Looks up a tool's entry in the loaded toolbox infos, raising when absent
+        or malformed so that every toolbox entry point reports problems the
+        same way.
+
+        :param tool_name: The name of the tool to look up.
+        :return: The toolbox dictionary entry for the tool name, guaranteed
+                to be a dictionary with a "class" key.
+                Can raise a ValueError with migration guidance if the tool was
+                removed from the default toolbox, one naming the searched
+                sources if the tool is simply unknown, or one describing how
+                the entry is malformed.
+        """
+        tool_info: Dict[str, Any] = self.toolbox_infos.get(tool_name)
+        if tool_info is None:
+            if tool_name in self.REMOVED_TOOLS:
+                raise self._removed_tool_error(tool_name)
+            sources: str = "the default toolbox info file"
+            if self.toolbox_info_file:
+                sources += f" or in {self.toolbox_info_file}"
+            raise ValueError(f"Tool '{tool_name}' is not defined in {sources}.")
+
+        if not isinstance(tool_info, dict):
+            raise ValueError(f"The value for the {tool_name} key must be a dictionary.")
+
+        if "class" not in tool_info:
+            if tool_name in self.REMOVED_TOOLS:
+                # A user toolbox file that overrides only part of a removed
+                # entry used to inherit "class" from the bundled default.
+                raise self._removed_tool_error(tool_name)
+            raise ValueError(
+                f"Tool '{tool_name}' is missing required key: 'class'.\n"
+                "Each tool must include a 'class' key:\n"
+                "- For Langchain base tools: use the full class path "
+                "(e.g., 'some_package.some_module.SomeTool')\n"
+                "- For shared CodedTools: use 'module.Class' format (e.g., 'some_module.SomeCodedTool')"
+            )
+
+        tool_class_name: Any = tool_info.get("class")
+        if not isinstance(tool_class_name, str) or not tool_class_name:
+            raise ValueError(f"Value for '{tool_name}.class' must be a non-empty string.")
+        return tool_info
+
+    @staticmethod
+    def _removed_tool_error(tool_name: str) -> ValueError:
+        """
+        :param tool_name: The name of a tool in REMOVED_TOOLS.
+        :return: A ValueError explaining the removal and how to migrate.
+        """
+        return ValueError(
+            f"Tool '{tool_name}' was removed from the default toolbox because it was "
+            "built on the deprecated langchain-community package. To keep using it, "
+            "define it in your own toolbox info file and register that file with the "
+            "AGENT_TOOLBOX_INFO_FILE environment variable or the 'toolbox_info_file' "
+            "key in the agent network hocon file. See "
+            "https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/toolbox_info_hocon_reference.md"
+        )
 
     def _resolve_args(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -302,9 +361,11 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         Get class of the shared coded tool
 
         :param tool_name: The name of the tool
-        :return: The class of the coded tool
+        :return: The class of the coded tool.
+                Can raise a ValueError if the tool_name is unknown to the toolbox,
+                just like create_tool_from_toolbox().
         """
-        tool_info: Dict[str, Any] = self.toolbox_infos.get(tool_name)
+        tool_info: Dict[str, Any] = self._require_tool_info(tool_name)
         return tool_info.get("class")
 
     def get_tool_info(self, tool_name: str) -> Dict[str, Any]:

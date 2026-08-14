@@ -26,8 +26,8 @@ import pytest
 
 from langchain_core.messages.ai import AIMessage
 
-from neuro_san.internals.messages.agent_message import AgentMessage
 from neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter import LangChainTokenCounter
+from neuro_san.message.types.agent_message import AgentMessage
 
 
 # pylint: disable=too-many-public-methods

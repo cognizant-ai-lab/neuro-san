@@ -29,7 +29,7 @@ from json.decoder import JSONDecodeError
 from logging import getLogger
 from logging import Logger
 
-from leaf_common.config.resolver_util import ResolverUtil
+from leaf_common.resolution.resolver_util import ResolverUtil
 
 # Lazily resolve here because this is one of the first places the import happens
 BaseClient: Type[Any] = ResolverUtil.create_type("botocore.client.BaseClient", install_if_missing="botocore")

@@ -33,8 +33,8 @@ import os
 from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.dictionary_overlay import DictionaryOverlay
-from leaf_common.config.resolver_util import ResolverUtil
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
+from leaf_common.resolution.resolver_util import ResolverUtil
 
 from neuro_san.internals.interfaces.context_type_llm_factory import ContextTypeLlmFactory
 from neuro_san.internals.run_context.langchain.llms.langchain_llm_factory import LangChainLlmFactory

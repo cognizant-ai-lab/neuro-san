@@ -19,13 +19,17 @@ from __future__ import annotations
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Type
+from typing import Union
 
 from pydantic import BaseModel
-from pydantic.v1 import Field
-from pydantic.v1 import create_model
+from pydantic import Field
+from pydantic import create_model
 
 from leaf_common.serialization.interface.dictionary_converter import DictionaryConverter
+
+from neuro_san.internals.run_context.langchain.core.tool_spec_error import ToolSpecError
 
 
 class BaseModelDictionaryConverter(DictionaryConverter):
@@ -42,13 +46,41 @@ class BaseModelDictionaryConverter(DictionaryConverter):
         "boolean": bool,
         "array": List,
 
-        # Note: "Any" produces a pydantic BaseModel object whose fields
-        #       are direct members when passed as an argument to a CodedTool
-        #       or any other Tool.  If you really want a dictionary,
-        #       you need to turn it into one using foo = dict(my_object_arg)
-        #       See: https://docs.pydantic.dev/1.10/usage/exporting_models/#dictmodel-and-iteration
-        #       This is what the PydanticArgumentDictionaryConverter is for.
-        "object": Any
+        # Aliases so that standard JSON Schema / OpenAI function spec type
+        # names work as well as the HOCON-native names above.
+        # "number" maps to a union because JSON Schema's number covers both
+        # integers and floats, and pydantic's smart-mode union preserves
+        # whichever one the caller actually sent.
+        "integer": int,
+        "number": Union[int, float],
+        "bool": bool,
+
+        # Note: This entry only applies to "object" properties that do not
+        #       declare "properties" of their own.  Objects that do declare
+        #       them never reach this lookup - get_type_from_property_dict()
+        #       below converts those into nested pydantic BaseModels, and
+        #       PydanticArgumentDictionaryConverter flattens any such nested
+        #       models back into plain dictionaries before tool arguments
+        #       are passed along, so CodedTools always receive dictionaries.
+        #
+        #       Dict[str, Any] is used here rather than bare Any because of
+        #       the JSON schema each produces for the LLM provider:
+        #       * Any yields an empty schema ({}), which provider adapters
+        #         cannot represent faithfully.  Notably langchain-google-genai
+        #         (every version tested, 2.1.8 through 4.3.2) defaults such
+        #         untyped properties to STRING, after which Gemini sends
+        #         JSON-encoded strings where tools expect dictionaries.
+        #       * Dict[str, Any] yields
+        #         {"type": "object", "additionalProperties": true},
+        #         which converts to a proper OBJECT declaration everywhere.
+        #
+        #       For well-formed arguments the two behave identically: a
+        #       dictionary sent by the LLM reaches the tool as the same
+        #       plain dict.  Non-dict values (e.g. a JSON-encoded string),
+        #       which Any silently passed through with the wrong type, now
+        #       fail pydantic validation and are reported back to the LLM
+        #       as a correctable tool error instead.
+        "object": Dict[str, Any]
     }
 
     def __init__(self, top_level_field_name: str):
@@ -80,6 +112,11 @@ class BaseModelDictionaryConverter(DictionaryConverter):
                 If obj_dict is not the correct type, it is also reasonable
                 to return None.
         """
+        # Honor the DictionaryConverter contract stated above.  None reaches
+        # here when an external agent reports "parameters": null.
+        if obj_dict is None:
+            return None
+
         base_model: BaseModel = self.openai_function_to_pydantic(self.top_level_field_name, obj_dict)
         return base_model
 
@@ -95,13 +132,43 @@ class BaseModelDictionaryConverter(DictionaryConverter):
         """
 
         # Get stuff from the object-level function dictionary
-        # from the OpenAI function spec
-        properties: Dict[str, Any] = function_dict.get("properties", {})
-        required: List[str] = []
-        required = function_dict.get("required", required)
+        # from the OpenAI function spec.
+        #
+        # Explicit nulls are expressible both in hocon registries and in the
+        # JSON function specs external agents send over the network, and
+        # .get() defaults do not apply to them - so treat an explicit null
+        # the same as a missing key rather than crashing on it, and reject
+        # other wrong-typed values with a clean spec error.
+        properties: Dict[str, Any] = function_dict.get("properties")
+        if properties is None:
+            properties = {}
+        if not isinstance(properties, Dict):
+            raise ToolSpecError(f"'properties' must be an object, got {type(properties).__name__}")
+
+        required: List[str] = function_dict.get("required")
+        if required is None:
+            required = []
+        if not isinstance(required, List):
+            # Also guards the "in" test below: a string here (e.g.
+            # "required": "city") would substring-match unrelated field
+            # names instead of naming one required field.
+            raise ToolSpecError(f"'required' must be a list of field names, got {type(required).__name__}")
+        if any(not isinstance(entry, str) for entry in required):
+            # Non-string entries match nothing in the "in" test below, so
+            # every field would silently become optional; they also crash
+            # downstream validators that use the entries as keys.
+            raise ToolSpecError(f"'required' must contain only field-name strings, got {required!r}")
 
         fields: Dict[str, Any] = {}
         for field_name, one_property in properties.items():
+
+            # Reject parameter names pydantic cannot make fields for
+            # before they reach create_model() below.
+            self.validate_field_name(field_name)
+
+            if not isinstance(one_property, Dict):
+                raise ToolSpecError(f"Property '{field_name}' must be an object describing the field, "
+                                    f"got {type(one_property).__name__}")
 
             # Get bits we need to assemble a pydantic Field description
             description: str = one_property.get("description")
@@ -119,16 +186,93 @@ class BaseModelDictionaryConverter(DictionaryConverter):
             # when a value is not there.  By contrast, we do not set a default
             # for something that is required, which leaves the pydantic definition
             # of "Undefined" in place which to agent infra implies a required arg.
+            #
+            # Note: pydantic v2 enforces required-ness for every type.  Under
+            # the pydantic v1 models this converter used to build, fields with
+            # an Any annotation (bare "object" parameters) were implicitly
+            # optional even when listed in "required", so tool calls omitting
+            # them slipped through.  Such calls now fail validation, which
+            # langchain reports back to the LLM as a correctable tool error.
             if field_name not in required:
                 field_kwargs["default"] = None
+                # Pydantic v1 implicitly made any field with a None default Optional.
+                # Pydantic v2 does not, so wrap the type explicitly lest an LLM
+                # passing an explicit null for an optional arg fail validation.
+                #
+                # This wrap also changes the JSON schema advertised to LLM
+                # providers for every non-required field: pydantic v1 emitted a
+                # flat {"type": X}, while v2 emits
+                # {"anyOf": [{"type": X}, {"type": "null"}], "default": null}.
+                # Provider adapters handle the anyOf-with-null shape (Gemini's
+                # converts it to a nullable declaration), but note that
+                # OpenAI's *strict* structured-output mode does not accept the
+                # "default" keyword and langchain does not strip it.  neuro-san
+                # never enables strict mode itself; this only matters for
+                # schema-strict gateways or user code that opts into it.
+                field_type = Optional[field_type]
             field = Field(**field_kwargs)
 
             # Add the field to our dictionary with its name as key
             fields[field_name] = (field_type, field)
 
-        # Create the pydantic BaseModel for the type dynamically
-        model: BaseModel = create_model(name, **fields)
+        # Create the pydantic BaseModel for the type dynamically.
+        #
+        # Note: pydantic v2 models validate LLM-supplied arguments more
+        # strictly than the v1 models this converter used to build.
+        # Sensible coercions still happen ("5" -> 5 for an int field), but
+        # the lossy ones v1 performed silently are now rejected: an int for
+        # a "string" field is no longer stringified, and a fractional float
+        # for an "int" field is no longer truncated.  Rejections do not
+        # crash the run - langchain surfaces them to the calling LLM as a
+        # correctable tool-error message, at the cost of a retry round-trip.
+        try:
+            model: BaseModel = create_model(name, **fields)
+        except (NameError, TypeError) as exception:
+            # Safety net for anything validate_field_name() does not cover:
+            # report whatever create_model() rejects as the same spec-error
+            # type the rest of the pipeline knows how to handle cleanly.
+            raise ToolSpecError(f"Could not create pydantic model '{name}': {exception}") from exception
         return model
+
+    def validate_field_name(self, field_name: str):
+        """
+        :param field_name: The string name of a single parameter/field.
+                Raises ToolSpecError for parameter names that pydantic v2's
+                create_model() cannot accept as field names.
+
+        Pydantic v1 tolerated all of the names rejected here (it merely
+        warned about and dropped underscore-prefixed names), but pydantic v2
+        fails on them with cryptic NameError/TypeError at model-creation
+        time.  The invalid names are:
+
+        * Names with a leading underscore (e.g. "_internal", "__config__"):
+          pydantic v2 reserves these for private attributes, and dunder
+          names collide with create_model()'s own keyword arguments.
+        * "model_config": silently consumed as create_model()'s model
+          configuration argument instead of becoming a field.
+        * Names that shadow a BaseModel method inside pydantic's protected
+          namespaces "model_dump" and "model_validate" (e.g. "model_dump",
+          "model_dump_json", "model_validate_json").  Other "model_"-prefixed
+          names (e.g. "model_name") are fine.
+
+        Deliberately NOT rejected here: names that shadow BaseModel
+        attributes outside the protected namespaces, such as "schema",
+        "json", "dict" or "copy".  Pydantic v2 creates those fields and only
+        emits a shadowing UserWarning, so they work.  This is itself a
+        behavior change from the v1-based converter: v1's create_model
+        raised NameError for them, which made network validation reject
+        such specs - they now pass.
+        """
+        message: str = None
+        if field_name.startswith("_"):
+            message = f"Parameter name '{field_name}' must not start with an underscore."
+        elif field_name == "model_config":
+            message = "Parameter name 'model_config' is reserved by pydantic for model configuration."
+        elif field_name.startswith(("model_dump", "model_validate")) and hasattr(BaseModel, field_name):
+            message = f"Parameter name '{field_name}' shadows a pydantic BaseModel method."
+
+        if message is not None:
+            raise ToolSpecError(message)
 
     def get_type_from_property_dict(self, field_name: str, one_property: Dict[str, Any]) -> Type:
         """
@@ -139,7 +283,28 @@ class BaseModelDictionaryConverter(DictionaryConverter):
                 deep enough.
         """
         type_from_dict: str = one_property.get("type")
+
+        # Distinguish a missing "type" key from an unrecognized type string,
+        # lest the error below read "Unrecognized type 'None'" and send the
+        # user hunting for a type literally called None.
+        if type_from_dict is None:
+            raise ToolSpecError(f"Field '{field_name}' has no 'type' key. "
+                                "Composite schemas (anyOf/oneOf/enum/$ref) are not supported.")
+
+        # JSON Schema also allows a list here ("type": ["string", "null"]),
+        # which is unsupported and would crash the dict lookup below with
+        # an unhashable-key TypeError, so reject it cleanly first.
+        if not isinstance(type_from_dict, str):
+            raise ToolSpecError(f"Field '{field_name}' has a non-string 'type' ({type_from_dict!r}). "
+                                "Union type lists are not supported; use a single type name.")
+
         field_type: Type = self.TYPE_LOOKUP.get(type_from_dict)
+
+        # Pydantic v1 rejected the None annotation that resulted from an
+        # unrecognized type string, but pydantic v2 accepts None as NoneType,
+        # so raise explicitly to keep bad specs from validating silently.
+        if field_type is None:
+            raise ToolSpecError(f"Unrecognized type '{type_from_dict}' for field '{field_name}'")
 
         if type_from_dict == "object":
 
@@ -151,14 +316,26 @@ class BaseModelDictionaryConverter(DictionaryConverter):
                 field_type = self.openai_function_to_pydantic(field_name, one_property)
 
             # If there are no properties, we use the default in the TYPE_LOOKUP
-            # which is Any.  Any passes a dynamically constructed pydantic object
-            # whose fields can be accessed like regular fields.  This is nice
-            # and fancy, but what we really want is a dictionary.
+            # which is Dict[str, Any]: the argument reaches the tool as a plain
+            # dictionary and is advertised to the LLM provider as a real JSON
+            # object type.  See the note on TYPE_LOOKUP above for why this is
+            # deliberately not Any.
 
         elif type_from_dict == "array":
 
             # Get the type of the list components/items
             items: Dict[str, Any] = one_property.get("items")
+
+            # A missing "items" key used to crash the recursion below with an
+            # opaque AttributeError (None.get).  A non-dict value can also
+            # arrive at runtime: the registry filter chain resolves string
+            # commondef references like "items": "cao_item" at load, but the
+            # unvalidated external-agent path does not.
+            if not isinstance(items, Dict):
+                got: str = "nothing" if items is None else type(items).__name__
+                raise ToolSpecError(f"Array field '{field_name}' needs an 'items' object "
+                                    f"describing its element type, got {got}")
+
             item_type: Type = self.get_type_from_property_dict(f"{field_name}_component", items)
 
             # Set the field_type as a properly typed generic List

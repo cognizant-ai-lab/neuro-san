@@ -23,8 +23,9 @@ from typing import Dict
 import json
 import tornado
 
+from leaf_common.utils.startable import Startable
+
 from neuro_san.service.http.logging.http_logger import HttpLogger
-from neuro_san.internals.interfaces.startable import Startable
 from neuro_san.service.utils.service_resources import ServiceResources
 
 

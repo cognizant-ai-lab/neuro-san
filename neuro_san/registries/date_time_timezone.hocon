@@ -47,8 +47,10 @@
             "name": "date_time_provider",
 
             # Note that there are no parameters defined for this guy's "function" key.
-            # This is the primary way to identify this tool as a front-man,
-            # distinguishing it from the rest of the tools.
+            # This is fine for a front-man that only takes direct user input, but a
+            # network that is to be referenced as an external tool by another network
+            # should declare at least one parameter so the calling agent knows what
+            # to pass. (The front-man is simply the first agent in the "tools" list.)
 
             "function": {
                 # The description acts as an initial prompt. 
@@ -83,23 +85,11 @@
             # However, the values provided in "args" here will have precedence over those provided at runtime.
             #
             # -------------------------------------------------------------------------------
-            # CURRENTLY AVAILABLE TOOLS IN TOOLBOX
-            # The following tools can be used as values for "toolbox":
-            #
-            # Langchain Tools
-            #
-            #   - "requests_get": Makes an HTTP GET request.
-            #   - "requests_post": Makes an HTTP POST request.
-            #   - "requests_patch": Makes an HTTP PATCH request.
-            #   - "requests_put": Makes an HTTP PUT request.
-            #   - "requests_delete": Makes an HTTP DELETE request.
-            #   - "requests_toolkit": Contains all of the request tools.
-            #
-            # Coded Tools
-            #
-            #   - "get_current_date_time": Return current date and time for a specified timezone.
-            #
-            # Each of these tools may require specific arguments in the "args" section.
+            # AVAILABLE TOOLS
+            # For the current list of tools that can be used as values for "toolbox",
+            # see the default tool configuration file referenced under EXTENSIBILITY below.
+            # Langchain tools can be added via a custom toolbox info file.
+            # Each tool may require specific arguments in the "args" section.
             # Refer to the tool's documentation for more details.
             # -------------------------------------------------------------------------------
 

@@ -61,9 +61,6 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         self.reader = S3ReservationsReader(bucket_name=bucket_name, prefix=prefix)
         self.expiration = S3ReservationsExpiration(bucket_name=bucket_name, prefix=prefix)
 
-        # This can throw ValueError if env var is invalid
-        self._check_interval_seconds = ExternalStorageUtil.get_check_interval_seconds(self.logger)
-
     def start(self):
         """
         Validate connection to the bucket, creating each worker's long-lived
@@ -74,6 +71,10 @@ class S3ReservationsStorage(AbstractReservationsStorage):
         happens in AwsSyncClientWorker.reset_client(), driven by its
         credential retry).
         """
+        # Set check interval seconds when we start: value could be overridden by now.
+        # This can throw ValueError if env var is invalid
+        self._check_interval_seconds = ExternalStorageUtil.get_check_interval_seconds(self.logger)
+
         self.reader.start()
         self.expiration.start()
 

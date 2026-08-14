@@ -32,11 +32,11 @@ from leaf_common.logging.sensitive_logger import SensitiveLogger
 
 from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
 from neuro_san.internals.run_context.langchain.core.langchain_run import LangChainRun
-from neuro_san.internals.run_context.langchain.core.base_model_dictionary_converter \
-    import BaseModelDictionaryConverter
+from neuro_san.internals.run_context.langchain.core.base_model_dictionary_converter import BaseModelDictionaryConverter
 from neuro_san.internals.run_context.langchain.core.pydantic_argument_dictionary_converter \
     import PydanticArgumentDictionaryConverter
-from neuro_san.internals.run_context.utils.external_agent_parsing import ExternalAgentParsing
+from neuro_san.internals.run_context.langchain.core.tool_spec_error import ToolSpecError
+from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
 
 
 class LangChainOpenAIFunctionTool(BaseTool):
@@ -96,13 +96,19 @@ class LangChainOpenAIFunctionTool(BaseTool):
         name: str = function_json.get("name")
         if name is None:
             message = "function dictionary has no 'name' defined."
-            raise ValueError(message)
+            raise ToolSpecError(message)
 
         if function_json.get("description") is None:
             message = f"Function for {name} has no description.\n"
 
         parameters: Dict[str, Any] = function_json.get("parameters")
-        if parameters:
+        if parameters is not None and not isinstance(parameters, Dict):
+            # Validate the container itself before reading its keys below, so a
+            # malformed spec follows the same invalid-spec error path as the
+            # other problems here instead of raising a raw AttributeError.
+            message = f"Function for {name} needs its parameters to be a dictionary, " \
+                      f"got {type(parameters).__name__}.\n"
+        elif parameters:
             if parameters.get("type") is None:
                 message = f"Function for {name} needs to have a parameters.type set to 'object'.\n"
             properties: Dict[str, Any] = parameters.get("properties")
@@ -117,7 +123,7 @@ This most often happens when calling an /external agent for the first time
 and the hocon file for the agent network does not have a full function definition
 specified for its front man for it to be called by another agent.
 """
-            raise ValueError(message)
+            raise ToolSpecError(message)
 
     @staticmethod
     def from_function_json(function_json: Dict[str, Any],
@@ -140,7 +146,7 @@ Could not create tool to call extenal agent {function_json.get("name")}.
 It's function_json is described thusly:
 {function_json}
 """
-            raise ValueError(message) from exception
+            raise ToolSpecError(message) from exception
 
         # Check for external tools.
         name: str = function_json.get("name")
@@ -171,6 +177,14 @@ It's function_json is described thusly:
         # function again later on in langchain agent-land.
         converter = BaseModelDictionaryConverter("parameters")
         schema_source: Dict[str, Any] = use_function_json if use_function_json != function_json else {}
+        if schema_source is None:
+            # An explicit "parameters": null (expressible in the JSON specs
+            # external agents send over the network) must still produce an
+            # explicit empty args_schema: from_dict(None) honors the
+            # DictionaryConverter None -> None contract, and a None
+            # args_schema would re-enable the langchain schema inference
+            # this block exists to avoid.
+            schema_source = {}
         tool.args_schema = converter.from_dict(schema_source)
 
         tool.tool_caller = tool_caller
@@ -208,8 +222,12 @@ It's function_json is described thusly:
         calls to another llm/agent instance happen asynchronously.
         ("a" is for asynchronous).
 
-        :return: The result of the tool in the form of the BaseMessage
-                 that tells us the "answer" from the tool.
+        :return: The content of the BaseMessage that tells us the "answer"
+                 from the tool - a string today, though langchain also allows
+                 lists of content blocks.
+                 Can be None if the tool produced no message.
+                 On failure, returns the string form of the exception so the
+                 calling LLM can verbally recognize the problem.
         """
         run: LangChainRun = None
         try:
@@ -246,4 +264,12 @@ It's function_json is described thusly:
 
         # Assume the answer is latest tool message in the Run.
         the_answer: BaseMessage = run.get_tool_message()
-        return the_answer
+        if the_answer is None:
+            return None
+
+        # Return the message's content rather than the message object itself.
+        # Langchain passes str (and content-block list) tool returns through
+        # to the calling LLM's ToolMessage as-is, but falls back to str() for
+        # any other object - which for a BaseMessage is its pydantic repr
+        # ("content='...' additional_kwargs={} ..."), not the answer.
+        return the_answer.content

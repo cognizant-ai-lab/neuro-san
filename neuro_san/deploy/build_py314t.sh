@@ -18,8 +18,8 @@
 
 # Builds the free-threaded (Python 3.14t) neuro-san server container.
 #
-# All Python dependencies -- including the in-house leaf-common and
-# leaf-server-common -- come from requirements.txt (i.e. from PyPI), so no
+# All Python dependencies -- including the in-house leaf-common --
+# come from requirements.txt (i.e. from PyPI), so no
 # sibling source repositories are needed. We still assemble a small, clean
 # temporary build context (requirements.txt + the neuro_san app source) rather
 # than using the repo root directly, to keep the otherwise huge,
