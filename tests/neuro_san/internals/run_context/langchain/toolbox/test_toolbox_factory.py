@@ -15,6 +15,8 @@
 #
 # END COPYRIGHT
 
+import logging
+
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -23,6 +25,8 @@ from langchain_core.tools.base import BaseTool
 from langchain_core.tools.base import BaseToolkit
 
 from neuro_san.internals.run_context.langchain.toolbox.toolbox_factory import ToolboxFactory
+
+FIXTURE_MODULE = "tests.neuro_san.internals.run_context.langchain.toolbox.real_tool_fixture"
 
 RESOLVER_PATH = "leaf_common.resolution.resolver.Resolver.resolve_class_in_module"
 VALIDATIOR_PATH = (
@@ -101,9 +105,133 @@ class TestToolboxFactory:
             # Ensure the returned tool is an instance of the mocked class
             assert tool is mock_instance
 
+    def test_create_toolbox_with_removed_tool_gives_migration_error(self, factory):
+        """Test that a reference to a removed requests_* tool explains the removal
+        and how to migrate, rather than raising a generic 'not defined' error."""
+        factory.toolbox_infos = {}
+
+        with pytest.raises(ValueError, match="deprecated langchain-community") as exc_info:
+            factory.create_tool_from_toolbox("requests_get", {})
+        assert "AGENT_TOOLBOX_INFO_FILE" in str(exc_info.value)
+
+    def test_create_toolbox_with_partial_override_of_removed_tool(self, factory):
+        """Test that a class-less entry for a removed tool also gets the migration
+        error. A user toolbox file that overrides only the args of a removed
+        entry used to inherit 'class' from the bundled default via the overlay;
+        it should not die on a generic missing-'class' message."""
+        factory.toolbox_infos = {
+            "requests_get": {"args": {"headers": {"Authorization": "Bearer token"}}},
+        }
+
+        with pytest.raises(ValueError, match="deprecated langchain-community"):
+            factory.create_tool_from_toolbox("requests_get", {})
+
+    def test_create_toolbox_missing_class_names_the_tool(self, factory):
+        """Test that the missing-'class' error names the offending tool."""
+        factory.toolbox_infos = {
+            "my_tool": {"args": {"param": "value"}},
+        }
+
+        with pytest.raises(ValueError, match="Tool 'my_tool' is missing required key: 'class'"):
+            factory.create_tool_from_toolbox("my_tool", {})
+
+    def test_empty_tool_entry_reports_missing_class(self, factory):
+        """Test that an empty (but present) tool entry is reported as missing
+        'class' rather than as not defined, from both toolbox entry points."""
+        factory.toolbox_infos = {
+            "empty_tool": {},
+        }
+
+        with pytest.raises(ValueError, match="Tool 'empty_tool' is missing required key: 'class'"):
+            factory.create_tool_from_toolbox("empty_tool", {})
+
+        with pytest.raises(ValueError, match="Tool 'empty_tool' is missing required key: 'class'"):
+            factory.get_shared_coded_tool_class("empty_tool")
+
+    def test_create_toolbox_with_unknown_tool_names_sources(self, factory):
+        """Test that an unknown tool name reports the searched sources by name.
+        Previously the message rendered 'not defined in None' when no user
+        toolbox info file was configured."""
+        factory.toolbox_infos = {}
+
+        factory.toolbox_info_file = None
+        with pytest.raises(ValueError, match="not defined in the default toolbox info file."):
+            factory.create_tool_from_toolbox("no_such_tool", {})
+
+        factory.toolbox_info_file = "/path/to/user_toolbox.hocon"
+        with pytest.raises(ValueError, match="or in /path/to/user_toolbox.hocon"):
+            factory.create_tool_from_toolbox("no_such_tool", {})
+
+    def test_create_toolbox_real_tool_unmocked(self, factory):
+        """Test tool creation with no mocks: a real BaseTool subclass and a real
+        nested wrapper class are resolved from their class paths, validated,
+        instantiated, and tagged — the same path an operator's toolbox info
+        file entry takes."""
+        factory.toolbox_infos = {
+            "real_tool": {
+                "class": f"{FIXTURE_MODULE}.RealTool",
+                "args": {
+                    "max_results": 3,
+                    "api_wrapper": {
+                        "class": f"{FIXTURE_MODULE}.RealApiWrapper",
+                        "args": {"timeout": 30},
+                    },
+                },
+            }
+        }
+
+        tool = factory.create_tool_from_toolbox("real_tool", user_args={"max_results": 7}, agent_name="my_agent")
+
+        assert isinstance(tool, BaseTool)
+        assert tool.name == "my_agent"
+        assert tool.tags == ["langchain_tool"]
+        # user_args override the toolbox-file args; nested wrapper args survive
+        assert tool.max_results == 7
+        assert tool.api_wrapper.timeout == 30
+
+    def test_langchain_community_class_logs_sunset_warning(self, factory, caplog):
+        """Test that a tool whose class comes from langchain-community logs the
+        sunset warning on creation."""
+        factory.toolbox_infos = {
+            "community_tool": {"class": "langchain_community.some_module.SomeTool"},
+        }
+
+        with patch(RESOLVER_PATH) as mock_resolver, patch(VALIDATIOR_PATH):
+            mock_tool_class = MagicMock(spec=BaseTool)
+            mock_resolver.return_value = mock_tool_class
+
+            mock_instance = MagicMock(spec=BaseTool)
+            mock_instance.name = MagicMock(spec=str)
+            mock_instance.tags = MagicMock(spec=list)
+            mock_tool_class.return_value = mock_instance
+
+            with caplog.at_level(logging.WARNING):
+                factory.create_tool_from_toolbox("community_tool", {})
+
+        assert "langchain-community" in caplog.text
+        assert "sunset" in caplog.text
+
+    def test_get_shared_coded_tool_class_unknown_tool_raises(self, factory):
+        """Test that unknown and removed tool names raise the same clear
+        ValueErrors as create_tool_from_toolbox(), instead of crashing with
+        AttributeError on the missing toolbox entry."""
+        factory.toolbox_infos = {
+            "known_tool": {"class": "some_module.SomeCodedTool"},
+        }
+        factory.toolbox_info_file = None
+
+        assert factory.get_shared_coded_tool_class("known_tool") == "some_module.SomeCodedTool"
+
+        with pytest.raises(ValueError, match="not defined in the default toolbox info file."):
+            factory.get_shared_coded_tool_class("no_such_tool")
+
+        with pytest.raises(ValueError, match="deprecated langchain-community"):
+            factory.get_shared_coded_tool_class("requests_get")
+
     @pytest.mark.parametrize("bad_class", [None, 123, ""])
     def test_create_toolbox_with_invalid_class_value(self, factory, bad_class):
-        """Test that a non-string or empty 'class' value raises a clear ValueError."""
+        """Test that a non-string or empty 'class' value raises a clear ValueError
+        from both toolbox entry points."""
         factory.toolbox_infos = {
             "bad_tool": {
                 "class": bad_class
@@ -112,6 +240,9 @@ class TestToolboxFactory:
 
         with pytest.raises(ValueError, match="must be a non-empty string"):
             factory.create_tool_from_toolbox("bad_tool", {})
+
+        with pytest.raises(ValueError, match="must be a non-empty string"):
+            factory.get_shared_coded_tool_class("bad_tool")
 
     def test_create_toolbox_with_toolkit_constructor(self, factory):
         """Test the toolkit instantiates with constructor."""

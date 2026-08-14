@@ -73,7 +73,9 @@ class ContextTypeToolboxFactory:
         Get class of the shared coded tool from toolbox
 
         :param tool_name: The name of the tool
-        :return: The class of the coded tool from toolbox
+        :return: The class of the coded tool from toolbox.
+                Can raise a ValueError if the tool_name value is
+                unknown to this method.
         """
         raise NotImplementedError
 
