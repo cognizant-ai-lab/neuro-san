@@ -415,18 +415,56 @@ class ProxyHandler(tornado.web.RequestHandler):
         except (json.JSONDecodeError, ValueError):
             return raw_body.decode("utf-8", errors="replace")
 
+    @staticmethod
+    def _split_sse_frame_bytes(raw: bytes) -> List[bytes]:
+        """
+        Split an accumulated SSE byte stream into event frames while preserving
+        the exact original delimiter bytes. Supports both LF and CRLF blank-line
+        delimiters and leaves any trailing unterminated bytes unchanged.
+        """
+        frames: List[bytes] = []
+        start: int = 0
+        raw_length: int = len(raw)
+
+        while start < raw_length:
+            lf_index: int = raw.find(b"\n\n", start)
+            crlf_index: int = raw.find(b"\r\n\r\n", start)
+
+            delimiter_index: int = -1
+            delimiter: bytes = b""
+            if lf_index == -1:
+                delimiter_index = crlf_index
+                delimiter = b"\r\n\r\n" if crlf_index != -1 else b""
+            elif crlf_index == -1 or lf_index < crlf_index:
+                delimiter_index = lf_index
+                delimiter = b"\n\n"
+            else:
+                delimiter_index = crlf_index
+                delimiter = b"\r\n\r\n"
+
+            if delimiter_index == -1:
+                if start < raw_length:
+                    frames.append(raw[start:])
+                break
+
+            frame_end: int = delimiter_index + len(delimiter)
+            if frame_end > start:
+                frames.append(raw[start:frame_end])
+            start = frame_end
+
+        return frames
+
     @classmethod
     def _split_sse_frames(cls, raw: bytes) -> List[str]:
         """
         Split an accumulated SSE byte stream into individual event frames.
         The recorded byte chunks are TCP-sized, not frame-aligned, so we
-        re-split on the SSE blank-line delimiter and re-append it to each
-        frame. This yields semantic event units for clean replay.
+        re-split on the SSE blank-line delimiter while preserving the exact
+        delimiter bytes found upstream. This yields semantic event units for
+        clean replay without changing the recorded byte stream.
         """
-        text: str = raw.decode("utf-8", errors="replace")
-        frames: List[str] = []
-        for part in text.split(cls.SSE_FRAME_DELIMITER):
-            if part == "":
-                continue
-            frames.append(f"{part}{cls.SSE_FRAME_DELIMITER}")
-        return frames
+        return [
+            frame.decode("utf-8", errors="replace")
+            for frame in cls._split_sse_frame_bytes(raw)
+            if frame != b""
+        ]
