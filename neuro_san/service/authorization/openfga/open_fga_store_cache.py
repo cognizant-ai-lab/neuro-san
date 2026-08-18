@@ -79,7 +79,7 @@ class OpenFgaStoreCache:
 
         # Lazy loading of OpenFgaInit class which directly uses OpenFga SDK types.
         # pylint: disable=import-outside-toplevel
-        from neuro_san.internals.authorization.openfga.open_fga_init import OpenFgaInit
+        from neuro_san.service.authorization.openfga.open_fga_init import OpenFgaInit
 
         if store_id is None:
             # Note: Synchronous lock is required here

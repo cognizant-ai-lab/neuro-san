@@ -18,13 +18,12 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-from neuro_san.internals.authorization.interfaces.abstract_authorizer import AbstractAuthorizer
+from neuro_san.service.authorization.interfaces.abstract_authorizer import AbstractAuthorizer
 
 
-class AlwaysYesAuthorizer(AbstractAuthorizer):
+class AlwaysNoAuthorizer(AbstractAuthorizer):
     """
-    Implementation of the Authorizer interface that lets all requests through.
-    This gives us the behavior we have had since the beginning of Neuro SAN.
+    Implementation of the Authorizer interface that lets no requests through.
     """
 
     async def authorize(self, actor: Dict[str, Any], action: str, resource: Dict[str, Any]) -> bool:
@@ -47,8 +46,8 @@ class AlwaysYesAuthorizer(AbstractAuthorizer):
         :return: True if the actor is allowed to take the requested action on the resource.
                  False otherwise.
         """
-        # By default, anyone can do anything
-        return True
+        # By default, no one can do anything
+        return False
 
     async def grant(self, actor: Dict[str, Any], relation: str, resource: Dict[str, Any]) -> bool:
         """
@@ -117,5 +116,6 @@ class AlwaysYesAuthorizer(AbstractAuthorizer):
                  An empty return list implies that the actor has access to no objects
                  of the given resource type.
         """
-        # Return None indicating some other mechanism should be used
-        return None
+        # Indicate no access to anything
+        retval: List[str] = []
+        return retval
