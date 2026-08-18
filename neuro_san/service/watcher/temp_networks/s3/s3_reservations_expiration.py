@@ -78,9 +78,13 @@ class S3ReservationsExpiration:
 
     def start(self):
         """
-        Initialize the S3 client and validate connection to the bucket.
+        Validate connection to the bucket, creating the worker's long-lived
+        S3 client on first use.
 
-        This method can be called to re-initialize the connection if needed.
+        Calling this again only re-validates bucket access through that same
+        client; it does not rebuild the client or re-resolve credentials
+        (that happens in AwsSyncClientWorker.reset_client(), driven by its
+        credential retry).
         """
         self.retriever.start()
 
@@ -245,19 +249,31 @@ class S3ReservationsExpiration:
                 expired = True  # Object is gone, which is the desired outcome for expiration
             elif S3Util.is_credential_rejection_error(exception):
                 # Credential rejection (ExpiredToken / InvalidToken /
-                # TokenRefreshRequired) must NOT be swallowed here. The client this sweep
-                # uses was created from frozen credentials (see AwsSyncClientWorker),
-                # which never auto-refresh, and the only code that can refresh them is
-                # retry_with_new_client() wrapping expire_any_reservations() at the top
-                # of the sweep - and it can only react to ClientErrors that actually
-                # reach it. If these errors were merely logged like the codes below,
-                # every remaining key in the sweep would make one doomed S3 call,
-                # nothing would be expired, and the sweep would still report success;
-                # credentials would only refresh when a later sweep's list_objects_v2
-                # call happened to fail outside this handler. Re-raising lets the
-                # wrapper reset the cached credentials and re-run the sweep with a
-                # working client. Restarting the sweep is safe because deletes are
+                # TokenRefreshRequired) must NOT be
+                # swallowed here. The sweep's client is keyless and long-lived (see
+                # AwsSyncClientWorker), so token-based credentials refresh at signing
+                # time and this path stays dormant for them - but it can still fire
+                # for static session tokens rotated externally (a credentials file
+                # rewritten by another process), which botocore resolves once per
+                # Session and never re-reads, or for a malformed/mismatched
+                # credential state (InvalidToken - see
+                # S3Util.is_credential_rejection_error). The only code that can
+                # recover is retry_with_new_client() wrapping
+                # expire_any_reservations() at the top of the sweep - and it can only
+                # react to ClientErrors that actually reach it. If these errors were
+                # merely logged like the codes below, every remaining key in the
+                # sweep would make one doomed S3 call, nothing would be expired, and
+                # the sweep would still report success. Re-raising lets the wrapper
+                # rebuild the session + client and re-run the sweep with working
+                # credentials. Restarting the sweep is safe because deletes are
                 # idempotent: NoSuchKey on the re-run is treated as success above.
+                #
+                # Caveat: this match only works for errors with a parseable body
+                # (GET/DELETE). An expired-token rejection of head_object surfaces
+                # as the bare status "400" (HEAD errors have no body - same reason
+                # as the "404" case above), misses this branch, and is logged by
+                # the else below; the sweep then recovers on the next key's GET,
+                # whose ExpiredToken body does reach this re-raise.
                 raise
             else:
                 # Log other S3 errors but don't raise - allows expiration to continue
@@ -304,10 +320,13 @@ class S3ReservationsExpiration:
 
         # The object's age comes from S3's LastModified via head_object. This
         # extra call happens only on this (rare) malformed path, never during
-        # a normal sweep. Any ClientError it raises (e.g. "404" because
-        # another process already deleted the object, or ExpiredToken) is
-        # handled by expire_one_reservation()'s handler, just like errors
-        # from the get/delete calls.
+        # a normal sweep. Any ClientError it raises is handled by
+        # expire_one_reservation()'s handler, with a HEAD-specific wrinkle:
+        # HEAD error responses have no body for botocore to parse, so they
+        # surface as bare HTTP status codes - a missing key is "404" (treated
+        # there as already-removed) and an expired token is "400" (logged and
+        # skipped there; the sweep recovers on the next key's GET, which
+        # carries a parseable ExpiredToken code).
         head_function: Callable = partial(sync_aws_client.head_object,
                                           Bucket=self.retriever.get_bucket_name(),
                                           Key=obj_key)
