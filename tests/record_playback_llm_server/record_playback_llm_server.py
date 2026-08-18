@@ -201,8 +201,9 @@ class RecordPlaybackLlmServer:
                     "(e.g. https://api.openai.com/v1)")
             return None
         if not api_key:
-            logging.warning("%s is not set; forwarding requests to %s without an Authorization header",
-                            cls.ENV_UPSTREAM_API_KEY, base_url)
+            logging.warning(
+                "Upstream API key is not set; forwarding requests to %s without an Authorization header",
+                base_url)
         upstream = UpstreamClient(
             base_url=base_url,
             api_key=api_key or None,
