@@ -1,0 +1,31 @@
+{
+    "agent": "agent_network_designer",
+    "prompts": [
+        "Create an agent network for a pet grooming salon",
+        "Design a multi-agent system for a university admissions office",
+        "Build an agent network for a food truck fleet management company",
+        "Create an agent network for a veterinary clinic",
+        "Design a multi-agent system for a public library",
+        "Build an agent network for a car rental agency",
+        "Create an agent network for a music festival organizer",
+        "Design a multi-agent system for a real estate property manager",
+        "Build an agent network for a dental office",
+        "Create an agent network for a local farmers market",
+        "Design a multi-agent system for a fitness gym",
+        "Build an agent network for a travel agency",
+        "Create an agent network for a daycare center",
+        "Design a multi-agent system for a home renovation contractor",
+        "Build an agent network for a catering company",
+        "Create an agent network for a dog walking service",
+        "Design a multi-agent system for a photography studio",
+        "Build an agent network for a landscaping business",
+        "Create an agent network for an auto repair shop",
+        "Design a multi-agent system for a wedding planning company"
+    ],
+    "estimated_tokens_per_request": 500000,
+    "success_fields": ["reservation_id", "agent_network_name"],
+    "failure_patterns": [
+        "No fully-specified LLM found",
+        "API key to be set as an environment variable"
+    ]
+}
