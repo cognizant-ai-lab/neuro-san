@@ -35,6 +35,10 @@ _DEPRECATION_REDIRECT = DeprecationRedirect(
             "neuro_san.service.authorization.interfaces.abstract_authorizer.AbstractAuthorizer",
         "neuro_san.internals.authorization.interfaces.authorizer.Authorizer":
             "neuro_san.service.authorization.interfaces.authorizer.Authorizer",
+        "neuro_san.internals.authorization.null.always_no_authorizer.AlwaysNoAuthorizer":
+            "neuro_san.service.authorization.null.always_no_authorizer.AlwaysNoAuthorizer",
+        "neuro_san.internals.authorization.null.always_yes_authorizer.AlwaysYesAuthorizer":
+            "neuro_san.service.authorization.null.always_yes_authorizer.AlwaysYesAuthorizer",
         "neuro_san.internals.authorization.openfga.open_fga_authorizer.OpenFgaAuthorizer":
             "neuro_san.service.authorization.openfga.open_fga_authorizer.OpenFgaAuthorizer",
         "neuro_san.internals.messages.chat_message_type.ChatMessageType":
