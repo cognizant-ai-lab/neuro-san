@@ -35,6 +35,7 @@ from typing import Tuple
 import tornado.httpclient
 import tornado.iostream
 import tornado.web
+import tornado.ioloop
 
 from tests.record_playback_llm_server.proxy_state import ProxyState
 from tests.record_playback_llm_server.request_canonicalizer import RequestCanonicalizer

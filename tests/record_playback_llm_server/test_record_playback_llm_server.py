@@ -289,7 +289,7 @@ class TestProxyIntegration:
         pb = ProxyState(mode=ProxyState.MODE_PLAYBACK, cassette=Cassette(path))
         pb_url = start_app(RecordPlaybackLlmServer.build_app(pb))
         code2, body2 = await _post(pb_url + CHAT_PATH, PAYLOAD)
-        assert code2 == 200 and json.loads(body2) == json.loads(body)   # byte-identical replay
+        assert code2 == 200 and json.loads(body2) == json.loads(body)   # JSON equivalent replay
         assert box["n"] == 1                                            # upstream NOT hit on playback
 
     @pytest.mark.asyncio
