@@ -50,6 +50,8 @@ class TestSmokeTestHocons(TestCase):
             "Issue #936: disabled until #909 is resolved.",
         "music_nerd_pro_llm_openrouter/combination_responses_with_history_direct.hocon":
             "Disabled until OPENROUTER_API_KEY is added to the GitHub Actions secrets.",
+        "music_nerd_pro_llm_ollama/combination_responses_with_history_http.hocon":
+            "Issue #1226: disabled until #909 is resolved.",
     }
 
     def _skip_if_disabled(self, test_hocon: str) -> None:
