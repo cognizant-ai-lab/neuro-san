@@ -71,8 +71,11 @@ class Cassette:
         """Load entries from disk into memory. A missing file is not an error."""
         if not self.path or not os.path.exists(self.path):
             return
-        with open(self.path, "r", encoding="utf-8") as cassette_file:
-            data: Dict[str, Any] = json.load(cassette_file)
+        try:
+            with open(self.path, "r", encoding="utf-8") as cassette_file:
+                data: Dict[str, Any] = json.load(cassette_file)
+        except (OSError, json.JSONDecodeError) as exc:
+            raise SystemExit(f"Failed to load cassette '{self.path}': {exc}") from exc
         for entry in data.get("entries", []):
             key: Optional[str] = entry.get("key")
             if key is None:
