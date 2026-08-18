@@ -139,44 +139,92 @@ class ProxyHandler(tornado.web.RequestHandler):
                              len(raw_body), latency_seconds, key[:12])
 
     async def _record_stream(self, method: str, body_bytes: bytes, key: str) -> None:
-        """Record and relay a streamed SSE response, teeing chunks to disk with latency."""
-        self.set_header("Content-Type", "text/event-stream")
-        self.set_header("Cache-Control", "no-cache")
-        self.set_header("X-Accel-Buffering", "no")
+        """
+        Record and relay a streamed response, teeing chunks to disk with latency.
 
+        The upstream status is not known until its headers arrive, which (via
+        header_callback) precedes the first body chunk. The client's status and
+        headers are therefore set on the first chunk rather than up front: a 2xx
+        is streamed as SSE; a non-2xx (401/429/5xx, whose body is typically JSON,
+        not SSE) is relayed with the real status and content-type. Only
+        successful responses are recorded (see _store).
+        """
         accumulated = bytearray()
         started: float = time.monotonic()
-        # One-element list so the sync on_chunk callback can record time-to-first-byte.
-        first_byte: List[Optional[float]] = [None]
+        # Mutable state shared with the synchronous header/chunk callbacks.
+        stream_state: Dict[str, Any] = {
+            "status": None, "content_type": None,
+            "headers_started": False, "first_byte_seconds": None,
+        }
+
+        def on_header(line: str) -> None:
+            stripped: str = line.strip()
+            if not stripped:
+                return
+            if stripped.startswith("HTTP/"):
+                # Status line, e.g. "HTTP/1.1 429 Too Many Requests". Reset the
+                # content-type so a redirect/retry block cannot leak a stale one.
+                parts = stripped.split(None, 2)
+                if len(parts) >= 2 and parts[1].isdigit():
+                    stream_state["status"] = int(parts[1])
+                stream_state["content_type"] = None
+                return
+            name, separator, value = stripped.partition(":")
+            if separator and name.strip().lower() == "content-type":
+                stream_state["content_type"] = value.strip()
 
         def on_chunk(chunk: bytes) -> None:
-            if first_byte[0] is None:
-                first_byte[0] = time.monotonic() - started
+            if stream_state["first_byte_seconds"] is None:
+                stream_state["first_byte_seconds"] = time.monotonic() - started
+            if not stream_state["headers_started"]:
+                self._begin_stream_relay(stream_state["status"], stream_state["content_type"])
+                stream_state["headers_started"] = True
             accumulated.extend(chunk)
             self.write(bytes(chunk))
-            # Flush must happen on the event loop; schedule it as a coroutine so
-            # the caller (neuro-san) sees tokens progressively during recording.
+            # Flush on the event loop so the caller sees tokens progressively.
             tornado.ioloop.IOLoop.current().spawn_callback(self._safe_flush)
 
         try:
             response: tornado.httpclient.HTTPResponse = await self.state.upstream.fetch_stream(
-                self.upstream_path, method, body_bytes, on_chunk)
+                self.upstream_path, method, body_bytes, on_chunk, on_header)
         except (OSError, tornado.httpclient.HTTPError) as exception:
             self._fail_upstream(exception)
             return
         latency_seconds: float = time.monotonic() - started
 
+        # Empty body (e.g. an error with no body): no chunk arrived, so set the
+        # status now that the response object is known.
+        if not stream_state["headers_started"]:
+            self._begin_stream_relay(response.code, response.headers.get("Content-Type"))
+
         await self._safe_flush()
+        first_byte: Optional[float] = stream_state["first_byte_seconds"]
         frames: List[str] = self._split_sse_frames(bytes(accumulated))
         if self._store(method, body_bytes, key, {
             "kind": "stream",
             "status": response.code,
             "chunks": frames,
             "latency_seconds": round(latency_seconds, 6),
-            "first_byte_seconds": round(first_byte[0], 6) if first_byte[0] is not None else None,
+            "first_byte_seconds": round(first_byte, 6) if first_byte is not None else None,
         }):
             self.logger.info("recorded stream response (%d frames, %.3fs) key=%s",
                              len(frames), latency_seconds, key[:12])
+
+    def _begin_stream_relay(self, status: Optional[int], content_type: Optional[str]) -> None:
+        """
+        Set the client response status/headers for a streamed relay once the
+        upstream status is known. A 2xx is streamed as Server-Sent Events; any
+        other status is relayed with the upstream's real status and content-type
+        (LLM error bodies are JSON, not SSE).
+        """
+        code: int = status if status is not None else 200
+        if 200 <= code < 300:
+            self.set_header("Content-Type", "text/event-stream")
+            self.set_header("Cache-Control", "no-cache")
+            self.set_header("X-Accel-Buffering", "no")
+        else:
+            self.set_status(code)
+            self.set_header("Content-Type", content_type or "application/json")
 
     def _store(self, method: str, body_bytes: bytes, key: str, response: Dict[str, Any]) -> bool:
         """

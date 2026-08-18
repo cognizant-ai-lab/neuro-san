@@ -374,3 +374,18 @@ class TestProxyIntegration:
         assert code == 429 and b"Too Many Requests" in body           # relayed to caller
         assert len(Cassette(path)) == 0                               # not recorded
         assert not os.path.exists(path)                              # nothing written at all
+
+    @pytest.mark.asyncio
+    async def test_stream_non_2xx_relayed_with_correct_status(self, start_app, tmp_path):
+        """
+        A streamed request whose upstream returns a non-2xx must be relayed with
+        the real status (not a bogus 200 text/event-stream) and not recorded.
+        """
+        upstream = start_app(tornado.web.Application([(CHAT_PATH, _RateLimitedUpstream)]))
+        path = str(tmp_path / "c.json")
+        state = ProxyState(mode=ProxyState.MODE_RECORD, cassette=Cassette(path), upstream=_upstream_client(upstream))
+        url = start_app(RecordPlaybackLlmServer.build_app(state))
+
+        code, body = await _post(url + CHAT_PATH, PAYLOAD, stream=True)
+        assert code == 429 and b"Too Many Requests" in body           # real status, not 200
+        assert len(Cassette(path)) == 0                               # not recorded

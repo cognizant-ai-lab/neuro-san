@@ -114,6 +114,7 @@ class UpstreamClient:
         method: str,
         body_bytes: bytes,
         on_chunk: Callable[[bytes], None],
+        on_header: Optional[Callable[[str], None]] = None,
     ) -> tornado.httpclient.HTTPResponse:
         """
         Forward a streaming request, invoking on_chunk for each received byte
@@ -122,10 +123,15 @@ class UpstreamClient:
         :param method: HTTP method.
         :param body_bytes: Raw request body (ignored for GET).
         :param on_chunk: Synchronous callback invoked with each raw byte chunk.
+        :param on_header: Optional callback invoked with each response header
+                          line (status line included) BEFORE any body chunk, so
+                          the caller can learn the upstream status/content-type
+                          before writing a response.
         :return: The tornado HTTPResponse (its body is empty when streaming).
         """
         request: tornado.httpclient.HTTPRequest = self._build_request(
-            path, method, body_bytes, stream=True, streaming_callback=on_chunk)
+            path, method, body_bytes, stream=True,
+            streaming_callback=on_chunk, header_callback=on_header)
         return await self.client.fetch(request, raise_error=False)
 
     # pylint: disable=too-many-arguments, too-many-positional-arguments
@@ -136,6 +142,7 @@ class UpstreamClient:
         body_bytes: bytes,
         stream: bool,
         streaming_callback: Optional[Callable[[bytes], None]] = None,
+        header_callback: Optional[Callable[[str], None]] = None,
     ) -> tornado.httpclient.HTTPRequest:
         """Construct the HTTPRequest for the external host."""
         return tornado.httpclient.HTTPRequest(
@@ -146,6 +153,7 @@ class UpstreamClient:
             request_timeout=self.request_timeout,
             connect_timeout=self.connect_timeout,
             streaming_callback=streaming_callback,
+            header_callback=header_callback,
             # ssl_options is used only for https URLs; ignored for plain http.
             ssl_options=self.ssl_context,
         )
