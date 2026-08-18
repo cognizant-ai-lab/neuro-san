@@ -21,9 +21,9 @@ from types import ModuleType
 
 from os import environ
 
-from neuro_san.internals.authorization.interfaces.abstract_authorizer import AbstractAuthorizer
-from neuro_san.internals.authorization.interfaces.authorizer import Authorizer
-from neuro_san.internals.authorization.openfga.open_fga_store_cache import OpenFgaStoreCache
+from neuro_san.service.authorization.interfaces.abstract_authorizer import AbstractAuthorizer
+from neuro_san.service.authorization.interfaces.authorizer import Authorizer
+from neuro_san.service.authorization.openfga.open_fga_store_cache import OpenFgaStoreCache
 
 
 class OpenFgaAuthorizer(AbstractAuthorizer):
