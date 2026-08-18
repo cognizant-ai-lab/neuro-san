@@ -24,7 +24,7 @@ import json
 
 from typing import Any
 from typing import Dict
-from typing import List
+from typing import Tuple
 
 
 class RequestCanonicalizer:
@@ -46,17 +46,19 @@ class RequestCanonicalizer:
     and a one-shot request map to different recorded responses.
     """
 
-    # Fields removed from the body before hashing. Empty by default; extend
-    # this if a client is found to inject a per-run volatile value (a random
-    # request id, a timestamp, etc.) into the request body.
-    VOLATILE_BODY_KEYS: List[str] = []
+    # Fields removed from the body before hashing. An immutable tuple so it
+    # cannot be mutated at run time (which would silently change keying for
+    # every caller in-process). Empty by default; extend this tuple in source
+    # if a client is found to inject a per-run volatile value (a random request
+    # id, a timestamp, etc.) into the request body.
+    VOLATILE_BODY_KEYS: Tuple[str, ...] = ()
 
     @staticmethod
     def canonical_string(method: str, path: str, body_bytes: bytes) -> str:
         """
         :param method: HTTP method, e.g. "POST" or "GET".
         :param path: Upstream path the request targets, e.g. "/chat/completions".
-        :param body_bytes: Raw request body bytes (may be empty).
+        :param body_bytes: Raw request body bytes (maybe empty).
         :return: A canonical, deterministic string representation of the request.
         """
         body_repr: str = RequestCanonicalizer._canonical_body(body_bytes)
