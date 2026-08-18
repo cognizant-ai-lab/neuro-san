@@ -1035,6 +1035,18 @@
         "max_output_tokens": 32768,
         "knowledge_cutoff": "unknown",
     },
+    "gemma4:e4b": {
+        "class": "ollama",
+        "model_info_url": "https://ollama.com/library/gemma4",
+        "modalities": {
+            "input": [ "text", "image", "audio" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 128000,  # https://ai.google.dev/gemma/docs/core/model_card_4 (E4B: 128K tokens)
+        "max_output_tokens": 8192,      # Not published for Gemma 4; assumed from Gemma 3, which documents 8192
+        "knowledge_cutoff": "unknown",
+    },
 
     # NVIDIA models
     # Also know that so far as of 10/7/2025, all nvidia models use synchronous clients,
