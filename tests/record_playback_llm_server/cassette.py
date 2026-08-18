@@ -45,7 +45,7 @@ class Cassette:
             "method": "POST",
             "path": "/chat/completions",
             "request": "<canonical request string>",
-            "response": { ... see record modes below ... }
+            "responses": [{ ... see record modes below ... }]
         }
 
     A non-streamed response is stored as:
