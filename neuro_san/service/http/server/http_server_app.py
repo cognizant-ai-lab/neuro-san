@@ -104,7 +104,7 @@ class HttpServerApp(Application):
             self.num_processing += 1
             self.requests_stats[caller] = self.requests_stats.get(caller, 0) + 1
         # Get worker instance id for this Http server
-        instance_id: int = self.server_context.get_worker_id() if self.server_context else (-1)
+        instance_id: int = self.server_context.get_worker_id()
         self.logger.info(metadata, "[%d] Start %s", instance_id, caller)
         return HTTPStatus.OK, ""
 
@@ -125,7 +125,7 @@ class HttpServerApp(Application):
             if get_stats:
                 stats_data: Dict[str, Any] = self.get_stats()
         # Get worker instance id for this Http server
-        instance_id: int = self.server_context.get_worker_id() if self.server_context else (-1)
+        instance_id: int = self.server_context.get_worker_id()
         self.logger.info(metadata, "[%d] Finish %s", instance_id, caller)
         if get_stats:
             self.logger.info(metadata, "[%d] Stats: %s", instance_id, stats_data)
@@ -147,7 +147,7 @@ class HttpServerApp(Application):
                 break
             time.sleep(wait_period_seconds)
             time_waited_seconds += wait_period_seconds
-        instance_id: int = self.server_context.get_worker_id() if self.server_context else (-1)
+        instance_id: int = self.server_context.get_worker_id()
         self.logger.info({}, "[%d] SERVER EXITING", instance_id)
         self.stop_server(loop)
 
@@ -165,7 +165,7 @@ class HttpServerApp(Application):
         if self.shutdown_initiated:
             return
         self.shutdown_initiated = True
-        instance_id: int = self.server_context.get_worker_id() if self.server_context else (-1)
+        instance_id: int = self.server_context.get_worker_id()
         self.logger.info({}, "[%d] Server request limit %d reached. Shutting down...",
                          instance_id, self.requests_limit)
         self.shutdown_thread = Thread(target=self.do_shutdown, args=(IOLoop.current(),), daemon=True)
@@ -183,7 +183,7 @@ class HttpServerApp(Application):
         return str(stats_dict)
 
     def log_request(self, handler):
-        instance_id: int = self.server_context.get_worker_id() if self.server_context else (-1)
+        instance_id: int = self.server_context.get_worker_id()
         if isinstance(handler, BaseRequestHandler):
             request = handler.request
             metadata: Dict[str, Any] = handler.get_metadata()
