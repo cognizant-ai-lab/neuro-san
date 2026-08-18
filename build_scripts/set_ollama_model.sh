@@ -1,6 +1,6 @@
 #!/bin/bash
   
-# Script set the ollama model by preforming a pull command. It is expected that Ollama Service is running!
+# Script set the ollama model by performing a pull command. It is expected that Ollama Service is running!
 
 # Ollama model used by the smoke tests.
 # Must match the model_name in neuro_san/registries/music_nerd_pro_llm_ollama.hocon
