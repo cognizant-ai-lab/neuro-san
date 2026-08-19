@@ -176,13 +176,16 @@ class ProxyHandler(tornado.web.RequestHandler):
         def on_chunk(chunk: bytes) -> None:
             if stream_state["first_byte_seconds"] is None:
                 stream_state["first_byte_seconds"] = time.monotonic() - started
-            if not stream_state["headers_started"]:
-                self._begin_stream_relay(stream_state["status"], stream_state["content_type"])
-                stream_state["headers_started"] = True
             accumulated.extend(chunk)
-            self.write(bytes(chunk))
-            # Flush on the event loop so the caller sees tokens progressively.
-            tornado.ioloop.IOLoop.current().spawn_callback(self._safe_flush)
+            try:
+                if not stream_state["headers_started"]:
+                    self._begin_stream_relay(stream_state["status"], stream_state["content_type"])
+                    stream_state["headers_started"] = True
+                self.write(bytes(chunk))
+                # Flush on the event loop so the caller sees tokens progressively.
+                tornado.ioloop.IOLoop.current().spawn_callback(self._safe_flush)
+            except tornado.iostream.StreamClosedError:
+                return
 
         try:
             response: tornado.httpclient.HTTPResponse = await self.state.upstream.fetch_stream(
