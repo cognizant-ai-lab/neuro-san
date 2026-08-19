@@ -19,16 +19,16 @@ Pins the expiration sweep's recovery from AWS credentials expiring
 MID-sweep - after the listing succeeded but before the per-object
 get/delete calls complete.
 
-Why this scenario exists at all: AwsSyncClientWorker creates its boto
-clients from FROZEN credentials (explicit key/secret/token passed to
-create_client), which disables botocore's native at-signing-time
-auto-refresh. The only recovery mechanism is therefore reactive:
+When this can happen: AwsSyncClientWorker's long-lived client is
+keyless, so token-based credentials (IAM Instance Roles, ECS Task
+Roles, SSO) refresh at signing time and cannot expire mid-sweep. What
+CAN still be rejected mid-sweep are STATIC credentials rotated
+externally - env vars or a credentials file rewritten by another
+process - which botocore resolves once per Session and never re-reads
+on its own. The only recovery mechanism for those is reactive:
 retry_with_new_client() wraps the whole sweep, and when an ExpiredToken
-ClientError reaches it, it resets the cached frozen credentials and
-re-runs the sweep with a freshly built client. Token-based credentials
-(IAM Instance Roles, ECS Task Roles, SSO) expire on the order of an
-hour, so a long sweep over a large bucket can realistically outlive its
-token.
+ClientError reaches it, it discards the session + client and re-runs
+the sweep with a freshly resolved credential chain.
 
 The failure mode this test guards against: if ExpiredToken errors
 raised by the per-object get_object calls are caught by
@@ -44,8 +44,6 @@ import json
 import time
 
 from unittest.mock import patch
-
-from botocore.exceptions import ClientError
 
 from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
@@ -88,21 +86,21 @@ class TestExpirationCredentialExpiryMidSweep(S3ReservationsStorageTestBase):
         rejects by the time the per-object get_object calls run.
 
         Simulation:
-          * get_object raises ClientError(ExpiredToken) while the FIRST
-            client is in use (self.token_expired starts True).
-          * Session.create_client is re-patched so that building a
-            SECOND client "refreshes" the token (flips the flag) - which
-            is exactly what happens in production when
-            retry_with_new_client resets frozen_credentials and the
-            credential chain hands back a fresh token.
+          * get_object raises ClientError(ExpiredToken) while the
+            token_state flag is set (it starts True).
+          * Session.create_client is re-patched so that the SECOND
+            client built under this test's patch "refreshes" the token
+            (flips the flag) - modeling production, where
+            retry_with_new_client discards the session + client and the
+            re-resolved credential chain hands back a fresh token.
 
         Expected: the ExpiredToken propagates out of the per-object
-        handling to retry_with_new_client, which builds client #2 and
+        handling to retry_with_new_client, which rebuilds the client and
         re-runs the sweep; every expired reservation is deleted.
 
         If expire_one_reservation swallows the ExpiredToken per key
-        instead of re-raising it, both assertions fail: only one client
-        is ever created and all three expired objects remain while the
+        instead of re-raising it, both assertions fail: the client is
+        never rebuilt and all three expired objects remain while the
         sweep reports success.
         """
         expired_keys = [
@@ -120,16 +118,7 @@ class TestExpirationCredentialExpiryMidSweep(S3ReservationsStorageTestBase):
         def get_object_with_expiring_token(Bucket: str, Key: str):
             """Raise ExpiredToken exactly as boto3 surfaces it (HTTP 400)."""
             if token_state["expired"]:
-                raise ClientError(
-                    {
-                        "Error": {
-                            "Code": "ExpiredToken",
-                            "Message": "The provided token has expired.",
-                        },
-                        "ResponseMetadata": {"HTTPStatusCode": 400},
-                    },
-                    "GetObject",
-                )
+                raise self.make_expired_token_error("GetObject")
             return real_get_object(Bucket=Bucket, Key=Key)
 
         # Inject onto the in-memory FakeS3Client for the duration of this
@@ -142,8 +131,9 @@ class TestExpirationCredentialExpiryMidSweep(S3ReservationsStorageTestBase):
         def create_client_with_refresh(*_args, **_kwargs):
             create_client_calls["count"] += 1
             if create_client_calls["count"] >= 2:
-                # retry_with_new_client reset frozen_credentials and built a
-                # new client: the fresh token works from here on.
+                # The second re-resolution of the credential chain (via
+                # retry_with_new_client discarding the session + client)
+                # hands back a fresh token that works from here on.
                 token_state["expired"] = False
             return self.fake_s3
 
@@ -174,7 +164,9 @@ class TestExpirationCredentialExpiryMidSweep(S3ReservationsStorageTestBase):
         )
         self.assertGreaterEqual(
             create_client_calls["count"], 2,
-            f"Expected at least 2 clients (initial + rebuilt-after-refresh); got "
-            f"{create_client_calls['count']}. A single client means the ExpiredToken "
-            f"never triggered retry_with_new_client's credential reset.",
+            f"Expected at least 2 client constructions under this test's patch "
+            f"(rebuilds forced by ExpiredToken reaching retry_with_new_client; the "
+            f"second rebuild picks up the fresh token); got "
+            f"{create_client_calls['count']}. Fewer means the ExpiredToken never "
+            f"triggered retry_with_new_client's session + client reset.",
         )

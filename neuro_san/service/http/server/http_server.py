@@ -502,6 +502,7 @@ class HttpServer(AgentStateListener):
             handlers,
             requests_limit,
             concurrent_requests_limit,
+            self.server_context,
             logger,
             self.forwarded_request_metadata)
 

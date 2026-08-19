@@ -23,8 +23,8 @@ from typing import Tuple
 
 from os import environ
 
-from neuro_san.internals.authorization.factory.authorizer_factory import AuthorizerFactory
-from neuro_san.internals.authorization.interfaces.authorizer import Authorizer
+from neuro_san.service.authorization.factory.authorizer_factory import AuthorizerFactory
+from neuro_san.service.authorization.interfaces.authorizer import Authorizer
 from neuro_san.service.generic.async_agent_service_provider import AsyncAgentServiceProvider
 from neuro_san.service.interfaces.agent_authorizer import AgentAuthorizer
 from neuro_san.service.interfaces.permission import Permission

@@ -21,8 +21,11 @@ Pytest's default test-file pattern is test_*.py, so this file (which
 does not start with "test_") is not collected as a test module. The
 class defined here is imported by sibling test_*.py modules.
 """
+import json
 import os
 import time
+
+from contextlib import contextmanager
 
 from typing import Any
 from typing import Dict
@@ -30,11 +33,11 @@ from typing import Dict
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import patch
 
-from aiobotocore.credentials import AioCredentials
-from botocore.credentials import Credentials
+from botocore.exceptions import ClientError
 
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
 from neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage import S3ReservationsStorage
+from neuro_san.service.watcher.temp_networks.s3.s3_util import S3Util
 from tests.neuro_san.service.watcher.temp_networks.s3.fake_s3_client import FakeS3Client
 from tests.neuro_san.service.watcher.temp_networks.s3.fake_async_s3_client import FakeAsyncS3Client
 
@@ -57,14 +60,37 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
     get_one_reservation), and is NOT a field in the JSON.
     """
 
+    # S3 key prefix used both to configure the storage under test and by
+    # the _put_* helpers below to construct object keys directly.
+    PREFIX: str = "reservations/"
+
     def setUp(self):
         # Force the env-driven expiration interval to 0 so no background
         # thread is started during tests, regardless of the developer's local
-        # environment. clear=False means only this key is overridden; all
+        # environment. clear=False means only these keys are overridden; all
         # other env vars are left untouched.
         env_patcher = patch.dict(
             os.environ,
-            {"AGENT_RESERVATIONS_EXTERNAL_STORAGE_CHECK_PERIOD_SECONDS": "0"},
+            {
+                "AGENT_RESERVATIONS_EXTERNAL_STORAGE_CHECK_PERIOD_SECONDS": "0",
+                # Hermeticity barrier: the workers build REAL botocore /
+                # aiobotocore sessions (only create_client is patched below),
+                # and the sync worker consults the session's credential chain
+                # before creating its client. These fake env credentials make
+                # that resolution instant and deterministic instead of walking
+                # the developer/CI machine's real chain (config files, SSO,
+                # IMDS on EC2).
+                "AWS_ACCESS_KEY_ID": "testing",
+                "AWS_SECRET_ACCESS_KEY": "testing",
+                "AWS_SESSION_TOKEN": "testing",
+                "AWS_DEFAULT_REGION": "us-east-1",
+                "AWS_EC2_METADATA_DISABLED": "true",
+                # Keep botocore away from the host's real config/credentials
+                # files: a config file can carry profile/SSO settings that
+                # break hermeticity even with the fake credentials above.
+                "AWS_CONFIG_FILE": os.devnull,
+                "AWS_SHARED_CREDENTIALS_FILE": os.devnull,
+            },
             clear=False,
         )
         env_patcher.start()
@@ -74,63 +100,118 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
         # is restored to "5", and a previously unset key is removed.
         self.addCleanup(env_patcher.stop)
 
+        # patch.dict with clear=False can only OVERRIDE variables, not delete
+        # them, so the profile selectors are popped manually (and restored by
+        # addCleanup). With AWS_PROFILE set, botocore raises ProfileNotFound
+        # from its config load when the profile is missing from the host's
+        # ~/.aws/config - BEFORE any credential provider (including the fake
+        # env credentials above) is consulted - which would fail every
+        # inheriting test in setUp on such a machine.
+        for profile_var in ("AWS_PROFILE", "AWS_DEFAULT_PROFILE"):
+            if profile_var in os.environ:
+                self.addCleanup(os.environ.__setitem__, profile_var, os.environ.pop(profile_var))
+
         self.fake_s3: FakeS3Client = FakeS3Client()
 
-        # Patch boto3_client at the import boundary in s3_reservations_storage
-        # so storage.start() receives our fake instead of a real boto3 client.
+        # Patch Session.create_client at the import boundary in
+        # aws_sync_client_worker so the workers receive our fake instead of a
+        # real boto3 client. The workers create their clients WITHOUT explicit
+        # keys, so create_client is the seam that swaps in the fake. The sync
+        # worker has one other credential touchpoint - its empty-chain guard
+        # calls Session.get_credentials() before each client build - which is
+        # answered by the fake env credentials above, not by this patch.
         boto3_patcher = patch(
             "neuro_san.service.watcher.temp_networks.s3.aws_sync_client_worker.Session.create_client",
             return_value=self.fake_s3,
         )
         boto3_patcher.start()
-        # Restores the real boto3_client symbol after the test completes,
+        # Restores the real create_client symbol after the test completes,
         # regardless of pass/fail.
         self.addCleanup(boto3_patcher.stop)
 
-        # Patch Session.get_credentials at the import boundary in s3_reservations_writer
-        # so storage.start() receives deterministic fake credentials.
-        def _fake_get_credentials(*_args, **_kwargs):
-            return Credentials("bogus", "bogus")
-
-        credentials_patcher = patch(
-            "neuro_san.service.watcher.temp_networks.s3.aws_sync_client_worker.Session.get_credentials",
-            new=_fake_get_credentials,
-        )
-        credentials_patcher.start()
-        # Restores the real AioSession symbol after the test completes, regardless of pass/fail.
-        self.addCleanup(credentials_patcher.stop)
-
         self.fake_async_s3: FakeAsyncS3Client = FakeAsyncS3Client(self.fake_s3)
 
-        # Patch aiobotocore_client at the import boundary in s3_reservations_storage
-        # so storage.start() receives our fake instead of a real aiobotocore client.
+        # Patch AioSession.create_client at the import boundary in
+        # aws_async_client_worker so the writer receives our fake instead of a
+        # real aiobotocore client. Same seam as the sync patch above; the
+        # async worker has no get_credentials() guard, so create_client is
+        # its only credential touchpoint.
         aiobotocore_patcher = patch(
             "neuro_san.service.watcher.temp_networks.s3.aws_async_client_worker.AioSession.create_client",
             return_value=self.fake_async_s3,
         )
         aiobotocore_patcher.start()
-        # Restores the real aiobotocore symbol after the test completes,
+        # Restores the real create_client symbol after the test completes,
         # regardless of pass/fail.
         self.addCleanup(aiobotocore_patcher.stop)
 
-        # Patch AioSession.get_credentials at the import boundary in s3_reservations_writer
-        # so storage.start() receives deterministic fake credentials.
-        async def _async_fake_get_credentials(*_args, **_kwargs):
-            return AioCredentials("bogus", "bogus")
-
-        credentials_patcher = patch(
-            "neuro_san.service.watcher.temp_networks.s3.aws_async_client_worker.AioSession.get_credentials",
-            new=_async_fake_get_credentials,
-        )
-        credentials_patcher.start()
-        # Restores the real AioSession symbol after the test completes, regardless of pass/fail.
-        self.addCleanup(credentials_patcher.stop)
-
         self.storage: S3ReservationsStorage = S3ReservationsStorage(
             bucket_name="test-bucket",
-            prefix="reservations/",
+            prefix=self.PREFIX,
         )
         self.storage.start()
+
+    def _put_live_reservation(self, reservation_id: str) -> str:
+        """
+        Place a well-formed, unexpired reservation object directly into the
+        fake bucket (matching the writer's on-disk schema, bypassing the
+        writer) so read paths have something real to fetch.
+
+        :return: the reservation id (readers derive the S3 key from it)
+        """
+        key: str = S3Util.get_obj_key_for_reservation(self.PREFIX, reservation_id)
+        self.fake_s3.objects[key] = json.dumps({
+            "name": reservation_id,
+            "llm_config": {"model_name": "gpt-5.2"},
+            "tools": [{"name": reservation_id, "function": {"description": "test frontman"}}],
+            "metadata": {
+                "reservation": {
+                    "id": reservation_id,
+                    "lifetime_in_seconds": 3600.0,
+                    "expiration_time_in_seconds": time.time() + 3600.0,
+                },
+                "stored_at": time.time(),
+            },
+        }).encode("utf-8")
+        return reservation_id
+
+    @contextmanager
+    def _fresh_reader_client(self, create_client_replacement):
+        """
+        Re-patch the sync create_client seam with the given replacement and
+        discard the reader worker's long-lived client, so that the client
+        serving the with-block is provably created by the replacement.
+        Without the reset, the reads would keep using the client built in
+        this base's setUp (under its own create_client patch) and the
+        replacement would never be consulted - making any assertion about
+        it vacuous.
+        """
+        with patch(
+            "neuro_san.service.watcher.temp_networks.s3.aws_sync_client_worker.Session.create_client",
+            new=create_client_replacement,
+        ):
+            self.storage.reader.retriever.get_sync_client_worker().reset_client()
+            yield
+
+    @staticmethod
+    def make_expired_token_error(operation_name: str) -> ClientError:
+        """
+        Build the ClientError boto3 surfaces when S3 rejects a request that
+        was signed with an expired session token (HTTP 400, body code
+        "ExpiredToken").
+
+        :param operation_name: The AWS operation name, e.g. "GetObject"
+        """
+        return ClientError(
+            {
+                "Error": {
+                    "Code": "ExpiredToken",
+                    "Message": "The provided token has expired.",
+                },
+                "ResponseMetadata": {"HTTPStatusCode": 400},
+            },
+            operation_name,
+        )
 
     @staticmethod
     def _make_reservation(reservation_id: str,

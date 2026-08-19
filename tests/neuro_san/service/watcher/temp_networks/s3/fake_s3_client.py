@@ -149,9 +149,3 @@ class FakeS3Client:
             "LastModified": self.last_modified.get(Key, datetime.now(timezone.utc)),
             "ContentLength": len(self.objects[Key]),
         }
-
-    def close(self):
-        """
-        Close the in-memory bucket.
-        """
-        # Do nothing
