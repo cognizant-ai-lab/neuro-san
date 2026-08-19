@@ -185,7 +185,8 @@ class ProxyHandler(tornado.web.RequestHandler):
                 # Flush on the event loop so the caller sees tokens progressively.
                 tornado.ioloop.IOLoop.current().spawn_callback(self._safe_flush)
             except tornado.iostream.StreamClosedError:
-                return
+                # Client disconnected mid-stream; nothing more to do.
+                pass
 
         try:
             response: tornado.httpclient.HTTPResponse = await self.state.upstream.fetch_stream(
