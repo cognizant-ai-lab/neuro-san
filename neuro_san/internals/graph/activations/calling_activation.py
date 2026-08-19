@@ -94,12 +94,12 @@ class CallingActivation(AbstractCallableActivation, ToolCaller):
 
         overlayer = DictionaryOverlay()
         llm_config: Dict[str, Any] = agent_network_config.get("llm_config", empty)
-        llm_config = overlayer.overlay(llm_config, spec_llm_config)
+        use_llm_config: Dict[str, Any] = overlayer.overlay(llm_config, spec_llm_config)
 
         middleware_config: List[Dict[str, Any]] = agent_tool_spec.get("middleware")
         run_context_config: Dict[str, Any] = {
             "context_type": agent_network_config.get("context_type"),
-            "llm_config": llm_config,
+            "llm_config": use_llm_config,
             "middleware_config": middleware_config
         }
         return run_context_config

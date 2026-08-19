@@ -133,7 +133,7 @@ class LangChainTokenCounter:
         # Attempt to count tokens/costs while invoking the agent.
         # The means by which this happens is on a per-LLM basis, so get the right hook
         # given the LLM we've got.
-        callback: AsyncCallbackHandler = None
+
         # Record origin information in our own context var so we can associate
         # with the langchain callback context vars more easily.
         origin_str: str = Origination.get_full_name_from_origin(self.origin)

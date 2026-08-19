@@ -68,8 +68,7 @@ Reservationist is None.  Make sure that temporary networks reservations
             return (reservation, error)
 
         # Creating the Reservations can be done outside the Reservationist with-statement
-        reservation: Reservation = await reservationist.reserve(lifetime_in_seconds=lifetime_in_seconds,
-                                                                prefix=prefix)
+        reservation = await reservationist.reserve(lifetime_in_seconds=lifetime_in_seconds, prefix=prefix)
         deployments: Dict[Reservation, Dict[str, Any]] = {
             reservation: agent_spec
         }
