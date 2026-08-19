@@ -145,8 +145,8 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
         prepper_class_name: str = None
         agent_prepper_classes: str = environ.get("AGENT_ACTIVATION_PREPPER_CLASSES") or ""
         for prepper_class_name in agent_prepper_classes.split():
-            prepper_class_name = prepper_class_name.strip()
-            prepper: ActivationPrepper = ResolverUtil.create_instance(prepper_class_name,
+            use_prepper_class_name = prepper_class_name.strip()
+            prepper: ActivationPrepper = ResolverUtil.create_instance(use_prepper_class_name,
                                                                       "AGENT_ACTIVATION_PREPPER_CLASSES env var",
                                                                       ActivationPrepper)
             if prepper is not None:
