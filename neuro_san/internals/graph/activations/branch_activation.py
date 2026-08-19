@@ -47,7 +47,7 @@ class BranchActivation(CallingActivation, CallableActivation):
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     def __init__(self, parent_run_context: RunContext,
                  factory: AgentToolFactory,
-                 arguments: Dict[str, Any],
+                 args: Dict[str, Any],
                  agent_tool_spec: Dict[str, Any],
                  sly_data: Dict[str, Any]):
         """
@@ -57,14 +57,14 @@ class BranchActivation(CallingActivation, CallableActivation):
                              down its resources to a new RunContext created by
                              this call.
         :param factory: The AgentToolFactory used to create tools
-        :param arguments: A dictionary of the tool function arguments passed in
+        :param args: A dictionary of the tool function arguments passed in
         :param agent_tool_spec: The dictionary describing the JSON agent tool
                             to be used by the instance
         :param sly_data: A mapping whose keys might be referenceable by agents, but whose
                  values should not appear in agent chat text. Can be an empty dictionary.
         """
         super().__init__(parent_run_context, factory, agent_tool_spec, sly_data)
-        self.arguments: Dict[str, Any] = arguments
+        self.arguments: Dict[str, Any] = args
 
     def get_assignments(self) -> str:
         """
