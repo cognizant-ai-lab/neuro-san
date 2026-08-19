@@ -218,12 +218,12 @@ class ProxyHandler(tornado.web.RequestHandler):
         (LLM error bodies are JSON, not SSE).
         """
         code: int = status if status is not None else 200
+        self.set_status(code)
         if 200 <= code < 300:
             self.set_header("Content-Type", "text/event-stream")
             self.set_header("Cache-Control", "no-cache")
             self.set_header("X-Accel-Buffering", "no")
         else:
-            self.set_status(code)
             self.set_header("Content-Type", content_type or "application/json")
 
     def _store(self, method: str, body_bytes: bytes, key: str, response: Dict[str, Any]) -> bool:
