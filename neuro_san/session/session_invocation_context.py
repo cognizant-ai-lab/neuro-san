@@ -322,7 +322,7 @@ class SessionInvocationContext(InvocationContext):
 
         # We need a different Event to signal work is done
         # Work being all done on a sub-invocation is not the same as work all done on the root.
-        invocation_context.work_done_event: Event = Event()
+        invocation_context.work_done_event = Event()
 
         # We need different resources to close
         # Resources are not shared between sub-invocations

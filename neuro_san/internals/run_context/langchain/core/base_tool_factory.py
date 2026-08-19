@@ -237,9 +237,9 @@ class BaseToolFactory:
             await self.journal.write_message(agent_message)
             self.logger.warning(message)
 
-        function_json = dict(function_json)
-        function_json["parameters"] = deepcopy(self.DEFAULT_EXTERNAL_PARAMETERS)
-        return function_json
+        use_function_json: Dict[str, Any] = dict(function_json)
+        use_function_json["parameters"] = deepcopy(self.DEFAULT_EXTERNAL_PARAMETERS)
+        return use_function_json
 
     async def create_internal_tool(self, name: str, agent_spec: Dict[str, Any]) -> BaseTool:
         """

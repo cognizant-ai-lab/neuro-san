@@ -271,9 +271,6 @@ class LangChainRunContext(RunContext):
         :param instructions: The instructions to use for the agent
         :return: An Agent (Runnable)
         """
-        # Initialize our return value
-        agent: Runnable = None
-
         # Get the factory we will use
         llm_factory: ContextTypeLlmFactory = self.invocation_context.get_llm_factory()
         sly_data: Dict[str, Any] = self.tool_caller.get_sly_data()
@@ -312,7 +309,7 @@ class LangChainRunContext(RunContext):
             raise ValueError(error)
 
         self.llm_resources = main_llm_resources
-        agent = self.create_agent(instructions, main_llm_resources.get_model())
+        agent: Runnable = self.create_agent(instructions, main_llm_resources.get_model())
 
         return agent
 
