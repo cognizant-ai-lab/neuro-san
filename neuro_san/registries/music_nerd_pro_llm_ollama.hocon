@@ -29,7 +29,7 @@
         ]
     },
     "llm_config": {
-        "model_name": "qwen3:8b",
+        "model_name": "gemma4:e4b",
         "reasoning": false,
         # Setting for docker env
         "base_url": "http://ollama:11434"

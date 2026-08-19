@@ -22,8 +22,8 @@ from os import environ
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.resolution.resolver_util import ResolverUtil
 
-from neuro_san.internals.authorization.interfaces.authorizer import Authorizer
-from neuro_san.internals.authorization.null.always_yes_authorizer import AlwaysYesAuthorizer
+from neuro_san.service.authorization.interfaces.authorizer import Authorizer
+from neuro_san.service.authorization.null.always_yes_authorizer import AlwaysYesAuthorizer
 
 
 class AuthorizerFactory:

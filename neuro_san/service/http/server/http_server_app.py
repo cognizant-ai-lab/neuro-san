@@ -35,6 +35,7 @@ from tornado.ioloop import IOLoop
 
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
 from neuro_san.service.interfaces.event_loop_logger import EventLoopLogger
+from neuro_san.service.utils.server_context import ServerContext
 
 
 class HttpServerApp(Application):
@@ -50,6 +51,7 @@ class HttpServerApp(Application):
     def __init__(self, handlers,
                  requests_limit: int,
                  concurrent_requests_limit: int,
+                 server_context: ServerContext,
                  logger: EventLoopLogger,
                  forwarded_request_metadata: List[str]):
         """
@@ -57,6 +59,7 @@ class HttpServerApp(Application):
         :param handlers: list of request handlers
         :param requests_limit: limit for number of requests we can execute
         :param concurrent_requests_limit: limit for number of concurrent requests we can execute
+        :param server_context: server context with configuration and state
         :param logger: logger to use
         :param forwarded_request_metadata: list of client metadata keys
         """
@@ -68,6 +71,7 @@ class HttpServerApp(Application):
         self.requests_limit: int = requests_limit
         self.concurrent_requests_limit: int = concurrent_requests_limit
         self.logger: EventLoopLogger = logger
+        self.server_context: ServerContext = server_context
         self.forwarded_request_metadata: List[str] = forwarded_request_metadata
         self.serving: bool = True
         self.shutdown_initiated: bool = False
@@ -99,7 +103,9 @@ class HttpServerApp(Application):
                 return HTTPStatus.SERVICE_UNAVAILABLE, "Too many concurrent requests"
             self.num_processing += 1
             self.requests_stats[caller] = self.requests_stats.get(caller, 0) + 1
-        self.logger.info(metadata, "Start %s", caller)
+        # Get worker instance id for this Http server
+        instance_id: int = self.server_context.get_worker_id()
+        self.logger.info(metadata, "[%d] Start %s", instance_id, caller)
         return HTTPStatus.OK, ""
 
     def finish_client_request(self, metadata: Dict[str, Any],
@@ -118,9 +124,11 @@ class HttpServerApp(Application):
             limit_reached = 0 <= self.requests_limit < self.total
             if get_stats:
                 stats_data: Dict[str, Any] = self.get_stats()
-        self.logger.info(metadata, "Finish %s", caller)
+        # Get worker instance id for this Http server
+        instance_id: int = self.server_context.get_worker_id()
+        self.logger.info(metadata, "[%d] Finish %s", instance_id, caller)
         if get_stats:
-            self.logger.info(metadata, "Stats: %s", stats_data)
+            self.logger.info(metadata, "[%d] Stats: %s", instance_id, stats_data)
         # Now check if we reached requests limit:
         if limit_reached:
             self.serving = False
@@ -139,7 +147,8 @@ class HttpServerApp(Application):
                 break
             time.sleep(wait_period_seconds)
             time_waited_seconds += wait_period_seconds
-        self.logger.info({}, "SERVER EXITING")
+        instance_id: int = self.server_context.get_worker_id()
+        self.logger.info({}, "[%d] SERVER EXITING", instance_id)
         self.stop_server(loop)
 
     def stop_server(self, loop):
@@ -156,7 +165,9 @@ class HttpServerApp(Application):
         if self.shutdown_initiated:
             return
         self.shutdown_initiated = True
-        self.logger.info({}, "Server request limit %d reached. Shutting down...", self.requests_limit)
+        instance_id: int = self.server_context.get_worker_id()
+        self.logger.info({}, "[%d] Server request limit %d reached. Shutting down...",
+                         instance_id, self.requests_limit)
         self.shutdown_thread = Thread(target=self.do_shutdown, args=(IOLoop.current(),), daemon=True)
         self.shutdown_thread.start()
 
@@ -172,14 +183,15 @@ class HttpServerApp(Application):
         return str(stats_dict)
 
     def log_request(self, handler):
+        instance_id: int = self.server_context.get_worker_id()
         if isinstance(handler, BaseRequestHandler):
             request = handler.request
             metadata: Dict[str, Any] = handler.get_metadata()
             status = handler.get_status()
             duration = 1000 * request.request_time()  # in milliseconds
             # handler.logger is our custom HttpLogger
-            handler.logger.info(metadata, "%d %s %s (%s) %.2fms",
-                                status, request.method, request.uri, request.remote_ip, duration)
+            handler.logger.info(metadata, "[%d] %d %s %s (%s) %.2fms",
+                                instance_id, status, request.method, request.uri, request.remote_ip, duration)
         elif isinstance(handler, ErrorHandler):
             request = handler.request
             metadata: Dict[str, Any] =\
@@ -187,8 +199,8 @@ class HttpServerApp(Application):
             status = handler.get_status()
             duration = 1000 * request.request_time()  # in milliseconds
             # handler.logger is our custom HttpLogger
-            self.logger.error(metadata, "%d %s %s (%s) %.2fms",
-                              status, request.method, request.uri, request.remote_ip, duration)
+            self.logger.error(metadata, "[%d] %d %s %s (%s) %.2fms",
+                              instance_id, status, request.method, request.uri, request.remote_ip, duration)
         else:
             # Fall back to base request logger:
             super().log_request(handler)
