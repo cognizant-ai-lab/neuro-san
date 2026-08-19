@@ -17,7 +17,7 @@
 from typing import Any
 from typing import Dict
 
-import uuid
+from uuid import uuid4
 
 from neuro_san.internals.run_context.interfaces.tool_call import ToolCall
 
@@ -47,7 +47,7 @@ class LangChainToolCall(ToolCall):
         """
         self.tool_name: str = tool_name
         self.args = args
-        self.id: str = f"tool_call_{run_id}_{uuid.uuid4()}"
+        self.id: str = f"tool_call_{run_id}_{uuid4()}"
         self.invocation: str = invocation
         if invocation is None:
             self.invocation = "chatbot"

@@ -18,7 +18,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-import uuid
+from uuid import uuid4
 
 from aiohttp.client_exceptions import ClientConnectionError
 
@@ -133,7 +133,7 @@ class BranchActivation(CallingActivation, CallableActivation):
         assignments: str = self.get_assignments()
         instructions: str = self.get_instructions()
 
-        uuid_str: str = str(uuid.uuid4())
+        uuid_str: str = str(uuid4())
         component_name: str = self.get_name()
         unique_name: str = f"{uuid_str}_{component_name}"
         await self.create_resources(unique_name, instructions, None)

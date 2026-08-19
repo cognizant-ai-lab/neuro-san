@@ -19,8 +19,9 @@ from typing import Dict
 from typing import List
 from typing import Union
 
-import json
-import uuid
+from json import loads
+from json.decoder import JSONDecodeError
+from uuid import uuid4
 
 from copy import copy
 from logging import Logger
@@ -101,7 +102,7 @@ class LangChainRunContext(RunContext):
 
         # This might get modified in create_resources() (for now)
         self.llm_config: Dict[str, Any] = llm_config
-        self.run_id_base: str = str(uuid.uuid4())
+        self.run_id_base: str = str(uuid4())
 
         self.tools: List[BaseTool] = []
         self.error_detector: ErrorDetector = None
@@ -520,8 +521,8 @@ class LangChainRunContext(RunContext):
         # Decode the JSON in that string now.
         tool_chat_list: List[Dict[str, Any]] = None
         try:
-            tool_chat_list = json.loads(tool_chat_list_string)
-        except json.decoder.JSONDecodeError as exception:
+            tool_chat_list = loads(tool_chat_list_string)
+        except JSONDecodeError as exception:
             sensitive_logger = SensitiveLogger(self.logger)
             sensitive_logger.error("Exception: %s parsing %s", str(exception), str(tool_chat_list_string))
             raise exception

@@ -20,7 +20,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-import copy
+from copy import copy
 from logging import Logger
 from logging import getLogger
 from threading import Lock
@@ -95,7 +95,7 @@ class LangChainMcpAdapter:
         if headers_dict:
             if isinstance(headers_dict, dict):
                 # Use a copy to avoid modifying the original headers dictionary.
-                mcp_tool_dict["headers"] = copy.copy(headers_dict)
+                mcp_tool_dict["headers"] = copy(headers_dict)
             else:
                 self.logger.error("MCP client headers for server %s must be a dictionary.",  server_url)
 

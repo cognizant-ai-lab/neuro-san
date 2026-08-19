@@ -23,7 +23,8 @@ from typing import Optional
 
 from asyncio import Task
 from contextlib import suppress
-import logging
+from logging import getLogger
+from logging import Logger
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
@@ -93,7 +94,7 @@ class AsyncDirectAgentSession(AsyncAgentSession):
             self.toolbox_factory = invocation_context.get_toolbox_factory()
         if metadata is not None:
             self.request_id = metadata.get("request_id")
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger: Logger = getLogger(self.__class__.__name__)
 
     def _log_agent_network_usage(self, operation: str):
         """
