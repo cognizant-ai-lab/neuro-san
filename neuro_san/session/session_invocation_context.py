@@ -326,14 +326,14 @@ class SessionInvocationContext(InvocationContext):
 
         # We need different resources to close
         # Resources are not shared between sub-invocations
-        invocation_context.resources: List[LingeringResource] = []
+        invocation_context.resources = []
 
         # We need a different queue in order to call external agents with direct sessions.
-        invocation_context.queue: AsyncCollatingQueue = AsyncCollatingQueue()
+        invocation_context.queue = AsyncCollatingQueue()
 
         # Now that the queue has changed, we need a new Journal as well
         # to be sure that the messages are sent to the correct queue.
-        invocation_context.journal: Journal = MessageJournal(invocation_context.queue)
+        invocation_context.journal = MessageJournal(invocation_context.queue)
 
         # If an invocation was provided, use it
         if invocation is not None:
