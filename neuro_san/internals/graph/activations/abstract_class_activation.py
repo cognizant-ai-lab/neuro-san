@@ -154,8 +154,6 @@ class AbstractClassActivation(AbstractCallableActivation):
 
         :return: A BaseMessage produced during this process.
         """
-        message: BaseMessage = None
-
         full_class_ref: str = self.get_full_class_ref()
         self.logger.info("Calling class %s", full_class_ref)
         class_split: List[str] = full_class_ref.split(".")

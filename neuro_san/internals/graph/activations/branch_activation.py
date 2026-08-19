@@ -144,14 +144,14 @@ class BranchActivation(CallingActivation, CallableActivation):
             assignments = assignments + "\n" + command
 
         run: Run = await self.run_context.submit_message(assignments)
-        run = await self.run_context.wait_on_run(run, self.journal)
+        use_run = await self.run_context.wait_on_run(run, self.journal)
 
         messages: List[BaseMessage] = await self.run_context.get_response()
 
-        messages = await self.integrate_callable_response(run, messages)
+        use_messages = await self.integrate_callable_response(use_run, messages)
 
         # Return the last message
-        return messages[-1]
+        return use_messages[-1]
 
     def get_origin(self) -> List[Dict[str, Any]]:
         """

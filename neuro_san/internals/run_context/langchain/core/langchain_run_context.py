@@ -32,7 +32,6 @@ from pydantic_core import ValidationError
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 
 from langchain.agents.factory import create_agent
-from langchain.agents.middleware.types import AgentMiddleware
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.human import HumanMessage
@@ -313,7 +312,7 @@ class LangChainRunContext(RunContext):
             raise ValueError(error)
 
         self.llm_resources = main_llm_resources
-        agent: Runnable = self.create_agent(instructions, main_llm_resources.get_model())
+        agent = self.create_agent(instructions, main_llm_resources.get_model())
 
         return agent
 
@@ -330,8 +329,8 @@ class LangChainRunContext(RunContext):
         middleware_factory = MiddlewareFactory(self.invocation_context, self.origin, self.chat_history, self.capsule)
         sly_data: Dict[str, Any] = self.tool_caller.get_sly_data()
 
-        middleware: List[AgentMiddleware] = None
-        checkpointer: Any = None
+        # middleware: List[AgentMiddleware]
+        # checkpointer: Any
         middleware, checkpointer = middleware_factory.create_agent_middleware(self.middleware_config, sly_data)
 
         return create_agent(
@@ -392,8 +391,8 @@ class LangChainRunContext(RunContext):
         # Chat history is updated in write_message
         await self.journal.write_message(self.recent_human_message)
 
-        run: Run = LangChainRun(self.run_id_base, self.chat_history)
-        session_id: str = run.get_id()
+        use_run: Run = LangChainRun(self.run_id_base, self.chat_history)
+        session_id: str = use_run.get_id()
 
         runnable = RunContextRunnable(agent_chain=self.agent_chain,
                                       primary_llm=self.llm_resources.get_model(),
@@ -414,7 +413,7 @@ class LangChainRunContext(RunContext):
 
         await chain.ainvoke(input=inputs, config=runnable_config)
 
-        return run
+        return use_run
 
     async def get_response(self) -> List[BaseMessage]:
         """
@@ -445,9 +444,8 @@ class LangChainRunContext(RunContext):
                     await self.journal.write_message(tool_message)
 
         # Create a run to return
-        run = LangChainRun(self.run_id_base, self.chat_history, tool_message=tool_message)
-
-        return run
+        use_run = LangChainRun(self.run_id_base, self.chat_history, tool_message=tool_message)
+        return use_run
 
     def parse_tool_output(self, tool_output: Dict[str, Any]) -> BaseMessage:
         """
@@ -511,20 +509,20 @@ class LangChainRunContext(RunContext):
             tool_chat_list_string = tool_chat_list_string[1:-1]
 
         # Remove escaping
-        tool_chat_list_string = tool_chat_list_string.replace('\\"', '"')
+        intermediate_tool_chat_list_string = tool_chat_list_string.replace('\\"', '"')
         # Put back some escaping of double quotes in messages that are not json.
         # We have to do this because gpt-4o seems to not like json braces in its
         # input, but now we have to deal with the consequences in the output.
         # See ArgumentAssigner.get_args_value_as_string().
-        tool_chat_list_string = tool_chat_list_string.replace('\\"', '\\\\\"')
+        use_tool_chat_list_string = intermediate_tool_chat_list_string.replace('\\"', '\\\\\"')
 
         # Decode the JSON in that string now.
         tool_chat_list: List[Dict[str, Any]] = None
         try:
-            tool_chat_list = loads(tool_chat_list_string)
+            tool_chat_list = loads(use_tool_chat_list_string)
         except JSONDecodeError as exception:
             sensitive_logger = SensitiveLogger(self.logger)
-            sensitive_logger.error("Exception: %s parsing %s", str(exception), str(tool_chat_list_string))
+            sensitive_logger.error("Exception: %s parsing %s", str(exception), str(use_tool_chat_list_string))
             raise exception
 
         # The tool_output seems to contain the entire chat history of

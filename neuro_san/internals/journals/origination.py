@@ -121,9 +121,9 @@ class Origination:
 
         # Simple replacement of local external agents.
         # DEF - need better recognition of external agent
-        full_path = full_path.replace("./", "/")
+        use_full_path = full_path.replace("./", "/")
 
-        return full_path
+        return use_full_path
 
     def reset(self):
         """

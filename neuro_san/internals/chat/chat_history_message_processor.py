@@ -128,18 +128,18 @@ class ChatHistoryMessageProcessor(MessageProcessor):
         # if they are not properly escaped.
 
         # First replace any pre-escaped braces with normal braces
-        text = text.replace("{{", "{")
-        text = text.replace("}}", "}")
+        text_1 = text.replace("{{", "{")
+        text_2 = text_1.replace("}}", "}")
 
         # Now replace normal braces with escaped braces.
         # Idea is to catch everything pre-escaped or not
-        text = text.replace("{", "{{")
-        text = text.replace("}", "}}")
+        text_3 = text_2.replace("{", "{{")
+        use_text = text_3.replace("}", "}}")
 
         # JSON spec does not allow control characters in strings and newlines in particular
         # can be a problem for http clients that expect one full JSON message per line.
         # Replace any lurking newlines with the 2 raw characters \ and n.
         # DEF - for the future.
 
-        transformed["text"] = text
+        transformed["text"] = use_text
         return transformed

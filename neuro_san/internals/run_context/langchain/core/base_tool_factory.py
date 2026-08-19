@@ -145,8 +145,8 @@ class BaseToolFactory:
             return None
 
         try:
-            function_json = await self.ensure_external_parameters(function_json, name)
-            return self.create_function_tool(function_json, name)
+            use_function_json = await self.ensure_external_parameters(function_json, name)
+            return self.create_function_tool(use_function_json, name)
         except ValueError as exception:
             # The agent was reachable, but what it reported cannot be made into a tool.
             message: str = f"Agent/tool {name} reported an invalid function definition. " + \
@@ -306,9 +306,9 @@ class BaseToolFactory:
             return None
 
         # The allowed tools list might have been updated by the MCP adapter
-        allowed_tools: List[str] = mcp_adapter.client_allowed_tools
+        use_allowed_tools: List[str] = mcp_adapter.client_allowed_tools
         tool_names: List[str] = [tool.name for tool in mcp_tools]
-        invalid_names: Set[str] = set(allowed_tools) - set(tool_names)
+        invalid_names: Set[str] = set(use_allowed_tools) - set(tool_names)
         # Check if there are invalid tool names in the list.
         if invalid_names:
             message = f"The following tools cannot be found in {server_url}: {invalid_names}"
