@@ -21,7 +21,7 @@ from typing import Sequence
 from typing import Tuple
 from typing import Union
 
-from os import cpu_count as os_cpu_count
+from os import cpu_count
 from os import environ
 from os import pathsep
 import json
@@ -156,8 +156,8 @@ class RegistryManifestRestorer(Restorer):
             return agent_networks
 
         # Avoid spawning an unbounded number of workers.
-        cpu_count: int = os_cpu_count() or 1
-        max_workers: int = min(len(one_manifest), cpu_count)
+        my_cpu_count: int = cpu_count() or 1
+        max_workers: int = min(len(one_manifest), my_cpu_count)
 
         # The default of "thread" is the least heavyweight, but not necessarily the fastest
         # given the context of how/how often the manifest is read.
