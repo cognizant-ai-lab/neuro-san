@@ -52,7 +52,8 @@ class JsonStructureParser(StructureParser):
             "{": "}",
         }
 
-        meat, self.remainder = self._extract_delimited_block(content, delimiters)
+        meat, one_remainder = self._extract_delimited_block(content, delimiters)
+        self.remainder = one_remainder
 
         # Attempt parsing the structure from the meat
         structure: Dict[str, Any] = None
