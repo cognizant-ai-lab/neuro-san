@@ -98,11 +98,11 @@ class DefaultsConfigFilter(ConfigFilter):
         basis_extractor = DictionaryExtractor(result_config)
 
         # Loop through all the tools making additions.
-        tools = result_config.get("tools")
+        use_tools: List[Dict[str, Any]] = result_config.get("tools")
 
         idx: int = 0
         tool: Dict[str, Any] = None
-        for idx, tool in enumerate(tools):
+        for idx, tool in enumerate(use_tools):
             tool_extractor = DictionaryExtractor(tool)
 
             # Assume the front-man is the first tool in the list.

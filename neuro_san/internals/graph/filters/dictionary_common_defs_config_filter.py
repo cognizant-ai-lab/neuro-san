@@ -81,6 +81,6 @@ class DictionaryCommonDefsConfigFilter(AbstractCommonDefsConfigFilter):
 
         # Make a deepcopy in case the replacement is something
         # that gets modified independently by other filtering steps.
-        replacement_value = deepcopy(replacement_value)
+        replacement_value_copy: Any = deepcopy(replacement_value)
 
-        return replacement_value
+        return replacement_value_copy

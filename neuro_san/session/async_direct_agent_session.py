@@ -23,7 +23,8 @@ from typing import Optional
 
 from asyncio import Task
 from contextlib import suppress
-import logging
+from logging import getLogger
+from logging import Logger
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
@@ -93,7 +94,7 @@ class AsyncDirectAgentSession(AsyncAgentSession):
             self.toolbox_factory = invocation_context.get_toolbox_factory()
         if metadata is not None:
             self.request_id = metadata.get("request_id")
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger: Logger = getLogger(self.__class__.__name__)
 
     def _log_agent_network_usage(self, operation: str):
         """
@@ -117,8 +118,7 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         """
         self._log_agent_network_usage("function")
         _ = request_dict
-        response_dict: Dict[str, Any] = {
-        }
+        response_dict: Dict[str, Any] = {}
 
         front_man: str = self.agent_network.find_front_man()
         if front_man is not None:
@@ -144,14 +144,12 @@ class AsyncDirectAgentSession(AsyncAgentSession):
         """
         self._log_agent_network_usage("connectivity")
         _ = request_dict
-        response_dict: Dict[str, Any] = {
-        }
 
         reporter = ConnectivityReporter(self.agent_network, self.toolbox_factory)
         config: Dict[str, Any] = self.agent_network.get_config()
         metadata: Dict[str, Any] = config.get("metadata")
         connectivity_info: List[Dict[str, Any]] = reporter.report_network_connectivity()
-        response_dict = {
+        response_dict: Dict[str, Any] = {
             "connectivity_info": connectivity_info,
         }
         if metadata is not None:

@@ -17,7 +17,8 @@
 
 from asyncio import Lock as AsyncLock
 from contextvars import ContextVar
-import logging
+from logging import getLogger
+from logging import Logger
 from time import time
 from typing import Any
 from typing import Dict
@@ -282,7 +283,8 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
             self._get_cost_from_info(model_name, prompt_tokens, "price_per_1k_input_tokens")
 
         if completion_token_cost is None and prompt_token_cost is None:
-            logging.warning("No price info found for model %s in llm info. Token cost defaults to 0.", model_name)
+            logger: Logger = getLogger(__name__)
+            logger.warning("No price info found for model %s in llm info. Token cost defaults to 0.", model_name)
 
         # Return total cost
         return (completion_token_cost or 0.0) + (prompt_token_cost or 0.0)
