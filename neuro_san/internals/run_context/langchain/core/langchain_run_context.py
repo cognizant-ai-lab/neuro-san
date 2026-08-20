@@ -326,8 +326,8 @@ class LangChainRunContext(RunContext):
         middleware_factory = MiddlewareFactory(self.invocation_context, self.origin, self.chat_history, self.capsule)
         sly_data: Dict[str, Any] = self.tool_caller.get_sly_data()
 
-        # middleware: List[AgentMiddleware]
-        # checkpointer: Any
+        # middleware is a list of AgentMiddleware instances, perhaps empty.
+        # checkpointer is an opaque object native to langchain.
         middleware, checkpointer = middleware_factory.create_agent_middleware(self.middleware_config, sly_data)
 
         return create_agent(
@@ -430,6 +430,7 @@ class LangChainRunContext(RunContext):
                     "tool_call_id"  The string id of the tool_call being executed
         :return: A potentially updated run handle
         """
+        _ = run
         tool_message: BaseMessage = None
         if tool_outputs is not None and len(tool_outputs) > 0:
             for tool_output in tool_outputs:

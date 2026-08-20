@@ -19,7 +19,7 @@ from typing import Any
 from typing import Dict
 
 from json import loads
-from requests import get
+from requests import get as http_get
 
 from neuro_san.interfaces.concierge_session import ConciergeSession
 from neuro_san.session.abstract_http_service_agent_session import AbstractHttpServiceAgentSession
@@ -42,8 +42,8 @@ class HttpConciergeSession(AbstractHttpServiceAgentSession, ConciergeSession):
         """
         path: str = self.get_request_path("list")
         try:
-            response = get(path, json=request_dict, headers=self.get_headers(),
-                           timeout=self.timeout_in_seconds)
+            response = http_get(path, json=request_dict, headers=self.get_headers(),
+                                timeout=self.timeout_in_seconds)
             result_dict = loads(response.text)
             return result_dict
         except Exception as exc:  # pylint: disable=broad-exception-caught
