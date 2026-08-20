@@ -44,7 +44,6 @@ class JsonStructureParser(StructureParser):
         # Reset remainder on each call
         self.remainder = None
 
-        meat: str = content
         delimiters: Dict[str, str] = {
             # Start : End
             "```json": "```",

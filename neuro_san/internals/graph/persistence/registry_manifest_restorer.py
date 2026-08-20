@@ -21,7 +21,9 @@ from typing import Sequence
 from typing import Tuple
 from typing import Union
 
-import os
+from os import cpu_count as os_cpu_count
+from os import environ
+from os import pathsep
 import json
 from logging import getLogger
 from logging import Logger
@@ -80,16 +82,16 @@ class RegistryManifestRestorer(Restorer):
 
         if manifest_files is None:
             # We have no manifest list coming in, so check an env variable for a definition.
-            manifest_file: str = os.environ.get("AGENT_MANIFEST_FILE")
+            manifest_file: str = environ.get("AGENT_MANIFEST_FILE")
             if manifest_file is None:
                 # No env var, so fallback to what is coded in this repo.
                 manifest_file = REGISTRIES_DIR.get_file_in_basis("manifest.hocon")
 
             # Add what was found above
-            use_files: List[str] = manifest_file.split(os.pathsep)
+            use_files: List[str] = manifest_file.split(pathsep)
             self.manifest_files.extend(use_files)
         elif isinstance(manifest_files, str):
-            use_files: List[str] = manifest_files.split(os.pathsep)
+            use_files: List[str] = manifest_files.split(pathsep)
             self.manifest_files.extend(use_files)
         else:
             self.manifest_files = manifest_files
@@ -154,12 +156,12 @@ class RegistryManifestRestorer(Restorer):
             return agent_networks
 
         # Avoid spawning an unbounded number of workers.
-        cpu_count: int = os.cpu_count() or 1
+        cpu_count: int = os_cpu_count() or 1
         max_workers: int = min(len(one_manifest), cpu_count)
 
         # The default of "thread" is the least heavyweight, but not necessarily the fastest
         # given the context of how/how often the manifest is read.
-        concurrency_context: str = os.environ.get("AGENT_MANIFEST_CONCURRENCY_CONTEXT", "thread")
+        concurrency_context: str = environ.get("AGENT_MANIFEST_CONCURRENCY_CONTEXT", "thread")
 
         try:
             executor_factory = self.find_executory_factory(concurrency_context, max_workers)

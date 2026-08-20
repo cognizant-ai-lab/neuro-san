@@ -22,6 +22,7 @@ from typing import Optional
 from typing import Tuple
 
 import logging
+from threading import Lock
 import time
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
@@ -216,7 +217,8 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             return
 
         # Do the dirty deeds.
-        with self.lock:
+        my_lock: Lock = self.lock
+        with my_lock:
             for agent_name in expired:
                 self.remove_agent_network(agent_name)
 
