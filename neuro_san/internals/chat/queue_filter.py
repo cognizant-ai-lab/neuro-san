@@ -52,8 +52,6 @@ class QueueFilter:
                 How this works is based on settings on the front man.
                 Can be None.
         """
-        message_processor: MessageProcessor = None
-
         front_man_name: str = agent_network.find_front_man()
         front_man_spec: Dict[str, Any] = agent_network.get_agent_tool_spec(front_man_name)
 
@@ -61,10 +59,10 @@ class QueueFilter:
         # As of 6/24/25, this is an unadvertised experimental feature.
         structure_formats: Union[str, List[str]] = front_man_spec.get("structure_formats")
         if structure_formats is None:
-            return message_processor
+            return None
 
         # Eventually this might be a CompositeMessageProcessor
-        message_processor = StructureMessageProcessor(structure_formats)
+        message_processor: MessageProcessor = StructureMessageProcessor(structure_formats)
         return message_processor
 
     def apply_to_journal(self, message_journal: MessageJournal):

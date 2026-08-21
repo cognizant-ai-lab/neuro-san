@@ -424,12 +424,12 @@ Some hints:
                 # That didn't work, so try running the synchronous method as an async task
                 # within the confines of the proper executor.
                 # Warn that there is a better alternative
-                message = f"""
+                info_message = f"""
 Running CodedTool class {coded_tool.__class__.__name__}.invoke() synchronously in an asynchronous environment.
 This can lead to performance problems when running within a server. Consider porting to the async_invoke() method.
 """
-                self.logger.info(message)
-                await self.journal.write_message(AgentMessage(content=message))
+                self.logger.info(info_message)
+                await self.journal.write_message(AgentMessage(content=info_message))
 
                 # Try to run in the executor.
                 invocation_context = self.run_context.get_invocation_context()
@@ -450,7 +450,7 @@ This can lead to performance problems when running within a server. Consider por
             "tool_error": tool_error,
             "tool_output": retval
         }
-        message = AgentMessage(content="Got result:", structure=retval_dict)
-        await self.journal.write_message(message)
+        result_message = AgentMessage(content="Got result:", structure=retval_dict)
+        await self.journal.write_message(result_message)
 
         return retval
