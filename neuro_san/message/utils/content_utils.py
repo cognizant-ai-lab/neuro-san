@@ -276,7 +276,7 @@ class ContentUtils:
 
     # pylint: disable=too-many-return-statements
     @staticmethod
-    def blocks_from_chat_message(chat_message: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
+    def blocks_from_chat_message(chat_message: Optional[Dict[str, Any]]) -> Optional[List[Dict[str, Any]]]:
         """
         Extract langchain v1 content blocks from a neuro-san ChatMessage
         dictionary, if it carries any block-form content.
