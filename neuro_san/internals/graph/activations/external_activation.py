@@ -228,8 +228,8 @@ class ExternalActivation(AbstractCallableActivation):
             "tool_end": True,
             "tool_output": answer
         }
-        message = AgentMessage(content="Got result:", structure=answer_dict)
-        await self.journal.write_message(message)
+        agent_message = AgentMessage(content="Got result:", structure=answer_dict)
+        await self.journal.write_message(agent_message)
 
         # In terms of sending tool results back up the graph,
         # we really only care about immediately are the AI responses.

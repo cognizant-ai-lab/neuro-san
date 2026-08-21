@@ -46,7 +46,6 @@ class StreamingInputProcessor:
         """
         Constructor
         """
-        super().__init__()
         self.default_input: str = default_input
         self.session: AgentSession = session
         self.processor = BasicMessageProcessor()

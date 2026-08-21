@@ -199,9 +199,9 @@ class RegistryManifestRestorer(Restorer):
         :return: The executor factory to use as a no-args constructor.
         """
         executor_factory = None
-        concurrency_context = concurrency_context.strip().lower()
+        lower_concurrency_context = concurrency_context.strip().lower()
 
-        if concurrency_context in ("spawn", "fork", "forkserver"):
+        if lower_concurrency_context in ("spawn", "fork", "forkserver"):
             # Use a ProcessPoolExecutor for "spawn" and "fork".
             # In cases of large manifests, a ProcessPoolExecutor ends up being more heavyweight,
             # yet still more time-efficient because of the parallelism sidestepping the GIL.
@@ -218,8 +218,8 @@ class RegistryManifestRestorer(Restorer):
             # See https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
             # for more details.
             executor_factory = partial(ProcessPoolExecutor, max_workers=max_workers,
-                                       mp_context=get_context(concurrency_context))
-        elif concurrency_context == "thread":
+                                       mp_context=get_context(lower_concurrency_context))
+        elif lower_concurrency_context == "thread":
             # Use a ThreadPoolExecutor for "thread".
             # The default of "thread" is best for servers who know their manifest content will be
             # changing over the course of their lifetime. It is slowest of all options, but has
@@ -228,7 +228,7 @@ class RegistryManifestRestorer(Restorer):
         else:
             # Default to ThreadPoolExecutor
             self.logger.warning("Unknown concurrency context '%s'. Defaulting to ThreadPoolExecutor.",
-                                concurrency_context)
+                                lower_concurrency_context)
             executor_factory = partial(ThreadPoolExecutor, max_workers=max_workers)
 
         return executor_factory
