@@ -33,11 +33,10 @@ class Cassette:
     On-disk store of recorded request -> response interactions.
 
     Entries are keyed by the sha256 request signature produced by
-    RequestCanonicalizer. In memory they live in a dict for O(1) lookup; on
+    RequestCanonicalizer. In the memory they live in a dict for O(1) lookup; on
     disk they are written as an ordered JSON array so the file stays
     human-diffable and reviewable in git -- which is where the test
-    repeatability actually comes from: the recorded run becomes a committed
-    fixture.
+    repeatability actually comes from: the recorded run may become a committed fixture.
 
     Each entry is a dict of the shape:
         {
@@ -57,14 +56,16 @@ class Cassette:
 
     VERSION: int = 1
 
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, use_multi_mode: bool) -> None:
         """
         :param path: Filesystem path of the cassette JSON file. Loaded now if
                      it exists; created on the first save otherwise.
+        :param use_multi_mode: Whether to use multi-response recording mode.
         """
         self.path: str = path
         self.entries: Dict[str, Dict[str, Any]] = {}
         self._order: List[str] = []
+        self.use_multi_mode: bool = use_multi_mode
         self.load()
 
     def load(self) -> None:
@@ -85,31 +86,24 @@ class Cassette:
             self.entries[key] = entry
 
     def get(self, key: str) -> Optional[Dict[str, Any]]:
-        """:return: The recorded entry for the key, or None if not present."""
+        """
+        :return: The recorded entry for the key, or None if not present.
+        """
         return self.entries.get(key)
 
-    def put(self, key: str, entry: Dict[str, Any]) -> None:
+    def put_response(self, key: str, meta: Dict[str, Any], response: Dict[str, Any]) -> None:
         """
-        Insert or overwrite the entry for a key and persist the whole cassette.
-        :param key: The request signature key.
-        :param entry: The entry dict; its "key" field is set from `key`.
-        """
-        entry["key"] = key
-        if key not in self.entries:
-            self._order.append(key)
-        self.entries[key] = entry
-        self.save()
-
-    def append_response(self, key: str, meta: Dict[str, Any], response: Dict[str, Any]) -> None:
-        """
-        Multi-response record: append a distinct response for a key, keeping all
-        variants under a "responses" list for round-robin playback. Responses
-        whose content matches an existing one (ignoring timing fields) are not
-        duplicated. Persists the whole cassette.
+        Record a response: append a distinct response for a key, keeping all
+        variants under a "responses" list for round-robin playback if multi-mode is enabled.
+        If multi-mode is disabled, only the first response is kept in "responses" list.
+        Responses whose content matches an existing one (ignoring timing fields) are not
+        duplicated. Persists the whole cassette if a new response was added.
         :param key: The request signature key.
         :param meta: Request metadata (method, path, request) for a new entry.
         :param response: The response dict to append.
         """
+        # Flag indicating whether the cassette was changed; if not, we can skip saving.
+        modified: bool = False
         entry: Optional[Dict[str, Any]] = self.entries.get(key)
         if entry is None:
             entry = dict(meta)
@@ -117,20 +111,33 @@ class Cassette:
             entry["responses"] = [response]
             self.entries[key] = entry
             self._order.append(key)
+            modified = True
         else:
             responses: List[Dict[str, Any]] = entry.setdefault("responses", [])
-            if not any(self._same_content(existing, response) for existing in responses):
-                responses.append(response)
-        self.save()
+            if self.use_multi_mode:
+                if not any(self._same_content(existing, response) for existing in responses):
+                    responses.append(response)
+                    modified = True
+            else:
+                # In single-response mode, use already existing response if we have it:
+                if len(responses) == 0:
+                    responses.append(response)
+                    modified = True
+        if modified:
+            self.save()
 
     @staticmethod
     def _same_content(first: Dict[str, Any], second: Dict[str, Any]) -> bool:
-        """Compare two responses for equality ignoring per-call timing fields."""
+        """
+        Compare two responses for equality ignoring per-call timing fields.
+        """
         return Cassette._content_key(first) == Cassette._content_key(second)
 
     @staticmethod
     def _content_key(response: Dict[str, Any]) -> str:
-        """Serialize a response for de-duplication, stripping volatile timing fields."""
+        """
+        Serialize a response for de-duplication, stripping volatile timing fields.
+        """
         trimmed: Dict[str, Any] = dict(response)
         trimmed.pop("latency_seconds", None)
         trimmed.pop("first_byte_seconds", None)
@@ -151,5 +158,7 @@ class Cassette:
         os.replace(tmp_path, self.path)
 
     def __len__(self) -> int:
-        """:return: Number of recorded entries."""
+        """
+        :return: Number of recorded entries.
+        """
         return len(self.entries)

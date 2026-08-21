@@ -187,7 +187,7 @@ class TestCassette:
         """A put entry is persisted and re-readable from a fresh Cassette."""
         path = str(tmp_path / "c.json")
         cassette = Cassette(path)
-        cassette.put("k1", {"request": "r", "response": {"kind": "json", "status": 200}})
+        cassette.put_response("k1", {"request": "r"}, {"kind": "json", "status": 200})
         assert os.path.exists(path)
         assert Cassette(path).get("k1")["response"]["status"] == 200
 
@@ -196,9 +196,9 @@ class TestCassette:
         path = str(tmp_path / "c.json")
         cassette = Cassette(path)
         meta = {"request": "r"}
-        cassette.append_response("k", meta, {"kind": "json", "status": 200, "body": {"a": 1}, "latency_seconds": 0.1})
-        cassette.append_response("k", meta, {"kind": "json", "status": 200, "body": {"a": 1}, "latency_seconds": 0.9})
-        cassette.append_response("k", meta, {"kind": "json", "status": 200, "body": {"a": 2}, "latency_seconds": 0.2})
+        cassette.put_response("k", meta, {"kind": "json", "status": 200, "body": {"a": 1}, "latency_seconds": 0.1})
+        cassette.put_response("k", meta, {"kind": "json", "status": 200, "body": {"a": 1}, "latency_seconds": 0.9})
+        cassette.put_response("k", meta, {"kind": "json", "status": 200, "body": {"a": 2}, "latency_seconds": 0.2})
         assert len(cassette.get("k")["responses"]) == 2
 
 
