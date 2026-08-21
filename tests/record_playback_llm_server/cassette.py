@@ -33,7 +33,7 @@ class Cassette:
     On-disk store of recorded request -> response interactions.
 
     Entries are keyed by the sha256 request signature produced by
-    RequestCanonicalizer. In the memory they live in a dict for O(1) lookup; on
+    RequestCanonicalizer. In memory, they live in a dict for O(1) lookup; on
     disk they are written as an ordered JSON array so the file stays
     human-diffable and reviewable in git -- which is where the test
     repeatability actually comes from: the recorded run may become a committed fixture.
