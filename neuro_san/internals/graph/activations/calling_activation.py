@@ -200,9 +200,9 @@ context with which it will proces input, essentially telling it what to do.
 
         # Submit all tool outputs at once after the loop has gathered all
         # outputs of all CallableActivation' functions.
-        component_run = await self.run_context.submit_tool_outputs(component_run, tool_outputs)
+        new_component_run = await self.run_context.submit_tool_outputs(component_run, tool_outputs)
 
-        return component_run
+        return new_component_run
 
     async def make_one_tool_function_call(self, component_tool_call: ToolCall) -> Dict[str, Any]:
         """
