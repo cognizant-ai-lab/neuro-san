@@ -15,17 +15,21 @@
 #
 # END COPYRIGHT
 """
-Local pytest configuration for the record/playback proxy tests.
+See class comment for details.
 """
-import pytest
+from __future__ import annotations
+
+import tornado.web
 
 
-@pytest.fixture(autouse=True)
-def configure_llm_provider_keys():
-    """
-    Override the repo-wide autouse fixture of the same name (tests/conftest.py),
-    which skips tests when no LLM provider API key is present. These proxy tests
-    drive a local in-process fake upstream and never contact a real LLM, so no
-    provider key is required.
-    """
-    yield
+class RateLimitedUpstream(tornado.web.RequestHandler):
+    """Fake OpenAI upstream that always rate-limits with HTTP 429."""
+
+    def data_received(self, chunk):
+        """Unused; the full body arrives via self.request.body."""
+        return
+
+    async def post(self) -> None:
+        """Always respond 429 Too Many Requests."""
+        self.set_status(429)
+        self.write({"error": {"message": "Too Many Requests"}})
