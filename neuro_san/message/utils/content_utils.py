@@ -38,6 +38,16 @@ class ContentUtils:
     Every place in the codebase that needs to reduce message content to text,
     or to a standardized block list, must go through this class so that the
     projections cannot diverge.
+
+    This is framework plumbing, NOT a client-facing API (much like
+    SlyDataRedactor in this same package). Clients should keep consuming
+    ChatMessage dictionaries via the message processors. The planned
+    consumers (see issue #1222 for the full map) are the wire converter in
+    neuro_san.message.types, the reasoning-surfacing message processors and
+    filters in neuro_san.message, and the capture/journaling/session code in
+    neuro_san.internals. It lives in neuro_san.message rather than
+    neuro_san.internals because its first consumers are in this package, and
+    neuro_san.message deliberately never imports from neuro_san.internals.
     """
 
     # Block types that AIMessage.content_blocks merges in from the message's
