@@ -20,13 +20,12 @@ from typing import Awaitable
 from typing import Callable
 
 from logging import getLogger
-import traceback
+from traceback import format_exc
 
 from langchain_core.tools import BaseTool
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
-
-from neuro_san.internals.utils.exception_util import ExceptionUtil
+from leaf_common.utils.exception_util import ExceptionUtil
 
 
 class McpToolErrorHandler:
@@ -116,7 +115,7 @@ class McpToolErrorHandler:
             # Keep the full traceback in the server logs only;
             # the client-facing tool output is the concise message below.
             self.sensitive_logger.error("Error invoking MCP tool %s: %s", self.tool.name, str(exception))
-            self.sensitive_logger.error("%s", traceback.format_exc())
+            self.sensitive_logger.error("%s", format_exc())
             # Transport failures reach us wrapped in an ExceptionGroup by anyio,
             # whose str() is just "unhandled errors in a TaskGroup (N sub-exceptions)".
             # get_exception_details() recursively unwraps such groups so the LLM

@@ -22,7 +22,11 @@ from langchain_core.messages.base import BaseMessage
 
 from neuro_san.internals.interfaces.async_hopper import AsyncHopper
 from neuro_san.internals.journals.journal import Journal
-from neuro_san.internals.messages.base_message_dictionary_converter import BaseMessageDictionaryConverter
+from neuro_san.message.filters.maximal_message_filter import MaximalMessageFilter
+from neuro_san.message.filters.message_filter import MessageFilter
+from neuro_san.message.processors.message_processor import MessageProcessor
+from neuro_san.message.types.base_message_dictionary_converter import BaseMessageDictionaryConverter
+from neuro_san.message.types.chat_message_type import ChatMessageType
 
 
 class MessageJournal(Journal):
@@ -39,6 +43,20 @@ class MessageJournal(Journal):
                        any message will be put().
         """
         self.hopper: AsyncHopper = hopper
+        self.message_filter: MessageFilter = MaximalMessageFilter()
+        self.message_processor: MessageProcessor = None
+
+    def set_message_filter(self, message_filter: MessageFilter):
+        """
+        Sets the message filter for this journal.
+        """
+        self.message_filter = message_filter
+
+    def set_message_processor(self, message_processor: MessageProcessor):
+        """
+        Sets the message processor for this journal.
+        """
+        self.message_processor = message_processor
 
     async def write_message(self, message: BaseMessage, origin: List[Dict[str, Any]]):
         """
@@ -53,6 +71,16 @@ class MessageJournal(Journal):
         """
         converter = BaseMessageDictionaryConverter(origin=origin)
         message_dict: Dict[str, Any] = converter.to_dict(message)
+        message_type: ChatMessageType = message_dict.get("type")
+
+        if not self.message_filter.allow_message(message_dict, message_type):
+            return
+
+        if self.message_processor is not None:
+            # Can modify message_dict
+            await self.message_processor.async_process_message(message_dict, message_type)
+
+        outgoing_dict = {"response": message_dict}
 
         # Queue Producer from this:
         #   https://stackoverflow.com/questions/74130544/asyncio-yielding-results-from-multiple-futures-as-they-arrive
@@ -60,4 +88,4 @@ class MessageJournal(Journal):
         # as the journal messages come from inside a separate event loop from that request. The lock
         # taken here ends up being harmless in the synchronous request case (like for gRPC) because
         # we would only be blocking our own event loop.
-        await self.hopper.put(message_dict, synchronous=True)
+        await self.hopper.put(outgoing_dict, synchronous=True)

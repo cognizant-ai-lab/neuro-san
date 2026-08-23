@@ -97,8 +97,10 @@
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "02/16/2026",
-        "price_per_1k_input_tokens": 0.0025,
-        "price_per_1k_output_tokens": 0.015,
+        # The initial price was 0.0025 and 0.015 for input and output tokens, respectively. 
+        # https://openai.com/index/advancing-the-price-performance-frontier-with-gpt-5-6/
+        "price_per_1k_input_tokens": 0.002,
+        "price_per_1k_output_tokens": 0.012,
         "model_launch_date": "2026-07-09",
         "model_retirement_date": null,
     },
@@ -113,8 +115,10 @@
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "02/16/2026",
-        "price_per_1k_input_tokens": 0.001,
-        "price_per_1k_output_tokens": 0.006,
+        # The initial price was 0.001 and 0.006 for input and output tokens, respectively. 
+        # https://openai.com/index/advancing-the-price-performance-frontier-with-gpt-5-6/
+        "price_per_1k_input_tokens": 0.0002,
+        "price_per_1k_output_tokens": 0.0012,
         "model_launch_date": "2026-07-09",
         "model_retirement_date": null,
     },
@@ -576,32 +580,10 @@
         "use_model_name": "claude-sonnet-5"
     },
     "claude-opus": {
-        "use_model_name": "claude-opus-4-8"
+        "use_model_name": "claude-opus-5"
     },
     "claude-fable": {
         "use_model_name": "claude-fable-5"
-    },
-
-    "claude-opus-4-1": {
-        "use_model_name": "claude-opus-4-1-20250805"
-    },
-    "claude-opus-4-1-20250805": {
-        "class": "anthropic",
-        "model_info_url": "https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison-table",
-        "modalities": {
-            "input": [ "text", "image" ],
-            "output": [ "text" ],
-        },
-        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
-        "capabilities": [ "tools" ],
-        "context_window_size": 200000,
-        "max_output_tokens": 32000,
-        "knowledge_cutoff": "03/2025",
-        # https://platform.claude.com/docs/en/about-claude/pricing
-        "price_per_1k_input_tokens": 0.015,
-        "price_per_1k_output_tokens": 0.075,
-        "model_launch_date": "2025-08-05",
-        "model_retirement_date": "2026-08-05",
     },
 
     "claude-haiku-4-5": {
@@ -760,6 +742,25 @@
         "model_launch_date": "2026-05-28",
         "model_retirement_date": "2027-05-28",
     },
+    "claude-opus-5": {
+        "class": "anthropic",
+        "model_info_url": "https://platform.claude.com/docs/en/about-claude/models/overview",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        # https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-opus-5.html
+        "knowledge_cutoff": "05/2026",
+        # https://platform.claude.com/docs/en/about-claude/pricing
+        "price_per_1k_input_tokens": 0.005,
+        "price_per_1k_output_tokens": 0.025,
+        "model_launch_date": "2026-07-24",
+        "model_retirement_date": null,
+    },
     "claude-fable-5": {
         "class": "anthropic",
         "model_info_url": "https://platform.claude.com/docs/en/about-claude/models/overview",
@@ -813,7 +814,19 @@
     #     global.anthropic.claude-opus-4-8  ->  us.anthropic.claude-opus-4-8
 
     "bedrock-claude-opus": {
-        "use_model_name": "global.anthropic.claude-opus-4-8"
+        "use_model_name": "global.anthropic.claude-opus-5"
+    },
+    "global.anthropic.claude-opus-5": {
+        "class": "anthropic-bedrock",
+        "model_info_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-opus-5.html",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "05/2026",
     },
     "global.anthropic.claude-opus-4-8": {
         "class": "anthropic-bedrock",
@@ -1022,6 +1035,18 @@
         "max_output_tokens": 32768,
         "knowledge_cutoff": "unknown",
     },
+    "gemma4:e4b": {
+        "class": "ollama",
+        "model_info_url": "https://ollama.com/library/gemma4",
+        "modalities": {
+            "input": [ "text", "image", "audio" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 128000,  # https://ai.google.dev/gemma/docs/core/model_card_4 (E4B: 128K tokens)
+        "max_output_tokens": 8192,      # Not published for Gemma 4; assumed from Gemma 3, which documents 8192
+        "knowledge_cutoff": "unknown",
+    },
 
     # NVIDIA models
     # Also know that so far as of 10/7/2025, all nvidia models use synchronous clients,
@@ -1075,6 +1100,44 @@
     # Per Google, the listed shutdown dates are the "earliest possible dates" — exact
     # retirement is communicated with advance notice. For models with no announced
     # retirement, "model_retirement_date" is null.
+    "gemini-3.7-flash": {
+        "class": "gemini",
+        "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash",
+        "modalities": {
+            "input": [ "text", "images", "video", "audio", "pdf"],
+            "output": [ "text"],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1048576,
+        "max_output_tokens": 65536,
+        # https://deepmind.google/models/model-cards/gemini-3-7-flash/
+        "knowledge_cutoff": "03/2026",
+        # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
+        # This price is effective until Dec 31, 2026 after that it will be doubled.
+        "price_per_1k_input_tokens": 0.00075,
+        "price_per_1k_output_tokens": 0.00375,
+        "model_launch_date": "2026-08-13",
+        "model_retirement_date": null,
+    },
+    "gemini-3.6-flash": {
+        "class": "gemini",
+        "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash",
+        "modalities": {
+            "input": [ "text", "images", "video", "audio", "pdf"],
+            "output": [ "text"],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1048576,
+        "max_output_tokens": 65536,
+        # https://deepmind.google/models/model-cards/gemini-3-6-flash/
+        "knowledge_cutoff": "03/2026",
+        # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
+        # This price is effective until Dec 31, 2026 after that it will be doubled.
+        "price_per_1k_input_tokens": 0.00075,
+        "price_per_1k_output_tokens": 0.00375,
+        "model_launch_date": "2026-07-21",
+        "model_retirement_date": null,
+    },
     "gemini-3.5-flash": {
         "class": "gemini",
         "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash",
@@ -1090,6 +1153,24 @@
         "price_per_1k_input_tokens": 0.0015,
         "price_per_1k_output_tokens": 0.009,
         "model_launch_date": "2026-05-19",
+        "model_retirement_date": null,
+    },
+    "gemini-3.5-flash-lite": {
+        "class": "gemini",
+        "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite",
+        "modalities": {
+            "input": [ "text", "images", "video", "audio", "pdf"],
+            "output": [ "text"],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1048576,
+        "max_output_tokens": 65536,
+        # https://deepmind.google/models/model-cards/gemini-3-5-flash-lite/
+        "knowledge_cutoff": "03/2026",
+        # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
+        "price_per_1k_input_tokens": 0.0003,
+        "price_per_1k_output_tokens": 0.0025,
+        "model_launch_date": "2026-07-21",
         "model_retirement_date": null,
     },
     "gemini-3.1-pro": {

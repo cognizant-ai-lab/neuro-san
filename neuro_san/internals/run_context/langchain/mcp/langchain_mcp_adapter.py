@@ -20,10 +20,10 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-import copy
+from copy import copy
 from logging import Logger
 from logging import getLogger
-import threading
+from threading import Lock
 
 from langchain_core.tools import BaseTool
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -37,7 +37,7 @@ class LangChainMcpAdapter:
     LangChain-compatible tools. This class provides static methods for interacting with MCP servers.
     """
 
-    _mcp_info_lock: threading.Lock = threading.Lock()
+    _mcp_info_lock: Lock = Lock()
     _mcp_servers_info: Dict[str, Any] = None
 
     def __init__(self):
@@ -95,7 +95,7 @@ class LangChainMcpAdapter:
         if headers_dict:
             if isinstance(headers_dict, dict):
                 # Use a copy to avoid modifying the original headers dictionary.
-                mcp_tool_dict["headers"] = copy.copy(headers_dict)
+                mcp_tool_dict["headers"] = copy(headers_dict)
             else:
                 self.logger.error("MCP client headers for server %s must be a dictionary.",  server_url)
 

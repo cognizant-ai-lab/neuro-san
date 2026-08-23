@@ -225,9 +225,46 @@ ENV AGENT_HTTP_PORT="8080"
 # best-case probe responsiveness under load.
 ENV AGENT_HEALTH_PROBE_PORT="8081"
 
-# Maximm number of requests that can be served at the same time
+# Enable asyncio debug mode on the Tornado main event loop in each worker.
+# When set to "true"/"1"/"yes", the server calls loop.set_debug(True), which:
+#   - turns on additional asyncio diagnostics
+#   - logs a WARNING via the "asyncio" logger whenever any callback runs longer
+#     than AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS (see below). The warning
+#     includes the source location of the offending callback -- the diagnostic
+#     to use when /livez probe latency spikes under load.
+# Adds ~5-10% loop overhead. Leave off in production unless diagnosing.
+ENV AGENT_ASYNCIO_DEBUG="false"
+
+# Slow-callback threshold in milliseconds. Only consulted when
+# AGENT_ASYNCIO_DEBUG is enabled. Lower values surface smaller hogs but
+# create more log volume. 50-100ms is a good first pass.
+ENV AGENT_ASYNCIO_SLOW_CALLBACK_DURATION_MS="100"
+
+# Enable the sys.setprofile-based loop timeline tracer on the Tornado
+# main event loop. When enabled, records a linear timeline of every
+# scheduled unit of work run by the loop -- task steps, done callbacks,
+# call_soon callbacks, timer callbacks -- keyed by task name or callback
+# qualname. Useful for answering "what is occupying the loop right now?"
+# Adds ~5-10% loop overhead. Leave OFF in production unless diagnosing.
+ENV AGENT_LOOP_TIMELINE="false"
+
+# Ring buffer size for the loop timeline tracer. Older events drop off as
+# newer ones arrive. Only consulted when AGENT_LOOP_TIMELINE is enabled.
+ENV AGENT_LOOP_TIMELINE_MAX_EVENTS="100000"
+
+# If non-empty AND AGENT_LOOP_TIMELINE is enabled, the tracer writes its
+# buffered events to this JSONL file on graceful process shutdown. Leave
+# empty to keep the timeline in-memory only (snapshot via a debug endpoint
+# or signal handler at runtime).
+ENV AGENT_LOOP_TIMELINE_DUMP_PATH=""
+
+# Maximum number of requests that can be served at the same time
 # A value of 0 indicates unlimited requests are handled.
-ENV AGENT_MAX_CONCURRENT_REQUESTS="50"
+ENV AGENT_MAX_CONCURRENT_REQUESTS="0"
+
+# Maximum number of worker threads per request.
+# Default of <= 0 (or unset) indicates system default of (num_cpus + 4).
+ENV AGENT_MAX_WORKERS_PER_REQUEST="0"
 
 # Number of requests served before the server shuts down in an orderly fashion.
 # This is useful for testing response handling in clusters with duplicated pods.
@@ -243,6 +280,28 @@ ENV AGENT_REQUEST_LIMIT="-1"
 # Update will be done every AGENT_MANIFEST_UPDATE_PERIOD_SECONDS seconds;
 # if value is not specified or <= 0, no such dynamic updates will be executed.
 ENV AGENT_MANIFEST_UPDATE_PERIOD_SECONDS="0"
+
+# Describes the concurrency model used for the manifest file updates.
+# Valid values are "thread" (the default) and "spawn" and "fork".
+#
+# "thread":     uses the default threading concurrency model.  It is best for servers who
+#               know their manifest content will be changing over the course of their lifetime.
+#               It is slowest of all options, but has the least amount of overall memory overhead
+#               and is lightweight and generally the safest and problem-free.
+# "spawn":      uses a multi-process based concurrency model.  It is the safest option (avoiding deadlocks)
+#               for environments where the manifest is changing, but some speed is still desired
+#               (like development servers).
+# "forkserver"  Is just like "fork" below, but forks from a clean process for memory conservation,
+#               More process overhead, not as quick but safer than "fork".
+# "fork":       uses a multi-process based concurrency model. It is actually the fastest option,
+#               but has potential to lead to deadlocks over repeated manifest reads.
+#               It can still be a reasonable option for server environments where the manifest
+#               is known never to change at all (AGENT_MANIFEST_UPDATE_PERIOD_SECONDS="0").
+#
+# See https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
+# for more details on "spawn", "fork" and "forkserver" concurrency models.
+# Not all are available on all OSes.
+ENV AGENT_MANIFEST_CONCURRENCY_CONTEXT="thread"
 
 # By default, the HTTP service reports the neuro-san library pip version in its health-check response.
 # It is possible to add other libraries to those results by listing them within this env var
@@ -308,6 +367,12 @@ ENV AGENT_HTTP_RESOURCES_MONITOR_INTERVAL="0"
 # Typical production value is 25-30 (under the 60s defaults of common proxies).
 ENV AGENT_STREAM_KEEP_ALIVE_WITH_PROGRESS_INTERVAL_SECONDS=0
 
+# When any particular CodedTool execution takes longer than this many seconds,
+# the system issues a message in the log.  This is very useful for determining
+# where your scale-up problems are with particular networks.  The default value of
+# 0 disables this feature.
+ENV AGENT_TOOL_EXECUTION_LOG_THRESHOLD_SECONDS=0
+
 # Optional URL describing how the server is to be referenced by the outside world.
 # This is useful when a server is behind a load-balancer as part of a larger cluster.
 ENV AGENT_EXTERNAL_SERVER_URL=""
@@ -318,7 +383,8 @@ ENV AGENT_EXTERNAL_SERVER_URL=""
 # neuro_san.internals.interfaces.ReservationsStorage interface.
 # When not set, this defaults to a null implementation.
 # A simple default implementation is provided by the class
-# "neuro_san.service.watcher.temp_networks.s3_reservations_storage.S3ReservationsStorage"
+# "neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage.S3ReservationsStorage"
+# Note that you will need to install appropriate botocore and aiobotocore packages to use this class.
 ENV AGENT_EXTERNAL_RESERVATIONS_STORAGE=""
 
 # When the AGENT_EXTERNAL_RESERVATIONS_STORAGE (immediately above) is set to the
@@ -367,6 +433,23 @@ ENV AGENT_SESSION_REQUIRE_HTTPS="true"
 # Strongly consider keeping this off for production deployments.
 ENV LEAF_LOG_SENSITIVE="false"
 
+# When set to "true" (default "false"), CodedTool "class" references -- including
+# shared coded tools referenced through the toolbox -- resolve ONLY from within
+# the AGENT_TOOL_PATH hierarchy (see AGENT_TOOL_PATH above).  Fully-qualified
+# references to modules elsewhere on the PYTHONPATH are not resolved -- not even
+# imported -- so an agent network hocon file cannot trigger import-time execution
+# of an arbitrary installed module through a CodedTool class reference.
+# Note this does not restrict other class references an agent network can make
+# (llm_config.class, middleware classes, langchain toolbox tool classes).  See
+# https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#class
+# The coded tools shipped with neuro-san resolve fine under this restriction,
+# so this sample container turns the hardening on.  If your own agent networks
+# use fully-qualified CodedTool class references, migrate them to the
+# "<module>.<ClassName>" form relative to your AGENT_TOOL_PATH, or set this to
+# "false" to restore unrestricted resolution (the server logs a one-time notice
+# when unrestricted).
+ENV AGENT_TOOL_PATH_ONLY="true"
+
 #
 # Authorization
 #
@@ -375,11 +458,11 @@ ENV LEAF_LOG_SENSITIVE="false"
 # When not set (the default) the server uses an implementation for the Authorizer
 # that effectively lets all requests for all users through.
 # We offer the following implementations:
-#   neuro_san.internals.authorization.null.always_yes_authorizer.AlwaysYesAuthorizer (default)
-#   neuro_san.internals.authorization.null.always_no_authorizer.AlwaysNoAuthorizer
-#   neuro_san.internals.authorization.openfga.open_fga_authorizer.OpenFgaAuthorizer
+#   neuro_san.service.authorization.null.always_yes_authorizer.AlwaysYesAuthorizer (default)
+#   neuro_san.service.authorization.null.always_no_authorizer.AlwaysNoAuthorizer
+#   neuro_san.service.authorization.openfga.open_fga_authorizer.OpenFgaAuthorizer
 # Feel free to make your own as long as it derives from this interface:
-#   neuro_san.internals.authorization.interfaces.authorizer.Authorizer
+#   neuro_san.service.authorization.interfaces.authorizer.Authorizer
 # Note that authorization (the ability to anwer the question "Does Actor X have Permission Y on Resource Z?")
 # is not to be confused with authentication (the ability to answer the question "Is Actor X who they say they are?")
 # Authentication is typically done outside a neuro-san server in a cluster load-balancer (for instance).

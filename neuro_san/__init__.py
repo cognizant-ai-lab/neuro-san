@@ -1,5 +1,3 @@
-
-
 # Copyright © 2023-2026 Cognizant Technology Solutions Corp, www.cognizant.com.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,10 +14,54 @@
 #
 # END COPYRIGHT
 
+from typing import Any
+from typing import Type
+
 from leaf_common.config.file_of_class import FileOfClass
+from leaf_common.resolution.deprecation_redirect import DeprecationRedirect
 
 # Normally we don't use __init__.py files to define anything,
 # but here we define some constants that point to important directories in the distribution.
 TOP_LEVEL_DIR = FileOfClass(__file__)
 DEPLOY_DIR = FileOfClass(__file__, path_to_basis="./deploy")
 REGISTRIES_DIR = FileOfClass(__file__, path_to_basis="./registries")
+
+
+_DEPRECATION_REDIRECT = DeprecationRedirect(
+    __name__,
+    # A map from old class name to new class name for compatibility
+    {
+        "neuro_san.internals.authorization.interfaces.abstract_authorizer.AbstractAuthorizer":
+            "neuro_san.service.authorization.interfaces.abstract_authorizer.AbstractAuthorizer",
+        "neuro_san.internals.authorization.interfaces.authorizer.Authorizer":
+            "neuro_san.service.authorization.interfaces.authorizer.Authorizer",
+        "neuro_san.internals.authorization.null.always_no_authorizer.AlwaysNoAuthorizer":
+            "neuro_san.service.authorization.null.always_no_authorizer.AlwaysNoAuthorizer",
+        "neuro_san.internals.authorization.null.always_yes_authorizer.AlwaysYesAuthorizer":
+            "neuro_san.service.authorization.null.always_yes_authorizer.AlwaysYesAuthorizer",
+        "neuro_san.internals.authorization.openfga.open_fga_authorizer.OpenFgaAuthorizer":
+            "neuro_san.service.authorization.openfga.open_fga_authorizer.OpenFgaAuthorizer",
+        "neuro_san.internals.messages.chat_message_type.ChatMessageType":
+            "neuro_san.message.types.chat_message_type.ChatMessageType",
+        "neuro_san.internals.messages.origination.Origination":
+            "neuro_san.internals.journals.origination.Origination",
+        "neuro_san.internals.parsers.structure.json_structure_parser.JsonStructureParser":
+            "neuro_san.message.parsers.structure.json_structure_parser.JsonStructureParser",
+        "neuro_san.internals.run_context.utils.external_agent_parsing.ExternalAgentParsing":
+            "neuro_san.internals.utils.external_agent_parsing.ExternalAgentParsing",
+        "neuro_san.message_processing.message_processor.MessageProcessor":
+            "neuro_san.message.processors.message_processor.MessageProcessor",
+        "neuro_san.message_processing.basic_message_processor.BasicMessageProcessor":
+            "neuro_san.message.processors.basic_message_processor.BasicMessageProcessor",
+    },
+    next_version="0.7.0"
+)
+
+
+def __getattr__(old_class: str) -> Type[Any]:
+    """
+    Redirect deprecated classes
+    :param old_class: The old class name
+    :return: The redirected class
+    """
+    return _DEPRECATION_REDIRECT.redirect_class(old_class)

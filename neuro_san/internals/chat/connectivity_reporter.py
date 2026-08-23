@@ -19,12 +19,15 @@ from typing import Dict
 from typing import List
 from typing import Set
 
+from logging import getLogger
+from logging import Logger
+
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.run_context.factory.master_toolbox_factory import MasterToolboxFactory
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
-from neuro_san.internals.run_context.utils.external_agent_parsing import ExternalAgentParsing
+from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
 from neuro_san.internals.validation.network.abstract_network_validator import AbstractNetworkValidator
 
 
@@ -55,17 +58,33 @@ class ConnectivityReporter:
         Maybe someday.
     """
 
-    def __init__(self, inspector: AgentNetworkInspector):
+    # Set once the self-build fallback below has been logged, so per-request
+    # reporter construction cannot flood the logs.
+    self_build_logged: bool = False
+
+    def __init__(self, inspector: AgentNetworkInspector, toolbox_factory: ContextTypeToolboxFactory = None):
         """
         Constructor
 
         :param inspector: The AgentNetworkInspector to use.
+        :param toolbox_factory: An optional ContextTypeToolboxFactory to consult
+                        for display_as information about toolbox tools.
+                        This should have been built from the same config as the
+                        inspector's agent network and may be passed pre-loaded
+                        so toolbox info files are not re-read per report.
+                        If None, one is created from the inspector's config.
         """
 
         self.inspector: AgentNetworkInspector = inspector
-        self.toolbox_factory: ContextTypeToolboxFactory = None
+        self.toolbox_factory: ContextTypeToolboxFactory = toolbox_factory
 
-        if self.inspector is not None:
+        if self.inspector is not None and self.toolbox_factory is None:
+            if not ConnectivityReporter.self_build_logged:
+                ConnectivityReporter.self_build_logged = True
+                logger: Logger = getLogger(self.__class__.__name__)
+                logger.info("No toolbox_factory provided. Building one from the agent network config. "
+                            "Pass a pre-loaded factory to avoid re-reading toolbox info files per report. "
+                            "(Logged once per process.)")
             config: Dict[str, Any] = self.inspector.get_config()
             self.toolbox_factory = MasterToolboxFactory.create_toolbox_factory(config)
 

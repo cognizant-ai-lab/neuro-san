@@ -68,11 +68,10 @@ class AbstractCommonDefsConfigFilter(ConfigFilter):
         replacements: Dict[str, Any] = deepcopy(self.starting_replacements)
 
         # Look for something to replace
-        commondefs: Dict[str, Any] = {}
-        commondefs = basis_config.get("commondefs", commondefs)
+        empty: Dict[str, Any] = {}
+        commondefs: Dict[str, Any] = basis_config.get("commondefs", empty)
         if commondefs:          # Empty dictionaries evaluate to False
-            new_replacements: Dict[str, Any] = {}
-            new_replacements = deepcopy(commondefs.get(self.commondefs_key, new_replacements))
+            new_replacements = deepcopy(commondefs.get(self.commondefs_key, empty))
             replacements.update(new_replacements)
 
         if not replacements:               # Empty dictionaries evaluate to False
@@ -84,11 +83,11 @@ class AbstractCommonDefsConfigFilter(ConfigFilter):
 
         # First do replacements among commondef dictionaries themselves
         # Note: These cannot have cycles.
-        replacements = self.filter_one_dict(replacements, replacements)
+        new_replacements = self.filter_one_dict(replacements, replacements)
 
         # Next do replacements among all tools dicts
         tools: List[Dict[str, Any]] = basis_config.get("tools")
-        new_config["tools"] = self.filter_one_list(tools, replacements)
+        new_config["tools"] = self.filter_one_list(tools, new_replacements)
 
         return new_config
 

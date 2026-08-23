@@ -54,7 +54,9 @@ Items in ***bold*** are essentials. Try to understand these first.
             - [required](#required)
         - [sly_data_schema](#sly_data_schema-1)
             - [llm_config](#llm_config-1)
+            - [http_headers](#http_headers)
         - [sly_data_output_schema](#sly_data_output_schema)
+        - [invocation](#invocation)
     - [***instructions*** - main system prompt for the agent](#instructions)
     - [***tools*** - list of other agents/tools that this agent may access](#tools-agents)
         - [External Agents](#external-agents)
@@ -531,9 +533,25 @@ For a user-facing front-man, what is contained in this description often suffice
 
 Parameters contains an optional [JSON Schema](https://json-schema.org) dictionary describing what
 specific information the agent needs as input arguments when it is called.
+Only the `type: object` + `properties` form described below is supported.
+JSON Schema constructs outside this form (such as `additionalProperties`,
+`anyOf`, or `$ref`) are not honored: a schema without a `properties` dictionary
+is rejected as invalid when the agent is called as a tool, and unsupported
+constructs appearing alongside a `properties` dictionary are ignored.
 
-A front-man typically does not need parameters defined, unless the agent network being described
-is anticipated as being called from other agent networks.
+A front-man typically does not need parameters defined when its agent network is only
+ever talked to directly by a user.
+
+When the agent network is anticipated as being called from other agent networks
+(that is, referenced as an external tool), the front-man's parameters are how a
+calling agent passes its request along — the tool-call arguments are the only message
+channel through which a caller's request reaches the external network.
+(Private data can separately flow through the opt-in `sly_data` channel —
+see [to_downstream](#to_downstream).) Declare at least one parameter
+(for example, a single required `inquiry` string) for any network intended to be
+referenced externally. If no parameters are declared, neuro-san synthesizes a default
+required `inquiry` string parameter on the calling side (and logs a warning) so the
+caller's request still gets through.
 
 ##### type
 
@@ -552,8 +570,12 @@ This dictionary has the following keys:
 | type         | A string describing the type of the property. (See below) |
 | default      | An optional default value for the property |
 
-Scalar types here can be "int", "float", "string", "bool".
+Scalar types here can be "int" or "integer", "float", "number" (accepts both
+integers and floats), "string", and "bool" or "boolean".
+These include the standard JSON Schema spellings, so function specs copied from
+OpenAI- or MCP-style tool definitions work as-is.
 It is possible that a properties' type can be "array"s for lists or "object"s for nested dictionaries.
+An "array" property must also carry an "items" dictionary describing the type of its elements.
 
 Any sample agent hocon with more than one agent will have some example of a simple properties dictionary.
 For a concrete, more complex properties definition, with nested objects and arrays,
@@ -608,6 +630,21 @@ Example networks that advertise that their sly_data_schema needs external API ke
 
 - [music_nerd_pro_sly_api_key.hocon](../neuro_san/registries/music_nerd_pro_sly_api_key.hocon)
 
+##### http_headers
+
+The sly_data dictionary can contain an optional `http_headers` key: a mapping from
+[MCP server](#mcp-servers) URL to a dictionary of HTTP header names/values (for example
+`{"Authorization": "Bearer <token>"}`) that neuro-san sends when it calls that server.
+See [Authentication](#authentication) under MCP Servers for the header format.
+
+Advertising `http_headers` in your `sly_data_schema` — with a `properties` entry per MCP URL and a
+`required` list — lets an OAuth-capable client (for example
+[nsflow](https://github.com/cognizant-ai-lab/nsflow)) run the sign-in flow, inject the resulting
+bearer token into sly_data on the user's behalf, and prompt the user to connect any URL listed under
+`http_headers.required` before chatting. neuro-san itself only defines the schema and forwards
+whatever `http_headers` arrive in sly_data; the OAuth flow and the connect prompt are the client's
+responsibility.
+
 #### sly_data_output_schema
 
 Similar optional dictionary to [sly_data_schema](#sly_data_schema-1) above, but this specifies the schema
@@ -616,6 +653,24 @@ for the sly_data being output by the agent network.
 Example networks that advertise their sly_data_output_schema:
 
 - [math_guy.hocon](../neuro_san/registries/math_guy.hocon)
+
+#### invocation
+
+_Front Man only_
+A string describing how the agent is to be called.
+
+A value of "chatbot" (the default) indicates that the agent is intended to be called as a chatbot,
+which essentially means the caller will be waiting for the agent network to complete
+the conversation in order to get some kind of response.  If the caller disconnects, the
+work being done for the request will be abandoned.
+
+A value of "event" indicates that the agent is intended to be called as an event handler,
+where the caller will _not_ be waiting for the agent network to complete the conversation.
+Rather, the caller reports information to the agent network, receives a quick acknowledgement
+message that the information has been received and the network's processing continues after
+the caller disconnects.  Events can also be called periodically by configuration in the manifest.
+See the [periodic key in the manifest documentation](./manifest_hocon_reference.md#periodic) for
+more information.
 
 ### instructions
 
@@ -757,6 +812,10 @@ server. Users may specify different authorization credentials for different MCP 
 
     - Tool filtering from the configuration file is used only if no tool filtering exists in the agent network HOCON
 
+A client can also populate these `http_headers` on the user's behalf: see [http_headers](#http_headers)
+under `sly_data_schema`, where a network advertises the MCP URLs it needs and an OAuth-capable client
+(e.g. nsflow) signs in and injects the bearer token, gating on `http_headers.required`.
+
 <!--- pyml disable-next-line no-duplicate-heading -->
 ### llm_config
 
@@ -793,6 +852,23 @@ For example:
 If the agent is called `math_guy` and the class is valued as `calculator.Calculator`,
 The python file math_guy/calculator.py under `AGENT_TOOL_PATH` is expected to have
 a class called Calculator which implements the CodedTool interface.
+
+> [!IMPORTANT]
+> Loading a class imports its module, and importing a module executes the module's top-level code.
+> Because agent network hocon files can name classes to load, hocon files and coded tools are
+> code-equivalent: anyone who can write to the registry directory or `AGENT_TOOL_PATH` can
+> effectively run code as the server process. Restrict write access to both locations, review
+> registry changes as you would code changes, and prefer least-privilege deployments.
+>
+> Setting the `AGENT_TOOL_PATH_ONLY` environment variable to `true` (default `false`) hardens the
+> CodedTool `class` path specifically: fully-qualified references are no longer resolved, so a
+> CodedTool `class` resolves only under the `AGENT_TOOL_PATH` hierarchy described above and cannot
+> import an arbitrary module elsewhere on the `PYTHONPATH`. The same flag governs shared coded
+> tools referenced through the [toolbox](#toolbox). It does **not** restrict other class references
+> an agent network can make — `llm_config.class`, middleware classes, and langchain toolbox tool
+> classes are still resolved fully-qualified — so it narrows one vector rather than replacing the
+> trust boundary above. When the flag is off, the server logs a one-time notice at first CodedTool
+> resolution that resolution is unrestricted.
 
 Implementations of the CodedTool interface must have implementations which:
 

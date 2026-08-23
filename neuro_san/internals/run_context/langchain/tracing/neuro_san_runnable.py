@@ -42,7 +42,7 @@ from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.interfaces.run_target import RunTarget
 from neuro_san.internals.interfaces.tracing_context import TracingContext
 from neuro_san.internals.journals.intercepting_journal import InterceptingJournal
-from neuro_san.internals.messages.origination import Origination
+from neuro_san.internals.journals.origination import Origination
 from neuro_san.internals.utils.metadata_util import MetadataUtil
 
 
@@ -204,8 +204,8 @@ class NeuroSanRunnable(RunnablePassthrough, RunTarget):
         request_keys: str = os.getenv("AGENT_TRACING_METADATA_REQUEST_KEYS",
                                       os.getenv("AGENT_FORWARDED_REQUEST_METADATA", "request_id user_id"))
         request_metadata: Dict[str, Any] = self.invocation_context.get_metadata()
-        to_add: Dict[str, Any] = MetadataUtil.minimize_metadata(request_metadata, request_keys)
-        runnable_metadata.update(to_add)
+        use_to_add: Dict[str, Any] = MetadataUtil.minimize_metadata(request_metadata, request_keys)
+        runnable_metadata.update(use_to_add)
 
         return runnable_metadata
 

@@ -15,8 +15,10 @@
 #
 # END COPYRIGHT
 
-# Error: "integer" is standard JSON Schema but not in TYPE_LOOKUP.
-# The HOCON type system uses "int" instead. Caught by pydantic conversion.
+# Error: "str" is neither a HOCON-native type name nor a standard
+# JSON Schema alias in TYPE_LOOKUP. Caught by pydantic conversion.
+# (Standard JSON Schema names like "integer" and "number" are accepted
+# via TYPE_LOOKUP aliases and are covered by json_schema_type_aliases.hocon.)
 # Expected result: 1 error mentioning "pydantic model conversion failed".
 {
     "tools": [
@@ -26,7 +28,7 @@
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "count": {"type": "integer"}
+                        "count": {"type": "str"}
                     }
                 }
             },

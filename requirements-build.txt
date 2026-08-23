@@ -10,13 +10,30 @@ langchain-aws[anthropic]>=1.0.0,<2.0
 langchain-google-genai>=4.1.2,<5.0
 langchain-nvidia-ai-endpoints>=1.0.0,<2.0
 langchain-ollama>=1.0.0,<2.0
+# langchain-openrouter depends on the openrouter SDK, which pins pydantic<2.13
+# (as of openrouter 1.1.47). That pin is what keeps requirements.txt's pydantic
+# floor below 2.13 (see the "Python 3.14 note" there) and is why pip resolves
+# pydantic to 2.12.x when installing both requirements files together.
+# Revisit both comments when openrouter lifts its cap.
 langchain-openrouter>=0.2.3,<1.0
+
+# Optional ReservationsStorage
+# ... for S3
+botocore>=1.34.51
+aiobotocore>=3.7.0
+# ... for Azure
+azure-storage-blob>=12.19.0
+azure-identity>=1.14.0
 
 # Optional Authorization
 openfga-sdk
 
 # Optional Observability
-langfuse
+# Floor is the verified version (langfuse.langchain.CallbackHandler path,
+# get_client() per-key singleton, LANGFUSE_TRACING_ENABLED unset == "true");
+# major-version cap because langfuse majors have moved the handler import
+# path before (v2 -> v3).
+langfuse>=4.6.1,<5.0
 
 # These are needed for generating code from .proto files and for the
 # generated *_pb2_grpc.py files which import grpcio

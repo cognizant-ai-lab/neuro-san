@@ -19,8 +19,9 @@ from typing import Dict
 
 from langchain_core.language_models.base import BaseLanguageModel
 
+from leaf_common.config.config_util import ConfigUtil
+
 from neuro_san.internals.run_context.langchain.llms.openai_llm_policy import OpenAILlmPolicy
-from neuro_san.internals.utils.config_util import ConfigUtil
 
 
 class AzureLlmPolicy(OpenAILlmPolicy):
@@ -67,8 +68,8 @@ class AzureLlmPolicy(OpenAILlmPolicy):
             openai_api_key = self.get_value_or_env(config, "openai_api_key", "OPENAI_API_KEY")
 
         # From lanchain_openai.chat_models.azure.py
-        default_headers: Dict[str, str] = {}
-        default_headers = config.get("default_headers", default_headers)
+        empty: Dict[str, str] = {}
+        default_headers: Dict[str, str] = config.get("default_headers", empty)
         default_headers.update({
             "User-Agent": "langchain-partner-python-azure-openai",
         })

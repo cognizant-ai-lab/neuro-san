@@ -21,33 +21,35 @@ from typing import Any
 from typing import Dict
 from typing import AsyncGenerator
 from typing import Tuple
+from typing import Optional
 
 from http import HTTPStatus
 
 import asyncio
 import concurrent.futures
+from asyncio import Lock as AsyncLock
 import contextlib
 import json
 from json.decoder import JSONDecodeError
 import time
+import uuid
 import tornado
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
 from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
 
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
-from neuro_san.internals.messages.chat_message_type import ChatMessageType
+from neuro_san.message.types.chat_message_type import ChatMessageType
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
 from neuro_san.session.session_invocation_context import SessionInvocationContext
+from neuro_san.service.utils.http_llm_tracer import HttpxLlmTracer
 
 
 class StreamingChatHandler(BaseRequestHandler):
     """
     Handler class for neuro-san streaming chat API call.
     """
-    # enable extra logging for this handler, including request preparation time
-    do_extra_logging: bool = True
 
     # pylint: disable=attribute-defined-outside-init
     def initialize(self, **kwargs):
@@ -66,7 +68,7 @@ class StreamingChatHandler(BaseRequestHandler):
         self.keep_alive_frame: str = self._build_keep_alive_frame()
         self.last_send_ts = 0.0
         self.keep_alive_task: asyncio.Task = None
-        self.lock: asyncio.Lock = asyncio.Lock()  # protects request writes to output stream and last_send_ts updates
+        self.lock: AsyncLock = AsyncLock()  # protects request writes to output stream and last_send_ts updates
         # Set by the executor-loop driver when request processing raises there, so the
         # Tornado side can surface it once the output queue has drained.
         self._driver_exception: Exception = None
@@ -105,9 +107,17 @@ class StreamingChatHandler(BaseRequestHandler):
         "basic actions": the setup preamble that is structurally bound to the Tornado
         request/connection, and writing already-serialized frames to the client.
         """
-
-        start_time = time.monotonic()
         metadata: Dict[str, Any] = self.get_metadata()
+        req_id: Optional[str] = metadata.get("request_id", None)
+        if req_id is None:
+            req_id = uuid.uuid4().hex[:8]
+        # Tag every outbound LLM call made during this request with a
+        # short user_req_id so the HttpxLlmTracer's structured log lines
+        # can be grouped for post-run analysis. ContextVar propagates
+        # through asyncio + executor bridges, so downstream LLM calls
+        # inherit this id automatically. No-op if the tracer is disabled.
+        HttpxLlmTracer.set_user_request_id(req_id)
+
         service: AsyncAgentService = await self.get_service(agent_name, metadata)
         if service is None:
             return

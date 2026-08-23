@@ -25,15 +25,18 @@ from asyncio import AbstractEventLoop
 from copy import deepcopy
 from logging import getLogger
 from logging import Logger
+from os import environ
+from time import perf_counter
 import traceback
 
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 
 from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
-from leaf_common.config.resolver import Resolver
-from leaf_common.config.resolver_util import ResolverUtil
+from leaf_common.config.config_util import ConfigUtil
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
+from leaf_common.resolution.resolver import Resolver
+from leaf_common.resolution.resolver_util import ResolverUtil
 
 from neuro_san.interfaces.coded_tool import CodedTool
 from neuro_san.interfaces.reservationist import Reservationist
@@ -42,13 +45,13 @@ from neuro_san.internals.graph.activations.branch_activation import BranchActiva
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.journal import Journal
+from neuro_san.internals.journals.origination import Origination
 from neuro_san.internals.journals.progress_journal import ProgressJournal
 from neuro_san.internals.journals.tool_argument_reporting import ToolArgumentReporting
-from neuro_san.internals.messages.agent_message import AgentMessage
-from neuro_san.internals.messages.origination import Origination
 from neuro_san.internals.reservations.accumulating_agent_reservationist import AccumulatingAgentReservationist
 from neuro_san.internals.run_context.factory.run_context_factory import RunContextFactory
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
+from neuro_san.message.types.agent_message import AgentMessage
 
 
 class AbstractClassActivation(AbstractCallableActivation):
@@ -64,10 +67,14 @@ class AbstractClassActivation(AbstractCallableActivation):
     - ToolboxActivation: looks up the class reference from a predefined toolbox.
     """
 
+    # Process-wide guard so the notice that class resolution is unrestricted
+    # is logged only once, not on every tool invocation.
+    _unrestricted_notice_logged: bool = False
+
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self, parent_run_context: RunContext,
                  factory: AgentToolFactory,
-                 arguments: Dict[str, Any],
+                 args: Dict[str, Any],
                  agent_tool_spec: Dict[str, Any],
                  sly_data: Dict[str, Any]):
         """
@@ -77,7 +84,7 @@ class AbstractClassActivation(AbstractCallableActivation):
                              down its resources to a new RunContext created by
                              this call.
         :param factory: The AgentToolFactory used to create tools
-        :param arguments: A dictionary of the tool function arguments passed in by the LLM
+        :param args: A dictionary of the tool function arguments passed in by the LLM
         :param agent_tool_spec: The dictionary describing the JSON agent tool
                             to be used by the instance
         :param sly_data: A mapping whose keys might be referenceable by agents, but whose
@@ -104,8 +111,8 @@ class AbstractClassActivation(AbstractCallableActivation):
 
         # Put together the arguments to pass to the CodedTool
         self.arguments: Dict[str, Any] = {}
-        if arguments is not None:
-            self.arguments = arguments
+        if args is not None:
+            self.arguments = args
 
         # Set some standard args so CodedTool can know about origin, but only if they are
         # not already set by other infrastructure.
@@ -147,8 +154,6 @@ class AbstractClassActivation(AbstractCallableActivation):
 
         :return: A BaseMessage produced during this process.
         """
-        message: BaseMessage = None
-
         full_class_ref: str = self.get_full_class_ref()
         self.logger.info("Calling class %s", full_class_ref)
         class_split: List[str] = full_class_ref.split(".")
@@ -158,6 +163,8 @@ class AbstractClassActivation(AbstractCallableActivation):
         # Remove any trailing .s
         while module_name.endswith("."):
             module_name = module_name[:-1]
+
+        start: float = perf_counter()
 
         # Resolve the class and the method
         python_class: Type[Any] = self.resolve_class(class_name, module_name)
@@ -170,6 +177,20 @@ class AbstractClassActivation(AbstractCallableActivation):
             retval: Any = await self.attempt_invoke(coded_tool, self.arguments, self.sly_data)
         else:
             retval = f"Error: {full_class_ref} is not a CodedTool"
+
+        stop: float = perf_counter()
+        duration: float = stop - start
+
+        threshold_str: str = environ.get("AGENT_TOOL_EXECUTION_LOG_THRESHOLD_SECONDS", "0")
+        threshold: float = 0.0
+        try:
+            threshold = float(threshold_str)
+        except ValueError:
+            # String not parseable as float. Fine, just ignore.
+            pass
+
+        if duration > threshold > 0.0:
+            self.logger.info("Execution of %s took %f seconds", full_class_ref, duration)
 
         # Change the result into a message
         retval_str: str = f"{retval}"
@@ -210,6 +231,16 @@ class AbstractClassActivation(AbstractCallableActivation):
         # If we exhausted all levels without success, warn and raise an error
         agent_name: str = self.factory.get_name_from_spec(self.agent_tool_spec)
         agent_tool_path: str = ".".join(this_agent_tool_path_parts[:-len(agent_network_name_parts)])
+        strict_note: str = ""
+        if self.is_agent_tool_path_only():
+            strict_note = """
+Note: AGENT_TOOL_PATH_ONLY is enabled, so fully-qualified class references are
+not resolved at all — even ones that point inside AGENT_TOOL_PATH. Reference the
+class as "<module>.<ClassName>" relative to AGENT_TOOL_PATH, not by its full
+package path: resolution searches the agent network's own directory first and
+then walks up to the shared AGENT_TOOL_PATH root, so the agent network name does
+not belong in the reference.
+"""
         message = f"""
 Could not find class "{class_name}"
 in module "{module_name}"
@@ -232,7 +263,7 @@ Check these things:
     e)  If an agent network contains both specific and global CodedTools,
         the global module must not have the same name as the agent network.
 3. Is AGENT_TOOL_PATH findable from what is set for your PYTHONPATH?
-"""
+{strict_note}"""
         self.logger.error(message)
         raise ValueError(message) from last_exception
 
@@ -251,13 +282,22 @@ Check these things:
         :param agent_network_name_parts: The agent network name split into parts
         :return: The resolved Python class
         """
-        # Phase 1 - Try the simplest thing first - a direct import from a fully-qualified path
-        fully_qualified_name: str = f"{module_name}.{class_name}"
-        python_class: Type[Any] = ResolverUtil.create_type(fully_qualified_name, raise_if_not_found=False)
-        if python_class is not None:
-            return python_class
+        # Phase 1 - Try the simplest thing first - a direct import from a fully-qualified path.
+        # This is skipped when AGENT_TOOL_PATH_ONLY is set: importing a module executes its
+        # top-level code, so a fully-qualified "class" reference in an agent network hocon
+        # could otherwise run import-time code from any module on the server's PYTHONPATH.
+        # Phase 2 below roots every import under the AGENT_TOOL_PATH hierarchy, so a
+        # reference cannot escape it.
+        if not self.is_agent_tool_path_only():
+            self._log_unrestricted_resolution_notice_once()
+
+            phase1_class: Type[Any] = ResolverUtil.create_type(
+                f"{module_name}.{class_name}", raise_if_not_found=False)
+            if phase1_class is not None:
+                return phase1_class
 
         # Phase 2 - Try resolving from most specific to most general (root level)
+        python_class: Type[Any] = None
         last_exception: Union[ValueError, AttributeError] = None
         for i in range(len(agent_network_name_parts) + 1):
             if i == 0:
@@ -288,6 +328,32 @@ Check these things:
             raise last_exception
 
         raise ValueError(f'Could not resolve class "{class_name}" in module "{module_name}".')
+
+    @staticmethod
+    def is_agent_tool_path_only() -> bool:
+        """
+        :return: True if the AGENT_TOOL_PATH_ONLY environment variable restricts
+                CodedTool class resolution to the AGENT_TOOL_PATH hierarchy only.
+                Defaults to False for backwards compatibility, where fully-qualified
+                references can resolve to any class on the server's PYTHONPATH.
+        """
+        # ConfigUtil.get_bool accepts the boolean-like spellings used elsewhere for
+        # neuro-san env flags (true/yes, case-insensitive, whitespace-trimmed), so an
+        # operator setting this security flag the way other flags are set gets the
+        # behavior they expect rather than a silent fail-open.
+        return ConfigUtil.get_bool(environ, "AGENT_TOOL_PATH_ONLY", default=False)
+
+    def _log_unrestricted_resolution_notice_once(self):
+        """
+        Logs a one-time notice that CodedTool class resolution is unrestricted.
+        """
+        if not AbstractClassActivation._unrestricted_notice_logged:
+            AbstractClassActivation._unrestricted_notice_logged = True
+            self.logger.info(
+                "AGENT_TOOL_PATH_ONLY is not enabled: CodedTool 'class' references "
+                "can resolve via fully-qualified import from anywhere on the PYTHONPATH. "
+                "Set AGENT_TOOL_PATH_ONLY=true to restrict resolution to the "
+                "AGENT_TOOL_PATH hierarchy.")
 
     def instantiate_coded_tool(self, python_class) -> CodedTool:
         """
@@ -332,19 +398,19 @@ Some hints:
 
         return coded_tool
 
-    async def attempt_invoke(self, coded_tool: CodedTool, arguments: Dict[str, Any], sly_data: Dict[str, Any]) \
+    async def attempt_invoke(self, coded_tool: CodedTool, args: Dict[str, Any], sly_data: Dict[str, Any]) \
             -> Any:
         """
         Attempt to invoke the coded tool.
 
         :param coded_tool: The CodedTool instance to invoke
-        :param arguments: The arguments dictionary to pass as input to the coded_tool
+        :param args: The arguments dictionary to pass as input to the coded_tool
         :param sly_data: The sly_data dictionary to pass as input to the coded_tool
         :return: The result of the coded_tool, whatever that is.
         """
         retval: Any = None
 
-        arguments_dict: Dict[str, Any] = ToolArgumentReporting.prepare_tool_start_dict(arguments)
+        arguments_dict: Dict[str, Any] = ToolArgumentReporting.prepare_tool_start_dict(args)
         message = AgentMessage(content="Received arguments:", structure=arguments_dict)
         await self.journal.write_message(message)
 
@@ -358,18 +424,18 @@ Some hints:
                 # That didn't work, so try running the synchronous method as an async task
                 # within the confines of the proper executor.
                 # Warn that there is a better alternative
-                message = f"""
+                info_message = f"""
 Running CodedTool class {coded_tool.__class__.__name__}.invoke() synchronously in an asynchronous environment.
 This can lead to performance problems when running within a server. Consider porting to the async_invoke() method.
 """
-                self.logger.info(message)
-                await self.journal.write_message(AgentMessage(content=message))
+                self.logger.info(info_message)
+                await self.journal.write_message(AgentMessage(content=info_message))
 
                 # Try to run in the executor.
                 invocation_context = self.run_context.get_invocation_context()
                 executor: AsyncioExecutor = invocation_context.get_asyncio_executor()
                 loop: AbstractEventLoop = executor.get_event_loop()
-                retval = await loop.run_in_executor(None, coded_tool.invoke, arguments, sly_data)
+                retval = await loop.run_in_executor(None, coded_tool.invoke, args, sly_data)
         # pylint: disable=broad-exception-caught
         except Exception as exception:
             # There was an error invoking the CodedTool.
@@ -384,7 +450,7 @@ This can lead to performance problems when running within a server. Consider por
             "tool_error": tool_error,
             "tool_output": retval
         }
-        message = AgentMessage(content="Got result:", structure=retval_dict)
-        await self.journal.write_message(message)
+        result_message = AgentMessage(content="Got result:", structure=retval_dict)
+        await self.journal.write_message(result_message)
 
         return retval

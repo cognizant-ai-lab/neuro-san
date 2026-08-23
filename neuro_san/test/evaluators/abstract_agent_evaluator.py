@@ -21,7 +21,7 @@ from typing import Dict
 
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
-from neuro_san.message_processing.basic_message_processor import BasicMessageProcessor
+from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
 from neuro_san.test.interfaces.agent_evaluator import AgentEvaluator
 from neuro_san.test.interfaces.assert_forwarder import AssertForwarder
 

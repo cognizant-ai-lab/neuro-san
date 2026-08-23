@@ -28,8 +28,9 @@ from typing import Optional
 from typing import Tuple
 import psutil
 
+from leaf_common.asyncio.event_loop_lag_monitor import EventLoopLagMonitor
+
 from neuro_san.service.utils.server_context import ServerContext
-from neuro_san.internals.utils.event_loop_lag_monitor import EventLoopLagMonitor
 
 # Unix-only
 try:
@@ -373,7 +374,9 @@ class ServiceResources:
             "cpu_load": round(cpu_load, 3),
             "socket_usage": cls.classify_sockets(server_port)
         }
+        snapshot["instance_id"] = None
         if cls.server_context is not None:
+            snapshot["instance_id"] = cls.server_context.get_worker_id()
             snapshot["executor_threads"] = cls.server_context.get_executor_pool().get_threads_metrics()
         if cls.event_loop_monitor is not None:
             loop_metrics: Dict[str, Any] = cls.event_loop_monitor.get_metrics()

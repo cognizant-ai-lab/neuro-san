@@ -19,8 +19,8 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-import json
-import uuid
+from json import dumps
+from uuid import uuid4
 
 from pathlib import Path
 from time import localtime
@@ -28,9 +28,9 @@ from time import strftime
 from time import time
 
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
-from neuro_san.internals.messages.chat_message_type import ChatMessageType
-from neuro_san.internals.messages.origination import Origination
-from neuro_san.message_processing.message_processor import MessageProcessor
+from neuro_san.internals.journals.origination import Origination
+from neuro_san.message.processors.message_processor import MessageProcessor
+from neuro_san.message.types.chat_message_type import ChatMessageType
 
 
 # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -124,13 +124,13 @@ class ThinkingFileMessageProcessor(MessageProcessor):
             # There is no real text, but there is a structure. JSON-ify it.
             if len(text) > 0:
                 text += "\n"
-            text += f"```json\n{json.dumps(structure, indent=4, sort_keys=True)}\n```"
+            text += f"```json\n{dumps(structure, indent=4, sort_keys=True)}\n```"
 
         if chat_context is not None:
             # There is no real text, but there is a chat_context. JSON-ify it.
             if len(text) > 0:
                 text += "\n"
-            text += f"\nchat_context:\n{json.dumps(chat_context, indent=4, sort_keys=True)}\n"
+            text += f"\nchat_context:\n{dumps(chat_context, indent=4, sort_keys=True)}\n"
 
         # Figure out how we are going to report the origin given the message.
         use_origin: str = self._determine_origin_reporting(response, origin_str)
@@ -149,7 +149,7 @@ class ThinkingFileMessageProcessor(MessageProcessor):
 
                 # Retry with a uuid as file name.
                 # If this fails, there's no helping ya.
-                origin_filename = str(uuid.uuid4())
+                origin_filename = str(uuid4())
                 self._write_to_file(origin_filename, origin_str, message_type_str, use_origin, text, timestamp)
 
                 # Squirell that uuid away so results continue to go to the same

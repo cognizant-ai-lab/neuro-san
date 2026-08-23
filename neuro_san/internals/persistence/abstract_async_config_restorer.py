@@ -15,8 +15,10 @@
 #
 # END COPYRIGHT
 from typing import Any
+from typing import ContextManager
 from typing import Dict
 
+from contextlib import nullcontext
 from io import BytesIO
 from json.decoder import JSONDecodeError
 from logging import getLogger
@@ -33,6 +35,8 @@ from leaf_common.persistence.interface.restorer import Restorer
 from leaf_common.serialization.format.hocon_serialization_format import HoconSerializationFormat
 from leaf_common.serialization.format.json_serialization_format import JsonSerializationFormat
 from leaf_common.serialization.interface.serialization_format import SerializationFormat
+
+from neuro_san.internals.persistence.hocon_parse_lock import HoconParseLock
 
 
 class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
@@ -155,10 +159,19 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
 
         # Determine the serialization format
         serialization: SerializationFormat = None
+        parse_lock: ContextManager = nullcontext()
         if file_path.endswith(".hocon"):
             # Worth noting that includes within hocon files can only be done synchronously
             # The core pyhocon library does not support async includes.
-            serialization = HoconSerializationFormat()
+            #
+            # sanitize_keys=True: without it, keys that had to be quoted in the
+            # HOCON source come back as '"llama3.1"' with the quotes baked into
+            # the string (see the HoconSerializationFormat docstring for details).
+            # Applies at all nesting levels.
+            serialization = HoconSerializationFormat(sanitize_keys=True)
+            # pyhocon parsing mutates process-global pyparsing state and is not
+            # thread-safe. See HoconParseLock.
+            parse_lock = HoconParseLock()
         elif file_path.endswith(".json"):
             serialization = JsonSerializationFormat()
         else:
@@ -166,7 +179,8 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
 
         # Read the contents
         try:
-            config = serialization.to_object(bytes_file)
+            with parse_lock:
+                config = serialization.to_object(bytes_file)
         except (ParseException, ParseSyntaxException, JSONDecodeError, ConfigException) as exception:
             # Re-raise as ValueError, not pyparsing.ParseException, for two reasons:
             #

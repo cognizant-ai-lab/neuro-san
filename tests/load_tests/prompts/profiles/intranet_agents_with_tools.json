@@ -1,0 +1,31 @@
+{
+    "agent": "industry/intranet_agents_with_tools",
+    "prompts": [
+        "I'm getting married in the morning! What do I need to do in the corporate system?",
+        "I just had a baby. What benefits and leave do I need to set up in the corporate system?",
+        "I'm relocating to a new city for work. What do I need to update in the corporate system?",
+        "I want to change my 401k contribution. How do I do that in the corporate system?",
+        "I'm going on parental leave next month. What steps do I take in the corporate system?",
+        "How do I submit an expense report for my recent business trip?",
+        "I need to request two weeks of vacation in July. How do I do that?",
+        "My direct deposit bank account changed. How do I update it in the corporate system?",
+        "I want to enroll in the health insurance plan during open enrollment. What do I do?",
+        "How do I book a conference room for a team meeting next Tuesday?",
+        "I lost my badge. How do I request a replacement in the corporate system?",
+        "I'm starting a new role internally. What onboarding steps do I need to complete?",
+        "How do I nominate a coworker for an employee recognition award?",
+        "I need to file for tuition reimbursement for a course I'm taking. What's the process?",
+        "How do I set up my out-of-office and delegate approvals while I'm away?",
+        "I want to update my emergency contact information. Where do I do that?",
+        "How do I request new equipment like a laptop or monitor for my home office?",
+        "I'm retiring at the end of the year. What do I need to do in the corporate system?",
+        "How do I report a workplace safety concern through the corporate system?",
+        "I need to complete my annual compliance training. Where do I find it?"
+    ],
+    "estimated_tokens_per_request": 50000,
+    "success_fields": [],
+    "failure_patterns": [
+        "No fully-specified LLM found",
+        "API key to be set as an environment variable"
+    ]
+}

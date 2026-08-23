@@ -40,13 +40,13 @@ from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.journal import Journal
-from neuro_san.internals.messages.agent_message import AgentMessage
-from neuro_san.internals.messages.chat_message_type import ChatMessageType
-from neuro_san.internals.messages.origination import Origination
-from neuro_san.internals.messages.sly_data_redactor import SlyDataRedactor
+from neuro_san.internals.journals.origination import Origination
 from neuro_san.internals.run_context.factory.run_context_factory import RunContextFactory
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
-from neuro_san.message_processing.basic_message_processor import BasicMessageProcessor
+from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
+from neuro_san.message.types.agent_message import AgentMessage
+from neuro_san.message.types.chat_message_type import ChatMessageType
+from neuro_san.message.utils.sly_data_redactor import SlyDataRedactor
 
 
 # pylint: disable=too-many-instance-attributes
@@ -60,7 +60,7 @@ class ExternalActivation(AbstractCallableActivation):
     def __init__(self, parent_run_context: RunContext,
                  factory: AgentToolFactory,
                  agent_url: str,
-                 arguments: Dict[str, Any],
+                 args: Dict[str, Any],
                  sly_data: Dict[str, Any],
                  allow_from_downstream: Dict[str, Any],
                  invocation: str):
@@ -74,7 +74,7 @@ class ExternalActivation(AbstractCallableActivation):
         :param agent_url: The string url to find the external agent.
                         Theoretically this has already been verified by use of an
                         ExternalAgentParsing method.
-        :param arguments: A dictionary of the tool function arguments passed in
+        :param args: A dictionary of the tool function arguments passed in
         :param sly_data: A mapping whose keys might be referenceable by agents, but whose
                  values should not appear in agent chat text. Can be an empty dictionary.
                  This gets passed along as a distinct argument to the referenced python class's
@@ -92,7 +92,7 @@ class ExternalActivation(AbstractCallableActivation):
         self.agent_url: str = agent_url
         self.run_context: RunContext = RunContextFactory.create_run_context(parent_run_context, self)
         self.journal: Journal = self.run_context.get_journal()
-        self.arguments: Dict[str, Any] = arguments
+        self.arguments: Dict[str, Any] = args
         self.allow_from_downstream: Dict[str, Any] = allow_from_downstream
 
         self.session: AsyncAgentSession = None
@@ -228,8 +228,8 @@ class ExternalActivation(AbstractCallableActivation):
             "tool_end": True,
             "tool_output": answer
         }
-        message = AgentMessage(content="Got result:", structure=answer_dict)
-        await self.journal.write_message(message)
+        agent_message = AgentMessage(content="Got result:", structure=answer_dict)
+        await self.journal.write_message(agent_message)
 
         # In terms of sending tool results back up the graph,
         # we really only care about immediately are the AI responses.
