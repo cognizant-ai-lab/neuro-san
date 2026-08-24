@@ -63,9 +63,6 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
         self.logger.debug("Validating %s parameters via pydantic...", self.network_name)
 
         # The converter is stateless, so one instance serves every agent.
-        # Its from_dict() caches created models by spec content, so
-        # validating here also warms the cache the tool-creation path
-        # reads from on the first request.
         converter = BaseModelDictionaryConverter("parameters")
 
         for agent_name, agent_spec in name_to_spec.items():

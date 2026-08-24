@@ -31,21 +31,62 @@ from neuro_san.internals.run_context.langchain.core.base_model_dictionary_conver
 from neuro_san.internals.run_context.langchain.core.tool_spec_error import ToolSpecError
 
 
+# pylint: disable=too-many-public-methods
 class TestBaseModelDictionaryConverter:
     """
     Test cases for the OpenAI-function-spec -> pydantic BaseModel conversion,
-    with emphasis on the handling of bare "object" parameters (no properties).
+    the handling of malformed specs, and the spec-keyed model cache.
 
-    Bare objects map to Dict[str, Any] rather than Any so that the JSON
-    schema advertised to LLM providers declares a real object type.  A bare
-    Any produced an empty schema ({}), which langchain-google-genai degrades
-    to a STRING declaration - Gemini then sends JSON-encoded strings where
-    tools expect dictionaries.
+    Conversion: bare "object" parameters map to Dict[str, Any] rather than
+    Any so that the JSON schema advertised to LLM providers declares a real
+    object type.  A bare Any produced an empty schema ({}), which
+    langchain-google-genai degrades to a STRING declaration - Gemini then
+    sends JSON-encoded strings where tools expect dictionaries.
+
+    Malformed specs: these produce clean ToolSpecErrors (or honor documented
+    contracts) instead of raw AttributeError/TypeError crashes.  Explicit
+    nulls and wrong-typed values are reachable from both hocon registries
+    (pyhocon preserves explicit nulls) and the unvalidated JSON function
+    specs external agents send over the network.
+
+    The cache (issue #1209): specs are static registry data re-converted for
+    every tool of every agent activation on every request, so from_dict()
+    caches the created model class by spec content.  The cache tests pin
+    down that contract: content-keyed sharing across converter instances,
+    key-order sensitivity (field order flows through to the provider-facing
+    JSON schema), LRU eviction, and the uncached fallbacks.
     """
 
-    def _convert(self, parameters: Dict[str, Any]) -> BaseModel:
-        converter = BaseModelDictionaryConverter("parameters")
+    SPEC: Dict[str, Any] = {
+        "properties": {
+            "city": {"type": "string", "description": "Which city"},
+            "days": {"type": "integer"},
+        },
+        "required": ["city"],
+    }
+
+    @pytest.fixture(autouse=True)
+    def clear_model_cache(self):
+        """
+        The model cache is class-level, process-wide state.  Clear it around
+        every test so tests stay order-independent.
+        """
+        BaseModelDictionaryConverter._model_cache.clear()   # pylint: disable=protected-access
+        yield
+        BaseModelDictionaryConverter._model_cache.clear()   # pylint: disable=protected-access
+
+    def _convert(self, parameters: Dict[str, Any], name: str = "parameters") -> BaseModel:
+        """
+        Run the given parameters spec through a fresh converter.
+
+        :param parameters: The parameters spec dictionary to convert
+        :param name: The top-level field name for the converter
+        :return: The pydantic model class from_dict() produces
+        """
+        converter = BaseModelDictionaryConverter(name)
         return converter.from_dict(parameters)
+
+    # ---- Conversion of well-formed specs -----------------------------------
 
     def test_bare_object_accepts_dict_as_plain_dict(self):
         """A well-formed dict argument reaches the tool as the same plain dict."""
@@ -126,20 +167,7 @@ class TestBaseModelDictionaryConverter:
         with pytest.raises(ValidationError):
             model.model_validate({"records": ["not-a-dict"]})
 
-
-class TestMalformedSpecHandling:
-    """
-    Malformed specs produce clean ToolSpecErrors (or honor documented
-    contracts) instead of raw AttributeError/TypeError crashes.
-
-    Explicit nulls and wrong-typed values are reachable from both hocon
-    registries (pyhocon preserves explicit nulls) and the unvalidated
-    JSON function specs external agents send over the network.
-    """
-
-    def _convert(self, parameters):
-        converter = BaseModelDictionaryConverter("parameters")
-        return converter.from_dict(parameters)
+    # ---- Malformed specs ----------------------------------------------------
 
     def test_from_dict_none_returns_none(self):
         """The DictionaryConverter contract: None in -> None out."""
@@ -230,46 +258,7 @@ class TestMalformedSpecHandling:
                 "properties": {"tags": {"type": "array", "items": "cao_item"}},
             })
 
-
-class TestModelCaching:
-    """
-    Test cases for the spec-keyed model cache (issue #1209).
-
-    Specs are static registry data re-converted for every tool of every
-    agent activation on every request, so from_dict() caches the created
-    model class by spec content.  These tests pin down the cache contract:
-    content-keyed sharing across converter instances, key-order sensitivity
-    (field order flows through to the provider-facing JSON schema), LRU
-    eviction, and the uncached fallbacks.
-    """
-
-    SPEC: Dict[str, Any] = {
-        "properties": {
-            "city": {"type": "string", "description": "Which city"},
-            "days": {"type": "integer"},
-        },
-        "required": ["city"],
-    }
-
-    @pytest.fixture(autouse=True)
-    def clear_model_cache(self):
-        """
-        The cache is class-level, process-wide state.  Clear it around each
-        test so tests stay order-independent.
-        """
-        BaseModelDictionaryConverter._model_cache.clear()   # pylint: disable=protected-access
-        yield
-        BaseModelDictionaryConverter._model_cache.clear()   # pylint: disable=protected-access
-
-    def _convert(self, parameters: Dict[str, Any], name: str = "parameters") -> BaseModel:
-        converter = BaseModelDictionaryConverter(name)
-        return converter.from_dict(parameters)
-
-    def test_same_spec_returns_cached_model(self):
-        """The very same spec dict converts to the very same model class."""
-        first = self._convert(self.SPEC)
-        second = self._convert(self.SPEC)
-        assert second is first
+    # ---- The spec-keyed model cache (issue #1209) ---------------------------
 
     def test_equal_content_shares_model_across_instances(self):
         """
@@ -332,11 +321,11 @@ class TestModelCaching:
 
         model_a = self._convert(spec_a)
         model_b = self._convert(spec_b)
-        model_c = self._convert(spec_c)          # evicts spec_a
+        model_c = self._convert(spec_c)               # evicts spec_a
 
-        assert self._convert(spec_c) is model_c  # still cached
-        assert self._convert(spec_b) is model_b  # still cached
-        assert self._convert(spec_a) is not model_a  # was evicted, rebuilt
+        assert self._convert(spec_c) is model_c       # still cached
+        assert self._convert(spec_b) is model_b       # still cached
+        assert self._convert(spec_a) is not model_a   # was evicted, rebuilt
 
     def test_unserializable_spec_builds_uncached(self):
         """
@@ -348,6 +337,26 @@ class TestModelCaching:
         }
         model = self._convert(spec)
         assert issubclass(model, BaseModel)
+        assert len(BaseModelDictionaryConverter._model_cache) == 0   # pylint: disable=protected-access
+
+    def test_deeply_nested_ignored_key_builds_uncached(self):
+        """
+        json.dumps walks the whole spec for keying and can exceed the
+        recursion limit on deep nesting under a key the model builder
+        itself never recurses into.  That RecursionError must fall back
+        to an uncached build, not propagate out of from_dict.
+        """
+        deep: Dict[str, Any] = {}
+        node: Dict[str, Any] = deep
+        for _ in range(10000):
+            node["next"] = {}
+            node = node["next"]
+        spec: Dict[str, Any] = {
+            "properties": {"f": {"type": "string", "extra": deep}},
+        }
+        model = self._convert(spec)
+        assert issubclass(model, BaseModel)
+        assert model.model_validate({"f": "ok"}).f == "ok"
         assert len(BaseModelDictionaryConverter._model_cache) == 0   # pylint: disable=protected-access
 
     def test_bad_spec_raises_every_time_and_is_not_cached(self):

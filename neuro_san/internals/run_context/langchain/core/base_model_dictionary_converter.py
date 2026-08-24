@@ -101,6 +101,13 @@ class BaseModelDictionaryConverter(DictionaryConverter):
     # specs over the network per request - without a bound, a misbehaving
     # remote agent whose spec varies per response would grow this without
     # limit.  Eviction is least-recently-used.
+    #
+    # Hand-rolled rather than functools.lru_cache: lru_cache can only key
+    # on hashables, so the builder would have to recover the spec with
+    # json.loads(key) and build from the round-tripped dictionary.  This
+    # cache keys on the serialized form but builds from the ORIGINAL
+    # dictionary, so what gets built is byte-for-byte what an uncached
+    # build would have produced.
     MODEL_CACHE_MAX_SIZE: int = 256
     _model_cache: OrderedDict = OrderedDict()
     _model_cache_lock: Lock = Lock()
@@ -133,18 +140,25 @@ class BaseModelDictionaryConverter(DictionaryConverter):
                 If obj_dict is None, the returned object should also be None.
                 If obj_dict is not the correct type, it is also reasonable
                 to return None.
+
+                The returned model class may be shared with every other
+                caller that converted an identical spec (see the cache
+                note on the class attributes above) - treat it as
+                immutable.  Mutating it in place would leak the change
+                into every tool and request sharing the spec.
         """
         # Honor the DictionaryConverter contract stated above.  None reaches
         # here when an external agent reports "parameters": null.
         if obj_dict is None:
             return None
 
-        cache_key: str = self.get_cache_key(obj_dict)
+        cache_key: Optional[str] = self.get_cache_key(obj_dict)
         if cache_key is None:
-            # The spec contains values JSON cannot represent.  Neither hocon
-            # registries nor network specs can produce those (both are born
-            # as JSON), so this is only reachable from in-process callers -
-            # build uncached rather than fail.
+            # The spec cannot be serialized for keying: it contains values
+            # JSON cannot represent, or is nested too deeply to serialize.
+            # Neither hocon registries nor network specs can produce those
+            # (both are born as JSON), so this is only reachable from
+            # in-process callers - build uncached rather than fail.
             return self.openai_function_to_pydantic(self.top_level_field_name, obj_dict)
 
         cache: OrderedDict = BaseModelDictionaryConverter._model_cache
@@ -169,7 +183,7 @@ class BaseModelDictionaryConverter(DictionaryConverter):
 
         return base_model
 
-    def get_cache_key(self, obj_dict: Dict[str, Any]) -> str:
+    def get_cache_key(self, obj_dict: Dict[str, Any]) -> Optional[str]:
         """
         :param obj_dict: The spec dictionary a model is being created from
         :return: A string cache key uniquely identifying the model that
@@ -182,8 +196,13 @@ class BaseModelDictionaryConverter(DictionaryConverter):
             # schema advertised to LLM providers.  Specs that differ only in
             # key order therefore get separate cache entries instead of one
             # of them being served a bytes-different schema.
+            #
+            # RecursionError: dumps() walks the whole spec, including deep
+            # nesting under keys the model builder itself never recurses
+            # into, so it can hit the recursion limit on a spec the
+            # uncached build handles fine.  Fall back to that build.
             spec_json: str = dumps(obj_dict, separators=(",", ":"))
-        except (TypeError, ValueError):
+        except (RecursionError, TypeError, ValueError):
             return None
 
         # The name becomes the created model's class name (visible in
