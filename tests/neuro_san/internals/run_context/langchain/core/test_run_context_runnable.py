@@ -22,10 +22,107 @@ import httpx
 import pytest
 
 from langchain_core.messages.ai import AIMessage
+from langchain_core.messages.human import HumanMessage
+from langchain_core.outputs import LLMResult
+from langchain_core.outputs.chat_generation import ChatGeneration
 from openai import RateLimitError
+
+from neuro_san.internals.run_context.langchain.journaling.journaling_callback_handler import JournalingCallbackHandler
 
 from neuro_san.internals.run_context.langchain.core.run_context_runnable import RunContextRunnable
 from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
+
+from tests.neuro_san.message.content_fixtures import ContentFixtures
+
+
+class TestParseChainResult:
+    """
+    Tests for the capture-side projection of list-form (block) content in
+    parse_chain_result. The old inline flatten took only the first
+    type=="text" block and skipped plain strings entirely, so multi-text
+    responses lost everything past the first text block and list-of-str
+    content became "".
+    """
+
+    @staticmethod
+    def _make_runnable() -> RunContextRunnable:
+        """Build a runnable whose error detector is a pass-through."""
+        error_detector = MagicMock()
+        error_detector.handle_error = MagicMock(side_effect=lambda output: output)
+        return RunContextRunnable.model_construct(error_detector=error_detector)
+
+    def test_parse_chain_result_thinking_first_returns_answer(self):
+        """
+        An Anthropic thinking-first AIMessage projects to its answer text.
+        """
+        runnable = self._make_runnable()
+        output = runnable.parse_chain_result(ContentFixtures.anthropic_thinking_first(), exception=None)
+        assert output == "the answer"
+
+    def test_parse_chain_result_concatenates_text_blocks(self):
+        """
+        Text blocks after the first must not be dropped: the old flatten
+        stopped at the first type=="text" block and returned "part one, ".
+        """
+        runnable = self._make_runnable()
+        message = AIMessage(content=[
+            {"type": "text", "text": "part one, "},
+            {"type": "thinking", "thinking": "hmm"},
+            {"type": "text", "text": "part two"},
+        ])
+        assert runnable.parse_chain_result(message, exception=None) == "part one, part two"
+
+    def test_parse_chain_result_list_of_str_returns_full_text(self):
+        """
+        List-of-strings content is legal per the pydantic annotation; the old
+        flatten skipped non-dict items and returned "".
+        """
+        runnable = self._make_runnable()
+        output = runnable.parse_chain_result(ContentFixtures.list_of_str(), exception=None)
+        assert output == "part one, part two"
+
+    def test_parse_chain_result_dict_messages_path_flattens_last_ai_message(self):
+        """
+        The normal chain result is a dict whose "messages" hold chat history;
+        the last AIMessage found there gets the same full-text projection.
+        """
+        runnable = self._make_runnable()
+        chain_result = {"messages": [
+            HumanMessage(content="question"),
+            ContentFixtures.anthropic_thinking_first(),
+        ]}
+        assert runnable.parse_chain_result(chain_result, exception=None) == "the answer"
+
+    @pytest.mark.asyncio
+    async def test_parse_chain_result_matches_on_llm_end_projection(self):
+        """
+        The dupe-leak regression: parse_chain_result and
+        JournalingCallbackHandler.on_llm_end must project the same block
+        content to the same text, because OriginatingJournal suppresses the
+        held AGENT message only when the next AI message's content is equal.
+        With the old divergent flattens this content pair differed and both
+        messages reached clients.
+        """
+        message = AIMessage(content=[
+            {"type": "text", "text": "part one, "},
+            {"type": "text", "text": "part two"},
+        ])
+
+        runnable = self._make_runnable()
+        parsed: str = runnable.parse_chain_result(message, exception=None)
+
+        calling_agent_journal = MagicMock()
+        calling_agent_journal.write_message_if_next_not_dupe = AsyncMock()
+        handler = JournalingCallbackHandler(
+            calling_agent_journal=calling_agent_journal,
+            base_journal=MagicMock(),
+            parent_origin=[],
+            origination=MagicMock(),
+        )
+        await handler.on_llm_end(LLMResult(generations=[[ChatGeneration(message=message)]]))
+        journaled = calling_agent_journal.write_message_if_next_not_dupe.call_args.args[0]
+
+        assert parsed == journaled.content == "part one, part two"
 
 
 class TestRunContextRunnable:

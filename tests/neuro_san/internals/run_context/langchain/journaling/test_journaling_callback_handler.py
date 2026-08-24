@@ -21,8 +21,76 @@ from uuid import uuid4
 
 import pytest
 
+from langchain_core.messages.ai import AIMessage
+from langchain_core.outputs import LLMResult
+from langchain_core.outputs.chat_generation import ChatGeneration
+
 from neuro_san.internals.run_context.langchain.journaling.journaling_callback_handler import JournalingCallbackHandler
 from neuro_san.message.types.agent_message import AgentMessage
+
+from tests.neuro_san.message.content_fixtures import ContentFixtures
+
+
+class TestOnLlmEndProjection:
+    """
+    on_llm_end journals the intermediate LLM output as an AGENT message using
+    the shared full-text projection: block content yields all of its text,
+    tool-call-only steps stay unjournaled, and stripping is preserved.
+    """
+
+    @staticmethod
+    def _make_handler():
+        """Build a handler whose calling-agent journal records held messages."""
+        calling_agent_journal = MagicMock()
+        calling_agent_journal.write_message_if_next_not_dupe = AsyncMock()
+        handler = JournalingCallbackHandler(
+            calling_agent_journal=calling_agent_journal,
+            base_journal=MagicMock(),
+            parent_origin=[],
+            origination=MagicMock(),
+        )
+        return handler, calling_agent_journal
+
+    @staticmethod
+    def _llm_result(message: AIMessage) -> LLMResult:
+        """Wrap an AIMessage the way it arrives at on_llm_end."""
+        return LLMResult(generations=[[ChatGeneration(message=message)]])
+
+    @pytest.mark.asyncio
+    async def test_journals_full_text_of_block_content(self):
+        """
+        Thinking-first block content journals its answer text as an AGENT
+        message, held for dupe comparison against the AI message that follows.
+        """
+        handler, journal = self._make_handler()
+        await handler.on_llm_end(self._llm_result(ContentFixtures.anthropic_thinking_first()))
+        message = journal.write_message_if_next_not_dupe.call_args.args[0]
+        assert isinstance(message, AgentMessage)
+        assert message.content == "the answer"
+
+    @pytest.mark.asyncio
+    async def test_tool_call_only_step_stays_unjournaled(self):
+        """
+        A tool-call-only step has no text, so the journaling gate must keep
+        skipping it - clients see the "Invoking:" message instead.
+        """
+        handler, journal = self._make_handler()
+        tool_call_only = AIMessage(
+            content=[{"type": "tool_use", "id": "toolu_1", "name": "lookup", "input": {"query": "q"}}],
+            tool_calls=[{"name": "lookup", "args": {"query": "q"}, "id": "toolu_1", "type": "tool_call"}],
+        )
+        await handler.on_llm_end(self._llm_result(tool_call_only))
+        journal.write_message_if_next_not_dupe.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_plain_string_content_still_journaled_stripped(self):
+        """
+        Plain-string content keeps its existing behavior: journaled stripped.
+        """
+        handler, journal = self._make_handler()
+        await handler.on_llm_end(self._llm_result(AIMessage(content="  padded thought  ")))
+        message = journal.write_message_if_next_not_dupe.call_args.args[0]
+        assert message.content == "padded thought"
 
 
 class TestOnToolStartInvokingLabel:

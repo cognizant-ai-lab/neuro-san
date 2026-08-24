@@ -48,6 +48,7 @@ from neuro_san.internals.run_context.langchain.token_counting.langchain_token_co
 from neuro_san.internals.run_context.langchain.tracing.neuro_san_runnable import NeuroSanRunnable
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
 from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
+from neuro_san.message.utils.content_utils import ContentUtils
 
 MINUTES: float = 60.0
 
@@ -375,17 +376,16 @@ class RunContextRunnable(NeuroSanRunnable):
                 # We generally want the content of any single AIMessage we found from above
                 output = ai_message.content
 
-        # In general, output is a string, but it can also be a list of content blocks when there are multiple
-        # message types, such as "thinking", "reasoning", etc.
-        # If it is a list, "text" is a key in the dict containing the actual string output we want to return.
+        # In general, output is a string, but it can also be a list of content blocks when there are
+        # multiple message types, such as "thinking", "reasoning", etc. - or a list of plain strings,
+        # which is also legal per the BaseMessage annotation.
+        # Project list output to its full text - every text block, not just the first one - with the
+        # same projection the wire converter and JournalingCallbackHandler.on_llm_end use. Divergent
+        # projections here made the AI message written below differ from the AGENT message journaled
+        # in on_llm_end, defeating its dupe suppression.
         # For more details: https://docs.langchain.com/oss/python/langchain/messages#standard-content-blocks
         if isinstance(output, list):
-            text_output: str = ""
-            for block in output:
-                if isinstance(block, dict) and block.get("type") == "text":
-                    text_output = block.get("text", "")
-                    break
-            output = text_output
+            output = ContentUtils.flatten_to_text(output)
 
         # See if we had some kind of error and format accordingly, if asked for.
         output = self.error_detector.handle_error(output)

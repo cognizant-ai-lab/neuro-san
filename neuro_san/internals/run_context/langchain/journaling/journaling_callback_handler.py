@@ -37,6 +37,7 @@ from neuro_san.internals.journals.origination import Origination
 from neuro_san.internals.journals.tool_argument_reporting import ToolArgumentReporting
 from neuro_san.message.types.agent_message import AgentMessage
 from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
+from neuro_san.message.utils.content_utils import ContentUtils
 
 
 # pylint: disable=too-many-ancestors
@@ -112,8 +113,15 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
         generations = response.generations[0]
         first_generation = generations[0]
         if isinstance(first_generation, ChatGeneration):
-            content: str = first_generation.text
-            if content is not None and len(content) > 0:
+            # Project the message content to its full text with the same
+            # projection the wire converter and parse_chain_result use.
+            # ChatGeneration.text happens to agree on the pinned langchain-core,
+            # but its list-content semantics have varied across versions;
+            # capturing through the one shared policy is what keeps the dupe
+            # comparison against the later AI message reliable. Tool-call-only
+            # steps flatten to "" and stay unjournaled, as before.
+            content: str = ContentUtils.flatten_to_text(first_generation.message)
+            if len(content) > 0:
                 # Package up the thinking content as an AgentMessage to stream
                 message = AgentMessage(content=content.strip())
                 # Some AGENT messages that come from this source end up being dupes
