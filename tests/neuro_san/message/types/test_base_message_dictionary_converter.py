@@ -25,20 +25,23 @@ from neuro_san.message.types.agent_tool_result_message import AgentToolResultMes
 from neuro_san.message.types.base_message_dictionary_converter import BaseMessageDictionaryConverter
 from neuro_san.message.types.chat_message_type import ChatMessageType
 
+from tests.neuro_san.message.content_fixtures import ContentFixtures
+
 
 class TestBaseMessageDictionaryConverter:
     """
-    Golden-parity tests for the wire converter.
+    Golden-parity tests for the wire converter, plus the corrected
+    projection of list-form (block) content.
 
-    These lock down the EXACT ChatMessage dictionaries produced for
-    plain-string traffic - the shapes every deployed client sees today.
-    The content-block work (see issue #1222) must keep every test here
+    The plain-string tests lock down the EXACT ChatMessage dictionaries
+    produced for text-only traffic - the shapes every deployed client sees.
+    The content-block work (see issue #1222) must keep every one of them
     green untouched: byte-identical wire output for text-only messages
     is the backward-compatibility guarantee of that whole effort.
 
-    Deliberately absent: list-form (block) content through to_dict. Its
-    current behavior is the bug being fixed (thinking-first content
-    flattens to "", list-of-str crashes), so there is nothing to lock.
+    The list-content tests cover the wire-flatten fix: the full text
+    projection replaces the old first-block-only flatten that produced ""
+    for thinking-first content and crashed on list-of-str.
     """
 
     ORIGIN = [{"tool": "front_man", "instantiation_index": 0}]
@@ -130,6 +133,76 @@ class TestBaseMessageDictionaryConverter:
         """
         converter = BaseMessageDictionaryConverter(langchain_only=True)
         assert converter.from_dict({"type": ChatMessageType.AGENT, "text": "internal"}) is None
+
+    def test_to_dict_thinking_first_content_yields_answer_text(self):
+        """
+        THE headline fix: an Anthropic thinking-first response must produce
+        the answer text on the wire. The old first-block flatten produced ""
+        because the first block is the thinking block, which has no "text".
+        """
+        converter = BaseMessageDictionaryConverter(origin=self.ORIGIN)
+        result = converter.to_dict(ContentFixtures.anthropic_thinking_first())
+        assert result == {
+            "type": ChatMessageType.AI,
+            "origin": self.ORIGIN,
+            "text": "the answer",
+        }
+
+    def test_to_dict_concatenates_all_text_blocks(self):
+        """
+        Text blocks after the first must not be dropped, and a reasoning-only
+        message still emits text="" exactly as the old flatten did.
+        """
+        converter = BaseMessageDictionaryConverter()
+        result = converter.to_dict(ContentFixtures.openai_responses_reasoning())
+        assert result == {
+            "type": ChatMessageType.AI,
+            "text": "the answer",
+        }
+
+        reasoning_only = AIMessage(content=[{"type": "reasoning", "reasoning": "hidden"}])
+        assert converter.to_dict(reasoning_only) == {
+            "type": ChatMessageType.AI,
+            "text": "",
+        }
+
+    def test_to_dict_list_of_str_content_does_not_crash(self):
+        """
+        List-of-strings content is legal per the pydantic annotation and
+        raised AttributeError in the old flatten.
+        """
+        converter = BaseMessageDictionaryConverter()
+        result = converter.to_dict(ContentFixtures.list_of_str())
+        assert result == {
+            "type": ChatMessageType.AI,
+            "text": "part one, part two",
+        }
+
+    def test_to_dict_empty_list_content_still_omits_text(self):
+        """
+        Empty-list content keeps omitting the text key (emitting text=""
+        would make such messages newly answer-eligible in AnswerMessageFilter).
+        """
+        converter = BaseMessageDictionaryConverter()
+        result = converter.to_dict(ContentFixtures.empty_list_content())
+        assert result == {
+            "type": ChatMessageType.AI,
+        }
+
+    def test_to_dict_blank_text_block_keeps_emitting_text(self):
+        """
+        Blank-but-non-empty block content keeps emitting its (blank) text,
+        exactly as the old first-block flatten did - only the empty LIST
+        omits the text key. Gating omission on "no visible text" instead
+        would newly omit text for reasoning-only messages, changing their
+        wire shape.
+        """
+        converter = BaseMessageDictionaryConverter()
+        result = converter.to_dict(AIMessage(content=[{"type": "text", "text": " "}]))
+        assert result == {
+            "type": ChatMessageType.AI,
+            "text": " ",
+        }
 
     def test_to_dict_agent_framework_message_optionals_exact_shape(self):
         """
