@@ -113,13 +113,14 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
         generations = response.generations[0]
         first_generation = generations[0]
         if isinstance(first_generation, ChatGeneration):
-            # Project the message content to its full text with the same
-            # projection the wire converter and parse_chain_result use.
-            # ChatGeneration.text happens to agree on the pinned langchain-core,
-            # but its list-content semantics have varied across versions;
-            # capturing through the one shared policy is what keeps the dupe
-            # comparison against the later AI message reliable. Tool-call-only
-            # steps flatten to "" and stay unjournaled, as before.
+            # Project the message content to its full text through the single
+            # projection policy ContentUtils defines: the dupe comparison
+            # against the later AI message relies on both copies projecting to
+            # the same text. ChatGeneration.text is close but not identical -
+            # it also collects legacy text blocks that carry no "type" key, a
+            # shape no supported provider emits and which is deliberately out
+            # of scope here. Tool-call-only steps flatten to "" and are
+            # skipped by the gate below.
             content: str = ContentUtils.flatten_to_text(first_generation.message)
             if len(content) > 0:
                 # Package up the thinking content as an AgentMessage to stream

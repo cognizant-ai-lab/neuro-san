@@ -339,7 +339,7 @@ class RunContextRunnable(NeuroSanRunnable):
         # Initialize our output.
         # The value here might morph a bit between types, but when we return
         # something we expect it to be a string.
-        output: Union[str, List[Dict[str, Any]]] = None
+        output: Optional[Union[str, List[Any]]] = None
 
         if chain_result is None and exception is not None:
             # We got an exception instead of a proper result. Say so.
@@ -379,10 +379,10 @@ class RunContextRunnable(NeuroSanRunnable):
         # In general, output is a string, but it can also be a list of content blocks when there are
         # multiple message types, such as "thinking", "reasoning", etc. - or a list of plain strings,
         # which is also legal per the BaseMessage annotation.
-        # Project list output to its full text - every text block, not just the first one - with the
-        # same projection the wire converter and JournalingCallbackHandler.on_llm_end use. Divergent
-        # projections here made the AI message written below differ from the AGENT message journaled
-        # in on_llm_end, defeating its dupe suppression.
+        # Project list output to its full text through the single projection policy ContentUtils
+        # defines: OriginatingJournal's dupe suppression relies on the AGENT and AI copies of the
+        # same output projecting to the same text. Full text also means the error detector below
+        # scans everything, exactly as it always has for plain-string output.
         # For more details: https://docs.langchain.com/oss/python/langchain/messages#standard-content-blocks
         if isinstance(output, list):
             output = ContentUtils.flatten_to_text(output)

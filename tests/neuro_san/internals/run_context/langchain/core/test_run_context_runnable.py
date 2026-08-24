@@ -68,11 +68,7 @@ class TestRunContextRunnable:
         stopped at the first type=="text" block and returned "part one, ".
         """
         runnable = self._make_runnable()
-        message = AIMessage(content=[
-            {"type": "text", "text": "part one, "},
-            {"type": "thinking", "thinking": "hmm"},
-            {"type": "text", "text": "part two"},
-        ])
+        message = ContentFixtures.multi_text_blocks()
         assert runnable.parse_chain_result(message, exception=None) == "part one, part two"
 
     def test_parse_chain_result_list_of_str_returns_full_text(self):
@@ -102,17 +98,16 @@ class TestRunContextRunnable:
         The dupe-leak regression: parse_chain_result and
         JournalingCallbackHandler.on_llm_end must project the same block
         content to the same text, because OriginatingJournal suppresses the
-        held AGENT message only when the next AI message's content is equal.
-        With the old divergent flattens this content pair differed and both
-        messages reached clients.
+        held AGENT message only when the next AI message carries the same
+        content. The projections agree up to leading/trailing whitespace,
+        which the journal's dupe comparison ignores (covered in
+        test_originating_journal.py).
         """
-        message = AIMessage(content=[
-            {"type": "text", "text": "part one, "},
-            {"type": "text", "text": "part two"},
-        ])
+        message = ContentFixtures.multi_text_blocks()
 
         runnable = self._make_runnable()
         parsed: str = runnable.parse_chain_result(message, exception=None)
+        assert parsed == "part one, part two"
 
         calling_agent_journal = MagicMock()
         calling_agent_journal.write_message_if_next_not_dupe = AsyncMock()
@@ -124,8 +119,7 @@ class TestRunContextRunnable:
         )
         await handler.on_llm_end(LLMResult(generations=[[ChatGeneration(message=message)]]))
         journaled = calling_agent_journal.write_message_if_next_not_dupe.call_args.args[0]
-
-        assert parsed == journaled.content == "part one, part two"
+        assert journaled.content == parsed
 
     @pytest.mark.asyncio
     async def test_journal_retry_reason_writes_agent_framework_message(self):
