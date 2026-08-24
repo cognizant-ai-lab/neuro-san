@@ -15,6 +15,7 @@
 #
 # END COPYRIGHT
 
+from typing import Tuple
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from uuid import uuid4
@@ -44,12 +45,16 @@ class TestJournalingCallbackHandler:
     """
 
     @staticmethod
-    def _make_handler():
-        """Build a handler whose calling-agent journal records written messages."""
-        calling_agent_journal = MagicMock()
+    def _make_handler() -> Tuple[JournalingCallbackHandler, MagicMock]:
+        """
+        Build a handler whose calling-agent journal records written messages.
+
+        :return: The handler and its mocked calling-agent journal.
+        """
+        calling_agent_journal: MagicMock = MagicMock()
         calling_agent_journal.write_message = AsyncMock()
         calling_agent_journal.write_message_if_next_not_dupe = AsyncMock()
-        handler = JournalingCallbackHandler(
+        handler: JournalingCallbackHandler = JournalingCallbackHandler(
             calling_agent_journal=calling_agent_journal,
             base_journal=MagicMock(),
             parent_origin=[],
@@ -63,7 +68,7 @@ class TestJournalingCallbackHandler:
         return LLMResult(generations=[[ChatGeneration(message=message)]])
 
     @pytest.mark.asyncio
-    async def test_on_llm_end_journals_full_text_of_block_content(self):
+    async def test_on_llm_end_journals_full_text_of_block_content(self) -> None:
         """
         Thinking-first block content journals its answer text as an AGENT
         message, held for dupe comparison against the AI message that follows.
@@ -75,7 +80,7 @@ class TestJournalingCallbackHandler:
         assert message.content == "the answer"
 
     @pytest.mark.asyncio
-    async def test_on_llm_end_tool_call_only_step_stays_unjournaled(self):
+    async def test_on_llm_end_tool_call_only_step_stays_unjournaled(self) -> None:
         """
         A tool-call-only step has no text, so the journaling gate must keep
         skipping it - clients see the "Invoking:" message instead.
@@ -89,7 +94,7 @@ class TestJournalingCallbackHandler:
         journal.write_message_if_next_not_dupe.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_on_llm_end_plain_string_content_still_journaled_stripped(self):
+    async def test_on_llm_end_plain_string_content_still_journaled_stripped(self) -> None:
         """
         Plain-string content keeps its existing behavior: journaled stripped.
         """
@@ -99,7 +104,7 @@ class TestJournalingCallbackHandler:
         assert message.content == "padded thought"
 
     @pytest.mark.asyncio
-    async def test_on_tool_start_uses_tool_name_when_present(self):
+    async def test_on_tool_start_uses_tool_name_when_present(self) -> None:
         """A serialized tool with a name is reported verbatim."""
         handler, journal = self._make_handler()
         await handler.on_tool_start({"name": "search"}, "input", run_id=uuid4(), tags=[], inputs={})
@@ -109,7 +114,7 @@ class TestJournalingCallbackHandler:
         assert message.structure["invoked_agent_name"] == "search"
 
     @pytest.mark.asyncio
-    async def test_on_tool_start_falls_back_to_placeholder_when_name_missing(self):
+    async def test_on_tool_start_falls_back_to_placeholder_when_name_missing(self) -> None:
         """A serialized tool with no name yields a diagnostic placeholder label
         instead of an empty "Invoking: ``"; the raw value is still reported."""
         handler, journal = self._make_handler()
