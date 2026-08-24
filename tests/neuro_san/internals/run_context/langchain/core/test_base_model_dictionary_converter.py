@@ -18,6 +18,8 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
+from typing import Type
 
 from threading import Thread
 
@@ -75,13 +77,15 @@ class TestBaseModelDictionaryConverter:
         yield
         BaseModelDictionaryConverter._model_cache.clear()   # pylint: disable=protected-access
 
-    def _convert(self, parameters: Dict[str, Any], name: str = "parameters") -> BaseModel:
+    def _convert(self, parameters: Optional[Dict[str, Any]],
+                 name: str = "parameters") -> Optional[Type[BaseModel]]:
         """
         Run the given parameters spec through a fresh converter.
 
         :param parameters: The parameters spec dictionary to convert
+                (None exercises the documented None -> None contract)
         :param name: The top-level field name for the converter
-        :return: The pydantic model class from_dict() produces
+        :return: The pydantic model class from_dict() produces, or None
         """
         converter = BaseModelDictionaryConverter(name)
         return converter.from_dict(parameters)

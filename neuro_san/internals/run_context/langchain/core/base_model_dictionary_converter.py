@@ -133,11 +133,11 @@ class BaseModelDictionaryConverter(DictionaryConverter):
         # At this point we are not going back to OpenAI functional specs
         raise NotImplementedError
 
-    def from_dict(self, obj_dict: Dict[str, Any]) -> BaseModel:
+    def from_dict(self, obj_dict: Optional[Dict[str, Any]]) -> Optional[Type[BaseModel]]:
         """
         :param obj_dict: The data-only dictionary to be converted into an object
-        :return: An object instance created from the given dictionary.
-                If obj_dict is None, the returned object should also be None.
+        :return: The pydantic model class created from the given dictionary.
+                If obj_dict is None, the returned value should also be None.
                 If obj_dict is not the correct type, it is also reasonable
                 to return None.
 
@@ -163,7 +163,7 @@ class BaseModelDictionaryConverter(DictionaryConverter):
 
         cache: OrderedDict = BaseModelDictionaryConverter._model_cache
         with BaseModelDictionaryConverter._model_cache_lock:
-            base_model: BaseModel = cache.get(cache_key)
+            base_model: Optional[Type[BaseModel]] = cache.get(cache_key)
             if base_model is not None:
                 cache.move_to_end(cache_key)
                 return base_model
@@ -209,15 +209,15 @@ class BaseModelDictionaryConverter(DictionaryConverter):
         # pydantic validation error messages), so it is part of the key.
         return f"{self.top_level_field_name}:{spec_json}"
 
-    def openai_function_to_pydantic(self, name: str, function_dict: Dict[str, Any]) -> BaseModel:
+    def openai_function_to_pydantic(self, name: str, function_dict: Dict[str, Any]) -> Type[BaseModel]:
         """
-        Turns an openai function spec dictionary into a pydantic BaseModel
+        Turns an openai function spec dictionary into a pydantic BaseModel class
         See: https://docs.pydantic.dev/latest/concepts/models/#dynamic-model-creation
 
         :param name: The string name of the object/field undergoing conversion
         :param function_dict: The dictionary describing the OpenAI function to
                     be converted into a pydantic BaseModel
-        :return: The pydantic BaseModel that corresponds to the OpenAI function spec.
+        :return: The pydantic BaseModel class that corresponds to the OpenAI function spec.
         """
 
         # Get stuff from the object-level function dictionary
@@ -315,7 +315,7 @@ class BaseModelDictionaryConverter(DictionaryConverter):
         # crash the run - langchain surfaces them to the calling LLM as a
         # correctable tool-error message, at the cost of a retry round-trip.
         try:
-            model: BaseModel = create_model(name, **fields)
+            model: Type[BaseModel] = create_model(name, **fields)
         except (NameError, TypeError) as exception:
             # Safety net for anything validate_field_name() does not cover:
             # report whatever create_model() rejects as the same spec-error
