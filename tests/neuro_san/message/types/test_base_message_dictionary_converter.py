@@ -178,6 +178,21 @@ class TestBaseMessageDictionaryConverter:
             "text": "part one, part two",
         }
 
+    def test_to_dict_blank_block_content_keeps_emitting_text(self):
+        """
+        Non-empty list content with no visible text keeps emitting the text
+        key, exactly as the old flatten did (value[0].get("text", "") always
+        produced a string). Such messages are answer-eligible on the wire
+        today, and this fix must not change that in either direction:
+        only the empty *list* omits the key.
+        """
+        converter = BaseMessageDictionaryConverter()
+        blank_block = AIMessage(content=[{"type": "text", "text": " "}])
+        assert converter.to_dict(blank_block) == {
+            "type": ChatMessageType.AI,
+            "text": " ",
+        }
+
     def test_to_dict_empty_list_content_still_omits_text(self):
         """
         Empty-list content keeps omitting the text key (emitting text=""
@@ -187,6 +202,21 @@ class TestBaseMessageDictionaryConverter:
         result = converter.to_dict(ContentFixtures.empty_list_content())
         assert result == {
             "type": ChatMessageType.AI,
+        }
+
+    def test_to_dict_blank_text_block_keeps_emitting_text(self):
+        """
+        Blank-but-non-empty block content keeps emitting its (blank) text,
+        exactly as the old first-block flatten did - only the empty LIST
+        omits the text key. Gating omission on "no visible text" instead
+        would newly omit text for reasoning-only messages, changing their
+        wire shape.
+        """
+        converter = BaseMessageDictionaryConverter()
+        result = converter.to_dict(AIMessage(content=[{"type": "text", "text": " "}]))
+        assert result == {
+            "type": ChatMessageType.AI,
+            "text": " ",
         }
 
     def test_to_dict_agent_framework_message_optionals_exact_shape(self):

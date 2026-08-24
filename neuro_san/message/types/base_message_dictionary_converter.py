@@ -112,6 +112,11 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
                     # displace the real answer.
                     value = None
                 else:
+                    # Deliberately NOT gated on ContentUtils.is_empty_content:
+                    # blank-but-non-empty block content (e.g. reasoning-only)
+                    # already emitted text=""/" " under the old first-block
+                    # flatten, and this projection preserves that wire shape
+                    # exactly.
                     value = ContentUtils.flatten_to_text(value)
 
             if value is not None:
