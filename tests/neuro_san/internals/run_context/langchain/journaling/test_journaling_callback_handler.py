@@ -31,17 +31,23 @@ from neuro_san.message.types.agent_message import AgentMessage
 from tests.neuro_san.message.content_fixtures import ContentFixtures
 
 
-class TestOnLlmEndProjection:
+class TestJournalingCallbackHandler:
     """
+    Tests for JournalingCallbackHandler.
+
     on_llm_end journals the intermediate LLM output as an AGENT message using
     the shared full-text projection: block content yields all of its text,
     tool-call-only steps stay unjournaled, and stripping is preserved.
+
+    on_tool_start should journal a diagnostic "Invoking" label even when the
+    serialized tool carries no name.
     """
 
     @staticmethod
     def _make_handler():
-        """Build a handler whose calling-agent journal records held messages."""
+        """Build a handler whose calling-agent journal records written messages."""
         calling_agent_journal = MagicMock()
+        calling_agent_journal.write_message = AsyncMock()
         calling_agent_journal.write_message_if_next_not_dupe = AsyncMock()
         handler = JournalingCallbackHandler(
             calling_agent_journal=calling_agent_journal,
@@ -57,7 +63,7 @@ class TestOnLlmEndProjection:
         return LLMResult(generations=[[ChatGeneration(message=message)]])
 
     @pytest.mark.asyncio
-    async def test_journals_full_text_of_block_content(self):
+    async def test_on_llm_end_journals_full_text_of_block_content(self):
         """
         Thinking-first block content journals its answer text as an AGENT
         message, held for dupe comparison against the AI message that follows.
@@ -69,7 +75,7 @@ class TestOnLlmEndProjection:
         assert message.content == "the answer"
 
     @pytest.mark.asyncio
-    async def test_tool_call_only_step_stays_unjournaled(self):
+    async def test_on_llm_end_tool_call_only_step_stays_unjournaled(self):
         """
         A tool-call-only step has no text, so the journaling gate must keep
         skipping it - clients see the "Invoking:" message instead.
@@ -83,7 +89,7 @@ class TestOnLlmEndProjection:
         journal.write_message_if_next_not_dupe.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_plain_string_content_still_journaled_stripped(self):
+    async def test_on_llm_end_plain_string_content_still_journaled_stripped(self):
         """
         Plain-string content keeps its existing behavior: journaled stripped.
         """
@@ -92,26 +98,8 @@ class TestOnLlmEndProjection:
         message = journal.write_message_if_next_not_dupe.call_args.args[0]
         assert message.content == "padded thought"
 
-
-class TestOnToolStartInvokingLabel:
-    """on_tool_start should journal a diagnostic "Invoking" label even when the
-    serialized tool carries no name."""
-
-    @staticmethod
-    def _make_handler():
-        """Build a handler whose calling-agent journal records written messages."""
-        calling_agent_journal = MagicMock()
-        calling_agent_journal.write_message = AsyncMock()
-        handler = JournalingCallbackHandler(
-            calling_agent_journal=calling_agent_journal,
-            base_journal=MagicMock(),
-            parent_origin=[],
-            origination=MagicMock(),
-        )
-        return handler, calling_agent_journal
-
     @pytest.mark.asyncio
-    async def test_uses_tool_name_when_present(self):
+    async def test_on_tool_start_uses_tool_name_when_present(self):
         """A serialized tool with a name is reported verbatim."""
         handler, journal = self._make_handler()
         await handler.on_tool_start({"name": "search"}, "input", run_id=uuid4(), tags=[], inputs={})
@@ -121,7 +109,7 @@ class TestOnToolStartInvokingLabel:
         assert message.structure["invoked_agent_name"] == "search"
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_placeholder_when_name_missing(self):
+    async def test_on_tool_start_falls_back_to_placeholder_when_name_missing(self):
         """A serialized tool with no name yields a diagnostic placeholder label
         instead of an empty "Invoking: ``"; the raw value is still reported."""
         handler, journal = self._make_handler()

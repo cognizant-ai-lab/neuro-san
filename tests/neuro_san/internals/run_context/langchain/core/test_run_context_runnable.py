@@ -35,10 +35,13 @@ from neuro_san.message.types.agent_framework_message import AgentFrameworkMessag
 from tests.neuro_san.message.content_fixtures import ContentFixtures
 
 
-class TestParseChainResult:
+class TestRunContextRunnable:
     """
-    Tests for the capture-side projection of list-form (block) content in
-    parse_chain_result. The old inline flatten took only the first
+    Tests for RunContextRunnable: the capture-side projection of list-form
+    (block) content in parse_chain_result, and the surfacing of
+    recoverable-error retries on the journal.
+
+    The old inline flatten in parse_chain_result took only the first
     type=="text" block and skipped plain strings entirely, so multi-text
     responses lost everything past the first text block and list-of-str
     content became "".
@@ -123,10 +126,6 @@ class TestParseChainResult:
         journaled = calling_agent_journal.write_message_if_next_not_dupe.call_args.args[0]
 
         assert parsed == journaled.content == "part one, part two"
-
-
-class TestRunContextRunnable:
-    """Test cases for surfacing recoverable-error retries on the journal."""
 
     @pytest.mark.asyncio
     async def test_journal_retry_reason_writes_agent_framework_message(self):
