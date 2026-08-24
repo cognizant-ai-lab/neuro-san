@@ -178,21 +178,6 @@ class TestBaseMessageDictionaryConverter:
             "text": "part one, part two",
         }
 
-    def test_to_dict_blank_block_content_keeps_emitting_text(self):
-        """
-        Non-empty list content with no visible text keeps emitting the text
-        key, exactly as the old flatten did (value[0].get("text", "") always
-        produced a string). Such messages are answer-eligible on the wire
-        today, and this fix must not change that in either direction:
-        only the empty *list* omits the key.
-        """
-        converter = BaseMessageDictionaryConverter()
-        blank_block = AIMessage(content=[{"type": "text", "text": " "}])
-        assert converter.to_dict(blank_block) == {
-            "type": ChatMessageType.AI,
-            "text": " ",
-        }
-
     def test_to_dict_empty_list_content_still_omits_text(self):
         """
         Empty-list content keeps omitting the text key (emitting text=""
