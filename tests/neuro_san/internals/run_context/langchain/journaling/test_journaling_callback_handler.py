@@ -15,6 +15,7 @@
 #
 # END COPYRIGHT
 
+from typing import Tuple
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from uuid import uuid4
@@ -30,11 +31,15 @@ class TestOnToolStartInvokingLabel:
     serialized tool carries no name."""
 
     @staticmethod
-    def _make_handler():
-        """Build a handler whose calling-agent journal records written messages."""
-        calling_agent_journal = MagicMock()
+    def _make_handler() -> Tuple[JournalingCallbackHandler, MagicMock]:
+        """
+        Build a handler whose calling-agent journal records written messages.
+
+        :return: The handler and its mocked calling-agent journal.
+        """
+        calling_agent_journal: MagicMock = MagicMock()
         calling_agent_journal.write_message = AsyncMock()
-        handler = JournalingCallbackHandler(
+        handler: JournalingCallbackHandler = JournalingCallbackHandler(
             calling_agent_journal=calling_agent_journal,
             base_journal=MagicMock(),
             parent_origin=[],
@@ -43,7 +48,7 @@ class TestOnToolStartInvokingLabel:
         return handler, calling_agent_journal
 
     @pytest.mark.asyncio
-    async def test_uses_tool_name_when_present(self):
+    async def test_uses_tool_name_when_present(self) -> None:
         """A serialized tool with a name is reported verbatim."""
         handler, journal = self._make_handler()
         await handler.on_tool_start({"name": "search"}, "input", run_id=uuid4(), tags=[], inputs={})
@@ -53,7 +58,7 @@ class TestOnToolStartInvokingLabel:
         assert message.structure["invoked_agent_name"] == "search"
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_placeholder_when_name_missing(self):
+    async def test_falls_back_to_placeholder_when_name_missing(self) -> None:
         """A serialized tool with no name yields a diagnostic placeholder label
         instead of an empty "Invoking: ``"; the raw value is still reported."""
         handler, journal = self._make_handler()

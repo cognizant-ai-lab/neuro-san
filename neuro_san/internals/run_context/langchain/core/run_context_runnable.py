@@ -148,11 +148,14 @@ class RunContextRunnable(NeuroSanRunnable):
         max_steps: int = agent_spec.get("max_steps") or max_iterations or 10_000
 
         # Create the list of callbacks to pass when invoking
-        parent_origin: List[Dict[str, Any]] = self.origin
-        base_journal: Journal = self.invocation_context.get_journal()
-        origination: Origination = self.invocation_context.get_origination()
+        journaling_callback: JournalingCallbackHandler = JournalingCallbackHandler(
+            calling_agent_journal=self.journal,
+            base_journal=self.invocation_context.get_journal(),
+            parent_origin=self.origin,
+            origination=self.invocation_context.get_origination()
+        )
         callbacks: List[BaseCallbackHandler] = [
-            JournalingCallbackHandler(self.journal, base_journal, parent_origin, origination)
+            journaling_callback
         ]
 
         # Consult the agent spec for level of verbosity as it pertains to callbacks.
@@ -187,8 +190,12 @@ class RunContextRunnable(NeuroSanRunnable):
         # Attempt to count tokens/costs while invoking the agent.
         token_counter = LangChainTokenCounter(self.primary_llm, self.invocation_context, self.journal, self.origin)
         try:
-            await token_counter.count_tokens(self.invoke_agent_chain(inputs, runnable_config, max_attempts),
-                                             max_execution_seconds)
+            # Enter the journaling scope before count_tokens() copies the current context
+            # into the agent-chain task. This is what propagates the owning handler to
+            # every descendant run while retaining it as the nearest active scope.
+            with journaling_callback.scope():
+                await token_counter.count_tokens(self.invoke_agent_chain(inputs, runnable_config, max_attempts),
+                                                 max_execution_seconds)
         except AsyncTimeout:
             # The token counter already wrote the final AIMessage to the journal
             # (before its token-accounting messages, to preserve message order).
