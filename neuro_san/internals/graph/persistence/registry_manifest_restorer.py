@@ -73,7 +73,7 @@ class RegistryManifestRestorer(Restorer):
         :param agent_mapper: optional AgentNameMapper;
             if None, AgentFileTreeMapper instance will be used.
         """
-        self.agent_mapper = agent_mapper
+        self.agent_mapper: AgentNameMapper = agent_mapper
         if not self.agent_mapper:
             self.agent_mapper = AgentFileTreeMapper()
 

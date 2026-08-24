@@ -26,11 +26,12 @@ from typing import Optional
 from typing import Tuple
 from typing_extensions import override
 
-from langchain_core.callbacks import AsyncCallbackHandler
-from langchain_core.messages import AIMessage
-from langchain_core.messages import BaseMessage
+from langchain_core.callbacks.base import AsyncCallbackHandler
+from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.ai import UsageMetadata
-from langchain_core.outputs import ChatGeneration, LLMResult
+from langchain_core.messages.base import BaseMessage
+from langchain_core.outputs.chat_generation import ChatGeneration
+from langchain_core.outputs.llm_result import LLMResult
 from langchain_core.tracers.context import register_configure_hook
 
 # Each agent's token counting scope sets this ContextVar to its own handler
