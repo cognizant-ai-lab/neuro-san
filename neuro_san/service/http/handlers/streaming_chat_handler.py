@@ -70,7 +70,7 @@ class StreamingChatHandler(BaseRequestHandler):
         self.keep_alive_task: asyncio.Task = None
         self.lock: AsyncLock = AsyncLock()  # protects request writes to output stream and last_send_ts updates
         # Set by the executor-loop driver when request processing raises there, so the
-        # Tornado side can surface it once the output queue has drained.
+        # Tornado side can signal it once the output queue has drained.
         self._driver_exception: Exception = None
 
     @staticmethod
