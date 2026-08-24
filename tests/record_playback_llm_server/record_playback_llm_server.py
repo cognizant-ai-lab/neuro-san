@@ -140,7 +140,7 @@ class RecordPlaybackLlmServer:
         Build the ProxyState from parsed args and the environment. Exits with a
         clear error if record mode is missing its required upstream base URL.
         """
-        cassette = Cassette(args.cassette)
+        cassette = Cassette(args.cassette, args.multi_response)
         upstream: Optional[UpstreamClient] = None
 
         if args.mode == ProxyState.MODE_RECORD:
@@ -148,10 +148,10 @@ class RecordPlaybackLlmServer:
             upstream = cls._build_upstream(required=True)
         elif args.mode == ProxyState.MODE_HYBRID:
             # Hybrid forwards only on a cache miss; an upstream is optional.
-            # Without one, a miss behaves like plain playback (504).
+            # Without upstream configured, a cache miss behaves like plain playback (code 504).
             upstream = cls._build_upstream(required=False)
             if upstream is None:
-                logging.warning("hybrid mode has no %s set; misses will 504 like plain playback",
+                logging.warning("hybrid mode has no %s set; cache misses will return 504 like plain playback",
                                 cls.ENV_UPSTREAM_BASE_URL)
         else:
             if not os.path.exists(args.cassette):

@@ -78,7 +78,9 @@ class ProxyHandler(tornado.web.RequestHandler):
         self.logger: logging.Logger = logging.getLogger("record-playback-llm")
 
     def data_received(self, chunk):
-        """Required override of RequestHandler abstract method; full body comes via self.request.body."""
+        """
+        Required override of RequestHandler abstract method; full body comes via self.request.body.
+        """
         return
 
     async def handle_request(self, method: str, body_bytes: bytes) -> None:
@@ -96,12 +98,16 @@ class ProxyHandler(tornado.web.RequestHandler):
             await self._playback(method, body_bytes, key)
 
     def _wants_stream(self, body_bytes: bytes) -> bool:
-        """:return: True if the request body asks for a streamed (SSE) response."""
+        """
+        :return: True if the request body asks for a streamed (SSE) response.
+        """
         body: Dict[str, Any] = RequestCanonicalizer.parsed_body(body_bytes)
         return bool(body.get("stream", False))
 
     async def _record(self, method: str, body_bytes: bytes, key: str) -> None:
-        """Forward to the external host, relay the response, and store it."""
+        """
+        Forward to the external host, relay the response, and store it.
+        """
         if self.state.upstream is None:
             self.set_status(500)
             self.set_header("Content-Type", "application/json")
@@ -250,12 +256,7 @@ class ProxyHandler(tornado.web.RequestHandler):
             "path": self.upstream_path,
             "request": RequestCanonicalizer.canonical_string(method, self.upstream_path, body_bytes),
         }
-        if self.state.multi_response:
-            self.state.cassette.append_response(key, meta, response)
-        else:
-            entry: Dict[str, Any] = dict(meta)
-            entry["response"] = response
-            self.state.cassette.put(key, entry)
+        self.state.cassette.put_response(key, meta, response)
         return True
 
     @staticmethod
@@ -403,7 +404,9 @@ class ProxyHandler(tornado.web.RequestHandler):
             return
 
     def _fail_upstream(self, exception: Exception) -> None:
-        """Report an upstream forwarding failure as a 502 without recording it."""
+        """
+        Report an upstream forwarding failure as a 502 without recording it.
+        """
         self.logger.error("upstream request to %s failed: %s", self.upstream_path, str(exception))
         self.set_status(502)
         self.set_header("Content-Type", "application/json")
