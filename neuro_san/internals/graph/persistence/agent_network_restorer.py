@@ -49,7 +49,7 @@ class AgentNetworkRestorer(AbstractAsyncConfigRestorer):
         super().__init__(file_purpose="agent network", must_exist=True)
 
         self.registry_dir: str = registry_dir
-        self.agent_mapper = agent_mapper
+        self.agent_mapper: AgentNameMapper = agent_mapper
         if not self.agent_mapper:
             if self.registry_dir is not None:
                 self.agent_mapper = AgentFileTreeMapper()

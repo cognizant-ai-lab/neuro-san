@@ -26,9 +26,9 @@ from langchain_core.agents import AgentAction
 from langchain_core.agents import AgentFinish
 from langchain_core.callbacks.base import AsyncCallbackHandler
 from langchain_core.documents import Document
-from langchain_core.messages import ToolMessage
+from langchain_core.messages.tool import ToolMessage
 from langchain_core.messages.base import BaseMessage
-from langchain_core.outputs import LLMResult
+from langchain_core.outputs.llm_rdsult import LLMResult
 from langchain_core.outputs.chat_generation import ChatGeneration
 
 from neuro_san.internals.journals.journal import Journal
