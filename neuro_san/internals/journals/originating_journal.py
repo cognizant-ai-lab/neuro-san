@@ -101,11 +101,29 @@ class OriginatingJournal(Journal):
 
         if self.pending is not None:
             # Avoid cases where two different kinds of message hold the same content.
-            if self.pending.content != message.content:
+            if not self._is_dupe_of_pending(message):
                 await self.wrapped_journal.write_message(self.pending, use_origin)
             self.pending = None
 
         await self.wrapped_journal.write_message(message, use_origin)
+
+    def _is_dupe_of_pending(self, message: BaseMessage) -> bool:
+        """
+        :param message: The incoming BaseMessage to compare against the held
+                pending message.
+        :return: True if the pending message carries the same content as the
+                incoming message. String content is compared ignoring leading
+                and trailing whitespace: the pending message's content was
+                stripped when it was captured (JournalingCallbackHandler's
+                on_llm_end), while the incoming message's content is not, so
+                an exact comparison would let a mere trailing newline defeat
+                the suppression and send clients both copies of the same text.
+        """
+        pending_content: Any = self.pending.content
+        incoming_content: Any = message.content
+        if isinstance(pending_content, str) and isinstance(incoming_content, str):
+            return pending_content.strip() == incoming_content.strip()
+        return pending_content == incoming_content
 
     def get_chat_history(self) -> List[BaseMessage]:
         """
