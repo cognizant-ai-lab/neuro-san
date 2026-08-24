@@ -155,10 +155,16 @@ class TestBaseMessageDictionaryConverter:
         """
         converter = BaseMessageDictionaryConverter()
         result = converter.to_dict(ContentFixtures.openai_responses_reasoning())
-        assert result["text"] == "the answer"
+        assert result == {
+            "type": ChatMessageType.AI,
+            "text": "the answer",
+        }
 
         reasoning_only = AIMessage(content=[{"type": "reasoning", "reasoning": "hidden"}])
-        assert converter.to_dict(reasoning_only)["text"] == ""
+        assert converter.to_dict(reasoning_only) == {
+            "type": ChatMessageType.AI,
+            "text": "",
+        }
 
     def test_to_dict_list_of_str_content_does_not_crash(self):
         """
@@ -167,7 +173,10 @@ class TestBaseMessageDictionaryConverter:
         """
         converter = BaseMessageDictionaryConverter()
         result = converter.to_dict(ContentFixtures.list_of_str())
-        assert result["text"] == "part one, part two"
+        assert result == {
+            "type": ChatMessageType.AI,
+            "text": "part one, part two",
+        }
 
     def test_to_dict_empty_list_content_still_omits_text(self):
         """
@@ -176,7 +185,9 @@ class TestBaseMessageDictionaryConverter:
         """
         converter = BaseMessageDictionaryConverter()
         result = converter.to_dict(ContentFixtures.empty_list_content())
-        assert "text" not in result
+        assert result == {
+            "type": ChatMessageType.AI,
+        }
 
     def test_to_dict_agent_framework_message_optionals_exact_shape(self):
         """
