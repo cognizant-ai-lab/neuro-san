@@ -17,6 +17,9 @@
 
 from typing import Any
 from typing import Dict
+from typing import List
+
+from threading import Thread
 
 import pytest
 
@@ -226,3 +229,177 @@ class TestMalformedSpecHandling:
             self._convert({
                 "properties": {"tags": {"type": "array", "items": "cao_item"}},
             })
+
+
+class TestModelCaching:
+    """
+    Test cases for the spec-keyed model cache (issue #1209).
+
+    Specs are static registry data re-converted for every tool of every
+    agent activation on every request, so from_dict() caches the created
+    model class by spec content.  These tests pin down the cache contract:
+    content-keyed sharing across converter instances, key-order sensitivity
+    (field order flows through to the provider-facing JSON schema), LRU
+    eviction, and the uncached fallbacks.
+    """
+
+    SPEC: Dict[str, Any] = {
+        "properties": {
+            "city": {"type": "string", "description": "Which city"},
+            "days": {"type": "integer"},
+        },
+        "required": ["city"],
+    }
+
+    @pytest.fixture(autouse=True)
+    def clear_model_cache(self):
+        """
+        The cache is class-level, process-wide state.  Clear it around each
+        test so tests stay order-independent.
+        """
+        BaseModelDictionaryConverter._model_cache.clear()   # pylint: disable=protected-access
+        yield
+        BaseModelDictionaryConverter._model_cache.clear()   # pylint: disable=protected-access
+
+    def _convert(self, parameters: Dict[str, Any], name: str = "parameters") -> BaseModel:
+        converter = BaseModelDictionaryConverter(name)
+        return converter.from_dict(parameters)
+
+    def test_same_spec_returns_cached_model(self):
+        """The very same spec dict converts to the very same model class."""
+        first = self._convert(self.SPEC)
+        second = self._convert(self.SPEC)
+        assert second is first
+
+    def test_equal_content_shares_model_across_instances(self):
+        """
+        The cache is keyed on content, not object identity, and is shared
+        by all converter instances - this is what lets registry validation
+        at load time warm the cache the tool-creation path reads from.
+        """
+        copy_of_spec: Dict[str, Any] = {
+            "properties": {
+                "city": {"type": "string", "description": "Which city"},
+                "days": {"type": "integer"},
+            },
+            "required": ["city"],
+        }
+        first = self._convert(self.SPEC)
+        second = self._convert(copy_of_spec)
+        assert second is first
+
+    def test_key_order_gets_separate_entries(self):
+        """
+        Field order flows through to the JSON schema advertised to LLM
+        providers, so specs differing only in property order deliberately
+        do NOT share a model.
+        """
+        reordered: Dict[str, Any] = {
+            "properties": {
+                "days": {"type": "integer"},
+                "city": {"type": "string", "description": "Which city"},
+            },
+            "required": ["city"],
+        }
+        first = self._convert(self.SPEC)
+        second = self._convert(reordered)
+        assert second is not first
+        assert list(first.model_fields.keys()) == ["city", "days"]
+        assert list(second.model_fields.keys()) == ["days", "city"]
+
+    def test_top_level_field_name_is_part_of_the_key(self):
+        """
+        The converter's top_level_field_name becomes the model's class name,
+        which pydantic uses in validation error messages - same spec under a
+        different name must not share a cache entry.
+        """
+        first = self._convert(self.SPEC, name="parameters")
+        second = self._convert(self.SPEC, name="sly_data_schema")
+        assert second is not first
+        assert first.__name__ == "parameters"
+        assert second.__name__ == "sly_data_schema"
+
+    def test_lru_eviction_at_bound(self, monkeypatch):
+        """
+        Oldest entry falls out once the bound is exceeded; re-converting it
+        afterwards builds a fresh class.
+        """
+        monkeypatch.setattr(BaseModelDictionaryConverter, "MODEL_CACHE_MAX_SIZE", 2)
+
+        spec_a: Dict[str, Any] = {"properties": {"a": {"type": "string"}}}
+        spec_b: Dict[str, Any] = {"properties": {"b": {"type": "string"}}}
+        spec_c: Dict[str, Any] = {"properties": {"c": {"type": "string"}}}
+
+        model_a = self._convert(spec_a)
+        model_b = self._convert(spec_b)
+        model_c = self._convert(spec_c)          # evicts spec_a
+
+        assert self._convert(spec_c) is model_c  # still cached
+        assert self._convert(spec_b) is model_b  # still cached
+        assert self._convert(spec_a) is not model_a  # was evicted, rebuilt
+
+    def test_unserializable_spec_builds_uncached(self):
+        """
+        A spec containing values JSON cannot represent (only reachable from
+        in-process callers) still converts - it just never enters the cache.
+        """
+        spec: Dict[str, Any] = {
+            "properties": {"blob": {"type": "string", "description": b"raw-bytes"}},
+        }
+        model = self._convert(spec)
+        assert issubclass(model, BaseModel)
+        assert len(BaseModelDictionaryConverter._model_cache) == 0   # pylint: disable=protected-access
+
+    def test_bad_spec_raises_every_time_and_is_not_cached(self):
+        """Spec errors propagate uncached so they are re-reported when re-seen."""
+        bad_spec: Dict[str, Any] = {"properties": {"x": {"type": "interger"}}}
+        for _ in range(2):
+            with pytest.raises(ToolSpecError, match="Unrecognized type"):
+                self._convert(bad_spec)
+        assert len(BaseModelDictionaryConverter._model_cache) == 0   # pylint: disable=protected-access
+
+    def test_concurrent_conversion_is_safe(self):
+        """
+        Threads racing on the same spec all get a usable model and the
+        cache converges to one entry per distinct spec.
+        """
+        results: List[Any] = []
+
+        def convert():
+            results.append(self._convert(self.SPEC))
+
+        threads: List[Thread] = [Thread(target=convert) for _ in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert len(results) == 8
+        for model in results:
+            assert issubclass(model, BaseModel)
+            assert model.model_validate({"city": "Lisbon"}).city == "Lisbon"
+        assert len(BaseModelDictionaryConverter._model_cache) == 1   # pylint: disable=protected-access
+
+    def test_edited_spec_gets_fresh_model_not_stale_cache(self):
+        """
+        Hot-reload safety: the server can refresh registries every few
+        seconds without a restart.  The cache is keyed on spec content, so
+        an edited parameters block is a guaranteed miss - the old model
+        cannot be served for it - while the unchanged case reuses a model
+        identical to what a rebuild would produce.
+        """
+        before = self._convert(self.SPEC)
+
+        edited_spec: Dict[str, Any] = {
+            "properties": {
+                "city": {"type": "string", "description": "Which city"},
+                "days": {"type": "integer"},
+                "units": {"type": "string"},   # field added by a hocon edit
+            },
+            "required": ["city"],
+        }
+        after = self._convert(edited_spec)
+
+        assert after is not before
+        assert "units" in after.model_fields
+        assert "units" not in before.model_fields

@@ -23,6 +23,10 @@ from typing import Optional
 from typing import Type
 from typing import Union
 
+from collections import OrderedDict
+from json import dumps
+from threading import Lock
+
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import create_model
@@ -83,6 +87,24 @@ class BaseModelDictionaryConverter(DictionaryConverter):
         "object": Dict[str, Any]
     }
 
+    # Cache of created models, shared by every converter instance.
+    #
+    # pydantic v2's create_model() compiles a Rust core schema per call
+    # (multiplied by nesting depth, since each nested object is its own
+    # create_model() call), and the specs arriving here are overwhelmingly
+    # static registry data that would otherwise be re-converted for every
+    # tool of every agent activation on every request.  Model classes are
+    # immutable once created, so identical specs can safely share one
+    # cached class across threads and requests.  See issue #1209.
+    #
+    # The cache is bounded because external agents send their function
+    # specs over the network per request - without a bound, a misbehaving
+    # remote agent whose spec varies per response would grow this without
+    # limit.  Eviction is least-recently-used.
+    MODEL_CACHE_MAX_SIZE: int = 256
+    _model_cache: OrderedDict = OrderedDict()
+    _model_cache_lock: Lock = Lock()
+
     def __init__(self, top_level_field_name: str):
         """
         Constructor
@@ -117,8 +139,56 @@ class BaseModelDictionaryConverter(DictionaryConverter):
         if obj_dict is None:
             return None
 
-        base_model: BaseModel = self.openai_function_to_pydantic(self.top_level_field_name, obj_dict)
+        cache_key: str = self.get_cache_key(obj_dict)
+        if cache_key is None:
+            # The spec contains values JSON cannot represent.  Neither hocon
+            # registries nor network specs can produce those (both are born
+            # as JSON), so this is only reachable from in-process callers -
+            # build uncached rather than fail.
+            return self.openai_function_to_pydantic(self.top_level_field_name, obj_dict)
+
+        cache: OrderedDict = BaseModelDictionaryConverter._model_cache
+        with BaseModelDictionaryConverter._model_cache_lock:
+            base_model: BaseModel = cache.get(cache_key)
+            if base_model is not None:
+                cache.move_to_end(cache_key)
+                return base_model
+
+        # Build outside the lock: create_model() is the slow part, and two
+        # threads racing to convert the same spec just produce two equivalent
+        # classes, one of which wins the cache below.  Spec errors raised
+        # here propagate uncached, so a bad spec is re-reported every time
+        # it is seen.
+        base_model = self.openai_function_to_pydantic(self.top_level_field_name, obj_dict)
+
+        with BaseModelDictionaryConverter._model_cache_lock:
+            cache[cache_key] = base_model
+            cache.move_to_end(cache_key)
+            while len(cache) > BaseModelDictionaryConverter.MODEL_CACHE_MAX_SIZE:
+                cache.popitem(last=False)
+
         return base_model
+
+    def get_cache_key(self, obj_dict: Dict[str, Any]) -> str:
+        """
+        :param obj_dict: The spec dictionary a model is being created from
+        :return: A string cache key uniquely identifying the model that
+                openai_function_to_pydantic() would build from the spec,
+                or None if the spec cannot be serialized for keying.
+        """
+        try:
+            # Keys are deliberately NOT sorted: the created model preserves
+            # the spec's own field order, which flows through to the JSON
+            # schema advertised to LLM providers.  Specs that differ only in
+            # key order therefore get separate cache entries instead of one
+            # of them being served a bytes-different schema.
+            spec_json: str = dumps(obj_dict, separators=(",", ":"))
+        except (TypeError, ValueError):
+            return None
+
+        # The name becomes the created model's class name (visible in
+        # pydantic validation error messages), so it is part of the key.
+        return f"{self.top_level_field_name}:{spec_json}"
 
     def openai_function_to_pydantic(self, name: str, function_dict: Dict[str, Any]) -> BaseModel:
         """
