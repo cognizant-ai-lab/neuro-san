@@ -118,6 +118,14 @@ class OriginatingJournal(Journal):
                 on_llm_end), while the incoming message's content is not, so
                 an exact comparison would let a mere trailing newline defeat
                 the suppression and send clients both copies of the same text.
+
+        Normalizing here, rather than stripping at either capture point, is
+        deliberate: both captured texts are client-visible and locked by
+        backward compatibility (the AGENT copy has always been journaled
+        stripped; the AI text reaches the wire and chat history unstripped),
+        so changing either producer would change client-visible output. The
+        dupe decision is internal, which makes this comparison the one place
+        that can reconcile the two without altering any payload.
         """
         pending_content: Any = self.pending.content
         incoming_content: Any = message.content
