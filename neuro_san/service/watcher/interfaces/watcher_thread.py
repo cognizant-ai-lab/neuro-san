@@ -56,10 +56,10 @@ class WatcherThread(Startable):
         """
         if self.single_instance:
             num_workers: int = self.server_context.get_num_workers()
-            work_id: int = self.server_context.get_worker_id()
-            if num_workers > 1 and work_id != 0:
+            worker_id: int = self.server_context.get_worker_id()
+            if num_workers > 1 and worker_id != 0:
                 self.logger.info("Not starting %s in worker %d because it is configured as a single instance",
-                                 self.__class__.__name__, work_id)
+                                 self.__class__.__name__, worker_id)
                 return
         self.logger.info("Starting %s with %f seconds period",
                          self.__class__.__name__, self.update_period_in_seconds)
