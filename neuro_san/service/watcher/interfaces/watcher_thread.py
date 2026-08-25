@@ -23,6 +23,7 @@ from threading import Thread
 from time import sleep
 
 from leaf_common.utils.startable import Startable
+from xdist.plugin import worker_id
 
 from neuro_san.service.utils.server_context import ServerContext
 
@@ -32,25 +33,45 @@ class WatcherThread(Startable):
     Startable implementation that starts a thread to do its work in run().
     """
 
-    def __init__(self, server_context: ServerContext):
+    def __init__(self, server_context: ServerContext, single_instance: bool = False):
         """
         Constructor
 
         :param server_context: ServerContext for global-ish state
+        :param single_instance: If True, this Startable should only be started
+            in a single service instance in multi-instance server configuration.
+            If False, this Startable should be started in all service instances.
         """
         self.logger: Logger = getLogger(self.__class__.__name__)
         self.update_thread: Thread = Thread(target=self.run, name=self.__class__.__name__, daemon=True)
         self.keep_running: bool = True
         self.update_period_in_seconds: float = 1.0
+        self.single_instance: bool = single_instance
         self.server_context: ServerContext = server_context
 
     def start(self):
         """
         Perform start up.
+        If this WatcherThread is configured as a single instance,
+        it will only be started in one service instance (worker id 0) in multi-instance server configuration.
         """
+        if self.single_instance:
+            num_workers: int = self.server_context.get_num_workers()
+            worker_id: int = self.server_context.get_worker_id()
+            if num_workers > 1 and worker_id != 0:
+                self.logger.info("Not starting %s in worker %d because it is configured as a single instance",
+                                 self.__class__.__name__, worker_id)
+                return
         self.logger.info("Starting %s with %f seconds period",
                          self.__class__.__name__, self.update_period_in_seconds)
         self.update_thread.start()
+
+    def run_single_instance(self) -> bool:
+        """
+        :return: True if this Startable should only be started in a single service instance
+            in multi-instance server configuration. False otherwise.
+        """
+        return self.single_instance
 
     def run(self):
         """
