@@ -42,6 +42,7 @@ from neuro_san.internals.journals.origination import Origination
 from neuro_san.internals.journals.tool_argument_reporting import ToolArgumentReporting
 from neuro_san.message.types.agent_message import AgentMessage
 from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
+from neuro_san.message.utils.content_utils import ContentUtils
 
 
 # Each agent must execute its chain in a context descended from the scope entered
@@ -160,8 +161,16 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
         generations = response.generations[0]
         first_generation = generations[0]
         if isinstance(first_generation, ChatGeneration):
-            content: str = first_generation.text
-            if content is not None and len(content) > 0:
+            # Project the message content to its full text through the single
+            # projection policy ContentUtils defines: the dupe comparison
+            # against the later AI message relies on both copies projecting to
+            # the same text. ChatGeneration.text is close but not identical -
+            # it also collects legacy text blocks that carry no "type" key, a
+            # shape no supported provider emits and which is deliberately out
+            # of scope here. Tool-call-only steps flatten to "" and are
+            # skipped by the gate below.
+            content: str = ContentUtils.flatten_to_text(first_generation.message)
+            if len(content) > 0:
                 # Package up the thinking content as an AgentMessage to stream
                 message = AgentMessage(content=content.strip())
                 # Some AGENT messages that come from this source end up being dupes
