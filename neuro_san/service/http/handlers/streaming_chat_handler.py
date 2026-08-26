@@ -20,11 +20,13 @@ See class comment for details
 from typing import Any
 from typing import Dict
 from typing import AsyncGenerator
+from typing import Tuple
 from typing import Optional
 
 from http import HTTPStatus
 
 import asyncio
+import concurrent.futures
 from asyncio import Lock as AsyncLock
 import contextlib
 import json
@@ -33,9 +35,14 @@ import time
 import uuid
 import tornado
 
+from leaf_common.asyncio.asyncio_executor import AsyncioExecutor
+from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
+
+from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.message.types.chat_message_type import ChatMessageType
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
+from neuro_san.session.session_invocation_context import SessionInvocationContext
 from neuro_san.service.utils.http_llm_tracer import HttpxLlmTracer
 
 
@@ -62,6 +69,9 @@ class StreamingChatHandler(BaseRequestHandler):
         self.last_send_ts = 0.0
         self.keep_alive_task: asyncio.Task = None
         self.lock: AsyncLock = AsyncLock()  # protects request writes to output stream and last_send_ts updates
+        # Set by the executor-loop driver when request processing raises there, so the
+        # Tornado side can signal it once the output queue has drained.
+        self._driver_exception: Exception = None
 
     @staticmethod
     def _build_keep_alive_frame() -> str:
@@ -89,6 +99,13 @@ class StreamingChatHandler(BaseRequestHandler):
     async def post(self, agent_name: str):
         """
         Implementation of POST request handler for streaming chat API call.
+
+        The bulk of request processing - building the session, driving the agent
+        message stream, converting each message and serializing it to a wire frame,
+        and tearing the request down - runs on the request's dedicated AsyncioExecutor
+        event loop, off the Tornado main loop. The Tornado loop is left with only
+        "basic actions": the setup preamble that is structurally bound to the Tornado
+        request/connection, and writing already-serialized frames to the client.
         """
         metadata: Dict[str, Any] = self.get_metadata()
         req_id: Optional[str] = metadata.get("request_id", None)
@@ -116,8 +133,6 @@ class StreamingChatHandler(BaseRequestHandler):
             # For asyncio.timeout(), None means no timeout:
             request_timeout = None
 
-        result_generator: AsyncGenerator[Dict[str, Any], None] = None
-
         # Parse the JSON request body separately from everything else.
         request_dict: Dict[str, Any] = None
         try:
@@ -127,11 +142,45 @@ class StreamingChatHandler(BaseRequestHandler):
             # Suppress possible exceptions: they are of no interest here.
             with contextlib.suppress(Exception):
                 self.process_exception(exc)
-            await self._finish_request(result_generator, metadata, agent_name)
+            await self._finish_request(None, metadata, agent_name)
             return
 
         is_event: bool = service.should_process_as_event(request_dict)
+
+        # Pull the request's AsyncioExecutor UP to the handler: obtain it here and start
+        # it (a no-op for a pooled/reused executor). We own returning it to the pool,
+        # except when the request defers work to the event work queue - in which case
+        # ownership transfers to that deferred path (see SessionInvocationContext).
+        pool: AsyncioExecutorPool = self.server_context.get_executor_pool()
+        executor: AsyncioExecutor = pool.get_executor()
+        executor.start()
+
+        # Synchronous setup stays on the Tornado thread: SessionInvocationContext.start()
+        # performs a blocking initialize() wait against the executor loop, which would
+        # self-deadlock if it ran from the executor loop thread itself.
+        try:
+            invocation_context, response_dict_generator, service_metadata, do_log, log_marker = \
+                service.prepare_streaming_chat(request_dict, metadata, asyncio_executor=executor)
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            with contextlib.suppress(Exception):
+                self.process_exception(exc)
+            pool.return_executor(executor)
+            await self._finish_request(None, metadata, agent_name)
+            return
+
+        # One output queue carrying ready-to-write wire frames (strings). Its async side
+        # binds to THIS (Tornado) loop - the write side. The driver on the executor loop
+        # feeds it via the loop-agnostic synchronous side.
+        out_queue: AsyncCollatingQueue = AsyncCollatingQueue()
+        self._driver_exception = None
+
+        # Drive per-message conversion/serialization and teardown on the executor loop.
+        driver_task, driver_done = self._start_driver(
+            executor, service, request_dict, invocation_context,
+            response_dict_generator, service_metadata, do_log, log_marker, out_queue)
+
         flushed_first_result: bool = False
+        client_gone: bool = False
         try:
             # Set up headers for chunked response
             self.set_header("Content-Type", "application/json-lines")
@@ -145,20 +194,21 @@ class StreamingChatHandler(BaseRequestHandler):
                 # Raise accordingly - we will handle this exception:
                 raise tornado.iostream.StreamClosedError()
 
-            # We are now ready to start processing the request and streaming results back to the client.
+            # We are now ready to start streaming results back to the client.
             # If heartbeat is enabled, time to start it here:
             if self.keep_alive_interval_seconds > 0:
-                # If heartbeat is enabled,
-                # start the heartbeat task in the background,
+                # Start the heartbeat task in the background,
                 # so it can run concurrently with the main request processing.
                 self.keep_alive_task = asyncio.create_task(self.run_heartbeat())
 
-            # Now process the result stream
+            # Consume ready-to-write frames produced on the executor loop and send them.
             async with asyncio.timeout(request_timeout):
-                result_generator = service.streaming_chat(request_dict, metadata)
-
-                async for result_dict in result_generator:
-                    result_str: str = json.dumps(result_dict) + "\n"
+                async for result_str in out_queue:
+                    if client_gone:
+                        # The client is gone but the work is allowed to finish on the
+                        # executor loop (e.g. an event agent). Drain frames without
+                        # writing so the driver can complete and memory stays bounded.
+                        continue
                     async with self.lock:
                         self.write(result_str)
                         flush_ok = await self.do_flush()
@@ -172,7 +222,13 @@ class StreamingChatHandler(BaseRequestHandler):
                             # Raise exception to be handled as a general
                             # "stream abruptly closed" case:
                             raise tornado.iostream.StreamClosedError()
-                        # Otherwise swallow and continue
+                        # Event agent, first result already out: stop writing but let the
+                        # work complete on the executor loop.
+                        client_gone = True
+
+            # Stream drained normally; surface any exception raised on the executor loop.
+            if self._driver_exception is not None:
+                raise self._driver_exception
 
         except asyncio.CancelledError:
             self.logger.info(metadata, "Request handler cancelled.")
@@ -204,7 +260,106 @@ class StreamingChatHandler(BaseRequestHandler):
                 self.keep_alive_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await self.keep_alive_task
-            await self._finish_request(result_generator, metadata, agent_name)
+
+            # If the driver is still running (timeout, problematic client close, or an
+            # unexpected error left the consume loop early), cancel it on the executor loop.
+            if not driver_task.done():
+                executor.get_event_loop().call_soon_threadsafe(driver_task.cancel)
+
+            # Wait for the driver to fully finish - including its teardown - before deciding
+            # the executor's fate. This also settles the deferred_to_event_work flag.
+            with contextlib.suppress(Exception):
+                await asyncio.wrap_future(driver_done)
+
+            await self._finish_request(None, metadata, agent_name)
+
+            # Return the executor to the pool unless the request deferred work to the event
+            # work queue, in which case the deferred-work path now owns returning it.
+            if not invocation_context.deferred_to_event_work:
+                pool.return_executor(executor)
+
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def _start_driver(self, executor: AsyncioExecutor, service: AsyncAgentService,
+                      request_dict: Dict[str, Any], invocation_context: SessionInvocationContext,
+                      response_dict_generator: AsyncGenerator[Dict[str, Any], None],
+                      service_metadata: Dict[str, str], do_log: bool, log_marker: str,
+                      out_queue: AsyncCollatingQueue) \
+            -> Tuple[asyncio.Task, concurrent.futures.Future]:
+        """
+        Submit the streaming driver coroutine onto the executor loop and bridge its
+        completion back to the Tornado loop.
+
+        :return: A tuple of (driver_task, driver_done) where driver_task is the
+                 asyncio.Task on the executor loop (used to cancel it) and driver_done
+                 is a concurrent.futures.Future the driver resolves when it finishes
+                 (awaitable from the Tornado loop via asyncio.wrap_future). The driver
+                 resolves the future itself rather than via a done-callback, since
+                 asyncio.Task.add_done_callback is not safe to call cross-thread.
+        """
+        driver_done: concurrent.futures.Future = concurrent.futures.Future()
+        driver_task: asyncio.Task = executor.create_task(
+            self._drive_streaming_chat(
+                service, request_dict, invocation_context, response_dict_generator,
+                service_metadata, do_log, log_marker, out_queue, driver_done),
+            "streaming_chat_driver")
+        return driver_task, driver_done
+
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    async def _drive_streaming_chat(self, service: AsyncAgentService,
+                                    request_dict: Dict[str, Any],
+                                    invocation_context: SessionInvocationContext,
+                                    response_dict_generator: AsyncGenerator[Dict[str, Any], None],
+                                    service_metadata: Dict[str, str], do_log: bool, log_marker: str,
+                                    out_queue: AsyncCollatingQueue,
+                                    driver_done: concurrent.futures.Future):
+        """
+        Runs on the executor loop. Consumes the converted response stream, serializes
+        each message to a wire frame, and feeds it to the output queue for the Tornado
+        loop to write. On completion it drains any in-flight teardown tasks so the
+        handler can return the executor to the pool without cancelling live cleanup,
+        and resolves driver_done so the Tornado side can await our completion.
+        """
+        cancelled: bool = False
+        try:
+            async for response_dict in service.consume_streaming_chat(
+                    request_dict, invocation_context, response_dict_generator,
+                    service_metadata, do_log, log_marker):
+                result_str: str = json.dumps(response_dict) + "\n"
+                # synchronous=True: the get()-ing end lives on the Tornado loop.
+                await out_queue.put(result_str, synchronous=True)
+        except asyncio.CancelledError:
+            # The handler cancelled us (timeout or the client went away). consume's own
+            # finally has already finalized the request; skip the (best-effort) drain.
+            cancelled = True
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            # Surface the failure to the Tornado side, which will react after the queue drains.
+            self._driver_exception = exc
+        finally:
+            if not cancelled:
+                # Let teardown tasks scheduled by finish_request() (close_of_request /
+                # close_of_work) finish before we signal done, so the handler's
+                # return_executor() does not cancel live cleanup.
+                with contextlib.suppress(Exception):
+                    await self._drain_executor_cleanup()
+            # Always unblock the Tornado-side consumer, however we got here.
+            with contextlib.suppress(Exception):
+                await out_queue.put_final_item(synchronous=True)
+            # Signal our completion to the Tornado side (awaited via asyncio.wrap_future).
+            if not driver_done.done():
+                driver_done.set_result(True)
+
+    @staticmethod
+    async def _drain_executor_cleanup():
+        """
+        Await all tasks currently pending on this (executor) loop except the caller,
+        so that fire-and-forget teardown scheduled during request finalization runs to
+        completion. Each request owns its executor exclusively while checked out of the
+        pool, so these tasks all belong to this request.
+        """
+        current: asyncio.Task = asyncio.current_task()
+        pending = [task for task in asyncio.all_tasks() if task is not current]
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
 
     async def run_heartbeat(self):
         """
