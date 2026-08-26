@@ -60,7 +60,7 @@ class ExternalActivation(AbstractCallableActivation):
     def __init__(self, parent_run_context: RunContext,
                  factory: AgentToolFactory,
                  agent_url: str,
-                 arguments: Dict[str, Any],
+                 args: Dict[str, Any],
                  sly_data: Dict[str, Any],
                  allow_from_downstream: Dict[str, Any],
                  invocation: str):
@@ -74,7 +74,7 @@ class ExternalActivation(AbstractCallableActivation):
         :param agent_url: The string url to find the external agent.
                         Theoretically this has already been verified by use of an
                         ExternalAgentParsing method.
-        :param arguments: A dictionary of the tool function arguments passed in
+        :param args: A dictionary of the tool function arguments passed in
         :param sly_data: A mapping whose keys might be referenceable by agents, but whose
                  values should not appear in agent chat text. Can be an empty dictionary.
                  This gets passed along as a distinct argument to the referenced python class's
@@ -92,7 +92,7 @@ class ExternalActivation(AbstractCallableActivation):
         self.agent_url: str = agent_url
         self.run_context: RunContext = RunContextFactory.create_run_context(parent_run_context, self)
         self.journal: Journal = self.run_context.get_journal()
-        self.arguments: Dict[str, Any] = arguments
+        self.arguments: Dict[str, Any] = args
         self.allow_from_downstream: Dict[str, Any] = allow_from_downstream
 
         self.session: AsyncAgentSession = None
@@ -228,8 +228,8 @@ class ExternalActivation(AbstractCallableActivation):
             "tool_end": True,
             "tool_output": answer
         }
-        message = AgentMessage(content="Got result:", structure=answer_dict)
-        await self.journal.write_message(message)
+        agent_message = AgentMessage(content="Got result:", structure=answer_dict)
+        await self.journal.write_message(agent_message)
 
         # In terms of sending tool results back up the graph,
         # we really only care about immediately are the AI responses.

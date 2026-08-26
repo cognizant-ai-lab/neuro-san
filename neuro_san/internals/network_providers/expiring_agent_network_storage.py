@@ -203,10 +203,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         # First determine what has expired
         expired: List[str] = []
 
-        reservations_snapshot: Dict[str, Reservation] = None
-        with self.lock:
-            reservations_snapshot = self.reservations_table.copy()
-
+        reservations_snapshot: Dict[str, Reservation] = self._get_reservations_snapshot()
         for agent_name, reservation in reservations_snapshot.items():
             if self.is_expired(reservation):
                 expired.append(agent_name)
@@ -226,6 +223,15 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             for agent_name in expired:
                 listener.agent_removed(agent_name, self)
                 self.logger.info("%s: REMOVED network for agent %s", self._name, agent_name)
+
+    def _get_reservations_snapshot(self) -> Dict[str, Reservation]:
+        """
+        Get a snapshot of all reservations
+        """
+        reservations_snapshot: Dict[str, Reservation] = None
+        with self.lock:
+            reservations_snapshot = self.reservations_table.copy()
+        return reservations_snapshot
 
     def remove_agent_network(self, agent_name: str):
         """

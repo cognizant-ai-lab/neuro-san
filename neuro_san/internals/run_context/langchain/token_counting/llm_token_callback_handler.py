@@ -17,7 +17,8 @@
 
 from asyncio import Lock as AsyncLock
 from contextvars import ContextVar
-import logging
+from logging import getLogger
+from logging import Logger
 from time import time
 from typing import Any
 from typing import Dict
@@ -25,11 +26,12 @@ from typing import Optional
 from typing import Tuple
 from typing_extensions import override
 
-from langchain_core.callbacks import AsyncCallbackHandler
-from langchain_core.messages import AIMessage
-from langchain_core.messages import BaseMessage
+from langchain_core.callbacks.base import AsyncCallbackHandler
+from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.ai import UsageMetadata
-from langchain_core.outputs import ChatGeneration, LLMResult
+from langchain_core.messages.base import BaseMessage
+from langchain_core.outputs.chat_generation import ChatGeneration
+from langchain_core.outputs.llm_result import LLMResult
 from langchain_core.tracers.context import register_configure_hook
 
 # Each agent's token counting scope sets this ContextVar to its own handler
@@ -282,7 +284,8 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
             self._get_cost_from_info(model_name, prompt_tokens, "price_per_1k_input_tokens")
 
         if completion_token_cost is None and prompt_token_cost is None:
-            logging.warning("No price info found for model %s in llm info. Token cost defaults to 0.", model_name)
+            logger: Logger = getLogger(__name__)
+            logger.warning("No price info found for model %s in llm info. Token cost defaults to 0.", model_name)
 
         # Return total cost
         return (completion_token_cost or 0.0) + (prompt_token_cost or 0.0)

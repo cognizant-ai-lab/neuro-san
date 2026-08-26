@@ -21,8 +21,9 @@ from typing import Dict
 from typing import Optional
 from typing import Type
 
-import logging
-import traceback
+from logging import getLogger
+from logging import Logger
+from traceback import format_exc
 
 from pydantic_core import ValidationError
 from langchain_core.messages.base import BaseMessage
@@ -249,7 +250,7 @@ It's function_json is described thusly:
             # Report the exception, but return exception as value from function.
             # This actually allows LLMs to recognize that something is wrong
             # and verbally report on that.
-            logger = logging.getLogger(self.__class__.__name__)
+            logger: Logger = getLogger(self.__class__.__name__)
             sensitive_logger = SensitiveLogger(logger)
 
             # CheckMarx false-positive for Information Exposure Through an Error Message
@@ -258,7 +259,7 @@ It's function_json is described thusly:
             # by setting the env var LEAF_LOG_SENSITIVE to "false", while still allowing
             # developers to see the error message.
             sensitive_logger.error("Tool._arun() got Exception: %s", str(exception))
-            sensitive_logger.error(traceback.format_exc())
+            sensitive_logger.error(format_exc())
             run = None
             return str(exception)
 

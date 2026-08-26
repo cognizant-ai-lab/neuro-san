@@ -32,6 +32,7 @@ from neuro_san.message.types.agent_framework_message import AgentFrameworkMessag
 from neuro_san.message.types.agent_progress_message import AgentProgressMessage
 from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
 from neuro_san.message.types.chat_message_type import ChatMessageType
+from neuro_san.message.utils.content_utils import ContentUtils
 
 
 class BaseMessageDictionaryConverter(DictionaryConverter):
@@ -97,15 +98,26 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
                 # for, and that is ok.
                 value = None
 
-            # For OpenAI and Ollama, content of AI message is a string but content from
-            # Anthropic AI message can either be a single string or a list of content blocks.
-            # If it is a list, "text" is a key of a dictionary which is the first element of
-            # the list. For more details: https://python.langchain.com/docs/integrations/chat/anthropic/#content-blocks
+            # Content is a plain string for most providers, but can be a list
+            # of content blocks (e.g. Anthropic thinking + text, or list-of-str,
+            # which is also legal per the BaseMessage annotation). Project list
+            # content to its full text: concatenate every text block, not just
+            # the first one - a thinking-first response has no text in its
+            # first block at all.
             if src == "content" and isinstance(value, list):
-                if len(value) > 0:
-                    value = value[0].get("text", "")
-                else:
+                if len(value) == 0:
+                    # Keep omitting the text key for empty-list content:
+                    # emitting text="" instead would make such messages newly
+                    # answer-eligible in AnswerMessageFilter and able to
+                    # displace the real answer.
                     value = None
+                else:
+                    # Deliberately NOT gated on ContentUtils.is_empty_content:
+                    # blank-but-non-empty block content (e.g. reasoning-only)
+                    # already emitted text=""/" " under the old first-block
+                    # flatten, and this projection preserves that wire shape
+                    # exactly.
+                    value = ContentUtils.flatten_to_text(value)
 
             if value is not None:
                 chat_message[dest] = value

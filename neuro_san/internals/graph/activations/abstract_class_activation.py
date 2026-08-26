@@ -74,7 +74,7 @@ class AbstractClassActivation(AbstractCallableActivation):
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self, parent_run_context: RunContext,
                  factory: AgentToolFactory,
-                 arguments: Dict[str, Any],
+                 args: Dict[str, Any],
                  agent_tool_spec: Dict[str, Any],
                  sly_data: Dict[str, Any]):
         """
@@ -84,7 +84,7 @@ class AbstractClassActivation(AbstractCallableActivation):
                              down its resources to a new RunContext created by
                              this call.
         :param factory: The AgentToolFactory used to create tools
-        :param arguments: A dictionary of the tool function arguments passed in by the LLM
+        :param args: A dictionary of the tool function arguments passed in by the LLM
         :param agent_tool_spec: The dictionary describing the JSON agent tool
                             to be used by the instance
         :param sly_data: A mapping whose keys might be referenceable by agents, but whose
@@ -111,8 +111,8 @@ class AbstractClassActivation(AbstractCallableActivation):
 
         # Put together the arguments to pass to the CodedTool
         self.arguments: Dict[str, Any] = {}
-        if arguments is not None:
-            self.arguments = arguments
+        if args is not None:
+            self.arguments = args
 
         # Set some standard args so CodedTool can know about origin, but only if they are
         # not already set by other infrastructure.
@@ -154,8 +154,6 @@ class AbstractClassActivation(AbstractCallableActivation):
 
         :return: A BaseMessage produced during this process.
         """
-        message: BaseMessage = None
-
         full_class_ref: str = self.get_full_class_ref()
         self.logger.info("Calling class %s", full_class_ref)
         class_split: List[str] = full_class_ref.split(".")
@@ -400,19 +398,19 @@ Some hints:
 
         return coded_tool
 
-    async def attempt_invoke(self, coded_tool: CodedTool, arguments: Dict[str, Any], sly_data: Dict[str, Any]) \
+    async def attempt_invoke(self, coded_tool: CodedTool, args: Dict[str, Any], sly_data: Dict[str, Any]) \
             -> Any:
         """
         Attempt to invoke the coded tool.
 
         :param coded_tool: The CodedTool instance to invoke
-        :param arguments: The arguments dictionary to pass as input to the coded_tool
+        :param args: The arguments dictionary to pass as input to the coded_tool
         :param sly_data: The sly_data dictionary to pass as input to the coded_tool
         :return: The result of the coded_tool, whatever that is.
         """
         retval: Any = None
 
-        arguments_dict: Dict[str, Any] = ToolArgumentReporting.prepare_tool_start_dict(arguments)
+        arguments_dict: Dict[str, Any] = ToolArgumentReporting.prepare_tool_start_dict(args)
         message = AgentMessage(content="Received arguments:", structure=arguments_dict)
         await self.journal.write_message(message)
 
@@ -426,18 +424,18 @@ Some hints:
                 # That didn't work, so try running the synchronous method as an async task
                 # within the confines of the proper executor.
                 # Warn that there is a better alternative
-                message = f"""
+                info_message = f"""
 Running CodedTool class {coded_tool.__class__.__name__}.invoke() synchronously in an asynchronous environment.
 This can lead to performance problems when running within a server. Consider porting to the async_invoke() method.
 """
-                self.logger.info(message)
-                await self.journal.write_message(AgentMessage(content=message))
+                self.logger.info(info_message)
+                await self.journal.write_message(AgentMessage(content=info_message))
 
                 # Try to run in the executor.
                 invocation_context = self.run_context.get_invocation_context()
                 executor: AsyncioExecutor = invocation_context.get_asyncio_executor()
                 loop: AbstractEventLoop = executor.get_event_loop()
-                retval = await loop.run_in_executor(None, coded_tool.invoke, arguments, sly_data)
+                retval = await loop.run_in_executor(None, coded_tool.invoke, args, sly_data)
         # pylint: disable=broad-exception-caught
         except Exception as exception:
             # There was an error invoking the CodedTool.
@@ -452,7 +450,7 @@ This can lead to performance problems when running within a server. Consider por
             "tool_error": tool_error,
             "tool_output": retval
         }
-        message = AgentMessage(content="Got result:", structure=retval_dict)
-        await self.journal.write_message(message)
+        result_message = AgentMessage(content="Got result:", structure=retval_dict)
+        await self.journal.write_message(result_message)
 
         return retval

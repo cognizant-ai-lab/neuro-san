@@ -39,8 +39,8 @@ class AgentNetwork(AgentNetworkInspector):
         :param config: The dictionary describing the entire agent network
         :param name: The name of the registry
         """
-        self.config = config
-        self.name = name
+        self.config: Dict[str, Any] = config
+        self.name: str = name
         self.agent_spec_map: Dict[str, Dict[str, Any]] = {}
 
         # True if this agent network is set to be served as an MCP tool;
@@ -49,7 +49,7 @@ class AgentNetwork(AgentNetworkInspector):
 
         self.first_agent: str = None
 
-        agent_specs = self.config.get("tools")
+        agent_specs: List[Dict[str, Any]] = self.config.get("tools")
         if agent_specs is not None:
             for agent_spec in agent_specs:
                 self.register(agent_spec)

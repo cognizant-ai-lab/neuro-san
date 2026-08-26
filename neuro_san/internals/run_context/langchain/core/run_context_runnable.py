@@ -48,6 +48,7 @@ from neuro_san.internals.run_context.langchain.token_counting.langchain_token_co
 from neuro_san.internals.run_context.langchain.tracing.neuro_san_runnable import NeuroSanRunnable
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
 from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
+from neuro_san.message.utils.content_utils import ContentUtils
 
 MINUTES: float = 60.0
 
@@ -148,11 +149,14 @@ class RunContextRunnable(NeuroSanRunnable):
         max_steps: int = agent_spec.get("max_steps") or max_iterations or 10_000
 
         # Create the list of callbacks to pass when invoking
-        parent_origin: List[Dict[str, Any]] = self.origin
-        base_journal: Journal = self.invocation_context.get_journal()
-        origination: Origination = self.invocation_context.get_origination()
+        journaling_callback: JournalingCallbackHandler = JournalingCallbackHandler(
+            calling_agent_journal=self.journal,
+            base_journal=self.invocation_context.get_journal(),
+            parent_origin=self.origin,
+            origination=self.invocation_context.get_origination()
+        )
         callbacks: List[BaseCallbackHandler] = [
-            JournalingCallbackHandler(self.journal, base_journal, parent_origin, origination)
+            journaling_callback
         ]
 
         # Consult the agent spec for level of verbosity as it pertains to callbacks.
@@ -187,8 +191,12 @@ class RunContextRunnable(NeuroSanRunnable):
         # Attempt to count tokens/costs while invoking the agent.
         token_counter = LangChainTokenCounter(self.primary_llm, self.invocation_context, self.journal, self.origin)
         try:
-            await token_counter.count_tokens(self.invoke_agent_chain(inputs, runnable_config, max_attempts),
-                                             max_execution_seconds)
+            # Enter the journaling scope before count_tokens() copies the current context
+            # into the agent-chain task. This is what propagates the owning handler to
+            # every descendant run while retaining it as the nearest active scope.
+            with journaling_callback.scope():
+                await token_counter.count_tokens(self.invoke_agent_chain(inputs, runnable_config, max_attempts),
+                                                 max_execution_seconds)
         except AsyncTimeout:
             # The token counter already wrote the final AIMessage to the journal
             # (before its token-accounting messages, to preserve message order).
@@ -338,7 +346,7 @@ class RunContextRunnable(NeuroSanRunnable):
         # Initialize our output.
         # The value here might morph a bit between types, but when we return
         # something we expect it to be a string.
-        output: Union[str, List[Dict[str, Any]]] = None
+        output: Optional[Union[str, List[Any]]] = None
 
         if chain_result is None and exception is not None:
             # We got an exception instead of a proper result. Say so.
@@ -375,17 +383,16 @@ class RunContextRunnable(NeuroSanRunnable):
                 # We generally want the content of any single AIMessage we found from above
                 output = ai_message.content
 
-        # In general, output is a string, but it can also be a list of content blocks when there are multiple
-        # message types, such as "thinking", "reasoning", etc.
-        # If it is a list, "text" is a key in the dict containing the actual string output we want to return.
+        # In general, output is a string, but it can also be a list of content blocks when there are
+        # multiple message types, such as "thinking", "reasoning", etc. - or a list of plain strings,
+        # which is also legal per the BaseMessage annotation.
+        # Project list output to its full text through the single projection policy ContentUtils
+        # defines: OriginatingJournal's dupe suppression relies on the AGENT and AI copies of the
+        # same output projecting to the same text. Full text also means the error detector below
+        # scans everything, exactly as it always has for plain-string output.
         # For more details: https://docs.langchain.com/oss/python/langchain/messages#standard-content-blocks
         if isinstance(output, list):
-            text_output: str = ""
-            for block in output:
-                if isinstance(block, dict) and block.get("type") == "text":
-                    text_output = block.get("text", "")
-                    break
-            output = text_output
+            output = ContentUtils.flatten_to_text(output)
 
         # See if we had some kind of error and format accordingly, if asked for.
         output = self.error_detector.handle_error(output)

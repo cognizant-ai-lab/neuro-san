@@ -18,7 +18,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-import uuid
+from uuid import uuid4
 
 from aiohttp.client_exceptions import ClientConnectionError
 
@@ -47,7 +47,7 @@ class BranchActivation(CallingActivation, CallableActivation):
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     def __init__(self, parent_run_context: RunContext,
                  factory: AgentToolFactory,
-                 arguments: Dict[str, Any],
+                 args: Dict[str, Any],
                  agent_tool_spec: Dict[str, Any],
                  sly_data: Dict[str, Any]):
         """
@@ -57,14 +57,14 @@ class BranchActivation(CallingActivation, CallableActivation):
                              down its resources to a new RunContext created by
                              this call.
         :param factory: The AgentToolFactory used to create tools
-        :param arguments: A dictionary of the tool function arguments passed in
+        :param args: A dictionary of the tool function arguments passed in
         :param agent_tool_spec: The dictionary describing the JSON agent tool
                             to be used by the instance
         :param sly_data: A mapping whose keys might be referenceable by agents, but whose
                  values should not appear in agent chat text. Can be an empty dictionary.
         """
         super().__init__(parent_run_context, factory, agent_tool_spec, sly_data)
-        self.arguments: Dict[str, Any] = arguments
+        self.arguments: Dict[str, Any] = args
 
     def get_assignments(self) -> str:
         """
@@ -133,7 +133,7 @@ class BranchActivation(CallingActivation, CallableActivation):
         assignments: str = self.get_assignments()
         instructions: str = self.get_instructions()
 
-        uuid_str: str = str(uuid.uuid4())
+        uuid_str: str = str(uuid4())
         component_name: str = self.get_name()
         unique_name: str = f"{uuid_str}_{component_name}"
         await self.create_resources(unique_name, instructions, None)
@@ -144,14 +144,14 @@ class BranchActivation(CallingActivation, CallableActivation):
             assignments = assignments + "\n" + command
 
         run: Run = await self.run_context.submit_message(assignments)
-        run = await self.run_context.wait_on_run(run, self.journal)
+        use_run = await self.run_context.wait_on_run(run, self.journal)
 
         messages: List[BaseMessage] = await self.run_context.get_response()
 
-        messages = await self.integrate_callable_response(run, messages)
+        use_messages = await self.integrate_callable_response(use_run, messages)
 
         # Return the last message
-        return messages[-1]
+        return use_messages[-1]
 
     def get_origin(self) -> List[Dict[str, Any]]:
         """
