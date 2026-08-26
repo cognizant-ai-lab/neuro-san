@@ -30,6 +30,8 @@ DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS: int = 0
 DEFAULT_HEALTH_PROBE_PORT: int = 8081
 
 
+# The server configuration intentionally aggregates all HTTP listener settings.
+# pylint: disable=too-many-instance-attributes
 class HttpServerConfig:
     """
     Class aggregating Tornado http server run-time configuration parameters.
@@ -39,6 +41,7 @@ class HttpServerConfig:
         self.http_connections_backlog: int = DEFAULT_HTTP_CONNECTIONS_BACKLOG
         self.http_idle_connection_timeout_seconds: int = DEFAULT_HTTP_IDLE_CONNECTIONS_TIMEOUT_SECONDS
         self.http_server_instances: int = DEFAULT_HTTP_SERVER_INSTANCES
+        self.http_reuse_port: bool = False
         self.http_port: int = 80
         self.http_probe_port: int = DEFAULT_HEALTH_PROBE_PORT
         self.http_server_monitor_interval_seconds: int = DEFAULT_HTTP_SERVER_MONITOR_INTERVAL_SECONDS
