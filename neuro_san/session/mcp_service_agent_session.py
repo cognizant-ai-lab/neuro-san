@@ -17,7 +17,6 @@
 
 from typing import Any
 from typing import Dict
-from typing import List
 from typing import Generator
 
 import json
@@ -41,6 +40,7 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
     This is largely only used by command-line tests.
     """
     MCP_PROTOCOL_VERSION: str = "MCP-Protocol-Version"
+    MAX_TOOLS: int = 1000
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments, too-many-locals
     def __init__(self, host: str = None,
@@ -159,8 +159,21 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(self.help_message(path)) from exc
 
-        tools_list: List[Dict[str, Any]] = response_dict.get("result", {}).get("tools", [])
+        if not isinstance(response_dict, dict):
+            raise ValueError("Invalid MCP tools/list response: response must be an object")
+        result_dict: Any = response_dict.get("result", {})
+        if not isinstance(result_dict, dict):
+            raise ValueError("Invalid MCP tools/list response: 'result' must be an object")
+
+        tools_list: Any = result_dict.get("tools", [])
+        if not isinstance(tools_list, list):
+            raise ValueError("Invalid MCP tools/list response: 'tools' must be an array")
+        if len(tools_list) > self.MAX_TOOLS:
+            raise ValueError(f"Invalid MCP tools/list response: too many tools (maximum {self.MAX_TOOLS})")
+
         for tool in tools_list:
+            if not isinstance(tool, dict):
+                raise ValueError("Invalid MCP tools/list response: each tool must be an object")
             name: str = tool.get("name", None)
             if name == self.agent_name:
                 tool_description: str = tool.get("description", None)
