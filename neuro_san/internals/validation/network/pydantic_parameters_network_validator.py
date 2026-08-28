@@ -86,6 +86,13 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
                 # flat param maps. Pydantic expects properties.items(), so skip.
                 continue
 
+            preflight_errors: List[str] = self._pre_validate_properties(
+                agent_name, params,
+            )
+            if preflight_errors:
+                errors.extend(preflight_errors)
+                continue
+
             try:
                 converter = BaseModelDictionaryConverter("parameters")
                 converter.from_dict(params)
@@ -98,5 +105,135 @@ class PydanticParametersNetworkValidator(AbstractNetworkValidator):
                 # exception types on severely malformed input.
                 detail = " ".join(str(exc).split())
                 errors.append(f"{agent_name}: pydantic model conversion failed - {detail}")
+
+        return errors
+
+    # --- Private helpers (not overrides) ---
+
+    @classmethod
+    def _pre_validate_properties(cls, agent_name: str, params: Dict[str, Any],
+                                 path: str = "parameters") -> List[str]:
+        """
+        Walk the properties tree looking for shapes that will crash
+        BaseModelDictionaryConverter, reporting exactly which property
+        is malformed and what to fix. Runs before from_dict() so that
+        all property-level errors are reported in one pass with a clear
+        UI, rather than crashing on the first bad property with an opaque
+        Pydantic error.
+
+        :param agent_name: Display name for error messages
+        :param params: The schema dict to inspect
+        :param path: Dotted path for contextual error messages
+        :return: A list of actionable error messages
+        """
+        errors: List[str] = []
+        if not isinstance(params, dict):
+            return errors
+
+        # Guard: 'properties' must be a dict when present
+        properties: Any = params.get("properties")
+        if properties is not None and not isinstance(properties, dict):
+            errors.append(
+                f"{agent_name}: {path}.properties must be an object,"
+                f" got {type(properties).__name__}"
+            )
+            return errors
+
+        if properties is None:
+            return errors
+
+        for prop_name, prop_schema in properties.items():
+            prop_path: str = f"{path}.properties.{prop_name}"
+            errors.extend(
+                cls._validate_schema_node(agent_name, prop_schema, prop_path)
+            )
+
+        return errors
+
+    @classmethod
+    def _validate_schema_node(cls, agent_name: str, schema: Any,
+                              path: str) -> List[str]:
+        """
+        Validate a single schema node (null, non-dict, missing/bad type,
+        array items, object properties) and recurse into children.
+
+        :param agent_name: Display name for error messages
+        :param schema: The schema value to inspect
+        :param path: Dotted path for contextual error messages
+        :return: A list of actionable error messages
+        """
+        errors: List[str] = []
+
+        # Check 1: null property definition
+        if schema is None:
+            errors.append(
+                f"{agent_name}: {path} is null"
+                f" - define it as an object or remove the key"
+            )
+            return errors
+
+        # Check 2: property definition must be a dict
+        if not isinstance(schema, dict):
+            errors.append(
+                f"{agent_name}: {path} must be an object,"
+                f" got {type(schema).__name__}"
+            )
+            return errors
+
+        # Check 3: 'type' key must be present
+        schema_type: Any = schema.get("type")
+        if schema_type is None:
+            errors.append(
+                f"{agent_name}: {path} is missing 'type'"
+            )
+            return errors
+
+        # Check 4: 'type' value must be a recognized string
+        if not isinstance(schema_type, str):
+            errors.append(
+                f"{agent_name}: {path} 'type' must be a string,"
+                f" got {type(schema_type).__name__}"
+            )
+            return errors
+
+        if schema_type not in BaseModelDictionaryConverter.TYPE_LOOKUP:
+            valid_types: str = ", ".join(
+                sorted(BaseModelDictionaryConverter.TYPE_LOOKUP.keys())
+            )
+            errors.append(
+                f"{agent_name}: {path} has unrecognized type"
+                f" '{schema_type}'"
+                f" - valid types are: {valid_types}"
+            )
+            return errors
+
+        # Check 5: array nodes must have a valid 'items' dict
+        if schema_type == "array":
+            items: Any = schema.get("items")
+            if items is None:
+                errors.append(
+                    f"{agent_name}: {path} is 'array'"
+                    f" but missing 'items'"
+                    f' - add "items": {{"type": "string"}} or similar'
+                )
+            elif not isinstance(items, dict):
+                errors.append(
+                    f"{agent_name}: {path}.items must be"
+                    f" an object, got {type(items).__name__}"
+                )
+            else:
+                errors.extend(
+                    cls._validate_schema_node(
+                        agent_name, items, f"{path}.items",
+                    )
+                )
+
+        # Check 6: object nodes — validate their nested properties
+        elif schema_type == "object":
+            errors.extend(
+                cls._pre_validate_properties(
+                    agent_name, schema, path,
+                )
+            )
 
         return errors
