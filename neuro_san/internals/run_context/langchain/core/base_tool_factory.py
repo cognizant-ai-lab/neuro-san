@@ -369,5 +369,6 @@ class BaseToolFactory:
             message: str = f"Could not create tool to call external agent '{name}'. Its function_json is None."
             raise ValueError(message)
 
-        function_json["name"] = name
-        return LangChainOpenAIFunctionTool.from_function_json(function_json, self.tool_caller)
+        use_function_json: Dict[str, Any] = dict(function_json)
+        use_function_json["name"] = name
+        return LangChainOpenAIFunctionTool.from_function_json(use_function_json, self.tool_caller)

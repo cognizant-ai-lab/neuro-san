@@ -122,6 +122,31 @@ class TestBaseToolFactory:
         assert list(tool.args_schema.__fields__.keys()) == ["question"]
         factory.journal.write_message.assert_not_awaited()
 
+    def test_create_function_tool_does_not_mutate_function_json(self):
+        """
+        Creating a tool must not add its lookup name to the caller-owned
+        function specification.
+        """
+        function_json: Dict[str, Any] = {
+            "description": "Answers music questions.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "The question to answer."
+                    }
+                },
+                "required": ["question"]
+            }
+        }
+        factory = self.make_factory(function_json)
+
+        tool = factory.create_function_tool(function_json, self.EXTERNAL_AGENT_NAME)
+
+        assert tool is not None
+        assert "name" not in function_json
+
     @pytest.mark.asyncio
     async def test_external_tool_with_empty_properties_gets_default_schema(self):
         """
