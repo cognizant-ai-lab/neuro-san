@@ -94,6 +94,20 @@ class ContentFixtures:
         )
 
     @staticmethod
+    def multi_text_blocks() -> AIMessage:
+        """
+        :return: An AIMessage whose text is split across multiple text blocks
+                 with a thinking block in between. Its full text is
+                 "part one, part two"; a first-text-block-only flatten sees
+                 only "part one, ".
+        """
+        return AIMessage(content=[
+            {"type": "text", "text": "part one, "},
+            {"type": "thinking", "thinking": "hmm"},
+            {"type": "text", "text": "part two"},
+        ])
+
+    @staticmethod
     def list_of_str() -> AIMessage:
         """
         :return: An AIMessage with list-of-strings content - legal per the
