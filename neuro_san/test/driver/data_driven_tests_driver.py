@@ -677,6 +677,9 @@ if __name__ == "__main__":
 
     print(f"Running test case from hocon file: {test_case}")
 
-    driver.run_tests([test_case, test_case, test_case], run_name="Single-Hocon-Test", num_need_success=3)
+    my_tests = [test_case for _ in range(200)]  # Run the same test case 20 times for demonstration
+
+
+    driver.run_tests(my_tests, run_name="Single-Hocon-Test", num_need_success=len(my_tests))
 
 
