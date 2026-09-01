@@ -96,6 +96,7 @@ class TrafficRunner:
         """
         prompt = self._profile.get_prompt(
             global_request_id, same_prompt=self._args.same_prompt,
+            allow_caching=self._args.allow_caching,
         )
         prompt_file = CliBuilder.write_prompt_file(global_request_id, prompt)
 
@@ -171,6 +172,7 @@ class TrafficRunner:
         prompt = self._profile.get_prompt(
             global_request_id,
             same_prompt=self._args.same_prompt,
+            allow_caching=self._args.allow_caching,
         )
         start = time.time()
         status, parsed_fields, response_text, ttft, token_data = (
