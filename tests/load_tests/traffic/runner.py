@@ -160,7 +160,7 @@ class TrafficRunner:
         finally:
             CliBuilder.cleanup_prompt_file(prompt_file)
 
-    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-locals,too-many-branches
     def run_one_http(self, request_id, global_request_id,
                      output_dir=None) -> RequestResult:
         """Execute a single request via direct HTTP.
