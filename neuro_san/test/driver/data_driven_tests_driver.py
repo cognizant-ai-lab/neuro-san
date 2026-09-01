@@ -79,99 +79,11 @@ class DataDrivenTestsDriver:
         self.test_name: str = test_name
 
     # pylint: disable=too-many-locals
-    def one_test(self, hocon_file: str):
-        """
-        Use a single hocon file in the fixtures as a test case"
-
-        :param hocon_file: The name of the hocon from the fixtures directory.
-        """
-        test_case: Dict[str, Any] = self.parse_hocon_test_case(hocon_file)
-
-        agent: str = test_case.get("agent")
-        self.asserts_basis.assertIsNotNone(agent)
-
-        # Set up any global test timeout.
-        timeouts: List[Timeout] = []
-        timeout_in_seconds: float = test_case.get("timeout_in_seconds", None)
-        if timeout_in_seconds is not None:
-            test_timeout = Timeout(name=agent)
-            test_timeout.set_limit_in_seconds(timeout_in_seconds)
-            timeouts.append(test_timeout)
-
-        # Get the success ratio
-        success_ratio: str = test_case.get("success_ratio", "1/1")
-        self.asserts_basis.assertIn("/", success_ratio)
-
-        # Find the integer components of the success ratio
-        success_split: List[str] = success_ratio.split("/")
-        num_need_success: int = int(success_split[0])
-        num_iterations: int = int(success_split[-1])
-
-        # Put some bounds on the number of iterations
-        num_iterations = max(1, num_iterations)
-        num_need_success = min(num_need_success, num_iterations)
-
-        # Capture asserts for each iteration
-        iteration_asserts: List[AssertCapture] = []
-
-        # Loop through each iteration, capturing any asserts.
-        num_successful: int = 0
-
-        # Extract the second-to-last part of the path,the parent folder name.
-        fixture_hocon_name = os.path.basename(os.path.dirname(hocon_file))
-
-        # Loop through each test iteration in parallel
-        with ThreadPoolExecutor(max_workers=num_iterations) as executor:
-
-            futures: List[Future] = []
-            for iteration_index in range(num_iterations):
-
-                # Don't include an iteration index if there is only one iteration to do.
-                if num_iterations == 1:
-                    iteration_index = None
-
-                future: Future = executor.submit(self.capture_one_iteration, test_case, timeouts,
-                                                 fixture_hocon_name, iteration_index)
-                futures.append(future)
-
-            for future in as_completed(futures):
-                assert_capture: AssertCapture = future.result()
-                iteration_asserts.append(assert_capture)
-
-                asserts: List[AssertionError] = assert_capture.get_asserts()
-                if len(asserts) > 0:
-                    # Not successful
-                    continue
-
-                num_successful += 1
-                if num_successful == num_need_success:
-                    # Don't look at more tests than we actually need to
-                    executor.shutdown(wait=False, cancel_futures=True)
-                    break
-
-        # Don't bother reporting any asserts if we have met our success ratio.
-        # Return early to pass this test.
-        if num_successful >= num_need_success:
-            return
-
-        # Find the first assert that fails and use it to fail this test
-        for assert_capture in iteration_asserts:
-            asserts: List[AssertionError] = assert_capture.get_asserts()
-            if len(asserts) > 0:
-                one_assert: AssertionError = asserts[0]
-                message: str = f"""
-{num_successful} of {num_iterations} iterations on agent {agent} were successful.
-Need at least {num_need_success} to consider {hocon_file} test to be successful.
-"""
-                raise AssertionError(message) from one_assert
-
-    # pylint: disable=too-many-locals
-    def run_tests(self, tests: Sequence[Dict[str, Any]], run_name: str, num_need_success: int):
+    def run_tests(self, tests: Sequence[Dict[str, Any]], num_need_success: int):
         """
         Run a sequence of test cases represented by Python dictionaries.
 
         :param tests: A sequence of test case dictionaries, each containing the necessary test information
-        :param run_name: The name of the test run
         :param num_need_success: The number of successful tests completions to consider this test run successful
         """
         # Set up tests timeouts.
@@ -214,23 +126,25 @@ Need at least {num_need_success} to consider {hocon_file} test to be successful.
                     # We can't get the result, but we can still record the timeout.
                     timed_capture = TimedAssertCapture(self.asserts_basis)
                     timed_capture.set_execution_time(float('inf'))  # Indicate that it timed out
-                    timed_capture.add_assert(AssertionError(f"Test for run {run_name} timed out."))
+                    timed_capture.add_assert(AssertionError(f"Test for run {self.test_name} timed out."))
                     run_results.append(timed_capture)
+                    print(f">>>>>>>>>>>>>>Test for run {self.test_name} timed out.")
                 else:
                     # This test completed (either successfully or with asserts or with possible exception).
                     try:
                         timed_capture = fut.result()
                         # Regular asserts captured, add to run results
                         run_results.append(timed_capture)
-                        print(f"*************Test for run {run_name} completed in {timed_capture.get_execution_time()} seconds.")
+                        print(f"*************Test for run {self.test_name} completed in {timed_capture.get_execution_time()} seconds.")
 
 
                     except Exception as exc:
                         # Handle any exceptions that occurred during test execution
                         timed_capture = TimedAssertCapture(self.asserts_basis)
                         timed_capture.set_execution_time(float('inf'))  # Indicate that it failed
-                        timed_capture.add_assert(AssertionError(f"Test for run {run_name} failed with exception: {exc}"))
+                        timed_capture.add_assert(AssertionError(f"Test for run {self.test_name} failed with exception: {exc}"))
                         run_results.append(timed_capture)
+                        print(f">>>>>>>>>>>>>>Test for run {self.test_name} failed with exception: {exc}")
 
                 asserts: List[AssertionError] = timed_capture.get_asserts()
                 if len(asserts) > 0:
@@ -246,22 +160,6 @@ Need at least {num_need_success} to consider {hocon_file} test to be successful.
         # Note: this is a blocking call, if some timed out tests are still running.
         executor.shutdown(wait=False, cancel_futures=True)
         return run_results
-
-#         # Don't bother reporting any asserts if we have met our success ratio.
-#         # Return early to pass this test.
-#         if num_successful >= num_need_success:
-#             return
-#
-#         # Find the first assert that fails and use it to fail this test
-#         for assert_capture in run_asserts:
-#             asserts: List[AssertionError] = assert_capture.get_asserts()
-#             if len(asserts) > 0:
-#                 one_assert: AssertionError = asserts[0]
-#                 message: str = f"""
-# {num_successful} of {len(tests)} tests were successful.
-# Need at least {num_need_success} to consider {run_name} test run to be successful.
-# """
-#                 raise AssertionError(message) from one_assert
 
     def capture_one_iteration(self, test_case: Dict[str, Any], timeouts: List[Timeout],
                               iteration_index: int) -> TimedAssertCapture:
@@ -677,9 +575,9 @@ if __name__ == "__main__":
 
     print(f"Running test case from hocon file: {test_case}")
 
-    my_tests = [test_case for _ in range(200)]  # Run the same test case 20 times for demonstration
+    my_tests = [test_case for _ in range(100)]  # Run the same test case 100 times for demonstration
 
 
-    driver.run_tests(my_tests, run_name="Single-Hocon-Test", num_need_success=len(my_tests))
+    driver.run_tests(my_tests, num_need_success=len(my_tests))
 
 
