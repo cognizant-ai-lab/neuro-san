@@ -232,16 +232,26 @@ class TrafficRunner:
         elif status == STATUS_FAILED and not response_text:
             failure_reason = "empty response from agent"
 
+        # A FAILED status with no failure_reason at this point means
+        # HttpClient caught an exception and returned its traceback as
+        # response_text.  Route that to stderr (like subprocess mode)
+        # instead of saving it as the agent's answer.
+        stderr = ""
+        stdout = self._http_saved_stdout(response_text, token_data)
+        if status == STATUS_FAILED and failure_reason is None:
+            stderr = response_text
+            stdout = ""
+            failure_reason = CliBuilder.last_stderr_line(stderr)
+
         self._save_request_output(
-            output_dir, request_id,
-            self._http_saved_stdout(response_text, token_data), "",
+            output_dir, request_id, stdout, stderr,
         )
 
         self._log_request_result(
             request_id, status, elapsed,
             parsed_fields=parsed_fields,
             failure_reason=failure_reason,
-            stderr="",
+            stderr=stderr,
             output_dir=output_dir,
         )
 
