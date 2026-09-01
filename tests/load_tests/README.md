@@ -329,7 +329,7 @@ At `adv` level this includes:
 | `server_receipts.log` | Per-request server receipt details (with `--server-log`) |
 | `server_tokens.log`   | Per-request token breakdown (when token data available) |
 | `summary.txt`         | Human-readable summary (`adv` level only)        |
-| `requests/`           | Raw stdout/stderr per request                    |
+| `requests/`           | Raw stdout/stderr per request; failed HTTP requests write the exception traceback to `request_N_stderr.txt` |
 
 ### `raw_results.json`
 
