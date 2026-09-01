@@ -103,6 +103,9 @@ class AgentProfile:
         base_prompt = prompts[request_id % len(prompts)]
         if allow_caching:
             return base_prompt
+        # The suffix makes every prompt unique, so no cache along the
+        # path (LLM prompt cache, agent network, proxy) can serve the
+        # response and the run measures real work, not cache hits.
         return f"{base_prompt} (request {request_id})"
 
     @classmethod
