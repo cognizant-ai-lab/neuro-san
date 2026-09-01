@@ -583,7 +583,7 @@
         "use_model_name": "claude-opus-5"
     },
     "claude-fable": {
-        "use_model_name": "claude-fable-5"
+        "use_model_name": "claude-fable-5-1"
     },
 
     "claude-haiku-4-5": {
