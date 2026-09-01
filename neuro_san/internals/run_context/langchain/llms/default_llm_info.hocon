@@ -780,7 +780,26 @@
         "model_launch_date": "2026-06-09",
         "model_retirement_date": null,
     },
-    # Note on claude-mythos-5: As of 2026-06-10, this model is only available via the Project Glasswing,
+    "claude-fable-5-1": {
+        "class": "anthropic",
+        "model_info_url": "https://platform.claude.com/docs/en/models/fable-5-1/overview",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "06/2026",
+        # https://platform.claude.com/docs/en/about-claude/pricing
+        "price_per_1k_input_tokens": 0.010,
+        "price_per_1k_output_tokens": 0.050,
+        "model_launch_date": "2026-09-01",
+        "model_retirement_date": null,
+    },
+    # Note on claude-mythos-5 and claude-mythos-5-1:
+    # As of 2026-09-01, this model is only available via the Project Glasswing,
     # which is invitation-only. Thus, we are not including it in the default LLM info at this time.
     # If it becomes generally available, we will add it to the registry with the appropriate details.
 
