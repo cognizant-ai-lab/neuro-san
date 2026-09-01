@@ -17,6 +17,7 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 
 from objsize import get_deep_size
 
@@ -166,6 +167,13 @@ However, the front man must not be:
             )
 
         return front_man
+
+    def get_metadata(self) -> Optional[Dict[str, Any]]:
+        """
+        :return: The metadata dictionary from the agent network config,
+                 or None if no metadata is defined.
+        """
+        return self.config.get("metadata", None)
 
     def get_network_name(self) -> str:
         """
