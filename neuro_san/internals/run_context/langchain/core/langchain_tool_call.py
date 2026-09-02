@@ -46,7 +46,7 @@ class LangChainToolCall(ToolCall):
                                     None - implies chatbot
         """
         self.tool_name: str = tool_name
-        self.args = args
+        self.args: Any = args
         self.id: str = f"tool_call_{run_id}_{uuid4()}"
         self.invocation: str = invocation
         if invocation is None:

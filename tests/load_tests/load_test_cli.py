@@ -2270,6 +2270,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             )
 
         prompt_mode = "same" if self.args.same_prompt else "varied"
+        if self.args.allow_caching:
+            prompt_mode = f"{prompt_mode} (caching allowed)"
         mode = "ramp" if self.args.ramp else "flat"
         logger.info(
             "\nConfig: agent=%s, mode=%s, level=%s, "
@@ -2732,6 +2734,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 "num_rounds": self.args.num_rounds,
                 "num_requests": self.args.num_requests,
                 "same_prompt": self.args.same_prompt,
+                "allow_caching": self.args.allow_caching,
                 "chat_filter": self.args.chat_filter,
                 "server_log": self.server_log,
                 "estimated_tokens_per_request": (

@@ -14,7 +14,10 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-from pathlib import Path, PurePosixPath
+from typing import Any
+
+from pathlib import Path
+from pathlib import PurePosixPath
 
 from neuro_san.internals.interfaces.agent_name_mapper import AgentNameMapper
 
@@ -25,14 +28,14 @@ class AgentFileTreeMapper(AgentNameMapper):
     between agent name as specified in a manifest file
     and a file path (relative to registry root directory) to this agent definition file.
     """
-    def __init__(self, path_method=Path):
+    def __init__(self, path_method: Any = Path):
         """
         Constructor
 
         :param path_method: Optional Path method to use for path manipulations.
             Default is pathlib.Path, but can be overridden for testing purposes.
         """
-        self.path_method = path_method
+        self.path_method: Any = path_method
 
     def agent_name_to_filepath(self, agent_name: str) -> str:
         """

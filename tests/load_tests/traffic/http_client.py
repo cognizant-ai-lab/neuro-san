@@ -25,6 +25,7 @@ request to ~1-2 MB per thread.
 
 import logging
 import time
+import traceback
 from typing import Any
 from typing import Dict
 from typing import List
@@ -143,12 +144,16 @@ class HttpClient:
         # decode, gRPC/transport errors) is not enumerable here.  This
         # is a per-request isolation boundary — any single request must
         # be recorded as FAILED/TIMEOUT without aborting the load test.
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except Exception:  # pylint: disable=broad-exception-caught
             elapsed = time.time() - start
             if elapsed >= timeout:
                 return (STATUS_TIMEOUT, {}, "", 0.0, {})
-            logger.debug("HTTP request failed: %s", exc)
-            return (STATUS_FAILED, {}, str(exc), 0.0, {})
+            # Include the full chained traceback so the root cause
+            # (ReadTimeout, ConnectionError, HTTPError, ...) survives
+            # the generic help text raised by the session client.
+            error_text = traceback.format_exc()
+            logger.debug("HTTP request failed:\n%s", error_text)
+            return (STATUS_FAILED, {}, error_text, 0.0, {})
 
         elapsed = time.time() - start
         if elapsed >= timeout:

@@ -207,6 +207,17 @@ class LoadTestArguments:
                  "prompts from the agent's prompt pool.",
         )
         parser.add_argument(
+            "--allow-caching",
+            action="store_true",
+            default=False,
+            help="Send prompts verbatim from the agent's prompt "
+                 "pool so caches along the path can serve them. "
+                 "By default a unique '(request N)' suffix is "
+                 "appended to defeat caching; pass this flag to "
+                 "measure cached behavior instead. No effect with "
+                 "--same-prompt, which is already cacheable.",
+        )
+        parser.add_argument(
             "--no-dry-run",
             action="store_true",
             default=False,
