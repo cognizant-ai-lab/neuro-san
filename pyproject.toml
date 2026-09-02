@@ -16,9 +16,12 @@ keywords = ["LLM", "langchain", "agent", "multi-agent"]
 # https://packaging.python.org/en/latest/guides/licensing-examples-and-user-scenarios/
 license = "Apache-2.0"
 license-files = ["LICENSE.txt"]
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Operating System :: OS Independent",
 
     # How mature is this project? Common values are
