@@ -31,9 +31,7 @@ from copy import copy
 from datetime import datetime
 from os import environ
 from time import monotonic
-from pathlib import Path
 
-from concurrent.futures import as_completed
 from concurrent.futures import Future
 from concurrent.futures import wait
 from concurrent.futures import FIRST_COMPLETED
@@ -41,16 +39,13 @@ from concurrent.futures import ThreadPoolExecutor
 
 from leaf_common.config.file_of_class import FileOfClass
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
-from leaf_common.persistence.easy.easy_hocon_persistence import EasyHoconPersistence
 from leaf_common.time.timeout import Timeout
 
 from neuro_san.client.agent_session_factory import AgentSessionFactory
 from neuro_san.client.streaming_input_processor import StreamingInputProcessor
 from neuro_san.interfaces.agent_session import AgentSession
-from neuro_san.internals.persistence.hocon_parse_lock import HoconParseLock
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
 from neuro_san.session.direct_agent_session import DirectAgentSession
-from neuro_san.test.driver.assert_capture import AssertCapture
 from neuro_san.test.driver.timed_assert_capture import TimedAssertCapture
 from neuro_san.test.evaluators.agent_evaluator_factory import AgentEvaluatorFactory
 from neuro_san.test.interfaces.agent_evaluator import AgentEvaluator
@@ -67,15 +62,14 @@ class DataDrivenTestsDriver:
 
     TEST_KEYS: List[str] = ["text", "structure", "sly_data"]
 
-    def __init__(self, asserts: AssertForwarder, fixtures: FileOfClass = None, test_name: str = None):
+    def __init__(self, asserts: AssertForwarder, test_name: str = None):
         """
         Constructor
         :param asserts: The AssertForwarder instance to use to integrate failures
                         back into the test system.
-        :param fixtures: Optional path to the fixtures root.
+        :param test_name: Optional name of the test run for logging and traceability.
         """
         self.asserts_basis: AssertForwarder = asserts
-        self.fixtures: FileOfClass = fixtures
         self.test_name: str = test_name
 
     # pylint: disable=too-many-locals
@@ -254,24 +248,6 @@ class DataDrivenTestsDriver:
                     iteration_index,
                     carried_sly_data
                 )
-
-    def parse_hocon_test_case(self, hocon_file: str) -> Dict[str, Any]:
-        """
-        Use a single hocon file in the fixtures as a test case"
-
-        :param hocon_file: The name of the hocon from the fixtures directory.
-        """
-        test_path: str = hocon_file
-        if self.fixtures is not None:
-            test_path = self.fixtures.get_file_in_basis(hocon_file)
-        hocon = EasyHoconPersistence(must_exist=True)
-        # pyhocon parsing mutates process-global pyparsing state and is not
-        # thread-safe. See HoconParseLock. Sessions driven by this class can
-        # leave background threads parsing agent hocons concurrently.
-        with HoconParseLock():
-            test_case: Dict[str, Any] = hocon.restore(file_reference=test_path)
-            test_case["fixture_name"] = Path(hocon_file).parent.name
-        return test_case
 
     # pylint: disable=too-many-locals,too-many-arguments,too-many-positional-arguments
     def interact(self, agent: str, session: AgentSession, interaction: Dict[str, Any],
