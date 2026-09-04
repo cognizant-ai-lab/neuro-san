@@ -134,5 +134,8 @@ and other agent hocon files.
 
 ### More information
 
+For a comparison of file-based runtime updates and temporary network reservations,
+see [Network Persistence Modes](network_persistence.md).
+
 For more information on environment variables used in a neuro-san server deployment, see end of the example
 [Dockerfile](../neuro_san/deploy/Dockerfile).

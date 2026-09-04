@@ -279,6 +279,7 @@ ENV AGENT_REQUEST_LIMIT="-1"
 # with corresponding changes in manifest file.
 # Update will be done every AGENT_MANIFEST_UPDATE_PERIOD_SECONDS seconds;
 # if value is not specified or <= 0, no such dynamic updates will be executed.
+# See docs/network_persistence.md for how this differs from temporary reservations.
 ENV AGENT_MANIFEST_UPDATE_PERIOD_SECONDS="0"
 
 # Describes the concurrency model used for the manifest file updates.
