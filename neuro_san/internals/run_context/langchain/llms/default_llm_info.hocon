@@ -1119,6 +1119,25 @@
     # Per Google, the listed shutdown dates are the "earliest possible dates" — exact
     # retirement is communicated with advance notice. For models with no announced
     # retirement, "model_retirement_date" is null.
+    "gemini-3.8-flash": {
+        "class": "gemini",
+        "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash",
+        "modalities": {
+            "input": [ "text", "images", "video", "audio", "pdf"],
+            "output": [ "text"],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1048576,
+        "max_output_tokens": 65536,
+        # https://deepmind.google/models/model-cards/gemini-3-8-flash/
+        "knowledge_cutoff": "03/2026",
+        # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
+        # This price is effective until Dec 31, 2026 after that it will be doubled.
+        "price_per_1k_input_tokens": 0.00075,
+        "price_per_1k_output_tokens": 0.00375,
+        "model_launch_date": "2026-09-02",
+        "model_retirement_date": null,
+    },
     "gemini-3.7-flash": {
         "class": "gemini",
         "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash",
