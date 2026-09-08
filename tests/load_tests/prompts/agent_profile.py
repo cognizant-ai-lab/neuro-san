@@ -77,11 +77,17 @@ class AgentProfile:
         """
         return self._data.get("failure_patterns", [])
 
-    def get_prompt(self, request_id, same_prompt=False) -> str:
+    def get_prompt(self, request_id, same_prompt=False,
+                   allow_caching=False) -> str:
         """Return the prompt for a given request.
 
         In same_prompt mode, always returns the first prompt.
         In varied mode, cycles through the pool and appends the request_id.
+        The request_id suffix keeps every prompt unique so that no
+        cache along the path (LLM prompt cache, agent network, proxy)
+        can serve the response.  In allow_caching mode the suffix is
+        dropped, so requests that reuse a pool prompt are eligible
+        for those caches.
         """
         prompts = self.prompts
         if not prompts:
@@ -95,6 +101,11 @@ class AgentProfile:
         if same_prompt:
             return prompts[0]
         base_prompt = prompts[request_id % len(prompts)]
+        if allow_caching:
+            return base_prompt
+        # The suffix makes every prompt unique, so no cache along the
+        # path (LLM prompt cache, agent network, proxy) can serve the
+        # response and the run measures real work, not cache hits.
         return f"{base_prompt} (request {request_id})"
 
     @classmethod

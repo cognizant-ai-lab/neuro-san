@@ -80,7 +80,7 @@ required in `record` mode and used for cache-miss fetches in `hybrid` mode:
 
 | Variable | Purpose |
 |---|---|
-| `RECORD_PLAYBACK_UPSTREAM_BASE_URL` | Base URL of the real host, including the version segment. e.g. `https://api.openai.com/v1`. Required in record mode; optional in hybrid mode. |
+| `RECORD_PLAYBACK_UPSTREAM_BASE_URL` | Base URL of the real host, e.g. `https://api.openai.com` or `https://api.openai.com/v1`. The OpenAI-style `/v1` segment is optional and is appended when absent. Required in record mode; optional in hybrid mode. |
 | `RECORD_PLAYBACK_UPSTREAM_API_KEY` | Bearer credential for that host. Optional (a warning is logged if absent, for hosts that need no auth). |
 | `RECORD_PLAYBACK_UPSTREAM_REQUEST_TIMEOUT_SECONDS` | Whole-request timeout when forwarding to the real host. Default `600`. |
 | `RECORD_PLAYBACK_UPSTREAM_CONNECT_TIMEOUT_SECONDS` | Connection timeout when forwarding to the real host. Default `30`. |
