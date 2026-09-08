@@ -1483,16 +1483,38 @@
                 "logit_bias": null,
                 # streaming defaults to off; set "streaming": true in llm_config to enable.
                 "streaming": false,
-                # n is always 1.  neuro-san will only ever consider a single chat completion.
+                # n is intentionally not sent. The API default of 1 applies (neuro-san only ever
+                # considers a single chat completion), and the Responses API has no n parameter at all.
+                # See https://github.com/cognizant-ai-lab/neuro-san/issues/725 and the n property of
+                # CreateChatCompletionRequest in https://github.com/openai/openai-openapi/blob/main/openapi.yaml
                 "top_p": null,
                 "max_tokens": null,         # This is always for output
                 "tiktoken_model_name": null,
                 "stop": null,
 
                 # The following parameters are for reasoning models only.
+                # Set either "reasoning" or "reasoning_effort", not both: on the Responses API path
+                # reasoning_effort is only folded into reasoning.effort when "reasoning" is absent.
                 "reasoning": null, # Reasoning parameters for reasoning models (Dict[str, Any])
                 "reasoning_effort": null, # Constrains effort on reasoning for reasoning models (str)
                 "verbosity": null, # Controls the verbosity level of responses for reasoning models (str)
+                # Tri-state switch for which OpenAI endpoint requests are sent to (bool or null). See
+                # https://docs.langchain.com/oss/python/integrations/chat/openai#responses-api and
+                # https://reference.langchain.com/python/langchain-openai/chat_models/base/BaseChatOpenAI/use_responses_api
+                #   null  - let langchain infer the endpoint from the other parameters and the model name.
+                #           Any Responses-only setting (with this class that means a "reasoning" dict) or a
+                #           Responses-only model (gpt-5.x-pro, codex) selects the Responses API; otherwise
+                #           requests stay on Chat Completions (the long-standing behavior).
+                #   true  - force the Responses API. Needed for tool calling with reasoning on the newest models,
+                #           because Chat Completions rejects function tools combined with reasoning:
+                #             - gpt-6-astra can only call tools through the Responses API. Chat Completions has
+                #               no function calling for it and it rejects reasoning_effort "none".
+                #             - gpt-5.6-* can either use this, or stay on Chat Completions with
+                #               reasoning_effort "none" (tool calls work, but without reasoning).
+                #           https://developers.openai.com/api/docs/guides/reasoning
+                #           https://developers.openai.com/api/docs/guides/migrate-to-responses
+                #   false - force Chat Completions.
+                "use_responses_api": null,
 
                 # If you really need more parameters, you will likely have to create your own LlmFactory.
             }
