@@ -70,6 +70,26 @@
         "model_retirement_date": "2026-10-23",
     },
 
+    "gpt-6-astra": {
+        "class": "openai",
+        "model_info_url": "https://developers.openai.com/api/docs/models/gpt-6-astra",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        # Tool calling needs "use_responses_api": true in llm_config: Chat Completions rejects tools combined
+        # with reasoning, and this model rejects reasoning_effort "none", so there is no Chat Completions path. See
+        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters
+        "context_window_size": 1050000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "04/30/2026",
+        "price_per_1k_input_tokens": 0.010,
+        "price_per_1k_output_tokens": 0.050,
+        "model_launch_date": "2026-09-03",
+        "model_retirement_date": null,
+    },
+
     "gpt-5.6-sol": {
         "class": "openai",
         "model_info_url": "https://developers.openai.com/api/docs/models/gpt-5.6-sol",
@@ -78,11 +98,14 @@
             "output": [ "text" ],
         },
         "capabilities": [ "tools" ],
+        # Tool calling needs "use_responses_api": true in llm_config, or "reasoning_effort": "none" to stay on
+        # Chat Completions without reasoning (Chat Completions rejects tools combined with reasoning). See
+        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "02/16/2026",
-        "price_per_1k_input_tokens": 0.005,
-        "price_per_1k_output_tokens": 0.030,
+        "price_per_1k_input_tokens": 0.004,
+        "price_per_1k_output_tokens": 0.020,
         "model_launch_date": "2026-07-09",
         "model_retirement_date": null,
     },
@@ -94,6 +117,9 @@
             "output": [ "text" ],
         },
         "capabilities": [ "tools" ],
+        # Tool calling needs "use_responses_api": true in llm_config, or "reasoning_effort": "none" to stay on
+        # Chat Completions without reasoning (Chat Completions rejects tools combined with reasoning). See
+        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "02/16/2026",
@@ -112,6 +138,9 @@
             "output": [ "text" ],
         },
         "capabilities": [ "tools" ],
+        # Tool calling needs "use_responses_api": true in llm_config, or "reasoning_effort": "none" to stay on
+        # Chat Completions without reasoning (Chat Completions rejects tools combined with reasoning). See
+        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "02/16/2026",
@@ -1482,20 +1511,16 @@
                 "reasoning_effort": null, # Constrains effort on reasoning for reasoning models (str)
                 "verbosity": null, # Controls the verbosity level of responses for reasoning models (str)
                 # Tri-state switch for which OpenAI endpoint requests are sent to (bool or null). See
+                # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters
+                # for which models need it and why, plus the langchain reference:
                 # https://docs.langchain.com/oss/python/integrations/chat/openai#responses-api and
                 # https://reference.langchain.com/python/langchain-openai/chat_models/base/BaseChatOpenAI/use_responses_api
                 #   null  - let langchain infer the endpoint from the other parameters and the model name.
                 #           Any Responses-only setting (with this class that means a "reasoning" dict) or a
                 #           Responses-only model (gpt-5.x-pro, codex) selects the Responses API; otherwise
                 #           requests stay on Chat Completions (the long-standing behavior).
-                #   true  - force the Responses API. Needed for tool calling with reasoning on the newest models,
-                #           because Chat Completions rejects function tools combined with reasoning:
-                #             - gpt-6-astra can only call tools through the Responses API. Chat Completions has
-                #               no function calling for it and it rejects reasoning_effort "none".
-                #             - gpt-5.6-* can either use this, or stay on Chat Completions with
-                #               reasoning_effort "none" (tool calls work, but without reasoning).
-                #           https://developers.openai.com/api/docs/guides/reasoning
-                #           https://developers.openai.com/api/docs/guides/migrate-to-responses
+                #   true  - force the Responses API. Needed for tool calling with reasoning on the newest OpenAI
+                #           models (gpt-6-astra, gpt-5.6-*), because Chat Completions rejects the combination.
                 #   false - force Chat Completions.
                 "use_responses_api": null,
 
