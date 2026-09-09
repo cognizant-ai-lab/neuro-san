@@ -369,6 +369,14 @@ class BaseToolFactory:
             message: str = f"Could not create tool to call external agent '{name}'. Its function_json is None."
             raise ValueError(message)
 
+        # Copy before adding the name. function_json can be a dictionary that
+        # outlives this call: for a same-server external agent it is the
+        # referenced network's live registry spec (AsyncDirectAgentSession
+        # returns it by reference), and internal and toolbox tools funnel
+        # here with their registry/toolbox entries too. Writing the lookup
+        # name into it would leak this caller's reference string into that
+        # shared state (issue #1230). The copy is deliberately shallow: only
+        # the top-level "name" key is written here, so nested dicts stay shared.
         use_function_json: Dict[str, Any] = dict(function_json)
         use_function_json["name"] = name
         return LangChainOpenAIFunctionTool.from_function_json(use_function_json, self.tool_caller)

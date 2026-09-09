@@ -17,12 +17,14 @@
 from typing import Any
 from typing import Dict
 
+from copy import deepcopy
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
 import pytest
 
 from neuro_san.internals.run_context.langchain.core.base_tool_factory import BaseToolFactory
+from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
 
 
 class TestBaseToolFactory:
@@ -140,12 +142,40 @@ class TestBaseToolFactory:
                 "required": ["question"]
             }
         }
+        expected: Dict[str, Any] = deepcopy(function_json)
         factory = self.make_factory(function_json)
 
         tool = factory.create_function_tool(function_json, self.EXTERNAL_AGENT_NAME)
 
-        assert tool is not None
-        assert "name" not in function_json
+        assert function_json == expected
+        assert tool.name == ExternalAgentParsing.get_safe_agent_name(self.EXTERNAL_AGENT_NAME)
+
+    @pytest.mark.asyncio
+    async def test_external_tool_does_not_mutate_function_json(self):
+        """
+        A same-server external agent can return its live registry function
+        specification by reference. Creating a tool from it must not mutate it.
+        """
+        function_json: Dict[str, Any] = {
+            "description": "Answers music questions.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "The question to answer."
+                    }
+                },
+                "required": ["question"]
+            }
+        }
+        expected: Dict[str, Any] = deepcopy(function_json)
+        factory = self.make_factory(function_json)
+
+        tool = await factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
+
+        assert function_json == expected
+        assert tool.name == ExternalAgentParsing.get_safe_agent_name(self.EXTERNAL_AGENT_NAME)
 
     @pytest.mark.asyncio
     async def test_external_tool_with_empty_properties_gets_default_schema(self):
