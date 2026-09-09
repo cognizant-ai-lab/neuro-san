@@ -119,15 +119,12 @@ class DataDrivenTestsDriver:
                     timed_capture.set_execution_time(float('inf'))  # Indicate that it timed out
                     timed_capture.add_assert(AssertionError(f"Test for run {self.test_name} timed out."))
                     run_results.append(timed_capture)
-                    print(f">>>>>>>>>>>>>>Test for run {self.test_name} timed out.")
                 else:
                     # This test completed (either successfully or with asserts or with possible exception).
                     try:
                         timed_capture = fut.result()
                         # Regular asserts captured, add to run results
                         run_results.append(timed_capture)
-                        print(f"*************Test for run {self.test_name} completed in "
-                              f"{timed_capture.get_execution_time()} seconds.")
                     except Exception as exc:  # pylint: disable=broad-exception-caught
                         # Handle any exceptions that occurred during test execution. Catch broadly so
                         # a single failing test does not abort the whole load run.
@@ -136,7 +133,6 @@ class DataDrivenTestsDriver:
                         timed_capture.add_assert(
                             AssertionError(f"Test for run {self.test_name} failed with exception: {exc}"))
                         run_results.append(timed_capture)
-                        print(f">>>>>>>>>>>>>>Test for run {self.test_name} failed with exception: {exc}")
 
                 asserts: List[AssertionError] = timed_capture.get_asserts()
                 if len(asserts) > 0:
@@ -521,5 +517,4 @@ class DataDrivenTestsDriver:
             # 3) Emit everything that completed during the wait.
             for fut in done:
                 pending.discard(fut)
-                print(f">>>>>>>>>>>>>>>>>>>>>>>Future {fut} completed")
                 yield fut, False
