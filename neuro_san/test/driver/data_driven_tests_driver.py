@@ -50,9 +50,6 @@ from neuro_san.test.evaluators.agent_evaluator_factory import AgentEvaluatorFact
 from neuro_san.test.interfaces.agent_evaluator import AgentEvaluator
 from neuro_san.test.interfaces.assert_forwarder import AssertForwarder
 
-from neuro_san.test.assessor.assessor_assert_forwarder import AssessorAssertForwarder
-from neuro_san.test.util.tests_util import TestsUtil
-
 
 class DataDrivenTestsDriver:
     """
@@ -129,14 +126,15 @@ class DataDrivenTestsDriver:
                         timed_capture = fut.result()
                         # Regular asserts captured, add to run results
                         run_results.append(timed_capture)
-                        print(f"*************Test for run {self.test_name} completed in {timed_capture.get_execution_time()} seconds.")
-
-
-                    except Exception as exc:
-                        # Handle any exceptions that occurred during test execution
+                        print(f"*************Test for run {self.test_name} completed in "
+                              f"{timed_capture.get_execution_time()} seconds.")
+                    except Exception as exc:  # pylint: disable=broad-exception-caught
+                        # Handle any exceptions that occurred during test execution. Catch broadly so
+                        # a single failing test does not abort the whole load run.
                         timed_capture = TimedAssertCapture(self.asserts_basis)
                         timed_capture.set_execution_time(float('inf'))  # Indicate that it failed
-                        timed_capture.add_assert(AssertionError(f"Test for run {self.test_name} failed with exception: {exc}"))
+                        timed_capture.add_assert(
+                            AssertionError(f"Test for run {self.test_name} failed with exception: {exc}"))
                         run_results.append(timed_capture)
                         print(f">>>>>>>>>>>>>>Test for run {self.test_name} failed with exception: {exc}")
 
@@ -525,5 +523,3 @@ class DataDrivenTestsDriver:
                 pending.discard(fut)
                 print(f">>>>>>>>>>>>>>>>>>>>>>>Future {fut} completed")
                 yield fut, False
-
-
