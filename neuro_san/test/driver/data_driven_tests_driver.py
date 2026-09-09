@@ -37,7 +37,6 @@ from concurrent.futures import wait
 from concurrent.futures import FIRST_COMPLETED
 from concurrent.futures import ThreadPoolExecutor
 
-from leaf_common.config.file_of_class import FileOfClass
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from leaf_common.time.timeout import Timeout
 
@@ -52,6 +51,7 @@ from neuro_san.test.interfaces.agent_evaluator import AgentEvaluator
 from neuro_san.test.interfaces.assert_forwarder import AssertForwarder
 
 from neuro_san.test.assessor.assessor_assert_forwarder import AssessorAssertForwarder
+from neuro_san.test.util.tests_util import TestsUtil
 
 
 class DataDrivenTestsDriver:
@@ -73,7 +73,7 @@ class DataDrivenTestsDriver:
         self.test_name: str = test_name
 
     # pylint: disable=too-many-locals
-    def run_tests(self, tests: Sequence[Dict[str, Any]], num_need_success: int):
+    def run_tests(self, tests: Sequence[Dict[str, Any]], num_need_success: int) -> List[TimedAssertCapture]:
         """
         Run a sequence of test cases represented by Python dictionaries.
 
@@ -147,7 +147,7 @@ class DataDrivenTestsDriver:
 
                 num_successful += 1
                 if num_successful == num_need_success:
-                    # Don't look at more tests than we actually need to
+                    # Fast path: we have enough successful tests, so we can stop waiting for more.
                     break
 
         # We are done with running tests, so we can shut down the executor and cancel any remaining futures.
@@ -525,35 +525,5 @@ class DataDrivenTestsDriver:
                 pending.discard(fut)
                 print(f">>>>>>>>>>>>>>>>>>>>>>>Future {fut} completed")
                 yield fut, False
-
-
-if __name__ == "__main__":
-    # This is a simple test harness for running a single hocon file as a test case.
-    # It is not intended to be used in production, but can be useful for debugging.
-    import sys
-    from leaf_common.config.file_of_class import FileOfClass
-    from neuro_san.test.driver.assert_capture import AssertCapture
-
-    if len(sys.argv) < 2:
-        print("Usage: python data_driven_tests_driver.py <hocon_file>")
-        sys.exit(1)
-
-    hocon_file = sys.argv[1]
-    fixtures = FileOfClass(__file__, path_to_basis="../../../tests/fixtures")
-
-    hocon_file: str = fixtures.get_file_in_basis(hocon_file)
-    driver_parser = DataDrivenTestsDriver(None, fixtures)
-    test_case: Dict[str, Any] = driver_parser.parse_hocon_test_case(hocon_file)
-
-
-    asserts = AssessorAssertForwarder()
-    driver = DataDrivenTestsDriver(asserts, fixtures)
-
-    print(f"Running test case from hocon file: {test_case}")
-
-    my_tests = [test_case for _ in range(100)]  # Run the same test case 100 times for demonstration
-
-
-    driver.run_tests(my_tests, num_need_success=len(my_tests))
 
 
