@@ -34,6 +34,7 @@ from neuro_san.internals.interfaces.callable_activation import CallableActivatio
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.run_context.interfaces.run import Run
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
+from neuro_san.message.utils.content_utils import ContentUtils
 
 
 class BranchActivation(CallingActivation, CallableActivation):
@@ -210,8 +211,15 @@ flag to your invocation.
             # load those pools accumulate as leaked sockets.
             await callable_activation.close_of_work(self.run_context)
 
-        # We got a message back, take the content as the return string
-        return message.content
+        # We got a message back. This method's contract is a str. Today the
+        # sub-agent's final message always carries str content (its chain
+        # output is flattened before it is journaled), so this projection is
+        # an identity. Once native block content is preserved through that
+        # message (later rungs of issue #1222), it keeps the contract: callers
+        # hand this value straight to the calling LLM (copyist.py f-strings it
+        # into the tool result) and would otherwise see a Python repr of the
+        # block list.
+        return ContentUtils.flatten_to_text(message)
 
     async def use_reservation(self, reservation_id: str, args: Dict[str, Any], sly_data: Dict[str, Any]) -> str:
         """
