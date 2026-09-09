@@ -18,6 +18,7 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 
 from neuro_san.internals.chat.chat_history_message_processor import ChatHistoryMessageProcessor
 from neuro_san.message.types.chat_message_type import ChatMessageType
@@ -41,8 +42,9 @@ class TestChatHistoryMessageProcessor:
         processor: ChatHistoryMessageProcessor = ChatHistoryMessageProcessor()
         original: Dict[str, Any] = {"type": ChatMessageType.AI, "text": "a {b} and {{c}}"}
 
-        result: Dict[str, Any] = processor.escape_message(original)
+        result: Optional[Dict[str, Any]] = processor.escape_message(original)
 
+        assert result is not None
         assert result["text"] == "a {{b}} and {{c}}"
         assert result["type"] == ChatMessageType.AI
         # The input dictionary is copied, never mutated.
@@ -64,8 +66,9 @@ class TestChatHistoryMessageProcessor:
         blocks: List[Dict[str, Any]] = [{"type": "text", "text": "{not escaped}"}]
         original: Dict[str, Any] = {"type": ChatMessageType.AI, "text": blocks}
 
-        result: Dict[str, Any] = processor.escape_message(original)
+        result: Optional[Dict[str, Any]] = processor.escape_message(original)
 
+        assert result is not None
         assert result is not original
         assert result["text"] is blocks
         assert result["type"] == ChatMessageType.AI
