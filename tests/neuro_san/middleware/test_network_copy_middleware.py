@@ -156,6 +156,28 @@ class TestNetworkCopyMiddleware:
         restore.assert_not_called()
         assert response["messages"][0].content == self.ASK_FOR_NAME
 
+    @pytest.mark.asyncio
+    async def test_non_object_json_asks_for_name(self) -> None:
+        """
+        Valid JSON that is not an object (here a JSON array) has no agent_name
+        key; the middleware asks for the name instead of raising AttributeError.
+        """
+        middleware: NetworkCopyMiddleware = self.make_middleware()
+        with patch(self.RESTORE_PATH) as restore:
+            response: Dict[str, Any] = await middleware.aafter_agent(self.make_state('["hello_world"]'), None)
+
+        restore.assert_not_called()
+        assert response["messages"][0].content == self.ASK_FOR_NAME
+
+    def test_parse_agent_name_rejects_non_object_json(self) -> None:
+        """
+        Bare JSON strings and numbers decode fine but are not objects, so they
+        yield None rather than an exception.
+        """
+        middleware: NetworkCopyMiddleware = self.make_middleware()
+        assert middleware._parse_agent_name('"hello_world"') is None
+        assert middleware._parse_agent_name("42") is None
+
     def test_parse_agent_name_tolerates_non_string(self) -> None:
         """
         _parse_agent_name catches TypeError alongside JSONDecodeError. The

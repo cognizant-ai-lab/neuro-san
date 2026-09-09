@@ -145,7 +145,7 @@ class NetworkCopyMiddleware(AgentMiddleware):
         :return: The agent name, or None if parsing/validation fails
         """
         try:
-            args: Dict[str, str] = loads(response)
+            args: Any = loads(response)
         except (JSONDecodeError, TypeError) as json_error:
             # TypeError is what json.loads() raises for non-string input. It
             # cannot happen on the aafter_agent() path, which always projects
@@ -153,6 +153,14 @@ class NetworkCopyMiddleware(AgentMiddleware):
             # any future caller bypassing that projection gets the same
             # "please provide the name" outcome instead of an exception.
             self.logger.error("Cannot parse '%s' into JSON format. Got %s", response, json_error)
+            return None
+
+        if not isinstance(args, dict):
+            # Valid JSON that is not an object (a bare string, list or number)
+            # has no "agent_name" key to read. Treat it like any other
+            # unusable response rather than raising AttributeError on .get(),
+            # which would also end the whole request with an exception.
+            self.logger.error("Expected a JSON object with an agent_name key, got '%s'", response)
             return None
 
         agent_name: str = args.get("agent_name")
