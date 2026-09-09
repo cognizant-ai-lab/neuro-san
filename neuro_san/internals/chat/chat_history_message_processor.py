@@ -18,6 +18,7 @@ from numbers import Number
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 
 from copy import copy
 
@@ -113,7 +114,7 @@ class ChatHistoryMessageProcessor(MessageProcessor):
         redacted["text"] = "<redacted>"
         return redacted
 
-    def escape_message(self, chat_message_dict: Dict[str, Any]) -> Dict[str, Any]:
+    def escape_message(self, chat_message_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Prepare a message such that it can be re-ingested by the system nicely.
         This means properly escaping any text that is sent.
