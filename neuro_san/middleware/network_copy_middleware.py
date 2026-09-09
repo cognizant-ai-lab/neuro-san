@@ -25,12 +25,14 @@ from typing_extensions import override
 from langchain.agents.middleware import AgentMiddleware
 from langchain.agents.middleware import AgentState
 from langchain_core.messages import AIMessage
+from langchain_core.messages import BaseMessage
 
 from neuro_san import REGISTRIES_DIR
 from neuro_san.interfaces.reservationist import Reservationist
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.reservations.reservation_util import ReservationUtil
+from neuro_san.message.utils.content_utils import ContentUtils
 
 
 class NetworkCopyMiddleware(AgentMiddleware):
@@ -81,7 +83,13 @@ class NetworkCopyMiddleware(AgentMiddleware):
         :param runtime: Runtime context
         :return: Dict with error message and jump directive, or None if valid
         """
-        response: str = state.get("messages")[-1].content
+        # The state holds the provider-native message, whose content is a list
+        # of blocks rather than a str whenever the model emitted thinking or
+        # tool_use blocks, or was routed through the OpenAI Responses API.
+        # json.loads() raises TypeError on a list, so project the content to
+        # its text first. For plain-string content this is an identity.
+        last_message: BaseMessage = state.get("messages")[-1]
+        response: str = ContentUtils.flatten_to_text(last_message)
 
         agent_name: str = self._parse_agent_name(response)
         if agent_name is None:
@@ -138,7 +146,12 @@ class NetworkCopyMiddleware(AgentMiddleware):
         """
         try:
             args: Dict[str, str] = loads(response)
-        except JSONDecodeError as json_error:
+        except (JSONDecodeError, TypeError) as json_error:
+            # TypeError is what json.loads() raises for non-string input. It
+            # cannot happen on the aafter_agent() path, which always projects
+            # the response to str first; it is kept as a cheap guard so that
+            # any future caller bypassing that projection gets the same
+            # "please provide the name" outcome instead of an exception.
             self.logger.error("Cannot parse '%s' into JSON format. Got %s", response, json_error)
             return None
 
