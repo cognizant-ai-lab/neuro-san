@@ -15,12 +15,16 @@
 #
 # END COPYRIGHT
 
+from typing import Any
+from typing import Dict
+
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
 import httpx
 
+from langchain_core.agents import AgentFinish
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.human import HumanMessage
 from langchain_core.outputs import LLMResult
@@ -45,6 +49,10 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):
     type=="text" block and skipped plain strings entirely, so multi-text
     responses lost everything past the first text block and list-of-str
     content became "".
+
+    find_ai_message is the single place that locates the provider-native
+    AIMessage inside a chain result (dict, AgentFinish or bare AIMessage);
+    parse_chain_result keeps its exact behavior on top of it.
     """
 
     @staticmethod
@@ -91,6 +99,62 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):
             ContentFixtures.anthropic_thinking_first(),
         ]}
         assert runnable.parse_chain_result(chain_result, exception=None) == "the answer"
+
+    def test_find_ai_message_returns_last_ai_message_in_dict(self) -> None:
+        """
+        The normal chain result is a dict whose "messages" hold chat history;
+        the LAST AIMessage there is the answer, even when non-AI messages
+        follow it.
+        """
+        first: AIMessage = AIMessage(content="first")
+        last: AIMessage = AIMessage(content="last")
+        chain_result: Dict[str, Any] = {
+            "messages": [HumanMessage(content="q"), first, last, HumanMessage(content="x")],
+        }
+        assert RunContextRunnable.find_ai_message(chain_result) is last
+
+    def test_find_ai_message_passes_through_ai_message(self) -> None:
+        """
+        A bare AIMessage result is the answer itself.
+        """
+        message: AIMessage = AIMessage(content="the answer")
+        assert RunContextRunnable.find_ai_message(message) is message
+
+    def test_find_ai_message_unwraps_agent_finish(self) -> None:
+        """
+        An AgentFinish result is unwrapped to its return_values first.
+        """
+        native: AIMessage = ContentFixtures.anthropic_thinking_first()
+        finish: AgentFinish = AgentFinish(return_values={"messages": [HumanMessage(content="q"), native]}, log="")
+        assert RunContextRunnable.find_ai_message(finish) is native
+
+    def test_find_ai_message_returns_none_without_ai_message(self) -> None:
+        """
+        A dict with no AIMessage (the API-key and output-parse error paths
+        return {"output": ...}), a None result, and a messages list without
+        an AIMessage all yield None.
+        """
+        assert RunContextRunnable.find_ai_message({"output": "Please set OPENAI_API_KEY"}) is None
+        assert RunContextRunnable.find_ai_message({"messages": [HumanMessage(content="q")]}) is None
+        assert RunContextRunnable.find_ai_message(None) is None
+
+    def test_parse_chain_result_bare_output_dict_returns_output(self) -> None:
+        """
+        A chain result with no AIMessage but an "output" key parses to that
+        text, exactly as before the lookup moved into find_ai_message.
+        """
+        runnable = self._make_runnable()
+        output: str = runnable.parse_chain_result({"output": "Please set OPENAI_API_KEY"}, exception=None)
+        assert output == "Please set OPENAI_API_KEY"
+
+    def test_parse_chain_result_agent_finish_with_output_key(self) -> None:
+        """
+        An AgentFinish whose return_values carry only an "output" key parses to
+        that text: the unwrap applies on the fallback path too.
+        """
+        runnable = self._make_runnable()
+        finish: AgentFinish = AgentFinish(return_values={"output": "done"}, log="")
+        assert runnable.parse_chain_result(finish, exception=None) == "done"
 
     async def test_parse_chain_result_matches_on_llm_end_projection(self):
         """
