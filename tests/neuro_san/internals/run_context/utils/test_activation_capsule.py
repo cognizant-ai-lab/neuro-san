@@ -15,6 +15,7 @@
 #
 # END COPYRIGHT
 
+from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
@@ -28,7 +29,7 @@ from neuro_san.internals.run_context.utils.activation_capsule import ActivationC
 from tests.neuro_san.message.content_fixtures import ContentFixtures
 
 
-class TestActivationCapsule:
+class TestActivationCapsule(IsolatedAsyncioTestCase):
     """
     Tests for the return contract of ActivationCapsule.use_tool.
 
