@@ -18,9 +18,6 @@
 from typing import Any
 from typing import Dict
 
-import logging
-import sys
-
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
@@ -29,31 +26,11 @@ from langchain_core.messages.ai import AIMessage
 import pytest
 
 from neuro_san.interfaces.coded_tool import CodedTool
-from neuro_san.internals.graph.activations.abstract_class_activation import AbstractClassActivation
 from neuro_san.internals.graph.activations.branch_activation import BranchActivation
 
-CREATE_RUN_CONTEXT_PATH = (
-    "neuro_san.internals.graph.activations.abstract_class_activation."
-    "RunContextFactory.create_run_context"
-)
-GET_FULL_NAME_FROM_ORIGIN_PATH = (
-    "neuro_san.internals.graph.activations.abstract_class_activation."
-    "Origination.get_full_name_from_origin"
-)
-RESOLVER_PATH = "neuro_san.internals.graph.activations.abstract_class_activation.Resolver"
-# pylint: disable=redefined-outer-name
-
-
-class ConcreteClassActivation(AbstractClassActivation):
-    """Concrete implementation for testing purposes."""
-    # pylint: disable=too-many-arguments
-    # pylint: disable=too-many-positional-arguments
-    def __init__(self, parent_run_context, factory, args, agent_tool_spec, sly_data, class_ref: str):
-        super().__init__(parent_run_context, factory, args, agent_tool_spec, sly_data)
-        self._class_ref = class_ref
-
-    def get_full_class_ref(self) -> str:
-        return self._class_ref
+from tests.neuro_san.internals.graph.activations.concrete_class_activation import ConcreteClassActivation
+from tests.neuro_san.internals.graph.activations.concrete_class_activation import CREATE_RUN_CONTEXT_PATH
+from tests.neuro_san.internals.graph.activations.concrete_class_activation import GET_FULL_NAME_FROM_ORIGIN_PATH
 
 
 class MockCodedTool(CodedTool):
@@ -139,6 +116,7 @@ def basic_agent_tool_spec():
     }
 
 
+# pylint: disable=redefined-outer-name
 @pytest.fixture
 def activation_instance(mock_run_context, mock_factory, basic_agent_tool_spec):
     """Create a ConcreteClassActivation instance for testing."""
@@ -155,8 +133,11 @@ def activation_instance(mock_run_context, mock_factory, basic_agent_tool_spec):
             return activation
 
 
+# pylint: disable=redefined-outer-name
 class TestAbstractClassActivation:
     """Test suite for AbstractClassActivation."""
+
+    RESOLVER_PATH = "neuro_san.internals.graph.activations.abstract_class_activation.Resolver"
 
     def test_initialization(self, activation_instance):
         """Test that the activation initializes correctly."""
@@ -202,7 +183,7 @@ class TestAbstractClassActivation:
         mock_resolver = MagicMock()
         mock_resolver.resolve_class_in_module.return_value = MockCodedTool
 
-        with patch(RESOLVER_PATH, return_value=mock_resolver):
+        with patch(self.RESOLVER_PATH, return_value=mock_resolver):
             result = activation_instance.resolve_class("TestClass", "test_module")
 
             assert result == MockCodedTool
@@ -217,7 +198,7 @@ class TestAbstractClassActivation:
         mock_resolver_success = MagicMock()
         mock_resolver_success.resolve_class_in_module.return_value = MockCodedTool
 
-        with patch(RESOLVER_PATH, side_effect=[mock_resolver_fail, mock_resolver_success]):
+        with patch(self.RESOLVER_PATH, side_effect=[mock_resolver_fail, mock_resolver_success]):
             result = activation_instance.resolve_class("TestClass", "test_module")
 
             assert result == MockCodedTool
@@ -230,7 +211,7 @@ class TestAbstractClassActivation:
         mock_resolver = MagicMock()
         mock_resolver.resolve_class_in_module.side_effect = ValueError("Not found")
 
-        with patch(RESOLVER_PATH, return_value=mock_resolver):
+        with patch(self.RESOLVER_PATH, return_value=mock_resolver):
             with pytest.raises(ValueError) as exc_info:
                 activation_instance.resolve_class("TestClass", "test_module")
 
@@ -257,7 +238,7 @@ class TestAbstractClassActivation:
 
             return resolver
 
-        with patch(RESOLVER_PATH, side_effect=mock_resolver_factory):
+        with patch(self.RESOLVER_PATH, side_effect=mock_resolver_factory):
             result = activation_instance.resolve_class("TestClass", "test_module")
 
             assert result == MockCodedTool
@@ -408,117 +389,3 @@ class TestAbstractClassActivation:
 
                 assert activation.reservationist is not None
                 assert activation.arguments.get("reservationist") is not None
-
-
-FIXTURE_TOOL_PATH_PACKAGE = "tests.neuro_san.internals.graph.activations.tool_path_fixture"
-# A canary module deliberately outside any tool path; see resolution_canary.py.
-CANARY_MODULE = "tests.neuro_san.internals.graph.activations.resolution_canary"
-
-
-def make_activation(mock_run_context, agent_tool_path: str, network_name: str,
-                    agent_name: str = "test_agent") -> "ConcreteClassActivation":
-    """
-    Build a ConcreteClassActivation whose class resolution runs unmocked against
-    real fixture modules, with the factory pointed at the given tool path.
-
-    :param mock_run_context: The mock RunContext to inject.
-    :param agent_tool_path: The dotted package the factory reports as the tool path.
-    :param network_name: The agent network name the factory reports.
-    :param agent_name: The name the factory reports for the spec.
-    :return: A ready-to-use ConcreteClassActivation.
-    """
-    factory = MagicMock()
-    factory.get_agent_tool_path.return_value = agent_tool_path
-    factory.agent_network.get_network_name.return_value = network_name
-    factory.get_name_from_spec.return_value = agent_name
-
-    with patch(CREATE_RUN_CONTEXT_PATH, return_value=mock_run_context):
-        with patch(GET_FULL_NAME_FROM_ORIGIN_PATH, return_value="test_full_name"):
-            return ConcreteClassActivation(
-                parent_run_context=mock_run_context,
-                factory=factory,
-                args={},
-                agent_tool_spec={"name": agent_name, "description": "Test tool"},
-                sly_data={},
-                class_ref="unused.Unused"
-            )
-
-
-@pytest.fixture
-def fixture_activation(mock_run_context):
-    """An activation pointed at the test tool_path_fixture hierarchy."""
-    return make_activation(
-        mock_run_context, f"{FIXTURE_TOOL_PATH_PACKAGE}.my_network", "my_network")
-
-
-class TestToolPathOnlyResolution:
-    """
-    Tests for the AGENT_TOOL_PATH_ONLY environment variable, run against real
-    fixture modules with no Resolver mocks so that actual import behavior is
-    what is asserted.
-    """
-
-    def test_default_mode_resolves_fully_qualified_ref(self, fixture_activation, monkeypatch):
-        """Test that with the flag off, a fully-qualified ref to a module outside
-        AGENT_TOOL_PATH resolves by direct import (backwards-compatible behavior)."""
-        monkeypatch.delenv("AGENT_TOOL_PATH_ONLY", raising=False)
-        cls = fixture_activation.resolve_class("CanaryTool", CANARY_MODULE)
-        assert cls.__name__ == "CanaryTool"
-
-    def test_tool_path_only_blocks_fully_qualified_ref_without_importing(
-            self, fixture_activation, monkeypatch):
-        """Test that strict mode rejects a fully-qualified ref outside AGENT_TOOL_PATH
-        and, critically, never imports the referenced module — importing executes
-        module-level code, which is the vulnerability the flag closes."""
-        sys.modules.pop(CANARY_MODULE, None)
-
-        monkeypatch.setenv("AGENT_TOOL_PATH_ONLY", "true")
-        with pytest.raises(ValueError) as exc_info:
-            fixture_activation.resolve_class("CanaryTool", CANARY_MODULE)
-
-        assert CANARY_MODULE not in sys.modules
-        assert "AGENT_TOOL_PATH_ONLY" in str(exc_info.value)
-
-    def test_tool_path_only_resolves_network_specific_tool(self, fixture_activation, monkeypatch):
-        """Test that strict mode still resolves a tool at the network-specific level."""
-        monkeypatch.setenv("AGENT_TOOL_PATH_ONLY", "true")
-        cls = fixture_activation.resolve_class("NetworkTool", "network_tool")
-        assert cls.__name__ == "NetworkTool"
-
-    def test_tool_path_only_resolves_shared_tool(self, fixture_activation, monkeypatch):
-        """Test that strict mode still resolves a shared tool one level up the hierarchy."""
-        monkeypatch.setenv("AGENT_TOOL_PATH_ONLY", "true")
-        cls = fixture_activation.resolve_class("SharedTool", "shared_tool")
-        assert cls.__name__ == "SharedTool"
-
-    def test_tool_path_only_accepts_boolean_like_values(self, fixture_activation, monkeypatch):
-        """Test that common boolean-like spellings enable the flag, so an operator
-        setting it like other neuro-san flags is not silently left unrestricted."""
-        sys.modules.pop(CANARY_MODULE, None)
-        for truthy in ("true", "True", "TRUE", "yes", " true "):
-            monkeypatch.setenv("AGENT_TOOL_PATH_ONLY", truthy)
-            with pytest.raises(ValueError):
-                fixture_activation.resolve_class("CanaryTool", CANARY_MODULE)
-            assert CANARY_MODULE not in sys.modules
-
-    def test_tool_path_only_resolves_shipped_toolbox_coded_tool(self, mock_run_context, monkeypatch):
-        """Test that strict mode still resolves the coded tools shipped in
-        neuro_san/coded_tools, as referenced by the default toolbox info file."""
-        activation = make_activation(
-            mock_run_context, "neuro_san.coded_tools.date_time_timezone",
-            "date_time_timezone", agent_name="current_date_time")
-
-        monkeypatch.setenv("AGENT_TOOL_PATH_ONLY", "true")
-        cls = activation.resolve_class("GetCurrentDateTime", "get_current_date_time")
-        assert cls.__name__ == "GetCurrentDateTime"
-
-    def test_unrestricted_resolution_notice_logged_once(self, fixture_activation, caplog, monkeypatch):
-        """Test that the flag-off notice is logged exactly once per process."""
-        # pylint: disable=protected-access
-        AbstractClassActivation._unrestricted_notice_logged = False
-        monkeypatch.delenv("AGENT_TOOL_PATH_ONLY", raising=False)
-        with caplog.at_level(logging.INFO):
-            fixture_activation.resolve_class("NetworkTool", "network_tool")
-            fixture_activation.resolve_class("SharedTool", "shared_tool")
-
-        assert caplog.text.count("AGENT_TOOL_PATH_ONLY is not enabled") == 1
