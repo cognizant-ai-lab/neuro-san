@@ -17,6 +17,8 @@
 
 import json
 
+from unittest import TestCase
+
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.ai import AIMessageChunk
 
@@ -26,7 +28,7 @@ from tests.neuro_san.message.content_fixtures import ContentFixtures
 
 
 # pylint: disable=too-many-public-methods
-class TestContentUtils:
+class TestContentUtils(TestCase):
     """
     Tests for ContentUtils, the single flatten/standardize/inspect policy
     for message content. Fixtures mirror real provider output shapes -
