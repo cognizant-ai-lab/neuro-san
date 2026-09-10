@@ -153,7 +153,6 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         assert written[0].content == "a thought"
         assert written[1] is incoming
 
-    @pytest.mark.asyncio
     async def test_tool_result_history_copy_is_text_projected(self) -> None:
         """
         A tool result carrying text + image blocks is journaled with its blocks
@@ -180,7 +179,6 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         assert written[0] is tool_result
         assert written[0].content == blocks
 
-    @pytest.mark.asyncio
     async def test_tool_result_str_history_copy_unchanged(self) -> None:
         """
         A plain-string tool result keeps producing a plain AIMessage history
@@ -197,7 +195,6 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         assert isinstance(chat_history[0], AIMessage)
         assert chat_history[0].content == "tool says"
 
-    @pytest.mark.asyncio
     async def test_block_answer_history_copy_is_text_projected(self) -> None:
         """
         An AI answer carrying block content is journaled with its blocks intact,
@@ -226,7 +223,6 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         assert written[0] is answer
         assert isinstance(written[0].content, list)
 
-    @pytest.mark.asyncio
     async def test_str_answer_history_copy_is_same_instance(self) -> None:
         """
         A plain-string AI answer is appended to the chat history as the very

@@ -141,7 +141,6 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
         with raises(ToolSpecError, match="parameters to be a dictionary"):
             LangChainOpenAIFunctionTool.from_function_json(function_json, MagicMock())
 
-    @pytest.mark.asyncio
     async def test_arun_projects_block_content_answer_to_text(self) -> None:
         """
         A sub-agent answer carrying reasoning + text blocks comes back as its
@@ -158,7 +157,6 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
 
         assert result == "the answer"
 
-    @pytest.mark.asyncio
     async def test_arun_references_data_blocks_in_text(self) -> None:
         """
         A data block in the answer becomes a short reference in the tool result

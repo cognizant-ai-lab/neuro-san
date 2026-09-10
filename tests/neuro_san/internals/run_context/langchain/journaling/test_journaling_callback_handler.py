@@ -161,7 +161,6 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         got_result: AgentMessage = base_journal.write_message.call_args_list[-1].args[0]
         return result, got_result
 
-    @pytest.mark.asyncio
     async def test_on_tool_end_str_output_unchanged(self) -> None:
         """
         Plain-string tool output is journaled exactly as before.
@@ -171,7 +170,6 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         assert result.content == "42"
         assert got_result.structure["tool_output"] == "42"
 
-    @pytest.mark.asyncio
     async def test_on_tool_end_preserves_block_list_output(self) -> None:
         """
         A ToolMessage carrying standard content blocks (text + image: the
@@ -184,7 +182,6 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         assert result.content == blocks
         assert got_result.structure["tool_output"] == blocks
 
-    @pytest.mark.asyncio
     async def test_on_tool_end_sanitizes_bytes_in_blocks(self) -> None:
         """
         Bytes payloads inside blocks become base64 strings in both the journaled
@@ -199,7 +196,6 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         json.dumps(result.content)
         json.dumps(got_result.structure)
 
-    @pytest.mark.asyncio
     async def test_on_tool_end_non_block_list_keeps_str_form(self) -> None:
         """
         A list that is not standard content blocks (here list-of-str) keeps the
@@ -210,7 +206,6 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         assert result.content == "['a', 'b']"
         assert got_result.structure["tool_output"] == ["a", "b"]
 
-    @pytest.mark.asyncio
     async def test_on_tool_end_single_text_block_list_is_kept_as_blocks(self) -> None:
         """
         A tool returning a bare text-block list is journaled as that list, so
