@@ -18,6 +18,7 @@ from numbers import Number
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 
 from copy import copy
 
@@ -113,16 +114,28 @@ class ChatHistoryMessageProcessor(MessageProcessor):
         redacted["text"] = "<redacted>"
         return redacted
 
-    def escape_message(self, chat_message_dict: Dict[str, Any]) -> Dict[str, Any]:
+    def escape_message(self, chat_message_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Prepare a message such that it can be re-ingested by the system nicely.
         This means properly escaping any text that is sent.
+
+        :param chat_message_dict: The ChatMessage dictionary to transform
+        :return: A shallow copy of the dictionary with its text escaped,
+                or None if the message carries no text at all
         """
         transformed: Dict[str, Any] = copy(chat_message_dict)
-        text: str = transformed.get("text")
+        text: Any = transformed.get("text")
 
         if text is None:
             return None
+
+        if not isinstance(text, str):
+            # Brace escaping only applies to str text. Every dict reaching this
+            # processor today comes from BaseMessageDictionaryConverter.to_dict,
+            # which always emits str text, so this is a defensive guard for
+            # future non-str text: pass the message through untouched rather
+            # than silently dropping a history entry.
+            return transformed
 
         # Braces are a problem for chat history being read back into the system
         # if they are not properly escaped.

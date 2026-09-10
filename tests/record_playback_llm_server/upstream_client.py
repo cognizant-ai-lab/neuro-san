@@ -61,8 +61,10 @@ class UpstreamClient:
         max_clients: int = DEFAULT_MAX_CLIENTS,
     ) -> None:
         """
-        :param base_url: Base URL of the external LLM host, including any
-                         version path segment (e.g. "https://api.openai.com/v1").
+        :param base_url: Base URL of the external LLM host. The OpenAI-style
+                         "/v1" version segment is optional: it is appended when
+                         absent, so both "https://api.openai.com" and
+                         "https://api.openai.com/v1" are accepted.
         :param api_key: Bearer credential for the external host. May be None
                         for hosts that do not require authentication.
         :param request_timeout: Whole-request timeout in seconds.
@@ -70,7 +72,7 @@ class UpstreamClient:
         :param max_clients: Maximum number of simultaneous in-flight requests to
                             the upstream host before further requests queue.
         """
-        self.base_url: str = base_url.rstrip("/") if base_url else base_url
+        self.base_url: str = self._normalize_base_url(base_url)
         self.api_key: Optional[str] = api_key
         self.request_timeout: float = request_timeout
         self.connect_timeout: float = connect_timeout
@@ -81,6 +83,23 @@ class UpstreamClient:
         self.client: tornado.httpclient.AsyncHTTPClient = \
             tornado.httpclient.AsyncHTTPClient(force_instance=True, max_clients=max_clients)
         self.ssl_context: ssl.SSLContext = self._build_ssl_context()
+
+    @staticmethod
+    def _normalize_base_url(base_url: str) -> str:
+        """
+        Normalize the upstream base URL: strip a trailing slash and append the
+        OpenAI-style "/v1" version segment when it is absent. This lets callers
+        pass either "https://host" or "https://host/v1"; both resolve to the
+        same "https://host/v1". A URL that already ends in "/v1" is left as-is.
+        :param base_url: The configured base URL (may be empty/None).
+        :return: The normalized base URL.
+        """
+        if not base_url:
+            return base_url
+        normalized: str = base_url.rstrip("/")
+        if not normalized.endswith("/v1"):
+            normalized = f"{normalized}/v1"
+        return normalized
 
     @staticmethod
     def _build_ssl_context() -> ssl.SSLContext:
