@@ -64,7 +64,6 @@ class TestNetworkCopyMiddleware(IsolatedAsyncioTestCase):
         """
         return {"messages": [AIMessage(content=content)]}
 
-    @pytest.mark.asyncio
     async def test_str_json_content_parses_agent_name(self) -> None:
         """
         Plain-string JSON content, which every Chat Completions model produces,
@@ -78,7 +77,6 @@ class TestNetworkCopyMiddleware(IsolatedAsyncioTestCase):
         restore.assert_called_once_with("hello_world")
         assert "Cannot find agent hello_world" in response["messages"][0].content
 
-    @pytest.mark.asyncio
     async def test_block_content_parses_agent_name(self) -> None:
         """
         The regression: Anthropic-style thinking-first block content whose text
