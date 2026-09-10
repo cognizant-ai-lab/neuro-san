@@ -19,6 +19,8 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from copy import deepcopy
+
 from leaf_common.config.file_of_class import FileOfClass
 
 from neuro_san.test.driver.data_driven_tests_driver import DataDrivenTestsDriver
@@ -73,7 +75,11 @@ class DataDrivenAgentTestDriver:
 
         # Construct a collection of tests we want to run.
         # In this case, we will run the same test multiple times in parallel.
-        tests: List[Dict[str, Any]] = [test_case] * num_iterations
+        # Note that we are deep-copying the test case so that each iteration has its own copy of the test case
+        # which could be mutated by the test driver during execution (sly data merges, etc.).
+        tests: List[Dict[str, Any]] = []
+        for _ in range(num_iterations):
+            tests.append(deepcopy(test_case))
 
         # Capture test results for each iteration
         test_results: List[TimedAssertCapture] = self.test_driver.run_tests(tests, num_need_success)

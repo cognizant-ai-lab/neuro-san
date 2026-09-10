@@ -90,8 +90,8 @@ class DataDrivenTestsDriver:
         num_successful: int = 0
 
         # Loop through each test execution in parallel
-        with ThreadPoolExecutor(max_workers=len(tests)) as executor:
-
+        executor: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=len(tests))
+        try:
             futures: List[Future] = []
             iteration_index: int = 0
             future_timeouts: Dict[Future, Optional[float]] = {}
@@ -107,6 +107,8 @@ class DataDrivenTestsDriver:
                 timeout_in_seconds: Optional[float] = test_case.get("timeout_in_seconds", None)
                 future: Future = executor.submit(
                     self.capture_one_iteration, test_case, timeouts, iteration_index)
+                if iteration_index is not None:
+                    iteration_index += 1
                 futures.append(future)
                 future_timeouts[future] = timeout_in_seconds
 
@@ -143,10 +145,11 @@ class DataDrivenTestsDriver:
                 if num_successful == num_need_success:
                     # Fast path: we have enough successful tests, so we can stop waiting for more.
                     break
-
-        # We are done with running tests, so we can shut down the executor and cancel any remaining futures.
-        # Note: this is a blocking call, if some timed out tests are still running.
-        executor.shutdown(wait=False, cancel_futures=True)
+        finally:
+            # We are done with running tests, so we can shut down the executor and cancel any remaining futures.
+            # Note: this is not a blocking call, but if some timed out tests are still running,
+            # they will continue to run in the background. We are just not waiting for them anymore.
+            executor.shutdown(wait=False, cancel_futures=True)
         return run_results
 
     def capture_one_iteration(self, test_case: Dict[str, Any], timeouts: List[Timeout],
