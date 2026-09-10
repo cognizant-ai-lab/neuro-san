@@ -130,8 +130,8 @@ class StandardLangChainLlmFactory(LangChainLlmFactory):
         if policy_class is not None:
 
             # Use the LlmPolicy type we found in the lookup table to create an call a new instance.
-            llm_policy = policy_class()
-            llm, llm_policy = llm_policy.create_llm_resources_components(config)
+            llm_policy_instance = policy_class()
+            llm, llm_policy = llm_policy_instance.create_llm_resources_components(config)
 
         elif chat_class is None:
             raise ValueError(f"Class name {chat_class} for model_name {model_name} is unspecified.")

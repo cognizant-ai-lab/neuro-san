@@ -19,7 +19,8 @@ from typing import Dict
 from typing import List
 from typing import Set
 
-import logging
+from logging import getLogger
+from logging import Logger
 
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
@@ -80,7 +81,7 @@ class ConnectivityReporter:
         if self.inspector is not None and self.toolbox_factory is None:
             if not ConnectivityReporter.self_build_logged:
                 ConnectivityReporter.self_build_logged = True
-                logger = logging.getLogger(self.__class__.__name__)
+                logger: Logger = getLogger(self.__class__.__name__)
                 logger.info("No toolbox_factory provided. Building one from the agent network config. "
                             "Pass a pre-loaded factory to avoid re-reading toolbox info files per report. "
                             "(Logged once per process.)")

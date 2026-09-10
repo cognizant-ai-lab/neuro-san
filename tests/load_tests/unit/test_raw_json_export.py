@@ -61,7 +61,7 @@ class TestExportRawJsonAggregates(TestCase):
             request_timeout=120, idle_timeout=60, stage_timeout=300,
             total_timeout=600, settle_time=5, max_workers=10,
             num_rounds=1, num_requests=3, same_prompt=False,
-            chat_filter=None,
+            allow_caching=False, chat_filter=None,
         )
         return orchestrator
 

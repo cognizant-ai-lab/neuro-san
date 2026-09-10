@@ -21,7 +21,7 @@ from typing import Dict
 from typing import Optional
 from typing import Type
 
-import os
+from os import environ
 import threading
 
 from contextvars import ContextVar
@@ -125,7 +125,7 @@ class LangfuseTracingContext(LangChainTracingContext):
             # Changing the var in a running process has no effect.  To
             # turn tracing fully off, set LANGFUSE_ENABLED=false and
             # restart the process.
-            os.environ.setdefault("LANGFUSE_TRACING_ENABLED", "true")
+            environ.setdefault("LANGFUSE_TRACING_ENABLED", "true")
 
             # Create the callback handler instance
             callback_handler: BaseCallbackHandler = callback_handler_type()
@@ -326,7 +326,8 @@ class LangfuseTracingContext(LangChainTracingContext):
             hostname: str = gethostname()
 
             # We use the time to distiguish sessions on a restarted server on the same host.
-            now_str: str = datetime.now().strftime('%Y-%m-%d-%H:%M:%S.%f')
+            now_time = datetime.now()
+            now_str: str = now_time.strftime('%Y-%m-%d-%H:%M:%S.%f')
 
             # Create a session_id for the trace.
             self.session_id: str = f"{run_name}@{request_id}@{hostname}@{now_str}"

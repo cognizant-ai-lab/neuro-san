@@ -48,8 +48,8 @@ class ConcreteClassActivation(AbstractClassActivation):
     """Concrete implementation for testing purposes."""
     # pylint: disable=too-many-arguments
     # pylint: disable=too-many-positional-arguments
-    def __init__(self, parent_run_context, factory, arguments, agent_tool_spec, sly_data, class_ref: str):
-        super().__init__(parent_run_context, factory, arguments, agent_tool_spec, sly_data)
+    def __init__(self, parent_run_context, factory, args, agent_tool_spec, sly_data, class_ref: str):
+        super().__init__(parent_run_context, factory, args, agent_tool_spec, sly_data)
         self._class_ref = class_ref
 
     def get_full_class_ref(self) -> str:
@@ -71,12 +71,12 @@ class MockBranchActivationTool(CodedTool):
     """
     # pylint: disable=too-many-arguments
     # pylint: disable=too-many-positional-arguments
-    def __init__(self, run_context, factory, arguments, agent_tool_spec, sly_data):
+    def __init__(self, run_context, factory, args, agent_tool_spec, sly_data):
         # Store the initialization parameters for verification
         self.init_params = {
             'run_context': run_context,
             'factory': factory,
-            'arguments': arguments,
+            'args': args,
             'agent_tool_spec': agent_tool_spec,
             'sly_data': sly_data
         }
@@ -147,7 +147,7 @@ def activation_instance(mock_run_context, mock_factory, basic_agent_tool_spec):
             activation = ConcreteClassActivation(
                 parent_run_context=mock_run_context,
                 factory=mock_factory,
-                arguments={"test_arg": "test_value"},
+                args={"test_arg": "test_value"},
                 agent_tool_spec=basic_agent_tool_spec,
                 sly_data={"test_sly": "test_data"},
                 class_ref="test_module.TestClass"
@@ -289,7 +289,7 @@ class TestAbstractClassActivation:
             assert isinstance(result, MockBranchActivationTool)
             # Verify it was initialized with correct parameters
             assert result.init_params['factory'] == mock_factory
-            assert result.init_params['arguments'] == activation_instance.arguments
+            assert result.init_params['args'] == activation_instance.arguments
 
     def test_instantiate_coded_tool_with_constructor_fails(self, activation_instance):
         """Test that instantiating a CodedTool with required constructor args raises TypeError."""
@@ -355,7 +355,7 @@ class TestAbstractClassActivation:
                 activation = ConcreteClassActivation(
                     parent_run_context=mock_run_context,
                     factory=mock_factory,
-                    arguments=None,
+                    args=None,
                     agent_tool_spec=basic_agent_tool_spec,
                     sly_data={},
                     class_ref="test.Class"
@@ -373,7 +373,7 @@ class TestAbstractClassActivation:
                 activation = ConcreteClassActivation(
                     parent_run_context=mock_run_context,
                     factory=mock_factory,
-                    arguments={"origin": existing_origin, "origin_str": "custom_str"},
+                    args={"origin": existing_origin, "origin_str": "custom_str"},
                     agent_tool_spec=basic_agent_tool_spec,
                     sly_data={},
                     class_ref="test.Class"
@@ -400,7 +400,7 @@ class TestAbstractClassActivation:
                 activation = ConcreteClassActivation(
                     parent_run_context=mock_run_context,
                     factory=mock_factory,
-                    arguments={},
+                    args={},
                     agent_tool_spec=agent_tool_spec,
                     sly_data={},
                     class_ref="test.Class"
@@ -437,7 +437,7 @@ def make_activation(mock_run_context, agent_tool_path: str, network_name: str,
             return ConcreteClassActivation(
                 parent_run_context=mock_run_context,
                 factory=factory,
-                arguments={},
+                args={},
                 agent_tool_spec={"name": agent_name, "description": "Test tool"},
                 sly_data={},
                 class_ref="unused.Unused"

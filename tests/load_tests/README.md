@@ -163,6 +163,7 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--total-timeout`          | 0 (disabled)| Hard timeout for entire load test. Accepts seconds or an `s`/`m`/`h` suffix. Kills run when exceeded |
 | `--settle-time`            | 15 (15s)    | Wait after each stage for server cleanup. Accepts seconds or an `s`/`m`/`h` suffix |
 | `--same-prompt`            | off         | Use identical prompt for all requests        |
+| `--allow-caching`          | off         | Send pool prompts verbatim so caches can serve them. By default a unique `(request N)` suffix is appended to defeat caching |
 | `--no-dry-run`             | off         | Skip the dry-run probe + cost confirmation (which run by default at min/norm; adv skips them already) |
 | `--full-concurrency`       | off         | Match `--max-workers` to `--num-requests` so all fire at once |
 | `--scale`                  | 1           | Multiply `--num-requests`, `--max-workers`, `--request-timeout`, `--idle-timeout`, `--stage-timeout`, `--total-timeout` by this factor. `--max-requests` auto-adjusts. |
@@ -328,7 +329,7 @@ At `adv` level this includes:
 | `server_receipts.log` | Per-request server receipt details (with `--server-log`) |
 | `server_tokens.log`   | Per-request token breakdown (when token data available) |
 | `summary.txt`         | Human-readable summary (`adv` level only)        |
-| `requests/`           | Raw stdout/stderr per request                    |
+| `requests/`           | Raw stdout/stderr per request; failed HTTP requests write the exception traceback to `request_N_stderr.txt` |
 
 ### `raw_results.json`
 

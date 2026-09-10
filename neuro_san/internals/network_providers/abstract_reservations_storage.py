@@ -20,9 +20,11 @@ from typing import Dict
 from typing import Optional
 from typing import Tuple
 
-import logging
-import time
-import threading
+from logging import getLogger
+from logging import Logger
+from time import monotonic
+from threading import Event
+from threading import Thread
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.utils.startable import Startable
@@ -46,15 +48,15 @@ class AbstractReservationsStorage(ReservationsStorage, Startable):
                             If set to 0 or negative, the background thread will not be started.
         """
         super().__init__()
-        self._thread: threading.Thread = None
+        self._thread: Thread = None
         self._check_interval_seconds: float = check_expirations_interval_seconds
-        self._stop_event = threading.Event()
-        self._logger = logging.getLogger(self.__class__.__name__)
+        self._stop_event = Event()
+        self._logger: Logger = getLogger(self.__class__.__name__)
         self._name: str = storage_name
 
     def start(self):
         if self._check_interval_seconds > 0:
-            self._thread = threading.Thread(target=self._run_loop, daemon=True)
+            self._thread = Thread(target=self._run_loop, daemon=True)
             self._thread.start()
             self._logger.debug("%s: Expiration cleanup thread started with period %f sec.",
                                self._name, self._check_interval_seconds)
@@ -73,13 +75,13 @@ class AbstractReservationsStorage(ReservationsStorage, Startable):
     def _run_loop(self):
         while not self._stop_event.is_set():
             # Using "monotonic" time allows us to avoid potential issues with system clock changes
-            start = time.monotonic()
+            start = monotonic()
             try:
                 self.expire_reservations()
             except Exception as exception:  # pylint: disable=broad-except
                 sensitive_logger = SensitiveLogger(self._logger)
                 sensitive_logger.info("%s: Expiration cleanup failed: %s", self._name, exception)
-            elapsed = time.monotonic() - start
+            elapsed = monotonic() - start
             self._logger.debug("%s: Expiration cleanup took %f seconds.", self._name, elapsed)
 
             # Compute remaining sleep time

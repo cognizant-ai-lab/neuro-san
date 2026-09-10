@@ -156,16 +156,48 @@ class OpenAILlmPolicy(LlmPolicy):
             # usage is collected from AIMessage.usage_metadata in LlmTokenCallbackHandler
             # regardless of streaming mode.
             streaming=ConfigUtil.get_bool(config, "streaming"),
-            n=1,  # n is always 1.  neuro-san will only ever consider one chat completion.
+            # n is intentionally not sent. Chat Completions defaults n to 1, which is all neuro-san
+            # ever consumes, and the Responses API has no n parameter at all. langchain-openai
+            # forwards n whenever it is not None, so an explicit n=1 made every request that
+            # reached the Responses API fail client-side.
+            # See https://github.com/cognizant-ai-lab/neuro-san/issues/725 and the n property of
+            # CreateChatCompletionRequest in https://github.com/openai/openai-openapi/blob/main/openapi.yaml
             top_p=config.get("top_p"),
             max_tokens=config.get("max_tokens"),  # This is always for output
             tiktoken_model_name=config.get("tiktoken_model_name"),
             stop=config.get("stop"),
 
             # The following three parameters are for reasoning models only.
+            # Set either "reasoning" or "reasoning_effort", not both: on the Responses API path
+            # langchain-openai folds reasoning_effort into reasoning["effort"] only when
+            # "reasoning" is absent, so a "reasoning" dict silently wins over reasoning_effort.
             reasoning=config.get("reasoning"),
             reasoning_effort=config.get("reasoning_effort"),
             verbosity=config.get("verbosity"),
+
+            # use_responses_api is a tri-state switch for which OpenAI endpoint ChatOpenAI uses.
+            # https://reference.langchain.com/python/langchain-openai/chat_models/base/BaseChatOpenAI/use_responses_api
+            # https://docs.langchain.com/oss/python/integrations/chat/openai#responses-api
+            #   None  - let langchain-openai infer the endpoint from the other parameters and the
+            #           model name: any Responses-only setting (reasoning, include, truncation,
+            #           context_management, previous_response_id, text, built-in tools) or a
+            #           Responses-only model (gpt-5.x-pro, codex) selects the Responses API. Of those,
+            #           this policy only forwards "reasoning", so everything else stays on Chat
+            #           Completions, which preserves behavior for existing configs.
+            #   True  - force the Responses API. Needed for tool calling with reasoning on the newest
+            #           models, because Chat Completions rejects function tools combined with reasoning.
+            #           gpt-6-astra has no other option: Chat Completions has no function calling for it
+            #           and it rejects reasoning_effort "none". gpt-5.6-* can alternatively stay on
+            #           Chat Completions with reasoning_effort "none" (tool calls work, no reasoning).
+            #           https://developers.openai.com/api/docs/guides/reasoning
+            #           https://developers.openai.com/api/docs/guides/migrate-to-responses
+            #   False - force Chat Completions.
+            # This is deliberately forwarded raw instead of through ConfigUtil.get_bool():
+            # get_bool() turns an absent/null value into False, which would disable langchain's
+            # auto-routing, send a "reasoning" dict to Chat Completions, and pin the *-pro models
+            # to an endpoint OpenAI rejects. Only an explicit true/false in llm_config should
+            # override langchain's choice.
+            use_responses_api=config.get("use_responses_api"),
 
             # If omitted, this defaults to the global verbose value,
             # accessible via langchain_core.globals.get_verbose():

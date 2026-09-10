@@ -16,6 +16,7 @@
 # END COPYRIGHT
 
 from typing import Any
+from typing import ClassVar
 from typing import Dict
 from typing import Iterator
 from typing import List
@@ -33,6 +34,8 @@ from pydantic import ConfigDict
 from pydantic import Field
 from tiktoken import get_encoding
 
+from neuro_san.message.utils.content_utils import ContentUtils
+
 
 class ChatMockLlm(BaseChatModel):
     """
@@ -40,6 +43,13 @@ class ChatMockLlm(BaseChatModel):
 
     Adapted from https://python.langchain.com/docs/how_to/custom_chat_model/
     """
+
+    # When the (flattened) input starts with this marker, _generate responds
+    # with Anthropic-style thinking-first block content instead of an echo,
+    # so block handling can be tested end-to-end without live provider keys.
+    # _generate only: _stream ignores the marker and streams the echo.
+    # ClassVar keeps this a constant rather than a pydantic model field.
+    THINKING_MARKER: ClassVar[str] = "emit thinking:"
 
     # This is required field and it is possible to have multiple test models.
     model_name: str = Field(default=None, alias="model")
@@ -73,16 +83,31 @@ class ChatMockLlm(BaseChatModel):
         :return: chat result containing chat generation which includes ai message.
         """
 
-        # The last message should be human message
+        # The last message should be human message.
+        # Its content can be a plain string or a list of content blocks,
+        # so token counting always goes through the flattened text.
         last_message = messages[-1]
         content = last_message.content
-        input_tokens = self._num_tokens_from_string(content)
+        text: str = ContentUtils.flatten_to_text(content)
+        input_tokens = self._num_tokens_from_string(text)
+
+        response_metadata: Dict[str, Any] = {  # Use for response metadata
+            "model_name": self.model_name,
+        }
+        if text.startswith(self.THINKING_MARKER):
+            # Respond like ChatAnthropic with extended thinking enabled:
+            # a thinking block FIRST, then the text answer.
+            answer: str = text[len(self.THINKING_MARKER):].strip()
+            content = [
+                {"type": "thinking", "thinking": "Mock thinking.", "signature": "mock-signature"},
+                {"type": "text", "text": answer},
+            ]
+            response_metadata["model_provider"] = "anthropic"
+
         message = AIMessage(
             content=content,
             additional_kwargs={},  # Used to add additional payload to the message
-            response_metadata={  # Use for response metadata
-                "model_name": self.model_name,
-            },
+            response_metadata=response_metadata,
             usage_metadata={
                 "input_tokens": input_tokens,
                 "output_tokens": input_tokens,
@@ -122,9 +147,12 @@ class ChatMockLlm(BaseChatModel):
         :yields: ChatGenerationChunk objects containing the streamed model output.
         """
 
-        # The last message should be human message
+        # The last message should be human message.
+        # Stream the flattened text so list-of-blocks content neither crashes
+        # tiktoken nor gets iterated dict-by-dict. For plain-string content
+        # the flattened text IS the content, so behavior is unchanged.
         last_message = messages[-1]
-        content = last_message.content
+        content = ContentUtils.flatten_to_text(last_message.content)
         input_tokens = self._num_tokens_from_string(content)
         for i, content_chunk in enumerate(content):
             # This is to make input = output tokens for streaming

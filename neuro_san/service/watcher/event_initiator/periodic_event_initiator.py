@@ -53,7 +53,7 @@ class PeriodicEventInitiator(WatcherThread):
         """
         Constructor
         """
-        super().__init__(server_context)
+        super().__init__(server_context, single_instance=True)
         self.verbose: bool = False
         # NB: do NOT construct the AsyncioExecutor here. When Tornado is
         # configured for multiple worker processes (AGENT_HTTP_SERVER_INSTANCES

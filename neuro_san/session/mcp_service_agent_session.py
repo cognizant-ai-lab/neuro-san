@@ -138,8 +138,9 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                     protobufs structure. Has the following keys:
                 "function" - the dictionary description of the function
         """
+        _ = request_dict
         # Get the list of tools available from the service
-        request_dict: Dict[str, Any] = {
+        use_request_dict: Dict[str, Any] = {
             "jsonrpc": "2.0",
             "id": 1,
             "method": "tools/list",
@@ -152,7 +153,7 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
 
         path: str = self.get_request_path("tools/list")
         try:
-            response = requests.post(path, json=request_dict, headers=headers, timeout=self.timeout_in_seconds)
+            response = requests.post(path, json=use_request_dict, headers=headers, timeout=self.timeout_in_seconds)
             response.raise_for_status()
             response_dict = json.loads(response.text)
         except Exception as exc:  # pylint: disable=broad-exception-caught
@@ -176,8 +177,8 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         :return: A dictionary version of the ConnectivityResponse.
         """
         # Not used in MCP protocol; return empty connectivity info
-        request_dict: Dict[str, Any] = {}
-        return request_dict
+        response: Dict[str, Any] = {}
+        return response
 
     def streaming_chat(self, request_dict: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:
         """

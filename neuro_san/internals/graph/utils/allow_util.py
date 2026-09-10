@@ -51,12 +51,12 @@ class AllowUtil:
         # Get the list of tools to look for
         config: Dict[str, Any] = inspector.get_config()
         tools: List[Dict[str, Any]] = []
-        tools = config.get("tools", tools)
+        use_tools: List[Dict[str, Any]] = config.get("tools", tools)
 
         # Loop through each of the tools/agents
         empty: Dict[str, Any] = {}
         agent_spec: Dict[str, Any] = empty
-        for agent_spec in tools:
+        for agent_spec in use_tools:
             allow = AllowUtil.is_allowed_in_agent_spec(agent_spec, allow_key, deeper_keys)
             if allow:
                 return True

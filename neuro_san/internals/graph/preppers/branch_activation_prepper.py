@@ -42,7 +42,7 @@ class BranchActivationPrepper(ActivationPrepper):
                            name: str,
                            agent_tool_spec: Dict[str, Any],
                            parent_agent_spec: Dict[str, Any],
-                           arguments: Dict[str, Any],
+                           args: Dict[str, Any],
                            sly_data: Dict[str, Any],
                            parent_run_context: RunContext,
                            factory: AgentToolFactory,
@@ -54,12 +54,12 @@ class BranchActivationPrepper(ActivationPrepper):
         :param name: the name of the agent tool
         :param agent_tool_spec: the agent tool spec dictionary
         :param parent_agent_spec: the parent agent spec dictionary
-        :param arguments: the arguments dictionary
+        :param args: the arguments dictionary
         :param sly_data: the sly data dictionary
         :param parent_run_context: the parent run context
         :param factory: the agent tool factory
         :param invocation: the invocation string ("chatbot" or "event")
         :return: a CallableActivation
         """
-        use_args: Dict[str, Any] = self.merge_args(arguments, agent_tool_spec)
+        use_args: Dict[str, Any] = self.merge_args(args, agent_tool_spec)
         return BranchActivation(parent_run_context, factory, use_args, agent_tool_spec, sly_data)

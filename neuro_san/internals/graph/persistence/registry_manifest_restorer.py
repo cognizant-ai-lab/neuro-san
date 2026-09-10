@@ -21,7 +21,9 @@ from typing import Sequence
 from typing import Tuple
 from typing import Union
 
-import os
+from os import cpu_count
+from os import environ
+from os import pathsep
 import json
 from logging import getLogger
 from logging import Logger
@@ -71,7 +73,7 @@ class RegistryManifestRestorer(Restorer):
         :param agent_mapper: optional AgentNameMapper;
             if None, AgentFileTreeMapper instance will be used.
         """
-        self.agent_mapper = agent_mapper
+        self.agent_mapper: AgentNameMapper = agent_mapper
         if not self.agent_mapper:
             self.agent_mapper = AgentFileTreeMapper()
 
@@ -80,16 +82,16 @@ class RegistryManifestRestorer(Restorer):
 
         if manifest_files is None:
             # We have no manifest list coming in, so check an env variable for a definition.
-            manifest_file: str = os.environ.get("AGENT_MANIFEST_FILE")
+            manifest_file: str = environ.get("AGENT_MANIFEST_FILE")
             if manifest_file is None:
                 # No env var, so fallback to what is coded in this repo.
                 manifest_file = REGISTRIES_DIR.get_file_in_basis("manifest.hocon")
 
             # Add what was found above
-            use_files: List[str] = manifest_file.split(os.pathsep)
+            use_files: List[str] = manifest_file.split(pathsep)
             self.manifest_files.extend(use_files)
         elif isinstance(manifest_files, str):
-            use_files: List[str] = manifest_files.split(os.pathsep)
+            use_files: List[str] = manifest_files.split(pathsep)
             self.manifest_files.extend(use_files)
         else:
             self.manifest_files = manifest_files
@@ -154,12 +156,12 @@ class RegistryManifestRestorer(Restorer):
             return agent_networks
 
         # Avoid spawning an unbounded number of workers.
-        cpu_count: int = os.cpu_count() or 1
-        max_workers: int = min(len(one_manifest), cpu_count)
+        my_cpu_count: int = cpu_count() or 1
+        max_workers: int = min(len(one_manifest), my_cpu_count)
 
         # The default of "thread" is the least heavyweight, but not necessarily the fastest
         # given the context of how/how often the manifest is read.
-        concurrency_context: str = os.environ.get("AGENT_MANIFEST_CONCURRENCY_CONTEXT", "thread")
+        concurrency_context: str = environ.get("AGENT_MANIFEST_CONCURRENCY_CONTEXT", "thread")
 
         try:
             executor_factory = self.find_executory_factory(concurrency_context, max_workers)
@@ -197,9 +199,9 @@ class RegistryManifestRestorer(Restorer):
         :return: The executor factory to use as a no-args constructor.
         """
         executor_factory = None
-        concurrency_context = concurrency_context.strip().lower()
+        lower_concurrency_context = concurrency_context.strip().lower()
 
-        if concurrency_context in ("spawn", "fork", "forkserver"):
+        if lower_concurrency_context in ("spawn", "fork", "forkserver"):
             # Use a ProcessPoolExecutor for "spawn" and "fork".
             # In cases of large manifests, a ProcessPoolExecutor ends up being more heavyweight,
             # yet still more time-efficient because of the parallelism sidestepping the GIL.
@@ -216,8 +218,8 @@ class RegistryManifestRestorer(Restorer):
             # See https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
             # for more details.
             executor_factory = partial(ProcessPoolExecutor, max_workers=max_workers,
-                                       mp_context=get_context(concurrency_context))
-        elif concurrency_context == "thread":
+                                       mp_context=get_context(lower_concurrency_context))
+        elif lower_concurrency_context == "thread":
             # Use a ThreadPoolExecutor for "thread".
             # The default of "thread" is best for servers who know their manifest content will be
             # changing over the course of their lifetime. It is slowest of all options, but has
@@ -226,7 +228,7 @@ class RegistryManifestRestorer(Restorer):
         else:
             # Default to ThreadPoolExecutor
             self.logger.warning("Unknown concurrency context '%s'. Defaulting to ThreadPoolExecutor.",
-                                concurrency_context)
+                                lower_concurrency_context)
             executor_factory = partial(ThreadPoolExecutor, max_workers=max_workers)
 
         return executor_factory

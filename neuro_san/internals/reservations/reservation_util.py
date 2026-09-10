@@ -53,7 +53,6 @@ class ReservationUtil:
                 and a string representing an error message pertaining to the Reservation.  One
                 of the elements of the Tuple will be None.
         """
-        reservation: Reservation = None
         error: str = None
         logger: Logger = getLogger(__name__)
 
@@ -65,11 +64,10 @@ Reservationist is None.  Make sure that temporary networks reservations
 "allow": { "reservations": True } or
  add a NetworkCopyMiddleware entry with allow.reservations = true.
 """
-            return (reservation, error)
+            return (None, error)
 
         # Creating the Reservations can be done outside the Reservationist with-statement
-        reservation: Reservation = await reservationist.reserve(lifetime_in_seconds=lifetime_in_seconds,
-                                                                prefix=prefix)
+        reservation: Reservation = await reservationist.reserve(lifetime_in_seconds=lifetime_in_seconds, prefix=prefix)
         deployments: Dict[Reservation, Dict[str, Any]] = {
             reservation: agent_spec
         }

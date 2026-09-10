@@ -145,8 +145,8 @@ class BaseToolFactory:
             return None
 
         try:
-            function_json = await self.ensure_external_parameters(function_json, name)
-            return self.create_function_tool(function_json, name)
+            use_function_json = await self.ensure_external_parameters(function_json, name)
+            return self.create_function_tool(use_function_json, name)
         except ValueError as exception:
             # The agent was reachable, but what it reported cannot be made into a tool.
             message: str = f"Agent/tool {name} reported an invalid function definition. " + \
@@ -237,9 +237,9 @@ class BaseToolFactory:
             await self.journal.write_message(agent_message)
             self.logger.warning(message)
 
-        function_json = dict(function_json)
-        function_json["parameters"] = deepcopy(self.DEFAULT_EXTERNAL_PARAMETERS)
-        return function_json
+        use_function_json: Dict[str, Any] = dict(function_json)
+        use_function_json["parameters"] = deepcopy(self.DEFAULT_EXTERNAL_PARAMETERS)
+        return use_function_json
 
     async def create_internal_tool(self, name: str, agent_spec: Dict[str, Any]) -> BaseTool:
         """
@@ -306,9 +306,9 @@ class BaseToolFactory:
             return None
 
         # The allowed tools list might have been updated by the MCP adapter
-        allowed_tools: List[str] = mcp_adapter.client_allowed_tools
+        use_allowed_tools: List[str] = mcp_adapter.client_allowed_tools
         tool_names: List[str] = [tool.name for tool in mcp_tools]
-        invalid_names: Set[str] = set(allowed_tools) - set(tool_names)
+        invalid_names: Set[str] = set(use_allowed_tools) - set(tool_names)
         # Check if there are invalid tool names in the list.
         if invalid_names:
             message = f"The following tools cannot be found in {server_url}: {invalid_names}"
@@ -369,5 +369,14 @@ class BaseToolFactory:
             message: str = f"Could not create tool to call external agent '{name}'. Its function_json is None."
             raise ValueError(message)
 
-        function_json["name"] = name
-        return LangChainOpenAIFunctionTool.from_function_json(function_json, self.tool_caller)
+        # Copy before adding the name. function_json can be a dictionary that
+        # outlives this call: for a same-server external agent it is the
+        # referenced network's live registry spec (AsyncDirectAgentSession
+        # returns it by reference), and internal and toolbox tools funnel
+        # here with their registry/toolbox entries too. Writing the lookup
+        # name into it would leak this caller's reference string into that
+        # shared state (issue #1230). The copy is deliberately shallow: only
+        # the top-level "name" key is written here, so nested dicts stay shared.
+        use_function_json: Dict[str, Any] = dict(function_json)
+        use_function_json["name"] = name
+        return LangChainOpenAIFunctionTool.from_function_json(use_function_json, self.tool_caller)

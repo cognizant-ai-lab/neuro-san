@@ -94,12 +94,12 @@ class CallingActivation(AbstractCallableActivation, ToolCaller):
 
         overlayer = DictionaryOverlay()
         llm_config: Dict[str, Any] = agent_network_config.get("llm_config", empty)
-        llm_config = overlayer.overlay(llm_config, spec_llm_config)
+        use_llm_config: Dict[str, Any] = overlayer.overlay(llm_config, spec_llm_config)
 
         middleware_config: List[Dict[str, Any]] = agent_tool_spec.get("middleware")
         run_context_config: Dict[str, Any] = {
             "context_type": agent_network_config.get("context_type"),
-            "llm_config": llm_config,
+            "llm_config": use_llm_config,
             "middleware_config": middleware_config
         }
         return run_context_config
@@ -200,9 +200,9 @@ context with which it will proces input, essentially telling it what to do.
 
         # Submit all tool outputs at once after the loop has gathered all
         # outputs of all CallableActivation' functions.
-        component_run = await self.run_context.submit_tool_outputs(component_run, tool_outputs)
+        new_component_run = await self.run_context.submit_tool_outputs(component_run, tool_outputs)
 
-        return component_run
+        return new_component_run
 
     async def make_one_tool_function_call(self, component_tool_call: ToolCall) -> Dict[str, Any]:
         """

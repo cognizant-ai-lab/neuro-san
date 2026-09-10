@@ -498,9 +498,6 @@ ENV AGENT_HTTP_IDLE_CONNECTIONS_TIMEOUT="3600"
 #   Positive integer (N) → Manually specifies number of worker processes.
 # The developer-oriented default is 1, but we set to 0 here to allow pod CPU configuration
 # to dictate the number of server instance processes.
-# Note 7/7/2026: If your installation requires temporary agent networks (aka Reservations),
-# the server systems in place are not yet suitable for the multi-process operation
-# that is implied by a value that is not 1.
 ENV AGENT_HTTP_SERVER_INSTANCES="0"
 
 # If set to a value>0, will start periodic logging of currently used
@@ -531,12 +528,14 @@ ENV AGENT_TOOL_EXECUTION_LOG_THRESHOLD_SECONDS=0
 ENV AGENT_EXTERNAL_SERVER_URL=""
 
 # A reference to a Python class that can be used to store temporary agent references
-# External to the server, so other replicated pods can pick them up.
+# external to the server, so other replicated pods can pick them up.
 # This class must have a no-args constructor and implement the
 # neuro_san.internals.interfaces.ReservationsStorage interface.
-# When not set, this defaults to a null implementation.
-# A simple default implementation is provided by the class
-# "neuro_san.service.watcher.temp_networks.s3_reservations_storage.S3ReservationsStorage"
+# When not set, this defaults to a null implementation, which does nothing for external storage,
+# however Reservations when created will still be stored only in-memory local to the single server instance.
+# A simple default implementation of ReservationsStorage is provided by the class
+# "neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage.S3ReservationsStorage"
+# Note that you will need to install appropriate botocore and aiobotocore packages to use this class.
 ENV AGENT_EXTERNAL_RESERVATIONS_STORAGE=""
 
 # When the AGENT_EXTERNAL_RESERVATIONS_STORAGE (immediately above) is set to the

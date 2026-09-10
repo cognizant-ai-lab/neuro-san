@@ -58,15 +58,13 @@ class Origination:
         :param agent_name: The agent name to be added to the list.
         :return: The new origin with the agent name at the end of the list
         """
-        new_origin: List[Dict[str, Any]] = []
-
         # Add the name from the spec to the origin, if we have it.
         if origin is None or agent_name is None:
-            return new_origin
+            return []
 
         # Make a shallow copy of the list, as we are going to modify it
         # and don't want to muck with the original
-        new_origin = copy(origin)
+        new_origin: List[Dict[str, Any]] = copy(origin)
 
         # Find the current instantiation index for the tool
         # and increment it in the map for later use
@@ -123,9 +121,9 @@ class Origination:
 
         # Simple replacement of local external agents.
         # DEF - need better recognition of external agent
-        full_path = full_path.replace("./", "/")
+        use_full_path = full_path.replace("./", "/")
 
-        return full_path
+        return use_full_path
 
     def reset(self):
         """

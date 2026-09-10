@@ -145,8 +145,8 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
         prepper_class_name: str = None
         agent_prepper_classes: str = environ.get("AGENT_ACTIVATION_PREPPER_CLASSES") or ""
         for prepper_class_name in agent_prepper_classes.split():
-            prepper_class_name = prepper_class_name.strip()
-            prepper: ActivationPrepper = ResolverUtil.create_instance(prepper_class_name,
+            use_prepper_class_name = prepper_class_name.strip()
+            prepper: ActivationPrepper = ResolverUtil.create_instance(use_prepper_class_name,
                                                                       "AGENT_ACTIVATION_PREPPER_CLASSES env var",
                                                                       ActivationPrepper)
             if prepper is not None:
@@ -169,7 +169,7 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
                                 parent_agent_spec: Dict[str, Any],
                                 name: str,
                                 sly_data: Dict[str, Any],
-                                arguments: Dict[str, Any] = None,
+                                args: Dict[str, Any] = None,
                                 factory: AgentToolFactory = None,
                                 invocation: str = None) -> CallableActivation:
         """
@@ -181,7 +181,7 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
         :param name: The name of the agent to get out of the registry
         :param sly_data: A mapping whose keys might be referenceable by agents, but whose
                  values should not appear in agent chat text. Can be an empty dictionary.
-        :param arguments: A dictionary of arguments for the newly constructed agent
+        :param args: A dictionary of arguments for the newly constructed agent
         :param factory: A factory that will be used to create the agent tool
         :param invocation: The invocation style of the activation.
         :return: The CallableActivation agent referred to by the name.
@@ -207,7 +207,7 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
             name,
             agent_tool_spec,
             parent_agent_spec,
-            arguments,
+            args,
             sly_data,
             parent_run_context,
             factory,

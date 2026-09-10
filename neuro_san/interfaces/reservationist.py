@@ -121,6 +121,5 @@ class Reservationist:
         :param mcp_servers: A list of MCP servers, as read in from a mcp_info.hocon file
         :return: The instance
         """
-        _ = external_networks
-        _ = mcp_servers
+        _ = external_networks, mcp_servers
         return self

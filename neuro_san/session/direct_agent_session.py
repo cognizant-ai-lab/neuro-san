@@ -108,8 +108,7 @@ class DirectAgentSession(AgentSession):
                 "function" - the dictionary description of the function
         """
         _ = request_dict
-        response_dict: Dict[str, Any] = {
-        }
+        response_dict: Dict[str, Any] = {}
 
         front_man: str = self.agent_network.find_front_man()
         if front_man is not None:
@@ -134,14 +133,12 @@ class DirectAgentSession(AgentSession):
                                     wants the client ot know about.
         """
         _ = request_dict
-        response_dict: Dict[str, Any] = {
-        }
 
         reporter = ConnectivityReporter(self.agent_network, self.toolbox_factory)
         config: Dict[str, Any] = self.agent_network.get_config()
         metadata: Dict[str, Any] = config.get("metadata")
         connectivity_info: List[Dict[str, Any]] = reporter.report_network_connectivity()
-        response_dict = {
+        response_dict: Dict[str, Any] = {
             "connectivity_info": connectivity_info,
         }
         if metadata is not None:

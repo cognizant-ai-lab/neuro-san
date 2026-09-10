@@ -96,6 +96,7 @@ class TrafficRunner:
         """
         prompt = self._profile.get_prompt(
             global_request_id, same_prompt=self._args.same_prompt,
+            allow_caching=self._args.allow_caching,
         )
         prompt_file = CliBuilder.write_prompt_file(global_request_id, prompt)
 
@@ -159,7 +160,7 @@ class TrafficRunner:
         finally:
             CliBuilder.cleanup_prompt_file(prompt_file)
 
-    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-locals,too-many-branches
     def run_one_http(self, request_id, global_request_id,
                      output_dir=None) -> RequestResult:
         """Execute a single request via direct HTTP.
@@ -171,6 +172,7 @@ class TrafficRunner:
         prompt = self._profile.get_prompt(
             global_request_id,
             same_prompt=self._args.same_prompt,
+            allow_caching=self._args.allow_caching,
         )
         start = time.time()
         status, parsed_fields, response_text, ttft, token_data = (
@@ -230,16 +232,26 @@ class TrafficRunner:
         elif status == STATUS_FAILED and not response_text:
             failure_reason = "empty response from agent"
 
+        # A FAILED status with no failure_reason at this point means
+        # HttpClient caught an exception and returned its traceback as
+        # response_text.  Route that to stderr (like subprocess mode)
+        # instead of saving it as the agent's answer.
+        stderr = ""
+        stdout = self._http_saved_stdout(response_text, token_data)
+        if status == STATUS_FAILED and failure_reason is None:
+            stderr = response_text
+            stdout = ""
+            failure_reason = CliBuilder.last_stderr_line(stderr)
+
         self._save_request_output(
-            output_dir, request_id,
-            self._http_saved_stdout(response_text, token_data), "",
+            output_dir, request_id, stdout, stderr,
         )
 
         self._log_request_result(
             request_id, status, elapsed,
             parsed_fields=parsed_fields,
             failure_reason=failure_reason,
-            stderr="",
+            stderr=stderr,
             output_dir=output_dir,
         )
 

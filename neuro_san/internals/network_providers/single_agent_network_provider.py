@@ -33,7 +33,7 @@ class SingleAgentNetworkProvider(AgentNetworkProvider):
             currently active AgentNetwork instances.
             This table is assumed to be dynamically modified outside a single agent scope.
         """
-        self.agent_name = agent_name
+        self.agent_name: str = agent_name
         self.agents_table: Dict[str, AgentNetwork] = agents_table
 
     def get_agent_network(self) -> AgentNetwork:

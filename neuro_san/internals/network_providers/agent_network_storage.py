@@ -18,7 +18,8 @@
 from typing import Dict
 from typing import List
 
-import logging
+from logging import getLogger
+from logging import Logger
 from threading import Lock
 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -38,7 +39,7 @@ class AgentNetworkStorage(AgentStorageSource):
 
     def __init__(self):
         self.agents_table: Dict[str, AgentNetwork] = {}
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger: Logger = getLogger(self.__class__.__name__)
         self.lock = Lock()
         self.listeners: List[AgentStateListener] = []
 

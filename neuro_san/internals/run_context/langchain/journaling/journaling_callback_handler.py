@@ -15,9 +15,14 @@
 #
 # END COPYRIGHT
 from collections.abc import Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
+from contextvars import Token
 from typing import Any
 from typing import Dict
+from typing import Generator
 from typing import List
+from typing import Optional
 from uuid import UUID
 
 from pydantic import ConfigDict
@@ -26,9 +31,9 @@ from langchain_core.agents import AgentAction
 from langchain_core.agents import AgentFinish
 from langchain_core.callbacks.base import AsyncCallbackHandler
 from langchain_core.documents import Document
-from langchain_core.messages import ToolMessage
+from langchain_core.messages.tool import ToolMessage
 from langchain_core.messages.base import BaseMessage
-from langchain_core.outputs import LLMResult
+from langchain_core.outputs.llm_result import LLMResult
 from langchain_core.outputs.chat_generation import ChatGeneration
 
 from neuro_san.internals.journals.journal import Journal
@@ -37,6 +42,19 @@ from neuro_san.internals.journals.origination import Origination
 from neuro_san.internals.journals.tool_argument_reporting import ToolArgumentReporting
 from neuro_san.message.types.agent_message import AgentMessage
 from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
+from neuro_san.message.utils.content_utils import ContentUtils
+
+
+# Each agent must execute its chain in a context descended from the scope entered
+# in RunContextRunnable.run_it(). The current path preserves that lineage through
+# copy_context(), task creation, and thread-safe task submission. If a future
+# execution boundary stops propagating context, this value becomes None. The
+# handler deliberately fails open in that case to preserve historical journaling
+# rather than silently discard legitimate messages, though duplicate descendant
+# events can then return.
+journaling_callback_var: ContextVar[Optional["JournalingCallbackHandler"]] = (
+    ContextVar("journaling_callback", default=None)
+)
 
 
 # pylint: disable=too-many-ancestors
@@ -103,8 +121,39 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
         self._tool_journals: Dict[str, Journal] = {}
         self._tool_origins: Dict[str, List[Dict[str, Any]]] = {}
 
+    @contextmanager
+    def scope(self) -> Generator[None, None, None]:
+        """
+        Mark this handler as the nearest active agent's journaling scope.
+
+        :return: A context manager that restores the previous scope on exit.
+        """
+        token: Token = journaling_callback_var.set(self)
+        try:
+            yield
+        finally:
+            journaling_callback_var.reset(token)
+
+    def _is_own_call(self) -> bool:
+        """
+        Determine whether the callback belongs to this handler's agent scope.
+
+        LangChain propagates callback handlers to descendant agent runs. At event
+        time, the context variable holds the handler for the nearest agent scope,
+        allowing an ancestor handler to ignore a descendant agent's events. If no
+        scope is set, preserve the historical behavior for direct callback use.
+
+        :return: True for this handler's events or when no agent scope is active.
+        """
+        current_handler: Optional[JournalingCallbackHandler] = journaling_callback_var.get()
+        return current_handler is None or current_handler is self
+
     async def on_llm_end(self, response: LLMResult,
                          **kwargs: Any) -> None:
+        if not self._is_own_call():
+            # Only the nearest agent's handler journals its LLM output.
+            return
+
         # Empirically we have seen that LLMResults that come in on_llm_end() calls
         # have a generations field which is a list of lists. Inside that inner list,
         # the first object is a ChatGeneration, whose text field tends to have agent
@@ -112,8 +161,16 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
         generations = response.generations[0]
         first_generation = generations[0]
         if isinstance(first_generation, ChatGeneration):
-            content: str = first_generation.text
-            if content is not None and len(content) > 0:
+            # Project the message content to its full text through the single
+            # projection policy ContentUtils defines: the dupe comparison
+            # against the later AI message relies on both copies projecting to
+            # the same text. ChatGeneration.text is close but not identical -
+            # it also collects legacy text blocks that carry no "type" key, a
+            # shape no supported provider emits and which is deliberately out
+            # of scope here. Tool-call-only steps flatten to "" and are
+            # skipped by the gate below.
+            content: str = ContentUtils.flatten_to_text(first_generation.message)
+            if len(content) > 0:
                 # Package up the thinking content as an AgentMessage to stream
                 message = AgentMessage(content=content.strip())
                 # Some AGENT messages that come from this source end up being dupes
@@ -151,6 +208,10 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
         :param inputs: Structured dictionary of input arguments
             passed to the tool.
         """
+
+        if not self._is_own_call():
+            # Only the nearest agent's handler journals and allocates origins for its tools.
+            return
 
         # Extract tool name from the serialized data
         agent_name: str = serialized.get("name")
@@ -202,6 +263,10 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
         :param run_id: Unique identifier for the tool execution instance.
         :param tags: List of tags associated with the tool. Used to determine whether it is a LangChain tool.
         """
+
+        if not self._is_own_call():
+            # Only the nearest agent's handler journals its tool results.
+            return
 
         if "langchain_tool" in tags:
             # Log the tool output to the calling agent's journal

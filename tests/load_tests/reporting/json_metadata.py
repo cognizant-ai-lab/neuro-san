@@ -50,6 +50,10 @@ class JsonMetadata:
             "config.same_prompt":
                 "If true, all requests use the same prompt "
                 "(collision stress test).",
+            "config.allow_caching":
+                "If true, prompts are sent verbatim and caches may "
+                "serve responses. If false, a unique per-request "
+                "suffix defeats caching.",
             "aggregates.total_elapsed_seconds":
                 "Sum of wall-clock time across all stages.",
             "aggregates.avg_latency_seconds":

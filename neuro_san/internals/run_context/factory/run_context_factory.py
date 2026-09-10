@@ -69,7 +69,7 @@ class RunContextFactory:
             "model_name": "gpt-5.2",
             "verbose": False
         }
-        default_llm_config = use_config.get("llm_config") or default_llm_config
+        use_llm_config: Dict[str, Any] = use_config.get("llm_config") or default_llm_config
 
         # Prepare for sanity in checks below
         context_type: str = MasterLlmFactory.get_context_type(use_config)
@@ -82,13 +82,13 @@ class RunContextFactory:
             raise ValueError("OpenAI Assistants implementation is no longer supported by OpenAI.")
 
         if context_type.startswith("langchain"):
-            run_context = LangChainRunContext(default_llm_config, parent_run_context,
+            run_context = LangChainRunContext(use_llm_config, parent_run_context,
                                               tool_caller, use_invocation_context,
                                               chat_context, use_config.get("middleware_config"),
                                               tracing_context=tracing_context)
         else:
             # Default case
-            run_context = LangChainRunContext(default_llm_config, parent_run_context,
+            run_context = LangChainRunContext(use_llm_config, parent_run_context,
                                               tool_caller, use_invocation_context,
                                               chat_context, use_config.get("middleware_config"),
                                               tracing_context=tracing_context)

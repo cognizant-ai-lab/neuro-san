@@ -25,6 +25,7 @@ from langchain_core.messages.system import SystemMessage
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
 from neuro_san.message.types.base_message_dictionary_converter import BaseMessageDictionaryConverter
+from neuro_san.message.utils.content_utils import ContentUtils
 
 
 class OriginatingJournal(Journal):
@@ -101,11 +102,48 @@ class OriginatingJournal(Journal):
 
         if self.pending is not None:
             # Avoid cases where two different kinds of message hold the same content.
-            if self.pending.content != message.content:
+            if not self._is_dupe_of_pending(message):
                 await self.wrapped_journal.write_message(self.pending, use_origin)
             self.pending = None
 
         await self.wrapped_journal.write_message(message, use_origin)
+
+    def _is_dupe_of_pending(self, message: BaseMessage) -> bool:
+        """
+        Decide whether the held pending message carries the same visible text
+        as the incoming message, so that only one of the two reaches clients.
+
+        Both contents are projected to text with ContentUtils.flatten_to_text
+        and compared ignoring leading and trailing whitespace. The whitespace
+        normalization is needed because the pending message's content was
+        stripped when it was captured (JournalingCallbackHandler's on_llm_end),
+        while the incoming message's content is not, so an exact comparison
+        would let a mere trailing newline defeat the suppression and send
+        clients both copies of the same text.
+
+        Projecting both sides to text matters once an incoming message can
+        carry list content (block content preserved from the provider): the
+        held AGENT copy is always a flattened str, so a raw equality against
+        a block list could never match and clients would receive both copies.
+        flatten_to_text is an identity on str, so string-only traffic compares
+        exactly as it did before.
+
+        Normalizing here, rather than stripping at either capture point, is
+        deliberate: both captured texts are client-visible and locked by
+        backward compatibility (the AGENT copy has always been journaled
+        stripped; the AI text reaches the wire and chat history unstripped),
+        so changing either producer would change client-visible output. The
+        dupe decision is internal, which makes this comparison the one place
+        that can reconcile the two without altering any payload.
+
+        :param message: The incoming BaseMessage to compare against the held
+                pending message.
+        :return: True if the pending message carries the same visible text as
+                the incoming message.
+        """
+        pending_text: str = ContentUtils.flatten_to_text(self.pending)
+        incoming_text: str = ContentUtils.flatten_to_text(message)
+        return pending_text.strip() == incoming_text.strip()
 
     def get_chat_history(self) -> List[BaseMessage]:
         """

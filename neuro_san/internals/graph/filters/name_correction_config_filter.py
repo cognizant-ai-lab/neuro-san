@@ -60,7 +60,6 @@ class NameCorrectionConfigFilter(ConfigFilter):
         errors: List[str] = []
 
         # Loop through all the tools making corrections or logging errors.
-        tools = basis_config.get("tools")
         for tool in tools:
 
             name = tool.get("name")

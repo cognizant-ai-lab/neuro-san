@@ -47,7 +47,7 @@ class ExternalActivationPrepper(ActivationPrepper):
                            name: str,
                            agent_tool_spec: Dict[str, Any],
                            parent_agent_spec: Dict[str, Any],
-                           arguments: Dict[str, Any],
+                           args: Dict[str, Any],
                            sly_data: Dict[str, Any],
                            parent_run_context: RunContext,
                            factory: AgentToolFactory,
@@ -59,7 +59,7 @@ class ExternalActivationPrepper(ActivationPrepper):
         :param name: the name of the agent tool
         :param agent_tool_spec: the agent tool spec dictionary
         :param parent_agent_spec: the parent agent spec dictionary
-        :param arguments: the arguments dictionary
+        :param args: the arguments dictionary
         :param sly_data: the sly data dictionary
         :param parent_run_context: the parent run context
         :param factory: the agent tool factory
@@ -78,7 +78,7 @@ class ExternalActivationPrepper(ActivationPrepper):
         empty = {}
         allow_from_downstream: Dict[str, Any] = extractor.get("allow.from_downstream", empty)
 
-        agent_activation = ExternalActivation(parent_run_context, factory, name, arguments, redacted_sly_data,
+        agent_activation = ExternalActivation(parent_run_context, factory, name, args, redacted_sly_data,
                                               allow_from_downstream, invocation)
         return agent_activation
 

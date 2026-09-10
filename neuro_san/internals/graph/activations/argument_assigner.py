@@ -36,9 +36,9 @@ class ArgumentAssigner:
         """
         self.properties: Dict[str, Any] = properties
 
-    def assign(self, arguments: Dict[str, Any]) -> List[str]:
+    def assign(self, args: Dict[str, Any]) -> List[str]:
         """
-        :param arguments: The arguments dictionary with the values as determined
+        :param args: The arguments dictionary with the values as determined
                 by the calling agent.
         :return: A List of text that describes the values of each argument,
                 suitable for transmitting to the chat stream of another agent.
@@ -46,7 +46,7 @@ class ArgumentAssigner:
         assignments: List[str] = []
 
         # Start to build the list of assignments, with one sentence for each argument
-        for args_name, args_value in arguments.items():
+        for args_name, args_value in args.items():
 
             # Skip if the value of the argument is None or empty
             if args_value is None:

@@ -98,11 +98,11 @@ class DefaultsConfigFilter(ConfigFilter):
         basis_extractor = DictionaryExtractor(result_config)
 
         # Loop through all the tools making additions.
-        tools = result_config.get("tools")
+        use_tools: List[Dict[str, Any]] = result_config.get("tools")
 
         idx: int = 0
         tool: Dict[str, Any] = None
-        for idx, tool in enumerate(tools):
+        for idx, tool in enumerate(use_tools):
             tool_extractor = DictionaryExtractor(tool)
 
             # Assume the front-man is the first tool in the list.
@@ -120,15 +120,16 @@ class DefaultsConfigFilter(ConfigFilter):
                     continue
 
                 # Account for semantics outlined in default_mapping above
-                if tool_dest_dict is None:
-                    tool_dest_dict = {
+                use_tool_dest_dict: Dict[str, Any] = tool_dest_dict
+                if use_tool_dest_dict is None:
+                    use_tool_dest_dict = {
                         "dest_key": basis_source_key,
                         "front_man_only": False,
                         "union_fields": None,
                     }
 
-                tool_dest_key = tool_dest_dict.get("dest_key", basis_source_key)
-                tool_front_man_only = tool_dest_dict.get("front_man_only", False)
+                tool_dest_key = use_tool_dest_dict.get("dest_key", basis_source_key)
+                tool_front_man_only = use_tool_dest_dict.get("front_man_only", False)
 
                 if tool_front_man_only and not is_front_man:
                     # Skip this one.
@@ -141,7 +142,7 @@ class DefaultsConfigFilter(ConfigFilter):
 
                 elif isinstance(tool_value, dict) and isinstance(basis_value, dict):
                     # Merge the dictionaries
-                    union_fields: List[str] | str | None = tool_dest_dict.get("union_fields")
+                    union_fields: List[str] | str | None = use_tool_dest_dict.get("union_fields")
                     self.merge_dictionaries(tool, tool_dest_key, basis_value, tool_value, union_fields)
 
                 # Otherwise, don't touch the value already in the tool.
