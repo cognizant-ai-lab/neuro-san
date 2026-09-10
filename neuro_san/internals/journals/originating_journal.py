@@ -101,6 +101,13 @@ class OriginatingJournal(Journal):
             # history_safe_text keeps the text, replaces data blocks with a
             # short reference, and is an identity for plain-string content.
             # The journaled message keeps the full blocks.
+            #
+            # Reasoning blocks are deliberately not replayed in this phase.
+            # Replaying them is provider-specific (Anthropic needs its own
+            # signed thinking blocks and strips prior-turn thinking anyway;
+            # OpenAI Responses needs its own reasoning item ids), so a
+            # provider-aware replay path is Phase 2 work (#1223). Until then
+            # the history carries exactly what providers receive today.
             if isinstance(message, AgentToolResultMessage) or \
                     (isinstance(message, AIMessage) and not isinstance(message.content, str)):
                 chat_history_message: BaseMessage = AIMessage(content=ContentUtils.history_safe_text(message))
