@@ -87,7 +87,7 @@ class TestLangfuseTracingContextRegistration:
         return FakeCallbackHandler
 
     @pytest.fixture(autouse=True)
-    def dummy_llm_key():
+    def dummy_llm_key(self):
         """
         These tests never call an LLM, but the repo-wide conftest fixture skips
         unmarked tests when OPENAI_API_KEY is unset. Scope a dummy value to this
