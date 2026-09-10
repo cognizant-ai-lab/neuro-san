@@ -45,10 +45,10 @@ class TestsUtil:
         # pyhocon parsing mutates process-global pyparsing state and is not
         # thread-safe. See HoconParseLock. Sessions driven by this class can
         # leave background threads parsing agent hocons concurrently.
-with HoconParseLock():
-    test_case: Dict[str, Any] = hocon.restore(file_reference=test_path)
+        with HoconParseLock():
+            test_case: Dict[str, Any] = hocon.restore(file_reference=test_path)
 
-# Put the fixture name in the test case dictionary
-# to make it more self-contained for logging and reporting.
-test_case["fixture_name"] = Path(test_path).parent.name
+        # Put the fixture name in the test case dictionary
+        # to make it more self-contained for logging and reporting.
+        test_case["fixture_name"] = Path(test_path).parent.name
         return test_case
