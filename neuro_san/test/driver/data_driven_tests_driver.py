@@ -89,6 +89,9 @@ class DataDrivenTestsDriver:
         # Loop through each iteration, capturing any asserts.
         num_successful: int = 0
 
+        if not tests:
+            return []
+
         # Loop through each test execution in parallel
         executor: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=len(tests))
         try:
