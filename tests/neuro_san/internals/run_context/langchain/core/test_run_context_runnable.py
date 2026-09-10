@@ -18,6 +18,7 @@
 from typing import Any
 from typing import Dict
 
+from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
@@ -39,7 +40,7 @@ from neuro_san.message.types.agent_framework_message import AgentFrameworkMessag
 from tests.neuro_san.message.content_fixtures import ContentFixtures
 
 
-class TestRunContextRunnable:
+class TestRunContextRunnable(IsolatedAsyncioTestCase):
     """
     Tests for RunContextRunnable: the capture-side projection of list-form
     (block) content in parse_chain_result, and the surfacing of

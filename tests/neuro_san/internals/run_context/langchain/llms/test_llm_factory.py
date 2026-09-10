@@ -15,10 +15,12 @@
 #
 # END COPYRIGHT
 
+from unittest import TestCase
+
 from tests.neuro_san.internals.run_context.langchain.llms.custom_llm_factory import CustomLlmFactory
 
 
-class TestLlmFactory:
+class TestLlmFactory(TestCase):
     """
     Test creating custom Factory class for LLM operations
     """

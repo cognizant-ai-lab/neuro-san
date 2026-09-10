@@ -26,6 +26,8 @@ do not silently change what clients see.
 
 import json
 
+from unittest import TestCase
+
 from neuro_san.message.types.chat_message_type import ChatMessageType
 from neuro_san.service.http.handlers.streaming_chat_handler import StreamingChatHandler
 
@@ -33,7 +35,7 @@ from neuro_san.service.http.handlers.streaming_chat_handler import StreamingChat
 # These tests access a deliberately-internal helper directly; suppress
 # protected-access warnings file-wide.
 # pylint: disable=protected-access
-class TestStreamingChatHandlerHeartbeatFrame:
+class TestStreamingChatHandlerHeartbeatFrame(TestCase):
     """
     Pins the wire-format invariants of the constant heartbeat frame:
     it must be a ChatResponse-shaped JSON line carrying an empty

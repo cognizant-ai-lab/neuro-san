@@ -18,6 +18,8 @@
 from typing import Any
 from typing import Dict
 from typing import List
+
+from unittest import TestCase
 from unittest.mock import MagicMock
 
 import pytest
@@ -31,7 +33,7 @@ from neuro_san.internals.run_context.langchain.llms.default_llm_factory import D
 pytestmark = [pytest.mark.non_default_llm_provider, pytest.mark.ollama]
 
 
-class TestLangChainContextLlmFallbacks:
+class TestLangChainRunContextLlmFallbacks(TestCase):
     """
     Tests covering the LLM-fallback slice of LangChainRunContext —
     specifically create_agent_with_fallbacks(), which iterates over llm_config
