@@ -208,7 +208,7 @@ class DataDrivenTestsDriver:
         elif isinstance(connections, str):
             # Make single strings into a list for consistent parsing
             connections = [connections]
-        asserts.assertIsInstance(connections, List)
+        asserts.assertIsInstance(connections, list)
         asserts.assertGreater(len(connections), 0)
 
         # Collect the interations to test for
