@@ -349,7 +349,7 @@ class RunContextRunnable(NeuroSanRunnable):
             # Sometimes we get an AIMessage from a tool call.
             return use_result
 
-        if isinstance(use_result, Dict):
+        if isinstance(use_result, dict):
             # Normal return value from a chain is a dict.
             # The dict in question usually has chat history in a messages field.
             # We want the last AIMessage from that chat history.
@@ -399,7 +399,7 @@ class RunContextRunnable(NeuroSanRunnable):
                 use_result: Any = chain_result
                 if isinstance(use_result, AgentFinish):
                     use_result = use_result.return_values
-                if isinstance(use_result, Dict):
+                if isinstance(use_result, dict):
                     output = use_result.get("output")
 
         # In general, output is a string, but it can also be a list of content blocks when there are
