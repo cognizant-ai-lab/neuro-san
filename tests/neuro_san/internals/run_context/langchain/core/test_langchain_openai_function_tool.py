@@ -142,3 +142,37 @@ class TestLangChainOpenAIFunctionTool:
         function_json = {"name": "ext_agent", "description": "d", "parameters": "not-a-dict"}
         with pytest.raises(ToolSpecError, match="parameters to be a dictionary"):
             LangChainOpenAIFunctionTool.from_function_json(function_json, MagicMock())
+
+    @pytest.mark.asyncio
+    async def test_arun_projects_block_content_answer_to_text(self) -> None:
+        """
+        A sub-agent answer carrying reasoning + text blocks comes back as its
+        text: providers reject reasoning blocks inside a tool result, and the
+        reasoning is already preserved in the sub-agent's own journal.
+        """
+        the_message = AgentToolResultMessage(
+            content=[{"type": "reasoning", "reasoning": "hidden"}, {"type": "text", "text": "the answer"}],
+            tool_result_origin=[{"tool": "test_tool", "instantiation_index": 0}])
+        run = LangChainRun("tool_base", [], tool_message=the_message)
+        tool = self.make_tool(run_to_return=run)
+
+        result = await tool._arun()   # pylint: disable=protected-access
+
+        assert result == "the answer"
+
+    @pytest.mark.asyncio
+    async def test_arun_references_data_blocks_in_text(self) -> None:
+        """
+        A data block in the answer becomes a short reference in the tool result
+        rather than vanishing, so an image-only answer is not an empty string.
+        """
+        the_message = AgentToolResultMessage(
+            content=[{"type": "text", "text": "Here is the chart."},
+                     {"type": "image", "base64": "AAAA", "mime_type": "image/png"}],
+            tool_result_origin=[{"tool": "test_tool", "instantiation_index": 0}])
+        run = LangChainRun("tool_base", [], tool_message=the_message)
+        tool = self.make_tool(run_to_return=run)
+
+        result = await tool._arun()   # pylint: disable=protected-access
+
+        assert result == "Here is the chart.[image attachment: image/png]"

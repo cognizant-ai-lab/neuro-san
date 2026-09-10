@@ -84,9 +84,10 @@ objsize>=0.8.0
 
 # Ceiling <0.2.0: 0.2.0 ships langchain-ai/langchain-mcp-adapters#379, which
 # changed ToolMessage.content from a concatenated text string to a list of
-# LangChain content blocks. JournalingCallbackHandler.on_tool_end then calls
-# str() on .content and would log the raw list structure instead of the tool's
-# text output.
+# LangChain content blocks. JournalingCallbackHandler.on_tool_end now journals
+# such block lists intact, so the original str()-repr concern is gone; the
+# ceiling stays until the 0.2.x line is verified end to end (sub-agent tool
+# results, wire shape) in a separate change.
 langchain-mcp-adapters>=0.1.7,<0.2.0
 
 # Floor >=1.23.0: needed for MCP OAuth client_credentials grant, required by

@@ -371,3 +371,21 @@ class TestContentUtils:
             "mime_data": [{"mime_type": "image/png", "mime_bytes": "AAAA"}],
         }
         assert ContentUtils.blocks_from_chat_message(chat_message) is None
+
+    # --- to_json_safe
+
+    def test_to_json_safe_makes_payloads_json_safe(self) -> None:
+        """
+        Bytes payloads become base64 strings and str items pass through, so
+        the result can be serialized; the input list is not mutated.
+        """
+        blocks = [
+            {"type": "text", "text": "chart"},
+            {"type": "image", "base64": b"raw", "mime_type": "image/png"},
+            "plain",
+        ]
+        safe = ContentUtils.to_json_safe(blocks)
+        assert safe[1]["base64"] == "cmF3"
+        assert safe[2] == "plain"
+        json.dumps(safe)
+        assert blocks[1]["base64"] == b"raw"
