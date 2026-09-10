@@ -18,6 +18,7 @@
 import logging
 import sys
 
+from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
@@ -35,6 +36,24 @@ FIXTURE_TOOL_PATH_PACKAGE = "tests.neuro_san.internals.graph.activations.tool_pa
 CANARY_MODULE = "tests.neuro_san.internals.graph.activations.resolution_canary"
 
 
+@pytest.fixture
+def mock_run_context():
+    """Create a mock RunContext."""
+    context = MagicMock()
+
+    # Create a mock journal with async write_message
+    mock_journal = MagicMock()
+    mock_journal.write_message = AsyncMock()
+    context.get_journal.return_value = mock_journal
+
+    context.get_origin.return_value = {"agent": "test_agent"}
+    context.get_invocation_context.return_value = MagicMock()
+    context.get_invocation_context().get_reservationist.return_value = None
+    context.get_invocation_context().get_asyncio_executor.return_value = MagicMock()
+    return context
+
+
+# pylint: disable=redefined-outer-name
 def make_activation(mock_run_context, agent_tool_path: str, network_name: str,
                     agent_name: str = "test_agent") -> "ConcreteClassActivation":
     """

@@ -81,23 +81,6 @@ class MockCodedToolWithConstructor(CodedTool):
 
 
 @pytest.fixture
-def mock_run_context():
-    """Create a mock RunContext."""
-    context = MagicMock()
-
-    # Create a mock journal with async write_message
-    mock_journal = MagicMock()
-    mock_journal.write_message = AsyncMock()
-    context.get_journal.return_value = mock_journal
-
-    context.get_origin.return_value = {"agent": "test_agent"}
-    context.get_invocation_context.return_value = MagicMock()
-    context.get_invocation_context().get_reservationist.return_value = None
-    context.get_invocation_context().get_asyncio_executor.return_value = MagicMock()
-    return context
-
-
-@pytest.fixture
 def mock_factory():
     """Create a mock AgentToolFactory."""
     factory = MagicMock()
@@ -114,6 +97,23 @@ def basic_agent_tool_spec():
         "name": "test_tool",
         "description": "Test tool"
     }
+
+
+@pytest.fixture
+def mock_run_context():
+    """Create a mock RunContext."""
+    context = MagicMock()
+
+    # Create a mock journal with async write_message
+    mock_journal = MagicMock()
+    mock_journal.write_message = AsyncMock()
+    context.get_journal.return_value = mock_journal
+
+    context.get_origin.return_value = {"agent": "test_agent"}
+    context.get_invocation_context.return_value = MagicMock()
+    context.get_invocation_context().get_reservationist.return_value = None
+    context.get_invocation_context().get_asyncio_executor.return_value = MagicMock()
+    return context
 
 
 # pylint: disable=redefined-outer-name
