@@ -119,9 +119,12 @@ class ContentFixtures:
     @staticmethod
     def mcp_tool_content() -> List[Dict[str, Any]]:
         """
-        :return: Raw ToolMessage content shaped like what
-                 langchain-mcp-adapters>=0.2.0 produces for a multi-part MCP
-                 tool result: a list of content blocks including binary data.
+        :return: Raw ToolMessage content shaped like what a block-returning
+                 tool produces for a multi-part result: a list of content
+                 blocks including binary data. langchain-mcp-adapters>=0.2.0
+                 emits this shape; the repo's <0.2.0 pin puts MCP images in
+                 the ToolMessage artifact instead, so under the pin only
+                 toolbox tools reach it.
         """
         return [
             {"type": "text", "text": "Here is the chart."},

@@ -28,6 +28,10 @@ from langchain_core.messages.base import BaseMessage
 
 from neuro_san.internals.journals.originating_journal import OriginatingJournal
 from neuro_san.message.types.agent_message import AgentMessage
+from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
+from neuro_san.message.utils.content_utils import ContentUtils
+
+from tests.neuro_san.message.content_fixtures import ContentFixtures
 
 
 class TestOriginatingJournal(IsolatedAsyncioTestCase):
@@ -148,3 +152,93 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         assert isinstance(written[0], AgentMessage)
         assert written[0].content == "a thought"
         assert written[1] is incoming
+
+    @pytest.mark.asyncio
+    async def test_tool_result_history_copy_is_text_projected(self) -> None:
+        """
+        A tool result carrying text + image blocks is journaled with its blocks
+        intact, but its chat-history copy is a plain AIMessage holding the
+        history-safe text: providers reject data blocks in assistant-role
+        history, and the image is replaced by a short reference.
+        """
+        wrapped: MagicMock = MagicMock()
+        wrapped.write_message = AsyncMock()
+        chat_history: List[BaseMessage] = []
+        journal: OriginatingJournal = OriginatingJournal(wrapped_journal=wrapped, origin=self.ORIGIN,
+                                                         chat_history=chat_history)
+        blocks: List[Dict[str, Any]] = ContentFixtures.mcp_tool_content()
+        tool_result: AgentToolResultMessage = AgentToolResultMessage(content=blocks, tool_result_origin=self.ORIGIN)
+        await journal.write_message(tool_result)
+
+        assert len(chat_history) == 1
+        history_copy: BaseMessage = chat_history[0]
+        assert isinstance(history_copy, AIMessage)
+        assert not isinstance(history_copy, AgentToolResultMessage)
+        assert history_copy.content == "Here is the chart.[image attachment: image/png]"
+
+        written: List[BaseMessage] = self._written_messages(wrapped)
+        assert written[0] is tool_result
+        assert written[0].content == blocks
+
+    @pytest.mark.asyncio
+    async def test_tool_result_str_history_copy_unchanged(self) -> None:
+        """
+        A plain-string tool result keeps producing a plain AIMessage history
+        copy with the identical text.
+        """
+        wrapped: MagicMock = MagicMock()
+        wrapped.write_message = AsyncMock()
+        chat_history: List[BaseMessage] = []
+        journal: OriginatingJournal = OriginatingJournal(wrapped_journal=wrapped, origin=self.ORIGIN,
+                                                         chat_history=chat_history)
+        await journal.write_message(AgentToolResultMessage(content="tool says", tool_result_origin=self.ORIGIN))
+
+        assert len(chat_history) == 1
+        assert isinstance(chat_history[0], AIMessage)
+        assert chat_history[0].content == "tool says"
+
+    @pytest.mark.asyncio
+    async def test_block_answer_history_copy_is_text_projected(self) -> None:
+        """
+        An AI answer carrying block content is journaled with its blocks intact,
+        but its chat-history copy is a plain AIMessage holding only the text:
+        the history is handed to whichever provider runs next (possibly a
+        fallback from a different provider) and is exported as chat_context,
+        and neither should carry provider-native blocks.
+        """
+        wrapped: MagicMock = MagicMock()
+        wrapped.write_message = AsyncMock()
+        chat_history: List[BaseMessage] = []
+        journal: OriginatingJournal = OriginatingJournal(wrapped_journal=wrapped, origin=self.ORIGIN,
+                                                         chat_history=chat_history)
+        answer: BaseMessage = ContentUtils.normalize_message(ContentFixtures.anthropic_thinking_first())
+        assert isinstance(answer.content, list)
+        await journal.write_message(answer)
+
+        assert len(chat_history) == 1
+        history_copy: BaseMessage = chat_history[0]
+        assert isinstance(history_copy, AIMessage)
+        assert history_copy is not answer
+        assert history_copy.content == "the answer"
+        assert history_copy.response_metadata == {}
+
+        written: List[BaseMessage] = self._written_messages(wrapped)
+        assert written[0] is answer
+        assert isinstance(written[0].content, list)
+
+    @pytest.mark.asyncio
+    async def test_str_answer_history_copy_is_same_instance(self) -> None:
+        """
+        A plain-string AI answer is appended to the chat history as the very
+        same instance, exactly as before.
+        """
+        wrapped: MagicMock = MagicMock()
+        wrapped.write_message = AsyncMock()
+        chat_history: List[BaseMessage] = []
+        journal: OriginatingJournal = OriginatingJournal(wrapped_journal=wrapped, origin=self.ORIGIN,
+                                                         chat_history=chat_history)
+        answer: AIMessage = AIMessage(content="the answer")
+        await journal.write_message(answer)
+
+        assert len(chat_history) == 1
+        assert chat_history[0] is answer

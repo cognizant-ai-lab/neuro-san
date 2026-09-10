@@ -38,6 +38,7 @@ from neuro_san.internals.run_context.langchain.core.pydantic_argument_dictionary
     import PydanticArgumentDictionaryConverter
 from neuro_san.internals.run_context.langchain.core.tool_spec_error import ToolSpecError
 from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
+from neuro_san.message.utils.content_utils import ContentUtils
 
 
 class LangChainOpenAIFunctionTool(BaseTool):
@@ -223,9 +224,10 @@ It's function_json is described thusly:
         calls to another llm/agent instance happen asynchronously.
         ("a" is for asynchronous).
 
-        :return: The content of the BaseMessage that tells us the "answer"
-                 from the tool - a string today, though langchain also allows
-                 lists of content blocks.
+        :return: The text of the BaseMessage that tells us the "answer"
+                 from the tool. Block content is projected to text
+                 (data blocks become a short reference) so the calling LLM's
+                 tool result never carries reasoning or data blocks.
                  Can be None if the tool produced no message.
                  On failure, returns the string form of the exception so the
                  calling LLM can verbally recognize the problem.
@@ -268,9 +270,15 @@ It's function_json is described thusly:
         if the_answer is None:
             return None
 
-        # Return the message's content rather than the message object itself.
+        # Return the message's text rather than the message object itself.
         # Langchain passes str (and content-block list) tool returns through
         # to the calling LLM's ToolMessage as-is, but falls back to str() for
         # any other object - which for a BaseMessage is its pydantic repr
         # ("content='...' additional_kwargs={} ..."), not the answer.
-        return the_answer.content
+        # The answer comes out of the sub-agent's chat history, whose copies
+        # are already text-projected (see OriginatingJournal.write_message),
+        # so this projection is an identity today. It stays as the guard for
+        # this boundary: a reasoning or data block inside a tool result is
+        # rejected by providers, and the blocks are already preserved in the
+        # sub-agent's own journal.
+        return ContentUtils.history_safe_text(the_answer)
