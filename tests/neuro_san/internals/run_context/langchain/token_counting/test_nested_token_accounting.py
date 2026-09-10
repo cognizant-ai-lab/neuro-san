@@ -22,6 +22,8 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from unittest import TestCase
+
 import pytest
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
@@ -124,7 +126,7 @@ class FakeInvocationContext:
         return self.cloned
 
 
-class TestNestedTokenAccounting:
+class TestNestedTokenAccounting(TestCase):
     """
     End-to-end test of the token accounting invariants through real langchain
     event dispatch, mirroring how agents nest in production:
