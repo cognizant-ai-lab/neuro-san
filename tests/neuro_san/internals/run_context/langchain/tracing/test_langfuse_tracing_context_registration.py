@@ -25,7 +25,6 @@ import threading
 import types
 
 from contextvars import ContextVar
-
 from unittest.mock import MagicMock
 
 import pytest
@@ -41,12 +40,56 @@ from neuro_san.internals.run_context.langchain.tracing.langchain_tracing_context
     import LangChainTracingContextFactory
 
 
-class FakeCallbackHandler(BaseCallbackHandler):
-    """Stand-in for langfuse.langchain.CallbackHandler."""
-    instances_created: int = 0
+def _count_langfuse_hooks() -> int:
+    """
+    :return: How many langchain configure hooks carry a ContextVar named "langfuse_handler".
+    """
+    return sum(1 for hook in _configure_hooks
+               if getattr(hook[0], "name", None) == ltc_module.LANGFUSE_HANDLER_VAR_NAME)
 
-    def __init__(self):
-        FakeCallbackHandler.instances_created += 1
+
+def _install_fake_langfuse(monkeypatch) -> type:
+    """
+    Put a minimal fake langfuse package into sys.modules so that
+    ResolverUtil.create_type("langfuse.langchain.CallbackHandler") and the
+    constructor's "from langfuse import ..." both resolve without the real
+    package. monkeypatch removes the entries again after the test.
+
+    :return: The fake CallbackHandler class, which counts its instantiations.
+    """
+    class FakeCallbackHandler(BaseCallbackHandler):
+        """Stand-in for langfuse.langchain.CallbackHandler."""
+        instances_created: int = 0
+
+        def __init__(self):
+            FakeCallbackHandler.instances_created += 1
+
+    fake_langchain_module = types.ModuleType("langfuse.langchain")
+    fake_langchain_module.CallbackHandler = FakeCallbackHandler
+
+    fake_root_module = types.ModuleType("langfuse")
+    fake_root_module.langchain = fake_langchain_module
+    fake_root_module.Langfuse = MagicMock(name="Langfuse")
+    fake_root_module.get_client = MagicMock(name="get_client", return_value=MagicMock(name="langfuse_client"))
+
+    monkeypatch.setitem(sys.modules, "langfuse", fake_root_module)
+    monkeypatch.setitem(sys.modules, "langfuse.langchain", fake_langchain_module)
+    return FakeCallbackHandler
+
+
+@pytest.fixture(scope="module", autouse=True)
+def dummy_llm_key():
+    """
+    These tests never call an LLM, but the repo-wide conftest fixture skips
+    unmarked tests when OPENAI_API_KEY is unset. Scope a dummy value to this
+    module so the registration tests always run.
+    """
+    had_key = "OPENAI_API_KEY" in os.environ
+    if not had_key:
+        os.environ["OPENAI_API_KEY"] = "dummy-never-used-by-these-tests"
+    yield
+    if not had_key:
+        os.environ.pop("OPENAI_API_KEY", None)
 
 
 class TestLangfuseTracingContextRegistration:
@@ -54,51 +97,6 @@ class TestLangfuseTracingContextRegistration:
     Test cases for the lazy, once-per-process registration of the Langfuse
     CallbackHandler (https://github.com/cognizant-ai-lab/neuro-san/issues/1191).
     """
-
-    @staticmethod
-    def _count_langfuse_hooks() -> int:
-        """
-        :return: How many langchain configure hooks carry a ContextVar named "langfuse_handler".
-        """
-        return sum(1 for hook in _configure_hooks
-                   if getattr(hook[0], "name", None) == ltc_module.LANGFUSE_HANDLER_VAR_NAME)
-
-    @staticmethod
-    def _install_fake_langfuse(monkeypatch) -> type:
-        """
-        Put a minimal fake langfuse package into sys.modules so that
-        ResolverUtil.create_type("langfuse.langchain.CallbackHandler") and the
-        constructor's "from langfuse import ..." both resolve without the real
-        package. monkeypatch removes the entries again after the test.
-
-        :return: The fake CallbackHandler class, which counts its instantiations.
-        """
-
-        fake_langchain_module = types.ModuleType("langfuse.langchain")
-        fake_langchain_module.CallbackHandler = FakeCallbackHandler
-
-        fake_root_module = types.ModuleType("langfuse")
-        fake_root_module.langchain = fake_langchain_module
-        fake_root_module.Langfuse = MagicMock(name="Langfuse")
-        fake_root_module.get_client = MagicMock(name="get_client", return_value=MagicMock(name="langfuse_client"))
-
-        monkeypatch.setitem(sys.modules, "langfuse", fake_root_module)
-        monkeypatch.setitem(sys.modules, "langfuse.langchain", fake_langchain_module)
-        return FakeCallbackHandler
-
-    @pytest.fixture(autouse=True)
-    def dummy_llm_key(self):
-        """
-        These tests never call an LLM, but the repo-wide conftest fixture skips
-        unmarked tests when OPENAI_API_KEY is unset. Scope a dummy value to this
-        module so the registration tests always run.
-        """
-        had_key = "OPENAI_API_KEY" in os.environ
-        if not had_key:
-            os.environ["OPENAI_API_KEY"] = "dummy-never-used-by-these-tests"
-        yield
-        if not had_key:
-            os.environ.pop("OPENAI_API_KEY", None)
 
     @pytest.fixture(autouse=True)
     def clean_registration_state(self):
@@ -131,11 +129,11 @@ class TestLangfuseTracingContextRegistration:
         keys present. This is the core of issue #1191: before the fix,
         class-load did both.
         """
-        self._install_fake_langfuse(monkeypatch)
+        _install_fake_langfuse(monkeypatch)
         monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-lf-test")
         monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-lf-test")
 
-        hooks_before = self._count_langfuse_hooks()
+        hooks_before = _count_langfuse_hooks()
 
         # Execute the module source into an isolated module object rather than
         # importlib.reload()-ing it in place: a reload would swap the class out
@@ -146,14 +144,14 @@ class TestLangfuseTracingContextRegistration:
         spec.loader.exec_module(isolated)
 
         assert isolated.LangfuseTracingContext.HANDLER_CONTEXT_VAR is None
-        assert self._count_langfuse_hooks() == hooks_before
+        assert _count_langfuse_hooks() == hooks_before
 
     def test_registers_once_and_only_once(self, monkeypatch):
         """
         _ensure_registered() must register exactly one hook per process no
         matter how many times it is called, and hand back the same ContextVar.
         """
-        fake_handler_class = self._install_fake_langfuse(monkeypatch)
+        fake_handler_class = _install_fake_langfuse(monkeypatch)
 
         first = ltc_module.LangfuseTracingContext._ensure_registered()
         second = ltc_module.LangfuseTracingContext._ensure_registered()
@@ -161,7 +159,7 @@ class TestLangfuseTracingContextRegistration:
         assert first is second
         assert isinstance(first.get(), fake_handler_class)
         assert fake_handler_class.instances_created == 1
-        assert self._count_langfuse_hooks() == 1
+        assert _count_langfuse_hooks() == 1
 
     def test_handler_visible_from_other_threads(self, monkeypatch):
         """
@@ -169,7 +167,7 @@ class TestLangfuseTracingContextRegistration:
         a set() is invisible to sibling threads, which would make traces
         silently vanish for requests handled off the registering thread.
         """
-        self._install_fake_langfuse(monkeypatch)
+        _install_fake_langfuse(monkeypatch)
         handler_var = ltc_module.LangfuseTracingContext._ensure_registered()
 
         seen_in_thread = []
@@ -189,7 +187,7 @@ class TestLangfuseTracingContextRegistration:
         in our own ContextVar as the default, so it stays visible on threads
         the foreign component's set() never reached.
         """
-        fake_handler_class = self._install_fake_langfuse(monkeypatch)
+        fake_handler_class = _install_fake_langfuse(monkeypatch)
 
         foreign_handler = BaseCallbackHandler()
         foreign_var = ContextVar(ltc_module.LANGFUSE_HANDLER_VAR_NAME, default=foreign_handler)
@@ -212,7 +210,7 @@ class TestLangfuseTracingContextRegistration:
         instance; langchain's identity dedupe must still dispatch each run
         event to that handler exactly once.
         """
-        self._install_fake_langfuse(monkeypatch)
+        _install_fake_langfuse(monkeypatch)
 
         events = []
 
@@ -238,7 +236,7 @@ class TestLangfuseTracingContextRegistration:
         tracing context must not raise the misleading "pip install langfuse"
         error — langfuse is installed; we just cannot see the handler.
         """
-        fake_handler_class = self._install_fake_langfuse(monkeypatch)
+        fake_handler_class = _install_fake_langfuse(monkeypatch)
 
         foreign_var = ContextVar(ltc_module.LANGFUSE_HANDLER_VAR_NAME, default=None)
         register_configure_hook(foreign_var, inheritable=True)
@@ -247,7 +245,7 @@ class TestLangfuseTracingContextRegistration:
 
         assert ltc_module.LangfuseTracingContext.HANDLER_CONTEXT_VAR is foreign_var
         assert fake_handler_class.instances_created == 0
-        assert self._count_langfuse_hooks() == 1
+        assert _count_langfuse_hooks() == 1
 
     def test_adopted_hook_without_langfuse_raises_actionable_error(self, monkeypatch):
         """
@@ -270,7 +268,7 @@ class TestLangfuseTracingContextRegistration:
         Registration only happens on the LANGFUSE_ENABLED=true path, so the
         SDK's own opt-out switch is defaulted to agree with it.
         """
-        self._install_fake_langfuse(monkeypatch)
+        _install_fake_langfuse(monkeypatch)
         monkeypatch.delenv("LANGFUSE_TRACING_ENABLED", raising=False)
 
         ltc_module.LangfuseTracingContext._ensure_registered()
@@ -281,7 +279,7 @@ class TestLangfuseTracingContextRegistration:
         """
         An explicitly set LANGFUSE_TRACING_ENABLED must win over the derived value.
         """
-        self._install_fake_langfuse(monkeypatch)
+        _install_fake_langfuse(monkeypatch)
         monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "false")
 
         ltc_module.LangfuseTracingContext._ensure_registered()
@@ -303,7 +301,7 @@ class TestLangfuseTracingContextRegistration:
         with pytest.raises(ValueError, match="pip installing the package langfuse"):
             ltc_module.LangfuseTracingContext(run_target=None, config={})
 
-        assert self._count_langfuse_hooks() == 0
+        assert _count_langfuse_hooks() == 0
         assert "LANGFUSE_TRACING_ENABLED" not in os.environ
 
     def test_resolution_failure_is_not_memoized(self, monkeypatch):
@@ -318,25 +316,25 @@ class TestLangfuseTracingContextRegistration:
             ltc_module.LangfuseTracingContext(run_target=None, config={})
         assert ltc_module.LangfuseTracingContext.HANDLER_CONTEXT_VAR is None
 
-        fake_handler_class = self._install_fake_langfuse(monkeypatch)
+        fake_handler_class = _install_fake_langfuse(monkeypatch)
         ltc_module.LangfuseTracingContext(run_target=None, config={})
 
         assert fake_handler_class.instances_created == 1
-        assert self._count_langfuse_hooks() == 1
+        assert _count_langfuse_hooks() == 1
 
     def test_construction_and_clone_share_one_registration(self, monkeypatch):
         """
         End-to-end over __init__: constructing contexts (including via clone,
         as happens per sub-agent within a request) registers exactly one hook.
         """
-        fake_handler_class = self._install_fake_langfuse(monkeypatch)
+        fake_handler_class = _install_fake_langfuse(monkeypatch)
 
         context = ltc_module.LangfuseTracingContext(run_target=None, config={})
         context.clone()
         ltc_module.LangfuseTracingContext(run_target=None, config={})
 
         assert fake_handler_class.instances_created == 1
-        assert self._count_langfuse_hooks() == 1
+        assert _count_langfuse_hooks() == 1
 
     def test_factory_flag_off_never_registers(self, monkeypatch):
         """
@@ -344,7 +342,7 @@ class TestLangfuseTracingContextRegistration:
         LangChainTracingContext and nothing registers: keys sitting in the
         environment are inert. (Before the fix, import alone registered.)
         """
-        self._install_fake_langfuse(monkeypatch)
+        _install_fake_langfuse(monkeypatch)
         monkeypatch.delenv("LANGFUSE_ENABLED", raising=False)
         monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-lf-test")
         monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-lf-test")
@@ -354,4 +352,4 @@ class TestLangfuseTracingContextRegistration:
 
         assert type(tracing_context) is LangChainTracingContext  # pylint: disable=unidiomatic-typecheck
         assert ltc_module.LangfuseTracingContext.HANDLER_CONTEXT_VAR is None
-        assert self._count_langfuse_hooks() == 0
+        assert _count_langfuse_hooks() == 0
