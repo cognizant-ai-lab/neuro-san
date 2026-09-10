@@ -18,6 +18,8 @@
 
 import asyncio
 
+from unittest import TestCase
+
 import pytest
 
 from neuro_san.internals.run_context.langchain.llms.gemini_llm_policy import GeminiLlmPolicy
@@ -77,7 +79,7 @@ class _LegacyStubChat(_StubChat):
     binding_class = _LegacyBinding
 
 
-class TestGeminiLlmPolicyAfcDisabled:
+class TestGeminiLlmPolicyAfcDisabled(TestCase):
     """
     Test cases for GeminiLlmPolicy._disable_afc().
 

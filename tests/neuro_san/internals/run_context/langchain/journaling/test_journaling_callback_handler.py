@@ -20,6 +20,8 @@ import json
 from typing import Any
 from typing import List
 from typing import Tuple
+
+from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from uuid import uuid4
@@ -39,7 +41,7 @@ from neuro_san.message.utils.content_utils import ContentUtils
 from tests.neuro_san.message.content_fixtures import ContentFixtures
 
 
-class TestJournalingCallbackHandler:
+class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
     """
     Tests for JournalingCallbackHandler.
 

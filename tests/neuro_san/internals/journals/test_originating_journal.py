@@ -19,6 +19,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
@@ -35,7 +36,7 @@ from neuro_san.message.utils.content_utils import ContentUtils
 from tests.neuro_san.message.content_fixtures import ContentFixtures
 
 
-class TestOriginatingJournal:
+class TestOriginatingJournal(IsolatedAsyncioTestCase):
     """
     Tests for OriginatingJournal's held-message dupe suppression.
 

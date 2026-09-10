@@ -15,6 +15,8 @@
 #
 # END COPYRIGHT
 
+from unittest import TestCase
+
 from langchain_core.messages.human import HumanMessage
 
 from neuro_san.message.utils.content_utils import ContentUtils
@@ -23,7 +25,7 @@ from neuro_san.test.llms.chat_mock_llm import ChatMockLlm
 from tests.neuro_san.message.content_fixtures import ContentFixtures
 
 
-class TestChatMockLlm:
+class TestChatMockLlm(TestCase):
     """
     Tests for the block-aware behaviors of the mock chat model:
     the plain-string echo is unchanged, list-of-blocks input does not crash

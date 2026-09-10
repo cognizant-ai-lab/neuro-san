@@ -17,13 +17,15 @@
 
 import warnings
 
+from unittest import TestCase
+
 from neuro_san.internals.run_context.langchain.core.base_model_dictionary_converter \
     import BaseModelDictionaryConverter
 from neuro_san.internals.run_context.langchain.core.pydantic_argument_dictionary_converter \
     import PydanticArgumentDictionaryConverter
 
 
-class TestPydanticArgumentDictionaryConverter:
+class TestPydanticArgumentDictionaryConverter(TestCase):
     """
     Test cases for the flattening of pydantic model instances back into
     plain dictionaries before tool arguments are passed along.

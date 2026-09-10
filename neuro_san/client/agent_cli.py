@@ -21,6 +21,7 @@ from typing import List
 
 import os
 import shutil
+import sys
 
 import argparse
 import json
@@ -193,12 +194,22 @@ Some suggestions:
             user_input = state.get("user_input")
             if user_input is None:
                 if prompt is not None and len(prompt) > 0:
-                    user_input = timedinput(prompt, timeout=timeout,
-                                            default=self.TIMEOUT_SIGNAL)
-                    if user_input == self.TIMEOUT_SIGNAL:
-                        # Timeout occurred - nobody is talking to us.
-                        print(f"\nNo input received after {timeout} seconds. Exiting.\n")
-                        break
+                    if not sys.platform.startswith("win"):
+                        user_input = timedinput(prompt, timeout=timeout, default=self.TIMEOUT_SIGNAL)
+                        if user_input == self.TIMEOUT_SIGNAL:
+                            # Timeout occurred - nobody is talking to us.
+                            print(f"\nNo input received after {timeout} seconds. Exiting.\n")
+                            break
+                    else:
+                        # On Windows the timedinput polling loop misbehaves in
+                        # PowerShell (prompt is redrawn on every poll). Use a
+                        # plain blocking input() there — we lose the idle
+                        # timeout but gain a usable CLI.
+                        try:
+                            user_input = input(prompt)
+                        except EOFError:
+                            print("\nStdin closed. Exiting.\n")
+                            break
                 else:
                     user_input = None
 
