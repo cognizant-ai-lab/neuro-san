@@ -449,7 +449,7 @@ class DataDrivenTestsDriver:
         basis_dir: str = os.environ.get("AGENT_TEST_THINKING_BASIS")
         if basis_dir is not None and len(basis_dir) > 0:
             now = datetime.now()
-            datestr: str = now.strftime("%Y-%m-%d_%H-%M-%S")
+datestr: str = now.strftime("%Y-%m-%d_%H-%M-%S_%f")
 
             # Add a test name to thinking_dir
             # for better uniqueness and traceability across different test fixtures.
