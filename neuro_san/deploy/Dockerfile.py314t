@@ -528,12 +528,14 @@ ENV AGENT_TOOL_EXECUTION_LOG_THRESHOLD_SECONDS=0
 ENV AGENT_EXTERNAL_SERVER_URL=""
 
 # A reference to a Python class that can be used to store temporary agent references
-# External to the server, so other replicated pods can pick them up.
+# external to the server, so other replicated pods can pick them up.
 # This class must have a no-args constructor and implement the
 # neuro_san.internals.interfaces.ReservationsStorage interface.
-# When not set, this defaults to a null implementation.
-# A simple default implementation is provided by the class
-# "neuro_san.service.watcher.temp_networks.s3_reservations_storage.S3ReservationsStorage"
+# When not set, this defaults to a null implementation, which does nothing for external storage,
+# however Reservations when created will still be stored only in-memory local to the single server instance.
+# A simple default implementation of ReservationsStorage is provided by the class
+# "neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage.S3ReservationsStorage"
+# Note that you will need to install appropriate botocore and aiobotocore packages to use this class.
 ENV AGENT_EXTERNAL_RESERVATIONS_STORAGE=""
 
 # When the AGENT_EXTERNAL_RESERVATIONS_STORAGE (immediately above) is set to the
