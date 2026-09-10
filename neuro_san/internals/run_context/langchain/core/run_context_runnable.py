@@ -325,6 +325,41 @@ class RunContextRunnable(NeuroSanRunnable):
         if self.sensitive_logger.should_log():
             await self.journal.write_message(AgentFrameworkMessage(content=text))
 
+    @staticmethod
+    def find_ai_message(chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]]) -> Optional[AIMessage]:
+        """
+        Locate the provider-native AIMessage that carries the chain's answer.
+
+        :param chain_result: The result from invoking the agent chain
+                        (see parse_chain_result() for the possible shapes)
+        :return: The last AIMessage in a dict result's "messages", the result
+                 itself when it is an AIMessage, or None when the result carries
+                 no AIMessage at all (exception, API-key error text, bare "output")
+        """
+        use_result: Any = chain_result
+        if isinstance(use_result, AgentFinish):
+            # AgentFinish is the return type of langchain's legacy AgentExecutor,
+            # which neuro-san stopped using in commit 5c2a0e61. The create_agent
+            # graph used today returns a state dict and never an AgentFinish, so
+            # this unwrap is kept for backwards compatibility only. Its
+            # return_values carry the output in dict form.
+            use_result = use_result.return_values
+
+        if isinstance(use_result, AIMessage):
+            # Sometimes we get an AIMessage from a tool call.
+            return use_result
+
+        if isinstance(use_result, Dict):
+            # Normal return value from a chain is a dict.
+            # The dict in question usually has chat history in a messages field.
+            # We want the last AIMessage from that chat history.
+            messages: List[BaseMessage] = use_result.get("messages", [])
+            for message in reversed(messages):
+                if isinstance(message, AIMessage):
+                    return message
+
+        return None
+
     def parse_chain_result(self, chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]],
                            exception: Optional[Exception]) -> str:
         """
@@ -352,36 +387,20 @@ class RunContextRunnable(NeuroSanRunnable):
             # We got an exception instead of a proper result. Say so.
             output = f"Agent stopped due to exception {exception}"
         else:
-            # Set some stuff up for later
-            ai_message: AIMessage = None
-
-            # Handle the AgentFinish case.
-            # The return_values from there contain our output whether in string or dict form.
-            # ??? From what path does this come?
-            if isinstance(chain_result, AgentFinish):
-                chain_result = chain_result.return_values
-
-            if isinstance(chain_result, Dict):
-                # Normal return value from a chain is a dict.
-                # The dict in question usually has chat history in a messages field.
-                # We want the last AIMessage from that chat history.
-                messages: List[BaseMessage] = chain_result.get("messages", [])
-                for message in reversed(messages):
-                    if isinstance(message, AIMessage):
-                        ai_message = message
-                        break
-
-                if ai_message is None:
-                    # We didn't find an AIMessage, so look for straight-up output key
-                    output = chain_result.get("output")
-
-            elif isinstance(chain_result, AIMessage):
-                # Sometimes we get an AIMessage from a tool call.
-                ai_message = chain_result
-
+            ai_message: Optional[AIMessage] = self.find_ai_message(chain_result)
             if ai_message is not None:
                 # We generally want the content of any single AIMessage we found from above
                 output = ai_message.content
+            else:
+                # We didn't find an AIMessage, so look for a straight-up "output" key:
+                # invoke_agent_chain builds {"output": text} on the API-key and
+                # output-parse error paths. Unwrap a legacy AgentFinish first (see
+                # find_ai_message) so its return_values get the same lookup.
+                use_result: Any = chain_result
+                if isinstance(use_result, AgentFinish):
+                    use_result = use_result.return_values
+                if isinstance(use_result, Dict):
+                    output = use_result.get("output")
 
         # In general, output is a string, but it can also be a list of content blocks when there are
         # multiple message types, such as "thinking", "reasoning", etc. - or a list of plain strings,
