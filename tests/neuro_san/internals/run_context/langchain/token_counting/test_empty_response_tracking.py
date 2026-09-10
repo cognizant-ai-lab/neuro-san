@@ -15,8 +15,6 @@
 #
 # END COPYRIGHT
 
-from unittest import TestCase
-
 from time import time
 import pytest
 
@@ -29,7 +27,7 @@ from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback
 from tests.neuro_san.internals.run_context.langchain.token_counting.owning_agent_scope import owning_agent_scope
 
 
-class TestEmptyResponseTracking(TestCase):
+class TestEmptyResponseTracking:
     """Test cases for the empty_responses tracking added to LlmTokenCallbackHandler."""
 
     @pytest.mark.parametrize("message,expected", [
