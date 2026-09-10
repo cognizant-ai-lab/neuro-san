@@ -48,5 +48,5 @@ class TestsUtil:
             test_case: Dict[str, Any] = hocon.restore(file_reference=test_path)
             # Put the fixture name in the test case dictionary
             # to make it more self-contained for logging and reporting.
-            test_case["fixture_name"] = Path(hocon_file).parent.name
+        test_case["fixture_name"] = Path(test_path).parent.name
         return test_case
