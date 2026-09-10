@@ -19,7 +19,6 @@ from typing import Dict
 
 from copy import deepcopy
 
-from unittest import TestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
@@ -29,7 +28,7 @@ from neuro_san.internals.run_context.langchain.core.base_tool_factory import Bas
 from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
 
 
-class TestBaseToolFactory(TestCase):
+class TestBaseToolFactory:
     """
     Test cases for BaseToolFactory.
 

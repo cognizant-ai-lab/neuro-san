@@ -17,9 +17,9 @@
 
 import logging
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
-from unittest import TestCase
 import pytest
 
 from langchain_core.tools.base import BaseTool
@@ -36,7 +36,7 @@ VALIDATIOR_PATH = (
 )
 
 
-class TestToolboxFactory(TestCase):
+class TestToolboxFactory:
     """Simplified test suite for ToolboxFactory."""
 
     @pytest.fixture

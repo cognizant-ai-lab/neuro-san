@@ -24,8 +24,6 @@ from typing import Dict
 from typing import Iterator
 from typing import List
 
-from unittest import TestCase
-
 import pytest
 
 from langchain_core.messages import HumanMessage
@@ -35,7 +33,7 @@ from openai.resources.responses import AsyncResponses
 from neuro_san.internals.run_context.langchain.llms.openai_llm_policy import OpenAILlmPolicy
 
 
-class TestOpenAILlmPolicy(TestCase):
+class TestOpenAILlmPolicy:
     """
     Test cases for OpenAILlmPolicy.create_llm().
 
