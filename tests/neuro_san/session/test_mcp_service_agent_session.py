@@ -33,7 +33,7 @@ class TestMcpServiceAgentSession(TestCase):
     """
 
     @staticmethod
-    def create_response(response_dict: Dict[str, Any]) -> MagicMock:
+    def create_response(response_dict: Any) -> MagicMock:
         """
         Creates a successful HTTP response containing response_dict.
         """
@@ -41,20 +41,35 @@ class TestMcpServiceAgentSession(TestCase):
         response.text = json.dumps(response_dict)
         return response
 
-    def call_function(self, tools: Any) -> Dict[str, Any]:
+    def call_function_with_response(self, response_dict: Any) -> Dict[str, Any]:
         """
-        Calls function() with a tools/list response containing tools.
+        Calls function() with the given tools/list response.
         """
         initialize_response: MagicMock = self.create_response({
             "result": {"protocolVersion": MCP_VERSION}
         })
         initialized_response: MagicMock = self.create_response({})
-        tools_response: MagicMock = self.create_response({"result": {"tools": tools}})
+        tools_response: MagicMock = self.create_response(response_dict)
 
         with patch("neuro_san.session.mcp_service_agent_session.requests.post",
                    side_effect=[initialize_response, initialized_response, tools_response]):
             session = McpServiceAgentSession(agent_name="hello_world")
             return session.function({})
+
+    def call_function(self, tools: Any) -> Dict[str, Any]:
+        """
+        Calls function() with a tools/list response containing tools.
+        """
+        return self.call_function_with_response({"result": {"tools": tools}})
+
+    def create_session_with_initialize_response(self, response_dict: Any) -> McpServiceAgentSession:
+        """
+        Creates an MCP session with the given initialize response.
+        """
+        initialize_response: MagicMock = self.create_response(response_dict)
+        with patch("neuro_san.session.mcp_service_agent_session.requests.post",
+                   return_value=initialize_response):
+            return McpServiceAgentSession(agent_name="hello_world")
 
     def test_function_accepts_valid_tools(self):
         """
@@ -70,13 +85,81 @@ class TestMcpServiceAgentSession(TestCase):
         """
         Tests that tools/list response data is validated before iteration.
         """
-        invalid_tools = (
-            "hello_world",
-            ["hello_world"],
-            [{}] * (McpServiceAgentSession.MAX_TOOLS + 1),
+        invalid_responses = (
+            ([], "Invalid MCP tools/list response: response must be an object"),
+            ({"result": None}, "Invalid MCP tools/list response: 'result' must be an object"),
+            ({"result": []}, "Invalid MCP tools/list response: 'result' must be an object"),
+            ({"result": {}}, "Invalid MCP tools/list response: 'tools' must be an array"),
+            ({"result": {"tools": None}}, "Invalid MCP tools/list response: 'tools' must be an array"),
+            ({"result": {"tools": "hello_world"}}, "Invalid MCP tools/list response: 'tools' must be an array"),
         )
 
-        for tools in invalid_tools:
-            with self.subTest(tools_type=type(tools), tools_length=len(tools)):
-                with self.assertRaisesRegex(ValueError, "Invalid MCP tools/list response"):
-                    self.call_function(tools)
+        for response_dict, expected_message in invalid_responses:
+            with self.subTest(response_dict=response_dict):
+                with self.assertRaises(ValueError) as context:
+                    self.call_function_with_response(response_dict)
+                self.assertEqual(expected_message, str(context.exception))
+
+    def test_function_surfaces_json_rpc_error(self):
+        """
+        Tests that a successful HTTP response containing a JSON-RPC error is surfaced.
+        """
+        response_dict = {
+            "error": {"code": -32602, "message": "Invalid params"}
+        }
+
+        with self.assertRaises(ValueError) as context:
+            self.call_function_with_response(response_dict)
+
+        self.assertEqual("MCP tools/list error -32602: Invalid params", str(context.exception))
+
+    def test_function_skips_invalid_tool(self):
+        """
+        Tests that an invalid entry does not prevent discovery of a valid tool.
+        """
+        result: Dict[str, Any] = self.call_function([
+            None,
+            {"name": "hello_world", "description": "Says hello"},
+        ])
+
+        self.assertEqual({"function": {"description": "Says hello"}}, result)
+
+    def test_initialize_rejects_invalid_response(self):
+        """
+        Tests that the initialize response and its result object are validated.
+        """
+        invalid_responses = (
+            ([], "Invalid MCP initialize response: response must be an object"),
+            ({"result": None}, "Invalid MCP initialize response: 'result' must be an object"),
+            ({"result": []}, "Invalid MCP initialize response: 'result' must be an object"),
+        )
+
+        for response_dict, expected_message in invalid_responses:
+            with self.subTest(response_dict=response_dict):
+                with self.assertRaises(ValueError) as context:
+                    self.create_session_with_initialize_response(response_dict)
+                self.assertEqual(expected_message, str(context.exception))
+
+    def test_initialize_surfaces_json_rpc_error(self):
+        """
+        Tests that a JSON-RPC error in the initialize response is surfaced.
+        """
+        response_dict = {
+            "error": {"code": -32602, "message": "Invalid params"}
+        }
+
+        with self.assertRaises(ValueError) as context:
+            self.create_session_with_initialize_response(response_dict)
+
+        self.assertEqual("MCP initialize error -32602: Invalid params", str(context.exception))
+
+    def test_function_accepts_more_than_one_thousand_tools(self):
+        """
+        Tests that the client does not impose a limit absent from the MCP specification.
+        """
+        tools = [{}] * 1001
+        tools.append({"name": "hello_world", "description": "Says hello"})
+
+        result: Dict[str, Any] = self.call_function(tools)
+
+        self.assertEqual({"function": {"description": "Says hello"}}, result)

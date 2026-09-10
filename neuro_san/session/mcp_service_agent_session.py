@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import List
 from typing import Generator
 
 import json
@@ -40,7 +41,6 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
     This is largely only used by command-line tests.
     """
     MCP_PROTOCOL_VERSION: str = "MCP-Protocol-Version"
-    MAX_TOOLS: int = 1000
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments, too-many-locals
     def __init__(self, host: str = None,
@@ -112,7 +112,8 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
             raise ValueError(self.help_message(path)) from exc
 
         # Extract the protocol version from the handshake response
-        self.protocol_version: str = response_dict.get("result", {}).get("protocolVersion", None)
+        result_dict: Dict[str, Any] = self._get_result_dict(response_dict, "initialize")
+        self.protocol_version: str = result_dict.get("protocolVersion", None)
 
         # Confirm the protocol version is supported by this client
         if self.protocol_version not in [MCP_VERSION]:
@@ -159,21 +160,15 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(self.help_message(path)) from exc
 
-        if not isinstance(response_dict, dict):
-            raise ValueError("Invalid MCP tools/list response: response must be an object")
-        result_dict: Any = response_dict.get("result", {})
-        if not isinstance(result_dict, dict):
-            raise ValueError("Invalid MCP tools/list response: 'result' must be an object")
+        tools_list: List[Any] = self._get_tools_list(response_dict)
 
-        tools_list: Any = result_dict.get("tools", [])
-        if not isinstance(tools_list, list):
-            raise ValueError("Invalid MCP tools/list response: 'tools' must be an array")
-        if len(tools_list) > self.MAX_TOOLS:
-            raise ValueError(f"Invalid MCP tools/list response: too many tools (maximum {self.MAX_TOOLS})")
-
+        # CheckMarx false positive (Unchecked Input for Loop Condition, #1252):
+        # tools_list has already been fully parsed by json.loads above, so this
+        # O(n) loop with early return cannot cost more than the parse that
+        # preceded it. The isinstance checks above validate the shape.
         for tool in tools_list:
             if not isinstance(tool, dict):
-                raise ValueError("Invalid MCP tools/list response: each tool must be an object")
+                continue
             name: str = tool.get("name", None)
             if name == self.agent_name:
                 tool_description: str = tool.get("description", None)
@@ -183,6 +178,34 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                     }
 
         return None
+
+    @staticmethod
+    def _get_result_dict(response_dict: Any, method: str) -> Dict[str, Any]:
+        """
+        Validates an MCP JSON-RPC response and returns its result object.
+        """
+        if not isinstance(response_dict, dict):
+            raise ValueError(f"Invalid MCP {method} response: response must be an object")
+
+        error_dict: Any = response_dict.get("error", None)
+        if isinstance(error_dict, dict):
+            raise ValueError(f"MCP {method} error {error_dict.get('code')}: {error_dict.get('message')}")
+
+        result_dict: Any = response_dict.get("result", None)
+        if not isinstance(result_dict, dict):
+            raise ValueError(f"Invalid MCP {method} response: 'result' must be an object")
+        return result_dict
+
+    @classmethod
+    def _get_tools_list(cls, response_dict: Any) -> List[Any]:
+        """
+        Validates an MCP tools/list response and returns its tools array.
+        """
+        result_dict: Dict[str, Any] = cls._get_result_dict(response_dict, "tools/list")
+        tools_list: Any = result_dict.get("tools", None)
+        if not isinstance(tools_list, list):
+            raise ValueError("Invalid MCP tools/list response: 'tools' must be an array")
+        return tools_list
 
     def connectivity(self, request_dict: Dict[str, Any]) -> Dict[str, Any]:
         """
