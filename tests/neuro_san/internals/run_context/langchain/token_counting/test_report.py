@@ -15,6 +15,7 @@
 #
 # END COPYRIGHT
 
+from unittest import TestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import TestCase
