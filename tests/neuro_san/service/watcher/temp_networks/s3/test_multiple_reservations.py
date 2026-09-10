@@ -14,12 +14,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-S3ReservationsStorage.add_reservations accepts a dict of multiple
-{Reservation: agent_spec} pairs. This module exercises the for-loop
-that iterates over those pairs.
-"""
-import pytest
 
 from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
@@ -27,13 +21,16 @@ from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_te
 
 class TestMultipleReservations(S3ReservationsStorageTestBase):
     """
+    S3ReservationsStorage.add_reservations accepts a dict of multiple
+    {Reservation: agent_spec} pairs. This module exercises the for-loop
+    that iterates over those pairs.
+
     Verify that a single add_reservations call with N>1 entries writes
     one S3 object per entry and preserves each spec independently. The
     other tests (#1, #3) only exercise N=1 per call, so the for-loop
     body is never iterated more than once. This test fills that gap.
     """
 
-    @pytest.mark.asyncio
     async def test_add_writes_each_reservation_independently(self):
         """
         One call to add_reservations({r1: s1, r2: s2, r3: s3}) writes

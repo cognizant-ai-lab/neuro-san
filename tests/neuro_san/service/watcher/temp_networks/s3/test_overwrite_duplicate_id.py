@@ -14,12 +14,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-S3ReservationsStorage.add_reservations is last-writer-wins for a given
-reservation id: a second call writes a new JSON blob to the same S3 key,
-replacing the first one.
-"""
-import pytest
 
 from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
@@ -27,6 +21,10 @@ from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_te
 
 class TestOverwriteDuplicateId(S3ReservationsStorageTestBase):
     """
+    S3ReservationsStorage.add_reservations is last-writer-wins for a given
+    reservation id: a second call writes a new JSON blob to the same S3 key,
+    replacing the first one.
+
     The storage uses plain put_object with no conditional header, so S3's
     default "second write wins" semantics apply. This is intentional: it
     lets callers refresh a reservation's expiration or swap the agent_spec
@@ -37,7 +35,6 @@ class TestOverwriteDuplicateId(S3ReservationsStorageTestBase):
     replacing.
     """
 
-    @pytest.mark.asyncio
     async def test_add_reservations_overwrites_on_duplicate_id(self):
         """
         Write twice under the same reservation id with different lifetimes
