@@ -19,17 +19,16 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from unittest import IsolatedAsyncioTestCase
 from unittest.mock import MagicMock
 from unittest.mock import patch
-
-import pytest
 
 from langchain_core.messages.ai import AIMessage
 
 from neuro_san.middleware.network_copy_middleware import NetworkCopyMiddleware
 
 
-class TestNetworkCopyMiddleware:
+class TestNetworkCopyMiddleware(IsolatedAsyncioTestCase):
     """
     Tests for how NetworkCopyMiddleware reads the model's response.
 
@@ -97,7 +96,6 @@ class TestNetworkCopyMiddleware:
         restore.assert_called_once_with("hello_world")
         assert "Cannot find agent hello_world" in response["messages"][0].content
 
-    @pytest.mark.asyncio
     async def test_responses_api_content_parses_agent_name(self) -> None:
         """
         The OpenAI Responses API shape (reasoning item first, then the text
@@ -114,7 +112,6 @@ class TestNetworkCopyMiddleware:
         restore.assert_called_once_with("hello_world")
         assert "Cannot find agent hello_world" in response["messages"][0].content
 
-    @pytest.mark.asyncio
     async def test_list_of_str_content_parses_agent_name(self) -> None:
         """
         List-of-str content is legal per the BaseMessage annotation and also
@@ -128,7 +125,6 @@ class TestNetworkCopyMiddleware:
         restore.assert_called_once_with("hello_world")
         assert "Cannot find agent hello_world" in response["messages"][0].content
 
-    @pytest.mark.asyncio
     async def test_block_content_without_text_asks_for_name(self) -> None:
         """
         Block content with no text block (a tool_use-only turn) projects to "",
@@ -144,7 +140,6 @@ class TestNetworkCopyMiddleware:
         restore.assert_not_called()
         assert response["messages"][0].content == self.ASK_FOR_NAME
 
-    @pytest.mark.asyncio
     async def test_malformed_json_asks_for_name(self) -> None:
         """
         Non-JSON string content keeps producing the "please provide" prompt.
@@ -156,7 +151,6 @@ class TestNetworkCopyMiddleware:
         restore.assert_not_called()
         assert response["messages"][0].content == self.ASK_FOR_NAME
 
-    @pytest.mark.asyncio
     async def test_non_object_json_asks_for_name(self) -> None:
         """
         Valid JSON that is not an object (here a JSON array) has no agent_name
