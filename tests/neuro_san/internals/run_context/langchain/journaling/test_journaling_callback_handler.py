@@ -17,7 +17,7 @@
 
 from typing import Tuple
 
-from unittest import TestCase
+from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from uuid import uuid4
@@ -34,7 +34,7 @@ from neuro_san.message.types.agent_message import AgentMessage
 from tests.neuro_san.message.content_fixtures import ContentFixtures
 
 
-class TestJournalingCallbackHandler(TestCase):
+class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
     """
     Tests for JournalingCallbackHandler.
 

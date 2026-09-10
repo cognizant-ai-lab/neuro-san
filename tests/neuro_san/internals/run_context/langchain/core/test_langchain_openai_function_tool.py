@@ -15,7 +15,7 @@
 #
 # END COPYRIGHT
 
-from unittest import TestCase
+from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
@@ -30,7 +30,7 @@ from neuro_san.internals.run_context.langchain.core.tool_spec_error import ToolS
 from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
 
 
-class TestLangChainOpenAIFunctionTool(TestCase):
+class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
     """
     Test cases for what _arun() hands back to langchain as the tool output.
 

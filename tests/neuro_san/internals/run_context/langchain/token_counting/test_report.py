@@ -15,7 +15,7 @@
 #
 # END COPYRIGHT
 
-from unittest import TestCase
+from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
@@ -25,7 +25,7 @@ from neuro_san.internals.run_context.langchain.token_counting.langchain_token_co
 from neuro_san.message.types.agent_message import AgentMessage
 
 
-class TestReport(TestCase):
+class TestReport(IsolatedAsyncioTestCase):
     """
     Test cases for report(): request-level accumulation and network-message gating.
 

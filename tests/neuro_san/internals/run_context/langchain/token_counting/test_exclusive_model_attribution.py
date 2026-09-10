@@ -15,7 +15,7 @@
 #
 # END COPYRIGHT
 
-from unittest import TestCase
+from unittest import IsolatedAsyncioTestCase
 import pytest
 
 from langchain_core.messages import AIMessage
@@ -27,7 +27,7 @@ from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback
 from tests.neuro_san.internals.run_context.langchain.token_counting.owning_agent_scope import owning_agent_scope
 
 
-class TestExclusiveModelAttribution(TestCase):
+class TestExclusiveModelAttribution(IsolatedAsyncioTestCase):
     """
     Test cases for the own-call vs downstream-call attribution in LlmTokenCallbackHandler.
 

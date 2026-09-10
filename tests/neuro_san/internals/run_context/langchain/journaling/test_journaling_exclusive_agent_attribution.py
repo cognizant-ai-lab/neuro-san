@@ -16,7 +16,7 @@
 
 from typing import Tuple
 
-from unittest import TestCase
+from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from uuid import uuid4
@@ -29,7 +29,7 @@ from langchain_core.outputs import LLMResult
 from neuro_san.internals.run_context.langchain.journaling.journaling_callback_handler import JournalingCallbackHandler
 
 
-class TestJournalingExclusiveAgentAttribution(TestCase):
+class TestJournalingExclusiveAgentAttribution(IsolatedAsyncioTestCase):
     """An inherited handler must ignore events owned by a descendant agent."""
 
     @staticmethod
