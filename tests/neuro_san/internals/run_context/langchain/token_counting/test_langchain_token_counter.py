@@ -18,7 +18,6 @@
 import asyncio
 from contextlib import contextmanager
 
-from unittest import TestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import Mock
@@ -33,7 +32,7 @@ from neuro_san.message.types.agent_message import AgentMessage
 
 
 # pylint: disable=too-many-public-methods
-class TestLangChainTokenCounter(TestCase):
+class TestLangChainTokenCounter:
     """Test cases for sum_all_tokens and merge_dicts methods."""
 
     @pytest.fixture
