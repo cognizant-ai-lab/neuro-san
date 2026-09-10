@@ -15,7 +15,6 @@
 #
 # END COPYRIGHT
 
-from unittest import TestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
@@ -26,7 +25,7 @@ from langchain_core.tools import StructuredTool
 from neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter import LangChainMcpAdapter
 
 
-class TestLangChainMcpAdapter(TestCase):
+class TestLangChainMcpAdapter:
     """Test suite for LangChainMcpAdapter class"""
 
     @pytest.fixture

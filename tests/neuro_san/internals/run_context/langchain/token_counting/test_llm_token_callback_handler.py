@@ -17,8 +17,6 @@
 
 from typing import Dict
 
-from unittest import TestCase
-
 import logging
 
 import pytest
@@ -26,7 +24,7 @@ import pytest
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import LlmTokenCallbackHandler
 
 
-class TestLlmTokenCallbackHandler(TestCase):
+class TestLlmTokenCallbackHandler:
     """Test cases for the LlmTokenCallbackHandler.calculate_token_costs method."""
 
     @pytest.fixture
