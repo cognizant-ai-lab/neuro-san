@@ -46,8 +46,6 @@ class TestSmokeTestHocons(TestCase):
             "Issue #910: disabled until #909 is resolved.",
         "music_nerd_pro_llm_bedrock_claude/combination_responses_with_history_direct.hocon":
             "Issue #910: disabled until #909 is resolved.",
-        "music_nerd_pro_llm_anthropic/combination_responses_with_history_direct.hocon":
-            "Issue #936: disabled until #909 is resolved.",
         "music_nerd_pro_llm_openrouter/combination_responses_with_history_direct.hocon":
             "Disabled until OPENROUTER_API_KEY is added to the GitHub Actions secrets.",
     }
