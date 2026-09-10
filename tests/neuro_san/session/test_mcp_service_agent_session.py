@@ -32,6 +32,12 @@ class TestMcpServiceAgentSession(TestCase):
     Unit tests for McpServiceAgentSession.
     """
 
+    VALID_INITIALIZE_RESULT: Dict[str, Any] = {
+        "protocolVersion": MCP_VERSION,
+        "capabilities": {},
+        "serverInfo": {"name": "test_server", "version": "1.0.0"},
+    }
+
     @staticmethod
     def create_response(response_dict: Any) -> MagicMock:
         """
@@ -46,7 +52,7 @@ class TestMcpServiceAgentSession(TestCase):
         Calls function() with the given tools/list response.
         """
         initialize_response: MagicMock = self.create_response({
-            "result": {"protocolVersion": MCP_VERSION}
+            "result": self.VALID_INITIALIZE_RESULT
         })
         initialized_response: MagicMock = self.create_response({})
         tools_response: MagicMock = self.create_response(response_dict)
@@ -62,6 +68,19 @@ class TestMcpServiceAgentSession(TestCase):
         """
         return self.call_function_with_response({"result": {"tools": tools}})
 
+    @staticmethod
+    def create_tool(name: str, description: str = None) -> Dict[str, Any]:
+        """
+        Creates a tool that conforms to the MCP Tool schema.
+        """
+        tool: Dict[str, Any] = {
+            "name": name,
+            "inputSchema": {"type": "object"},
+        }
+        if description is not None:
+            tool["description"] = description
+        return tool
+
     def create_session_with_initialize_response(self, response_dict: Any) -> McpServiceAgentSession:
         """
         Creates an MCP session with the given initialize response.
@@ -76,7 +95,7 @@ class TestMcpServiceAgentSession(TestCase):
         Tests that a valid tools/list response returns the matching tool description.
         """
         result: Dict[str, Any] = self.call_function([
-            {"name": "hello_world", "description": "Says hello"}
+            self.create_tool("hello_world", "Says hello")
         ])
 
         self.assertEqual({"function": {"description": "Says hello"}}, result)
@@ -89,9 +108,14 @@ class TestMcpServiceAgentSession(TestCase):
             ([], "Invalid MCP tools/list response: response must be an object"),
             ({"result": None}, "Invalid MCP tools/list response: 'result' must be an object"),
             ({"result": []}, "Invalid MCP tools/list response: 'result' must be an object"),
-            ({"result": {}}, "Invalid MCP tools/list response: 'tools' must be an array"),
-            ({"result": {"tools": None}}, "Invalid MCP tools/list response: 'tools' must be an array"),
-            ({"result": {"tools": "hello_world"}}, "Invalid MCP tools/list response: 'tools' must be an array"),
+            ({"result": {}},
+             "Invalid MCP tools/list response: 'result' does not match ListToolsResult"),
+            ({"result": {"tools": None}},
+             "Invalid MCP tools/list response: 'result' does not match ListToolsResult"),
+            ({"result": {"tools": "hello_world"}},
+             "Invalid MCP tools/list response: 'result' does not match ListToolsResult"),
+            ({"result": {"tools": [{"name": "hello_world"}]}},
+             "Invalid MCP tools/list response: 'result' does not match ListToolsResult"),
         )
 
         for response_dict, expected_message in invalid_responses:
@@ -113,16 +137,17 @@ class TestMcpServiceAgentSession(TestCase):
 
         self.assertEqual("MCP tools/list error -32602: Invalid params", str(context.exception))
 
-    def test_function_skips_invalid_tool(self):
+    def test_function_rejects_invalid_tool(self):
         """
-        Tests that an invalid entry does not prevent discovery of a valid tool.
+        Tests that a malformed tool causes the ListToolsResult schema validation to fail.
         """
-        result: Dict[str, Any] = self.call_function([
-            None,
-            {"name": "hello_world", "description": "Says hello"},
-        ])
+        with self.assertRaises(ValueError) as context:
+            self.call_function([None, self.create_tool("hello_world", "Says hello")])
 
-        self.assertEqual({"function": {"description": "Says hello"}}, result)
+        self.assertEqual(
+            "Invalid MCP tools/list response: 'result' does not match ListToolsResult",
+            str(context.exception),
+        )
 
     def test_initialize_rejects_invalid_response(self):
         """
@@ -132,6 +157,8 @@ class TestMcpServiceAgentSession(TestCase):
             ([], "Invalid MCP initialize response: response must be an object"),
             ({"result": None}, "Invalid MCP initialize response: 'result' must be an object"),
             ({"result": []}, "Invalid MCP initialize response: 'result' must be an object"),
+            ({"result": {"protocolVersion": MCP_VERSION}},
+             "Invalid MCP initialize response: 'result' does not match InitializeResult"),
         )
 
         for response_dict, expected_message in invalid_responses:
@@ -157,8 +184,8 @@ class TestMcpServiceAgentSession(TestCase):
         """
         Tests that the client does not impose a limit absent from the MCP specification.
         """
-        tools = [{}] * 1001
-        tools.append({"name": "hello_world", "description": "Says hello"})
+        tools = [self.create_tool(f"tool_{index}") for index in range(1001)]
+        tools.append(self.create_tool("hello_world", "Says hello"))
 
         result: Dict[str, Any] = self.call_function(tools)
 
