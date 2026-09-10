@@ -406,10 +406,15 @@ class ContentUtils:
         Recursively make a value JSON-serializable without dropping data:
         bytes become base64 strings, non-finite floats and unknown objects
         become their string form, tuples and sets become lists, and
-        dictionary keys become strings.
+        dictionary keys become strings. Use it for message content and
+        content-block payloads (tool outputs, images, files) that must
+        survive intact into the journal.
 
-        This intentionally differs from ChatMessageConverter.to_json_safe,
-        which nulls out bytes - block payloads must survive.
+        Not to be confused with ChatMessageConverter.to_json_safe, the lossy
+        variant for outbound ChatMessage response dictionaries: there
+        anything non-serializable, bytes included, becomes None and
+        non-string keys are dropped. Use that one for response
+        dictionaries, this one for content.
 
         :param value: Any value to sanitize
         :return: A JSON-serializable equivalent of the value
