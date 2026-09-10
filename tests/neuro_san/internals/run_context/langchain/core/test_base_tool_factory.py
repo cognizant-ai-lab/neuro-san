@@ -88,7 +88,7 @@ class TestBaseToolFactory:
 
         # The args_schema is what actually reaches the calling LLM.
         param_name: str = BaseToolFactory.DEFAULT_EXTERNAL_PARAMETER_NAME
-        fields = tool.args_schema.__fields__
+        fields = tool.args_schema.model_fields
         assert list(fields.keys()) == [param_name]
         # is_required() is the pydantic v2 FieldInfo API; the v1 models this
         # converter used to build exposed a .required attribute instead.
@@ -122,7 +122,7 @@ class TestBaseToolFactory:
 
         assert tool is not None
         assert tool.parameters == declared_parameters
-        assert list(tool.args_schema.__fields__.keys()) == ["question"]
+        assert list(tool.args_schema.model_fields.keys()) == ["question"]
         factory.journal.write_message.assert_not_awaited()
 
     def test_create_function_tool_does_not_mutate_function_json(self):

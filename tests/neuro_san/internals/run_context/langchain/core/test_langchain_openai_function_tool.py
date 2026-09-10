@@ -118,7 +118,7 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
         tool = LangChainOpenAIFunctionTool.from_function_json(function_json, MagicMock())
 
         assert tool.args_schema is not None
-        assert len(tool.args_schema.__fields__) == 0
+        assert len(tool.args_schema.model_fields) == 0
 
     def test_explicit_null_parameters_builds_explicit_empty_args_schema(self):
         """
