@@ -20,6 +20,7 @@ See class comment for details
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Tuple
 
 import asyncio
@@ -79,8 +80,10 @@ class McpToolsProcessor:
             if provider is not None:
                 agent_network: AgentNetwork = provider.get_agent_network()
                 if agent_network.is_mcp_tool():
-                    tool_dict: Dict[str, Any] = await self._get_tool_description(agent_name, metadata)
-                    tools_description.append(tool_dict)
+                    tool_dict: Optional[Dict[str, Any]] = \
+                        await self._get_tool_description(agent_name, agent_network, metadata)
+                    if tool_dict is not None:
+                        tools_description.append(tool_dict)
         return {
             "jsonrpc": "2.0",
             "id": RequestUtil.safe_request_id(request_id),
@@ -212,7 +215,11 @@ class McpToolsProcessor:
         call_result["result"]["content"][0]["text"] = RequestUtil.safe_message(result_text)
         return call_result
 
-    async def _get_tool_description(self, agent_name: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
+    async def _get_tool_description(
+            self,
+            agent_name: str,
+            agent_network: AgentNetwork,
+            metadata: Dict[str, Any]) -> Dict[str, Any]:
 
         is_authorized: bool = False
         service_provider: AsyncAgentServiceProvider = None
@@ -224,11 +231,35 @@ class McpToolsProcessor:
         service: AsyncAgentService = service_provider.get_service()
         function_dict: Dict[str, Any] = await service.function({}, metadata)
         tool_description: str = function_dict.get("function", {}).get("description", "")
-        return {
+        tool_dict: Dict[str, Any] = {
             "name": agent_name,
             "description": tool_description,
             "inputSchema": self.tool_request_validator.get_request_schema()
         }
+        # Include agent network metadata in MCP _meta field if available:
+        network_metadata: Dict[str, Any] = self.get_agent_network_metadata(agent_network)
+        if network_metadata is not None:
+            tool_dict["_meta"] = network_metadata
+        return tool_dict
+
+    def get_agent_network_metadata(self, agent_network: AgentNetwork) -> Optional[Dict[str, Any]]:
+        """
+        Get agent network metadata dictionary for MCP tool description.
+        :param agent_network: agent network object;
+        :return: metadata dictionary or None
+        """
+        # List of keys we are interested in for MCP tool metadata - we can add more if necessary:
+        metadata_keys: List[str] = ["description", "sample_queries", "tags"]
+
+        network_metadata: Any = agent_network.get_metadata()
+        result_dict: Dict[str, Any] = {}
+        if isinstance(network_metadata, dict):
+            for key in metadata_keys:
+                if key in network_metadata:
+                    result_dict[key] = network_metadata[key]
+        if len(result_dict) > 0:
+            return result_dict
+        return None
 
     async def _extract_tool_response_part(
             self, response_dict: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
