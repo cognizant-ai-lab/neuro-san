@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import Optional
 
 from pathlib import Path
 
@@ -31,7 +32,7 @@ class TestsUtil:
     """
 
     @staticmethod
-    def parse_hocon_test_case(fixtures: FileOfClass, hocon_file: str) -> Dict[str, Any]:
+    def parse_hocon_test_case(fixtures: Optional[FileOfClass], hocon_file: str) -> Dict[str, Any]:
         """
         Parse a hocon test case from the fixtures directory.
 
