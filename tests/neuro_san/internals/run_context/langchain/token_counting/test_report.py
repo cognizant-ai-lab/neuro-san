@@ -19,8 +19,6 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
-import pytest
-
 from neuro_san.internals.run_context.langchain.token_counting.langchain_token_counter import LangChainTokenCounter
 from neuro_san.message.types.agent_message import AgentMessage
 
@@ -83,7 +81,6 @@ class TestReport(IsolatedAsyncioTestCase):
         callback.total_cost = 0.0
         return callback
 
-    @pytest.mark.asyncio
     async def test_report_counts_each_agents_own_calls_exactly_once(self):
         """
         Nested completions must not double count: even though the front man's
@@ -117,7 +114,6 @@ class TestReport(IsolatedAsyncioTestCase):
         assert main_accounting["total_tokens"] == 45
         assert main_accounting["successful_requests"] == 3
 
-    @pytest.mark.asyncio
     async def test_report_separates_main_network_from_total(self):
         """
         Agents of same-server external networks (cloned InvocationContexts)
@@ -157,7 +153,6 @@ class TestReport(IsolatedAsyncioTestCase):
         assert list(request_reporting.keys()) == \
             ["token_accounting", "total_token_accounting"]
 
-    @pytest.mark.asyncio
     async def test_report_late_external_does_not_restamp_request_latency(self):
         """
         A cloned (external) agent completing after the front man - e.g. an
@@ -179,7 +174,6 @@ class TestReport(IsolatedAsyncioTestCase):
         # ... but the request latency remains the front man's.
         assert total_accounting["time_taken_in_seconds"] == 20.0
 
-    @pytest.mark.asyncio
     async def test_report_flags_unattributed_tokens(self):
         """
         When the front man's subtree scalars exceed what completed scopes merged
@@ -200,7 +194,6 @@ class TestReport(IsolatedAsyncioTestCase):
         assert any("An additional 20 tokens" in caveat
                    for caveat in total_accounting["caveats"])
 
-    @pytest.mark.asyncio
     async def test_report_network_message_gating(self):
         """
         Only the front man of the main network (single-element origin, non-cloned

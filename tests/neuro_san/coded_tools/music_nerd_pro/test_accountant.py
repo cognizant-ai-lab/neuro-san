@@ -16,8 +16,6 @@
 # END COPYRIGHT
 from unittest import IsolatedAsyncioTestCase
 
-import pytest
-
 from neuro_san.coded_tools.accountant import Accountant
 
 
@@ -26,7 +24,6 @@ class TestAccountant(IsolatedAsyncioTestCase):
     Unit tests for Accountant class.
     """
 
-    @pytest.mark.asyncio
     async def test_invoke(self):
         """
         Tests the invoke method of the Accountant CodedTool.

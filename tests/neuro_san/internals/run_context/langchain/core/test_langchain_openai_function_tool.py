@@ -19,7 +19,7 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
-import pytest
+from pytest import raises
 
 from pydantic import BaseModel
 
@@ -60,7 +60,6 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
             description="a test tool",
             tool_caller=tool_caller)
 
-    @pytest.mark.asyncio
     async def test_arun_returns_message_content_not_message_object(self):
         """
         The sub-agent's answer must come back as the message content,
@@ -77,7 +76,6 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
         assert result == "the answer"
         assert isinstance(result, str)
 
-    @pytest.mark.asyncio
     async def test_arun_returns_none_when_run_has_no_tool_message(self):
         """
         A Run can legitimately carry no tool message (see submit_tool_outputs()
@@ -91,7 +89,6 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
 
         assert result is None
 
-    @pytest.mark.asyncio
     async def test_arun_returns_exception_string_on_failure(self):
         """
         Exceptions from the tool call are reported back to the calling LLM
@@ -141,5 +138,5 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
         instead of raising a raw AttributeError from parameters.get().
         """
         function_json = {"name": "ext_agent", "description": "d", "parameters": "not-a-dict"}
-        with pytest.raises(ToolSpecError, match="parameters to be a dictionary"):
+        with raises(ToolSpecError, match="parameters to be a dictionary"):
             LangChainOpenAIFunctionTool.from_function_json(function_json, MagicMock())

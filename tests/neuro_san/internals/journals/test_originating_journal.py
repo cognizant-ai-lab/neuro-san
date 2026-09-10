@@ -23,8 +23,6 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
-import pytest
-
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 
@@ -72,7 +70,6 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
             written.append(call.args[0])
         return written
 
-    @pytest.mark.asyncio
     async def test_exact_dupe_is_suppressed(self) -> None:
         """
         A held AGENT message whose content matches the next message exactly
@@ -87,7 +84,6 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         assert written[0].content == "the answer"
         assert not isinstance(written[0], AgentMessage)
 
-    @pytest.mark.asyncio
     async def test_dupe_comparison_ignores_edge_whitespace(self) -> None:
         """
         The held AGENT content is stripped at capture while the AI content is
@@ -102,7 +98,6 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         assert len(written) == 1
         assert written[0].content == "the answer\n"
 
-    @pytest.mark.asyncio
     async def test_different_content_flushes_pending_first(self) -> None:
         """
         A held AGENT message with genuinely different content is not a dupe:
@@ -118,7 +113,6 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         assert written[0].content == "a thought"
         assert written[1].content == "the answer"
 
-    @pytest.mark.asyncio
     async def test_block_content_dupe_is_suppressed(self) -> None:
         """
         The held AGENT copy is a flattened str while the incoming AI message
@@ -139,7 +133,6 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         assert len(written) == 1
         assert written[0] is incoming
 
-    @pytest.mark.asyncio
     async def test_block_content_with_different_text_flushes_pending(self) -> None:
         """
         Block content whose visible text differs from the held AGENT copy is

@@ -22,8 +22,6 @@ from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from uuid import uuid4
 
-import pytest
-
 from langchain_core.messages.ai import AIMessage
 from langchain_core.outputs import LLMResult
 from langchain_core.outputs.chat_generation import ChatGeneration
@@ -69,7 +67,6 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         """Wrap an AIMessage the way it arrives at on_llm_end."""
         return LLMResult(generations=[[ChatGeneration(message=message)]])
 
-    @pytest.mark.asyncio
     async def test_on_llm_end_journals_full_text_of_block_content(self) -> None:
         """
         Thinking-first block content journals its answer text as an AGENT
@@ -81,7 +78,6 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         assert isinstance(message, AgentMessage)
         assert message.content == "the answer"
 
-    @pytest.mark.asyncio
     async def test_on_llm_end_tool_call_only_step_stays_unjournaled(self) -> None:
         """
         A tool-call-only step has no text, so the journaling gate must keep
@@ -95,7 +91,6 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         await handler.on_llm_end(self._llm_result(tool_call_only))
         journal.write_message_if_next_not_dupe.assert_not_called()
 
-    @pytest.mark.asyncio
     async def test_on_llm_end_plain_string_content_still_journaled_stripped(self) -> None:
         """
         Plain-string content keeps its existing behavior: journaled stripped.
@@ -105,7 +100,6 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         message = journal.write_message_if_next_not_dupe.call_args.args[0]
         assert message.content == "padded thought"
 
-    @pytest.mark.asyncio
     async def test_on_tool_start_uses_tool_name_when_present(self) -> None:
         """A serialized tool with a name is reported verbatim."""
         handler, journal = self._make_handler()
@@ -115,7 +109,6 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         assert message.content == "Invoking: `search` with:"
         assert message.structure["invoked_agent_name"] == "search"
 
-    @pytest.mark.asyncio
     async def test_on_tool_start_falls_back_to_placeholder_when_name_missing(self) -> None:
         """A serialized tool with no name yields a diagnostic placeholder label
         instead of an empty "Invoking: ``"; the raw value is still reported."""
