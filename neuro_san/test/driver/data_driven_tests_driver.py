@@ -503,7 +503,7 @@ datestr: str = now.strftime("%Y-%m-%d_%H-%M-%S_%f")
 
             # 1) Emit futures whose deadline has passed but which haven't finished.
             #    (If one finished right at its deadline, prefer reporting it completed.)
-            expired: Sequence[Future] = []
+expired: List[Future] = []
             for fut in pending:
                 if deadlines[fut] is not None and now >= deadlines[fut] and not fut.done():
                     expired.append(fut)
