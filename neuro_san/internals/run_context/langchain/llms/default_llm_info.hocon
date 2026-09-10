@@ -70,6 +70,26 @@
         "model_retirement_date": "2026-10-23",
     },
 
+    "gpt-6-astra": {
+        "class": "openai",
+        "model_info_url": "https://developers.openai.com/api/docs/models/gpt-6-astra",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        # Tool calling needs "use_responses_api": true in llm_config: Chat Completions rejects tools combined
+        # with reasoning, and this model rejects reasoning_effort "none", so there is no Chat Completions path. See
+        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters
+        "context_window_size": 1050000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "04/30/2026",
+        "price_per_1k_input_tokens": 0.010,
+        "price_per_1k_output_tokens": 0.050,
+        "model_launch_date": "2026-09-03",
+        "model_retirement_date": null,
+    },
+
     "gpt-5.6-sol": {
         "class": "openai",
         "model_info_url": "https://developers.openai.com/api/docs/models/gpt-5.6-sol",
@@ -78,11 +98,14 @@
             "output": [ "text" ],
         },
         "capabilities": [ "tools" ],
+        # Tool calling needs "use_responses_api": true in llm_config, or "reasoning_effort": "none" to stay on
+        # Chat Completions without reasoning (Chat Completions rejects tools combined with reasoning). See
+        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "02/16/2026",
-        "price_per_1k_input_tokens": 0.005,
-        "price_per_1k_output_tokens": 0.030,
+        "price_per_1k_input_tokens": 0.004,
+        "price_per_1k_output_tokens": 0.020,
         "model_launch_date": "2026-07-09",
         "model_retirement_date": null,
     },
@@ -94,6 +117,9 @@
             "output": [ "text" ],
         },
         "capabilities": [ "tools" ],
+        # Tool calling needs "use_responses_api": true in llm_config, or "reasoning_effort": "none" to stay on
+        # Chat Completions without reasoning (Chat Completions rejects tools combined with reasoning). See
+        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "02/16/2026",
@@ -112,6 +138,9 @@
             "output": [ "text" ],
         },
         "capabilities": [ "tools" ],
+        # Tool calling needs "use_responses_api": true in llm_config, or "reasoning_effort": "none" to stay on
+        # Chat Completions without reasoning (Chat Completions rejects tools combined with reasoning). See
+        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "02/16/2026",
@@ -1119,6 +1148,25 @@
     # Per Google, the listed shutdown dates are the "earliest possible dates" — exact
     # retirement is communicated with advance notice. For models with no announced
     # retirement, "model_retirement_date" is null.
+    "gemini-3.8-flash": {
+        "class": "gemini",
+        "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash",
+        "modalities": {
+            "input": [ "text", "images", "video", "audio", "pdf"],
+            "output": [ "text"],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1048576,
+        "max_output_tokens": 65536,
+        # https://deepmind.google/models/model-cards/gemini-3-8-flash/
+        "knowledge_cutoff": "03/2026",
+        # https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
+        # This price is effective until Dec 31, 2026 after that it will be doubled.
+        "price_per_1k_input_tokens": 0.00075,
+        "price_per_1k_output_tokens": 0.00375,
+        "model_launch_date": "2026-09-02",
+        "model_retirement_date": null,
+    },
     "gemini-3.7-flash": {
         "class": "gemini",
         "model_info_url": "https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash",
@@ -1447,16 +1495,34 @@
                 "logit_bias": null,
                 # streaming defaults to off; set "streaming": true in llm_config to enable.
                 "streaming": false,
-                # n is always 1.  neuro-san will only ever consider a single chat completion.
+                # n is intentionally not sent. The API default of 1 applies (neuro-san only ever
+                # considers a single chat completion), and the Responses API has no n parameter at all.
+                # See https://github.com/cognizant-ai-lab/neuro-san/issues/725 and the n property of
+                # CreateChatCompletionRequest in https://github.com/openai/openai-openapi/blob/main/openapi.yaml
                 "top_p": null,
                 "max_tokens": null,         # This is always for output
                 "tiktoken_model_name": null,
                 "stop": null,
 
                 # The following parameters are for reasoning models only.
+                # Set either "reasoning" or "reasoning_effort", not both: on the Responses API path
+                # reasoning_effort is only folded into reasoning.effort when "reasoning" is absent.
                 "reasoning": null, # Reasoning parameters for reasoning models (Dict[str, Any])
                 "reasoning_effort": null, # Constrains effort on reasoning for reasoning models (str)
                 "verbosity": null, # Controls the verbosity level of responses for reasoning models (str)
+                # Tri-state switch for which OpenAI endpoint requests are sent to (bool or null). See
+                # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters
+                # for which models need it and why, plus the langchain reference:
+                # https://docs.langchain.com/oss/python/integrations/chat/openai#responses-api and
+                # https://reference.langchain.com/python/langchain-openai/chat_models/base/BaseChatOpenAI/use_responses_api
+                #   null  - let langchain infer the endpoint from the other parameters and the model name.
+                #           Any Responses-only setting (with this class that means a "reasoning" dict) or a
+                #           Responses-only model (gpt-5.x-pro, codex) selects the Responses API; otherwise
+                #           requests stay on Chat Completions (the long-standing behavior).
+                #   true  - force the Responses API. Needed for tool calling with reasoning on the newest OpenAI
+                #           models (gpt-6-astra, gpt-5.6-*), because Chat Completions rejects the combination.
+                #   false - force Chat Completions.
+                "use_responses_api": null,
 
                 # If you really need more parameters, you will likely have to create your own LlmFactory.
             }

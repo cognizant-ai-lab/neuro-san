@@ -28,7 +28,7 @@ jobs:
         # 1.0.11
         uses: cognizant-ai-lab/build-common/actions/setup-python-env@a70df67b0d623e56f34159de26c38989cd315d26
         with:
-          python-version: '3.10'
+          python-version: '3.12'
           requirements-file: ''
           requirements-build-file: ''
           install-extras: 'build'
