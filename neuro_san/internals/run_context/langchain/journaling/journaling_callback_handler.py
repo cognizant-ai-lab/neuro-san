@@ -23,6 +23,7 @@ from typing import Dict
 from typing import Generator
 from typing import List
 from typing import Optional
+from typing import Union
 from uuid import UUID
 
 from pydantic import ConfigDict
@@ -279,15 +280,36 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
             origin = self._tool_origins.get(run_id)
             langchain_tool_journal = self._tool_journals.get(run_id)
 
+            # A tool can return a list of standard content blocks (text plus
+            # image/file data): toolbox tools that return blocks do, and so
+            # does langchain-mcp-adapters>=0.2, while the <0.2 pin in
+            # requirements.txt hands over text only and puts MCP images in the
+            # ToolMessage artifact. Preserve a block list as a JSON-safe list
+            # so the payload reaches the journal intact instead of collapsing
+            # to the Python repr that str() would produce. Every other shape,
+            # str and list-of-str included, keeps exactly the str() form it
+            # has always had.
+            result_content: Union[str, List[Any]]
+            if ContentUtils.looks_like_blocks(output):
+                result_content = ContentUtils.to_json_safe(output)
+            else:
+                result_content = str(output)
+
             # Log the tool output to the calling agent's journal
             await self.calling_agent_journal.write_message(
-                AgentToolResultMessage(content=str(output), tool_result_origin=origin)
+                AgentToolResultMessage(content=result_content, tool_result_origin=origin)
             )
 
-            # Also log the tool output to the LangChain tool-specific journal
+            # Also log the tool output to the LangChain tool-specific journal.
+            # The structure carries the raw output as before, except that a
+            # block list is the sanitized copy so the structure stays
+            # serializable when blocks carry bytes payloads.
+            tool_output: Any = output
+            if isinstance(result_content, list):
+                tool_output = result_content
             output_dict: Dict[str, Any] = {
                 "tool_end": True,
-                "tool_output": output
+                "tool_output": tool_output
             }
             message: BaseMessage = AgentMessage(content="Got result:", structure=output_dict)
             await langchain_tool_journal.write_message(message)
