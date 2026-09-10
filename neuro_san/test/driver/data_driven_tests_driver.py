@@ -279,7 +279,7 @@ class DataDrivenTestsDriver:
 
         # Prepare the request
         text: str = interaction.get("text")
-        current_sly_data: str = interaction.get("sly_data")
+        current_sly_data: Optional[Dict[str, Any]] = interaction.get("sly_data")
         # Use current interaction's sly_data if provided, otherwise use carried-over sly_data
         # from the previous interaction. This allows sly_data to accumulate across turns.
         if current_sly_data is None:
