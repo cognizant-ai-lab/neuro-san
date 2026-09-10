@@ -19,7 +19,7 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
-import pytest
+from pytest import raises
 
 from pydantic import BaseModel
 
@@ -60,7 +60,6 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
             description="a test tool",
             tool_caller=tool_caller)
 
-    @pytest.mark.asyncio
     async def test_arun_returns_message_content_not_message_object(self):
         """
         The sub-agent's answer must come back as the message content,
@@ -77,7 +76,6 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
         assert result == "the answer"
         assert isinstance(result, str)
 
-    @pytest.mark.asyncio
     async def test_arun_returns_none_when_run_has_no_tool_message(self):
         """
         A Run can legitimately carry no tool message (see submit_tool_outputs()
@@ -91,7 +89,6 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
 
         assert result is None
 
-    @pytest.mark.asyncio
     async def test_arun_returns_exception_string_on_failure(self):
         """
         Exceptions from the tool call are reported back to the calling LLM
@@ -118,7 +115,7 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
         tool = LangChainOpenAIFunctionTool.from_function_json(function_json, MagicMock())
 
         assert tool.args_schema is not None
-        assert len(tool.args_schema.__fields__) == 0
+        assert len(tool.args_schema.model_fields) == 0
 
     def test_explicit_null_parameters_builds_explicit_empty_args_schema(self):
         """
@@ -141,10 +138,9 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
         instead of raising a raw AttributeError from parameters.get().
         """
         function_json = {"name": "ext_agent", "description": "d", "parameters": "not-a-dict"}
-        with pytest.raises(ToolSpecError, match="parameters to be a dictionary"):
+        with raises(ToolSpecError, match="parameters to be a dictionary"):
             LangChainOpenAIFunctionTool.from_function_json(function_json, MagicMock())
 
-    @pytest.mark.asyncio
     async def test_arun_projects_block_content_answer_to_text(self) -> None:
         """
         A sub-agent answer carrying reasoning + text blocks comes back as its
@@ -161,7 +157,6 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
 
         assert result == "the answer"
 
-    @pytest.mark.asyncio
     async def test_arun_references_data_blocks_in_text(self) -> None:
         """
         A data block in the answer becomes a short reference in the tool result

@@ -19,7 +19,7 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
-import pytest
+from pytest import raises
 
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
@@ -61,7 +61,6 @@ class TestActivationCapsule(IsolatedAsyncioTestCase):
                                  parent_agent_spec={"name": "caller"},
                                  agent_tool_factory=factory)
 
-    @pytest.mark.asyncio
     async def test_use_tool_returns_str_content_unchanged(self) -> None:
         """
         Plain-string content is returned exactly as-is: no stripping, no wrapping.
@@ -70,7 +69,6 @@ class TestActivationCapsule(IsolatedAsyncioTestCase):
         result: str = await capsule.use_tool("sub_agent", {"arg": "value"}, {})
         assert result == "  the answer  "
 
-    @pytest.mark.asyncio
     async def test_use_tool_projects_block_content_to_text(self) -> None:
         """
         Thinking-first block content from the sub-agent comes back as its text,
@@ -81,12 +79,11 @@ class TestActivationCapsule(IsolatedAsyncioTestCase):
         assert isinstance(result, str)
         assert result == "the answer"
 
-    @pytest.mark.asyncio
     async def test_use_tool_requires_factory_and_spec(self) -> None:
         """
         A capsule created without a factory or parent spec cannot call tools
         and says so, rather than failing deep inside the call.
         """
         capsule: ActivationCapsule = ActivationCapsule(parent_run_context=MagicMock())
-        with pytest.raises(ValueError):
+        with raises(ValueError):
             await capsule.use_tool("sub_agent", {}, {})

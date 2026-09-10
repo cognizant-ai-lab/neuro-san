@@ -14,13 +14,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Shared scaffolding for S3ReservationsStorage tests.
-
-Pytest's default test-file pattern is test_*.py, so this file (which
-does not start with "test_") is not collected as a test module. The
-class defined here is imported by sibling test_*.py modules.
-"""
 import json
 import os
 import time

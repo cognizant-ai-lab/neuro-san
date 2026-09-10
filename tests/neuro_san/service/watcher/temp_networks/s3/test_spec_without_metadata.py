@@ -14,22 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-The "metadata" key on an agent_spec is documented as optional in the
-project's HOCON registry files (see registries/*.hocon: "Optional
-metadata describing this agent network"). Callers may legitimately
-hand a metadata-less spec to add_reservations. The storage's read
-path requires metadata.reservation on every stored object, so the
-write path must initialize the field when missing - otherwise
-downstream reads would crash.
-
-This module exercises the storage's defensive init branch:
-    if agent_spec.get("metadata") is None:
-        agent_spec["metadata"] = {}
-    agent_spec["metadata"].update(new_metadata)
-"""
 from json import loads
-import pytest
 
 from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
@@ -37,13 +22,25 @@ from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_te
 
 class TestSpecWithoutMetadata(S3ReservationsStorageTestBase):
     """
+    The "metadata" key on an agent_spec is documented as optional in the
+    project's HOCON registry files (see registries/*.hocon: "Optional
+    metadata describing this agent network"). Callers may legitimately
+    hand a metadata-less spec to add_reservations. The storage's read
+    path requires metadata.reservation on every stored object, so the
+    write path must initialize the field when missing - otherwise
+    downstream reads would crash.
+
+    This module exercises the storage's defensive init branch:
+        if agent_spec.get("metadata") is None:
+            agent_spec["metadata"] = {}
+        agent_spec["metadata"].update(new_metadata)
+
     Existing tests T1-T10 all pass agent_specs that include a
     pre-populated "metadata" key (built by _make_agent_spec). This
     test exercises the other side of the storage's metadata-init
     branch: input specs that arrive without a "metadata" key.
     """
 
-    @pytest.mark.asyncio
     async def test_add_initializes_metadata_when_spec_lacks_key(self):
         """
         When the input agent_spec has no "metadata" key,

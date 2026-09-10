@@ -14,11 +14,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-S3ReservationsStorage.add_reservations writes each reservation to a
-specific S3 object key. This module pins that key format as a contract.
-"""
-import pytest
 
 from neuro_san.service.watcher.temp_networks.s3.s3_util import S3Util
 
@@ -28,6 +23,9 @@ from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_te
 
 class TestObjectKeyFormat(S3ReservationsStorageTestBase):
     """
+    S3ReservationsStorage.add_reservations writes each reservation to a
+    specific S3 object key. This module pins that key format as a contract.
+
     The S3 object key written by add_reservations follows the documented
     format "{prefix}{reservation_id}.json". A refactor that changes the
     layout (e.g., to "{prefix}{id}/data.json") would still let the
@@ -36,7 +34,6 @@ class TestObjectKeyFormat(S3ReservationsStorageTestBase):
     asserting against a hardcoded literal path.
     """
 
-    @pytest.mark.asyncio
     async def test_add_writes_at_expected_object_key(self):
         """
         After add_reservations, the S3 bucket contains exactly one object,

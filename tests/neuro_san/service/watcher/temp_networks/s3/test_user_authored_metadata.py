@@ -14,15 +14,8 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-S3ReservationsStorage.add_reservations must merge into agent_spec["metadata"]
-rather than replace it, so user-authored keys (description, tags, etc.)
-survive the round-trip.
-"""
 from typing import Any
 from typing import Dict
-
-import pytest
 
 from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
@@ -30,12 +23,15 @@ from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_te
 
 class TestUserAuthoredMetadata(S3ReservationsStorageTestBase):
     """
+    S3ReservationsStorage.add_reservations must merge into agent_spec["metadata"]
+    rather than replace it, so user-authored keys (description, tags, etc.)
+    survive the round-trip.
+
     Real registry entries (e.g. neuro_san/registries/copy_cat.hocon) ship
     with their own metadata.description and metadata.tags. The storage
     must preserve those keys when injecting its own reservation/stored_at.
     """
 
-    @pytest.mark.asyncio
     async def test_add_does_not_clobber_user_authored_metadata(self):
         """
         When the input agent_spec already has a user-authored 'metadata'

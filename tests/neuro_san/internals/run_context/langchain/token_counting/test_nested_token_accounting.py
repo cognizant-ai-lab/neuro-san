@@ -24,8 +24,6 @@ from typing import Optional
 
 from unittest import IsolatedAsyncioTestCase
 
-import pytest
-
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage
@@ -143,7 +141,6 @@ class TestNestedTokenAccounting(IsolatedAsyncioTestCase):
 
     # A test this end-to-end legitimately needs a handful of actors and captures.
     # pylint: disable=too-many-locals
-    @pytest.mark.asyncio
     async def test_nested_agents_count_each_llm_call_exactly_once(self):
         """
         Three count_tokens() scopes with one LLM call each, shaped like a

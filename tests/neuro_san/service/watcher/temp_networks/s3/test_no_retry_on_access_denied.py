@@ -14,17 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-S3ReservationsStorage._is_retryable_client_error classifies errors
-into retryable (transient: throttling, slow-down, 5xx) and
-non-retryable (permanent: AccessDenied, malformed request, etc.).
-This module exercises the non-retryable branch: an AccessDenied
-ClientError must propagate immediately, with no S3 mutation and
-nothing retrievable through the public read path.
-"""
 from unittest.mock import patch
-
-import pytest
 
 from botocore.exceptions import ClientError
 
@@ -34,12 +24,18 @@ from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_te
 
 class TestNoRetryOnAccessDenied(S3ReservationsStorageTestBase):
     """
+    S3ReservationsStorage._is_retryable_client_error classifies errors
+    into retryable (transient: throttling, slow-down, 5xx) and
+    non-retryable (permanent: AccessDenied, malformed request, etc.).
+    This module exercises the non-retryable branch: an AccessDenied
+    ClientError must propagate immediately, with no S3 mutation and
+    nothing retrievable through the public read path.
+
     Companion to TestRetryOnThrottling. T6 pinned that transient errors
     DO retry; this test pins that AccessDenied does NOT retry. Together
     they document the storage's full retry policy.
     """
 
-    @pytest.mark.asyncio
     async def test_add_does_not_retry_on_access_denied(self):
         """
         On AccessDenied (HTTP 403 with error code AccessDenied -

@@ -26,8 +26,6 @@ from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from uuid import uuid4
 
-import pytest
-
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.tool import ToolMessage
 from langchain_core.outputs import LLMResult
@@ -80,7 +78,6 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         """Wrap an AIMessage the way it arrives at on_llm_end."""
         return LLMResult(generations=[[ChatGeneration(message=message)]])
 
-    @pytest.mark.asyncio
     async def test_on_llm_end_journals_full_text_of_block_content(self) -> None:
         """
         Thinking-first block content journals its answer text as an AGENT
@@ -92,7 +89,6 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         assert isinstance(message, AgentMessage)
         assert message.content == "the answer"
 
-    @pytest.mark.asyncio
     async def test_on_llm_end_tool_call_only_step_stays_unjournaled(self) -> None:
         """
         A tool-call-only step has no text, so the journaling gate must keep
@@ -106,7 +102,6 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         await handler.on_llm_end(self._llm_result(tool_call_only))
         journal.write_message_if_next_not_dupe.assert_not_called()
 
-    @pytest.mark.asyncio
     async def test_on_llm_end_plain_string_content_still_journaled_stripped(self) -> None:
         """
         Plain-string content keeps its existing behavior: journaled stripped.
@@ -116,7 +111,6 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         message = journal.write_message_if_next_not_dupe.call_args.args[0]
         assert message.content == "padded thought"
 
-    @pytest.mark.asyncio
     async def test_on_tool_start_uses_tool_name_when_present(self) -> None:
         """A serialized tool with a name is reported verbatim."""
         handler, journal = self._make_handler()
@@ -126,7 +120,6 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         assert message.content == "Invoking: `search` with:"
         assert message.structure["invoked_agent_name"] == "search"
 
-    @pytest.mark.asyncio
     async def test_on_tool_start_falls_back_to_placeholder_when_name_missing(self) -> None:
         """A serialized tool with no name yields a diagnostic placeholder label
         instead of an empty "Invoking: ``"; the raw value is still reported."""
@@ -168,7 +161,6 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         got_result: AgentMessage = base_journal.write_message.call_args_list[-1].args[0]
         return result, got_result
 
-    @pytest.mark.asyncio
     async def test_on_tool_end_str_output_unchanged(self) -> None:
         """
         Plain-string tool output is journaled exactly as before.
@@ -178,7 +170,6 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         assert result.content == "42"
         assert got_result.structure["tool_output"] == "42"
 
-    @pytest.mark.asyncio
     async def test_on_tool_end_preserves_block_list_output(self) -> None:
         """
         A ToolMessage carrying standard content blocks (text + image: the
@@ -191,7 +182,6 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         assert result.content == blocks
         assert got_result.structure["tool_output"] == blocks
 
-    @pytest.mark.asyncio
     async def test_on_tool_end_sanitizes_bytes_in_blocks(self) -> None:
         """
         Bytes payloads inside blocks become base64 strings in both the journaled
@@ -206,7 +196,6 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         json.dumps(result.content)
         json.dumps(got_result.structure)
 
-    @pytest.mark.asyncio
     async def test_on_tool_end_non_block_list_keeps_str_form(self) -> None:
         """
         A list that is not standard content blocks (here list-of-str) keeps the
@@ -217,7 +206,6 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         assert result.content == "['a', 'b']"
         assert got_result.structure["tool_output"] == ["a", "b"]
 
-    @pytest.mark.asyncio
     async def test_on_tool_end_single_text_block_list_is_kept_as_blocks(self) -> None:
         """
         A tool returning a bare text-block list is journaled as that list, so
