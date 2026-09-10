@@ -55,6 +55,7 @@ class TestLangfuseTracingContextRegistration:
     CallbackHandler (https://github.com/cognizant-ai-lab/neuro-san/issues/1191).
     """
 
+    @staticmethod
     def _count_langfuse_hooks() -> int:
         """
         :return: How many langchain configure hooks carry a ContextVar named "langfuse_handler".
@@ -62,6 +63,7 @@ class TestLangfuseTracingContextRegistration:
         return sum(1 for hook in _configure_hooks
                    if getattr(hook[0], "name", None) == ltc_module.LANGFUSE_HANDLER_VAR_NAME)
 
+    @staticmethod
     def _install_fake_langfuse(monkeypatch) -> type:
         """
         Put a minimal fake langfuse package into sys.modules so that

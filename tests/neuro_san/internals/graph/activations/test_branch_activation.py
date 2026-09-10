@@ -15,6 +15,7 @@
 #
 # END COPYRIGHT
 
+from unittest import TestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
@@ -28,7 +29,7 @@ from neuro_san.internals.graph.activations.branch_activation import BranchActiva
 from tests.neuro_san.message.content_fixtures import ContentFixtures
 
 
-class TestBranchActivation:
+class TestBranchActivation(TestCase):
     """
     Tests for the return contract of BranchActivation.use_tool.
 
