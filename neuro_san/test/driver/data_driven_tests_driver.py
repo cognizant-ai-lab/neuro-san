@@ -100,8 +100,16 @@ class DataDrivenTestsDriver:
             future_timeouts: Dict[Future, Optional[float]] = {}
 
             for test_case in tests:
-                agent: str = test_case.get("agent")
-                self.asserts_basis.assertIsNotNone(agent)
+                agent: Optional[str] = test_case.get("agent")
+                if agent is None:
+                    # If the agent is not specified in the test case, we cannot proceed with this test.
+                    # Record an assertion failure and continue to the next test case.
+                    timed_capture = TimedAssertCapture(self.asserts_basis)
+                    timed_capture.set_execution_time(float('inf'))  # Indicate that it failed
+                    timed_capture.add_assert(
+                        AssertionError(f"Test for run {self.test_name} failed: 'agent' not specified in test case."))
+                    run_results.append(timed_capture)
+                    continue
 
                 # Don't include an iteration index if there is only one test to do.
                 if len(tests) == 1:
