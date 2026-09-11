@@ -45,7 +45,7 @@ from neuro_san.service.http.server.http_server import DEFAULT_MAX_CONCURRENT_REQ
 from neuro_san.service.http.server.http_server import DEFAULT_REQUEST_LIMIT
 from neuro_san.service.http.server.http_server import HttpServer
 from neuro_san.service.interfaces.agent_server import AgentServer
-from neuro_san.service.main_loop.macos_worker_supervisor import MacOsWorkerSupervisor
+from neuro_san.service.main_loop.worker_supervisor import WorkerSupervisor
 from neuro_san.service.watcher.event_initiator.periodic_event_initiator import PeriodicEventInitiator
 from neuro_san.service.watcher.event_work.event_work_monitor import EventWorkMonitor
 from neuro_san.service.watcher.main_loop.storage_watcher import StorageWatcher
@@ -203,9 +203,14 @@ class ServerMainLoop:
         self.http_server_config.http_connections_backlog = args.http_connections_backlog
         self.http_server_config.http_idle_connection_timeout_seconds = args.http_idle_connections_timeout
         self.http_server_config.http_server_instances = args.http_server_instances
-        if MacOsWorkerSupervisor.is_worker():
+        if WorkerSupervisor.is_worker():
             self.http_server_config.http_server_instances = 1
             self.http_server_config.http_reuse_port = True
+            worker_id = WorkerSupervisor.get_worker_id()
+            num_workers = WorkerSupervisor.get_num_workers()
+            self.server_context.set_worker_info(worker_id, num_workers)
+        else:
+            self.server_context.set_worker_info(0, 1)
         self.http_server_config.http_server_monitor_interval_seconds = args.http_resources_monitor_interval_seconds
         self.http_server_config.http_port = args.http_port
         self.http_server_config.stream_keep_alive_with_progress_interval_seconds =\
@@ -309,7 +314,7 @@ class ServerMainLoop:
 
 
 if __name__ == '__main__':
-    supervisor_exit_code = MacOsWorkerSupervisor.run()
+    supervisor_exit_code = WorkerSupervisor.run()
     if supervisor_exit_code >= 0:
         sys.exit(supervisor_exit_code)
     ServerMainLoop().main_loop()
