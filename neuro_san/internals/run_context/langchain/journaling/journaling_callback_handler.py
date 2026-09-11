@@ -289,7 +289,7 @@ class JournalingCallbackHandler(AsyncCallbackHandler):
             # to the Python repr that str() would produce. Every other shape,
             # str and list-of-str included, keeps exactly the str() form it
             # has always had.
-            result_content: Union[str, List[Any]]
+            result_content: Union[str, List[Any]] = ""
             if ContentUtils.looks_like_blocks(output):
                 result_content = ContentUtils.to_json_safe(output)
             else:
