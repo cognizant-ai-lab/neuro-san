@@ -17,6 +17,8 @@
 
 from typing import Any
 from typing import Dict
+from typing import List
+from typing import Tuple
 
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
@@ -27,6 +29,8 @@ import pytest
 
 from langchain_core.agents import AgentFinish
 from langchain_core.messages.ai import AIMessage
+from langchain_core.messages.ai import AIMessageChunk
+from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.human import HumanMessage
 from langchain_core.outputs import LLMResult
 from langchain_core.outputs.chat_generation import ChatGeneration
@@ -36,11 +40,15 @@ from neuro_san.internals.run_context.langchain.journaling.journaling_callback_ha
 
 from neuro_san.internals.run_context.langchain.core.run_context_runnable import RunContextRunnable
 from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
+from neuro_san.message.utils.content_utils import ContentUtils
 
 from tests.neuro_san.message.content_fixtures import ContentFixtures
 
 
-class TestRunContextRunnable(IsolatedAsyncioTestCase):
+# One test module per class is the repo convention, and RunContextRunnable
+# has many independent branches to pin, so the test count exceeds pylint's
+# default of 20 public methods.
+class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-many-public-methods
     """
     Tests for RunContextRunnable: the capture-side projection of list-form
     (block) content in parse_chain_result, and the surfacing of
@@ -54,6 +62,10 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):
     find_ai_message is the single place that locates the provider-native
     AIMessage inside a chain result (dict, AgentFinish or bare AIMessage);
     parse_chain_result keeps its exact behavior on top of it.
+
+    invoke_agent_chain journals the provider-native answer (normalized to
+    standard blocks) when it carries block content, and keeps the plain
+    text-only AIMessage shape for everything else.
     """
 
     @staticmethod
@@ -338,3 +350,226 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):
         assert "rate limited" in final.content
         # ...so the stale KeyError traceback from attempt 1 must not be logged.
         assert not any("Traceback" in str(call) for call in sensitive_logger.error.call_args_list)
+
+    @staticmethod
+    def _make_invoking_runnable(chain_result: Any,
+                                error_detector: MagicMock = None) -> Tuple[RunContextRunnable, List[BaseMessage]]:
+        """
+        Build a runnable whose agent chain returns the given result and whose
+        journal records every written message.
+
+        :param chain_result: What agent_chain.ainvoke should return
+        :param error_detector: Optional error detector; defaults to a pass-through
+        :return: The runnable and the list its journal appends written messages to
+        """
+        written: List[BaseMessage] = []
+        journal: MagicMock = MagicMock()
+        journal.write_message = AsyncMock(side_effect=lambda msg, *_a, **_k: written.append(msg))
+        agent_chain: MagicMock = MagicMock()
+        agent_chain.ainvoke = AsyncMock(return_value=chain_result)
+        if error_detector is None:
+            error_detector = MagicMock()
+            error_detector.handle_error = MagicMock(side_effect=lambda output: output)
+        sensitive_logger: MagicMock = MagicMock()
+        sensitive_logger.should_log = MagicMock(return_value=True)
+        runnable: RunContextRunnable = RunContextRunnable.model_construct(
+            journal=journal,
+            sensitive_logger=sensitive_logger,
+            agent_chain=agent_chain,
+            error_detector=error_detector,
+            logger=MagicMock(),
+        )
+        return runnable, written
+
+    @staticmethod
+    def _block_types(message: BaseMessage) -> List[str]:
+        """
+        :param message: A message whose content is a list of block dictionaries
+        :return: The "type" of each block, in order
+        """
+        block_types: List[str] = []
+        for block in message.content:
+            block_types.append(block["type"])
+        return block_types
+
+    @pytest.mark.asyncio
+    async def test_invoke_agent_chain_preserves_block_content_answer(self) -> None:
+        """
+        A thinking-first native answer is journaled as the native message with
+        its content normalized to standard blocks, not as a fresh text-only
+        AIMessage: the reasoning and the usage metadata survive into the
+        journal while the text it projects to is unchanged.
+        """
+        usage: Dict[str, int] = {"input_tokens": 5, "output_tokens": 7, "total_tokens": 12}
+        native: AIMessage = ContentFixtures.anthropic_thinking_first().model_copy(update={"usage_metadata": usage})
+        runnable, written = self._make_invoking_runnable({"messages": [HumanMessage(content="q"), native]})
+        await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=1)
+
+        final: BaseMessage = written[-1]
+        assert isinstance(final.content, list)
+        assert self._block_types(final) == ["reasoning", "text"]
+        assert ContentUtils.flatten_to_text(final) == "the answer"
+        assert final.response_metadata["output_version"] == "v1"
+        assert final.response_metadata["model_provider"] == "anthropic"
+        assert final.usage_metadata == usage
+
+    @pytest.mark.asyncio
+    async def test_invoke_agent_chain_keeps_text_only_answer_shape(self) -> None:
+        """
+        A plain-string native answer keeps the shape it has always had: a fresh
+        AIMessage carrying only the text, without the native message's provider
+        bookkeeping (id, metadata) that it never carried before.
+        """
+        native: AIMessage = AIMessage(content="the answer", id="msg_1",
+                                      response_metadata={"model_provider": "openai"},
+                                      usage_metadata={"input_tokens": 1, "output_tokens": 1, "total_tokens": 2})
+        runnable, written = self._make_invoking_runnable({"messages": [native]})
+        await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=1)
+
+        final: BaseMessage = written[-1]
+        assert isinstance(final, AIMessage)
+        assert final.content == "the answer"
+        assert final.id is None
+        assert final.response_metadata == {}
+        assert final.usage_metadata is None
+
+    @pytest.mark.asyncio
+    async def test_invoke_agent_chain_error_rewrite_wins_over_native_blocks(self) -> None:
+        """
+        When the ErrorDetector rewrites the answer text, the journaled message
+        carries the formatted error as plain text even though the native
+        message had block content: the client-visible answer is the error.
+        """
+        error_detector: MagicMock = MagicMock()
+        error_detector.handle_error = MagicMock(return_value="formatted error")
+        runnable, written = self._make_invoking_runnable(ContentFixtures.anthropic_thinking_first(), error_detector)
+        await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=1)
+
+        final: BaseMessage = written[-1]
+        assert final.content == "formatted error"
+
+    @pytest.mark.asyncio
+    async def test_invoke_agent_chain_preserved_answer_excludes_tool_call_blocks(self) -> None:
+        """
+        A preserved block-content answer that still carries a tool call (the
+        loop was cut short) keeps its reasoning and text blocks but no
+        tool_use block: tool calls are not message content.
+        """
+        native: AIMessage = AIMessage(
+            content=[
+                {"type": "thinking", "thinking": "hmm", "signature": "sig"},
+                {"type": "text", "text": "the answer"},
+                {"type": "tool_use", "id": "toolu_1", "name": "lookup", "input": {"q": "x"}},
+            ],
+            tool_calls=[{"name": "lookup", "args": {"q": "x"}, "id": "toolu_1", "type": "tool_call"}],
+            response_metadata={"model_provider": "anthropic"},
+        )
+        runnable, written = self._make_invoking_runnable(native)
+        await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=1)
+
+        final: BaseMessage = written[-1]
+        assert self._block_types(final) == ["reasoning", "text"]
+        assert ContentUtils.flatten_to_text(final) == "the answer"
+
+    @pytest.mark.asyncio
+    async def test_invoke_agent_chain_tool_use_turn_collapses_to_text(self) -> None:
+        """
+        A text + tool_use native answer (every Anthropic tool-calling turn
+        without reasoning) is text-only once tool calls are set aside, so it
+        keeps the fresh AIMessage shape: no id, no metadata, no tool calls.
+        """
+        runnable, written = self._make_invoking_runnable({"messages": [ContentFixtures.anthropic_tool_use()]})
+        await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=1)
+
+        final: BaseMessage = written[-1]
+        assert isinstance(final, AIMessage)
+        assert final.content == "Let me look that up."
+        assert final.id is None
+        assert final.response_metadata == {}
+        assert final.tool_calls == []
+
+    @pytest.mark.asyncio
+    async def test_invoke_agent_chain_list_of_str_answer_collapses_to_text(self) -> None:
+        """
+        List-of-strings native content carries no block structure, so it is
+        journaled as the joined plain text.
+        """
+        runnable, written = self._make_invoking_runnable({"messages": [ContentFixtures.list_of_str()]})
+        await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=1)
+
+        final: BaseMessage = written[-1]
+        assert final.content == "part one, part two"
+        assert final.id is None
+
+    @pytest.mark.asyncio
+    async def test_invoke_agent_chain_bare_output_dict_stays_text(self) -> None:
+        """
+        A chain result with no AIMessage, only an "output" key (the API-key
+        and output-parse error paths), is journaled as that text.
+        """
+        runnable, written = self._make_invoking_runnable({"output": "Please set OPENAI_API_KEY"})
+        await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=1)
+
+        final: BaseMessage = written[-1]
+        assert isinstance(final, AIMessage)
+        assert final.content == "Please set OPENAI_API_KEY"
+        assert final.id is None
+
+    @pytest.mark.asyncio
+    async def test_invoke_agent_chain_unwraps_agent_finish(self) -> None:
+        """
+        An AgentFinish result is unwrapped to its return_values, so a native
+        block-content answer inside it is preserved the same way.
+        """
+        finish: AgentFinish = AgentFinish(
+            return_values={"messages": [HumanMessage(content="q"), ContentFixtures.anthropic_thinking_first()]},
+            log="")
+        runnable, written = self._make_invoking_runnable(finish)
+        await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=1)
+
+        final: BaseMessage = written[-1]
+        assert self._block_types(final) == ["reasoning", "text"]
+        assert ContentUtils.flatten_to_text(final) == "the answer"
+
+    @pytest.mark.asyncio
+    async def test_invoke_agent_chain_mixed_content_falls_back_to_text(self) -> None:
+        """
+        When normalizing would lose text (langchain's provider translators skip
+        a bare string inside a block list), the answer is journaled as the
+        full parsed text rather than as lossy blocks.
+        """
+        native: AIMessage = AIMessage(
+            content=[
+                "hello ",
+                {"type": "thinking", "thinking": "hmm", "signature": "sig"},
+                {"type": "text", "text": "world"},
+            ],
+            response_metadata={"model_provider": "anthropic"},
+        )
+        runnable, written = self._make_invoking_runnable({"messages": [native]})
+        await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=1)
+
+        final: BaseMessage = written[-1]
+        assert final.content == "hello world"
+
+    @pytest.mark.asyncio
+    async def test_invoke_agent_chain_chunk_answer_is_journaled_as_message(self) -> None:
+        """
+        An AIMessageChunk answer (only a custom middleware could produce one)
+        is journaled as a complete AIMessage with its blocks preserved, so the
+        journaled answer keeps the AI wire type.
+        """
+        native: AIMessageChunk = AIMessageChunk(
+            content=[
+                {"type": "thinking", "thinking": "hmm", "signature": "sig"},
+                {"type": "text", "text": "the answer"},
+            ],
+            response_metadata={"model_provider": "anthropic"},
+        )
+        runnable, written = self._make_invoking_runnable({"messages": [native]})
+        await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=1)
+
+        final: BaseMessage = written[-1]
+        assert type(final) is AIMessage  # pylint: disable=unidiomatic-typecheck
+        assert self._block_types(final) == ["reasoning", "text"]
+        assert ContentUtils.flatten_to_text(final) == "the answer"
