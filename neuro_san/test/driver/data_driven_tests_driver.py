@@ -28,6 +28,7 @@ from typing import Tuple
 from typing import Union
 
 from copy import copy
+from copy import deepcopy
 from datetime import datetime
 from os import environ
 from time import monotonic
@@ -70,6 +71,7 @@ class DataDrivenTestsDriver:
         self.test_name: str = test_name
 
     # pylint: disable=too-many-locals
+    # pylint: disable=too-many-statements
     def run_tests(self, tests: Sequence[Dict[str, Any]], num_need_success: int) -> List[TimedAssertCapture]:
         """
         Run a sequence of test cases represented by Python dictionaries.
@@ -98,39 +100,44 @@ class DataDrivenTestsDriver:
             futures: List[Future] = []
             iteration_index: int = 0
             future_timeouts: Dict[Future, Optional[float]] = {}
+            # Map each future to its corresponding iteration index for logging and reporting.
+            future_indices: Dict[Future, Optional[int]] = {}
 
             for test_case in tests:
-                agent: Optional[str] = test_case.get("agent")
-                if agent is None:
-                    # If the agent is not specified in the test case, we cannot proceed with this test.
-                    # Record an assertion failure and continue to the next test case.
-                    timed_capture = TimedAssertCapture(self.asserts_basis)
-                    timed_capture.set_execution_time(float('inf'))  # Indicate that it failed
-                    timed_capture.add_assert(
-                        AssertionError(f"Test for run {self.test_name} failed: 'agent' not specified in test case."))
-                    run_results.append(timed_capture)
-                    continue
-
                 # Don't include an iteration index if there is only one test to do.
                 if len(tests) == 1:
                     iteration_index = None
 
+                agent: Optional[str] = test_case.get("agent")
+                if agent is None:
+                    # If the agent is not specified in the test case, we cannot proceed with this test.
+                    # Record an assertion failure and continue to the next test case.
+                    timed_capture = self.get_new_capture(test_index=iteration_index)
+                    timed_capture.set_execution_time(float('inf'))  # Indicate that it failed
+                    timed_capture.add_assert(
+                        AssertionError(f"Test for run {self.test_name}/{iteration_index} failed: "
+                                       "'agent' not specified in test case."))
+                    run_results.append(timed_capture)
+                    continue
+
                 timeout_in_seconds: Optional[float] = test_case.get("timeout_in_seconds", None)
                 future: Future = executor.submit(
                     self.capture_one_iteration, test_case, timeouts, iteration_index)
-                if iteration_index is not None:
-                    iteration_index += 1
                 futures.append(future)
                 future_timeouts[future] = timeout_in_seconds
+                future_indices[future] = iteration_index
+                if iteration_index is not None:
+                    iteration_index += 1
 
             for fut, timed_out in self.as_completed_or_timeout(future_timeouts):
                 timed_capture: TimedAssertCapture = None
+                test_index: Optional[int] = future_indices.get(fut)
                 if timed_out:
                     # This test iteration has timed out.
                     # We can't get the result, but we can still record the timeout.
-                    timed_capture = TimedAssertCapture(self.asserts_basis)
+                    timed_capture = self.get_new_capture(test_index=test_index)
                     timed_capture.set_execution_time(float('inf'))  # Indicate that it timed out
-                    timed_capture.add_assert(AssertionError(f"Test for run {self.test_name} timed out."))
+                    timed_capture.add_assert(AssertionError(f"Test for run {self.test_name}/{test_index} timed out."))
                     run_results.append(timed_capture)
                 else:
                     # This test completed (either successfully or with asserts or with possible exception).
@@ -141,10 +148,10 @@ class DataDrivenTestsDriver:
                     except Exception as exc:  # pylint: disable=broad-exception-caught
                         # Handle any exceptions that occurred during test execution. Catch broadly so
                         # a single failing test does not abort the whole load run.
-                        timed_capture = TimedAssertCapture(self.asserts_basis)
+                        timed_capture = self.get_new_capture(test_index=test_index)
                         timed_capture.set_execution_time(float('inf'))  # Indicate that it failed
                         timed_capture.add_assert(
-                            AssertionError(f"Test for run {self.test_name} failed with exception: {exc}"))
+                            AssertionError(f"Test for run {self.test_name}/{test_index} failed with exception: {exc}"))
                         run_results.append(timed_capture)
 
                 asserts: List[AssertionError] = timed_capture.get_asserts()
@@ -163,6 +170,16 @@ class DataDrivenTestsDriver:
             executor.shutdown(wait=False, cancel_futures=True)
         return run_results
 
+    def get_new_capture(self, test_index: Optional[int] = None) -> TimedAssertCapture:
+        """
+        Helper method to construct a new TimedAssertCapture object for capturing asserts.
+        Note: we are using a copy of the asserts_basis object to ensure
+              that all capture objects are independent in multi-threaded environments.
+        :param test_index: Optional index of the test case for logging and reporting.
+        :return: A new TimedAssertCapture object for capturing asserts.
+        """
+        return TimedAssertCapture(deepcopy(self.asserts_basis), test_index=test_index)
+
     def capture_one_iteration(self, test_case: Dict[str, Any], timeouts: List[Timeout],
                               iteration_index: int) -> TimedAssertCapture:
         """
@@ -173,7 +190,7 @@ class DataDrivenTestsDriver:
         :return: A TimedAssertCapture object for the iteration.
         """
         # Capture the asserts for this iteration and add it to the list for later
-        assert_capture = TimedAssertCapture(self.asserts_basis)
+        assert_capture = self.get_new_capture(test_index=iteration_index)
 
         fixture_hocon_name: str = test_case.get("fixture_name", "unknown_fixture")
         start_time: float = monotonic()
