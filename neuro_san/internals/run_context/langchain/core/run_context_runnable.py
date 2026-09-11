@@ -476,4 +476,17 @@ class RunContextRunnable(NeuroSanRunnable):
             # while they still project to it.
             return AIMessage(output)
 
+        # What reaches this point with the pinned providers: an Anthropic
+        # answer with extended thinking on (thinking blocks, then text;
+        # normalized to reasoning + text with the signature kept in extras,
+        # while a redacted_thinking block stays a non_standard wrapper around
+        # its opaque data, see ContentUtils.standard_blocks), an OpenAI
+        # Responses answer with reasoning summaries on (reasoning items, then
+        # text, with their ids kept on the blocks), or any answer whose text
+        # arrives as two or more text blocks or as text blocks carrying
+        # annotations or extras (citations), since is_trivial collapses only
+        # a single plain text block. Not expected here: tool-call blocks
+        # (standard_blocks leaves them out), data blocks (providers do not
+        # emit them in assistant answers), chunks (converted above) and mixed
+        # string-and-block lists (caught by the text check above).
         return preserved

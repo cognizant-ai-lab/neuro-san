@@ -17,6 +17,10 @@
 
 import json
 
+from typing import Any
+from typing import Dict
+from typing import List
+
 from unittest import TestCase
 
 from langchain_core.messages.ai import AIMessage
@@ -35,6 +39,19 @@ class TestContentUtils(TestCase):
     see ContentFixtures.
     """
 
+    @staticmethod
+    def _block_types(blocks: List[Dict[str, Any]]) -> List[str]:
+        """
+        Collect the "type" value of each content block, in order.
+
+        :param blocks: The standardized content blocks to inspect
+        :return: The list of block type strings, one per block
+        """
+        types: List[str] = []
+        for block in blocks:
+            types.append(block["type"])
+        return types
+
     # --- flatten_to_text
 
     def test_flatten_plain_string_is_untouched(self):
@@ -42,15 +59,15 @@ class TestContentUtils(TestCase):
         Plain strings pass through exactly - including whitespace, which some
         call sites strip themselves and some must not.
         """
-        assert ContentUtils.flatten_to_text(ContentFixtures.whitespace_text()) == "  the answer  "
-        assert ContentUtils.flatten_to_text("hello") == "hello"
+        self.assertEqual(ContentUtils.flatten_to_text(ContentFixtures.whitespace_text()), "  the answer  ")
+        self.assertEqual(ContentUtils.flatten_to_text("hello"), "hello")
 
     def test_flatten_thinking_first_yields_answer_text(self):
         """
         An Anthropic thinking-first response must flatten to the answer text.
         (Today's first-block flatten yields "" for this shape.)
         """
-        assert ContentUtils.flatten_to_text(ContentFixtures.anthropic_thinking_first()) == "the answer"
+        self.assertEqual(ContentUtils.flatten_to_text(ContentFixtures.anthropic_thinking_first()), "the answer")
 
     def test_flatten_concatenates_all_text_blocks(self):
         """
@@ -61,28 +78,28 @@ class TestContentUtils(TestCase):
             {"type": "reasoning", "reasoning": "hidden"},
             {"type": "text", "text": "part two"},
         ]
-        assert ContentUtils.flatten_to_text(content) == "part one, part two"
+        self.assertEqual(ContentUtils.flatten_to_text(content), "part one, part two")
 
     def test_flatten_list_of_str_does_not_crash(self):
         """
         List-of-strings content is legal per the pydantic annotation and
         raises AttributeError in today's flatten.
         """
-        assert ContentUtils.flatten_to_text(ContentFixtures.list_of_str()) == "part one, part two"
+        self.assertEqual(ContentUtils.flatten_to_text(ContentFixtures.list_of_str()), "part one, part two")
 
     def test_flatten_empty_and_none(self):
         """
         Empty content shapes yield "" rather than crashing or yielding None.
         """
-        assert ContentUtils.flatten_to_text(None) == ""
-        assert ContentUtils.flatten_to_text([]) == ""
-        assert ContentUtils.flatten_to_text(ContentFixtures.empty_list_content()) == ""
+        self.assertEqual(ContentUtils.flatten_to_text(None), "")
+        self.assertEqual(ContentUtils.flatten_to_text([]), "")
+        self.assertEqual(ContentUtils.flatten_to_text(ContentFixtures.empty_list_content()), "")
 
     def test_flatten_ignores_non_text_blocks(self):
         """
         Data blocks contribute nothing to the text projection.
         """
-        assert ContentUtils.flatten_to_text(ContentFixtures.mcp_tool_content()) == "Here is the chart."
+        self.assertEqual(ContentUtils.flatten_to_text(ContentFixtures.mcp_tool_content()), "Here is the chart.")
 
     # --- is_empty_content
 
@@ -91,12 +108,12 @@ class TestContentUtils(TestCase):
         Whitespace-only strings, empty lists, and all-blank blocks are empty;
         any non-text block counts as content.
         """
-        assert ContentUtils.is_empty_content("   ")
-        assert ContentUtils.is_empty_content([])
-        assert ContentUtils.is_empty_content([{"type": "text", "text": " "}])
-        assert not ContentUtils.is_empty_content("x")
-        assert not ContentUtils.is_empty_content([{"type": "reasoning", "reasoning": "r"}])
-        assert not ContentUtils.is_empty_content(ContentFixtures.mcp_tool_content())
+        self.assertTrue(ContentUtils.is_empty_content("   "))
+        self.assertTrue(ContentUtils.is_empty_content([]))
+        self.assertTrue(ContentUtils.is_empty_content([{"type": "text", "text": " "}]))
+        self.assertFalse(ContentUtils.is_empty_content("x"))
+        self.assertFalse(ContentUtils.is_empty_content([{"type": "reasoning", "reasoning": "r"}]))
+        self.assertFalse(ContentUtils.is_empty_content(ContentFixtures.mcp_tool_content()))
 
     # --- standard_blocks
 
@@ -107,9 +124,9 @@ class TestContentUtils(TestCase):
         thinking + tool use).
         """
         blocks = ContentUtils.standard_blocks(ContentFixtures.anthropic_thinking_first())
-        assert [block["type"] for block in blocks] == ["reasoning", "text"]
-        assert blocks[0]["reasoning"] == "Let me reason this through."
-        assert blocks[0]["extras"]["signature"] == "sig-abc"
+        self.assertEqual(self._block_types(blocks), ["reasoning", "text"])
+        self.assertEqual(blocks[0]["reasoning"], "Let me reason this through.")
+        self.assertEqual(blocks[0]["extras"]["signature"], "sig-abc")
 
     def test_standard_blocks_excludes_tool_call_blocks(self):
         """
@@ -118,7 +135,7 @@ class TestContentUtils(TestCase):
         would start emitting content_blocks in Phase 2 (parity break).
         """
         blocks = ContentUtils.standard_blocks(ContentFixtures.anthropic_tool_use())
-        assert [block["type"] for block in blocks] == ["text"]
+        self.assertEqual(self._block_types(blocks), ["text"])
 
     def test_standard_blocks_explodes_openai_reasoning_summary(self):
         """
@@ -126,10 +143,10 @@ class TestContentUtils(TestCase):
         """
         blocks = ContentUtils.standard_blocks(ContentFixtures.openai_responses_reasoning())
         types = [block["type"] for block in blocks]
-        assert "reasoning" in types
-        assert "text" in types
+        self.assertIn("reasoning", types)
+        self.assertIn("text", types)
         reasoning = [block for block in blocks if block["type"] == "reasoning"]
-        assert reasoning[0].get("reasoning") == "thought one"
+        self.assertEqual(reasoning[0].get("reasoning"), "thought one")
 
     def test_standard_blocks_passes_v1_content_through(self):
         """
@@ -137,7 +154,7 @@ class TestContentUtils(TestCase):
         untranslated - reasoning stays reasoning, not non_standard.
         """
         blocks = ContentUtils.standard_blocks(ContentFixtures.v1_reasoning_blocks())
-        assert [block["type"] for block in blocks] == ["reasoning", "text"]
+        self.assertEqual(self._block_types(blocks), ["reasoning", "text"])
 
     def test_standard_blocks_output_is_json_safe(self):
         """
@@ -151,7 +168,7 @@ class TestContentUtils(TestCase):
         blocks = ContentUtils.standard_blocks(message)
         json.dumps(blocks)
         image = [block for block in blocks if block.get("type") == "image"][0]
-        assert isinstance(image["base64"], str)
+        self.assertIsInstance(image["base64"], str)
 
     # --- is_trivial
 
@@ -160,12 +177,13 @@ class TestContentUtils(TestCase):
         Exactly one text block with no annotations/extras is trivial;
         anything else is not.
         """
-        assert ContentUtils.is_trivial([{"type": "text", "text": "hi"}])
-        assert not ContentUtils.is_trivial([])
-        assert not ContentUtils.is_trivial([{"type": "reasoning", "reasoning": "r"}])
-        assert not ContentUtils.is_trivial([{"type": "text", "text": "a"}, {"type": "text", "text": "b"}])
-        assert not ContentUtils.is_trivial([{"type": "text", "text": "hi", "annotations": [{"type": "citation"}]}])
-        assert not ContentUtils.is_trivial([{"type": "text", "text": "hi", "extras": {"signature": "s"}}])
+        self.assertTrue(ContentUtils.is_trivial([{"type": "text", "text": "hi"}]))
+        self.assertFalse(ContentUtils.is_trivial([]))
+        self.assertFalse(ContentUtils.is_trivial([{"type": "reasoning", "reasoning": "r"}]))
+        self.assertFalse(ContentUtils.is_trivial([{"type": "text", "text": "a"}, {"type": "text", "text": "b"}]))
+        self.assertFalse(
+            ContentUtils.is_trivial([{"type": "text", "text": "hi", "annotations": [{"type": "citation"}]}]))
+        self.assertFalse(ContentUtils.is_trivial([{"type": "text", "text": "hi", "extras": {"signature": "s"}}]))
 
     # --- normalize_content / normalize_message
 
@@ -173,23 +191,23 @@ class TestContentUtils(TestCase):
         """
         String content is untouched - including whitespace.
         """
-        assert ContentUtils.normalize_content(ContentFixtures.whitespace_text()) == "  the answer  "
+        self.assertEqual(ContentUtils.normalize_content(ContentFixtures.whitespace_text()), "  the answer  ")
 
     def test_normalize_content_collapses_trivial_and_empty(self):
         """
         A tool-use turn (text + tool_use, tool_call blocks excluded) collapses
         to its plain text; empty-list content collapses to "".
         """
-        assert ContentUtils.normalize_content(ContentFixtures.anthropic_tool_use()) == "Let me look that up."
-        assert ContentUtils.normalize_content(ContentFixtures.empty_list_content()) == ""
+        self.assertEqual(ContentUtils.normalize_content(ContentFixtures.anthropic_tool_use()), "Let me look that up.")
+        self.assertEqual(ContentUtils.normalize_content(ContentFixtures.empty_list_content()), "")
 
     def test_normalize_content_keeps_reasoning_blocks(self):
         """
         Thinking-bearing content normalizes to the standardized block list.
         """
         normalized = ContentUtils.normalize_content(ContentFixtures.anthropic_thinking_first())
-        assert isinstance(normalized, list)
-        assert [block["type"] for block in normalized] == ["reasoning", "text"]
+        self.assertIsInstance(normalized, list)
+        self.assertEqual(self._block_types(normalized), ["reasoning", "text"])
 
     def test_normalize_message_stamps_output_version(self):
         """
@@ -199,18 +217,18 @@ class TestContentUtils(TestCase):
         through instead of wrapping them as non_standard.
         """
         normalized = ContentUtils.normalize_message(ContentFixtures.anthropic_thinking_first())
-        assert normalized.response_metadata["output_version"] == "v1"
+        self.assertEqual(normalized.response_metadata["output_version"], "v1")
         # Model provider metadata survives, and re-standardizing stays stable.
-        assert normalized.response_metadata["model_provider"] == "anthropic"
+        self.assertEqual(normalized.response_metadata["model_provider"], "anthropic")
         again = ContentUtils.standard_blocks(normalized)
-        assert [block["type"] for block in again] == ["reasoning", "text"]
+        self.assertEqual(self._block_types(again), ["reasoning", "text"])
 
     def test_normalize_message_returns_same_instance_for_plain_strings(self):
         """
         Text-only traffic must not even be copied - shape and identity stable.
         """
         message = ContentFixtures.whitespace_text()
-        assert ContentUtils.normalize_message(message) is message
+        self.assertIs(ContentUtils.normalize_message(message), message)
 
     def test_normalize_message_preserves_message_class_and_tool_calls(self):
         """
@@ -219,9 +237,9 @@ class TestContentUtils(TestCase):
         """
         message = ContentFixtures.anthropic_tool_use()
         normalized = ContentUtils.normalize_message(message)
-        assert isinstance(normalized, AIMessage)
-        assert normalized.tool_calls == message.tool_calls
-        assert normalized.content == "Let me look that up."
+        self.assertIsInstance(normalized, AIMessage)
+        self.assertEqual(normalized.tool_calls, message.tool_calls)
+        self.assertEqual(normalized.content, "Let me look that up.")
 
     # --- looks_like_blocks
 
@@ -230,18 +248,18 @@ class TestContentUtils(TestCase):
         Standard v1 block lists qualify; provider-native shapes, non-lists,
         empty lists and unknown types do not.
         """
-        assert ContentUtils.looks_like_blocks(ContentFixtures.multimodal_human().content)
-        assert ContentUtils.looks_like_blocks(ContentFixtures.mcp_tool_content())
-        assert not ContentUtils.looks_like_blocks("text")
-        assert not ContentUtils.looks_like_blocks([])
-        assert not ContentUtils.looks_like_blocks([{"type": "thinking", "thinking": "native"}])
-        assert not ContentUtils.looks_like_blocks(["just a string"])
+        self.assertTrue(ContentUtils.looks_like_blocks(ContentFixtures.multimodal_human().content))
+        self.assertTrue(ContentUtils.looks_like_blocks(ContentFixtures.mcp_tool_content()))
+        self.assertFalse(ContentUtils.looks_like_blocks("text"))
+        self.assertFalse(ContentUtils.looks_like_blocks([]))
+        self.assertFalse(ContentUtils.looks_like_blocks([{"type": "thinking", "thinking": "native"}]))
+        self.assertFalse(ContentUtils.looks_like_blocks(["just a string"]))
         # v0-era blocks (source_type marker) and tool-call blocks are not
         # standard v1 content and must not be accepted inbound.
-        assert not ContentUtils.looks_like_blocks(
-            [{"type": "image", "source_type": "base64", "data": "aGk=", "mime_type": "image/png"}])
-        assert not ContentUtils.looks_like_blocks(
-            [{"type": "tool_call", "name": "f", "args": {}, "id": "c1"}])
+        self.assertFalse(ContentUtils.looks_like_blocks(
+            [{"type": "image", "source_type": "base64", "data": "aGk=", "mime_type": "image/png"}]))
+        self.assertFalse(ContentUtils.looks_like_blocks(
+            [{"type": "tool_call", "name": "f", "args": {}, "id": "c1"}]))
 
     # --- blocks_from_chat_message
 
@@ -256,7 +274,7 @@ class TestContentUtils(TestCase):
             "mime_data": [{"mime_type": "image/png", "mime_bytes": "AAAA"}],
         }
         blocks = ContentUtils.blocks_from_chat_message(chat_message)
-        assert blocks == [{"type": "text", "text": "from blocks"}]
+        self.assertEqual(blocks, [{"type": "text", "text": "from blocks"}])
 
     def test_blocks_from_chat_message_maps_mime_data(self):
         """
@@ -274,11 +292,11 @@ class TestContentUtils(TestCase):
             ],
         }
         blocks = ContentUtils.blocks_from_chat_message(chat_message)
-        assert blocks[0] == {"type": "text", "text": "Describe this image."}
-        assert blocks[1] == {"type": "image", "base64": "aW1n", "mime_type": "image/png"}
-        assert blocks[2] == {"type": "audio", "base64": "YXVk", "mime_type": "audio/wav"}
-        assert blocks[3] == {"type": "file", "base64": "cGRm", "mime_type": "application/pdf"}
-        assert blocks[4] == {"type": "text-plain", "mime_type": "text/plain", "base64": "dHh0"}
+        self.assertEqual(blocks[0], {"type": "text", "text": "Describe this image."})
+        self.assertEqual(blocks[1], {"type": "image", "base64": "aW1n", "mime_type": "image/png"})
+        self.assertEqual(blocks[2], {"type": "audio", "base64": "YXVk", "mime_type": "audio/wav"})
+        self.assertEqual(blocks[3], {"type": "file", "base64": "cGRm", "mime_type": "application/pdf"})
+        self.assertEqual(blocks[4], {"type": "text-plain", "mime_type": "text/plain", "base64": "dHh0"})
 
     def test_flatten_matches_langchain_text_for_non_string_text_values(self):
         """
@@ -288,16 +306,16 @@ class TestContentUtils(TestCase):
         """
         content = [{"type": "text", "text": None}, {"type": "text", "text": 5}]
         message = AIMessage(content=content)
-        assert ContentUtils.flatten_to_text(message) == ""
-        assert ContentUtils.flatten_to_text(message) == str(message.text)
-        assert ContentUtils.is_empty_content(message)
+        self.assertEqual(ContentUtils.flatten_to_text(message), "")
+        self.assertEqual(ContentUtils.flatten_to_text(message), str(message.text))
+        self.assertTrue(ContentUtils.is_empty_content(message))
 
     def test_normalize_content_collapses_list_of_str(self):
         """
         List-of-strings content has no block structure to preserve - it
         collapses to the concatenated text, not a multi-text-block list.
         """
-        assert ContentUtils.normalize_content(ContentFixtures.list_of_str()) == "part one, part two"
+        self.assertEqual(ContentUtils.normalize_content(ContentFixtures.list_of_str()), "part one, part two")
 
     def test_normalize_message_is_idempotent(self):
         """
@@ -306,8 +324,8 @@ class TestContentUtils(TestCase):
         """
         once = ContentUtils.normalize_message(ContentFixtures.anthropic_thinking_first())
         twice = ContentUtils.normalize_message(once)
-        assert twice.content == once.content
-        assert twice.response_metadata == once.response_metadata
+        self.assertEqual(twice.content, once.content)
+        self.assertEqual(twice.response_metadata, once.response_metadata)
 
     def test_utils_handle_message_chunks(self):
         """
@@ -318,8 +336,8 @@ class TestContentUtils(TestCase):
             {"type": "text", "text": "partial", "index": 0},
             {"type": "tool_call_chunk", "name": "f", "args": '{"x"', "id": "c1", "index": 1},
         ])
-        assert ContentUtils.flatten_to_text(chunk) == "partial"
-        assert [block["type"] for block in ContentUtils.standard_blocks(chunk)] == ["text"]
+        self.assertEqual(ContentUtils.flatten_to_text(chunk), "partial")
+        self.assertEqual(self._block_types(ContentUtils.standard_blocks(chunk)), ["text"])
 
     def test_is_trivial_ignores_provider_id_keys(self):
         """
@@ -327,7 +345,7 @@ class TestContentUtils(TestCase):
         non-trivial - such messages are plain strings on today's wire, and
         the collapse deliberately drops those keys.
         """
-        assert ContentUtils.is_trivial([{"type": "text", "text": "hi", "id": "msg_1", "index": 0}])
+        self.assertTrue(ContentUtils.is_trivial([{"type": "text", "text": "hi", "id": "msg_1", "index": 0}]))
 
     def test_history_safe_text_references_data_blocks(self):
         """
@@ -335,31 +353,31 @@ class TestContentUtils(TestCase):
         with a short reference - an image-only tool result must not become
         empty history.
         """
-        assert ContentUtils.history_safe_text(ContentFixtures.mcp_tool_content()) == \
-            "Here is the chart.[image attachment: image/png]"
+        self.assertEqual(ContentUtils.history_safe_text(ContentFixtures.mcp_tool_content()),
+                         "Here is the chart.[image attachment: image/png]")
         image_only = [{"type": "image", "base64": "AAAA", "mime_type": "image/png"}]
-        assert ContentUtils.history_safe_text(image_only) == "[image attachment: image/png]"
+        self.assertEqual(ContentUtils.history_safe_text(image_only), "[image attachment: image/png]")
         # Plain strings and text-plain inline text pass through.
-        assert ContentUtils.history_safe_text("plain") == "plain"
-        assert ContentUtils.history_safe_text(
-            [{"type": "text-plain", "mime_type": "text/plain", "text": "inline doc"}]) == "inline doc"
+        self.assertEqual(ContentUtils.history_safe_text("plain"), "plain")
+        self.assertEqual(ContentUtils.history_safe_text(
+            [{"type": "text-plain", "mime_type": "text/plain", "text": "inline doc"}]), "inline doc")
 
     def test_blocks_from_chat_message_text_only_and_malformed(self):
         """
         Text-only messages yield None (callers keep today's path), and
         malformed mime_data yields None (callers fall back to text).
         """
-        assert ContentUtils.blocks_from_chat_message(None) is None
-        assert ContentUtils.blocks_from_chat_message({"type": "HUMAN", "text": "hi"}) is None
-        assert ContentUtils.blocks_from_chat_message(
-            {"type": "HUMAN", "text": "hi", "mime_data": []}) is None
+        self.assertIsNone(ContentUtils.blocks_from_chat_message(None))
+        self.assertIsNone(ContentUtils.blocks_from_chat_message({"type": "HUMAN", "text": "hi"}))
+        self.assertIsNone(ContentUtils.blocks_from_chat_message(
+            {"type": "HUMAN", "text": "hi", "mime_data": []}))
         # Raw bytes / missing fields are malformed: base64 strings only.
-        assert ContentUtils.blocks_from_chat_message(
-            {"type": "HUMAN", "mime_data": [{"mime_type": "image/png", "mime_bytes": b"raw"}]}) is None
-        assert ContentUtils.blocks_from_chat_message(
-            {"type": "HUMAN", "mime_data": [{"mime_type": "image/png"}]}) is None
-        assert ContentUtils.blocks_from_chat_message(
-            {"type": "HUMAN", "mime_data": [{"mime_bytes": "AAAA"}]}) is None
+        self.assertIsNone(ContentUtils.blocks_from_chat_message(
+            {"type": "HUMAN", "mime_data": [{"mime_type": "image/png", "mime_bytes": b"raw"}]}))
+        self.assertIsNone(ContentUtils.blocks_from_chat_message(
+            {"type": "HUMAN", "mime_data": [{"mime_type": "image/png"}]}))
+        self.assertIsNone(ContentUtils.blocks_from_chat_message(
+            {"type": "HUMAN", "mime_data": [{"mime_bytes": "AAAA"}]}))
 
     def test_blocks_from_chat_message_malformed_content_blocks_fails_safe(self):
         """
@@ -372,7 +390,7 @@ class TestContentUtils(TestCase):
             "content_blocks": [{"type": "bogus-type", "x": 1}],
             "mime_data": [{"mime_type": "image/png", "mime_bytes": "AAAA"}],
         }
-        assert ContentUtils.blocks_from_chat_message(chat_message) is None
+        self.assertIsNone(ContentUtils.blocks_from_chat_message(chat_message))
 
     # --- to_json_safe
 
@@ -387,7 +405,7 @@ class TestContentUtils(TestCase):
             "plain",
         ]
         safe = ContentUtils.to_json_safe(blocks)
-        assert safe[1]["base64"] == "cmF3"
-        assert safe[2] == "plain"
+        self.assertEqual(safe[1]["base64"], "cmF3")
+        self.assertEqual(safe[2], "plain")
         json.dumps(safe)
-        assert blocks[1]["base64"] == b"raw"
+        self.assertEqual(blocks[1]["base64"], b"raw")

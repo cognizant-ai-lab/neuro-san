@@ -151,6 +151,29 @@ Run pytest with '--pdb' flag
 
     pytest -v --pdb ./tests/neuro_san/internals/graph/test_sly_data_redactor.py
 
+## Writing unit tests
+
+A few conventions keep the unit tests consistent across contributors:
+
+- One test module per class. The tests for `some_module.py`, which holds the
+  class `SomeClass`, live in `tests/.../test_some_module.py` as the single
+  class `TestSomeClass`, mirroring the source path. Every directory under
+  `tests/` that holds test modules needs an `__init__.py`: the CI gate hands
+  pylint the `tests` tree, and pylint only descends into sub-directories that
+  are packages, so a directory without one is silently not linted.
+- Test classes derive from `unittest.TestCase`, or from
+  `unittest.IsolatedAsyncioTestCase` when they contain `async def` tests.
+  `IsolatedAsyncioTestCase` runs async tests itself, so its methods do not
+  take `@pytest.mark.asyncio`.
+- Use the `TestCase` assert methods (`assertEqual`, `assertIs`,
+  `assertIsNone`, `assertIn`, `assertIsInstance`, `assertRaises`, and so on)
+  rather than bare `assert` statements. On failure they report both operands,
+  and one style keeps the tests readable for everyone.
+- Test helpers are methods or `@staticmethod`s on the test class, not
+  module-level or nested functions. Where a callback needs bound arguments,
+  for example a mock `side_effect` that records calls into a list, bind them
+  with `functools.partial` on a `@staticmethod` instead of writing a `lambda`.
+
 ## Note on Markdown Linting
 
 We use [pymarkdown](https://pymarkdown.readthedocs.io/en/latest/) to run linting on .md files.

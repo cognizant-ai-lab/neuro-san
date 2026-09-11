@@ -84,9 +84,9 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         await journal.write_message(AIMessage(content="the answer"))
 
         written: List[BaseMessage] = self._written_messages(wrapped)
-        assert len(written) == 1
-        assert written[0].content == "the answer"
-        assert not isinstance(written[0], AgentMessage)
+        self.assertEqual(len(written), 1)
+        self.assertEqual(written[0].content, "the answer")
+        self.assertNotIsInstance(written[0], AgentMessage)
 
     async def test_dupe_comparison_ignores_edge_whitespace(self) -> None:
         """
@@ -99,8 +99,8 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         await journal.write_message(AIMessage(content="the answer\n"))
 
         written: List[BaseMessage] = self._written_messages(wrapped)
-        assert len(written) == 1
-        assert written[0].content == "the answer\n"
+        self.assertEqual(len(written), 1)
+        self.assertEqual(written[0].content, "the answer\n")
 
     async def test_different_content_flushes_pending_first(self) -> None:
         """
@@ -112,10 +112,10 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         await journal.write_message(AIMessage(content="the answer"))
 
         written: List[BaseMessage] = self._written_messages(wrapped)
-        assert len(written) == 2
-        assert isinstance(written[0], AgentMessage)
-        assert written[0].content == "a thought"
-        assert written[1].content == "the answer"
+        self.assertEqual(len(written), 2)
+        self.assertIsInstance(written[0], AgentMessage)
+        self.assertEqual(written[0].content, "a thought")
+        self.assertEqual(written[1].content, "the answer")
 
     async def test_block_content_dupe_is_suppressed(self) -> None:
         """
@@ -134,8 +134,8 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         await journal.write_message(incoming)
 
         written: List[BaseMessage] = self._written_messages(wrapped)
-        assert len(written) == 1
-        assert written[0] is incoming
+        self.assertEqual(len(written), 1)
+        self.assertIs(written[0], incoming)
 
     async def test_block_content_with_different_text_flushes_pending(self) -> None:
         """
@@ -148,10 +148,10 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         await journal.write_message(incoming)
 
         written: List[BaseMessage] = self._written_messages(wrapped)
-        assert len(written) == 2
-        assert isinstance(written[0], AgentMessage)
-        assert written[0].content == "a thought"
-        assert written[1] is incoming
+        self.assertEqual(len(written), 2)
+        self.assertIsInstance(written[0], AgentMessage)
+        self.assertEqual(written[0].content, "a thought")
+        self.assertIs(written[1], incoming)
 
     async def test_tool_result_history_copy_is_text_projected(self) -> None:
         """
@@ -169,15 +169,15 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         tool_result: AgentToolResultMessage = AgentToolResultMessage(content=blocks, tool_result_origin=self.ORIGIN)
         await journal.write_message(tool_result)
 
-        assert len(chat_history) == 1
+        self.assertEqual(len(chat_history), 1)
         history_copy: BaseMessage = chat_history[0]
-        assert isinstance(history_copy, AIMessage)
-        assert not isinstance(history_copy, AgentToolResultMessage)
-        assert history_copy.content == "Here is the chart.[image attachment: image/png]"
+        self.assertIsInstance(history_copy, AIMessage)
+        self.assertNotIsInstance(history_copy, AgentToolResultMessage)
+        self.assertEqual(history_copy.content, "Here is the chart.[image attachment: image/png]")
 
         written: List[BaseMessage] = self._written_messages(wrapped)
-        assert written[0] is tool_result
-        assert written[0].content == blocks
+        self.assertIs(written[0], tool_result)
+        self.assertEqual(written[0].content, blocks)
 
     async def test_tool_result_str_history_copy_unchanged(self) -> None:
         """
@@ -191,9 +191,9 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
                                                          chat_history=chat_history)
         await journal.write_message(AgentToolResultMessage(content="tool says", tool_result_origin=self.ORIGIN))
 
-        assert len(chat_history) == 1
-        assert isinstance(chat_history[0], AIMessage)
-        assert chat_history[0].content == "tool says"
+        self.assertEqual(len(chat_history), 1)
+        self.assertIsInstance(chat_history[0], AIMessage)
+        self.assertEqual(chat_history[0].content, "tool says")
 
     async def test_block_answer_history_copy_is_text_projected(self) -> None:
         """
@@ -209,19 +209,19 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         journal: OriginatingJournal = OriginatingJournal(wrapped_journal=wrapped, origin=self.ORIGIN,
                                                          chat_history=chat_history)
         answer: BaseMessage = ContentUtils.normalize_message(ContentFixtures.anthropic_thinking_first())
-        assert isinstance(answer.content, list)
+        self.assertIsInstance(answer.content, list)
         await journal.write_message(answer)
 
-        assert len(chat_history) == 1
+        self.assertEqual(len(chat_history), 1)
         history_copy: BaseMessage = chat_history[0]
-        assert isinstance(history_copy, AIMessage)
-        assert history_copy is not answer
-        assert history_copy.content == "the answer"
-        assert history_copy.response_metadata == {}
+        self.assertIsInstance(history_copy, AIMessage)
+        self.assertIsNot(history_copy, answer)
+        self.assertEqual(history_copy.content, "the answer")
+        self.assertEqual(history_copy.response_metadata, {})
 
         written: List[BaseMessage] = self._written_messages(wrapped)
-        assert written[0] is answer
-        assert isinstance(written[0].content, list)
+        self.assertIs(written[0], answer)
+        self.assertIsInstance(written[0].content, list)
 
     async def test_str_answer_history_copy_is_same_instance(self) -> None:
         """
@@ -236,5 +236,5 @@ class TestOriginatingJournal(IsolatedAsyncioTestCase):
         answer: AIMessage = AIMessage(content="the answer")
         await journal.write_message(answer)
 
-        assert len(chat_history) == 1
-        assert chat_history[0] is answer
+        self.assertEqual(len(chat_history), 1)
+        self.assertIs(chat_history[0], answer)

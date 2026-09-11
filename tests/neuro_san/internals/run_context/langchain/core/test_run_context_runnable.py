@@ -15,6 +15,8 @@
 #
 # END COPYRIGHT
 
+from functools import partial
+
 from typing import Any
 from typing import Dict
 from typing import List
@@ -68,10 +70,47 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
     """
 
     @staticmethod
+    def _passthrough(output: str) -> str:
+        """
+        Return the given output unchanged, standing in for ErrorDetector.handle_error
+        in tests that do not exercise error rewriting.
+
+        :param output: The chain output text handed to the error detector
+        :return: The same output, untouched
+        """
+        return output
+
+    @staticmethod
+    def _record(written: List[BaseMessage], message: BaseMessage, *_args: Any, **_kwargs: Any) -> None:
+        """
+        Append the given message to the written list, standing in for Journal.write_message
+        so tests can inspect everything the runnable journaled.
+
+        :param written: The list that collects every journaled message, in order
+        :param message: The message being journaled
+        :param _args: Further positional arguments write_message accepts (its origin); ignored
+        :param _kwargs: Further keyword arguments write_message accepts; ignored
+        """
+        written.append(message)
+
+    @staticmethod
+    def _logged_traceback(sensitive_logger: MagicMock) -> bool:
+        """
+        Tell whether any error() call on the given logger mock carried a traceback.
+
+        :param sensitive_logger: The mocked sensitive logger whose error() calls are inspected
+        :return: True if the arguments of any error() call mention "Traceback", False otherwise
+        """
+        for call in sensitive_logger.error.call_args_list:
+            if "Traceback" in str(call):
+                return True
+        return False
+
+    @staticmethod
     def _make_runnable() -> RunContextRunnable:
         """Build a runnable whose error detector is a pass-through."""
         error_detector = MagicMock()
-        error_detector.handle_error = MagicMock(side_effect=lambda output: output)
+        error_detector.handle_error = MagicMock(side_effect=TestRunContextRunnable._passthrough)
         return RunContextRunnable.model_construct(error_detector=error_detector)
 
     def test_parse_chain_result_thinking_first_returns_answer(self):
@@ -80,7 +119,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         """
         runnable = self._make_runnable()
         output = runnable.parse_chain_result(ContentFixtures.anthropic_thinking_first(), exception=None)
-        assert output == "the answer"
+        self.assertEqual(output, "the answer")
 
     def test_parse_chain_result_concatenates_text_blocks(self):
         """
@@ -89,7 +128,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         """
         runnable = self._make_runnable()
         message = ContentFixtures.multi_text_blocks()
-        assert runnable.parse_chain_result(message, exception=None) == "part one, part two"
+        self.assertEqual(runnable.parse_chain_result(message, exception=None), "part one, part two")
 
     def test_parse_chain_result_list_of_str_returns_full_text(self):
         """
@@ -98,7 +137,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         """
         runnable = self._make_runnable()
         output = runnable.parse_chain_result(ContentFixtures.list_of_str(), exception=None)
-        assert output == "part one, part two"
+        self.assertEqual(output, "part one, part two")
 
     def test_parse_chain_result_dict_messages_path_flattens_last_ai_message(self):
         """
@@ -110,7 +149,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
             HumanMessage(content="question"),
             ContentFixtures.anthropic_thinking_first(),
         ]}
-        assert runnable.parse_chain_result(chain_result, exception=None) == "the answer"
+        self.assertEqual(runnable.parse_chain_result(chain_result, exception=None), "the answer")
 
     def test_find_ai_message_returns_last_ai_message_in_dict(self) -> None:
         """
@@ -123,14 +162,14 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         chain_result: Dict[str, Any] = {
             "messages": [HumanMessage(content="q"), first, last, HumanMessage(content="x")],
         }
-        assert RunContextRunnable.find_ai_message(chain_result) is last
+        self.assertIs(RunContextRunnable.find_ai_message(chain_result), last)
 
     def test_find_ai_message_passes_through_ai_message(self) -> None:
         """
         A bare AIMessage result is the answer itself.
         """
         message: AIMessage = AIMessage(content="the answer")
-        assert RunContextRunnable.find_ai_message(message) is message
+        self.assertIs(RunContextRunnable.find_ai_message(message), message)
 
     def test_find_ai_message_unwraps_agent_finish(self) -> None:
         """
@@ -138,7 +177,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         """
         native: AIMessage = ContentFixtures.anthropic_thinking_first()
         finish: AgentFinish = AgentFinish(return_values={"messages": [HumanMessage(content="q"), native]}, log="")
-        assert RunContextRunnable.find_ai_message(finish) is native
+        self.assertIs(RunContextRunnable.find_ai_message(finish), native)
 
     def test_find_ai_message_returns_none_without_ai_message(self) -> None:
         """
@@ -146,9 +185,9 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         return {"output": ...}), a None result, and a messages list without
         an AIMessage all yield None.
         """
-        assert RunContextRunnable.find_ai_message({"output": "Please set OPENAI_API_KEY"}) is None
-        assert RunContextRunnable.find_ai_message({"messages": [HumanMessage(content="q")]}) is None
-        assert RunContextRunnable.find_ai_message(None) is None
+        self.assertIsNone(RunContextRunnable.find_ai_message({"output": "Please set OPENAI_API_KEY"}))
+        self.assertIsNone(RunContextRunnable.find_ai_message({"messages": [HumanMessage(content="q")]}))
+        self.assertIsNone(RunContextRunnable.find_ai_message(None))
 
     def test_parse_chain_result_bare_output_dict_returns_output(self) -> None:
         """
@@ -157,7 +196,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         """
         runnable = self._make_runnable()
         output: str = runnable.parse_chain_result({"output": "Please set OPENAI_API_KEY"}, exception=None)
-        assert output == "Please set OPENAI_API_KEY"
+        self.assertEqual(output, "Please set OPENAI_API_KEY")
 
     def test_parse_chain_result_agent_finish_with_output_key(self) -> None:
         """
@@ -166,7 +205,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         """
         runnable = self._make_runnable()
         finish: AgentFinish = AgentFinish(return_values={"output": "done"}, log="")
-        assert runnable.parse_chain_result(finish, exception=None) == "done"
+        self.assertEqual(runnable.parse_chain_result(finish, exception=None), "done")
 
     async def test_parse_chain_result_matches_on_llm_end_projection(self):
         """
@@ -182,7 +221,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
 
         runnable = self._make_runnable()
         parsed: str = runnable.parse_chain_result(message, exception=None)
-        assert parsed == "part one, part two"
+        self.assertEqual(parsed, "part one, part two")
 
         calling_agent_journal = MagicMock()
         calling_agent_journal.write_message_if_next_not_dupe = AsyncMock()
@@ -194,7 +233,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         )
         await handler.on_llm_end(LLMResult(generations=[[ChatGeneration(message=message)]]))
         journaled = calling_agent_journal.write_message_if_next_not_dupe.call_args.args[0]
-        assert journaled.content == parsed
+        self.assertEqual(journaled.content, parsed)
 
     async def test_journal_retry_reason_writes_agent_framework_message(self):
         """
@@ -204,9 +243,9 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         written through this agent's journal (so it carries an origin and is never
         mistaken for the final answer).
         """
-        written = []
+        written: List[BaseMessage] = []
         mock_journal = MagicMock()
-        mock_journal.write_message = AsyncMock(side_effect=lambda msg, *_a, **_k: written.append(msg))
+        mock_journal.write_message = AsyncMock(side_effect=partial(TestRunContextRunnable._record, written))
         sensitive_logger = MagicMock()
         sensitive_logger.should_log = MagicMock(return_value=True)
 
@@ -217,10 +256,10 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
 
         await runnable.journal_retry_reason(ValueError("bad json"), "the model's output could not be parsed")
 
-        assert len(written) == 1
+        self.assertEqual(len(written), 1)
         message = written[0]
-        assert isinstance(message, AgentFrameworkMessage)
-        assert message.content == "Retrying: the model's output could not be parsed (ValueError) - bad json"
+        self.assertIsInstance(message, AgentFrameworkMessage)
+        self.assertEqual(message.content, "Retrying: the model's output could not be parsed (ValueError) - bad json")
 
     async def test_invoke_agent_chain_surfaces_retry_reason_before_final_message(self):
         """
@@ -228,9 +267,9 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         should emit an AgentFrameworkMessage diagnostic, and the final AIMessage must
         still come last so the journal stream order is preserved.
         """
-        written = []
+        written: List[BaseMessage] = []
         mock_journal = MagicMock()
-        mock_journal.write_message = AsyncMock(side_effect=lambda msg, *_a, **_k: written.append(msg))
+        mock_journal.write_message = AsyncMock(side_effect=partial(TestRunContextRunnable._record, written))
         sensitive_logger = MagicMock()
         sensitive_logger.should_log = MagicMock(return_value=True)
 
@@ -240,7 +279,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
 
         # error_detector.handle_error is a pass-through for this test.
         error_detector = MagicMock()
-        error_detector.handle_error = MagicMock(side_effect=lambda output: output)
+        error_detector.handle_error = MagicMock(side_effect=TestRunContextRunnable._passthrough)
 
         runnable = RunContextRunnable.model_construct(
             journal=mock_journal,
@@ -253,11 +292,12 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=2)
 
         # Two retries -> two diagnostics, then the final AIMessage.
-        assert len(written) == 3
+        self.assertEqual(len(written), 3)
         for msg in written[:2]:
-            assert isinstance(msg, AgentFrameworkMessage)
-            assert msg.content == "Retrying: the model's output could not be parsed (ValueError) - not a parsing error"
-        assert isinstance(written[-1], AIMessage)
+            self.assertIsInstance(msg, AgentFrameworkMessage)
+            self.assertEqual(msg.content,
+                             "Retrying: the model's output could not be parsed (ValueError) - not a parsing error")
+        self.assertIsInstance(written[-1], AIMessage)
 
     async def test_invoke_agent_chain_keeps_backtrace_out_of_client_output(self):
         """
@@ -267,9 +307,9 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         ErrorDetector as client-facing details.
         See https://github.com/cognizant-ai-lab/neuro-san/issues/1097
         """
-        written = []
+        written: List[BaseMessage] = []
         mock_journal = MagicMock()
-        mock_journal.write_message = AsyncMock(side_effect=lambda msg, *_a, **_k: written.append(msg))
+        mock_journal.write_message = AsyncMock(side_effect=partial(TestRunContextRunnable._record, written))
         sensitive_logger = MagicMock()
         sensitive_logger.should_log = MagicMock(return_value=True)
 
@@ -279,7 +319,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
 
         # error_detector.handle_error is a pass-through for this test.
         error_detector = MagicMock()
-        error_detector.handle_error = MagicMock(side_effect=lambda output: output)
+        error_detector.handle_error = MagicMock(side_effect=TestRunContextRunnable._passthrough)
 
         runnable = RunContextRunnable.model_construct(
             journal=mock_journal,
@@ -292,15 +332,15 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=3)
 
         # Unhandled exceptions are not retried: a single final AIMessage.
-        assert len(written) == 1
+        self.assertEqual(len(written), 1)
         final = written[-1]
-        assert isinstance(final, AIMessage)
-        assert final.content == "Agent stopped due to exception Server error '504 Gateway Time-out'"
+        self.assertIsInstance(final, AIMessage)
+        self.assertEqual(final.content, "Agent stopped due to exception Server error '504 Gateway Time-out'")
         # The ErrorDetector must not receive the backtrace as client-facing details.
         error_detector.handle_error.assert_called_once_with(
             "Agent stopped due to exception Server error '504 Gateway Time-out'")
         # The backtrace is logged server-side instead.
-        assert any("Traceback" in str(call) for call in sensitive_logger.error.call_args_list)
+        self.assertTrue(self._logged_traceback(sensitive_logger))
 
     async def test_invoke_agent_chain_does_not_log_stale_backtrace(self):
         """
@@ -311,9 +351,9 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         attempt 2 fails with a rate-limit error (captures none), so no
         traceback should be logged at all.
         """
-        written = []
+        written: List[BaseMessage] = []
         mock_journal = MagicMock()
-        mock_journal.write_message = AsyncMock(side_effect=lambda msg, *_a, **_k: written.append(msg))
+        mock_journal.write_message = AsyncMock(side_effect=partial(TestRunContextRunnable._record, written))
         sensitive_logger = MagicMock()
         sensitive_logger.should_log = MagicMock(return_value=True)
 
@@ -326,7 +366,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
 
         # error_detector.handle_error is a pass-through for this test.
         error_detector = MagicMock()
-        error_detector.handle_error = MagicMock(side_effect=lambda output: output)
+        error_detector.handle_error = MagicMock(side_effect=TestRunContextRunnable._passthrough)
 
         runnable = RunContextRunnable.model_construct(
             journal=mock_journal,
@@ -340,10 +380,10 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
 
         # The final message reflects the rate-limit failure from the last attempt...
         final = written[-1]
-        assert isinstance(final, AIMessage)
-        assert "rate limited" in final.content
+        self.assertIsInstance(final, AIMessage)
+        self.assertIn("rate limited", final.content)
         # ...so the stale KeyError traceback from attempt 1 must not be logged.
-        assert not any("Traceback" in str(call) for call in sensitive_logger.error.call_args_list)
+        self.assertFalse(self._logged_traceback(sensitive_logger))
 
     @staticmethod
     def _make_invoking_runnable(chain_result: Any,
@@ -358,12 +398,12 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         """
         written: List[BaseMessage] = []
         journal: MagicMock = MagicMock()
-        journal.write_message = AsyncMock(side_effect=lambda msg, *_a, **_k: written.append(msg))
+        journal.write_message = AsyncMock(side_effect=partial(TestRunContextRunnable._record, written))
         agent_chain: MagicMock = MagicMock()
         agent_chain.ainvoke = AsyncMock(return_value=chain_result)
         if error_detector is None:
             error_detector = MagicMock()
-            error_detector.handle_error = MagicMock(side_effect=lambda output: output)
+            error_detector.handle_error = MagicMock(side_effect=TestRunContextRunnable._passthrough)
         sensitive_logger: MagicMock = MagicMock()
         sensitive_logger.should_log = MagicMock(return_value=True)
         runnable: RunContextRunnable = RunContextRunnable.model_construct(
@@ -399,12 +439,12 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=1)
 
         final: BaseMessage = written[-1]
-        assert isinstance(final.content, list)
-        assert self._block_types(final) == ["reasoning", "text"]
-        assert ContentUtils.flatten_to_text(final) == "the answer"
-        assert final.response_metadata["output_version"] == "v1"
-        assert final.response_metadata["model_provider"] == "anthropic"
-        assert final.usage_metadata == usage
+        self.assertIsInstance(final.content, list)
+        self.assertEqual(self._block_types(final), ["reasoning", "text"])
+        self.assertEqual(ContentUtils.flatten_to_text(final), "the answer")
+        self.assertEqual(final.response_metadata["output_version"], "v1")
+        self.assertEqual(final.response_metadata["model_provider"], "anthropic")
+        self.assertEqual(final.usage_metadata, usage)
 
     async def test_invoke_agent_chain_keeps_text_only_answer_shape(self) -> None:
         """
@@ -419,11 +459,11 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=1)
 
         final: BaseMessage = written[-1]
-        assert isinstance(final, AIMessage)
-        assert final.content == "the answer"
-        assert final.id is None
-        assert final.response_metadata == {}
-        assert final.usage_metadata is None
+        self.assertIsInstance(final, AIMessage)
+        self.assertEqual(final.content, "the answer")
+        self.assertIsNone(final.id)
+        self.assertEqual(final.response_metadata, {})
+        self.assertIsNone(final.usage_metadata)
 
     async def test_invoke_agent_chain_error_rewrite_wins_over_native_blocks(self) -> None:
         """
@@ -437,7 +477,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=1)
 
         final: BaseMessage = written[-1]
-        assert final.content == "formatted error"
+        self.assertEqual(final.content, "formatted error")
 
     async def test_invoke_agent_chain_preserved_answer_excludes_tool_call_blocks(self) -> None:
         """
@@ -458,8 +498,8 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=1)
 
         final: BaseMessage = written[-1]
-        assert self._block_types(final) == ["reasoning", "text"]
-        assert ContentUtils.flatten_to_text(final) == "the answer"
+        self.assertEqual(self._block_types(final), ["reasoning", "text"])
+        self.assertEqual(ContentUtils.flatten_to_text(final), "the answer")
 
     async def test_invoke_agent_chain_tool_use_turn_collapses_to_text(self) -> None:
         """
@@ -471,11 +511,11 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=1)
 
         final: BaseMessage = written[-1]
-        assert isinstance(final, AIMessage)
-        assert final.content == "Let me look that up."
-        assert final.id is None
-        assert final.response_metadata == {}
-        assert final.tool_calls == []
+        self.assertIsInstance(final, AIMessage)
+        self.assertEqual(final.content, "Let me look that up.")
+        self.assertIsNone(final.id)
+        self.assertEqual(final.response_metadata, {})
+        self.assertEqual(final.tool_calls, [])
 
     async def test_invoke_agent_chain_list_of_str_answer_collapses_to_text(self) -> None:
         """
@@ -486,8 +526,8 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=1)
 
         final: BaseMessage = written[-1]
-        assert final.content == "part one, part two"
-        assert final.id is None
+        self.assertEqual(final.content, "part one, part two")
+        self.assertIsNone(final.id)
 
     async def test_invoke_agent_chain_bare_output_dict_stays_text(self) -> None:
         """
@@ -498,9 +538,9 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=1)
 
         final: BaseMessage = written[-1]
-        assert isinstance(final, AIMessage)
-        assert final.content == "Please set OPENAI_API_KEY"
-        assert final.id is None
+        self.assertIsInstance(final, AIMessage)
+        self.assertEqual(final.content, "Please set OPENAI_API_KEY")
+        self.assertIsNone(final.id)
 
     async def test_invoke_agent_chain_unwraps_agent_finish(self) -> None:
         """
@@ -514,8 +554,8 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=1)
 
         final: BaseMessage = written[-1]
-        assert self._block_types(final) == ["reasoning", "text"]
-        assert ContentUtils.flatten_to_text(final) == "the answer"
+        self.assertEqual(self._block_types(final), ["reasoning", "text"])
+        self.assertEqual(ContentUtils.flatten_to_text(final), "the answer")
 
     async def test_invoke_agent_chain_mixed_content_falls_back_to_text(self) -> None:
         """
@@ -535,7 +575,7 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=1)
 
         final: BaseMessage = written[-1]
-        assert final.content == "hello world"
+        self.assertEqual(final.content, "hello world")
 
     async def test_invoke_agent_chain_chunk_answer_is_journaled_as_message(self) -> None:
         """
@@ -554,6 +594,6 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         await runnable.invoke_agent_chain(inputs={}, runnable_config={}, max_attempts=1)
 
         final: BaseMessage = written[-1]
-        assert type(final) is AIMessage  # pylint: disable=unidiomatic-typecheck
-        assert self._block_types(final) == ["reasoning", "text"]
-        assert ContentUtils.flatten_to_text(final) == "the answer"
+        self.assertIs(type(final), AIMessage)
+        self.assertEqual(self._block_types(final), ["reasoning", "text"])
+        self.assertEqual(ContentUtils.flatten_to_text(final), "the answer")
