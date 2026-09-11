@@ -14,13 +14,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-expire_reservations() sweep tests for LocalReservationsStorage.
-
-Verifies that the sweep deletes only files whose expiration timestamp is
-in the past and tolerates a missing storage directory (no crash before
-start()).
-"""
 import pytest
 
 from neuro_san.service.watcher.temp_networks.local.local_reservations_storage import LocalReservationsStorage
@@ -29,7 +22,13 @@ from tests.neuro_san.service.watcher.temp_networks.local.local_reservations_test
 
 
 class TestLocalReservationsStorageExpiration:
-    """expire_reservations() removes only files whose expiration is in the past."""
+    """
+    expire_reservations() sweep tests for LocalReservationsStorage.
+
+    Verifies that the sweep deletes only files whose expiration timestamp is
+    in the past and tolerates a missing storage directory (no crash before
+    start()).
+    """
 
     @pytest.mark.asyncio
     async def test_expire_removes_only_stale_files(self, tmp_path):

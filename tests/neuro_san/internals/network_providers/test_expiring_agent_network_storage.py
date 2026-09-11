@@ -17,8 +17,6 @@
 import time
 from unittest import IsolatedAsyncioTestCase
 
-import pytest
-
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.network_providers.expiring_agent_network_storage \
     import ExpiringAgentNetworkStorage
@@ -79,7 +77,6 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         self.assertEqual(0, storage.max_items)
         self.assertEqual(0, len(storage.agents_table))
 
-    @pytest.mark.asyncio
     async def test_add_reservations(self):
         """
         Test that reservations can be added and are tracked in all tables.
@@ -91,7 +88,6 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         self.assertIn("agent_a", storage.reservations_table)
         self.assertIn("agent_a", storage.access_times)
 
-    @pytest.mark.asyncio
     async def test_add_reservations_replaces_existing(self):
         """
         Test that adding a reservation with the same name replaces it.
@@ -140,7 +136,6 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         self.assertEqual(0, storage.max_items)
         self.assertEqual(0, storage.items_overflow_threshold)
 
-    @pytest.mark.asyncio
     async def test_no_eviction_when_unlimited(self):
         """
         Test that no eviction occurs when max_items is 0 (unlimited).
@@ -151,7 +146,6 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
             await storage.add_reservations({r: self._make_agent_spec(f"agent_{i}")}, source="test")
         self.assertEqual(20, len(storage.agents_table))
 
-    @pytest.mark.asyncio
     async def test_lru_eviction_on_add(self):
         """
         Test that LRU eviction occurs when adding items beyond the limit.
@@ -181,7 +175,6 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         # Oldest agents should have been evicted
         self.assertTrue(len(listener.removed) > 0)
 
-    @pytest.mark.asyncio
     async def test_lru_eviction_preserves_recently_accessed(self):
         """
         Test that recently accessed items survive LRU eviction.
@@ -213,7 +206,6 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         # Some older agents should have been evicted
         self.assertTrue(len(listener.removed) > 0)
 
-    @pytest.mark.asyncio
     async def test_access_time_updated_on_get(self):
         """
         Test that accessing an agent network updates its access time.
@@ -229,7 +221,6 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         self.assertIsNotNone(provider)
         self.assertGreater(storage.access_times["agent_a"], original_time)
 
-    @pytest.mark.asyncio
     async def test_access_time_set_on_add(self):
         """
         Test that access time is set when a reservation is added.
@@ -244,7 +235,6 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         self.assertGreaterEqual(storage.access_times["agent_a"], before)
         self.assertLessEqual(storage.access_times["agent_a"], after)
 
-    @pytest.mark.asyncio
     async def test_expire_removes_access_times(self):
         """
         Test that expiring a reservation also removes its access time entry.
@@ -261,7 +251,6 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         self.assertNotIn("agent_expired", storage.reservations_table)
         self.assertNotIn("agent_expired", storage.access_times)
 
-    @pytest.mark.asyncio
     async def test_get_expired_removes_access_times(self):
         """
         Test that getting an expired agent removes its access time entry.
@@ -274,7 +263,6 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         self.assertIsNone(provider)
         self.assertNotIn("agent_expired", storage.access_times)
 
-    @pytest.mark.asyncio
     async def test_remove_agent_network_cleans_all_tables(self):
         """
         Test that remove_agent_network removes from all three tables.
@@ -296,7 +284,6 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         storage = self._make_storage()
         storage.remove_agent_network("does_not_exist")
 
-    @pytest.mark.asyncio
     async def test_eviction_notifies_listeners(self):
         """
         Test that listeners are notified when agents are evicted.
@@ -314,7 +301,6 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         # Some agents should have been removed via eviction
         self.assertTrue(len(listener.removed) > 0)
 
-    @pytest.mark.asyncio
     async def test_set_max_evicts_existing(self):
         """
         Test that calling set_max_agent_networks on a storage
@@ -340,7 +326,6 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         self.assertLessEqual(len(storage.agents_table), 3)
         self.assertTrue(len(listener.removed) > 0)
 
-    @pytest.mark.asyncio
     async def test_add_empty_reservations(self):
         """
         Test that adding an empty dict is a no-op.
@@ -357,7 +342,6 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         provider = storage.get_agent_network_provider("does_not_exist")
         self.assertIsNone(provider)
 
-    @pytest.mark.asyncio
     async def test_get_valid_returns_provider(self):
         """
         Test that getting a valid agent returns a non-None provider.
@@ -369,7 +353,6 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         provider = storage.get_agent_network_provider("agent_a")
         self.assertIsNotNone(provider)
 
-    @pytest.mark.asyncio
     async def test_expire_mixed(self):
         """
         Test that only expired reservations are removed, valid ones remain.
@@ -390,7 +373,6 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         self.assertNotIn("expired", storage.agents_table)
         self.assertNotIn("expired", storage.access_times)
 
-    @pytest.mark.asyncio
     async def test_tables_stay_consistent(self):
         """
         Test that agents_table, reservations_table, and access_times

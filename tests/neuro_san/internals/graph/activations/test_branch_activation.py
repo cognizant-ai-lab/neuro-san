@@ -19,8 +19,6 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
-import pytest
-
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
 
@@ -66,7 +64,6 @@ class TestBranchActivation(IsolatedAsyncioTestCase):
         activation.factory.create_agent_activation = MagicMock(return_value=callable_activation)
         return activation
 
-    @pytest.mark.asyncio
     async def test_use_tool_returns_str_content_unchanged(self) -> None:
         """
         Plain-string content is returned exactly as-is: no stripping, no wrapping.
@@ -75,7 +72,6 @@ class TestBranchActivation(IsolatedAsyncioTestCase):
         result: str = await activation.use_tool("sub_agent", {"arg": "value"}, {})
         assert result == "  the answer  "
 
-    @pytest.mark.asyncio
     async def test_use_tool_projects_block_content_to_text(self) -> None:
         """
         Thinking-first block content from the sub-agent comes back as its text,
@@ -86,7 +82,6 @@ class TestBranchActivation(IsolatedAsyncioTestCase):
         assert isinstance(result, str)
         assert result == "the answer"
 
-    @pytest.mark.asyncio
     async def test_use_tool_releases_sub_activation_resources(self) -> None:
         """
         The sub-agent activation's close_of_work() is always awaited with the

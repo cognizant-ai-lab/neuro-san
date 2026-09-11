@@ -14,16 +14,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-S3ReservationsStorage accepts a configurable prefix (default
-"reservations/") that's prepended to every reservation's S3 object
-key. Production deploys may set a non-default prefix for
-multi-tenancy, environment separation (prod/staging), or version
-migration. This module verifies that add_reservations writes objects
-under the configured prefix - catching regressions where the prefix
-is hardcoded or otherwise dropped.
-"""
-import pytest
 
 from neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage \
     import S3ReservationsStorage
@@ -34,6 +24,14 @@ from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_te
 
 class TestCustomPrefix(S3ReservationsStorageTestBase):
     """
+    S3ReservationsStorage accepts a configurable prefix (default
+    "reservations/") that's prepended to every reservation's S3 object
+    key. Production deploys may set a non-default prefix for
+    multi-tenancy, environment separation (prod/staging), or version
+    migration. This module verifies that add_reservations writes objects
+    under the configured prefix - catching regressions where the prefix
+    is hardcoded or otherwise dropped.
+
     Existing tests T1-T9 all use the default prefix "reservations/".
     None of them detect a hardcoded-prefix regression in
     get_obj_key_for_reservation, because the hardcoded value matches
@@ -41,7 +39,6 @@ class TestCustomPrefix(S3ReservationsStorageTestBase):
     prefix to surface that class of bug.
     """
 
-    @pytest.mark.asyncio
     async def test_add_uses_configured_prefix_for_object_keys(self):
         """
         A storage configured with a non-default prefix writes objects

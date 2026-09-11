@@ -25,7 +25,6 @@ from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
 import httpx
-import pytest
 
 from langchain_core.agents import AgentFinish
 from langchain_core.messages.ai import AIMessage
@@ -169,7 +168,6 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         finish: AgentFinish = AgentFinish(return_values={"output": "done"}, log="")
         assert runnable.parse_chain_result(finish, exception=None) == "done"
 
-    @pytest.mark.asyncio
     async def test_parse_chain_result_matches_on_llm_end_projection(self):
         """
         The dupe-leak regression: parse_chain_result and
@@ -198,7 +196,6 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         journaled = calling_agent_journal.write_message_if_next_not_dupe.call_args.args[0]
         assert journaled.content == parsed
 
-    @pytest.mark.asyncio
     async def test_journal_retry_reason_writes_agent_framework_message(self):
         """
         journal_retry_reason should write a single AgentFrameworkMessage carrying the
@@ -225,7 +222,6 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         assert isinstance(message, AgentFrameworkMessage)
         assert message.content == "Retrying: the model's output could not be parsed (ValueError) - bad json"
 
-    @pytest.mark.asyncio
     async def test_invoke_agent_chain_surfaces_retry_reason_before_final_message(self):
         """
         When a recoverable error is retried until attempts are exhausted, each retry
@@ -263,7 +259,6 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
             assert msg.content == "Retrying: the model's output could not be parsed (ValueError) - not a parsing error"
         assert isinstance(written[-1], AIMessage)
 
-    @pytest.mark.asyncio
     async def test_invoke_agent_chain_keeps_backtrace_out_of_client_output(self):
         """
         When the agent chain dies with an unhandled exception (e.g. an MCP tool
@@ -307,7 +302,6 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         # The backtrace is logged server-side instead.
         assert any("Traceback" in str(call) for call in sensitive_logger.error.call_args_list)
 
-    @pytest.mark.asyncio
     async def test_invoke_agent_chain_does_not_log_stale_backtrace(self):
         """
         A backtrace captured on an earlier attempt must not be logged when a

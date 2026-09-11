@@ -14,14 +14,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-S3ReservationsStorage.add_reservations should be a complete no-op
-when called with an empty mapping. Real callers may legitimately
-pass {} when pre-filtering yields no new reservations; the storage
-must handle that without crashing, without writing placeholder
-objects, and without making any S3 calls.
-"""
-import pytest
 
 from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
@@ -29,13 +21,18 @@ from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_te
 
 class TestEmptyBatchIsNoOp(S3ReservationsStorageTestBase):
     """
+    S3ReservationsStorage.add_reservations should be a complete no-op
+    when called with an empty mapping. Real callers may legitimately
+    pass {} when pre-filtering yields no new reservations; the storage
+    must handle that without crashing, without writing placeholder
+    objects, and without making any S3 calls.
+
     The empty-batch contract: add_reservations({}) is equivalent to
     not calling add_reservations at all. No exception, no S3 call, no
     bucket mutation. Existing tests T1-T8 all use N>=1 entries, so
     none of them touch this path.
     """
 
-    @pytest.mark.asyncio
     async def test_add_with_empty_dict_is_a_no_op(self):
         """
         add_reservations({}) returns normally, makes zero put_object

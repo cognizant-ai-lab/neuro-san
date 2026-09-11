@@ -14,33 +14,10 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Pins credential recovery on the reservation WRITE path: a deployment
-batch whose first attempt fails against a bad credential state must
-discard the shared AioSession, re-resolve the chain behind a fresh
-session, retry, and land the write - not lose the batch.
-
-A lost batch is the worst credential failure mode this storage has:
-add_reservations raises, the updater logs and drops the item (there is
-no requeue), and other pods then report the just-created network
-not-found. Covered here for both faces of a rotation window:
-
-  * InvalidToken - S3 rejects the request the batch's client signed
-    with a bad resolved credential state (a ClientError; the same
-    production failure the reader-path test in
-    test_invalid_token_recovery.py pins, see neuro-san-studio #1310).
-  * NoCredentialsError - the chain behind the batch's fresh client
-    resolved to nothing (credentials file caught empty mid-rewrite),
-    raised locally by botocore at request-signing time. This is a
-    BotoCoreError, NOT a ClientError: under a ClientError-only retry
-    gate it escapes with retry budget unused and the batch is lost -
-    the recovery test below fails exactly that way against such a gate.
-"""
 from typing import Any
 from typing import Dict
 
 from unittest.mock import patch
-import pytest
 
 from aiobotocore.session import get_session as real_get_session
 from botocore.exceptions import ClientError
@@ -53,10 +30,30 @@ from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_te
 
 class TestWriterCredentialRecovery(S3ReservationsStorageTestBase):
     """
-    Verifies that the async writer's credential retry discards the
-    shared session and completes the batch through a re-resolved chain,
-    for both a ClientError rejection (InvalidToken) and a local
-    resolution failure (NoCredentialsError).
+    Pins credential recovery on the reservation WRITE path: a deployment
+    batch whose first attempt fails against a bad credential state must
+    discard the shared AioSession, re-resolve the chain behind a fresh
+    session, retry, and land the write - not lose the batch.
+
+    A lost batch is the worst credential failure mode this storage has:
+    add_reservations raises, the updater logs and drops the item (there is
+    no requeue), and other pods then report the just-created network
+    not-found. Covered here for both faces of a rotation window:
+
+      * InvalidToken - S3 rejects the request the batch's client signed
+        with a bad resolved credential state (a ClientError; the same
+        production failure the reader-path test in
+        test_invalid_token_recovery.py pins, see neuro-san-studio #1310).
+      * NoCredentialsError - the chain behind the batch's fresh client
+        resolved to nothing (credentials file caught empty mid-rewrite),
+        raised locally by botocore at request-signing time. This is a
+        BotoCoreError, NOT a ClientError: under a ClientError-only retry
+        gate it escapes with retry budget unused and the batch is lost -
+        the recovery test below fails exactly that way against such a gate.
+        Verifies that the async writer's credential retry discards the
+        shared session and completes the batch through a re-resolved chain,
+        for both a ClientError rejection (InvalidToken) and a local
+        resolution failure (NoCredentialsError).
     """
 
     async def _run_batch_with_bad_first_session(self, make_error) -> Dict[str, int]:
@@ -120,7 +117,6 @@ class TestWriterCredentialRecovery(S3ReservationsStorageTestBase):
         )
         return counters
 
-    @pytest.mark.asyncio
     async def test_invalid_token_triggers_session_rebuild_and_batch_succeeds(self):
         """
         S3 rejects the first attempt's request with InvalidToken (HTTP
@@ -141,7 +137,6 @@ class TestWriterCredentialRecovery(S3ReservationsStorageTestBase):
 
         await self._run_batch_with_bad_first_session(make_invalid_token)
 
-    @pytest.mark.asyncio
     async def test_empty_chain_triggers_session_rebuild_and_batch_succeeds(self):
         """
         The first attempt's put_object raises NoCredentialsError at

@@ -16,7 +16,6 @@
 # END COPYRIGHT
 
 from unittest import IsolatedAsyncioTestCase
-import pytest
 
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration
@@ -48,7 +47,6 @@ class TestExclusiveModelAttribution(IsolatedAsyncioTestCase):
         )
         return LLMResult(generations=[[ChatGeneration(message=message)]])
 
-    @pytest.mark.asyncio
     async def test_own_call_updates_models_and_scalars(self):
         """An LLM call belonging to this handler's own agent updates both tallies."""
         handler = LlmTokenCallbackHandler(llm_infos={})
@@ -61,7 +59,6 @@ class TestExclusiveModelAttribution(IsolatedAsyncioTestCase):
         assert handler.models_token_dict["openai"]["gpt-4"]["total_tokens"] == 15
         assert handler.models_token_dict["openai"]["gpt-4"]["successful_requests"] == 1
 
-    @pytest.mark.asyncio
     async def test_downstream_call_updates_scalars_only(self):
         """
         A downstream agent's LLM call updates the subtree scalars of an ancestor
@@ -90,7 +87,6 @@ class TestExclusiveModelAttribution(IsolatedAsyncioTestCase):
         # And its per-call timer state was never touched.
         assert ancestor_handler.start_time is None
 
-    @pytest.mark.asyncio
     async def test_call_outside_any_agent_scope_updates_scalars_only(self):
         """With no owning agent scope at all, treat the call as not our own."""
         handler = LlmTokenCallbackHandler(llm_infos={})
