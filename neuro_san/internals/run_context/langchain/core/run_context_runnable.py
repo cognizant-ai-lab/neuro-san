@@ -30,7 +30,9 @@ from pydantic import ConfigDict
 from langchain_core.agents import AgentFinish
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.messages.ai import AIMessage
+from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.messages.base import BaseMessage
+from langchain_core.messages.utils import message_chunk_to_message
 from langchain_core.runnables.base import Runnable
 from langchain_core.runnables.config import ensure_config
 from langchain_core.runnables.config import merge_configs
@@ -298,7 +300,7 @@ class RunContextRunnable(NeuroSanRunnable):
             self.sensitive_logger.error("%s", backtrace)
 
         output: str = self.parse_chain_result(chain_result, exception)
-        return_message: BaseMessage = AIMessage(output)
+        return_message: BaseMessage = self.build_return_message(chain_result, output)
 
         # Chat history is updated in write_message
         await self.journal.write_message(return_message)
@@ -416,3 +418,62 @@ class RunContextRunnable(NeuroSanRunnable):
         # See if we had some kind of error and format accordingly, if asked for.
         output = self.error_detector.handle_error(output)
         return output
+
+    def build_return_message(self, chain_result: Optional[Union[Dict[str, Any], AgentFinish, AIMessage]],
+                             output: str) -> BaseMessage:
+        """
+        Build the AIMessage that is journaled as this agent's answer for the turn.
+
+        Plain-string answers, error paths, and anything the ErrorDetector
+        rewrote keep the exact shape they have always had: a fresh AIMessage
+        carrying only the parsed text. When the provider-native message
+        carries block content (Anthropic thinking, OpenAI Responses reasoning,
+        ...), that message is preserved instead, with its content normalized
+        to standard v1 blocks (see ContentUtils.normalize_message) so the
+        blocks and its usage_metadata reach the journal. The wire is the
+        same either way: the converter projects block content to the same
+        text and emits nothing else for it in this phase.
+
+        The chat history does not depend on which shape is chosen:
+        OriginatingJournal.write_message appends a text-only copy of any
+        block-content AI message, so what is handed to a provider (or a
+        fallback provider) stays provider-agnostic.
+
+        :param chain_result: The result from invoking the agent chain
+        :param output: The parsed, error-checked text from parse_chain_result()
+        :return: The BaseMessage to journal as the answer
+        """
+        ai_message: Optional[AIMessage] = self.find_ai_message(chain_result)
+        if ai_message is None:
+            # Exception, API-key error text or a bare "output": nothing native to preserve.
+            return AIMessage(output)
+
+        if output != ContentUtils.flatten_to_text(ai_message):
+            # The ErrorDetector rewrote the text. The client-visible answer is
+            # the formatted error, not the native content.
+            return AIMessage(output)
+
+        if isinstance(ai_message, AIMessageChunk):
+            # normalize_message is for complete messages only: chunk-only
+            # shapes are not content. Chains return complete messages today,
+            # but a custom middleware could hand back a chunk, and preserving
+            # its class would give the journaled answer an unknown wire type.
+            ai_message = message_chunk_to_message(ai_message)
+
+        preserved: BaseMessage = ContentUtils.normalize_message(ai_message)
+        if isinstance(preserved.content, str):
+            # Trivial (text-only) content: keep the exact message shape that has
+            # always been journaled for it. Preserving the native object would
+            # change nothing a client can see and would only drag provider
+            # bookkeeping (ids, metadata) along with it.
+            return AIMessage(output)
+
+        if ContentUtils.flatten_to_text(preserved) != output:
+            # Fail closed. The provider translators behind normalize_message
+            # skip content items they do not recognize (e.g. a bare string
+            # inside a block list), which can drop text. The client-visible
+            # answer must stay the parsed text, so blocks are preserved only
+            # while they still project to it.
+            return AIMessage(output)
+
+        return preserved
