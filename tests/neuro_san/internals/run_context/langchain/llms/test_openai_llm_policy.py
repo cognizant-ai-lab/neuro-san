@@ -23,6 +23,8 @@ from typing import Any
 from typing import Dict
 from typing import Iterator
 from typing import List
+from typing import Optional
+from typing import Tuple
 
 import pytest
 
@@ -50,6 +52,15 @@ class TestOpenAILlmPolicy:
         "max_retries": 0,
         "request_timeout": 5,
         "streaming": False,
+    }
+
+    # Every environment variable create_llm() consults for a connection setting, mapped to
+    # the llm_config key that must be consulted alongside it. See issue #1308.
+    EXPECTED_KEYS_BY_ENV: Dict[str, str] = {
+        "OPENAI_API_KEY": "openai_api_key",
+        "OPENAI_API_BASE": "openai_api_base",
+        "OPENAI_ORG_ID": "openai_organization",
+        "OPENAI_PROXY": "openai_proxy",
     }
 
     @pytest.fixture(name="policies")
@@ -210,3 +221,95 @@ class TestOpenAILlmPolicy:
         assert "reasoning_effort" not in payload
         assert "n" not in payload
         self._assert_binds_to_responses_create(payload)
+
+    def test_create_llm_uses_matching_config_keys(self, policies: List[OpenAILlmPolicy],
+                                                  monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Regression test for issue #1308: every environment variable that create_llm() consults
+        must be paired with its own llm_config key. In particular OPENAI_PROXY must be paired
+        with "openai_proxy"; it used to be paired with "openai_organization".
+
+        The test records every (config key, env key) pair that create_llm() hands to
+        get_value_or_env() and checks each pairing against EXPECTED_KEYS_BY_ENV.
+
+        :param policies: The fixture list that tracks policies for teardown
+        :param monkeypatch: The pytest fixture used to swap in the recording get_value_or_env()
+        """
+        recorded: List[Tuple[str, Optional[str]]] = []
+
+        # pylint: disable=unused-argument
+        def recorder(config: Dict[str, Any], key: str, env_key: Optional[str],
+                     none_obj: Any = None) -> None:
+            """
+            Stand-in for EnvironmentConfiguration.get_value_or_env() that records
+            which (key, env_key) pair was requested and always returns None.
+
+            :param config: The llm config being consulted (unused; only the pairing matters)
+            :param key: The config key being requested
+            :param env_key: The environment variable being requested, if any
+            :param none_obj: Optional object whose presence would normally short-circuit
+                             the lookup (unused; only the pairing matters)
+            """
+            # Returning None (implicitly) makes ChatOpenAI fall back to its own defaults,
+            # so nothing recorded here influences how the client is built.
+            recorded.append((key, env_key))
+        # pylint: enable=unused-argument
+
+        config: Dict[str, Any] = dict(self.BASE_CONFIG)
+
+        policy: OpenAILlmPolicy = OpenAILlmPolicy()
+        # Register before creating anything so teardown still runs if create_llm() raises.
+        policies.append(policy)
+
+        # Build the real async client first so that its own get_value_or_env()
+        # lookups are not mixed into what we record from create_llm().
+        client: Any = policy.create_client(config)
+
+        # get_value_or_env() is a staticmethod on the EnvironmentConfiguration base
+        # class, so shadow it on the subclass with another staticmethod; that way
+        # self.get_value_or_env(...) inside create_llm() reaches the recorder.
+        monkeypatch.setattr(OpenAILlmPolicy, "get_value_or_env", staticmethod(recorder))
+
+        llm: ChatOpenAI = policy.create_llm(config, "gpt-5.2", client)
+        assert llm is not None
+
+        # Every recorded env var must have been paired with its own config key.
+        seen_env_keys: List[str] = []
+        for key, env_key in recorded:
+            if env_key in self.EXPECTED_KEYS_BY_ENV:
+                seen_env_keys.append(env_key)
+                expected_key: str = self.EXPECTED_KEYS_BY_ENV[env_key]
+                assert key == expected_key, \
+                    f"{env_key} was looked up with config key {key!r}, expected {expected_key!r}"
+
+        # Guard against passing vacuously if create_llm() ever stops consulting
+        # get_value_or_env() for one of these settings.
+        for env_key in self.EXPECTED_KEYS_BY_ENV:
+            assert env_key in seen_env_keys, f"create_llm() never consulted {env_key}"
+
+        # The exact mispairing from issue #1308 must never reappear.
+        assert ("openai_organization", "OPENAI_PROXY") not in recorded
+
+    def test_create_llm_without_client_reads_each_connection_key(self, policies: List[OpenAILlmPolicy]) -> None:
+        """
+        Regression test for issue #1308 at the level of the built ChatOpenAI: with no pre-built
+        client, each connection setting in llm_config must land on its own ChatOpenAI field.
+        Before the fix the organization id was handed to ChatOpenAI as the proxy URL.
+
+        :param policies: The fixture list that tracks policies for teardown
+        """
+        config: Dict[str, Any] = dict(self.BASE_CONFIG)
+        config["openai_organization"] = "org-test"
+        # A closed local port, like openai_api_base, so nothing can reach a real proxy.
+        config["openai_proxy"] = "http://127.0.0.1:9"
+
+        policy: OpenAILlmPolicy = OpenAILlmPolicy()
+        policies.append(policy)
+
+        # No client is passed, so create_llm() must fall back to the llm_config values themselves.
+        llm: ChatOpenAI = policy.create_llm(config, "gpt-5.2", None)
+
+        assert llm.openai_api_key.get_secret_value() == "sk-test"
+        assert llm.openai_api_base == "http://127.0.0.1:9"
+        assert llm.openai_organization == "org-test"
+        assert llm.openai_proxy == "http://127.0.0.1:9"
