@@ -158,8 +158,9 @@ A few conventions keep the unit tests consistent across contributors:
 - One test module per class. The tests for `some_module.py`, which holds the
   class `SomeClass`, live in `tests/.../test_some_module.py` as the single
   class `TestSomeClass`, mirroring the source path. Every directory under
-  `tests/` needs an `__init__.py`; the pylint gate in CI skips directories
-  without one.
+  `tests/` needs an `__init__.py`: the CI gate hands pylint the `tests`
+  tree, and pylint only descends into sub-directories that are packages,
+  so a directory without one is silently not linted.
 - Test classes derive from `unittest.TestCase`, or from
   `unittest.IsolatedAsyncioTestCase` when they contain `async def` tests.
   `IsolatedAsyncioTestCase` runs async tests itself, so its methods do not
