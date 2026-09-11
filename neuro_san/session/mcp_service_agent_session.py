@@ -21,10 +21,13 @@ from typing import List
 from typing import Generator
 
 import json
+import jsonschema
 import requests
 
+from leaf_common.serialization.util.text_file_reader import TextFileReader
 from leaf_common.time.timeout import Timeout
 
+from neuro_san import TOP_LEVEL_DIR
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.session.abstract_http_service_agent_session import AbstractHttpServiceAgentSession
 from neuro_san.session.mcp_chat_response_dictionary_converter import McpChatResponseDictionaryConverter
@@ -41,6 +44,7 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
     This is largely only used by command-line tests.
     """
     MCP_PROTOCOL_VERSION: str = "MCP-Protocol-Version"
+    _protocol_schema: Dict[str, Any] = None
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments, too-many-locals
     def __init__(self, host: str = None,
@@ -112,7 +116,8 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
             raise ValueError(self.help_message(path)) from exc
 
         # Extract the protocol version from the handshake response
-        self.protocol_version: str = response_dict.get("result", {}).get("protocolVersion", None)
+        result_dict: Dict[str, Any] = self._get_result_dict(response_dict, "initialize", "InitializeResult")
+        self.protocol_version: str = result_dict.get("protocolVersion", None)
 
         # Confirm the protocol version is supported by this client
         if self.protocol_version not in [MCP_VERSION]:
@@ -159,7 +164,12 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(self.help_message(path)) from exc
 
-        tools_list: List[Dict[str, Any]] = response_dict.get("result", {}).get("tools", [])
+        tools_list: List[Any] = self._get_tools_list(response_dict)
+
+        # CheckMarx false positive (Unchecked Input for Loop Condition, #1252):
+        # tools_list has already been fully parsed by json.loads above, so this
+        # O(n) loop with early return cannot cost more than the parse that
+        # preceded it. The MCP schema validation above validates the shape.
         for tool in tools_list:
             name: str = tool.get("name", None)
             if name == self.agent_name:
@@ -170,6 +180,56 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                     }
 
         return None
+
+    @classmethod
+    def _get_result_dict(cls, response_dict: Any, method: str, result_definition: str) -> Dict[str, Any]:
+        """
+        Validates an MCP JSON-RPC response and its result against the protocol schema.
+        """
+        if not isinstance(response_dict, dict):
+            raise ValueError(f"Invalid MCP {method} response: response must be an object")
+
+        error_dict: Any = response_dict.get("error", None)
+        if isinstance(error_dict, dict):
+            raise ValueError(f"MCP {method} error {error_dict.get('code')}: {error_dict.get('message')}")
+
+        result_dict: Any = response_dict.get("result", None)
+        if not isinstance(result_dict, dict):
+            raise ValueError(f"Invalid MCP {method} response: 'result' must be an object")
+
+        protocol_schema: Dict[str, Any] = cls._get_protocol_schema()
+        validation_schema: Dict[str, Any] = {
+            "$schema": protocol_schema.get("$schema"),
+            "$ref": f"#/definitions/{result_definition}",
+            "definitions": protocol_schema.get("definitions", {}),
+        }
+        try:
+            jsonschema.validate(instance=result_dict, schema=validation_schema)
+        except jsonschema.exceptions.ValidationError as exc:
+            raise ValueError(
+                f"Invalid MCP {method} response: 'result' does not match {result_definition}"
+            ) from exc
+        return result_dict
+
+    @classmethod
+    def _get_protocol_schema(cls) -> Dict[str, Any]:
+        """
+        Loads and caches the MCP protocol schema supported by this session.
+        """
+        if cls._protocol_schema is None:
+            schema_name: str = f"service/mcp/validation/mcp-schema-{MCP_VERSION}.json"
+            schema_path = TOP_LEVEL_DIR.get_file_in_basis(schema_name)
+            schema_str: str = TextFileReader.read_text_file(schema_path)
+            cls._protocol_schema = json.loads(schema_str)
+        return cls._protocol_schema
+
+    @classmethod
+    def _get_tools_list(cls, response_dict: Any) -> List[Any]:
+        """
+        Validates an MCP tools/list response and returns its tools array.
+        """
+        result_dict: Dict[str, Any] = cls._get_result_dict(response_dict, "tools/list", "ListToolsResult")
+        return result_dict["tools"]
 
     def connectivity(self, request_dict: Dict[str, Any]) -> Dict[str, Any]:
         """
