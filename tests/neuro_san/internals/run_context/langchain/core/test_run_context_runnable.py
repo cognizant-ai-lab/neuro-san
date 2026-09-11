@@ -386,7 +386,6 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
             block_types.append(block["type"])
         return block_types
 
-    @pytest.mark.asyncio
     async def test_invoke_agent_chain_preserves_block_content_answer(self) -> None:
         """
         A thinking-first native answer is journaled as the native message with
@@ -407,7 +406,6 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         assert final.response_metadata["model_provider"] == "anthropic"
         assert final.usage_metadata == usage
 
-    @pytest.mark.asyncio
     async def test_invoke_agent_chain_keeps_text_only_answer_shape(self) -> None:
         """
         A plain-string native answer keeps the shape it has always had: a fresh
@@ -427,7 +425,6 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         assert final.response_metadata == {}
         assert final.usage_metadata is None
 
-    @pytest.mark.asyncio
     async def test_invoke_agent_chain_error_rewrite_wins_over_native_blocks(self) -> None:
         """
         When the ErrorDetector rewrites the answer text, the journaled message
@@ -442,7 +439,6 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         final: BaseMessage = written[-1]
         assert final.content == "formatted error"
 
-    @pytest.mark.asyncio
     async def test_invoke_agent_chain_preserved_answer_excludes_tool_call_blocks(self) -> None:
         """
         A preserved block-content answer that still carries a tool call (the
@@ -465,7 +461,6 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         assert self._block_types(final) == ["reasoning", "text"]
         assert ContentUtils.flatten_to_text(final) == "the answer"
 
-    @pytest.mark.asyncio
     async def test_invoke_agent_chain_tool_use_turn_collapses_to_text(self) -> None:
         """
         A text + tool_use native answer (every Anthropic tool-calling turn
@@ -482,7 +477,6 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         assert final.response_metadata == {}
         assert final.tool_calls == []
 
-    @pytest.mark.asyncio
     async def test_invoke_agent_chain_list_of_str_answer_collapses_to_text(self) -> None:
         """
         List-of-strings native content carries no block structure, so it is
@@ -495,7 +489,6 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         assert final.content == "part one, part two"
         assert final.id is None
 
-    @pytest.mark.asyncio
     async def test_invoke_agent_chain_bare_output_dict_stays_text(self) -> None:
         """
         A chain result with no AIMessage, only an "output" key (the API-key
@@ -509,7 +502,6 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         assert final.content == "Please set OPENAI_API_KEY"
         assert final.id is None
 
-    @pytest.mark.asyncio
     async def test_invoke_agent_chain_unwraps_agent_finish(self) -> None:
         """
         An AgentFinish result is unwrapped to its return_values, so a native
@@ -525,7 +517,6 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         assert self._block_types(final) == ["reasoning", "text"]
         assert ContentUtils.flatten_to_text(final) == "the answer"
 
-    @pytest.mark.asyncio
     async def test_invoke_agent_chain_mixed_content_falls_back_to_text(self) -> None:
         """
         When normalizing would lose text (langchain's provider translators skip
@@ -546,7 +537,6 @@ class TestRunContextRunnable(IsolatedAsyncioTestCase):  # pylint: disable=too-ma
         final: BaseMessage = written[-1]
         assert final.content == "hello world"
 
-    @pytest.mark.asyncio
     async def test_invoke_agent_chain_chunk_answer_is_journaled_as_message(self) -> None:
         """
         An AIMessageChunk answer (only a custom middleware could produce one)
