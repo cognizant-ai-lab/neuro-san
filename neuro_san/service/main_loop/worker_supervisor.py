@@ -17,7 +17,9 @@
 Supervisor for managing fresh worker processes in multi-instance HTTP server mode.
 """
 from contextlib import ExitStack
+from typing import Any
 from typing import List
+from typing import Optional
 
 import os
 import signal
@@ -84,15 +86,29 @@ class WorkerSupervisor:
         except ValueError:
             return 1
 
-    @staticmethod
-    def run() -> int:
+    active_workers: List[subprocess.Popen] = []
+
+    @classmethod
+    def stop_workers(cls, _signal_number: Optional[int] = None, _frame: Optional[Any] = None):
+        """
+        Terminate every worker which is still running.
+
+        :param _signal_number: Signal number passed by signal handler (optional).
+        :param _frame: Stack frame passed by signal handler (optional).
+        """
+        for worker in cls.active_workers:
+            if worker.poll() is None:
+                worker.terminate()
+
+    @classmethod
+    def run(cls) -> int:
         """
         Start fresh worker processes instead of forking this process.
 
         :return: The supervisor exit code, or -1 when no supervisor is needed.
         """
         # A worker must continue into ServerMainLoop instead of recursively supervising.
-        if WorkerSupervisor.is_worker():
+        if cls.is_worker():
             return -1
 
         # Parse only the instance argument here. ServerMainLoop remains
@@ -131,36 +147,33 @@ class WorkerSupervisor:
 
         # ExitStack closes every Popen resource even when startup, signal
         # handling, or worker monitoring raises an exception.
-        with ExitStack() as stack:
-            workers: List[subprocess.Popen] = []
-            for i in range(worker_count):
-                worker_env = os.environ.copy()
-                worker_env[WorkerSupervisor.WORKER_ENV] = "1"
-                worker_env[WorkerSupervisor.WORKER_ID_ENV] = str(i)
-                worker_env[WorkerSupervisor.NUM_WORKERS_ENV] = str(worker_count)
-                workers.append(
-                    stack.enter_context(subprocess.Popen(worker_command, env=worker_env))
+        try:
+            with ExitStack() as stack:
+                cls.active_workers = []
+                for i in range(worker_count):
+                    worker_env = os.environ.copy()
+                    worker_env[cls.WORKER_ENV] = "1"
+                    worker_env[cls.WORKER_ID_ENV] = str(i)
+                    worker_env[cls.NUM_WORKERS_ENV] = str(worker_count)
+                    cls.active_workers.append(
+                        stack.enter_context(subprocess.Popen(worker_command, env=worker_env))
+                    )
+
+                signal.signal(signal.SIGINT, cls.stop_workers)
+                signal.signal(signal.SIGTERM, cls.stop_workers)
+
+                # Keep supervising until any worker exits. A worker failure should
+                # stop its peers and become the supervisor's process exit status.
+                while not any(worker.poll() is not None for worker in cls.active_workers):
+                    time.sleep(0.1)
+
+                exit_code = next(
+                    (worker.returncode for worker in cls.active_workers if worker.returncode not in (None, 0)),
+                    0,
                 )
-
-            def stop_workers(_signal_number, _frame):
-                """Terminate every worker which is still running."""
-                for worker in workers:
-                    if worker.poll() is None:
-                        worker.terminate()
-
-            signal.signal(signal.SIGINT, stop_workers)
-            signal.signal(signal.SIGTERM, stop_workers)
-
-            # Keep supervising until any worker exits. A worker failure should
-            # stop its peers and become the supervisor's process exit status.
-            while not any(worker.poll() is not None for worker in workers):
-                time.sleep(0.1)
-
-            exit_code = next(
-                (worker.returncode for worker in workers if worker.returncode not in (None, 0)),
-                0,
-            )
-            stop_workers(None, None)
-            for worker in workers:
-                worker.wait()
-            return exit_code
+                cls.stop_workers()
+                for worker in cls.active_workers:
+                    worker.wait()
+                return exit_code
+        finally:
+            cls.active_workers = []

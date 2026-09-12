@@ -21,6 +21,7 @@ import signal
 import sys
 
 from unittest import TestCase
+from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from neuro_san.service.main_loop.worker_supervisor import WorkerSupervisor
@@ -104,6 +105,23 @@ class TestWorkerSupervisor(TestCase):
             [signal_call.args[0] for signal_call in signal_mock.call_args_list],
             [signal.SIGINT, signal.SIGTERM],
         )
+        self.assertEqual(signal_mock.call_args_list[0].args[1], WorkerSupervisor.stop_workers)
+        self.assertEqual(signal_mock.call_args_list[1].args[1], WorkerSupervisor.stop_workers)
+
+    def test_stop_workers_terminates_running_workers(self):
+        """stop_workers should call terminate on running workers and skip exited ones."""
+        running_worker = MagicMock()
+        running_worker.poll.return_value = None
+        exited_worker = MagicMock()
+        exited_worker.poll.return_value = 0
+
+        try:
+            WorkerSupervisor.active_workers = [running_worker, exited_worker]
+            WorkerSupervisor.stop_workers()
+            running_worker.terminate.assert_called_once()
+            exited_worker.terminate.assert_not_called()
+        finally:
+            WorkerSupervisor.active_workers = []
 
     def test_worker_identity_helpers(self):
         """Test is_worker(), get_worker_id(), and get_num_workers() with various env configurations."""
