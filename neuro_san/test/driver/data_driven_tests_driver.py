@@ -28,7 +28,6 @@ from typing import Tuple
 from typing import Union
 
 from copy import copy
-from copy import deepcopy
 from datetime import datetime
 from os import environ
 from time import monotonic
@@ -178,7 +177,7 @@ class DataDrivenTestsDriver:
         :param test_index: Optional index of the test case for logging and reporting.
         :return: A new TimedAssertCapture object for capturing asserts.
         """
-        return TimedAssertCapture(deepcopy(self.asserts_basis), test_index=test_index)
+        return TimedAssertCapture(self.asserts_basis, test_index=test_index)
 
     def capture_one_iteration(self, test_case: Dict[str, Any], timeouts: List[Timeout],
                               iteration_index: int) -> TimedAssertCapture:
