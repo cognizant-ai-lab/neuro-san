@@ -30,7 +30,6 @@ from threading import Lock
 
 import tornado
 import tornado.netutil
-import tornado.process
 
 from leaf_common.asyncio.event_loop_lag_monitor import EventLoopLagMonitor
 from leaf_common.config.config_util import ConfigUtil
@@ -190,35 +189,29 @@ class HttpServer(AgentStateListener):
                 logging_config=self.logging_config,
             ))
 
-        # Determine the number of worker processes to start.
-        # If http_server_instances is 0, use the number of CPU cores.
-        num_workers: int = self.server_config.http_server_instances
+        # Determine the number of worker processes.
+        num_workers: int = self.server_context.get_num_workers()
         if num_workers <= 0:
-            num_workers = os.cpu_count() or 1
+            num_workers = self.server_config.http_server_instances
+            if num_workers <= 0:
+                num_workers = os.cpu_count() or 1
+            self.server_context.set_worker_info(self.server_context.get_worker_id(), num_workers)
 
-        # Bind the listening socket(s) BEFORE forking so every worker inherits
-        # the same bound fd. Do NOT create/touch an IOLoop before fork_processes.
+        # Bind the listening socket(s). In multi-instance mode, workers bind
+        # with reuse_port=True.
         sockets = tornado.netutil.bind_sockets(
-            self.http_port, backlog=self.server_config.http_connections_backlog)
+            self.http_port,
+            backlog=self.server_config.http_connections_backlog,
+            reuse_port=self.server_config.http_reuse_port,
+        )
 
-        # Do not create or access an asyncio/Tornado event loop before this call.
-        worker_id: int = 0
-        if num_workers > 1:
-            worker_id = tornado.process.fork_processes(num_workers)
+        worker_id: int = self.server_context.get_worker_id()
+        self.logger.info({}, "Starting HTTP server instance (worker_id=%d of %d, pid=%d)",
+                         worker_id, num_workers, os.getpid())
 
-        # If num_workers == 1, we don't fork and worker_id of our single server process remains 0.
-        self.logger.info({}, "Starting %d worker processes (worker_id=%d, pid=%d)",
-                         num_workers, worker_id, os.getpid())
-        # Register this worker's ID and total number of workers in the server context for use by other components.
-        self.server_context.set_worker_info(worker_id, num_workers)
-
-        # CRITICAL: attach the inherited sockets to THIS worker's IOLoop so it
-        # actually accepts connections. server.start(N) did fork + add_sockets;
-        # a bare fork_processes() does the fork but not the add_sockets.
         server.add_sockets(sockets)
 
-        # Create all server context resources that need to be created after fork,
-        # and start them if necessary.
+        # Create all server context resources and start them if necessary.
         self.server_context.start()
 
         server_status: ServerStatus = self.server_context.get_server_status()
