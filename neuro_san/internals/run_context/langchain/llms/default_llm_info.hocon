@@ -1506,6 +1506,8 @@
                 "top_p": null,
                 "max_tokens": null,         # This is always for output
                 "tiktoken_model_name": null,
+                # Chat Completions only: langchain-openai drops stop from Responses API requests, so it has no
+                # effect unless "use_responses_api" is false.
                 "stop": null,
 
                 # The following parameters are for reasoning models only.

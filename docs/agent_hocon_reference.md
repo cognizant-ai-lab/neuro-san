@@ -407,9 +407,10 @@ The minimal configuration is just the model name. The model's default reasoning 
 ```
 
 **Parameters the Responses API rejects.** `presence_penalty`, `frequency_penalty`, `seed`, `logprobs` and
-`logit_bias` (plus `stop` on langchain-openai releases before 1.4) exist only on Chat Completions. Now that the
-Responses API is the default endpoint, an llm_config that carries any of them is rejected unless it also sets
-`"use_responses_api": false`, so remove them from every other OpenAI llm_config. OpenAI's
+`logit_bias` exist only on Chat Completions. Now that the Responses API is the default endpoint, an llm_config
+that carries any of them is rejected unless it also sets `"use_responses_api": false`, so remove them from every
+other OpenAI llm_config. `stop` is Chat Completions only as well, but langchain-openai drops it from Responses API
+requests instead of failing, so it simply has no effect unless `use_responses_api` is `false`. OpenAI's
 [migration guide](https://developers.openai.com/api/docs/guides/migrate-to-responses) lists the remaining
 differences between the two endpoints.
 
@@ -431,9 +432,11 @@ things for llm_configs that never set `use_responses_api`:
 
 - Responses are no longer stored server-side, because `store` defaults to `false`. Set `"store": true` if you
   relied on retrieving responses from OpenAI afterwards.
-- `stop` sequences are ignored on langchain-openai 1.4 and later, which drop the parameter because the Responses
-  API has none. Earlier releases still send it and the request fails client-side, so remove `stop` from the
-  llm_config or set `"use_responses_api": false` for it.
+- `stop` sequences are ignored: the Responses API has no `stop` parameter and langchain-openai drops it from the
+  request. They still apply with `"use_responses_api": false`.
+- neuro-san now requires langchain-openai 1.4 or later (and langchain-core 1.5 or later, which it depends on).
+  Earlier langchain-openai releases sent `stop` to the Responses API and lacked the stateless reasoning replay
+  that `store: false` relies on.
 - OpenAI-compatible gateways that do not implement `/responses` need `"use_responses_api": false`, per agent or
   server-wide as shown above.
 

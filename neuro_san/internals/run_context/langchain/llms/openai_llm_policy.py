@@ -165,6 +165,8 @@ class OpenAILlmPolicy(LlmPolicy):
             top_p=config.get("top_p"),
             max_tokens=config.get("max_tokens"),  # This is always for output
             tiktoken_model_name=config.get("tiktoken_model_name"),
+            # Only takes effect on Chat Completions: langchain-openai drops stop from Responses API
+            # requests (the API has no such parameter) rather than failing.
             stop=config.get("stop"),
 
             # The following three parameters are for reasoning models only.
