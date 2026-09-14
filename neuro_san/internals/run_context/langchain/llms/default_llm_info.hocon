@@ -81,7 +81,7 @@
         # Tool calling works with the class defaults (the Responses API is the default endpoint). Do not set
         # "use_responses_api": false for this model: Chat Completions rejects tools combined with reasoning and the
         # model rejects reasoning_effort "none", so there is no Chat Completions path. See
-        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters
+        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/llm_info_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "04/30/2026",
@@ -102,7 +102,7 @@
         # Tool calling works with the class defaults (the Responses API is the default endpoint). To call tools on
         # Chat Completions instead, set "use_responses_api": false together with "reasoning_effort": "none" (Chat
         # Completions rejects tools combined with reasoning). See
-        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters
+        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/llm_info_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "02/16/2026",
@@ -122,7 +122,7 @@
         # Tool calling works with the class defaults (the Responses API is the default endpoint). To call tools on
         # Chat Completions instead, set "use_responses_api": false together with "reasoning_effort": "none" (Chat
         # Completions rejects tools combined with reasoning). See
-        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters
+        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/llm_info_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "02/16/2026",
@@ -144,7 +144,7 @@
         # Tool calling works with the class defaults (the Responses API is the default endpoint). To call tools on
         # Chat Completions instead, set "use_responses_api": false together with "reasoning_effort": "none" (Chat
         # Completions rejects tools combined with reasoning). See
-        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters
+        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/llm_info_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
         "knowledge_cutoff": "02/16/2026",
@@ -1517,7 +1517,7 @@
                 "reasoning_effort": null, # Constrains effort on reasoning for reasoning models (str)
                 "verbosity": null, # Controls the verbosity level of responses for reasoning models (str)
                 # Tri-state switch for which OpenAI endpoint requests are sent to (bool or null). See
-                # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters
+                # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/llm_info_hocon_reference.md#openai-reasoning-and-responses-api-parameters
                 # for the details, plus the langchain reference:
                 # https://docs.langchain.com/oss/python/integrations/chat/openai#responses-api and
                 # https://reference.langchain.com/python/langchain-openai/chat_models/base/BaseChatOpenAI/use_responses_api
