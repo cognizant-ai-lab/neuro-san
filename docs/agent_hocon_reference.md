@@ -415,7 +415,9 @@ Fable 5, Opus 5, Sonnet 5, Opus 4.8 and Opus 4.7 the API returns HTTP 400 for:
 
 Leave `temperature`, `top_p`, `top_k` and `thinking` at their `null` defaults so that they are omitted from the
 request, and use `effort` to steer how much the model thinks: `"low"`, `"medium"` or `"high"` (the API default),
-plus `"xhigh"` and `"max"` on the models above. See the
+plus `"xhigh"` and `"max"`, which the
+[effort guide](https://platform.claude.com/docs/en/build-with-claude/effort#effort-levels) lists as available on
+every model named above. See the
 [Anthropic extended thinking guide](https://platform.claude.com/docs/en/build-with-claude/extended-thinking)
 for the migration path from `budget_tokens` to `effort`, and the
 [troubleshooting thinking](https://platform.claude.com/docs/en/build-with-claude/thinking-troubleshooting) page
