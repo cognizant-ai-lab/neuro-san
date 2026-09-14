@@ -477,8 +477,9 @@ requests neuro-san sent before the Responses API became the default:
 **Upgrading existing OpenAI configurations.** Making the Responses API the default changes a few observable
 things for llm_configs that never set `use_responses_api`:
 
-- Requests go to `/v1/responses` instead of `/v1/chat/completions`. Against OpenAI itself nothing needs to
-  change; gateways are covered in the previous paragraph.
+- Requests that langchain previously routed to `/v1/chat/completions` (no `reasoning`, no `include` and not a
+  Responses-only model) now go to `/v1/responses`; configurations that already inferred the Responses API are
+  unchanged. Against OpenAI itself nothing needs to change; gateways are covered in the previous paragraph.
 - Responses are no longer stored server-side, because `store` defaults to `false`. Set `"store": true` if you
   relied on retrieving responses from OpenAI afterwards.
 - `stop` sequences are ignored: the Responses API has no `stop` parameter and langchain-openai drops it from the
