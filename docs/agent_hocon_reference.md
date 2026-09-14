@@ -440,7 +440,8 @@ things for llm_configs that never set `use_responses_api`:
   Earlier langchain-openai releases sent `stop` to the Responses API and lacked the stateless reasoning replay
   that `store: false` relies on.
 - OpenAI-compatible gateways that do not implement `/responses` need `"use_responses_api": false`, per agent or
-  server-wide as shown above.
+  server-wide as shown above. The bundled mock and record/playback test servers are such gateways;
+  `tests/mock_llm_server/llm_info_chat_completions.hocon` is a ready-made server-wide override for them.
 
 #### class
 

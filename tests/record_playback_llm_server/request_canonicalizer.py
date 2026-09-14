@@ -48,10 +48,15 @@ class RequestCanonicalizer:
 
     # Fields removed from the body before hashing. An immutable tuple so it
     # cannot be mutated at run time (which would silently change keying for
-    # every caller in-process). Empty by default; extend this tuple in source
-    # if a client is found to inject a per-run volatile value (a random request
-    # id, a timestamp, etc.) into the request body.
-    VOLATILE_BODY_KEYS: Tuple[str, ...] = ()
+    # every caller in-process). Extend this tuple in source if a client is
+    # found to inject a per-run volatile value (a random request id, a
+    # timestamp, etc.) into the request body.
+    #
+    # "store" only tells OpenAI whether to keep the response server-side and
+    # never changes the answer. neuro-san's openai class now sends store=false
+    # on every request, so dropping it keeps cassettes recorded before that
+    # default existed matching the requests neuro-san sends today.
+    VOLATILE_BODY_KEYS: Tuple[str, ...] = ("store",)
 
     @staticmethod
     def canonical_string(method: str, path: str, body_bytes: bytes) -> str:

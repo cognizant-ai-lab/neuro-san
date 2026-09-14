@@ -6,8 +6,10 @@ neuro-san agent networks without incurring real LLM token costs, hitting rate
 limits, or depending on network connectivity to a hosted provider.
 
 The mock is wire-compatible with the OpenAI client SDK, so any neuro-san agent
-network configured for `class = "openai"` can be redirected at it with a single
-`openai_api_base` change.
+network configured for `class = "openai"` can be redirected at it with an
+`openai_api_base` change plus `use_responses_api = false` — the `openai` class
+defaults to the Responses API, which the mock does not implement. See
+[Pointing a neuro-san agent network at the mock](#pointing-a-neuro-san-agent-network-at-the-mock).
 
 ## What it provides
 
@@ -96,7 +98,14 @@ Notes:
   is strict about this.
 - `use_responses_api = false` is required: the `openai` class defaults to the
   Responses API, and the mock only implements `/v1/chat/completions`, so
-  without it every request is a 404 on `/v1/responses`.
+  without it every request is a 404 on `/v1/responses`. To pin every
+  openai-class model server-wide instead (for example for the bundled
+  `math_guy` and `hello_world` networks, whose configs only name a model),
+  start the neuro-san server with
+  `AGENT_LLM_INFO_FILE=tests/mock_llm_server/llm_info_chat_completions.hocon`.
+  A network that sets its own `llm_info_file` ignores that variable. The
+  load test in `tests/load_tests/load_test_mock_llm_service.py` sets it for
+  you with `--auto-start`.
 - The `openai_api_key` value is required by the client SDK but is not validated
   by the mock. Any non-empty string works.
 - If the neuro-san service runs in a container and the mock runs on the host,
