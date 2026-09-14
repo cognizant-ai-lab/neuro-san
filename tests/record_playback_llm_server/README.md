@@ -183,10 +183,14 @@ llm_config {
     model_name = "gpt-4.1"
     openai_api_base = "http://localhost:8899/v1"
     openai_api_key = "not-needed"
+    use_responses_api = false
 }
 ```
 
 - `openai_api_base` must include the `/v1` path segment.
+- `use_responses_api = false` is required: the `openai` class defaults to the
+  Responses API, and the proxy only implements `/v1/chat/completions`, so
+  without it every request is a 404 on `/v1/responses`.
 - Use the **same** agent network and inputs for record and playback — the
   match key is derived from the request, so a changed prompt is a new
   (unrecorded) request.

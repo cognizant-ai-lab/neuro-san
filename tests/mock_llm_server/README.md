@@ -86,6 +86,7 @@ llm_config {
     model_name = "mock-model"
     openai_api_base = "http://localhost:8888/v1"
     openai_api_key = "not-needed"
+    use_responses_api = false
 }
 ```
 
@@ -93,6 +94,9 @@ Notes:
 
 - `openai_api_base` must include the `/v1` path segment — the OpenAI client SDK
   is strict about this.
+- `use_responses_api = false` is required: the `openai` class defaults to the
+  Responses API, and the mock only implements `/v1/chat/completions`, so
+  without it every request is a 404 on `/v1/responses`.
 - The `openai_api_key` value is required by the client SDK but is not validated
   by the mock. Any non-empty string works.
 - If the neuro-san service runs in a container and the mock runs on the host,
