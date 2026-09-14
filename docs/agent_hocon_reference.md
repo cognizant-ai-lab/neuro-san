@@ -25,8 +25,6 @@ Items in ***bold*** are essentials. Try to understand these first.
         - [fallbacks](#fallbacks)
         - [temperature](#temperature)
         - [Other LLM-specific Parameters](#other-llm-specific-parameters)
-        - [OpenAI Reasoning and Responses API Parameters](#openai-reasoning-and-responses-api-parameters)
-        - [Anthropic Thinking Parameters](#anthropic-thinking-parameters)
         - [Client-Provided API Keys](#client-provided-api-keys)
     - [***tools*** - list of agent/tool definitions](#tools)
     - [commondefs](#commondefs)
@@ -329,99 +327,15 @@ As long as a parameter is a scalar listed in the args section for your LLM's cla
 [llm_info hocon file](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon)
 file, you can set that parameter in any llm_config within its own technical limits however you like.
 
+A few of those parameters decide which endpoint a request goes to, or are rejected by some models.
+They are described per provider in the
+[Provider-Specific Arguments](./llm_info_hocon_reference.md#provider-specific-arguments) section of the
+llm_info reference: which OpenAI endpoint is used and why the Responses API is now the default, how to switch
+back to Chat Completions (also behind gateways such as LiteLLM), Anthropic thinking and effort, and Gemini thinking.
+
 Note: _We strongly recommend to **not** set secrets as values within any source file, including hocon files._
 These files tend to creep into source control repos, and it is **very** bad practice
 to expose secrets by checking them in.
-
-#### OpenAI Reasoning and Responses API Parameters
-
-The `openai` class accepts a few parameters that only matter for OpenAI reasoning models and for choosing which
-OpenAI endpoint (Chat Completions or the Responses API) requests are sent to. All of them default to `null`.
-
-- `reasoning`: a dictionary passed through as the Responses API `reasoning` object, for example
-  `{"effort": "low", "summary": "auto"}`. Setting it makes langchain route requests to the Responses API.
-- `reasoning_effort`: a string such as `"low"`, `"medium"` or `"high"` that constrains how much reasoning the
-  model does (`"none"` disables reasoning on models that allow it, such as `gpt-5.6-*`; `gpt-6-astra` rejects
-  it). On the Chat Completions path it is sent as-is. On the Responses API path langchain folds it into
-  `reasoning.effort` **only when `reasoning` is absent**, so set either `reasoning` or `reasoning_effort`, not
-  both. Setting `reasoning_effort` on its own does not change the endpoint.
-- `verbosity`: a string (`"low"`, `"medium"` or `"high"`) that controls how long the model's answers are.
-- `use_responses_api`: a tri-state switch for the endpoint:
-    - `null` (the default): let langchain infer the endpoint from the other parameters and the model name, as
-      documented for
-      [`use_responses_api`](https://reference.langchain.com/python/langchain-openai/chat_models/base/BaseChatOpenAI/use_responses_api).
-      langchain switches to the Responses API when any Responses-only setting is present (`reasoning`, `include`,
-      `truncation`, `context_management`, `previous_response_id`, `text`, or a built-in tool such as web search)
-      or when the model is one it knows to be Responses-only (the `gpt-5.x-pro` and `codex` models). Of those,
-      the `openai` class only exposes `reasoning` and the model name, so everything else keeps using Chat
-      Completions and existing configurations behave exactly as before.
-    - `true`: always use the Responses API.
-    - `false`: always use Chat Completions.
-
-**Models that need the Responses API for tool calling.** OpenAI's newest models no longer accept function (tool)
-calls together with reasoning on Chat Completions, and every agent that lists `tools` is a tool-calling agent.
-A Chat Completions request from a `gpt-5.6-*` model that carries tools is rejected with an error such as:
-
-> Function tools with reasoning_effort are not supported for gpt-5.6-sol in /v1/chat/completions.
-> To use function tools, use /v1/responses or set reasoning_effort to 'none'.
-
-The two model families differ in what you can do about it:
-
-- `gpt-5.6-*` (`gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`): either set `"use_responses_api": true` and keep
-  reasoning, or stay on Chat Completions with `"reasoning_effort": "none"`, which makes tool calls work but
-  without any reasoning.
-- `gpt-6-astra`: the Responses API is the only option. The
-  [OpenAI reasoning guide](https://developers.openai.com/api/docs/guides/reasoning) states that
-  "Chat Completions does not support function calling with GPT-6 Astra" and that GPT-6 Astra
-  "does not support none reasoning effort" (the API answers HTTP 400), so the `"none"` workaround does not exist
-  for it. Any agent that uses tools with gpt-6-astra must set `"use_responses_api": true`.
-
-The minimal configuration is just the endpoint switch. The model's default reasoning effort applies; add
-`reasoning_effort` only when you want a different level.
-
-```hocon
-"llm_config": {
-    "model_name": "gpt-6-astra",
-    "use_responses_api": true
-}
-```
-
-**Parameters the Responses API rejects.** `presence_penalty`, `frequency_penalty`, `seed`, `logprobs` and
-`logit_bias` (plus `stop` on langchain-openai releases before 1.4) exist only on Chat Completions. The Responses
-API rejects requests that carry them, so remove them from any llm_config that reaches the Responses API, whether
-through `"use_responses_api": true` or through auto-routing. OpenAI's
-[migration guide](https://developers.openai.com/api/docs/guides/migrate-to-responses) lists the remaining
-differences between the two endpoints.
-
-**Interaction with fallbacks.** The rejections above surface as exceptions on the client side, but
-[fallbacks](#fallbacks) wrap the model so that any exception moves on to the next llm_config in the list. With
-fallbacks configured, a misconfigured primary model silently fails over instead of reporting the problem, so
-verify a new llm_config without fallbacks first.
-
-**Azure OpenAI.** The `azure-openai` class does not support the Responses API path yet (tracked in
-[#1307](https://github.com/cognizant-ai-lab/neuro-san/issues/1307)), so leave `use_responses_api` unset for
-Azure deployments.
-
-#### Anthropic Thinking Parameters
-
-The `anthropic` and `anthropic-bedrock` classes expose `thinking`, `effort`, `temperature`, `top_p` and `top_k`,
-but current Claude models are much stricter about them than earlier generations. On Claude Fable 5.1, Mythos 5.1,
-Fable 5, Opus 5, Sonnet 5, Opus 4.8 and Opus 4.7 the API returns HTTP 400 for:
-
-- any non-default `temperature`, `top_p` or `top_k`, whether or not thinking is used;
-- `thinking` set to `{"type": "enabled", "budget_tokens": N}`, because these models only support adaptive thinking;
-- `thinking` set to `{"type": "disabled"}` on Fable 5.1, Mythos 5.1 and Fable 5, where thinking is always on
-  (Opus 5 also rejects it when `effort` is `"xhigh"` or `"max"`).
-
-Leave `temperature`, `top_p`, `top_k` and `thinking` at their `null` defaults so that they are omitted from the
-request, and use `effort` to steer how much the model thinks: `"low"`, `"medium"` or `"high"` (the API default),
-plus `"xhigh"` and `"max"`, which the
-[effort guide](https://platform.claude.com/docs/en/build-with-claude/effort#effort-levels) lists as available on
-every model named above. See the
-[Anthropic extended thinking guide](https://platform.claude.com/docs/en/build-with-claude/extended-thinking)
-for the migration path from `budget_tokens` to `effort`, and the
-[troubleshooting thinking](https://platform.claude.com/docs/en/build-with-claude/thinking-troubleshooting) page
-for the per-model table of accepted `thinking` types.
 
 #### class
 
