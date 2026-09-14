@@ -19,8 +19,6 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
-from pytest import raises
-
 from pydantic import BaseModel
 
 from neuro_san.internals.run_context.langchain.core.langchain_openai_function_tool \
@@ -73,8 +71,8 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
 
         result = await tool._arun()   # pylint: disable=protected-access
 
-        assert result == "the answer"
-        assert isinstance(result, str)
+        self.assertEqual(result, "the answer")
+        self.assertIsInstance(result, str)
 
     async def test_arun_returns_none_when_run_has_no_tool_message(self):
         """
@@ -87,7 +85,7 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
 
         result = await tool._arun()   # pylint: disable=protected-access
 
-        assert result is None
+        self.assertIsNone(result)
 
     async def test_arun_returns_exception_string_on_failure(self):
         """
@@ -98,7 +96,7 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
 
         result = await tool._arun()   # pylint: disable=protected-access
 
-        assert result == "something broke"
+        self.assertEqual(result, "something broke")
 
     def test_from_function_json_without_parameters_builds_empty_args_schema(self):
         """
@@ -114,8 +112,8 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
         }
         tool = LangChainOpenAIFunctionTool.from_function_json(function_json, MagicMock())
 
-        assert tool.args_schema is not None
-        assert len(tool.args_schema.model_fields) == 0
+        self.assertIsNotNone(tool.args_schema)
+        self.assertEqual(len(tool.args_schema.model_fields), 0)
 
     def test_explicit_null_parameters_builds_explicit_empty_args_schema(self):
         """
@@ -129,8 +127,8 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
         """
         function_json = {"name": "ext_agent", "description": "d", "parameters": None}
         tool = LangChainOpenAIFunctionTool.from_function_json(function_json, MagicMock())
-        assert tool.args_schema is not None
-        assert issubclass(tool.args_schema, BaseModel)
+        self.assertIsNotNone(tool.args_schema)
+        self.assertTrue(issubclass(tool.args_schema, BaseModel))
 
     def test_non_dict_parameters_raises_tool_spec_error(self):
         """
@@ -138,7 +136,7 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
         instead of raising a raw AttributeError from parameters.get().
         """
         function_json = {"name": "ext_agent", "description": "d", "parameters": "not-a-dict"}
-        with raises(ToolSpecError, match="parameters to be a dictionary"):
+        with self.assertRaisesRegex(ToolSpecError, "parameters to be a dictionary"):
             LangChainOpenAIFunctionTool.from_function_json(function_json, MagicMock())
 
     async def test_arun_projects_block_content_answer_to_text(self) -> None:
@@ -155,7 +153,7 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
 
         result = await tool._arun()   # pylint: disable=protected-access
 
-        assert result == "the answer"
+        self.assertEqual(result, "the answer")
 
     async def test_arun_references_data_blocks_in_text(self) -> None:
         """
@@ -171,4 +169,4 @@ class TestLangChainOpenAIFunctionTool(IsolatedAsyncioTestCase):
 
         result = await tool._arun()   # pylint: disable=protected-access
 
-        assert result == "Here is the chart.[image attachment: image/png]"
+        self.assertEqual(result, "Here is the chart.[image attachment: image/png]")
