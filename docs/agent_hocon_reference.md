@@ -216,7 +216,7 @@ branches off work to any other agent/tool.  You can browse the `capabilities` se
 The most common situation is one where you will need your own access key set as an environment variable in order
 to use LLMs from various providers.
 
-| LLM Provider               | API Key environment variable                                       |
+| LLM Provider               | Environment variables                                              |
 |:---------------------------|:-------------------------------------------------------------------|
 | Amazon Bedrock             | AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or AWS_PROFILE        |
 | Anthropic                  | ANTHROPIC_API_KEY                                                  |
@@ -313,8 +313,9 @@ Example networks that advertise that their sly_data_schema needs external API ke
 #### temperature
 
 Pretty much any of the LLMs will take a floating-point temperature parameter as an argument.
-Roughly speaking, temperature is a number between 0.0 and 1.0 that indicates a relative amount of randomness
-in answers provided by the LLM.  Most of the stock classes in
+Roughly speaking, temperature is a number that indicates a relative amount of randomness in answers provided
+by the LLM; the accepted range depends on the provider (the `gemini` class documents 0.0 to 2.0, for example),
+so check your model's documentation.  Most of the stock classes in
 [default_llm_info.hocon](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon)
 leave temperature `null`, which means it is omitted from the request and the provider's own default applies
 (the `gemini` class is the exception and sets 0.7).  Note that some reasoning models reject a custom

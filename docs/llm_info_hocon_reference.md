@@ -451,8 +451,9 @@ defaults above that is a request to `/v1/responses` carrying `store: false`. Wha
 gateway:
 
 - A gateway that fronts OpenAI and serves `/v1/responses` (LiteLLM does, for every provider it supports) needs
-  no change. The requests carry the same parameters as before plus `store: false`, which OpenAI accepts on
-  both endpoints.
+  no endpoint override. The requests carry the same parameters as before plus `store: false`, which OpenAI
+  accepts on both endpoints; the Chat-Completions-only parameters listed above still have to be removed, or
+  the request pinned to Chat Completions, exactly as against OpenAI itself.
 - A gateway that only implements `/chat/completions`, such as an older proxy or the bundled mock and
   record/playback test servers, needs `"use_responses_api": false`.
 - A gateway that translates the OpenAI format into another provider's API, such as LiteLLM with an Anthropic,
