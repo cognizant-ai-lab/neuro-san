@@ -422,10 +422,13 @@ The minimal configuration is just the model name. The model's default reasoning 
 ```
 
 **Parameters the Responses API rejects.** `presence_penalty`, `frequency_penalty`, `seed`, `logprobs` and
-`logit_bias` exist only on Chat Completions. Now that the Responses API is the default endpoint, an llm_config
-that carries any of them is rejected unless it also sets `"use_responses_api": false`, so remove them from every
-other OpenAI llm_config. `stop` is Chat Completions only as well, but langchain-openai drops it from Responses API
-requests instead of failing, so it simply has no effect unless `use_responses_api` is `false`. OpenAI's
+`logit_bias` exist only on Chat Completions. langchain-openai rejects an llm_config that carries any of them
+whenever the request goes to the Responses API, which with the class default `use_responses_api: true` is every
+request. Keep them only in an llm_config that pins Chat Completions with `"use_responses_api": false` (with
+`null`, langchain's inference also picks Chat Completions for a model without Responses-only settings), and
+remove them from every other OpenAI llm_config. `stop` is Chat Completions only as well, but langchain-openai
+drops it from Responses API requests instead of failing, so it simply has no effect unless the request goes to
+Chat Completions. OpenAI's
 [migration guide](https://developers.openai.com/api/docs/guides/migrate-to-responses) lists the remaining
 differences between the two endpoints.
 
