@@ -26,6 +26,7 @@ Items in ***bold*** are essentials. Try to understand these first.
         - [temperature](#temperature)
         - [Other LLM-specific Parameters](#other-llm-specific-parameters)
         - [OpenAI Reasoning and Responses API Parameters](#openai-reasoning-and-responses-api-parameters)
+        - [Anthropic Thinking Parameters](#anthropic-thinking-parameters)
         - [Client-Provided API Keys](#client-provided-api-keys)
     - [***tools*** - list of agent/tool definitions](#tools)
     - [commondefs](#commondefs)
@@ -193,14 +194,18 @@ For further details, refer to the [toolbox](#toolbox) section below.
 ### llm_config
 
 An optional dictionary describing the default settings for agent LLMs when specifics
-are not available for an given agent.  The default setting when this is not present
-is to use an OpenAI gpt-4o model as the model_name for all agents.
+are not available for a given agent.  When this is not present, the model_name for all agents
+is the one in the `default_config` section of
+[default_llm_info.hocon](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon)
+(at the time of writing this is gpt-5.2).
 
 #### model_name
 
 The string model name to use for an agent in the network.
-When this is not present, the default model is "gpt-4o" which is a decent all-purpose tool-using agent
-which gets job done but doesn't cost a ton.
+When this is not present, the default is the `model_name` in the `default_config` section of
+[default_llm_info.hocon](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon)
+(at the time of writing this is gpt-5.2), a decent all-purpose tool-using model
+which gets the job done but doesn't cost a ton.
 
 You can use any model listed in the [default_llm_info.hocon](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon)
 file included with the neuro-san distribution without any further modification.
@@ -213,17 +218,21 @@ branches off work to any other agent/tool.  You can browse the `capabilities` se
 The most common situation is one where you will need your own access key set as an environment variable in order
 to use LLMs from various providers.
 
-| LLM Provider               | API Key environment variable                                 |
-|:---------------------------|:-------------------------------------------------------------|
-| Amazon Bedrock             | AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or AWS_PROFILE  |
-| Anthropic                  | ANTHROPIC_API_KEY                                            |
-| Anthropic via Bedrock      | AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or AWS_PROFILE  |
-| Azure OpenAI               | AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT               |
-| Google Gemini              | GOOGLE_API_KEY                                               |
-| NVidia                     | NVIDIA_API_KEY                                               |
-| Ollama                     | &lt;None required&gt;                                        |
-| OpenAI                     | OPENAI_API_KEY                                               |
-| OpenRouter                 | OPENROUTER_API_KEY                                           |
+| LLM Provider               | API Key environment variable                                       |
+|:---------------------------|:-------------------------------------------------------------------|
+| Amazon Bedrock             | AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or AWS_PROFILE        |
+| Anthropic                  | ANTHROPIC_API_KEY                                                  |
+| Anthropic via Bedrock      | AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or AWS_PROFILE        |
+| Azure OpenAI               | AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT and OPENAI_API_VERSION |
+| Google Gemini              | GOOGLE_API_KEY                                                     |
+| NVidia                     | NVIDIA_API_KEY                                                     |
+| Ollama                     | &lt;None required&gt;                                              |
+| OpenAI                     | OPENAI_API_KEY                                                     |
+| OpenRouter                 | OPENROUTER_API_KEY                                                 |
+
+Azure OpenAI also needs to know which deployment to call.  Give it as `deployment_name` in the llm_config
+or set the `AZURE_OPENAI_DEPLOYMENT_NAME` environment variable.  See
+[music_nerd_pro_llm_azure.hocon](../neuro_san/registries/music_nerd_pro_llm_azure.hocon) for a working example.
 
 For the Bedrock-based entries you can either set explicit credentials via
 `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` (plus optional `AWS_SESSION_TOKEN`
@@ -307,7 +316,11 @@ Example networks that advertise that their sly_data_schema needs external API ke
 
 Pretty much any of the LLMs will take a floating-point temperature parameter as an argument.
 Roughly speaking, temperature is a number between 0.0 and 1.0 that indicates a relative amount of randomness
-in answers provided by the LLM.  By default this value is 0.7.
+in answers provided by the LLM.  Most of the stock classes in
+[default_llm_info.hocon](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon)
+leave temperature `null`, which means it is omitted from the request and the provider's own default applies
+(the `gemini` class is the exception and sets 0.7).  Note that some reasoning models reject a custom
+temperature, so only set one if your model supports it.
 
 #### Other LLM-specific Parameters
 
@@ -389,6 +402,25 @@ verify a new llm_config without fallbacks first.
 [#1307](https://github.com/cognizant-ai-lab/neuro-san/issues/1307)), so leave `use_responses_api` unset for
 Azure deployments.
 
+#### Anthropic Thinking Parameters
+
+The `anthropic` and `anthropic-bedrock` classes expose `thinking`, `effort`, `temperature`, `top_p` and `top_k`,
+but current Claude models are much stricter about them than earlier generations. On Claude Fable 5.1, Mythos 5.1,
+Fable 5, Opus 5, Sonnet 5, Opus 4.8 and Opus 4.7 the API returns HTTP 400 for:
+
+- any non-default `temperature`, `top_p` or `top_k`, whether or not thinking is used;
+- `thinking` set to `{"type": "enabled", "budget_tokens": N}`, because these models only support adaptive thinking;
+- `thinking` set to `{"type": "disabled"}` on Fable 5.1, Mythos 5.1 and Fable 5, where thinking is always on
+  (Opus 5 also rejects it when `effort` is `"xhigh"` or `"max"`).
+
+Leave `temperature`, `top_p`, `top_k` and `thinking` at their `null` defaults so that they are omitted from the
+request, and use `effort` to steer how much the model thinks: `"low"`, `"medium"` or `"high"` (the API default),
+plus `"xhigh"` and `"max"` on the models above. See the
+[Anthropic extended thinking guide](https://platform.claude.com/docs/en/build-with-claude/extended-thinking)
+for the migration path from `budget_tokens` to `effort`, and the
+[troubleshooting thinking](https://platform.claude.com/docs/en/build-with-claude/thinking-troubleshooting) page
+for the per-model table of accepted `thinking` types.
+
 #### class
 
 You can use the `class` key in two ways:
@@ -412,7 +444,9 @@ Set the `class` key to one of the values listed below, then specify the model us
 You may only provide parameters that are explicitly defined for that provider's class under the
 `classes.<class>.args` section of
 [`default_llm_info.hocon`](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon).
-Unsupported parameters will be ignored
+Unsupported parameters will be ignored.  More precisely, any parameter that the provider's policy does not
+forward to the underlying chat model is silently dropped, with no error or warning.  This differs from the
+custom class route described in section 2 below, where unknown parameters raise an error instead.
 
 **2. For custom providers (not in `default_llm_info.hocon`)**
 
@@ -423,6 +457,19 @@ Set the `class` key to the full Python path of the desired LangChain-compatible 
 ```
 
 Then, provide any constructor arguments supported by that class in `llm_config`.
+
+Note that this route bypasses both the provider policy and the model alias table in
+[`default_llm_info.hocon`](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon).
+`DefaultLlmFactory` resolves the class path and constructs the class directly, passing the `llm_config`
+(minus `class` and `verbose`) to its constructor as keyword arguments. As a result:
+
+- The model must be given the way the class expects it, and as the provider's own API model name. For example
+  `ChatGoogleGenerativeAI` takes `model` rather than `model_name`, and the value must be `gemini-3-flash-preview`
+  rather than the neuro-san alias `gemini-3-flash`, because the alias and `use_model_name` redirections are never
+  consulted.
+- Settings derived from the llm_info entry are not applied. In particular `max_tokens` is not computed from
+  `max_output_tokens`, and the shared HTTP client (connection pooling, proxy and timeout handling) that the
+  `openai` and `azure-openai` policies set up is not created.
 
 For a full list of available chat model classes and their parameters, refer to:
 [LangChain Chat Integrations Documentation](https://python.langchain.com/docs/integrations/chat/)

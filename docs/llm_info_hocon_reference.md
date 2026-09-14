@@ -122,6 +122,13 @@ is trained to use tools, it typically does not.
 The lack of capability to use tools is the main source of disappointment for neuro-san
 users when trying out newly released models.
 
+Some newer OpenAI models are trained to use tools but only do so through the Responses API
+(for example `gpt-6-astra`), or need `reasoning_effort` set to `"none"` to use tools on Chat Completions
+(the `gpt-5.6-*` models). Which OpenAI endpoint a model uses is controlled by `use_responses_api` in the
+`llm_config`, or by the `openai` class default in this file. See
+[OpenAI Reasoning and Responses API Parameters](./agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters)
+for the per-model details.
+
 Note it is not possible to simply list a new capability and have it
 magically manifest itself.  This is a matter of how the LLM was trained.
 
