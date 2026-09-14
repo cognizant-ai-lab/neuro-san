@@ -419,16 +419,21 @@ fallbacks configured, a misconfigured primary model silently fails over instead 
 verify a new llm_config without fallbacks first.
 
 **Azure OpenAI.** The `azure-openai` class extends `openai` and therefore inherits the `use_responses_api`,
-`store` and `include` defaults, but `AzureLlmPolicy` does not forward any of them to `AzureChatOpenAI`, so Azure
-deployments stay on Chat Completions regardless of what those keys say (tracked in
-[#1307](https://github.com/cognizant-ai-lab/neuro-san/issues/1307)).
+`store` and `include` defaults, but `AzureLlmPolicy` does not forward any of them to `AzureChatOpenAI`, so those
+keys have no effect on Azure. Azure requests instead follow langchain's own inference: Chat Completions for most
+models, but a model name langchain knows to be Responses-only (such as the `gpt-5.4-pro` snapshot behind
+`azure-gpt-5.4-pro`) auto-routes to the Responses API, which `AzureLlmPolicy` does not support yet. Responses API
+support for Azure, including pinning the endpoint, is tracked in
+[#1307](https://github.com/cognizant-ai-lab/neuro-san/issues/1307).
 
 **Upgrading existing OpenAI configurations.** Making the Responses API the default changes a few observable
 things for llm_configs that never set `use_responses_api`:
 
 - Responses are no longer stored server-side, because `store` defaults to `false`. Set `"store": true` if you
   relied on retrieving responses from OpenAI afterwards.
-- `stop` sequences are ignored: the Responses API has no `stop` parameter, so langchain drops it from the request.
+- `stop` sequences are ignored on langchain-openai 1.4 and later, which drop the parameter because the Responses
+  API has none. Earlier releases still send it and the request fails client-side, so remove `stop` from the
+  llm_config or set `"use_responses_api": false` for it.
 - OpenAI-compatible gateways that do not implement `/responses` need `"use_responses_api": false`, per agent or
   server-wide as shown above.
 

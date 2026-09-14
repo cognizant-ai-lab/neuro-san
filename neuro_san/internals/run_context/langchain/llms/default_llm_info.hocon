@@ -1555,8 +1555,10 @@
         "azure-openai": {
             "extends": "openai",
             # The use_responses_api, store and include values inherited from "openai" are not forwarded by
-            # AzureLlmPolicy, so Azure stays on Chat Completions regardless of what they say. Tracked in
-            # https://github.com/cognizant-ai-lab/neuro-san/issues/1307
+            # AzureLlmPolicy, so they have no effect here. Azure requests follow langchain's own inference instead:
+            # Chat Completions for most models, but a Responses-only model name (such as the gpt-5.4-pro snapshot
+            # behind azure-gpt-5.4-pro) auto-routes to the Responses API, which AzureLlmPolicy does not support yet.
+            # Tracked in https://github.com/cognizant-ai-lab/neuro-san/issues/1307
             "args": {
                 # Note that we can only supply arguments that are "Just Data" in nature.
                 # See https://python.langchain.com/api_reference/openai/chat_models/langchain_openai.chat_models.azure.AzureChatOpenAI.html
