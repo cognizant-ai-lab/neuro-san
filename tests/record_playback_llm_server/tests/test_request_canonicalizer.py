@@ -1,4 +1,3 @@
-
 # Copyright © 2023-2026 Cognizant Technology Solutions Corp, www.cognizant.com.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,28 +18,78 @@ Tests for RequestCanonicalizer key stability.
 """
 import json
 
+from typing import Any
+from typing import Dict
+from unittest import TestCase
+
 from tests.record_playback_llm_server.request_canonicalizer import RequestCanonicalizer
 
 
-class TestRequestCanonicalizer:
-    """Canonical-key stability guarantees the record/playback matching relies on."""
+class TestRequestCanonicalizer(TestCase):
+    """
+    Canonical-key stability guarantees the record/playback matching relies on.
+    """
 
-    def test_key_ignores_json_key_order(self):
-        """Requests differing only in JSON key order hash to the same key."""
-        body_a = json.dumps({"model": "m", "stream": False, "messages": []}).encode()
-        body_b = json.dumps({"messages": [], "stream": False, "model": "m"}).encode()
-        assert RequestCanonicalizer.key("POST", "/v1/chat/completions", body_a) == \
-            RequestCanonicalizer.key("POST", "/v1/chat/completions", body_b)
+    PATH: str = "/v1/chat/completions"
 
-    def test_stream_flag_changes_key(self):
-        """A streamed request and a one-shot request map to different keys."""
-        one = json.dumps({"model": "m", "stream": False}).encode()
-        streamed = json.dumps({"model": "m", "stream": True}).encode()
-        assert RequestCanonicalizer.key("POST", "/v1/chat/completions", one) != \
-            RequestCanonicalizer.key("POST", "/v1/chat/completions", streamed)
+    @staticmethod
+    def _key(body: Dict[str, Any], method: str = "POST", path: str = "/v1/chat/completions") -> str:
+        """
+        Computes the cassette key for a JSON body.
 
-    def test_path_and_method_participate(self):
-        """Method and path are part of the key, not just the body."""
-        body = b"{}"
-        assert RequestCanonicalizer.key("POST", "/chat/completions", body) != \
-            RequestCanonicalizer.key("GET", "/chat/completions", body)
+        :param body: The request body to serialize and hash
+        :param method: The HTTP method of the request
+        :param path: The upstream path of the request
+        :return: The canonical cassette key
+        """
+        body_bytes: bytes = json.dumps(body).encode()
+        return RequestCanonicalizer.key(method, path, body_bytes)
+
+    def test_key_ignores_json_key_order(self) -> None:
+        """
+        Requests differing only in JSON key order hash to the same key.
+        """
+        body_a: Dict[str, Any] = {"model": "m", "stream": False, "messages": []}
+        body_b: Dict[str, Any] = {"messages": [], "stream": False, "model": "m"}
+
+        self.assertEqual(self._key(body_a), self._key(body_b))
+
+    def test_stream_flag_changes_key(self) -> None:
+        """
+        A streamed request and a one-shot request map to different keys.
+        """
+        one: Dict[str, Any] = {"model": "m", "stream": False}
+        streamed: Dict[str, Any] = {"model": "m", "stream": True}
+
+        self.assertNotEqual(self._key(one), self._key(streamed))
+
+    def test_path_and_method_participate(self) -> None:
+        """
+        Method and path are part of the key, not just the body.
+        """
+        body: bytes = b"{}"
+
+        self.assertNotEqual(RequestCanonicalizer.key("POST", "/chat/completions", body),
+                            RequestCanonicalizer.key("GET", "/chat/completions", body))
+
+    def test_store_is_volatile_but_other_fields_are_not(self) -> None:
+        """
+        Requests that differ only by "store" hash identically, while a real request field
+        still changes the key.
+
+        neuro-san's openai class now sends store=false on every request; store only controls
+        whether OpenAI keeps the response server-side and never changes the answer, so dropping
+        it keeps cassettes recorded before that default matching the requests sent today.
+        """
+        base: Dict[str, Any] = {"model": "m", "stream": False, "messages": [{"role": "user", "content": "hi"}]}
+        with_store_false: Dict[str, Any] = dict(base)
+        with_store_false["store"] = False
+        with_store_true: Dict[str, Any] = dict(base)
+        with_store_true["store"] = True
+        different_message: Dict[str, Any] = dict(base)
+        different_message["messages"] = [{"role": "user", "content": "bye"}]
+
+        self.assertIn("store", RequestCanonicalizer.VOLATILE_BODY_KEYS)
+        self.assertEqual(self._key(base), self._key(with_store_false))
+        self.assertEqual(self._key(base), self._key(with_store_true))
+        self.assertNotEqual(self._key(base), self._key(different_message))

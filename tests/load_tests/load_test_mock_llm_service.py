@@ -352,8 +352,10 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         # Without the overlay, model-name-only openai configs (math_guy, hello_world) use the
         # Responses API, which the mock does not serve, and every request is a 404. Warn rather
         # than exit: a deployment may pin Chat Completions through a per-network llm_info_file.
+        # An empty value counts as unset: the shipped Dockerfiles define AGENT_LLM_INFO_FILE=""
+        # and DefaultLlmFactory ignores an empty path just like a missing variable.
         llm_info_file: str = server_env.get("AGENT_LLM_INFO_FILE")
-        if llm_info_file is None:
+        if not llm_info_file:
             logger.warning(
                 "neuro-san server does not have AGENT_LLM_INFO_FILE set.\n"
                 "  The openai class defaults to the Responses API, which the mock LLM server does not\n"
