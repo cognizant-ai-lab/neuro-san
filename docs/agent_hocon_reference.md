@@ -323,10 +323,12 @@ to expose secrets by checking them in.
 #### OpenAI Reasoning and Responses API Parameters
 
 The `openai` class accepts a few parameters that only matter for OpenAI reasoning models and for choosing which
-OpenAI endpoint (Chat Completions or the Responses API) requests are sent to. All of them default to `null`.
+OpenAI endpoint (Chat Completions or the Responses API) requests are sent to. The Responses API is the default
+endpoint and responses are not stored server-side by default; the reasoning parameters default to `null`.
 
 - `reasoning`: a dictionary passed through as the Responses API `reasoning` object, for example
-  `{"effort": "low", "summary": "auto"}`. Setting it makes langchain route requests to the Responses API.
+  `{"effort": "low", "summary": "auto"}`. Setting it makes langchain route requests to the Responses API even
+  when `use_responses_api` is `null`.
 - `reasoning_effort`: a string such as `"low"`, `"medium"` or `"high"` that constrains how much reasoning the
   model does (`"none"` disables reasoning on models that allow it, such as `gpt-5.6-*`; `gpt-6-astra` rejects
   it). On the Chat Completions path it is sent as-is. On the Responses API path langchain folds it into
@@ -334,16 +336,47 @@ OpenAI endpoint (Chat Completions or the Responses API) requests are sent to. Al
   both. Setting `reasoning_effort` on its own does not change the endpoint.
 - `verbosity`: a string (`"low"`, `"medium"` or `"high"`) that controls how long the model's answers are.
 - `use_responses_api`: a tri-state switch for the endpoint:
-    - `null` (the default): let langchain infer the endpoint from the other parameters and the model name, as
-      documented for
+    - `true` (the default): every OpenAI model uses the Responses API. This is the endpoint OpenAI's newest
+      models require for tool calling with reasoning (see below); OpenAI's
+      [migration guide](https://developers.openai.com/api/docs/guides/migrate-to-responses) describes the
+      differences from Chat Completions.
+    - `false`: always use Chat Completions. Use this for OpenAI-compatible gateways that only implement
+      `/chat/completions`. To switch a single agent, set it in that agent's `llm_config`. To switch a whole
+      server, point the
+      [AGENT_LLM_INFO_FILE](./llm_info_hocon_reference.md#AGENT_LLM_INFO_FILE-environment-variable) environment
+      variable at a sparse llm info file that deep-merges over the default:
+
+      ```hocon
+      {
+          "classes": {
+              "openai": {
+                  "args": {
+                      "use_responses_api": false
+                  }
+              }
+          }
+      }
+      ```
+
+    - `null`: let langchain infer the endpoint from the other parameters and the model name, as documented for
       [`use_responses_api`](https://reference.langchain.com/python/langchain-openai/chat_models/base/BaseChatOpenAI/use_responses_api).
       langchain switches to the Responses API when any Responses-only setting is present (`reasoning`, `include`,
       `truncation`, `context_management`, `previous_response_id`, `text`, or a built-in tool such as web search)
-      or when the model is one it knows to be Responses-only (the `gpt-5.x-pro` and `codex` models). Of those,
-      the `openai` class only exposes `reasoning` and the model name, so everything else keeps using Chat
-      Completions and existing configurations behave exactly as before.
-    - `true`: always use the Responses API.
-    - `false`: always use Chat Completions.
+      or when the model is one it knows to be Responses-only (the `gpt-5.x-pro` and `codex` models); otherwise it
+      uses Chat Completions. Of those settings, the `openai` class only exposes `reasoning`, `include` and the
+      model name. This was the default before the Responses API became the default endpoint.
+- `store`: whether OpenAI keeps the response server-side (`false` by default). OpenAI stores responses for 30
+  days unless told otherwise; `false` makes every request stateless. Stateless operation does not break
+  reasoning models in the tool-calling loop, because the Responses API includes an `encrypted_content` property
+  on reasoning items by default (see the
+  [OpenAI reasoning guide](https://developers.openai.com/api/docs/guides/reasoning)) and langchain replays those
+  items on the next turn. Set `true` to let OpenAI store responses so they can be retrieved later, or `null` to
+  omit the field entirely for gateways that reject fields they do not know. Chat Completions accepts `store` too.
+- `include`: a list of extra output fields to return, for example `["reasoning.encrypted_content"]` (`null` by
+  default). OpenAI still accepts that legacy value but no longer requires it, because `encrypted_content` is
+  included by default. Any non-null `include` makes langchain route to the Responses API when `use_responses_api`
+  is `null`, while an explicit `"use_responses_api": false` still wins and then Chat Completions rejects the
+  parameter outright, so leave it `null` unless the request is certain to go to the Responses API.
 
 **Models that need the Responses API for tool calling.** OpenAI's newest models no longer accept function (tool)
 calls together with reasoning on Chat Completions, and every agent that lists `tools` is a tool-calling agent.
@@ -352,31 +385,31 @@ A Chat Completions request from a `gpt-5.6-*` model that carries tools is reject
 > Function tools with reasoning_effort are not supported for gpt-5.6-sol in /v1/chat/completions.
 > To use function tools, use /v1/responses or set reasoning_effort to 'none'.
 
-The two model families differ in what you can do about it:
+With the Responses API as the default endpoint both model families work out of the box. They differ in how far
+you can move away from the defaults:
 
-- `gpt-5.6-*` (`gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`): either set `"use_responses_api": true` and keep
-  reasoning, or stay on Chat Completions with `"reasoning_effort": "none"`, which makes tool calls work but
-  without any reasoning.
-- `gpt-6-astra`: the Responses API is the only option. The
+- `gpt-5.6-*` (`gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`): the defaults keep reasoning and tool calling.
+  If you must stay on Chat Completions, set `"use_responses_api": false` together with
+  `"reasoning_effort": "none"`, which makes tool calls work but without any reasoning.
+- `gpt-6-astra`: the Responses API is the only option, so never set `"use_responses_api": false` for it. The
   [OpenAI reasoning guide](https://developers.openai.com/api/docs/guides/reasoning) states that
   "Chat Completions does not support function calling with GPT-6 Astra" and that GPT-6 Astra
   "does not support none reasoning effort" (the API answers HTTP 400), so the `"none"` workaround does not exist
-  for it. Any agent that uses tools with gpt-6-astra must set `"use_responses_api": true`.
+  for it.
 
-The minimal configuration is just the endpoint switch. The model's default reasoning effort applies; add
+The minimal configuration is just the model name. The model's default reasoning effort applies; add
 `reasoning_effort` only when you want a different level.
 
 ```hocon
 "llm_config": {
-    "model_name": "gpt-6-astra",
-    "use_responses_api": true
+    "model_name": "gpt-6-astra"
 }
 ```
 
 **Parameters the Responses API rejects.** `presence_penalty`, `frequency_penalty`, `seed`, `logprobs` and
-`logit_bias` (plus `stop` on langchain-openai releases before 1.4) exist only on Chat Completions. The Responses
-API rejects requests that carry them, so remove them from any llm_config that reaches the Responses API, whether
-through `"use_responses_api": true` or through auto-routing. OpenAI's
+`logit_bias` (plus `stop` on langchain-openai releases before 1.4) exist only on Chat Completions. Now that the
+Responses API is the default endpoint, an llm_config that carries any of them is rejected unless it also sets
+`"use_responses_api": false`, so remove them from every other OpenAI llm_config. OpenAI's
 [migration guide](https://developers.openai.com/api/docs/guides/migrate-to-responses) lists the remaining
 differences between the two endpoints.
 
@@ -385,9 +418,19 @@ differences between the two endpoints.
 fallbacks configured, a misconfigured primary model silently fails over instead of reporting the problem, so
 verify a new llm_config without fallbacks first.
 
-**Azure OpenAI.** The `azure-openai` class does not support the Responses API path yet (tracked in
-[#1307](https://github.com/cognizant-ai-lab/neuro-san/issues/1307)), so leave `use_responses_api` unset for
-Azure deployments.
+**Azure OpenAI.** The `azure-openai` class extends `openai` and therefore inherits the `use_responses_api`,
+`store` and `include` defaults, but `AzureLlmPolicy` does not forward any of them to `AzureChatOpenAI`, so Azure
+deployments stay on Chat Completions regardless of what those keys say (tracked in
+[#1307](https://github.com/cognizant-ai-lab/neuro-san/issues/1307)).
+
+**Upgrading existing OpenAI configurations.** Making the Responses API the default changes a few observable
+things for llm_configs that never set `use_responses_api`:
+
+- Responses are no longer stored server-side, because `store` defaults to `false`. Set `"store": true` if you
+  relied on retrieving responses from OpenAI afterwards.
+- `stop` sequences are ignored: the Responses API has no `stop` parameter, so langchain drops it from the request.
+- OpenAI-compatible gateways that do not implement `/responses` need `"use_responses_api": false`, per agent or
+  server-wide as shown above.
 
 #### class
 

@@ -78,8 +78,9 @@
             "output": [ "text" ],
         },
         "capabilities": [ "tools" ],
-        # Tool calling needs "use_responses_api": true in llm_config: Chat Completions rejects tools combined
-        # with reasoning, and this model rejects reasoning_effort "none", so there is no Chat Completions path. See
+        # Tool calling works with the class defaults (the Responses API is the default endpoint). Do not set
+        # "use_responses_api": false for this model: Chat Completions rejects tools combined with reasoning and the
+        # model rejects reasoning_effort "none", so there is no Chat Completions path. See
         # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
@@ -98,8 +99,9 @@
             "output": [ "text" ],
         },
         "capabilities": [ "tools" ],
-        # Tool calling needs "use_responses_api": true in llm_config, or "reasoning_effort": "none" to stay on
-        # Chat Completions without reasoning (Chat Completions rejects tools combined with reasoning). See
+        # Tool calling works with the class defaults (the Responses API is the default endpoint). To call tools on
+        # Chat Completions instead, set "use_responses_api": false together with "reasoning_effort": "none" (Chat
+        # Completions rejects tools combined with reasoning). See
         # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
@@ -117,8 +119,9 @@
             "output": [ "text" ],
         },
         "capabilities": [ "tools" ],
-        # Tool calling needs "use_responses_api": true in llm_config, or "reasoning_effort": "none" to stay on
-        # Chat Completions without reasoning (Chat Completions rejects tools combined with reasoning). See
+        # Tool calling works with the class defaults (the Responses API is the default endpoint). To call tools on
+        # Chat Completions instead, set "use_responses_api": false together with "reasoning_effort": "none" (Chat
+        # Completions rejects tools combined with reasoning). See
         # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
@@ -138,8 +141,9 @@
             "output": [ "text" ],
         },
         "capabilities": [ "tools" ],
-        # Tool calling needs "use_responses_api": true in llm_config, or "reasoning_effort": "none" to stay on
-        # Chat Completions without reasoning (Chat Completions rejects tools combined with reasoning). See
+        # Tool calling works with the class defaults (the Responses API is the default endpoint). To call tools on
+        # Chat Completions instead, set "use_responses_api": false together with "reasoning_effort": "none" (Chat
+        # Completions rejects tools combined with reasoning). See
         # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters
         "context_window_size": 1050000,
         "max_output_tokens": 128000,
@@ -1512,23 +1516,47 @@
                 "verbosity": null, # Controls the verbosity level of responses for reasoning models (str)
                 # Tri-state switch for which OpenAI endpoint requests are sent to (bool or null). See
                 # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#openai-reasoning-and-responses-api-parameters
-                # for which models need it and why, plus the langchain reference:
+                # for the details, plus the langchain reference:
                 # https://docs.langchain.com/oss/python/integrations/chat/openai#responses-api and
                 # https://reference.langchain.com/python/langchain-openai/chat_models/base/BaseChatOpenAI/use_responses_api
-                #   null  - let langchain infer the endpoint from the other parameters and the model name.
-                #           Any Responses-only setting (with this class that means a "reasoning" dict) or a
-                #           Responses-only model (gpt-5.x-pro, codex) selects the Responses API; otherwise
-                #           requests stay on Chat Completions (the long-standing behavior).
-                #   true  - force the Responses API. Needed for tool calling with reasoning on the newest OpenAI
-                #           models (gpt-6-astra, gpt-5.6-*), because Chat Completions rejects the combination.
-                #   false - force Chat Completions.
-                "use_responses_api": null,
+                #   true  - (default) every OpenAI model goes to the Responses API. This became the default because
+                #           the newest OpenAI models (gpt-6-astra, gpt-5.6-*) only allow tool calling combined with
+                #           reasoning on the Responses API: Chat Completions rejects the combination, and gpt-6-astra
+                #           has no Chat Completions function calling at all.
+                #           https://developers.openai.com/api/docs/guides/reasoning
+                #   false - force Chat Completions. Use this for OpenAI-compatible gateways that only implement
+                #           /chat/completions. For gpt-5.6-* combine it with "reasoning_effort": "none" so that tool
+                #           calls still work (without reasoning).
+                #   null  - let langchain infer the endpoint from the other parameters and the model name: a
+                #           "reasoning" dict, an "include" list or a Responses-only model (gpt-5.x-pro, codex) selects
+                #           the Responses API; otherwise requests stay on Chat Completions (the previous default).
+                # To restore Chat Completions for one agent, set "use_responses_api": false in its llm_config.
+                # To restore it server-wide, point AGENT_LLM_INFO_FILE at a sparse hocon file that deep-merges over
+                # this one, for example:
+                #   { "classes": { "openai": { "args": { "use_responses_api": false } } } }
+                "use_responses_api": true,
+                # Whether OpenAI stores the response server-side (bool or null). OpenAI stores by default (for 30
+                # days); false keeps every request stateless. Stateless reasoning replay in the tool-calling loop
+                # still works, because the Responses API includes encrypted_content on reasoning items by default:
+                # https://developers.openai.com/api/docs/guides/reasoning
+                #   false - (default) do not store responses server-side.
+                #   true  - let OpenAI store responses so they can be retrieved later.
+                #   null  - omit the field entirely, for gateways that reject fields they do not know.
+                "store": false,
+                # Extra output fields to return (list of strings or null), e.g. [ "reasoning.encrypted_content" ].
+                # OpenAI still accepts that legacy value but no longer requires it: encrypted_content is included
+                # by default. Any non-null value selects the Responses API in langchain when use_responses_api is
+                # null, and is rejected by Chat Completions, so this must never be given a non-null default here.
+                "include": null,
 
                 # If you really need more parameters, you will likely have to create your own LlmFactory.
             }
         },
         "azure-openai": {
             "extends": "openai",
+            # The use_responses_api, store and include values inherited from "openai" are not forwarded by
+            # AzureLlmPolicy, so Azure stays on Chat Completions regardless of what they say. Tracked in
+            # https://github.com/cognizant-ai-lab/neuro-san/issues/1307
             "args": {
                 # Note that we can only supply arguments that are "Just Data" in nature.
                 # See https://python.langchain.com/api_reference/openai/chat_models/langchain_openai.chat_models.azure.AzureChatOpenAI.html
