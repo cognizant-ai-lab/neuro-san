@@ -86,8 +86,8 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         handler, journal = self._make_handler()
         await handler.on_llm_end(self._llm_result(ContentFixtures.anthropic_thinking_first()))
         message = journal.write_message_if_next_not_dupe.call_args.args[0]
-        assert isinstance(message, AgentMessage)
-        assert message.content == "the answer"
+        self.assertIsInstance(message, AgentMessage)
+        self.assertEqual(message.content, "the answer")
 
     async def test_on_llm_end_tool_call_only_step_stays_unjournaled(self) -> None:
         """
@@ -109,16 +109,16 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         handler, journal = self._make_handler()
         await handler.on_llm_end(self._llm_result(AIMessage(content="  padded thought  ")))
         message = journal.write_message_if_next_not_dupe.call_args.args[0]
-        assert message.content == "padded thought"
+        self.assertEqual(message.content, "padded thought")
 
     async def test_on_tool_start_uses_tool_name_when_present(self) -> None:
         """A serialized tool with a name is reported verbatim."""
         handler, journal = self._make_handler()
         await handler.on_tool_start({"name": "search"}, "input", run_id=uuid4(), tags=[], inputs={})
         message = journal.write_message.call_args.args[0]
-        assert isinstance(message, AgentMessage)
-        assert message.content == "Invoking: `search` with:"
-        assert message.structure["invoked_agent_name"] == "search"
+        self.assertIsInstance(message, AgentMessage)
+        self.assertEqual(message.content, "Invoking: `search` with:")
+        self.assertEqual(message.structure["invoked_agent_name"], "search")
 
     async def test_on_tool_start_falls_back_to_placeholder_when_name_missing(self) -> None:
         """A serialized tool with no name yields a diagnostic placeholder label
@@ -126,8 +126,8 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         handler, journal = self._make_handler()
         await handler.on_tool_start({}, "input", run_id=uuid4(), tags=[], inputs={})
         message = journal.write_message.call_args.args[0]
-        assert message.content == "Invoking: `<unnamed tool>` with:"
-        assert message.structure["invoked_agent_name"] is None
+        self.assertEqual(message.content, "Invoking: `<unnamed tool>` with:")
+        self.assertIsNone(message.structure["invoked_agent_name"])
 
     @staticmethod
     async def _run_langchain_tool(output: Any) -> Tuple[AgentToolResultMessage, AgentMessage]:
@@ -166,9 +166,9 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         Plain-string tool output is journaled exactly as before.
         """
         result, got_result = await self._run_langchain_tool("42")
-        assert isinstance(result, AgentToolResultMessage)
-        assert result.content == "42"
-        assert got_result.structure["tool_output"] == "42"
+        self.assertIsInstance(result, AgentToolResultMessage)
+        self.assertEqual(result.content, "42")
+        self.assertEqual(got_result.structure["tool_output"], "42")
 
     async def test_on_tool_end_preserves_block_list_output(self) -> None:
         """
@@ -179,8 +179,8 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         """
         blocks: List[Any] = ContentFixtures.mcp_tool_content()
         result, got_result = await self._run_langchain_tool(ToolMessage(content=blocks, tool_call_id="call_1"))
-        assert result.content == blocks
-        assert got_result.structure["tool_output"] == blocks
+        self.assertEqual(result.content, blocks)
+        self.assertEqual(got_result.structure["tool_output"], blocks)
 
     async def test_on_tool_end_sanitizes_bytes_in_blocks(self) -> None:
         """
@@ -192,7 +192,7 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
             {"type": "image", "base64": b"raw", "mime_type": "image/png"},
         ]
         result, got_result = await self._run_langchain_tool(blocks)
-        assert result.content[1]["base64"] == "cmF3"
+        self.assertEqual(result.content[1]["base64"], "cmF3")
         json.dumps(result.content)
         json.dumps(got_result.structure)
 
@@ -203,8 +203,8 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         raw output as before.
         """
         result, got_result = await self._run_langchain_tool(["a", "b"])
-        assert result.content == "['a', 'b']"
-        assert got_result.structure["tool_output"] == ["a", "b"]
+        self.assertEqual(result.content, "['a', 'b']")
+        self.assertEqual(got_result.structure["tool_output"], ["a", "b"])
 
     async def test_on_tool_end_single_text_block_list_is_kept_as_blocks(self) -> None:
         """
@@ -214,6 +214,6 @@ class TestJournalingCallbackHandler(IsolatedAsyncioTestCase):
         """
         blocks: List[Any] = [{"type": "text", "text": "42"}]
         result, got_result = await self._run_langchain_tool(blocks)
-        assert result.content == blocks
-        assert ContentUtils.flatten_to_text(result) == "42"
-        assert got_result.structure["tool_output"] == blocks
+        self.assertEqual(result.content, blocks)
+        self.assertEqual(ContentUtils.flatten_to_text(result), "42")
+        self.assertEqual(got_result.structure["tool_output"], blocks)
