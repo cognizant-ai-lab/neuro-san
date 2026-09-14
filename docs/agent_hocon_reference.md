@@ -343,8 +343,10 @@ endpoint and responses are not stored server-side by default; the reasoning para
     - `false`: always use Chat Completions. Use this for OpenAI-compatible gateways that only implement
       `/chat/completions`. To switch a single agent, set it in that agent's `llm_config`. To switch a whole
       server, point the
-      [AGENT_LLM_INFO_FILE](./llm_info_hocon_reference.md#AGENT_LLM_INFO_FILE-environment-variable) environment
-      variable at a sparse llm info file that deep-merges over the default:
+      [AGENT_LLM_INFO_FILE](./llm_info_hocon_reference.md#agent_llm_info_file-environment-variable) environment
+      variable at a sparse llm info file that deep-merges over the default. An agent network that sets its own
+      [llm_info_file](#llm_info_file) ignores the environment variable, so it needs the same override in that
+      file:
 
       ```hocon
       {

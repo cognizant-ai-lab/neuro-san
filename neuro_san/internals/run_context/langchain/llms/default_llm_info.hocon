@@ -1536,6 +1536,8 @@
                 # To restore it server-wide, point AGENT_LLM_INFO_FILE at a sparse hocon file that deep-merges over
                 # this one, for example:
                 #   { "classes": { "openai": { "args": { "use_responses_api": false } } } }
+                # An agent network that sets its own llm_info_file ignores AGENT_LLM_INFO_FILE and needs the same
+                # override in that file.
                 "use_responses_api": true,
                 # Whether OpenAI stores the response server-side (bool or null). OpenAI stores by default (for 30
                 # days); false keeps every request stateless. Stateless reasoning replay in the tool-calling loop
