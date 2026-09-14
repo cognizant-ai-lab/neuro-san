@@ -26,6 +26,7 @@ Items in ***bold*** are essentials. Try to understand these first.
         - [temperature](#temperature)
         - [Other LLM-specific Parameters](#other-llm-specific-parameters)
         - [OpenAI Reasoning and Responses API Parameters](#openai-reasoning-and-responses-api-parameters)
+        - [Gemini Thinking Parameters](#gemini-thinking-parameters)
         - [Client-Provided API Keys](#client-provided-api-keys)
     - [***tools*** - list of agent/tool definitions](#tools)
     - [commondefs](#commondefs)
@@ -388,6 +389,42 @@ verify a new llm_config without fallbacks first.
 **Azure OpenAI.** The `azure-openai` class does not support the Responses API path yet (tracked in
 [#1307](https://github.com/cognizant-ai-lab/neuro-san/issues/1307)), so leave `use_responses_api` unset for
 Azure deployments.
+
+#### Gemini Thinking Parameters
+
+The `gemini` class accepts a few parameters that only matter for Gemini thinking models. All of them default to
+`null`, which leaves the model's own defaults in place.
+
+- `thinking_level`: a string that constrains how much thinking the model does. The accepted values depend on the
+  model (see the [Gemini 3 developer guide](https://ai.google.dev/gemini-api/docs/gemini-3#thinking_level) and
+  the per-model pages under [Gemini models](https://ai.google.dev/gemini-api/docs/models)), and the API rejects
+  a value the model does not support:
+    - Gemini 3 Pro: `"low"` or `"high"` (default `"high"`).
+    - Gemini 3 Flash: `"minimal"`, `"low"`, `"medium"` or `"high"` (default `"high"`).
+    - Gemini 3.7 Flash and Gemini 3.8 Flash: `"low"`, `"medium"` or `"high"` (default `"medium"`). `"minimal"`
+      is not supported and returns an error.
+- `thinking_budget`: an integer number of thinking tokens for Gemini 2.5 models. `0` disables thinking where the
+  model allows it, `-1` lets the model decide, and a positive integer caps the budget. Gemini 3 and later use
+  `thinking_level` instead; when both are set, langchain keeps `thinking_level` and drops `thinking_budget`.
+- `include_thoughts`: a boolean. When `true`, Gemini adds its thought summaries to the reply as thinking blocks
+  in the message content. A summary is not guaranteed on every reply: the model may reason without emitting one.
+  Thought signatures, which carry the model's reasoning across tool calls within a request, round-trip regardless
+  of this setting. See the [Gemini thinking guide](https://ai.google.dev/gemini-api/docs/thinking) and the
+  [langchain Gemini page](https://docs.langchain.com/oss/python/integrations/chat/google_generative_ai).
+
+**Temperature.** Google recommends keeping `temperature` at `1.0` for Gemini 3 and later: lower values can cause
+infinite loops, degraded reasoning and failures on complex tasks (see
+[Gemini 3 temperature](https://ai.google.dev/gemini-api/docs/gemini-3#temperature)). The `gemini` class default
+is `0.7`, so set `"temperature": 1.0` explicitly in the llm_config of any Gemini 3+ model.
+
+```hocon
+"llm_config": {
+    "model_name": "gemini-3.8-flash",
+    "temperature": 1.0,
+    "thinking_level": "low",
+    "include_thoughts": true
+}
+```
 
 #### class
 
