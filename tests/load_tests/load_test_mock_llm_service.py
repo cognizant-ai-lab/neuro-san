@@ -27,7 +27,10 @@ Prerequisites:
     1. Mock LLM server running (Terminal 1):
        python -m tests.mock_llm_server.mock_llm_server --port 8888
 
-    2. Neuro-san server running with OPENAI_API_BASE (Terminal 2):
+    2. Neuro-san server running with OPENAI_API_BASE and the Chat Completions
+       llm_info overlay (Terminal 2). The openai class defaults to the Responses
+       API, which the mock does not serve, so the overlay pins Chat Completions:
+       export AGENT_LLM_INFO_FILE=tests/mock_llm_server/llm_info_chat_completions.hocon
        export OPENAI_API_BASE=http://localhost:8888/v1
        python -m neuro_san.service.main_loop.server_main_loop
 
@@ -77,6 +80,9 @@ logger = logging.getLogger(__name__)
 
 MOCK_REQUEST_TIMEOUT = 120
 PROCESS_WAIT_TIMEOUT = 10
+# Sparse llm_info overlay that pins openai-class models to Chat Completions, which is the only
+# endpoint the mock LLM server implements. Relative to the repo root, like the -m module paths.
+CHAT_COMPLETIONS_LLM_INFO_PATH = "tests/mock_llm_server/llm_info_chat_completions.hocon"
 
 
 class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
@@ -334,6 +340,7 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 "neuro-san server does not have OPENAI_API_BASE set.\n"
                 "  Mock LLM server is running on port %s.\n"
                 "  Restart the server with:\n"
+                "    export AGENT_LLM_INFO_FILE=tests/mock_llm_server/llm_info_chat_completions.hocon\n"
                 "    export OPENAI_API_BASE=%s\n"
                 "    python -m neuro_san.service.main_loop.server_main_loop",
                 mock_port, expected_url,
@@ -341,12 +348,34 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             sys.exit(1)
 
         logger.info("  OPENAI_API_BASE=%s", api_base)
+
+        # Without the overlay, model-name-only openai configs (math_guy, hello_world) use the
+        # Responses API, which the mock does not serve, and every request is a 404. Warn rather
+        # than exit: a deployment may pin Chat Completions through a per-network llm_info_file.
+        # An empty value counts as unset: the shipped Dockerfiles define AGENT_LLM_INFO_FILE=""
+        # and DefaultLlmFactory ignores an empty path just like a missing variable.
+        llm_info_file: str = server_env.get("AGENT_LLM_INFO_FILE")
+        if not llm_info_file:
+            logger.warning(
+                "neuro-san server does not have AGENT_LLM_INFO_FILE set.\n"
+                "  The openai class defaults to the Responses API, which the mock LLM server does not\n"
+                "  serve, so model-name-only agent configs will get HTTP 404 from /v1/responses.\n"
+                "  Restart the server with:\n"
+                "    export AGENT_LLM_INFO_FILE=%s\n"
+                "    export OPENAI_API_BASE=%s\n"
+                "    python -m neuro_san.service.main_loop.server_main_loop",
+                CHAT_COMPLETIONS_LLM_INFO_PATH, expected_url,
+            )
+        else:
+            logger.info("  AGENT_LLM_INFO_FILE=%s", llm_info_file)
+
         if mock_port not in api_base:
             logger.error(
                 "OPENAI_API_BASE does not reference port %s.\n"
                 "  Mock LLM server is running on port %s,\n"
                 "  but OPENAI_API_BASE=%s\n"
                 "  Restart the server with:\n"
+                "    export AGENT_LLM_INFO_FILE=tests/mock_llm_server/llm_info_chat_completions.hocon\n"
                 "    export OPENAI_API_BASE=%s\n"
                 "    python -m neuro_san.service.main_loop.server_main_loop",
                 mock_port, mock_port, api_base, expected_url,
@@ -366,7 +395,8 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         if self.server_proc is None:
             logger.error(
                 "neuro-san server process not found.\n"
-                "Start it with OPENAI_API_BASE pointing to the mock LLM server:\n"
+                "Start it with the Chat Completions overlay and OPENAI_API_BASE pointing to the mock LLM server:\n"
+                "  export AGENT_LLM_INFO_FILE=tests/mock_llm_server/llm_info_chat_completions.hocon\n"
                 "  export OPENAI_API_BASE=http://localhost:8888/v1\n"
                 "  python -m neuro_san.service.main_loop.server_main_loop"
             )
@@ -379,6 +409,7 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 "Start the mock LLM server first, then the neuro-san server:\n"
                 "  python -m tests.mock_llm_server.mock_llm_server --port 8888\n"
                 "Then:\n"
+                "  export AGENT_LLM_INFO_FILE=tests/mock_llm_server/llm_info_chat_completions.hocon\n"
                 "  export OPENAI_API_BASE=http://localhost:8888/v1\n"
                 "  python -m neuro_san.service.main_loop.server_main_loop"
             )
@@ -404,7 +435,12 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
             stderr=self._mock_log_fh,
         )
 
-        server_env = {**os.environ, "OPENAI_API_BASE": api_base}
+        # The overlay keeps openai-class models on Chat Completions, the only endpoint the mock serves.
+        server_env = {
+            **os.environ,
+            "OPENAI_API_BASE": api_base,
+            "AGENT_LLM_INFO_FILE": CHAT_COMPLETIONS_LLM_INFO_PATH,
+        }
         logger.info("Auto-starting neuro-san server (log: %s)", self.SERVER_LOG_PATH)
         self._server_log_fh = open(  # pylint: disable=consider-using-with
             self.SERVER_LOG_PATH, "w", encoding="utf-8",
@@ -441,6 +477,7 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         logger.info("Mock LLM server ready (PID %s)", self.mock_proc.pid)
         logger.info("Neuro-san server ready (PID %s)", self.server_proc.pid)
         logger.info("  OPENAI_API_BASE=%s", self._api_base)
+        logger.info("  AGENT_LLM_INFO_FILE=%s", CHAT_COMPLETIONS_LLM_INFO_PATH)
 
     def _stop_servers(self):
         """Terminate auto-started servers and close log file handles."""
