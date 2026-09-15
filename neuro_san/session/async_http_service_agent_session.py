@@ -242,15 +242,22 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
         Close this session by aborting any in-flight streaming request.
 
         Marks the session closed and, on the event loop the request runs on,
-        aborts it so streaming_chat() unblocks and the neuro-san service observes
-        the client disconnect and terminates the corresponding server-side work.
-        Both handles are needed because aiohttp aborts differently per phase:
-        closing the response unblocks an in-flight read after headers have
-        arrived, while closing the session aborts a request still awaiting
-        headers (there may be no total timeout). aiohttp objects are bound to
-        their loop and are not thread-safe, so the work is scheduled on that loop.
-        Safe to call from another thread than the one running streaming_chat(),
-        and safe to call more than once.
+        aborts it so streaming_chat() unblocks on the client side. Both handles
+        are needed because aiohttp aborts differently per phase: closing the
+        response unblocks an in-flight read after headers have arrived, while
+        closing the session aborts a request still awaiting headers (there may be
+        no total timeout). aiohttp objects are bound to their loop and are not
+        thread-safe, so the work is scheduled on that loop. Safe to call from
+        another thread than the one running streaming_chat(), and safe to call
+        more than once.
+
+        Server-side scope: close() releases the client connection; it does NOT
+        directly cancel the server-side work. The neuro-san service ends the
+        corresponding request only when it next detects the dropped connection --
+        on its next result or heartbeat flush. That is prompt while results stream
+        (or a keep-alive heartbeat is enabled), but a request producing no output
+        with heartbeat and request-timeout disabled may keep running server-side
+        until it does.
         """
         with self._stream_lock:
             self._closed = True
