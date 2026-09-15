@@ -18,8 +18,6 @@ from typing import Any
 from typing import Dict
 from typing import Iterator
 from typing import List
-from typing import Tuple
-from typing import Type
 from typing import Union
 
 from copy import deepcopy
@@ -31,8 +29,6 @@ from logging import Logger
 from inspect import iscoroutinefunction
 
 from langchain_core.messages.base import BaseMessage
-
-from leaf_common.resolution.resolver_util import ResolverUtil
 
 from neuro_san.internals.chat.async_collating_queue import AsyncCollatingQueue
 from neuro_san.internals.chat.chat_history_message_processor import ChatHistoryMessageProcessor
@@ -54,11 +50,6 @@ from neuro_san.message.processors.message_processor import MessageProcessor
 from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
 from neuro_san.message.types.base_message_dictionary_converter import BaseMessageDictionaryConverter
 from neuro_san.message.utils.sly_data_redactor import SlyDataRedactor
-
-# Lazily import specific errors from llm providers
-PATIENCE_ERRORS: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
-                                            "openai.BadRequestError",
-                                         ])
 
 
 # pylint: disable=too-many-instance-attributes
@@ -316,21 +307,7 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         else:
             self.front_man.update_invocation_context(invocation_context)
 
-        try:
-            # DEF - drill further down for iterator from here to enable getting
-            #       messages from downstream agents.
-            raw_messages: List[BaseMessage] = await self.front_man.submit_message(user_input)
-
-        except PATIENCE_ERRORS:
-            # This can happen if the user is trying to send a new message
-            # while it is still working on a previous message that has not
-            # yet returned.
-            raw_messages: List[BaseMessage] = [
-                AgentFrameworkMessage(content="Patience, please. I'm working on it.")
-            ]
-
-            logger: Logger = getLogger(self.__class__.__name__)
-            logger.error(traceback.format_exc())
+        raw_messages: List[BaseMessage] = await self.front_man.submit_message(user_input)
 
         converter = BaseMessageDictionaryConverter(origin=self.front_man.get_origin())
         chat_messages: List[Dict[str, Any]] = []
