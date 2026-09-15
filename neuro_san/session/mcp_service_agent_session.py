@@ -19,12 +19,8 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Generator
-from typing import Optional
 
 import json
-
-from threading import Lock
-from contextlib import suppress
 
 import requests
 
@@ -84,12 +80,6 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         super().__init__(host=host, port=port, timeout_in_seconds=timeout_in_seconds,
                          metadata=metadata, security_cfg=security_cfg, umbrella_timeout=umbrella_timeout,
                          streaming_timeout_in_seconds=streaming_timeout_in_seconds, agent_name=agent_name)
-        # Cancellation state so an in-flight streaming_chat() can be aborted from
-        # another thread via close(). Guards _active_response / _closed against
-        # concurrent access between the streaming thread and the closing thread.
-        self._stream_lock: Lock = Lock()
-        self._active_response: Optional[requests.Response] = None
-        self._closed: bool = False
         # Do initial handshake and protocol negotiation
         handshake_dict: Dict[str, Any] = {
             "jsonrpc": "2.0",
@@ -222,24 +212,11 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         headers["Content-Type"] = "application/json"
         headers[self.MCP_PROTOCOL_VERSION] = self.protocol_version
 
-        # Check if the session has been closed already before starting the streaming request
-        with self._stream_lock:
-            if self._closed:
-                return
-
         path: str = self.get_request_path("streaming_chat")
         try:
             with requests.post(path, json=mcp_payload, headers=headers,
                                stream=True, timeout=self.streaming_timeout_in_seconds) as response:
                 response.raise_for_status()
-
-                # Register this response so close() (possibly from another thread)
-                # can drop the connection and unblock the read loop below.
-                # If the session was already closed, abort before consuming any stream.
-                with self._stream_lock:
-                    if self._closed:
-                        return
-                    self._active_response = response
 
                 for line in response.iter_lines(decode_unicode=True):
                     if line.strip():  # Skip empty lines
@@ -249,31 +226,21 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                         yield result_dict
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(self.help_message(path)) from exc
-        finally:
-            # The request is over (normally, by error, or because close() dropped
-            # the connection); stop tracking its response.
-            with self._stream_lock:
-                self._active_response = None
 
     def close(self):
         """
-        Close this session by dropping any in-flight streaming connection.
+        No-op: this MCP session cannot cancel an in-flight tool call.
 
-        Marks the session closed and closes the currently-streaming response (if
-        any). Closing the response releases its socket, which unblocks the read
-        in streaming_chat() and causes the neuro-san service to observe the
-        client disconnect and terminate the corresponding server-side request.
-        Safe to call from a different thread than the one iterating
-        streaming_chat(), and safe to call more than once.
+        The MCP transport here is request/response, not streaming: requests.post()
+        does not return until the server sends response headers, and the neuro-san
+        MCP handler writes the response only after awaiting the full tool run (see
+        mcp_root_handler.py). There is therefore no abortable in-flight connection
+        to release mid-run -- closing anything client-side cannot terminate the
+        server-side work -- so this session deliberately does NOT claim to support
+        cancellation. Provided as a documented no-op so callers can treat all
+        session types uniformly.
         """
-        with self._stream_lock:
-            self._closed = True
-            response: Optional[requests.Response] = self._active_response
-            self._active_response = None
-        if response is not None:
-            with suppress(Exception):
-                # Best-effort: the connection may already be torn down.
-                response.close()
+        return
 
     def get_request_path(self, method: str) -> str:
         """
