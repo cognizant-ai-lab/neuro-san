@@ -41,6 +41,14 @@ class AssertCapture(AssertForwarder):
         """
         return self.asserts
 
+    def add_assert(self, assertion_error: AssertionError):
+        """
+        Add an assertion error to the list of captured asserts.
+
+        :param assertion_error: The assertion error to add
+        """
+        self.asserts.append(assertion_error)
+
     # pylint: disable=invalid-name
     def assertEqual(self, first: Any, second: Any, msg: str = None):
         """
