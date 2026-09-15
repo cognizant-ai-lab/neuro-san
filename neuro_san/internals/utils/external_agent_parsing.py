@@ -137,8 +137,9 @@ class ExternalAgentParsing:
         # - MUST have an http/https scheme (accepted case-insensitively for robustness)
         # - MUST have a host
         # - MUST NOT contain a fragment
+        parsed: ParseResult = None
         try:
-            parsed: ParseResult = urlparse(tool_ref)
+            parsed = urlparse(tool_ref)
         except ValueError:
             return False
 

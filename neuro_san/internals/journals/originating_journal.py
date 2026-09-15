@@ -108,9 +108,10 @@ class OriginatingJournal(Journal):
             # OpenAI Responses needs its own reasoning item ids), so a
             # provider-aware replay path is Phase 2 work (#1223). Until then
             # the history carries exactly what providers receive today.
+            chat_history_message: BaseMessage = None
             if isinstance(message, AgentToolResultMessage) or \
                     (isinstance(message, AIMessage) and not isinstance(message.content, str)):
-                chat_history_message: BaseMessage = AIMessage(content=ContentUtils.history_safe_text(message))
+                chat_history_message = AIMessage(content=ContentUtils.history_safe_text(message))
             else:
                 chat_history_message = message
 

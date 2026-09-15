@@ -107,6 +107,7 @@ class ToolboxFactory(ContextTypeToolboxFactory):
         # Get user toolbox info file path with the following priority:
         # 1. "toolbox_info_file" from agent network hocon
         # 2. "AGENT_TOOLBOX_INFO_FILE" from environment variable
+        raw_toolbox_info_file: str = None
         if config:
             raw_toolbox_info_file: str = (
                 config.get("toolbox_info_file")

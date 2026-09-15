@@ -17,6 +17,7 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Tuple
 from typing import Union
 
 from json import loads
@@ -457,7 +458,7 @@ class LangChainRunContext(RunContext):
         if tool_chat_list_string is None:
             # Dunno what to do with None tool output
             return None
-        if isinstance(tool_chat_list_string, tuple):
+        if isinstance(tool_chat_list_string, Tuple):
             # Sometimes output comes back as a tuple.
             # The output we want is the first element of the tuple.
             tool_chat_list_string = tool_chat_list_string[0]

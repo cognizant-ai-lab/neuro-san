@@ -20,7 +20,7 @@ from typing import List
 from typing import Optional
 
 # Dictionary with provider key env var -> strings to look for
-API_KEY_EXCEPTIONS: Dict[str, List] = {
+API_KEY_EXCEPTIONS: Dict[str, List[str]] = {
     "OPENAI_API_KEY": ["OPENAI_API_KEY", "Incorrect API key provided"],
     "ANTHROPIC_API_KEY": ["ANTHROPIC_API_KEY", "anthropic_api_key", "invalid x-api-key", "credit balance"],
     "GOOGLE_API_KEY": ["Application Default Credentials", "default credentials", "Gemini: 400 API key not valid"],
@@ -55,7 +55,7 @@ AZURE_DOCUMENTATION: str = "https://learn.microsoft.com/en-us/azure/ai-services/
 "chatgpt-quickstart?tabs=keyless%2Ctypescript-keyless%2Cpython-new%2Ccommand-line&pivots=programming-language-python"
 
 # Dictionary with provider key env var -> link to documentation
-API_KEY_DOCUMENTATION: Dict[str, List] = {
+API_KEY_DOCUMENTATION: Dict[str, str] = {
     "AZURE_OPENAI_API_KEY": AZURE_DOCUMENTATION,
     "AZURE_OPENAI_ENDPOINT": AZURE_DOCUMENTATION,
     "OPENAI_API_VERSION": AZURE_DOCUMENTATION,
