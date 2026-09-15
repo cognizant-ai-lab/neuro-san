@@ -67,3 +67,20 @@ class AsyncAgentSession(AgentSessionConstants):
             are produced until the system decides there are no more messages to be sent.
         """
         raise NotImplementedError
+
+    def close(self):
+        """
+        Close the session, releasing any underlying client connection.
+
+        For remote sessions this drops the connection to the service so that an
+        in-flight streaming_chat() request is aborted (the service detects the
+        client disconnect and terminates the corresponding server-side work).
+        This is a synchronous method (no await needed) so it can be invoked from
+        a supervising sync context or another thread; implementations that own an
+        event-loop-bound client schedule the actual close on that loop.
+        Safe to call more than once.
+
+        The default implementation is a no-op: sessions that hold no external
+        connection (e.g. in-process direct sessions) have nothing to close.
+        """
+        return

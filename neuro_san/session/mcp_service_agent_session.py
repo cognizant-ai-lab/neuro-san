@@ -19,8 +19,12 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Generator
+from typing import Optional
 
 import json
+
+from threading import Lock
+
 import requests
 
 from leaf_common.time.timeout import Timeout
@@ -79,6 +83,12 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         super().__init__(host=host, port=port, timeout_in_seconds=timeout_in_seconds,
                          metadata=metadata, security_cfg=security_cfg, umbrella_timeout=umbrella_timeout,
                          streaming_timeout_in_seconds=streaming_timeout_in_seconds, agent_name=agent_name)
+        # Cancellation state so an in-flight streaming_chat() can be aborted from
+        # another thread via close(). Guards _active_response / _closed against
+        # concurrent access between the streaming thread and the closing thread.
+        self._stream_lock: Lock = Lock()
+        self._active_response: Optional[requests.Response] = None
+        self._closed: bool = False
         # Do initial handshake and protocol negotiation
         handshake_dict: Dict[str, Any] = {
             "jsonrpc": "2.0",
@@ -216,6 +226,15 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
             with requests.post(path, json=mcp_payload, headers=headers,
                                timeout=self.streaming_timeout_in_seconds) as response:
                 response.raise_for_status()
+
+                # Register this response so close() (possibly from another thread)
+                # can drop the connection and unblock the read loop below.
+                # If the session was already closed, abort before consuming any stream.
+                with self._stream_lock:
+                    if self._closed:
+                        return
+                    self._active_response = response
+
                 for line in response.iter_lines(decode_unicode=True):
                     if line.strip():  # Skip empty lines
                         # Each line is a JSON object representing an MCP tool call(chat) response
@@ -224,6 +243,33 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                         yield result_dict
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(self.help_message(path)) from exc
+        finally:
+            # The request is over (normally, by error, or because close() dropped
+            # the connection); stop tracking its response.
+            with self._stream_lock:
+                self._active_response = None
+
+    def close(self):
+        """
+        Close this session by dropping any in-flight streaming connection.
+
+        Marks the session closed and closes the currently-streaming response (if
+        any). Closing the response releases its socket, which unblocks the read
+        in streaming_chat() and causes the neuro-san service to observe the
+        client disconnect and terminate the corresponding server-side request.
+        Safe to call from a different thread than the one iterating
+        streaming_chat(), and safe to call more than once.
+        """
+        with self._stream_lock:
+            self._closed = True
+            response: Optional[requests.Response] = self._active_response
+            self._active_response = None
+        if response is not None:
+            try:
+                response.close()
+            except Exception:  # pylint: disable=broad-exception-caught
+                # Best-effort: the connection may already be torn down.
+                pass
 
     def get_request_path(self, method: str) -> str:
         """

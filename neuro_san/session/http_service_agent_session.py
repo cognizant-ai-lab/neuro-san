@@ -18,8 +18,13 @@
 from typing import Any
 from typing import Dict
 from typing import Generator
+from typing import Optional
 
 import json
+
+from threading import Lock
+from contextlib import suppress
+
 import requests
 
 from neuro_san.interfaces.agent_session import AgentSession
@@ -31,6 +36,22 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
     Implementation of AgentSession that talks to an HTTP service.
     This is largely only used by command-line tests.
     """
+
+    def __init__(self, *args, **kwargs):
+        """
+        Constructor. Delegates all connection parameters to the base class and
+        adds cancellation state so an in-flight streaming_chat() can be aborted
+        from another thread via close().
+        """
+        super().__init__(*args, **kwargs)
+        # Guards _active_response / _closed against concurrent access between the
+        # thread iterating streaming_chat() and a thread calling close().
+        self._stream_lock: Lock = Lock()
+        # The response of the currently-streaming request, if any, so close()
+        # can drop its connection and unblock the streaming read.
+        self._active_response: Optional[requests.Response] = None
+        # Once closed, no further streaming request will be started.
+        self._closed: bool = False
 
     def function(self, request_dict: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -93,6 +114,14 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                                timeout=self.streaming_timeout_in_seconds) as response:
                 response.raise_for_status()
 
+                # Register this response so close() (possibly from another thread)
+                # can drop the connection and unblock the read loop below.
+                # If the session was already closed, abort before consuming any stream.
+                with self._stream_lock:
+                    if self._closed:
+                        return
+                    self._active_response = response
+
                 # Iterate over the content stream as it comes in.
                 # Note: We used to iterate over lines with the simpler:
                 #           for line in response.iter_lines(decode_unicode=True):
@@ -135,3 +164,28 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
 
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(self.help_message(path)) from exc
+        finally:
+            # The request is over (normally, by error, or because close() dropped
+            # the connection); stop tracking its response.
+            with self._stream_lock:
+                self._active_response = None
+
+    def close(self):
+        """
+        Close this session by dropping any in-flight streaming connection.
+
+        Marks the session closed and closes the currently-streaming response (if
+        any). Closing the response releases its socket, which unblocks the read
+        in streaming_chat() and causes the neuro-san service to observe the
+        client disconnect and terminate the corresponding server-side request.
+        Safe to call from a different thread than the one iterating
+        streaming_chat(), and safe to call more than once.
+        """
+        with self._stream_lock:
+            self._closed = True
+            response: Optional[requests.Response] = self._active_response
+            self._active_response = None
+        if response is not None:
+            with suppress(Exception):
+                # Best-effort: the connection may already be torn down.
+                response.close()
