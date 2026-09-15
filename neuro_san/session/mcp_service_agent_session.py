@@ -222,6 +222,11 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         headers["Content-Type"] = "application/json"
         headers[self.MCP_PROTOCOL_VERSION] = self.protocol_version
 
+        # Check if the session has been closed already before starting the streaming request
+        with self._stream_lock:
+            if self._closed:
+                return
+
         path: str = self.get_request_path("streaming_chat")
         try:
             with requests.post(path, json=mcp_payload, headers=headers,
