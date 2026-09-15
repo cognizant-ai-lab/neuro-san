@@ -153,6 +153,8 @@ class AbstractAsyncConfigRestorer(Restorer, ConfigFilter):
         :param file_contents: The contents of the file as bytes
         :return: a dictionary
         """
+        config: Dict[str, Any] = None
+
         # Create a file-like object from the input bytes.
         # This allows us to use the same deserialization code for both sync and async reads.
         bytes_file = BytesIO(file_contents)

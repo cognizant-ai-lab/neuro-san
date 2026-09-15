@@ -32,7 +32,7 @@ class ConciergeSession:
 
     # Default port for the Concierge Service
     # This port number will also be mentioned in its Dockerfile
-    DEFAULT_PORT: int = DEFAULT_HTTP_PORT
+    DEFAULT_PORT: int = AgentSession.DEFAULT_HTTP_PORT
 
     def list(self, request_dict: Dict[str, Any]) -> Dict[str, Any]:
         """

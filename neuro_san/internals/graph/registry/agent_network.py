@@ -130,6 +130,7 @@ Some things to try:
                  This guy will be user facing. If there are none,
                  an exception will be raised.
         """
+        front_man: str = None
 
         # List all agents in the same order as agent network HOCON.
         agent_list: List[str] = list(self.agent_spec_map.keys())
@@ -138,7 +139,7 @@ Some things to try:
         if len(agent_list) > 0:
 
             # Front-man is the **first** agent in the agent list
-            front_man: str = agent_list[0]
+            front_man = agent_list[0]
 
             # Check the agent spec of the front man for validity
             agent_spec: Dict[str, Any] = self.get_agent_tool_spec(front_man)
