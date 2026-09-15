@@ -14,13 +14,10 @@
 #
 # END COPYRIGHT
 
-"""In-thread HTTP client for load testing without subprocess overhead.
+"""In-thread HTTP client for load testing.
 
-Instead of spawning a separate ``python -m neuro_san.client.agent_cli``
-process per request (~96 MB each), this module instantiates
-``HttpServiceAgentSession`` and ``StreamingInputProcessor`` directly
-in the calling thread.  Memory cost drops from ~96 MB per concurrent
-request to ~1-2 MB per thread.
+Instantiates ``HttpServiceAgentSession`` and ``StreamingInputProcessor``
+directly in the calling thread, costing ~1-2 MB per concurrent request.
 """
 
 import logging
@@ -98,10 +95,9 @@ class HttpClient:
             streaming_timeout_in_seconds=idle_timeout,
         )
 
-        # Time-to-first-response: wrap the session's streaming_chat so
-        # the first streamed chat message is timestamped, matching the
-        # subprocess mode's time-to-first-stdout metric. process_once()
-        # iterates this generator internally.
+        # Time-to-first-response: wrap the session's streaming_chat so the
+        # first streamed chat message is timestamped. process_once() iterates
+        # this generator internally.
         first_response: List[float] = []
         original_streaming_chat = session.streaming_chat
 
@@ -188,11 +184,9 @@ class HttpClient:
     ):
         """Recursively extract string-valued fields.
 
-        The subprocess mode prints sly_data as JSON and then
-        regex-searches the entire stdout.  Fields like
-        ``reservation_id`` may be nested inside lists (e.g.
-        ``sly_data["agent_reservations"][0]["reservation_id"]``).
-        A flat top-level scan misses them, so we recurse.
+        Fields like ``reservation_id`` may be nested inside lists (e.g.
+        ``sly_data["agent_reservations"][0]["reservation_id"]``). A flat
+        top-level scan misses them, so we recurse.
         """
         if isinstance(obj, dict):
             for key, value in obj.items():
