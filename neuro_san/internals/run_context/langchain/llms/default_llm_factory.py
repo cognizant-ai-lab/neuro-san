@@ -98,6 +98,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         # Get user LLM info file path with the following priority:
         # 1. "llm_info_file" from agent network hocon
         # 2. "AGENT_LLM_INFO_FILE" from environment variable
+        raw_llm_info_file: str = None
         if config:
             raw_llm_info_file: str = (
                 config.get("llm_info_file")

@@ -140,6 +140,7 @@ specified for its front man for it to be called by another agent.
         # be passed in which we expect to conform to an OpenAI function.
         # definition.
         LangChainOpenAIFunctionTool.verify_function_json(function_json)
+        tool: LangChainOpenAIFunctionTool = None
         try:
             tool = LangChainOpenAIFunctionTool(**function_json)
         except ValidationError as exception:
