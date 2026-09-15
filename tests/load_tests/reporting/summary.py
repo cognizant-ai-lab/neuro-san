@@ -40,7 +40,7 @@ class SummaryReporter:
     """
 
     def __init__(self, stage_summaries, neuro_san_version=None,
-                 client_token_source="agent_cli --tokens") -> None:
+                 client_token_source="HTTP token_accounting") -> None:
         self._summaries = stage_summaries
         self._neuro_san_version = neuro_san_version
         self._client_token_source = client_token_source
@@ -185,7 +185,7 @@ class SummaryReporter:
         """Log the LLM & TOKEN USAGE section (client vs server log).
 
         A uniform block for all modes: the client side comes from
-        agent_cli/HTTP token accounting, the server side from
+        HTTP token accounting, the server side from
         server.log.  Whichever side is unavailable prints "not
         available".  When both are present (all-in-one) a Match line
         reports whether they agree.

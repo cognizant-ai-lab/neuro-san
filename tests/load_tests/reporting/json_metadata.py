@@ -137,16 +137,15 @@ class JsonMetadata:
             "client_resource_rows[].peak":
                 "Client process peak snapshot during stage.",
             "client_resource_rows[].settled":
-                "Client process snapshot after all subprocesses "
+                "Client process snapshot after all requests "
                 "completed.",
             "config.request_timeout":
                 "Hard timeout per request in seconds. "
                 "Kills the request if it exceeds this limit.",
             "config.idle_timeout":
                 "Per-request idle timeout in seconds. "
-                "Kills a request if agent_cli produces no "
-                "stdout/stderr output for this duration. "
-                "Resets on every output activity.",
+                "Kills a request if no stream chunk arrives for "
+                "this duration. Resets on every activity.",
             "config.stage_timeout":
                 "Hard timeout for an entire stage/round in "
                 "seconds. Kills all remaining in-flight "
@@ -214,7 +213,7 @@ class JsonMetadata:
             "configured timeout thresholds.",
             "Compare client-side elapsed vs server-side "
             "network_tokens duration — large gaps indicate "
-            "client overhead (subprocess, gRPC, CLI parsing).",
+            "client overhead (HTTP streaming, response parsing).",
             "Check FD growth across rounds — unclosed file "
             "descriptors indicate resource leaks.",
         ]
