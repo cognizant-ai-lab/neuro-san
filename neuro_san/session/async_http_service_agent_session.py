@@ -175,6 +175,8 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
                     # Headers have arrived; track the response so close() can
                     # unblock the read below (closing the session alone does not).
                     with self._stream_lock:
+                        if self._closed:
+                            return
                         self._active_response = response
 
                     # Iterate over the content stream as it comes in.
