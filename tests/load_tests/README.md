@@ -1,8 +1,12 @@
 # Load Test Framework
 
 Fire concurrent requests at a neuro-san server, monitor resource usage,
-and report results. Fires real LLM calls either via `agent_cli`
-subprocesses (default) or direct HTTP streaming (`--http-client`).
+and report results. Fires real LLM calls via direct HTTP streaming.
+
+Each request runs in a worker thread that opens an `HttpServiceAgentSession`
+directly (~1-2 MB per concurrent request). An earlier transport spawned one
+`agent_cli` subprocess per request instead, costing ~96 MB each, which made
+memory the limit on concurrency; that transport has been removed.
 
 ## Contents
 
@@ -95,8 +99,8 @@ file (`--server-log` alone forces auto-detect and aborts if it fails).
 It stays off by default at `min`.
 Resource monitoring is on automatically at `norm`/`adv` and in the
 `min` profile used by `--client-only`/`--server-only`. Token
-accounting via `agent_cli --tokens` is enabled at all levels by
-default (disable with `--no-tokens`).
+accounting is enabled at all levels by default (disable with
+`--no-tokens`).
 
 **Where LLM/token numbers come from.** Client-side counts arrive in the
 chat stream as a token-accounting message, so they require the default
@@ -147,7 +151,7 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--server-log [PATH]`      | auto (local, norm/adv) | Server log analysis. Auto-detected for a local server at norm/adv; if not found you're prompted to continue without it (remote host aborts — use `--client-only`). Pass a path for an explicit file, or the flag alone to force auto-detect. |
 | `--no-server-log`          | off         | Skip the missing-log prompt at norm/adv and run without server-log analysis; overrides the local auto-detect |
 | `--no-tokens`              | off         | Disable per-request token accounting         |
-| `--minimal`                | off         | Ask the server for the bare minimum of messages, as `agent_cli --minimal` does: only the final answer, cutting traffic and progress-event work — but it also drops the token-accounting message, so client-side LLM/token reporting is unavailable (tokens then come only from the server log) |
+| `--minimal`                | off         | Ask the server for the bare minimum of messages: only the final answer, cutting traffic and progress-event work — but it also drops the token-accounting message, so client-side LLM/token reporting is unavailable (tokens then come only from the server log) |
 | `--profile-path`           | auto        | Directory containing profile JSON files (or `LOAD_TEST_PROFILE_PATH` env var) |
 | `--host`                   | localhost   | Neuro-san server host                        |
 | `--port`                   | 8080        | Neuro-san server port                        |
@@ -157,8 +161,8 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--stages`                 | 10,30,50,100| Concurrency per stage in ramp mode           |
 | `--num-rounds`             | 1           | Repeat the full sequence N times             |
 | `--max-requests`           | sum(stages) * num_rounds | Hard cap on total requests |
-| `--request-timeout`        | 1200 (20m)  | Hard timeout per request (see [Abort on timeout](#abort-on-timeout) for how `--http-client` differs). Accepts a bare number (seconds) or an `s`/`m`/`h` suffix (e.g. `90s`, `20m`, `2h`) |
-| `--idle-timeout`           | 900 (15m)   | Abort a request that is idle for this long (resets on activity). Accepts seconds or an `s`/`m`/`h` suffix. Subprocess mode: no `agent_cli` output; HTTP mode (`--http-client`): no next stream chunk |
+| `--request-timeout`        | 1200 (20m)  | Hard timeout per request. Accepts a bare number (seconds) or an `s`/`m`/`h` suffix (e.g. `90s`, `20m`, `2h`) |
+| `--idle-timeout`           | 900 (15m)   | Abort a request that is idle for this long (no next stream chunk; resets on activity). Accepts seconds or an `s`/`m`/`h` suffix |
 | `--stage-timeout`          | 1500 (25m)  | Hard timeout for entire stage/round. Accepts seconds or an `s`/`m`/`h` suffix. Kills remaining in-flight requests |
 | `--total-timeout`          | 0 (disabled)| Hard timeout for entire load test. Accepts seconds or an `s`/`m`/`h` suffix. Kills run when exceeded |
 | `--settle-time`            | 15 (15s)    | Wait after each stage for server cleanup. Accepts seconds or an `s`/`m`/`h` suffix |
@@ -178,16 +182,8 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 Any timeout aborts the entire test immediately and reports results
 collected so far:
 
-- **`--idle-timeout`**: A request is idle for N seconds → abort.
-  Idle means no `agent_cli` output (subprocess mode) or no next
-  stream chunk (HTTP mode, `--http-client`).
-- **`--request-timeout`**: A request exceeds its hard time limit →
-  abort. Subprocess mode kills the `agent_cli` process at the limit.
-  HTTP mode (`--http-client`) abandons the request as the response
-  streams, so it stops within one streamed message of the limit
-  rather than exactly at it; that wait is itself bounded by
-  `--idle-timeout`. Interrupting a blocking read exactly would cost
-  a thread per request, which is what HTTP mode exists to avoid.
+- **`--idle-timeout`**: A request receives no next stream chunk for N seconds → abort.
+- **`--request-timeout`**: A request exceeds its hard time limit → abort. The request is abandoned as the response streams, so it stops within one streamed message of the limit rather than exactly at it; that wait is itself bounded by `--idle-timeout`.
 - **`--stage-timeout`**: A stage/round exceeds its limit, remaining
   requests killed → abort.
 - **`--total-timeout`**: Overall test elapsed time exceeded → abort
@@ -564,8 +560,8 @@ tests/load_tests/
     trend_history.py           TrendHistory (--trend output)
 
   traffic/
-    cli_builder.py             CliBuilder (agent_cli commands)
-    process_monitor.py         ProcessMonitor (subprocess lifecycle)
+    http_client.py             HttpClient (in-thread HTTP streaming)
+    output_parser.py           OutputParser (sly_data / token parsing)
     runner.py                  TrafficRunner (thread pool executor)
 
   validation/

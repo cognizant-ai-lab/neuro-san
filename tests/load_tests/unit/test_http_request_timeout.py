@@ -68,7 +68,7 @@ class TestHttpRequestTimeout(TestCase):
 
     A streaming request that keeps producing messages must still be
     abandoned at the cap: without that, one slow request holds a worker
-    for the whole run and the timeout only describes subprocess mode.
+    for the whole run.
     """
 
     def _execute(self, *, timeout, message_count, message_interval):

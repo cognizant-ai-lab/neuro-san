@@ -31,7 +31,7 @@ from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.reporting.json_metadata import JsonMetadata
-from tests.load_tests.traffic.cli_builder import CliBuilder
+from tests.load_tests.traffic.output_parser import OutputParser
 
 logger = logging.getLogger(__name__)
 
@@ -253,10 +253,10 @@ class ResultsRebuilder:
     def _build_result(req_id, stdout, timing):
         """Build a single result dict from stdout and timing."""
         parsed_fields = {
-            "reservation_id": CliBuilder.parse_stdout_field(
+            "reservation_id": OutputParser.parse_stdout_field(
                 stdout, "reservation_id",
             ),
-            "agent_network_name": CliBuilder.parse_stdout_field(
+            "agent_network_name": OutputParser.parse_stdout_field(
                 stdout, "agent_network_name",
             ),
         }
@@ -281,7 +281,7 @@ class ResultsRebuilder:
     @staticmethod
     def _attach_tokens(result, stdout):
         """Add token accounting fields to a result dict."""
-        token_data = CliBuilder.parse_token_accounting(stdout)
+        token_data = OutputParser.parse_token_accounting(stdout)
         if token_data:
             result.update({
                 "total_tokens": token_data.get(
@@ -403,7 +403,7 @@ class ResultsRebuilder:
         for field in ("reservation_id", "agent_network_name"):
             if not parsed_fields.get(field):
                 reasons.append(f"missing {field}")
-        tokens = CliBuilder.parse_token_accounting(stdout)
+        tokens = OutputParser.parse_token_accounting(stdout)
         if not tokens:
             reasons.append("no token data")
         else:
