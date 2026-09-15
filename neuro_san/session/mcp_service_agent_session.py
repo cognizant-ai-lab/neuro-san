@@ -24,6 +24,7 @@ from typing import Optional
 import json
 
 from threading import Lock
+from contextlib import suppress
 
 import requests
 
@@ -265,11 +266,9 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
             response: Optional[requests.Response] = self._active_response
             self._active_response = None
         if response is not None:
-            try:
-                response.close()
-            except Exception:  # pylint: disable=broad-exception-caught
+            with suppress(Exception):
                 # Best-effort: the connection may already be torn down.
-                pass
+                response.close()
 
     def get_request_path(self, method: str) -> str:
         """

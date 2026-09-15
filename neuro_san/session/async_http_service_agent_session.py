@@ -24,6 +24,7 @@ import asyncio
 import json
 
 from threading import Lock
+from contextlib import suppress
 
 from aiohttp import ClientPayloadError
 from aiohttp import ClientOSError
@@ -228,12 +229,10 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
             self._active_loop = None
         if response is None:
             return
-        try:
+        with suppress(Exception):
+            # Best-effort: the connection may already be torn down.
             if loop is not None and not loop.is_closed():
                 # ClientResponse.close() is synchronous; run it on the owning loop.
                 loop.call_soon_threadsafe(response.close)
             else:
                 response.close()
-        except Exception:  # pylint: disable=broad-exception-caught
-            # Best-effort: the connection may already be torn down.
-            pass
