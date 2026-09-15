@@ -225,7 +225,7 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         path: str = self.get_request_path("streaming_chat")
         try:
             with requests.post(path, json=mcp_payload, headers=headers,
-                               timeout=self.streaming_timeout_in_seconds) as response:
+                               stream=True, timeout=self.streaming_timeout_in_seconds) as response
                 response.raise_for_status()
 
                 # Register this response so close() (possibly from another thread)
