@@ -18,12 +18,16 @@
 from typing import Any
 from typing import Dict
 from typing import Generator
+from typing import Optional
 
 import asyncio
 import json
 
+from threading import Lock
+
 from aiohttp import ClientPayloadError
 from aiohttp import ClientOSError
+from aiohttp import ClientResponse
 from aiohttp import ClientSession
 from aiohttp import ClientTimeout
 
@@ -35,6 +39,24 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
     """
     Implementation of AsyncAgentSession that talks to an HTTP service.
     """
+
+    def __init__(self, *args, **kwargs):
+        """
+        Constructor. Delegates all connection parameters to the base class and
+        adds cancellation state so an in-flight streaming_chat() can be aborted
+        via close(). aiohttp objects are bound to their event loop and are not
+        thread-safe, so close() schedules the actual close on that loop.
+        """
+        super().__init__(*args, **kwargs)
+        # Guards the cancellation state below against concurrent access.
+        self._stream_lock: Lock = Lock()
+        # The response of the currently-streaming request, if any.
+        self._active_response: Optional[ClientResponse] = None
+        # The event loop the streaming request is running on, so close() can
+        # schedule the aiohttp close on the correct (owning) loop.
+        self._active_loop: Optional[asyncio.AbstractEventLoop] = None
+        # Once closed, no further streaming request will be started.
+        self._closed: bool = False
 
     async def function(self, request_dict: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -120,6 +142,15 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
                     # Check for successful response status
                     response.raise_for_status()
 
+                    # Register this response (and its loop) so close() -- possibly
+                    # from another thread -- can drop the connection and unblock
+                    # the read below. If already closed, abort before consuming.
+                    with self._stream_lock:
+                        if self._closed:
+                            return
+                        self._active_response = response
+                        self._active_loop = asyncio.get_running_loop()
+
                     # Iterate over the content stream as it comes in.
                     # Note: We used to iterate over lines with the simpler:
                     #           async for line in response.content:
@@ -169,3 +200,40 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
         except Exception as exc:  # pylint: disable=broad-exception-caught
             # Assume the newly initiated need some more help.
             raise ValueError(self.help_message(path)) from exc
+        finally:
+            # The request is over (normally, by error, or because close() dropped
+            # the connection); stop tracking its response.
+            with self._stream_lock:
+                self._active_response = None
+                self._active_loop = None
+
+    def close(self):
+        """
+        Close this session by dropping any in-flight streaming connection.
+
+        Marks the session closed and closes the currently-streaming aiohttp
+        response (if any). Because aiohttp objects are bound to their event loop
+        and are not thread-safe, the close is scheduled on the loop the streaming
+        request runs on via call_soon_threadsafe. Closing the response releases
+        its connection, which unblocks the read in streaming_chat() and causes the
+        neuro-san service to observe the client disconnect and terminate the
+        corresponding server-side request. Safe to call from another thread than
+        the one running streaming_chat(), and safe to call more than once.
+        """
+        with self._stream_lock:
+            self._closed = True
+            response: Optional[ClientResponse] = self._active_response
+            loop: Optional[asyncio.AbstractEventLoop] = self._active_loop
+            self._active_response = None
+            self._active_loop = None
+        if response is None:
+            return
+        try:
+            if loop is not None and not loop.is_closed():
+                # ClientResponse.close() is synchronous; run it on the owning loop.
+                loop.call_soon_threadsafe(response.close)
+            else:
+                response.close()
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Best-effort: the connection may already be torn down.
+            pass
