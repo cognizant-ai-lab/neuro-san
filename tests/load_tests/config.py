@@ -215,7 +215,6 @@ FAILURE_LOG_LIMIT = 10
 # Timeouts for short-lived operations (seconds)
 SOCKET_CHECK_TIMEOUT = 2
 THREAD_JOIN_TIMEOUT = 2
-PROCESS_WAIT_TIMEOUT = 10
 STALE_LOG_THRESHOLD_SECONDS = 300
 
 # Trend history: one append-only JSONL record per client run so
@@ -240,10 +239,8 @@ class SharedRef:
         self.value = None
 
 
-# Heartbeat and subprocess monitoring
+# Heartbeat
 HEARTBEAT_INTERVAL_SECONDS = 30
-POLL_INTERVAL_SECONDS = 5.0
-READ_BUFFER_SIZE = 4096
 
 # Server log regex patterns
 RETRY_LOG_PATTERN = re.compile(
