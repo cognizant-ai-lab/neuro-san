@@ -71,11 +71,14 @@ class TestMcpServiceAgentSession(TestCase):
     @staticmethod
     def create_tool(name: str, description: str = None) -> Dict[str, Any]:
         """
-        Creates a tool that conforms to the MCP Tool schema.
+        Creates a tool using the input schema shape returned by neuro-san servers.
         """
         tool: Dict[str, Any] = {
             "name": name,
-            "inputSchema": {"type": "object"},
+            "inputSchema": {
+                "$ref": "#/components/schemas/ChatRequest",
+                "components": {"schemas": {}},
+            },
         }
         if description is not None:
             tool["description"] = description
@@ -90,9 +93,9 @@ class TestMcpServiceAgentSession(TestCase):
                    return_value=initialize_response):
             return McpServiceAgentSession(agent_name="hello_world")
 
-    def test_function_accepts_valid_tools(self):
+    def test_function_accepts_neuro_san_tool_schema(self):
         """
-        Tests that a valid tools/list response returns the matching tool description.
+        Tests compatibility with the tool schema shape returned by neuro-san servers.
         """
         result: Dict[str, Any] = self.call_function([
             self.create_tool("hello_world", "Says hello")
@@ -108,14 +111,9 @@ class TestMcpServiceAgentSession(TestCase):
             ([], "Invalid MCP tools/list response: response must be an object"),
             ({"result": None}, "Invalid MCP tools/list response: 'result' must be an object"),
             ({"result": []}, "Invalid MCP tools/list response: 'result' must be an object"),
-            ({"result": {}},
-             "Invalid MCP tools/list response: 'result' does not match ListToolsResult"),
-            ({"result": {"tools": None}},
-             "Invalid MCP tools/list response: 'result' does not match ListToolsResult"),
-            ({"result": {"tools": "hello_world"}},
-             "Invalid MCP tools/list response: 'result' does not match ListToolsResult"),
-            ({"result": {"tools": [{"name": "hello_world"}]}},
-             "Invalid MCP tools/list response: 'result' does not match ListToolsResult"),
+            ({"result": {}}, "Invalid MCP tools/list response: 'tools' must be an array"),
+            ({"result": {"tools": None}}, "Invalid MCP tools/list response: 'tools' must be an array"),
+            ({"result": {"tools": "hello_world"}}, "Invalid MCP tools/list response: 'tools' must be an array"),
         )
 
         for response_dict, expected_message in invalid_responses:
@@ -137,17 +135,16 @@ class TestMcpServiceAgentSession(TestCase):
 
         self.assertEqual("MCP tools/list error -32602: Invalid params", str(context.exception))
 
-    def test_function_rejects_invalid_tool(self):
+    def test_function_skips_invalid_tool(self):
         """
-        Tests that a malformed tool causes the ListToolsResult schema validation to fail.
+        Tests that an invalid entry does not prevent discovery of a valid tool.
         """
-        with self.assertRaises(ValueError) as context:
-            self.call_function([None, self.create_tool("hello_world", "Says hello")])
+        result: Dict[str, Any] = self.call_function([
+            None,
+            self.create_tool("hello_world", "Says hello"),
+        ])
 
-        self.assertEqual(
-            "Invalid MCP tools/list response: 'result' does not match ListToolsResult",
-            str(context.exception),
-        )
+        self.assertEqual({"function": {"description": "Says hello"}}, result)
 
     def test_initialize_rejects_invalid_response(self):
         """

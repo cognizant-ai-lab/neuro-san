@@ -171,8 +171,10 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         # CheckMarx false positive (Unchecked Input for Loop Condition, #1252):
         # tools_list has already been fully parsed by json.loads above, so this
         # O(n) loop with early return cannot cost more than the parse that
-        # preceded it. The MCP schema validation above validates the shape.
+        # preceded it. The isinstance checks above validate the shape.
         for tool in tools_list:
+            if not isinstance(tool, dict):
+                continue
             name: str = tool.get("name", None)
             if name == self.agent_name:
                 tool_description: str = tool.get("description", None)
@@ -184,9 +186,9 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         return None
 
     @classmethod
-    def _get_result_dict(cls, response_dict: Any, method: str, result_definition: str) -> Dict[str, Any]:
+    def _get_result_dict(cls, response_dict: Any, method: str, result_definition: str = None) -> Dict[str, Any]:
         """
-        Validates an MCP JSON-RPC response and its result against the protocol schema.
+        Validates an MCP JSON-RPC response and optionally its result against the protocol schema.
         """
         if not isinstance(response_dict, dict):
             raise ValueError(f"Invalid MCP {method} response: response must be an object")
@@ -199,18 +201,19 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         if not isinstance(result_dict, dict):
             raise ValueError(f"Invalid MCP {method} response: 'result' must be an object")
 
-        protocol_schema: Dict[str, Any] = cls._get_protocol_schema()
-        validation_schema: Dict[str, Any] = {
-            "$schema": protocol_schema.get("$schema"),
-            "$ref": f"#/definitions/{result_definition}",
-            "definitions": protocol_schema.get("definitions", {}),
-        }
-        try:
-            jsonschema.validate(instance=result_dict, schema=validation_schema)
-        except jsonschema.exceptions.ValidationError as exc:
-            raise ValueError(
-                f"Invalid MCP {method} response: 'result' does not match {result_definition}"
-            ) from exc
+        if result_definition is not None:
+            protocol_schema: Dict[str, Any] = cls._get_protocol_schema()
+            validation_schema: Dict[str, Any] = {
+                "$schema": protocol_schema.get("$schema"),
+                "$ref": f"#/definitions/{result_definition}",
+                "definitions": protocol_schema.get("definitions", {}),
+            }
+            try:
+                jsonschema.validate(instance=result_dict, schema=validation_schema)
+            except jsonschema.exceptions.ValidationError as exc:
+                raise ValueError(
+                    f"Invalid MCP {method} response: 'result' does not match {result_definition}"
+                ) from exc
         return result_dict
 
     @classmethod
@@ -230,8 +233,11 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         """
         Validates an MCP tools/list response and returns its tools array.
         """
-        result_dict: Dict[str, Any] = cls._get_result_dict(response_dict, "tools/list", "ListToolsResult")
-        return result_dict["tools"]
+        result_dict: Dict[str, Any] = cls._get_result_dict(response_dict, "tools/list")
+        tools_list: Any = result_dict.get("tools", None)
+        if not isinstance(tools_list, list):
+            raise ValueError("Invalid MCP tools/list response: 'tools' must be an array")
+        return tools_list
 
     def connectivity(self, request_dict: Dict[str, Any]) -> Dict[str, Any]:
         """
