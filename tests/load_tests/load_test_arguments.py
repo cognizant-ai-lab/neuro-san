@@ -273,16 +273,6 @@ class LoadTestArguments:
                  "Mutually exclusive with --server-only.",
         )
         parser.add_argument(
-            "--http-client",
-            action="store_true",
-            default=False,
-            help="Use direct HTTP requests instead of "
-                 "spawning agent_cli subprocesses. "
-                 "Drastically reduces client memory "
-                 "(~1 MB vs ~96 MB per concurrent request). "
-                 "Implies --client-only.",
-        )
-        parser.add_argument(
             "--server-only",
             action="store_true",
             default=False,
@@ -312,8 +302,7 @@ class LoadTestArguments:
             action="store_true",
             default=False,
             help="Disable per-request token accounting. By default "
-                 "the load test passes --tokens to agent_cli at "
-                 "all levels.",
+                 "the load test requests token accounting at all levels.",
         )
         parser.add_argument(
             "--minimal",
@@ -322,8 +311,7 @@ class LoadTestArguments:
             const="minimal",
             default="maximal",
             help="Ask the server for the bare minimum of messages, "
-                 "as agent_cli's --minimal does (both subprocess and "
-                 "--http-client modes). Streams only the final answer "
+                 "as agent_cli's --minimal does. Streams only the final answer "
                  "instead of all messages including AGENT_PROGRESS, "
                  "which reduces server-to-client traffic and the "
                  "server-side work of producing progress events, but "
