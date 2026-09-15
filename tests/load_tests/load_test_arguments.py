@@ -310,8 +310,8 @@ class LoadTestArguments:
             action="store_const",
             const="minimal",
             default="maximal",
-            help="Ask the server for the bare minimum of messages, "
-                 "as agent_cli's --minimal does. Streams only the final answer "
+            help="Ask the server for the bare minimum of messages. "
+                 "Streams only the final answer "
                  "instead of all messages including AGENT_PROGRESS, "
                  "which reduces server-to-client traffic and the "
                  "server-side work of producing progress events, but "

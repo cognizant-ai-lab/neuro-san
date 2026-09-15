@@ -51,7 +51,7 @@ class _RequestTimeout(Exception):
 
 
 class HttpClient:
-    """Runs agent_cli logic in-thread via HttpServiceAgentSession."""
+    """Sends streaming_chat requests in-thread via HttpServiceAgentSession."""
 
     @staticmethod
     def execute_request(
@@ -59,12 +59,10 @@ class HttpClient:
             timeout, idle_timeout, use_https=False,
             chat_filter_type="MAXIMAL",
     ) -> Tuple[str, Dict[str, str], str, float, Dict]:
-        """Send one streaming_chat request using the agent_cli
-        client stack in-thread.
+        """Send one streaming_chat request in-thread.
 
         Creates an ``HttpServiceAgentSession`` and a
-        ``StreamingInputProcessor`` (the same objects that
-        ``agent_cli`` uses), then calls ``process_once()``
+        ``StreamingInputProcessor``, then calls ``process_once()``
         to send the request, consume the streaming response,
         and extract sly_data fields.  When ``use_https`` is True,
         a ``security_cfg`` is supplied so the session connects
@@ -80,8 +78,8 @@ class HttpClient:
         Returns (status, parsed_fields, response_text, ttft,
         token_accounting).
         """
-        # Mirrors the agent_cli request surface, so the argument list and
-        # the local state track that interface rather than an internal design.
+        # The argument list and local state track the streaming_chat
+        # request surface rather than an internal design.
         # pylint: disable=too-many-arguments,too-many-locals
         start = time.time()
 

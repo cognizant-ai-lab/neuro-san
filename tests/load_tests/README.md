@@ -3,6 +3,11 @@
 Fire concurrent requests at a neuro-san server, monitor resource usage,
 and report results. Fires real LLM calls via direct HTTP streaming.
 
+Each request runs in a worker thread that opens an `HttpServiceAgentSession`
+directly (~1-2 MB per concurrent request). An earlier transport spawned one
+`agent_cli` subprocess per request instead, costing ~96 MB each, which made
+memory the limit on concurrency; that transport has been removed.
+
 ## Contents
 
 - [Quick Start](#quick-start)
@@ -146,7 +151,7 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--server-log [PATH]`      | auto (local, norm/adv) | Server log analysis. Auto-detected for a local server at norm/adv; if not found you're prompted to continue without it (remote host aborts — use `--client-only`). Pass a path for an explicit file, or the flag alone to force auto-detect. |
 | `--no-server-log`          | off         | Skip the missing-log prompt at norm/adv and run without server-log analysis; overrides the local auto-detect |
 | `--no-tokens`              | off         | Disable per-request token accounting         |
-| `--minimal`                | off         | Ask the server for the bare minimum of messages, as `agent_cli --minimal` does: only the final answer, cutting traffic and progress-event work — but it also drops the token-accounting message, so client-side LLM/token reporting is unavailable (tokens then come only from the server log) |
+| `--minimal`                | off         | Ask the server for the bare minimum of messages: only the final answer, cutting traffic and progress-event work — but it also drops the token-accounting message, so client-side LLM/token reporting is unavailable (tokens then come only from the server log) |
 | `--profile-path`           | auto        | Directory containing profile JSON files (or `LOAD_TEST_PROFILE_PATH` env var) |
 | `--host`                   | localhost   | Neuro-san server host                        |
 | `--port`                   | 8080        | Neuro-san server port                        |
