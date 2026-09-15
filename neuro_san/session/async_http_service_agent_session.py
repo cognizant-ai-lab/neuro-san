@@ -130,6 +130,7 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
             Note that responses to the chat input might be numerous and will come as they
             are produced until the system decides there are no more messages to be sent.
         """
+        # pylint: disable=too-many-branches,too-many-statements
         separator: bytes = b"\n"
         max_chunk_size: int = 64 * 1024
         path: str = self.get_request_path("streaming_chat")
