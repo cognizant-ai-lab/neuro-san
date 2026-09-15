@@ -14,14 +14,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Write/read round-trip tests for LocalReservationsStorage.
-
-Covers: write-then-read of a valid reservation, non-mutation of the
-caller's agent_spec, empty-batch no-op, missing-reservation returns
-(None, None), and the documented read-path contract that an already-
-expired reservation is reported as absent.
-"""
 import json
 
 import pytest
@@ -33,8 +25,12 @@ from tests.neuro_san.service.watcher.temp_networks.local.local_reservations_test
 
 class TestLocalReservationsStorageWriteRead:
     """
-    End-to-end: write a batch, read one back, verify JSON shape and that
-    the caller's agent_spec was not mutated.
+    Write/read round-trip tests for LocalReservationsStorage.
+
+    Covers: write-then-read of a valid reservation, non-mutation of the
+    caller's agent_spec, empty-batch no-op, missing-reservation returns
+    (None, None), and the documented read-path contract that an already-
+    expired reservation is reported as absent.
     """
 
     @pytest.mark.asyncio

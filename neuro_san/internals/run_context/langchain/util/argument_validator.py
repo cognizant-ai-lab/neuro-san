@@ -47,8 +47,9 @@ class ArgumentValidator:
         """
 
         # If method_class is a Pydantic BaseModel, get its field names and aliases
+        class_args_set: Set[str] = None
         if isclass(method_class) and issubclass(method_class, BaseModel):
-            class_args_set: Set[str] = ArgumentValidator.get_base_model_args(method_class)
+            class_args_set = ArgumentValidator.get_base_model_args(method_class)
         else:
             # Otherwise, extract argument names from the function/method signature
             class_args_set = set(signature(method_class).parameters.keys())

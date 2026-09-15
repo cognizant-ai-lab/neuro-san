@@ -108,6 +108,7 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         headers["Content-Type"] = "application/json"
 
         path: str = self.get_request_path("initialize")
+        response_dict: Dict[str, Any] = None
         try:
             response = requests.post(path, json=handshake_dict, headers=headers, timeout=self.timeout_in_seconds)
             response.raise_for_status()
@@ -157,6 +158,7 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         headers[self.MCP_PROTOCOL_VERSION] = self.protocol_version
 
         path: str = self.get_request_path("tools/list")
+        response_dict: Dict[str, Any] = None
         try:
             response = requests.post(path, json=use_request_dict, headers=headers, timeout=self.timeout_in_seconds)
             response.raise_for_status()

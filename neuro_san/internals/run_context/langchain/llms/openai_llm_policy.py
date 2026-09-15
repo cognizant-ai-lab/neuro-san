@@ -137,7 +137,7 @@ class OpenAILlmPolicy(LlmPolicy):
                                                   "OPENAI_API_BASE", client),
             openai_organization=self.get_value_or_env(config, "openai_organization",
                                                       "OPENAI_ORG_ID", client),
-            openai_proxy=self.get_value_or_env(config, "openai_organization",
+            openai_proxy=self.get_value_or_env(config, "openai_proxy",
                                                "OPENAI_PROXY", client),
             request_timeout=self.get_value_or_env(config, "request_timeout", None, client),
             max_retries=self.get_value_or_env(config, "max_retries", None, client),

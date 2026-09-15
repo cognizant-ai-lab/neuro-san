@@ -14,14 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-S3ReservationsStorage routes every put_object call through
-_do_with_retries. This module exercises the happy retry path: a
-transient ThrottlingException on the first attempt is retried, the
-retry succeeds, and S3 ends up consistent.
-"""
 from unittest.mock import patch
-import pytest
 
 from botocore.exceptions import ClientError
 
@@ -31,6 +24,11 @@ from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_te
 
 class TestRetryOnThrottling(S3ReservationsStorageTestBase):
     """
+    S3ReservationsStorage routes every put_object call through
+    _do_with_retries. This module exercises the happy retry path: a
+    transient ThrottlingException on the first attempt is retried, the
+    retry succeeds, and S3 ends up consistent.
+
     The earlier tests all run against a FakeS3Client that never fails,
     so they never reach the retry branch of _do_with_retries. This test
     fills that gap by injecting a one-shot ThrottlingException on the
@@ -38,7 +36,6 @@ class TestRetryOnThrottling(S3ReservationsStorageTestBase):
     the put succeeds.
     """
 
-    @pytest.mark.asyncio
     async def test_add_retries_on_throttling_then_succeeds(self):
         """
         On a transient ThrottlingException, add_reservations should

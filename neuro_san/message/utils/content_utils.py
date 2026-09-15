@@ -175,7 +175,7 @@ class ContentUtils:
             block for block in message.content_blocks
             if block.get("type") not in ContentUtils.TOOL_CALL_BLOCK_TYPES
         ]
-        return ContentUtils._to_json_safe(blocks)
+        return ContentUtils.to_json_safe(blocks)
 
     @staticmethod
     def is_trivial(blocks: List[Dict[str, Any]]) -> bool:
@@ -401,15 +401,20 @@ class ContentUtils:
         return {"type": kind, "base64": base64_str, "mime_type": mime_type}
 
     @staticmethod
-    def _to_json_safe(value: Any) -> Any:
+    def to_json_safe(value: Any) -> Any:
         """
         Recursively make a value JSON-serializable without dropping data:
         bytes become base64 strings, non-finite floats and unknown objects
         become their string form, tuples and sets become lists, and
-        dictionary keys become strings.
+        dictionary keys become strings. Use it for message content and
+        content-block payloads (tool outputs, images, files) that must
+        survive intact into the journal.
 
-        This intentionally differs from ChatMessageConverter.to_json_safe,
-        which nulls out bytes - block payloads must survive.
+        Not to be confused with ChatMessageConverter.to_json_safe, the lossy
+        variant for outbound ChatMessage response dictionaries: there
+        anything non-serializable, bytes included, becomes None and
+        non-string keys are dropped. Use that one for response
+        dictionaries, this one for content.
 
         :param value: Any value to sanitize
         :return: A JSON-serializable equivalent of the value
@@ -421,7 +426,13 @@ class ContentUtils:
         if isinstance(value, (bytes, bytearray)):
             return base64.b64encode(bytes(value)).decode("ascii")
         if isinstance(value, dict):
-            return {str(key): ContentUtils._to_json_safe(item) for key, item in value.items()}
+            safe_dict: Dict[str, Any] = {}
+            for key, item in value.items():
+                safe_dict[str(key)] = ContentUtils.to_json_safe(item)
+            return safe_dict
         if isinstance(value, (list, tuple, set)):
-            return [ContentUtils._to_json_safe(item) for item in value]
+            safe_list: List[Any] = []
+            for item in value:
+                safe_list.append(ContentUtils.to_json_safe(item))
+            return safe_list
         return str(value)

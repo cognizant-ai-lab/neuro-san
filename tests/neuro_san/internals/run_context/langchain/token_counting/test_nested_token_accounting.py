@@ -22,7 +22,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-import pytest
+from unittest import IsolatedAsyncioTestCase
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -124,7 +124,7 @@ class FakeInvocationContext:
         return self.cloned
 
 
-class TestNestedTokenAccounting:
+class TestNestedTokenAccounting(IsolatedAsyncioTestCase):
     """
     End-to-end test of the token accounting invariants through real langchain
     event dispatch, mirroring how agents nest in production:
@@ -141,7 +141,6 @@ class TestNestedTokenAccounting:
 
     # A test this end-to-end legitimately needs a handful of actors and captures.
     # pylint: disable=too-many-locals
-    @pytest.mark.asyncio
     async def test_nested_agents_count_each_llm_call_exactly_once(self):
         """
         Three count_tokens() scopes with one LLM call each, shaped like a

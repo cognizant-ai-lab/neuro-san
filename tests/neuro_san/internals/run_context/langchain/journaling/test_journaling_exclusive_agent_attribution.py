@@ -15,11 +15,12 @@
 # END COPYRIGHT
 
 from typing import Tuple
+
+from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from uuid import uuid4
 
-import pytest
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration
 from langchain_core.outputs import LLMResult
@@ -27,7 +28,7 @@ from langchain_core.outputs import LLMResult
 from neuro_san.internals.run_context.langchain.journaling.journaling_callback_handler import JournalingCallbackHandler
 
 
-class TestExclusiveAgentAttribution:
+class TestJournalingExclusiveAgentAttribution(IsolatedAsyncioTestCase):
     """An inherited handler must ignore events owned by a descendant agent."""
 
     @staticmethod
@@ -49,7 +50,6 @@ class TestExclusiveAgentAttribution:
         )
         return handler, calling_agent_journal, origination
 
-    @pytest.mark.asyncio
     async def test_descendant_llm_event_is_ignored(self) -> None:
         """An ancestor handler must not journal a descendant's LLM output."""
         ancestor, ancestor_journal, _ = self._make_handler()
@@ -61,7 +61,6 @@ class TestExclusiveAgentAttribution:
 
         ancestor_journal.write_message_if_next_not_dupe.assert_not_awaited()
 
-    @pytest.mark.asyncio
     async def test_descendant_tool_events_are_ignored_before_origin_allocation(self) -> None:
         """Descendant tool callbacks must be rejected before allocating an origin."""
         ancestor, ancestor_journal, ancestor_origination = self._make_handler()
@@ -80,7 +79,6 @@ class TestExclusiveAgentAttribution:
         assert not ancestor._tool_journals  # pylint: disable=protected-access
         assert not ancestor._tool_origins  # pylint: disable=protected-access
 
-    @pytest.mark.asyncio
     async def test_nearest_handler_processes_its_own_event(self) -> None:
         """The handler owning the nearest agent scope must process its event."""
         handler, journal, _ = self._make_handler()

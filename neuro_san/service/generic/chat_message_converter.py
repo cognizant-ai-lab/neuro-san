@@ -80,11 +80,22 @@ class ChatMessageConverter(DictionaryConverter):
     JSON_PRIMITIVES = (str, int, float, bool, type(None))
     SKIP_TYPES = (ChatMessageType,)
 
-    def to_json_safe(self, obj: Any):
+    def to_json_safe(self, obj: Any) -> Any:
         """
-        Recursively convert obj into a JSON-serializable structure.
-        Don't touch the values of SKIP_TYPES.
-        Non-serializable values are replaced with None.
+        Recursively convert obj into a JSON-serializable structure for an
+        outbound ChatMessage response dictionary: the values of SKIP_TYPES
+        are left untouched, enums become their value, non-string dictionary
+        keys are dropped, and anything else that is not JSON-serializable,
+        bytes included, is replaced with None.
+
+        Not to be confused with ContentUtils.to_json_safe, the lossless
+        variant for message content and content-block payloads: there bytes
+        become base64 strings and unknown values become their string form,
+        because block data (images, files) must survive. Use this method for
+        response dictionaries, that one for content.
+
+        :param obj: The object to convert
+        :return: A JSON-serializable equivalent of obj
         """
         # Fast path: JSON primitives or types we need to skip:
         if isinstance(obj, (self.SKIP_TYPES, self.JSON_PRIMITIVES)):

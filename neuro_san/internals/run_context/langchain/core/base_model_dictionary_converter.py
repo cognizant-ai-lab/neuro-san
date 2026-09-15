@@ -225,8 +225,9 @@ class BaseModelDictionaryConverter(DictionaryConverter):
         # for an "int" field is no longer truncated.  Rejections do not
         # crash the run - langchain surfaces them to the calling LLM as a
         # correctable tool-error message, at the cost of a retry round-trip.
+        model: BaseModel = None
         try:
-            model: BaseModel = create_model(name, **fields)
+            model = create_model(name, **fields)
         except (NameError, TypeError) as exception:
             # Safety net for anything validate_field_name() does not cover:
             # report whatever create_model() rejects as the same spec-error

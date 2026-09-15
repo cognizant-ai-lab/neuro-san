@@ -19,9 +19,12 @@ from typing import Any
 from typing import Dict
 from typing import Set
 
+from unittest import TestCase
+import pytest
+
 from pydantic import BaseModel
 from pydantic import Field
-import pytest
+
 
 from neuro_san.internals.run_context.langchain.util.argument_validator import ArgumentValidator
 
@@ -41,7 +44,7 @@ def sample_function(name: str, city: str):
 
 # ------------------------- Tests -------------------------------
 
-class TestArgumentValidator:
+class TestArgumentValidator(TestCase):
     """Tests for the ArgumentValidator class and its static validation utilities."""
 
     def test_get_base_model_args_returns_field_names_and_aliases(self):

@@ -14,29 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-S3ReservationsStorage commits to a specific on-disk format for every
-reservation it writes:
-  - Serialization is JSON (we chose json.dumps, not pickle/yaml/proto).
-  - The original agent_spec lives at the top level of the document
-    (no wrap-in-envelope like {"data": ...}).
-  - Storage-injected bookkeeping fields live under a "metadata" key
-    ("reservation" with the serialized Reservation, "stored_at" with
-    the wall-clock timestamp).
-
-External consumers (CLI tools, dashboards, debugging operators) read
-these objects directly and rely on the format being stable. T1's
-round-trip would still pass if the read+write paths were updated
-together but the on-disk format silently changed; this module pins
-the format by reading the raw bytes and validating the parsed
-document against a JSON Schema, independent of the storage's read
-path.
-
-Encoding/line-ending properties (UTF-8, no BOM, no CRLF) are
-boto3+Python concerns and are intentionally NOT tested here.
-"""
 from json import loads
-import pytest
 
 from jsonschema import validate
 
@@ -87,13 +65,27 @@ RESERVATION_OBJECT_SCHEMA = {
 
 class TestJsonBodyFormat(S3ReservationsStorageTestBase):
     """
-    Pin the on-disk JSON shape produced by add_reservations. Reads
-    the raw bytes from the FakeS3Client and validates the parsed
-    document against RESERVATION_OBJECT_SCHEMA, independent of the
-    storage's read path.
+    S3ReservationsStorage commits to a specific on-disk format for every
+    reservation it writes:
+      - Serialization is JSON (we chose json.dumps, not pickle/yaml/proto).
+      - The original agent_spec lives at the top level of the document
+        (no wrap-in-envelope like {"data": ...}).
+      - Storage-injected bookkeeping fields live under a "metadata" key
+        ("reservation" with the serialized Reservation, "stored_at" with
+        the wall-clock timestamp).
+
+    External consumers (CLI tools, dashboards, debugging operators) read
+    these objects directly and rely on the format being stable. T1's
+    round-trip would still pass if the read+write paths were updated
+    together but the on-disk format silently changed; this module pins
+    the format by reading the raw bytes and validating the parsed
+    document against a JSON Schema, independent of the storage's read
+    path.
+
+    Encoding/line-ending properties (UTF-8, no BOM, no CRLF) are
+    boto3+Python concerns and are intentionally NOT tested here.
     """
 
-    @pytest.mark.asyncio
     async def test_add_writes_json_body_with_expected_top_level_shape(self):
         """
         After add_reservations, the S3 object body should:

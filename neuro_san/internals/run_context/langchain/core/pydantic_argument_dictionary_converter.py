@@ -61,7 +61,7 @@ class PydanticArgumentDictionaryConverter(DictionaryConverter):
         if isinstance(value, Dict) or self.is_pydantic_object(value):
             return self.to_dict(value)
         if isinstance(value, list):
-            converted_list: List = []
+            converted_list: List[Any] = []
             for item in value:
                 converted_list.append(self._convert_value(item))
             return converted_list

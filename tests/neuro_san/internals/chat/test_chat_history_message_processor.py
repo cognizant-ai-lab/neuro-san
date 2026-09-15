@@ -20,11 +20,13 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from unittest import TestCase
+
 from neuro_san.internals.chat.chat_history_message_processor import ChatHistoryMessageProcessor
 from neuro_san.message.types.chat_message_type import ChatMessageType
 
 
-class TestChatHistoryMessageProcessor:
+class TestChatHistoryMessageProcessor(TestCase):
     """
     Tests for ChatHistoryMessageProcessor.escape_message.
 

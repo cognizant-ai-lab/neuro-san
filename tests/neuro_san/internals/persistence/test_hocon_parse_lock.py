@@ -25,6 +25,8 @@ from pathlib import Path
 from typing import Any
 from typing import Dict
 from typing import List
+
+from unittest import TestCase
 from unittest.mock import patch
 
 import pytest
@@ -70,7 +72,7 @@ class TrackingHoconSerializationFormat(HoconSerializationFormat):
                 cls.in_flight -= 1
 
 
-class TestHoconParseLock:
+class TestHoconParseLock(TestCase):
     """
     Tests that all HOCON deserialization is serialized through HoconParseLock.
 

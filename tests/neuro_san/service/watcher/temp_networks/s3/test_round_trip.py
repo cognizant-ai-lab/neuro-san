@@ -14,10 +14,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Round-trip a single reservation through S3ReservationsStorage.
-"""
-import pytest
 
 from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
@@ -25,12 +21,12 @@ from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_te
 
 class TestRoundTrip(S3ReservationsStorageTestBase):
     """
+    Round-trip a single reservation through S3ReservationsStorage.
     Reservation feature works end-to-end against an S3-like backend:
     writing a reservation and reading it back yields an equivalent
     Reservation and an AgentNetwork carrying the original agent spec.
     """
 
-    @pytest.mark.asyncio
     async def test_add_then_get_returns_equivalent_reservation(self):
         """
         Uses a reservation id and an authored network name that are

@@ -15,6 +15,8 @@
 #
 # END COPYRIGHT
 
+from unittest import TestCase
+
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.human import HumanMessage
 from langchain_core.messages.system import SystemMessage
@@ -28,7 +30,7 @@ from neuro_san.message.types.chat_message_type import ChatMessageType
 from tests.neuro_san.message.content_fixtures import ContentFixtures
 
 
-class TestBaseMessageDictionaryConverter:
+class TestBaseMessageDictionaryConverter(TestCase):
     """
     Golden-parity tests for the wire converter, plus the corrected
     projection of list-form (block) content.

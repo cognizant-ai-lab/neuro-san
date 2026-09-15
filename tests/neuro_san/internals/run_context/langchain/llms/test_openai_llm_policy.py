@@ -210,3 +210,55 @@ class TestOpenAILlmPolicy:
         assert "reasoning_effort" not in payload
         assert "n" not in payload
         self._assert_binds_to_responses_create(payload)
+
+    def test_create_llm_reads_openai_proxy_from_its_own_env_var(self, policies: List[OpenAILlmPolicy],
+                                                                monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Regression test for issue #1308: with no pre-built client, an llm_config that sets
+        "openai_organization" but not "openai_proxy" must fall back to OPENAI_PROXY for the
+        proxy. Before the fix the proxy was read from the "openai_organization" key, so the
+        organization id was handed to ChatOpenAI as the proxy URL and OPENAI_PROXY was ignored.
+
+        :param policies: The fixture list that tracks policies for teardown
+        :param monkeypatch: The pytest fixture used to set the environment variables
+        """
+        # A closed local port, like openai_api_base, so nothing can reach a real proxy.
+        monkeypatch.setenv("OPENAI_PROXY", "http://127.0.0.1:9")
+        # A different organization in the environment shows that llm_config wins over it.
+        monkeypatch.setenv("OPENAI_ORG_ID", "org-from-env")
+
+        config: Dict[str, Any] = dict(self.BASE_CONFIG)
+        config["openai_organization"] = "org-from-config"
+
+        policy: OpenAILlmPolicy = OpenAILlmPolicy()
+        policies.append(policy)
+
+        # No client is passed, so create_llm() consults llm_config first and the environment second.
+        llm: ChatOpenAI = policy.create_llm(config, "gpt-5.2", None)
+
+        assert llm.openai_organization == "org-from-config"
+        assert llm.openai_proxy == "http://127.0.0.1:9"
+
+    def test_create_llm_without_client_reads_each_connection_key(self, policies: List[OpenAILlmPolicy]) -> None:
+        """
+        Regression test for issue #1308 at the level of the built ChatOpenAI: with no pre-built
+        client, each connection setting in llm_config must land on its own ChatOpenAI field.
+        Before the fix the organization id was handed to ChatOpenAI as the proxy URL.
+
+        :param policies: The fixture list that tracks policies for teardown
+        """
+        config: Dict[str, Any] = dict(self.BASE_CONFIG)
+        config["openai_organization"] = "org-test"
+        # A closed local port, like openai_api_base, so nothing can reach a real proxy.
+        config["openai_proxy"] = "http://127.0.0.1:9"
+
+        policy: OpenAILlmPolicy = OpenAILlmPolicy()
+        policies.append(policy)
+
+        # No client is passed, so create_llm() must fall back to the llm_config values themselves.
+        llm: ChatOpenAI = policy.create_llm(config, "gpt-5.2", None)
+
+        assert llm.openai_api_key.get_secret_value() == "sk-test"
+        assert llm.openai_api_base == "http://127.0.0.1:9"
+        assert llm.openai_organization == "org-test"
+        assert llm.openai_proxy == "http://127.0.0.1:9"
