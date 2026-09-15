@@ -182,21 +182,27 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         Close this session by dropping any in-flight streaming connection.
 
         Marks the session closed and closes the currently-streaming response (if
-        any). Closing the response releases its socket, which unblocks the read
-        in streaming_chat() and causes the neuro-san service to observe the
-        client disconnect and terminate the corresponding server-side request.
-        Safe to call from a different thread than the one iterating
-        streaming_chat(), and safe to call more than once.
+        any), releasing its socket and unblocking the read in streaming_chat() on
+        the client side. Safe to call from a different thread than the one
+        iterating streaming_chat(), and safe to call more than once.
 
-        Scope of the guarantee: close() reliably aborts the request once response
+        Client-side scope: close() reliably drops the connection once response
         headers have arrived (i.e. once streaming has begun). A request still
         blocked on the very first header round-trip cannot be force-interrupted
         through the synchronous `requests` library from another thread; that
         window is bounded in practice because the neuro-san streaming service
         flushes response headers immediately, before doing the agent work, so the
-        long-running wait is the post-header streaming read -- which close()
-        does interrupt. (The async client has no such window: it aborts the
-        underlying client session, cancelling even a pre-header request.)
+        long-running wait is the post-header streaming read -- which close() does
+        interrupt. (The async client has no such window: it aborts the underlying
+        client session, cancelling even a pre-header request.)
+
+        Server-side scope: close() releases the client connection; it does NOT
+        directly cancel the server-side work. The neuro-san service ends the
+        corresponding request only when it next detects the dropped connection --
+        on its next result or heartbeat flush. That is prompt while results stream
+        (or a keep-alive heartbeat is enabled), but a request producing no output
+        with heartbeat and request-timeout disabled may keep running server-side
+        until it does.
         """
         with self._stream_lock:
             self._closed = True

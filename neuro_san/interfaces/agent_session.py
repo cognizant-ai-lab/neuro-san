@@ -72,9 +72,17 @@ class AgentSession(AgentSessionConstants):
         """
         Close the session, releasing any underlying client connection.
 
-        For remote sessions this drops the connection to the service so that an
-        in-flight streaming_chat() request is aborted (the service detects the
-        client disconnect and terminates the corresponding server-side work).
+        For remote sessions this drops the client connection to the service and
+        unblocks an in-flight streaming_chat() on the client side. It does NOT
+        directly cancel the server-side work: the neuro-san service ends the
+        corresponding request only when it next detects the dropped connection --
+        that is, on its next result or heartbeat flush. So termination is prompt
+        while the service is streaming results (or a keep-alive heartbeat is
+        enabled), but a request that produces no output, with heartbeat and
+        request-timeout disabled, may keep running server-side until it does.
+        In short: close() guarantees release of the client connection, not
+        immediate server-side termination.
+
         Safe to call from another thread than the one iterating streaming_chat(),
         and safe to call more than once.
 
