@@ -108,6 +108,13 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         separator: bytes = b"\n"
         max_chunk_size: int = 64 * 1024
         path: str = self.get_request_path("streaming_chat")
+
+        # Abort before issuing the request if close() has already been called
+        # (e.g. the caller cancelled before first iterating this generator).
+        with self._stream_lock:
+            if self._closed:
+                return
+
         try:
             with requests.post(path, json=request_dict, headers=self.get_headers(),
                                stream=True,
@@ -180,6 +187,16 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         client disconnect and terminate the corresponding server-side request.
         Safe to call from a different thread than the one iterating
         streaming_chat(), and safe to call more than once.
+
+        Scope of the guarantee: close() reliably aborts the request once response
+        headers have arrived (i.e. once streaming has begun). A request still
+        blocked on the very first header round-trip cannot be force-interrupted
+        through the synchronous `requests` library from another thread; that
+        window is bounded in practice because the neuro-san streaming service
+        flushes response headers immediately, before doing the agent work, so the
+        long-running wait is the post-header streaming read -- which close()
+        does interrupt. (The async client has no such window: it aborts the
+        underlying client session, cancelling even a pre-header request.)
         """
         with self._stream_lock:
             self._closed = True

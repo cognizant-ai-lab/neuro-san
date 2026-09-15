@@ -51,8 +51,14 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
         super().__init__(*args, **kwargs)
         # Guards the cancellation state below against concurrent access.
         self._stream_lock: Lock = Lock()
-        # The response of the currently-streaming request, if any.
+        # Empirically, aborting an aiohttp request needs different handles in
+        # different phases: closing the RESPONSE unblocks an in-flight read after
+        # headers have arrived, while closing the SESSION aborts a request still
+        # awaiting headers (there may be no total timeout). We track both so
+        # close() can cover either window.
         self._active_response: Optional[ClientResponse] = None
+        # The aiohttp client session of the in-flight request, if any.
+        self._active_session: Optional[ClientSession] = None
         # The event loop the streaming request is running on, so close() can
         # schedule the aiohttp close on the correct (owning) loop.
         self._active_loop: Optional[asyncio.AbstractEventLoop] = None
@@ -127,30 +133,49 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
         separator: bytes = b"\n"
         max_chunk_size: int = 64 * 1024
         path: str = self.get_request_path("streaming_chat")
+
+        # Abort before issuing the request if close() has already been called
+        # (e.g. the caller cancelled before first iterating this generator), and
+        # record the running loop now so close() from another thread can schedule
+        # the abort even while we are still awaiting response headers.
+        with self._stream_lock:
+            if self._closed:
+                return
+            self._active_loop = asyncio.get_running_loop()
+
+        # To specify complete timeout value, we must use "total" parameter of ClientTimeout.
+        # See https://docs.aiohttp.org/en/stable/client_reference.html#aiohttp.ClientTimeout for details.
+        timeout: ClientTimeout = ClientTimeout(total=None)
+        # That will make sure that the connection will stay open until the (last) result is yielded,
+        # which is what we want here.
+        # Not specifying "total" parameter will invoke lower-level aiohttp timeout, which is 300 seconds by default
+        if self.streaming_timeout_in_seconds is not None:
+            timeout = ClientTimeout(total=self.streaming_timeout_in_seconds)
+
+        session: ClientSession = ClientSession(headers=self.get_headers(), timeout=timeout)
+        # Track the session BEFORE issuing the request so close() can abort it even
+        # while it is still awaiting response headers. If close() raced in between
+        # the check above and here, tear the session down and bail.
+        abort: bool = False
+        with self._stream_lock:
+            if self._closed:
+                abort = True
+            else:
+                self._active_session = session
+        if abort:
+            await session.close()
+            return
+
         try:
-            # To specify complete timeout value, we must use "total" parameter of ClientTimeout.
-            # See https://docs.aiohttp.org/en/stable/client_reference.html#aiohttp.ClientTimeout for details.
-            timeout: ClientTimeout = ClientTimeout(total=None)
-            # That will make sure that the connection will stay open until the (last) result is yielded,
-            # which is what we want here.
-            # Not specifying "total" parameter will invoke lower-level aiohttp timeout, which is 300 seconds by default
-            if self.streaming_timeout_in_seconds is not None:
-                timeout = ClientTimeout(total=self.streaming_timeout_in_seconds)
-            async with ClientSession(headers=self.get_headers(),
-                                     timeout=timeout
-                                     ) as session:
+            async with session:
                 async with session.post(path, json=request_dict) as response:
                     # Check for successful response status
                     response.raise_for_status()
 
-                    # Register this response (and its loop) so close() -- possibly
-                    # from another thread -- can drop the connection and unblock
-                    # the read below. If already closed, abort before consuming.
+                    # Headers have arrived; track the response so close() can
+                    # unblock the read below (closing the session alone does not).
                     with self._stream_lock:
-                        if self._closed:
-                            return
                         self._active_response = response
-                        self._active_loop = asyncio.get_running_loop()
 
                     # Iterate over the content stream as it comes in.
                     # Note: We used to iterate over lines with the simpler:
@@ -202,37 +227,56 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
             # Assume the newly initiated need some more help.
             raise ValueError(self.help_message(path)) from exc
         finally:
-            # The request is over (normally, by error, or because close() dropped
-            # the connection); stop tracking its response.
+            # The request is over (normally, by error, or because close() aborted
+            # it); stop tracking it.
             with self._stream_lock:
                 self._active_response = None
+                self._active_session = None
                 self._active_loop = None
 
     def close(self):
         """
-        Close this session by dropping any in-flight streaming connection.
+        Close this session by aborting any in-flight streaming request.
 
-        Marks the session closed and closes the currently-streaming aiohttp
-        response (if any). Because aiohttp objects are bound to their event loop
-        and are not thread-safe, the close is scheduled on the loop the streaming
-        request runs on via call_soon_threadsafe. Closing the response releases
-        its connection, which unblocks the read in streaming_chat() and causes the
-        neuro-san service to observe the client disconnect and terminate the
-        corresponding server-side request. Safe to call from another thread than
-        the one running streaming_chat(), and safe to call more than once.
+        Marks the session closed and, on the event loop the request runs on,
+        aborts it so streaming_chat() unblocks and the neuro-san service observes
+        the client disconnect and terminates the corresponding server-side work.
+        Both handles are needed because aiohttp aborts differently per phase:
+        closing the response unblocks an in-flight read after headers have
+        arrived, while closing the session aborts a request still awaiting
+        headers (there may be no total timeout). aiohttp objects are bound to
+        their loop and are not thread-safe, so the work is scheduled on that loop.
+        Safe to call from another thread than the one running streaming_chat(),
+        and safe to call more than once.
         """
         with self._stream_lock:
             self._closed = True
             response: Optional[ClientResponse] = self._active_response
+            session: Optional[ClientSession] = self._active_session
             loop: Optional[asyncio.AbstractEventLoop] = self._active_loop
             self._active_response = None
+            self._active_session = None
             self._active_loop = None
-        if response is None:
+        if loop is None or loop.is_closed():
+            # No running loop to schedule on; best-effort synchronous response close.
+            if response is not None:
+                with suppress(Exception):
+                    response.close()
             return
-        with suppress(Exception):
-            # Best-effort: the connection may already be torn down.
-            if loop is not None and not loop.is_closed():
+        # RuntimeError is raised only if the loop is not running -- nothing to abort.
+        with suppress(RuntimeError):
+            if response is not None:
                 # ClientResponse.close() is synchronous; run it on the owning loop.
+                # Unblocks an in-flight read once headers have arrived.
                 loop.call_soon_threadsafe(response.close)
-            else:
-                response.close()
+            if session is not None:
+                # ClientSession.close() is a coroutine; run it on the owning loop.
+                # Aborts a request still awaiting headers.
+                asyncio.run_coroutine_threadsafe(self._close_session(session), loop)
+
+    @staticmethod
+    async def _close_session(session: ClientSession):
+        """Close the aiohttp session on its owning loop; swallows teardown errors."""
+        with suppress(Exception):
+            if not session.closed:
+                await session.close()
