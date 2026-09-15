@@ -156,8 +156,8 @@ class TrendHistory:
         keys, and a server log cannot measure the client's time to
         first response, so the missing values render as "-".
 
-        The transport is shown because subprocess and HTTP runs are not
-        comparable to each other, and both land in the same file.
+        The transport is shown so historical transport values remain
+        distinguishable in the same file.
         """
         mode = record.get("mode", "client")
         requests = record.get(
