@@ -172,9 +172,10 @@ class AbstractClassActivation(AbstractCallableActivation):
         # Instantiate the CodedTool
         coded_tool: CodedTool = self.instantiate_coded_tool(python_class)
 
+        retval: Any = None
         if isinstance(coded_tool, CodedTool):
             # Invoke the CodedTool
-            retval: Any = await self.attempt_invoke(coded_tool, self.arguments, self.sly_data)
+            retval = await self.attempt_invoke(coded_tool, self.arguments, self.sly_data)
         else:
             retval = f"Error: {full_class_ref} is not a CodedTool"
 
@@ -298,11 +299,12 @@ Check these things:
 
         # Phase 2 - Try resolving from most specific to most general (root level)
         python_class: Type[Any] = None
+        packages: List[str] = []
         last_exception: Union[ValueError, AttributeError] = None
         for i in range(len(agent_network_name_parts) + 1):
             if i == 0:
                 # First attempt: try the most specific path
-                packages: List[str] = [this_agent_tool_path]
+                packages = [this_agent_tool_path]
             else:
                 # Subsequent attempts: remove one level at a time from the end
                 path_parts: List[str] = this_agent_tool_path_parts[:-i]
@@ -414,8 +416,8 @@ Some hints:
         message = AgentMessage(content="Received arguments:", structure=arguments_dict)
         await self.journal.write_message(message)
 
+        tool_error: bool = False
         try:
-            tool_error: bool = False
             try:
                 # Try the preferred async method
                 retval = await coded_tool.async_invoke(self.arguments, self.sly_data)

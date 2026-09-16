@@ -901,11 +901,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 r.get("total_tokens") for r in results
             )
             if has_token_data:
-                token_source = (
-                    "HTTP token_accounting"
-                    if getattr(self.args, "http_client", False)
-                    else "agent_cli --tokens"
-                )
+                token_source = "HTTP token_accounting"
                 logger.info(
                     "\n  Token usage (from %s):", token_source,
                 )
@@ -1269,7 +1265,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
         printed = SummaryReporter.render_token_usage(
             None, server_stats,
-            client_source="agent_cli --tokens",
+            client_source="HTTP token_accounting",
         )
         if not printed:
             return
@@ -2210,16 +2206,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
 
         if self.args.client_only:
-            if self.args.http_client:
-                logger.info(
-                    "Client-only mode (HTTP threads): "
-                    "skipping server process detection.",
-                )
-            else:
-                logger.info(
-                    "Client-only mode: skipping server "
-                    "process detection.",
-                )
+            logger.info("Client-only mode: skipping server process detection.")
         elif self.args.server_only:
             self.server_proc = (
                 EnvironmentValidator.find_local_server(
@@ -2325,11 +2312,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             summary_reporter = SummaryReporter(
                 stage_summaries,
                 neuro_san_version=self._resolve_ns_version(),
-                client_token_source=(
-                    "HTTP token_accounting"
-                    if getattr(self.args, "http_client", False)
-                    else "agent_cli --tokens"
-                ),
+                client_token_source="HTTP token_accounting",
             )
             if len(stage_summaries) > 1:
                 summary_reporter.log_ramp_summary(
@@ -2512,10 +2495,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "neuro_san_version": self._server_ns_version or "unknown",
             "host": self.args.host,
             "agent": self.args.agent,
-            "transport": (
-                "http" if getattr(self.args, "http_client", False)
-                else "subprocess"
-            ),
+            "transport": "http",
             "total_requests": len(results),
             "completed": completed,
             "avg_first_response_s": avg_first_response,

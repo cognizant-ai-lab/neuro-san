@@ -101,8 +101,9 @@ class AgentNetworkStorage(AgentStorageSource):
         Remove agent name and its AgentNetwork from service scope,
         so that agent becomes unavailable on our server.
         """
+        agent_network: AgentNetwork = None
         with self.lock:
-            agent_network: AgentNetwork = self.agents_table.get(agent_name, None)
+            agent_network = self.agents_table.get(agent_name, None)
             self.agents_table.pop(agent_name, None)
 
         # Notify listeners about this state change:

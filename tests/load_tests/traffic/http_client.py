@@ -14,13 +14,10 @@
 #
 # END COPYRIGHT
 
-"""In-thread HTTP client for load testing without subprocess overhead.
+"""In-thread HTTP client for load testing.
 
-Instead of spawning a separate ``python -m neuro_san.client.agent_cli``
-process per request (~96 MB each), this module instantiates
-``HttpServiceAgentSession`` and ``StreamingInputProcessor`` directly
-in the calling thread.  Memory cost drops from ~96 MB per concurrent
-request to ~1-2 MB per thread.
+Instantiates ``HttpServiceAgentSession`` and ``StreamingInputProcessor``
+directly in the calling thread, costing ~1-2 MB per concurrent request.
 """
 
 import logging
@@ -54,7 +51,7 @@ class _RequestTimeout(Exception):
 
 
 class HttpClient:
-    """Runs agent_cli logic in-thread via HttpServiceAgentSession."""
+    """Sends streaming_chat requests in-thread via HttpServiceAgentSession."""
 
     @staticmethod
     def execute_request(
@@ -62,12 +59,10 @@ class HttpClient:
             timeout, idle_timeout, use_https=False,
             chat_filter_type="MAXIMAL",
     ) -> Tuple[str, Dict[str, str], str, float, Dict]:
-        """Send one streaming_chat request using the agent_cli
-        client stack in-thread.
+        """Send one streaming_chat request in-thread.
 
         Creates an ``HttpServiceAgentSession`` and a
-        ``StreamingInputProcessor`` (the same objects that
-        ``agent_cli`` uses), then calls ``process_once()``
+        ``StreamingInputProcessor``, then calls ``process_once()``
         to send the request, consume the streaming response,
         and extract sly_data fields.  When ``use_https`` is True,
         a ``security_cfg`` is supplied so the session connects
@@ -83,8 +78,8 @@ class HttpClient:
         Returns (status, parsed_fields, response_text, ttft,
         token_accounting).
         """
-        # Mirrors the agent_cli request surface, so the argument list and
-        # the local state track that interface rather than an internal design.
+        # The argument list and local state track the streaming_chat
+        # request surface rather than an internal design.
         # pylint: disable=too-many-arguments,too-many-locals
         start = time.time()
 
@@ -98,10 +93,9 @@ class HttpClient:
             streaming_timeout_in_seconds=idle_timeout,
         )
 
-        # Time-to-first-response: wrap the session's streaming_chat so
-        # the first streamed chat message is timestamped, matching the
-        # subprocess mode's time-to-first-stdout metric. process_once()
-        # iterates this generator internally.
+        # Time-to-first-response: wrap the session's streaming_chat so the
+        # first streamed chat message is timestamped. process_once() iterates
+        # this generator internally.
         first_response: List[float] = []
         original_streaming_chat = session.streaming_chat
 
@@ -188,11 +182,9 @@ class HttpClient:
     ):
         """Recursively extract string-valued fields.
 
-        The subprocess mode prints sly_data as JSON and then
-        regex-searches the entire stdout.  Fields like
-        ``reservation_id`` may be nested inside lists (e.g.
-        ``sly_data["agent_reservations"][0]["reservation_id"]``).
-        A flat top-level scan misses them, so we recurse.
+        Fields like ``reservation_id`` may be nested inside lists (e.g.
+        ``sly_data["agent_reservations"][0]["reservation_id"]``). A flat
+        top-level scan misses them, so we recurse.
         """
         if isinstance(obj, dict):
             for key, value in obj.items():
