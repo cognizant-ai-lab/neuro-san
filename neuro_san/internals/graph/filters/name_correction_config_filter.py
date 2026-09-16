@@ -69,8 +69,10 @@ class NameCorrectionConfigFilter(ConfigFilter):
                 # Add to the errors
                 errors.append(new_name)
             elif new_name != name:
-                # Make a correction
-                tool[name] = new_name
+                # Make a correction to the tool's own "name" field.  The references other
+                # tools hold to it are rewritten below from the corrections table, so both
+                # sides of every edge end up using the corrected name.
+                tool["name"] = new_name
                 corrections[name] = new_name
 
         # Make the name corrections consistent in the tool lists
