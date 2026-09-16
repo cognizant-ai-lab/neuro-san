@@ -14,6 +14,10 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from typing import Any
+from typing import Dict
+
+from neuro_san.internals.graph.filters.network_config_filter_chain import NetworkConfigFilterChain
 
 from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_test_base \
     import S3ReservationsStorageTestBase
@@ -106,10 +110,16 @@ class TestRoundTrip(S3ReservationsStorageTestBase):
             returned_network.get_config().get("name"),
             "Original agent_spec['name'] was not preserved through S3 round-trip.",
         )
+        # The reader resolves the spec through NetworkConfigFilterChain before building the
+        # AgentNetwork (see S3ReservationsReader.get_one_reservation), so the tools come back
+        # with the top-level defaults applied - here the network-level llm_config copied onto
+        # the front man. Compare against the resolved form of what was written, which is what
+        # any client of the storage is meant to receive.
+        resolved_spec: Dict[str, Any] = NetworkConfigFilterChain().filter_config(agent_spec)
         self.assertEqual(
-            agent_spec.get("tools"),
+            resolved_spec.get("tools"),
             returned_network.get_config().get("tools"),
-            "Original agent_spec['tools'] was not preserved through S3 round-trip.",
+            "Original agent_spec['tools'] was not preserved (in resolved form) through S3 round-trip.",
         )
         self.assertEqual(
             agent_spec.get("llm_config"),

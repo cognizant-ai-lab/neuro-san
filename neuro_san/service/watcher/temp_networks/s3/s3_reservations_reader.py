@@ -29,6 +29,7 @@ from logging import Logger
 from botocore.exceptions import ClientError
 
 from neuro_san.interfaces.reservation import Reservation
+from neuro_san.internals.graph.filters.network_config_filter_chain import NetworkConfigFilterChain
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
 from neuro_san.service.watcher.temp_networks.s3.aws_sync_client_worker import AwsSyncClientWorker
@@ -118,8 +119,15 @@ class S3ReservationsReader:
             reservation = self.converter.from_dict(reservation_dict)
 
             # Reconstruct the AgentNetwork object using the agent spec dictionary
-            # and reservation ID - which is our agent name in this design
-            agent_network: AgentNetwork = AgentNetwork(agent_spec, reservation.get_reservation_id())
+            # and reservation ID - which is our agent name in this design.
+            #
+            # ExpiringAgentNetworkStorage resolves specs through the filter chain before
+            # they are written, and the chain is idempotent, so this is normally a no-op.
+            # It still matters for objects written by instances predating that behavior
+            # (rolling upgrades) or by other writers, which would otherwise be served
+            # without their top-level defaults applied (e.g. the front man's sly_data_schema).
+            resolved_spec: Dict[str, Any] = NetworkConfigFilterChain().filter_config(agent_spec)
+            agent_network: AgentNetwork = AgentNetwork(resolved_spec, reservation.get_reservation_id())
 
             self.logger.debug("%s: Successfully synced active reservation %s",
                               self.name, reservation.get_reservation_id())

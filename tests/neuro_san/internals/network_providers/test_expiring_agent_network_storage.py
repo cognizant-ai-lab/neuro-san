@@ -14,15 +14,23 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from typing import Any
+from typing import Dict
+
 import time
 from unittest import IsolatedAsyncioTestCase
 
 from neuro_san.interfaces.reservation import Reservation
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.expiring_agent_network_storage \
     import ExpiringAgentNetworkStorage
 
+from tests.neuro_san.internals.network_providers.byok_agent_spec_builder \
+    import ByokAgentSpecBuilder
 from tests.neuro_san.internals.network_providers.recording_listener \
     import RecordingListener
+from tests.neuro_san.internals.network_providers.recording_reservations_storage \
+    import RecordingReservationsStorage
 
 
 # pylint: disable=too-many-public-methods
@@ -394,3 +402,98 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
             set(storage.agents_table.keys()),
             set(storage.access_times.keys())
         )
+
+    async def test_add_reservations_merges_global_sly_data_schema_into_front_man(self):
+        """
+        A reservation spec never passes through AgentNetworkRestorer, so add_reservations
+        must run the NetworkConfigFilterChain itself.  The visible effect is that the
+        deployment-wide sly_data_schema ends up on the front man's function, which is
+        what the /function endpoint serves to clients deciding whether to send BYOK keys.
+        """
+        storage = self._make_storage()
+        r_a = self._make_reservation("agent_a")
+        await storage.add_reservations({r_a: ByokAgentSpecBuilder.make_spec("agent_a")}, source="test")
+
+        agent_network: AgentNetwork = storage.agents_table["agent_a"]
+        front_man_spec: Dict[str, Any] = ByokAgentSpecBuilder.front_man_spec(agent_network)
+        sly_data_schema: Dict[str, Any] = front_man_spec["function"]["sly_data_schema"]
+        self.assertEqual(["llm_config"], sly_data_schema["required"])
+        self.assertIn("openai_api_key", sly_data_schema["properties"]["llm_config"]["properties"])
+
+        # The other top-level defaults are applied as well: llm_config lands on every agent...
+        self.assertIn("fallbacks", front_man_spec["llm_config"])
+        helper_spec: Dict[str, Any] = agent_network.get_agent_tool_spec("helper")
+        self.assertIn("fallbacks", helper_spec["llm_config"])
+        # ... but only the front man advertises the sly_data_schema.
+        self.assertNotIn("sly_data_schema", helper_spec["function"])
+
+    async def test_add_reservations_unions_front_man_sly_data_schema_with_global(self):
+        """
+        When the front man already declares a sly_data_schema of its own (e.g. http_headers
+        for MCP servers), the global one is merged into it and the "required" lists are
+        unioned rather than one replacing the other.
+        """
+        front_man_schema: Dict[str, Any] = {
+            "type": "object",
+            "properties": {"http_headers": {"type": "object"}},
+            "required": ["http_headers"],
+        }
+        storage = self._make_storage()
+        r_a = self._make_reservation("agent_a")
+        await storage.add_reservations(
+            {r_a: ByokAgentSpecBuilder.make_spec("agent_a", front_man_schema=front_man_schema)},
+            source="test")
+
+        front_man_spec: Dict[str, Any] = ByokAgentSpecBuilder.front_man_spec(storage.agents_table["agent_a"])
+        sly_data_schema: Dict[str, Any] = front_man_spec["function"]["sly_data_schema"]
+        self.assertCountEqual(["llm_config", "http_headers"], sly_data_schema["required"])
+        self.assertIn("http_headers", sly_data_schema["properties"])
+        self.assertIn("llm_config", sly_data_schema["properties"])
+
+    async def test_add_reservations_writes_resolved_spec_to_base_storage(self):
+        """
+        The base storage is the source of truth for other server instances, so the spec it
+        receives must already be resolved; filtering only the in-memory copy would leave
+        every other instance serving the raw spec.  The in-memory AgentNetwork must also be
+        built from the very dictionary handed to the base storage, so metadata a writer adds
+        to it (e.g. the S3 writer's reservation block) stays consistent with what is served here.
+        """
+        storage = self._make_storage()
+        base_storage = RecordingReservationsStorage()
+        storage.set_base_storage(base_storage)
+        r_a = self._make_reservation("agent_a")
+        await storage.add_reservations({r_a: ByokAgentSpecBuilder.make_spec("agent_a")}, source="test")
+
+        self.assertEqual(1, len(base_storage.received))
+        self.assertEqual(["test"], base_storage.sources)
+        written: Dict[Reservation, Dict[str, Any]] = base_storage.received[0]
+        self.assertEqual([r_a], list(written.keys()))
+        written_spec: Dict[str, Any] = written[r_a]
+        self.assertEqual(["llm_config"], written_spec["tools"][0]["function"]["sly_data_schema"]["required"])
+        self.assertIs(written_spec, storage.agents_table["agent_a"].get_config())
+
+    async def test_add_reservations_does_not_mutate_caller_spec(self):
+        """
+        Filtering must not leak into the caller's dictionary: reservationists and coded tools
+        may keep using the spec they deployed, and DefaultsConfigFilter works on a copy.
+        """
+        storage = self._make_storage()
+        spec: Dict[str, Any] = ByokAgentSpecBuilder.make_spec("agent_a")
+        r_a = self._make_reservation("agent_a")
+        await storage.add_reservations({r_a: spec}, source="test")
+
+        self.assertNotIn("sly_data_schema", spec["tools"][0]["function"])
+        self.assertNotIn("llm_config", spec["tools"][0])
+
+    def test_filter_reservations_is_idempotent(self):
+        """
+        Specs that are already resolved (e.g. read back from base storage) must come out
+        unchanged, so filtering on both the write side and the read side is safe.
+        """
+        r_a = self._make_reservation("agent_a")
+        once: Dict[Reservation, Dict[str, Any]] = \
+            ExpiringAgentNetworkStorage.filter_reservations({r_a: ByokAgentSpecBuilder.make_spec("agent_a")})
+        twice: Dict[Reservation, Dict[str, Any]] = ExpiringAgentNetworkStorage.filter_reservations(once)
+
+        self.assertEqual([r_a], list(twice.keys()))
+        self.assertEqual(once[r_a], twice[r_a])

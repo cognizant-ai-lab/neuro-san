@@ -24,10 +24,12 @@ from typing import Tuple
 import logging
 import time
 
+from leaf_common.config.config_filter import ConfigFilter
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.utils.startable import Startable
 
 from neuro_san.interfaces.reservation import Reservation
+from neuro_san.internals.graph.filters.network_config_filter_chain import NetworkConfigFilterChain
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
@@ -128,6 +130,33 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         """
         return time.time() > reservation.get_expiration_time_in_seconds()
 
+    @staticmethod
+    def filter_reservations(reservations_dict: Dict[Reservation, Dict[str, Any]]) \
+            -> Dict[Reservation, Dict[str, Any]]:
+        """
+        Runs every agent network spec in the given mapping through the standard
+        NetworkConfigFilterChain.
+
+        Networks loaded from hocon files get this treatment in AgentNetworkRestorer.filter_config(),
+        but reservation specs are plain dictionaries assembled in code and handed to us directly,
+        so without this step the top-level defaults are never applied to them.  Most visibly,
+        the "global" sly_data_schema of a deployment's llm_config would never be merged into the
+        front man's function.sly_data_schema (see DefaultsConfigFilter), so the /function endpoint
+        of a temporary network would not tell clients that it needs BYOK keys in sly_data.llm_config.
+
+        The chain is idempotent, so specs that were already resolved come back unchanged.
+
+        :param reservations_dict: A mapping of Reservation -> agent network spec as deployed
+        :return: A new mapping with the same Reservation keys whose values are the
+                 fully resolved agent network specs.  Specs the filter chain does not
+                 need to modify are passed through as-is.
+        """
+        filter_chain: ConfigFilter = NetworkConfigFilterChain()
+        filtered: Dict[Reservation, Dict[str, Any]] = {}
+        for reservation, agent_spec in reservations_dict.items():
+            filtered[reservation] = filter_chain.filter_config(agent_spec)
+        return filtered
+
     async def add_reservations(self, reservations_dict: Dict[Reservation, Dict[str, Any]],
                                source: str = None):
         """
@@ -140,9 +169,18 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             # Nothing to do
             return
 
+        # Resolve every spec through the standard filter chain *before* anything is stored.
+        # Doing this ahead of the base storage write matters for multi-instance deployments:
+        # other instances hydrate temporary networks from the base storage (S3, local files, ...),
+        # so the persisted spec has to be the resolved one or those instances would serve a
+        # network that never got its defaults (e.g. the front man's sly_data_schema).
+        # The same resolved dictionaries are then used for the in-memory AgentNetworks below,
+        # so any metadata a writer adds to them stays consistent with what is served here.
+        use_reservations: Dict[Reservation, Dict[str, Any]] = self.filter_reservations(reservations_dict)
+
         if self.base_storage is not None:
             # If we have a source storage, then we need to add these reservations there first:
-            await self.base_storage.add_reservations(reservations_dict, source=source)
+            await self.base_storage.add_reservations(use_reservations, source=source)
 
         # Figure out what's new vs what's not.
         # Need to do this while holding the lock
@@ -150,7 +188,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         replaced: List[str] = []
         now: float = time.time()
         with self.lock:
-            for reservation, agent_spec in reservations_dict.items():
+            for reservation, agent_spec in use_reservations.items():
 
                 agent_name: str = reservation.get_reservation_id()
                 is_new = self.agents_table.get(agent_name) is None
