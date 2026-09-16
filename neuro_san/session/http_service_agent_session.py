@@ -43,16 +43,6 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
     call raises AgentSessionClosedError.
     """
 
-    def is_closed(self) -> bool:
-        """:return: True if close() has been called on this session."""
-        with self._stream_lock:
-            return self._closed
-
-    def _raise_if_closed(self):
-        """Raise AgentSessionClosedError if this session has been closed."""
-        if self.is_closed():
-            raise AgentSessionClosedError("HTTP agent session has been closed")
-
     def __init__(self, *args, **kwargs):
         """
         Constructor. Delegates all connection parameters to the base class and
@@ -200,6 +190,16 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
             # the connection); stop tracking its response.
             with self._stream_lock:
                 self._active_response = None
+
+    def is_closed(self) -> bool:
+        """:return: True if close() has been called on this session."""
+        with self._stream_lock:
+            return self._closed
+
+    def _raise_if_closed(self):
+        """Raise AgentSessionClosedError if this session has been closed."""
+        if self.is_closed():
+            raise AgentSessionClosedError("HTTP agent session has been closed")
 
     def close(self):
         """
