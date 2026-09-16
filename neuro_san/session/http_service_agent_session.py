@@ -29,13 +29,29 @@ import requests
 
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.session.abstract_http_service_agent_session import AbstractHttpServiceAgentSession
+from neuro_san.session.agent_session_closed_error import AgentSessionClosedError
 
 
 class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
     """
     Implementation of AgentSession that talks to an HTTP service.
     This is largely only used by command-line tests.
+
+    A session is single-use with respect to close(): after close() (typically
+    called from another thread to cancel an in-flight streaming_chat()) the
+    session is closed and any further streaming_chat()/function()/connectivity()
+    call raises AgentSessionClosedError.
     """
+
+    def is_closed(self) -> bool:
+        """:return: True if close() has been called on this session."""
+        with self._stream_lock:
+            return self._closed
+
+    def _raise_if_closed(self):
+        """Raise AgentSessionClosedError if this session has been closed."""
+        if self.is_closed():
+            raise AgentSessionClosedError("HTTP agent session has been closed")
 
     def __init__(self, *args, **kwargs):
         """
@@ -62,6 +78,7 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                     protobufs structure. Has the following keys:
                 "function" - the dictionary description of the function
         """
+        self._raise_if_closed()
         path: str = self.get_request_path("function")
         try:
             response = requests.get(path, json=request_dict, headers=self.get_headers(),
@@ -82,6 +99,7 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                                     each node in the agent network the service
                                     wants the client ot know about.
         """
+        self._raise_if_closed()
         path: str = self.get_request_path("connectivity")
         try:
             response = requests.get(path, json=request_dict, headers=self.get_headers(),
@@ -109,11 +127,9 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         max_chunk_size: int = 64 * 1024
         path: str = self.get_request_path("streaming_chat")
 
-        # Abort before issuing the request if close() has already been called
-        # (e.g. the caller cancelled before first iterating this generator).
-        with self._stream_lock:
-            if self._closed:
-                return
+        # A closed session is single-use: fail loudly rather than yielding an
+        # empty stream that looks like "the agent returned no messages".
+        self._raise_if_closed()
 
         try:
             with requests.post(path, json=request_dict, headers=self.get_headers(),
@@ -170,6 +186,12 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                         yield result_dict
 
         except Exception as exc:  # pylint: disable=broad-exception-caught
+            if self.is_closed():
+                # The read was interrupted by a deliberate close() from another
+                # thread, not a real connectivity failure. Raise a dedicated error
+                # so callers can tell cancellation apart from a lost connection.
+                raise AgentSessionClosedError(
+                    "HTTP agent session was closed during streaming_chat()") from exc
             raise ValueError(self.help_message(path)) from exc
         finally:
             # The request is over (normally, by error, or because close() dropped

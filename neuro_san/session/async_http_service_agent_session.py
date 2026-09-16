@@ -34,12 +34,28 @@ from aiohttp import ClientTimeout
 
 from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.session.abstract_http_service_agent_session import AbstractHttpServiceAgentSession
+from neuro_san.session.agent_session_closed_error import AgentSessionClosedError
 
 
 class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSession):
     """
     Implementation of AsyncAgentSession that talks to an HTTP service.
+
+    A session is single-use with respect to close(): after close() (typically
+    called to cancel an in-flight streaming_chat()) the session is closed and any
+    further streaming_chat()/function()/connectivity() call raises
+    AgentSessionClosedError.
     """
+
+    def is_closed(self) -> bool:
+        """:return: True if close() has been called on this session."""
+        with self._stream_lock:
+            return self._closed
+
+    def _raise_if_closed(self):
+        """Raise AgentSessionClosedError if this session has been closed."""
+        if self.is_closed():
+            raise AgentSessionClosedError("async HTTP agent session has been closed")
 
     def __init__(self, *args, **kwargs):
         """
@@ -74,6 +90,7 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
                     protobufs structure. Has the following keys:
                 "function" - the dictionary description of the function
         """
+        self._raise_if_closed()
         path: str = self.get_request_path("function")
         result_dict: Dict[str, Any] = None
         try:
@@ -101,6 +118,7 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
                                     each node in the agent network the service
                                     wants the client ot know about.
         """
+        self._raise_if_closed()
         path: str = self.get_request_path("connectivity")
         result_dict: Dict[str, Any] = None
         try:
@@ -135,13 +153,12 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
         max_chunk_size: int = 64 * 1024
         path: str = self.get_request_path("streaming_chat")
 
-        # Abort before issuing the request if close() has already been called
-        # (e.g. the caller cancelled before first iterating this generator), and
-        # record the running loop now so close() from another thread can schedule
+        # A closed session is single-use: fail loudly rather than yielding an
+        # empty stream that looks like "the agent returned no messages".
+        self._raise_if_closed()
+        # Record the running loop now so close() from another thread can schedule
         # the abort even while we are still awaiting response headers.
         with self._stream_lock:
-            if self._closed:
-                return
             self._active_loop = asyncio.get_running_loop()
 
         # To specify complete timeout value, we must use "total" parameter of ClientTimeout.
@@ -164,8 +181,9 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
             else:
                 self._active_session = session
         if abort:
+            # close() raced in after our initial check; tear down and fail loudly.
             await session.close()
-            return
+            raise AgentSessionClosedError("async HTTP agent session has been closed")
 
         try:
             async with session:
@@ -218,6 +236,10 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
                             yield result_dict
 
         except (asyncio.TimeoutError, ClientOSError, ClientPayloadError) as exc:
+            if self.is_closed():
+                # Interrupted by a deliberate close(), not a real failure.
+                raise AgentSessionClosedError(
+                    "async HTTP agent session was closed during streaming_chat()") from exc
             # Pass on a couple of asserts that are known to represent
             # real problems that a client has to deal with.
             # We figure this is OK for streaming_chat() because normally
@@ -227,6 +249,12 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
             raise exc
 
         except Exception as exc:  # pylint: disable=broad-exception-caught
+            if self.is_closed():
+                # Interrupted by a deliberate close() from another thread; raise a
+                # dedicated error so callers can tell cancellation from a lost
+                # connection.
+                raise AgentSessionClosedError(
+                    "async HTTP agent session was closed during streaming_chat()") from exc
             # Assume the newly initiated need some more help.
             raise ValueError(self.help_message(path)) from exc
         finally:
