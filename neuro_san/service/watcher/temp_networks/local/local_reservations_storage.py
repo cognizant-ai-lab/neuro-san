@@ -251,10 +251,12 @@ class LocalReservationsStorage(AbstractReservationsStorage):
             if time.time() > reservation.get_expiration_time_in_seconds():
                 self.logger.debug("%s: reservation %s is expired", self._name, reservation_id)
                 return None, None
-            # Specs written through ExpiringAgentNetworkStorage are already resolved and the
-            # chain is idempotent, so this only changes files written by older instances or
-            # by other tooling. See ExpiringAgentNetworkStorage.filter_reservations() for why
-            # an unresolved spec is a problem.
+            # Specs written through ExpiringAgentNetworkStorage.filter_reservations() are already
+            # resolved with their commondefs stripped, so for those this second pass is a no-op;
+            # it only changes files written by older instances or by other tooling.  See
+            # filter_reservations() for why an unresolved spec is a problem.  Any exception the
+            # chain raises on a malformed foreign spec lands in the broad except below and is
+            # reported as "not present", like every other reconstruction failure.
             resolved_spec: Dict[str, Any] = NetworkConfigFilterChain().filter_config(agent_spec)
             agent_network = AgentNetwork(resolved_spec, reservation.get_reservation_id())
         except Exception as exc:  # pylint: disable=broad-exception-caught

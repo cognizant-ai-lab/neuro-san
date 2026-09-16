@@ -28,6 +28,8 @@ from logging import Logger
 
 from botocore.exceptions import ClientError
 
+from leaf_common.logging.sensitive_logger import SensitiveLogger
+
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.filters.network_config_filter_chain import NetworkConfigFilterChain
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -121,13 +123,26 @@ class S3ReservationsReader:
             # Reconstruct the AgentNetwork object using the agent spec dictionary
             # and reservation ID - which is our agent name in this design.
             #
-            # ExpiringAgentNetworkStorage resolves specs through the filter chain before
-            # they are written, and the chain is idempotent, so this is normally a no-op.
-            # It still matters for objects written by instances predating that behavior
-            # (rolling upgrades) or by other writers, which would otherwise be served
-            # without their top-level defaults applied (e.g. the front man's sly_data_schema).
-            resolved_spec: Dict[str, Any] = NetworkConfigFilterChain().filter_config(agent_spec)
-            agent_network: AgentNetwork = AgentNetwork(resolved_spec, reservation.get_reservation_id())
+            # ExpiringAgentNetworkStorage.filter_reservations() resolves specs through the
+            # filter chain (and strips the consumed commondefs) before they are written, so
+            # for objects it wrote this second pass is a no-op.  It still matters for objects
+            # written by instances predating that behavior (rolling upgrades) or by other
+            # writers, which would otherwise be served without their top-level defaults
+            # applied (e.g. the front man's sly_data_schema).
+            #
+            # Those foreign objects never went through the reservationist's validators, so
+            # the chain (or AgentNetwork itself) can raise on a malformed shape.  Treat that
+            # like any other unreadable object - log it and report the reservation as absent -
+            # rather than letting the exception escape onto the request path.  This mirrors
+            # LocalReservationsStorage.get_one_reservation().
+            try:
+                resolved_spec: Dict[str, Any] = NetworkConfigFilterChain().filter_config(agent_spec)
+                agent_network = AgentNetwork(resolved_spec, reservation.get_reservation_id())
+            except Exception as exception:  # pylint: disable=broad-exception-caught
+                sensitive_logger = SensitiveLogger(self.logger)
+                sensitive_logger.error("%s: Failed to reconstruct agent network for reservation %s: %s",
+                                       self.name, reservation_id, exception)
+                return None, None
 
             self.logger.debug("%s: Successfully synced active reservation %s",
                               self.name, reservation.get_reservation_id())

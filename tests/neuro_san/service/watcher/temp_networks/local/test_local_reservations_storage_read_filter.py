@@ -13,14 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# END COPYRIGHT
 import json
 import os
 import tempfile
 from typing import Any
 from typing import Dict
+from typing import Optional
 from unittest import IsolatedAsyncioTestCase
 
+from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.reservations.agent_reservation import AgentReservation
 from neuro_san.service.watcher.temp_networks.local.local_reservations_storage import LocalReservationsStorage
 
 from tests.neuro_san.internals.network_providers.byok_agent_spec_builder import ByokAgentSpecBuilder
@@ -45,9 +49,10 @@ class TestLocalReservationsStorageReadFilter(IsolatedAsyncioTestCase):
         merged into the front man, while the file itself is left exactly as written.
         """
         with tempfile.TemporaryDirectory() as base_path:
-            storage = LocalReservationsStorage(base_path=base_path)
+            storage: LocalReservationsStorage = LocalReservationsStorage(base_path=base_path)
             storage.start()
-            reservation = LocalReservationsTestHelpers.make_reservation(prefix="raw", lifetime_s=3600.0)
+            reservation: AgentReservation = LocalReservationsTestHelpers.make_reservation(prefix="raw",
+                                                                                          lifetime_s=3600.0)
             reservation_id: str = reservation.get_reservation_id()
             # Write through the storage directly, bypassing ExpiringAgentNetworkStorage,
             # the way a pre-filtering server instance would have.
@@ -55,11 +60,19 @@ class TestLocalReservationsStorageReadFilter(IsolatedAsyncioTestCase):
                                            source="unit-test")
 
             # Guard against a vacuous pass: the on-disk spec really is unresolved.
-            with open(os.path.join(base_path, f"{reservation_id}.json"), "r", encoding="utf-8") as file_handle:
+            path: str = os.path.join(base_path, f"{reservation_id}.json")
+            with open(path, "r", encoding="utf-8") as file_handle:
                 on_disk: Dict[str, Any] = json.load(file_handle)
             self.assertNotIn("sly_data_schema", on_disk["tools"][0]["function"])
 
+            got_reservation: Optional[Reservation]
+            got_network: Optional[AgentNetwork]
             got_reservation, got_network = storage.get_one_reservation(reservation_id)
+
+            # Reading resolves in memory only; the file is left exactly as written.
+            with open(path, "r", encoding="utf-8") as file_handle:
+                after_read: Dict[str, Any] = json.load(file_handle)
+            self.assertEqual(on_disk, after_read)
 
             self.assertIsNotNone(got_reservation)
             self.assertIsInstance(got_network, AgentNetwork)

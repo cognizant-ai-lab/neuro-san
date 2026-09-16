@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# END COPYRIGHT
 """
 Pins the read-side safety net of the reservation READ path: an S3 object whose
 agent spec never went through the NetworkConfigFilterChain must still come back
@@ -27,7 +28,9 @@ import json
 import time
 from typing import Any
 from typing import Dict
+from typing import Optional
 
+from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.service.watcher.temp_networks.s3.s3_util import S3Util
 
@@ -72,6 +75,8 @@ class TestReaderFiltersRawSpec(S3ReservationsStorageTestBase):
         """
         reservation_id: str = self._put_raw_byok_reservation("byok-raw")
 
+        reservation: Optional[Reservation]
+        agent_network: Optional[AgentNetwork]
         reservation, agent_network = self.storage.get_one_reservation(reservation_id)
 
         self.assertIsNotNone(reservation)

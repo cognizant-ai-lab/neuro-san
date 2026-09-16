@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# END COPYRIGHT
 from typing import Any
 from typing import Dict
 from typing import List
@@ -29,7 +30,7 @@ class RecordingReservationsStorage(ReservationsStorage):
     exactly which agent specs would have been persisted to S3/local storage.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """
         Constructor
         """
@@ -38,7 +39,7 @@ class RecordingReservationsStorage(ReservationsStorage):
         self.sources: List[str] = []
 
     async def add_reservations(self, reservations_dict: Dict[Reservation, Any],
-                               source: str = None):
+                               source: str = None) -> None:
         """
         Records the reservations that would have been persisted.
 
@@ -58,7 +59,7 @@ class RecordingReservationsStorage(ReservationsStorage):
         """
         return None, None
 
-    def expire_reservations(self):
+    def expire_reservations(self) -> None:
         """
         Nothing to expire in this test double.
         """

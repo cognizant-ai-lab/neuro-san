@@ -17,10 +17,12 @@
 from typing import Any
 from typing import Dict
 
+from copy import deepcopy
 import time
 from unittest import IsolatedAsyncioTestCase
 
 from neuro_san.interfaces.reservation import Reservation
+from neuro_san.internals.graph.filters.network_config_filter_chain import NetworkConfigFilterChain
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.expiring_agent_network_storage \
     import ExpiringAgentNetworkStorage
@@ -410,8 +412,8 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         deployment-wide sly_data_schema ends up on the front man's function, which is
         what the /function endpoint serves to clients deciding whether to send BYOK keys.
         """
-        storage = self._make_storage()
-        r_a = self._make_reservation("agent_a")
+        storage: ExpiringAgentNetworkStorage = self._make_storage()
+        r_a: Reservation = self._make_reservation("agent_a")
         await storage.add_reservations({r_a: ByokAgentSpecBuilder.make_spec("agent_a")}, source="test")
 
         agent_network: AgentNetwork = storage.agents_table["agent_a"]
@@ -424,6 +426,9 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         self.assertIn("fallbacks", front_man_spec["llm_config"])
         helper_spec: Dict[str, Any] = agent_network.get_agent_tool_spec("helper")
         self.assertIn("fallbacks", helper_spec["llm_config"])
+        # ... and so does every other top-level default the runtime reads per agent.
+        self.assertEqual(600, front_man_spec["max_execution_seconds"])
+        self.assertEqual(600, helper_spec["max_execution_seconds"])
         # ... but only the front man advertises the sly_data_schema.
         self.assertNotIn("sly_data_schema", helper_spec["function"])
 
@@ -438,8 +443,8 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
             "properties": {"http_headers": {"type": "object"}},
             "required": ["http_headers"],
         }
-        storage = self._make_storage()
-        r_a = self._make_reservation("agent_a")
+        storage: ExpiringAgentNetworkStorage = self._make_storage()
+        r_a: Reservation = self._make_reservation("agent_a")
         await storage.add_reservations(
             {r_a: ByokAgentSpecBuilder.make_spec("agent_a", front_man_schema=front_man_schema)},
             source="test")
@@ -458,10 +463,10 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         built from the very dictionary handed to the base storage, so metadata a writer adds
         to it (e.g. the S3 writer's reservation block) stays consistent with what is served here.
         """
-        storage = self._make_storage()
-        base_storage = RecordingReservationsStorage()
+        storage: ExpiringAgentNetworkStorage = self._make_storage()
+        base_storage: RecordingReservationsStorage = RecordingReservationsStorage()
         storage.set_base_storage(base_storage)
-        r_a = self._make_reservation("agent_a")
+        r_a: Reservation = self._make_reservation("agent_a")
         await storage.add_reservations({r_a: ByokAgentSpecBuilder.make_spec("agent_a")}, source="test")
 
         self.assertEqual(1, len(base_storage.received))
@@ -477,23 +482,45 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
         Filtering must not leak into the caller's dictionary: reservationists and coded tools
         may keep using the spec they deployed, and DefaultsConfigFilter works on a copy.
         """
-        storage = self._make_storage()
+        storage: ExpiringAgentNetworkStorage = self._make_storage()
         spec: Dict[str, Any] = ByokAgentSpecBuilder.make_spec("agent_a")
-        r_a = self._make_reservation("agent_a")
+        expected: Dict[str, Any] = deepcopy(spec)
+        r_a: Reservation = self._make_reservation("agent_a")
         await storage.add_reservations({r_a: spec}, source="test")
 
-        self.assertNotIn("sly_data_schema", spec["tools"][0]["function"])
-        self.assertNotIn("llm_config", spec["tools"][0])
+        # The whole dictionary, not just the keys the filter is known to touch.
+        self.assertEqual(expected, spec)
 
     def test_filter_reservations_is_idempotent(self):
         """
         Specs that are already resolved (e.g. read back from base storage) must come out
         unchanged, so filtering on both the write side and the read side is safe.
+
+        The commondefs filters resolve one level of substitution per pass and never remove the
+        "commondefs" block, so a spec that kept it would keep changing on every pass.
+        filter_reservations() therefore strips the block, and its result must equal what a
+        single hocon-style pass of the chain produces (minus that block).
         """
-        r_a = self._make_reservation("agent_a")
-        once: Dict[Reservation, Dict[str, Any]] = \
-            ExpiringAgentNetworkStorage.filter_reservations({r_a: ByokAgentSpecBuilder.make_spec("agent_a")})
+        spec: Dict[str, Any] = ByokAgentSpecBuilder.make_spec("agent_a")
+        spec["commondefs"] = {
+            # Chained value substitution: a single pass resolves only one hop.
+            "replacement_values": {"a": "b", "b": {"z": 1}},
+            # Order-dependent string substitution: "punct" is visited before "who" needs it.
+            "replacement_strings": {"punct": "!", "who": "world {punct}", "greet": "hello {who}"},
+        }
+        spec["tools"][0]["args"] = {"x": "a"}
+        spec["tools"][0]["instructions"] = "{greet}"
+        expected: Dict[str, Any] = NetworkConfigFilterChain().filter_config(spec)
+        del expected["commondefs"]
+
+        r_a: Reservation = self._make_reservation("agent_a")
+        once: Dict[Reservation, Dict[str, Any]] = ExpiringAgentNetworkStorage.filter_reservations({r_a: spec})
+        snapshot: Dict[str, Any] = deepcopy(once[r_a])
         twice: Dict[Reservation, Dict[str, Any]] = ExpiringAgentNetworkStorage.filter_reservations(once)
 
         self.assertEqual([r_a], list(twice.keys()))
-        self.assertEqual(once[r_a], twice[r_a])
+        self.assertNotIn("commondefs", once[r_a])
+        self.assertEqual(expected, once[r_a])
+        self.assertEqual(snapshot, twice[r_a])
+        # The second pass did not mutate its input either.
+        self.assertEqual(snapshot, once[r_a])

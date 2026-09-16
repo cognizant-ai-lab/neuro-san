@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# END COPYRIGHT
 from typing import Any
 from typing import Dict
 
@@ -51,6 +52,9 @@ class ByokAgentSpecBuilder:
         if front_man_schema is not None:
             front_man_function["sly_data_schema"] = front_man_schema
         return {
+            # A second top-level default besides llm_config: DefaultsConfigFilter copies it onto
+            # every agent, which is how the runtime (which reads it per agent) gets to see it.
+            "max_execution_seconds": 600,
             "llm_config": {
                 "fallbacks": [
                     {

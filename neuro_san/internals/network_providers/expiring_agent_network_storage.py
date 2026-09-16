@@ -135,26 +135,41 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             -> Dict[Reservation, Dict[str, Any]]:
         """
         Runs every agent network spec in the given mapping through the standard
-        NetworkConfigFilterChain.
+        NetworkConfigFilterChain and strips the consumed "commondefs" block.
 
         Networks loaded from hocon files get this treatment in AgentNetworkRestorer.filter_config(),
         but reservation specs are plain dictionaries assembled in code and handed to us directly,
-        so without this step the top-level defaults are never applied to them.  Most visibly,
-        the "global" sly_data_schema of a deployment's llm_config would never be merged into the
-        front man's function.sly_data_schema (see DefaultsConfigFilter), so the /function endpoint
-        of a temporary network would not tell clients that it needs BYOK keys in sly_data.llm_config.
+        so without this step none of the top-level defaults that DefaultsConfigFilter distributes
+        (llm_config, verbose, max_steps, max_execution_seconds, max_attempts, error_formatter,
+        error_fragments, and the front-man-only sly_data_schema) is ever applied to their agents,
+        and no commondefs substitution happens.  Most visibly, the "global" top-level sly_data_schema
+        that a deployment's llm_config.hocon defines alongside llm_config would never be merged into
+        the front man's function.sly_data_schema, so the /function endpoint of a temporary network
+        would not tell clients that it needs BYOK keys in sly_data.llm_config.
 
-        The chain is idempotent, so specs that were already resolved come back unchanged.
+        The "commondefs" block is removed from the resolved spec because the chain has consumed it:
+        the commondefs filters resolve one level of substitution per pass and never strip the block
+        themselves, so a spec that kept it would come out different on every pass.  Without it the
+        remaining filters are idempotent, which is what lets the S3/local readers safely run the
+        chain again on a spec written by this method.
 
         :param reservations_dict: A mapping of Reservation -> agent network spec as deployed
-        :return: A new mapping with the same Reservation keys whose values are the
-                 fully resolved agent network specs.  Specs the filter chain does not
-                 need to modify are passed through as-is.
+        :return: A new mapping with the same Reservation keys whose values are the fully resolved
+                 agent network specs.  Any spec the chain had to touch comes back as a copy
+                 (value-equal to the input when no default applied); only a spec with neither
+                 tools nor commondefs is passed back as the caller's own object.
         """
         filter_chain: ConfigFilter = NetworkConfigFilterChain()
         filtered: Dict[Reservation, Dict[str, Any]] = {}
         for reservation, agent_spec in reservations_dict.items():
-            filtered[reservation] = filter_chain.filter_config(agent_spec)
+            resolved: Dict[str, Any] = filter_chain.filter_config(agent_spec)
+            if isinstance(resolved, dict) and "commondefs" in resolved:
+                if resolved is agent_spec:
+                    # The chain hands back the caller's own dict when it had nothing to copy;
+                    # never mutate what the caller gave us.
+                    resolved = dict(agent_spec)
+                del resolved["commondefs"]
+            filtered[reservation] = resolved
         return filtered
 
     async def add_reservations(self, reservations_dict: Dict[Reservation, Dict[str, Any]],
