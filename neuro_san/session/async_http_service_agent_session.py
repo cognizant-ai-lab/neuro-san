@@ -83,8 +83,8 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
         self._raise_if_closed()
         path: str = self.get_request_path("function")
         result_dict: Dict[str, Any] = None
+        timeout: ClientTimeout = None
         try:
-            timeout: ClientTimeout = None
             if self.timeout_in_seconds is not None:
                 timeout = ClientTimeout(self.timeout_in_seconds)
 
@@ -111,8 +111,8 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
         self._raise_if_closed()
         path: str = self.get_request_path("connectivity")
         result_dict: Dict[str, Any] = None
+        timeout: ClientTimeout = None
         try:
-            timeout: ClientTimeout = None
             if self.timeout_in_seconds is not None:
                 timeout = ClientTimeout(self.timeout_in_seconds)
             async with ClientSession(headers=self.get_headers(),
@@ -142,6 +142,9 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
         separator: bytes = b"\n"
         max_chunk_size: int = 64 * 1024
         path: str = self.get_request_path("streaming_chat")
+        accumulator: bytearray = bytearray(b"")
+        index: int = 0
+        unicode_line: str = ""
 
         # A closed session is single-use: fail loudly rather than yielding an
         # empty stream that looks like "the agent returned no messages".
@@ -194,18 +197,17 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
                     #               ... blah blah ...
                     #       but that could fail with ValueError("Chunk too big")
                     #       if a single line was too long.
-                    accumulator: bytearray = bytearray(b"")
                     async for data in response.content.iter_chunked(max_chunk_size):
 
                         # Concatenate data as it comes in
                         accumulator.extend(data)
 
                         # Try to find our line separator
-                        index: int = accumulator.find(separator)
+                        index = accumulator.find(separator)
                         while index >= 0:
 
                             # Grab a single line
-                            unicode_line: str = accumulator[:index].decode("utf-8").strip()
+                            unicode_line = accumulator[:index].decode("utf-8").strip()
                             if unicode_line:    # Skip empty lines
                                 # We have a line with something in it.
                                 # Decode and yield as a dictionary
@@ -220,7 +222,7 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
 
                     # If there is anything left in the accumulator, yield it
                     if len(accumulator) > 0:
-                        unicode_line: str = accumulator.decode("utf-8").strip()
+                        unicode_line = accumulator.decode("utf-8").strip()
                         if unicode_line:
                             result_dict = json.loads(unicode_line)
                             yield result_dict

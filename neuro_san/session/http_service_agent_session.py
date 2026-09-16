@@ -126,6 +126,9 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         separator: bytes = b"\n"
         max_chunk_size: int = 64 * 1024
         path: str = self.get_request_path("streaming_chat")
+        accumulator: bytearray = bytearray(b"")
+        index: int = 0
+        unicode_line: str = ""
 
         # A closed session is single-use: fail loudly rather than yielding an
         # empty stream that looks like "the agent returned no messages".
@@ -154,18 +157,17 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                 #       and split on universal newlines instead of strict "\n".
                 #       We now buffer raw bytes, split strictly on "\n",
                 #       and decode UTF-8 explicitly -- mirroring the async client.
-                accumulator: bytearray = bytearray(b"")
                 for data in response.iter_content(chunk_size=max_chunk_size):
 
                     # Concatenate data as it comes in
                     accumulator.extend(data)
 
                     # Try to find our line separator
-                    index: int = accumulator.find(separator)
+                    index = accumulator.find(separator)
                     while index >= 0:
 
                         # Grab a single line
-                        unicode_line: str = accumulator[:index].decode("utf-8").strip()
+                        unicode_line = accumulator[:index].decode("utf-8").strip()
                         if unicode_line:  # Skip empty lines
                             # We have a line with something in it.
                             # Decode and yield as a dictionary
@@ -180,7 +182,7 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
 
                 # If there is anything left in the accumulator, yield it
                 if len(accumulator) > 0:
-                    unicode_line: str = accumulator.decode("utf-8").strip()
+                    unicode_line = accumulator.decode("utf-8").strip()
                     if unicode_line:
                         result_dict = json.loads(unicode_line)
                         yield result_dict

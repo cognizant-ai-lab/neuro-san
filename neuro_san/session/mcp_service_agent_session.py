@@ -163,10 +163,12 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
             raise ValueError(self.help_message(path)) from exc
 
         tools_list: List[Dict[str, Any]] = response_dict.get("result", {}).get("tools", [])
+        name: str = None
+        tool_description: str = None
         for tool in tools_list:
-            name: str = tool.get("name", None)
+            name = tool.get("name", None)
             if name == self.agent_name:
-                tool_description: str = tool.get("description", None)
+                tool_description = tool.get("description", None)
                 if tool_description is not None:
                     return {
                         "function": {"description": tool_description}
