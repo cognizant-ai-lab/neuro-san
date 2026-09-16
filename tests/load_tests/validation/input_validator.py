@@ -320,12 +320,7 @@ class InputValidator:
 
         warnings.extend(self._token_reporting_warnings())
 
-        mem_warning = self._check_memory_headroom(
-            capped,
-            http_client=getattr(
-                self._args, "http_client", False,
-            ),
-        )
+        mem_warning = self._check_memory_headroom(capped)
         if mem_warning:
             warnings.append(mem_warning)
 
@@ -362,9 +357,7 @@ class InputValidator:
         ]
 
     @staticmethod
-    def _check_memory_headroom(
-            num_requests, *, http_client=False,
-    ) -> Optional[str]:
+    def _check_memory_headroom(num_requests) -> Optional[str]:
         """Warn if available memory looks insufficient.
 
         Uses a conservative per-request estimate based on
@@ -372,7 +365,7 @@ class InputValidator:
         """
         mem = psutil.virtual_memory()
         avail_gb = mem.available / (1024 ** 3)
-        per_request_mb = 2 if http_client else 50
+        per_request_mb = 2
         needed_gb = (num_requests * per_request_mb) / 1024
         if needed_gb > avail_gb * 0.8:
             return (
@@ -420,7 +413,7 @@ class InputValidator:
             "cost...",
         )
 
-        probe_result = runner.run_one(
+        probe_result = runner.run_one_http(
             request_id=0, global_request_id=0,
             output_dir=output_dir,
         )
