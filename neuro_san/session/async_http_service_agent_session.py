@@ -47,16 +47,6 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
     AgentSessionClosedError.
     """
 
-    def is_closed(self) -> bool:
-        """:return: True if close() has been called on this session."""
-        with self._stream_lock:
-            return self._closed
-
-    def _raise_if_closed(self):
-        """Raise AgentSessionClosedError if this session has been closed."""
-        if self.is_closed():
-            raise AgentSessionClosedError("async HTTP agent session has been closed")
-
     def __init__(self, *args, **kwargs):
         """
         Constructor. Delegates all connection parameters to the base class and
@@ -265,6 +255,16 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
                 self._active_session = None
                 self._active_loop = None
 
+    def is_closed(self) -> bool:
+        """:return: True if close() has been called on this session."""
+        with self._stream_lock:
+            return self._closed
+
+    def _raise_if_closed(self):
+        """Raise AgentSessionClosedError if this session has been closed."""
+        if self.is_closed():
+            raise AgentSessionClosedError("async HTTP agent session has been closed")
+
     def close(self):
         """
         Close this session by aborting any in-flight streaming request.
@@ -287,11 +287,14 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
         with heartbeat and request-timeout disabled may keep running server-side
         until it does.
         """
+        response: Optional[ClientResponse] = None
+        session: Optional[ClientSession] = None
+        loop: Optional[asyncio.AbstractEventLoop] = None
         with self._stream_lock:
             self._closed = True
-            response: Optional[ClientResponse] = self._active_response
-            session: Optional[ClientSession] = self._active_session
-            loop: Optional[asyncio.AbstractEventLoop] = self._active_loop
+            response = self._active_response
+            session = self._active_session
+            loop = self._active_loop
             self._active_response = None
             self._active_session = None
             self._active_loop = None

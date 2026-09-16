@@ -226,9 +226,10 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         with heartbeat and request-timeout disabled may keep running server-side
         until it does.
         """
+        response: Optional[requests.Response] = None
         with self._stream_lock:
             self._closed = True
-            response: Optional[requests.Response] = self._active_response
+            response = self._active_response
             self._active_response = None
         if response is not None:
             with suppress(Exception):
