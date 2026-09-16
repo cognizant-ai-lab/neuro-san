@@ -40,6 +40,8 @@ What it does:
 """
 import pytest
 
+from tests.neuro_san.session.close_contract.streaming_cancel_server import StreamingCancelServer
+
 
 # pylint: disable=unused-argument
 @pytest.fixture(autouse=True)
@@ -52,3 +54,18 @@ def configure_llm_provider_keys(request, monkeypatch):
     overridden fixture's signature and are intentionally unused here.
     """
     yield
+
+
+@pytest.fixture
+def streaming_cancel_server():
+    """
+    Start an in-process StreamingCancelServer for a single test and stop it on
+    teardown. Used by the transport-level close()-cancellation tests to drive a
+    real agent session into a blocked state before cancelling it.
+    """
+    server: StreamingCancelServer = StreamingCancelServer()
+    server.start()
+    try:
+        yield server
+    finally:
+        server.stop()

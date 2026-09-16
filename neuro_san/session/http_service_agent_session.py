@@ -23,6 +23,7 @@ from typing import Optional
 import json
 
 from threading import Lock
+from threading import Thread
 from contextlib import suppress
 
 import requests
@@ -203,22 +204,21 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
 
     def close(self):
         """
-        Close this session by dropping any in-flight streaming connection.
+        Close this session, marking it closed and best-effort dropping any
+        in-flight streaming connection. Non-blocking and safe to call from a
+        different thread than the one iterating streaming_chat(), and safe to call
+        more than once. Returns immediately.
 
-        Marks the session closed and closes the currently-streaming response (if
-        any), releasing its socket and unblocking the read in streaming_chat() on
-        the client side. Safe to call from a different thread than the one
-        iterating streaming_chat(), and safe to call more than once.
-
-        Client-side scope: close() reliably drops the connection once response
-        headers have arrived (i.e. once streaming has begun). A request still
-        blocked on the very first header round-trip cannot be force-interrupted
-        through the synchronous `requests` library from another thread; that
-        window is bounded in practice because the neuro-san streaming service
-        flushes response headers immediately, before doing the agent work, so the
-        long-running wait is the post-header streaming read -- which close() does
-        interrupt. (The async client has no such window: it aborts the underlying
-        client session, cancelling even a pre-header request.)
+        Client-side scope (best-effort): the streaming response is closed on a
+        background daemon thread rather than the caller's thread, because closing
+        a `requests` streaming response while another thread is blocked reading it
+        can itself block. Closing the response reliably interrupts the reader
+        WHILE DATA IS FLOWING (results streaming, or a keep-alive heartbeat
+        enabled) -- the reader's next read then fails and streaming_chat() raises
+        AgentSessionClosedError. A read blocked on a fully silent stream (no
+        results and heartbeat disabled) may NOT be interrupted through the
+        synchronous `requests` library from another thread; such a stream is not
+        reliably cancellable here. (The async client has no such limitation.)
 
         Server-side scope: close() releases the client connection; it does NOT
         directly cancel the server-side work. The neuro-san service ends the
@@ -234,6 +234,14 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
             response = self._active_response
             self._active_response = None
         if response is not None:
-            with suppress(Exception):
-                # Best-effort: the connection may already be torn down.
-                response.close()
+            # Close off the caller's thread: closing a streaming response that
+            # another thread is blocked reading can block, and close() must never
+            # hang its caller.
+            Thread(target=self._close_response, args=(response,),
+                   name="HttpServiceAgentSession-close", daemon=True).start()
+
+    @staticmethod
+    def _close_response(response: requests.Response):
+        """Best-effort close of a streaming response; swallow any error."""
+        with suppress(Exception):
+            response.close()
