@@ -32,18 +32,23 @@ from tests.neuro_san.service.watcher.temp_networks.local.local_reservations_test
     import LocalReservationsTestHelpers
 
 
-class TestLocalReservationsStorageReadFilter(IsolatedAsyncioTestCase):
+class TestLocalReservationsStorage(IsolatedAsyncioTestCase):
     """
-    Read-path tests for how LocalReservationsStorage handles unresolved agent specs.
+    Unit tests for LocalReservationsStorage.
 
-    ExpiringAgentNetworkStorage resolves specs through the NetworkConfigFilterChain before
-    writing them, but a file written directly (by an older server instance during a rolling
-    upgrade, or by other tooling) may still hold a raw spec.  get_one_reservation() must
-    resolve such a spec so the AgentNetwork it returns carries the same top-level defaults
-    as one served from memory.
+    The constructor, start, expiration and write/read round-trip behaviours are
+    currently covered by the sibling test_local_reservations_storage_*.py modules,
+    which predate the one-test-module-per-class convention. New tests for this class
+    belong here.
+
+    The read path resolves each stored agent spec through NetworkConfigFilterChain
+    before building the AgentNetwork.  ExpiringAgentNetworkStorage already resolves
+    specs before writing them, but a file written directly (by an older server instance
+    during a rolling upgrade, or by other tooling) may still hold a raw spec, and
+    get_one_reservation() must hand back the same resolved network either way.
     """
 
-    async def test_read_resolves_raw_spec(self):
+    async def test_get_one_reservation_resolves_raw_spec(self):
         """
         A raw spec written straight to disk comes back with the global sly_data_schema
         merged into the front man, while the file itself is left exactly as written.

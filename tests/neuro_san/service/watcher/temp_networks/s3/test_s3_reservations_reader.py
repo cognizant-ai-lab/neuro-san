@@ -14,18 +14,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Pins the S3 reader's policy for reservation objects whose agent spec breaks the
-NetworkConfigFilterChain: they are reported as absent, never raised.
-
-The reader resolves specs on read so that objects written by older instances or
-other tooling still get their defaults. Those objects never went through the
-reservationist's validators, so the chain may raise on a malformed shape. Letting
-that propagate would surface as an unhandled error on the request path (via
-ExpiringAgentNetworkStorage.get_agent_network_provider) instead of the not-found
-handling, and would diverge from LocalReservationsStorage, which already treats
-any reconstruction failure as "not present".
-"""
 import json
 import time
 from typing import Any
@@ -42,23 +30,34 @@ from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_te
     import S3ReservationsStorageTestBase
 
 
-class TestReaderMalformedSpecPolicy(S3ReservationsStorageTestBase):
+class TestS3ReservationsReader(S3ReservationsStorageTestBase):
     """
-    Verifies that get_one_reservation() returns (None, None) when the stored agent
-    spec makes the filter chain raise, instead of letting the exception escape.
+    Unit tests for S3ReservationsReader, reached through the reader that
+    S3ReservationsStorageTestBase wires to an in-memory fake S3 client.
+
+    The read path resolves each stored agent spec through NetworkConfigFilterChain
+    before building the AgentNetwork.  ExpiringAgentNetworkStorage already resolves
+    specs before writing them, so in steady state that is a no-op; it matters for
+    objects written by older instances during a rolling upgrade or by other tooling.
+    Such objects never went through the reservationist's validators, so the reader
+    must also treat a spec that makes the chain raise as "not present" rather than
+    let the exception escape onto the request path, matching LocalReservationsStorage.
     """
 
-    def _put_reservation_with(self, reservation_id: str, overrides: Dict[str, Any]) -> str:
+    def _put_raw_byok_reservation(self, reservation_id: str, overrides: Dict[str, Any] = None) -> str:
         """
-        Place an unexpired reservation object into the fake bucket whose agent spec is
-        a valid BYOK-shaped spec with the given top-level keys overridden.
+        Place an unexpired reservation object whose agent spec has NOT been through the
+        filter chain directly into the fake bucket, matching the writer's on-disk schema
+        but bypassing ExpiringAgentNetworkStorage (which would have resolved it).
 
         :param reservation_id: The reservation id, which readers turn into the S3 key
-        :param overrides: Top-level keys to set on the spec before it is stored
+        :param overrides: Optional top-level keys to set on the spec before it is stored,
+                used to make the spec malformed on purpose. None means store it as built.
         :return: The reservation id
         """
         agent_spec: Dict[str, Any] = ByokAgentSpecBuilder.make_spec(reservation_id)
-        agent_spec.update(overrides)
+        if overrides is not None:
+            agent_spec.update(overrides)
         agent_spec["metadata"] = {
             "reservation": {
                 "id": reservation_id,
@@ -71,25 +70,44 @@ class TestReaderMalformedSpecPolicy(S3ReservationsStorageTestBase):
         self.fake_s3.objects[key] = json.dumps(agent_spec).encode("utf-8")
         return reservation_id
 
-    def test_chain_error_reports_reservation_as_absent(self):
+    def test_get_one_reservation_resolves_raw_spec(self):
+        """
+        Reading a raw spec yields an AgentNetwork whose front man carries the merged
+        global sly_data_schema and the network-level llm_config.
+        """
+        reservation_id: str = self._put_raw_byok_reservation("byok-raw")
+
+        reservation: Optional[Reservation]
+        agent_network: Optional[AgentNetwork]
+        reservation, agent_network = self.storage.reader.get_one_reservation(reservation_id)
+
+        self.assertIsNotNone(reservation)
+        self.assertIsInstance(agent_network, AgentNetwork)
+        front_man_spec: Dict[str, Any] = ByokAgentSpecBuilder.front_man_spec(agent_network)
+        self.assertEqual(["llm_config"], front_man_spec["function"]["sly_data_schema"]["required"])
+        self.assertIn("openai_api_key",
+                      front_man_spec["function"]["sly_data_schema"]["properties"]["llm_config"]["properties"])
+        self.assertIn("fallbacks", front_man_spec["llm_config"])
+
+    def test_get_one_reservation_reports_chain_error_as_absent(self):
         """
         A commondefs block that is not a dictionary makes the commondefs filter raise;
         the reader must swallow that and report the reservation as absent.
         """
-        reservation_id: str = self._put_reservation_with("byok-bad-commondefs", {"commondefs": "oops"})
+        reservation_id: str = self._put_raw_byok_reservation("byok-bad-commondefs", {"commondefs": "oops"})
 
         result: Tuple[Optional[Reservation], Optional[AgentNetwork]] = \
-            self.storage.get_one_reservation(reservation_id)
+            self.storage.reader.get_one_reservation(reservation_id)
 
         self.assertEqual((None, None), result)
 
-    def test_defaults_merge_error_reports_reservation_as_absent(self):
+    def test_get_one_reservation_reports_defaults_merge_error_as_absent(self):
         """
         A global sly_data_schema whose "required" is a string instead of a list makes
-        DefaultsConfigFilter's union raise; same policy applies.
+        DefaultsConfigFilter's union raise; the same policy applies.
         """
         bad_schema: Dict[str, Any] = {"type": "object", "properties": {}, "required": "llm_config"}
-        reservation_id: str = self._put_reservation_with("byok-bad-required", {"sly_data_schema": bad_schema})
+        reservation_id: str = self._put_raw_byok_reservation("byok-bad-required", {"sly_data_schema": bad_schema})
         # The front man must declare its own list-valued "required" for the union to be attempted.
         spec_key: str = S3Util.get_obj_key_for_reservation(self.PREFIX, reservation_id)
         stored: Dict[str, Any] = json.loads(self.fake_s3.objects[spec_key])
@@ -97,6 +115,6 @@ class TestReaderMalformedSpecPolicy(S3ReservationsStorageTestBase):
         self.fake_s3.objects[spec_key] = json.dumps(stored).encode("utf-8")
 
         result: Tuple[Optional[Reservation], Optional[AgentNetwork]] = \
-            self.storage.get_one_reservation(reservation_id)
+            self.storage.reader.get_one_reservation(reservation_id)
 
         self.assertEqual((None, None), result)
