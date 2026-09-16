@@ -30,10 +30,15 @@ class RecordingReservationsStorage(ReservationsStorage):
     exactly which agent specs would have been persisted to S3/local storage.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, inject_metadata: bool = False) -> None:
         """
         Constructor
+
+        :param inject_metadata: When True, behave like S3ReservationsWriter and write a
+                "metadata.reservation" block into every spec handed to add_reservations(),
+                so tests can prove that such writes never reach the caller's dictionary.
         """
+        self.inject_metadata: bool = inject_metadata
         # One entry per add_reservations() call, in call order.
         self.received: List[Dict[Reservation, Dict[str, Any]]] = []
         self.sources: List[str] = []
@@ -41,11 +46,17 @@ class RecordingReservationsStorage(ReservationsStorage):
     async def add_reservations(self, reservations_dict: Dict[Reservation, Any],
                                source: str = None) -> None:
         """
-        Records the reservations that would have been persisted.
+        Records the reservations that would have been persisted, optionally mutating
+        each spec's metadata the way the S3 writer does.
 
         :param reservations_dict: A mapping of Reservation -> agent network spec
         :param source: A string describing where the deployment was coming from
         """
+        if self.inject_metadata:
+            for reservation, agent_spec in reservations_dict.items():
+                if agent_spec.get("metadata") is None:
+                    agent_spec["metadata"] = {}
+                agent_spec["metadata"]["reservation"] = {"id": reservation.get_reservation_id()}
         self.received.append(reservations_dict)
         self.sources.append(source)
 

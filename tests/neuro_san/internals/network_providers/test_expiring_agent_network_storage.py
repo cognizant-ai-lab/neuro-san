@@ -480,16 +480,42 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
     async def test_add_reservations_does_not_mutate_caller_spec(self):
         """
         Filtering must not leak into the caller's dictionary: reservationists and coded tools
-        may keep using the spec they deployed, and DefaultsConfigFilter works on a copy.
+        may keep using the spec they deployed.  The spec deliberately exercises every filter
+        that writes into a spec (defaults, commondefs substitution and stripping, and the
+        in-place name correction of a "/" agent name) as well as a metadata-injecting base
+        storage writer, and the caller's dictionary must still come out untouched.
         """
         storage: ExpiringAgentNetworkStorage = self._make_storage()
+        storage.set_base_storage(RecordingReservationsStorage(inject_metadata=True))
         spec: Dict[str, Any] = ByokAgentSpecBuilder.make_spec("agent_a")
+        spec["commondefs"] = {"replacement_strings": {"greet": "hello"}}
+        spec["tools"][0]["tools"] = ["help/er"]
+        spec["tools"][1]["name"] = "help/er"
         expected: Dict[str, Any] = deepcopy(spec)
         r_a: Reservation = self._make_reservation("agent_a")
         await storage.add_reservations({r_a: spec}, source="test")
 
-        # The whole dictionary, not just the keys the filter is known to touch.
+        # The whole dictionary, not just the keys the filters are known to touch.
         self.assertEqual(expected, spec)
+        # ... while the stored network did get the correction and the metadata.
+        stored: Dict[str, Any] = storage.agents_table["agent_a"].get_config()
+        self.assertEqual("help_er", stored["tools"][1]["name"])
+        self.assertEqual(["help_er"], stored["tools"][0]["tools"])
+        self.assertIn("reservation", stored["metadata"])
+
+    def test_filter_reservations_copies_a_spec_without_tools(self):
+        """
+        The chain hands back the caller's own dict when there are no tools to work on;
+        filter_reservations() must still return a copy so nothing downstream can reach
+        the caller's object.
+        """
+        spec: Dict[str, Any] = {"name": "empty", "tools": []}
+        r_a: Reservation = self._make_reservation("empty")
+
+        filtered: Dict[Reservation, Dict[str, Any]] = ExpiringAgentNetworkStorage.filter_reservations({r_a: spec})
+
+        self.assertEqual(spec, filtered[r_a])
+        self.assertIsNot(spec, filtered[r_a])
 
     def test_filter_reservations_is_idempotent(self):
         """

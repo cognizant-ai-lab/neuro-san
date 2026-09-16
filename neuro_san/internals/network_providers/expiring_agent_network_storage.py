@@ -21,6 +21,7 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
+from copy import deepcopy
 import logging
 import time
 
@@ -155,20 +156,21 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
 
         :param reservations_dict: A mapping of Reservation -> agent network spec as deployed
         :return: A new mapping with the same Reservation keys whose values are the fully resolved
-                 agent network specs.  Any spec the chain had to touch comes back as a copy
-                 (value-equal to the input when no default applied); only a spec with neither
-                 tools nor commondefs is passed back as the caller's own object.
+                 agent network specs.  Every value is a copy: the caller's dictionaries are never
+                 returned or mutated, so a base-storage writer that injects metadata into what it
+                 is given (S3ReservationsWriter does) cannot reach them either.
         """
         filter_chain: ConfigFilter = NetworkConfigFilterChain()
         filtered: Dict[Reservation, Dict[str, Any]] = {}
         for reservation, agent_spec in reservations_dict.items():
             resolved: Dict[str, Any] = filter_chain.filter_config(agent_spec)
-            if isinstance(resolved, dict) and "commondefs" in resolved:
-                if resolved is agent_spec:
-                    # The chain hands back the caller's own dict when it had nothing to copy;
-                    # never mutate what the caller gave us.
-                    resolved = dict(agent_spec)
-                del resolved["commondefs"]
+            if resolved is agent_spec:
+                # The chain only copies when there are tools to work on; for anything else it
+                # hands back the caller's own dict.  Copy it ourselves so that neither the
+                # commondefs removal below nor a metadata-injecting writer touches the caller's object.
+                resolved = deepcopy(agent_spec)
+            if isinstance(resolved, dict):
+                resolved.pop("commondefs", None)
             filtered[reservation] = resolved
         return filtered
 
