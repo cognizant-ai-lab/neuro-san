@@ -195,7 +195,7 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
                     # unblock the read below (closing the session alone does not).
                     with self._stream_lock:
                         if self._closed:
-                            return
+                            raise AgentSessionClosedError("async HTTP agent session has been closed")
                         self._active_response = response
 
                     # Iterate over the content stream as it comes in.
