@@ -142,7 +142,7 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                 # If the session was already closed, abort before consuming any stream.
                 with self._stream_lock:
                     if self._closed:
-                        return
+                        raise AgentSessionClosedError("HTTP agent session has been closed")
                     self._active_response = response
 
                 # Iterate over the content stream as it comes in.
