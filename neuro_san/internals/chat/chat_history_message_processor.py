@@ -14,7 +14,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-from numbers import Number
 from typing import Any
 from typing import Dict
 from typing import List
@@ -43,7 +42,8 @@ class ChatHistoryMessageProcessor(MessageProcessor):
         """
         self.max_message_history: int = max_message_history
         if self.max_message_history is not None:
-            if not isinstance(self.max_message_history, Number):
+            if not isinstance(self.max_message_history, int):
+                    and not isinstance(self.max_message_history, float):
                 # If we don't have a number we don't have a max.
                 self.max_message_history = None
             else:
