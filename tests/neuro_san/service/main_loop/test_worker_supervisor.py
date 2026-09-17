@@ -17,6 +17,7 @@
 Unit tests for the WorkerSupervisor.
 """
 
+import os
 import signal
 import sys
 
@@ -47,8 +48,15 @@ class TestWorkerSupervisor(TestCase):
     )
     def test_supervisor_is_not_used_when_already_worker(self):
         """Worker processes should bypass the supervisor and run ServerMainLoop."""
-        with patch.dict("os.environ", {WorkerSupervisor.WORKER_ENV: "1"}, clear=True):
+        worker_env = {
+            WorkerSupervisor.WORKER_ENV: "1",
+            WorkerSupervisor.SUPERVISOR_PID_ENV: "123",
+        }
+        with patch.dict("os.environ", worker_env, clear=True), \
+                patch("neuro_san.service.main_loop.worker_supervisor.Thread") as thread_mock:
             self.assertEqual(WorkerSupervisor.run(), -1)
+        thread_mock.assert_called_once_with(target=WorkerSupervisor.monitor_supervisor, daemon=True)
+        thread_mock.return_value.start.assert_called_once()
 
     @patch(
         "neuro_san.service.main_loop.worker_supervisor.sys.argv",
@@ -100,6 +108,8 @@ class TestWorkerSupervisor(TestCase):
             self.assertEqual(env[WorkerSupervisor.WORKER_ENV], "1")
             self.assertEqual(env[WorkerSupervisor.WORKER_ID_ENV], str(idx))
             self.assertEqual(env[WorkerSupervisor.NUM_WORKERS_ENV], "2")
+            self.assertEqual(env[WorkerSupervisor.SUPERVISOR_PID_ENV], str(os.getpid()))
+            self.assertTrue(popen_call.kwargs["start_new_session"])
 
         self.assertEqual(
             [signal_call.args[0] for signal_call in signal_mock.call_args_list],
@@ -122,6 +132,15 @@ class TestWorkerSupervisor(TestCase):
             exited_worker.terminate.assert_not_called()
         finally:
             WorkerSupervisor.active_workers = []
+
+    @patch("neuro_san.service.main_loop.worker_supervisor.os._exit")
+    @patch("neuro_san.service.main_loop.worker_supervisor.os.getppid", return_value=456)
+    def test_worker_exits_when_supervisor_is_gone(self, _getppid_mock, exit_mock):
+        """A worker exits if it is no longer parented by its supervisor."""
+        with patch.dict(
+                "os.environ", {WorkerSupervisor.SUPERVISOR_PID_ENV: "123"}, clear=True):
+            WorkerSupervisor.monitor_supervisor()
+        exit_mock.assert_called_once_with(1)
 
     def test_worker_identity_helpers(self):
         """Test is_worker(), get_worker_id(), and get_num_workers() with various env configurations."""
