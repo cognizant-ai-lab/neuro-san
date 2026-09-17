@@ -148,7 +148,6 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                 #       and split on universal newlines instead of strict "\n".
                 #       We now buffer raw bytes, split strictly on "\n",
                 #       and decode UTF-8 explicitly -- mirroring the async client.
-                accumulator: bytearray = bytearray(b"")
                 for data in response.iter_content(chunk_size=max_chunk_size):
 
                     # Concatenate data as it comes in
