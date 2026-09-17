@@ -140,6 +140,7 @@ class SlyDataRedactor(ConfigFilter):
             # What was configured was a list.
             # Turn the string keys listed into a dictionary for canonical processing below.
             true_dict: Dict[str, Any] = {}
+            key: str = None
             for key in allow_dict:
                 true_dict[key] = True
             allow_dict = true_dict
@@ -148,6 +149,7 @@ class SlyDataRedactor(ConfigFilter):
         # Now leaf through the keys of the dictionaries.
         # For now, just do top-level keys. Can get more complicated later if need be.
         redacted: Dict[str, Any] = {}
+        source_key: str = None
         for source_key, dest_key in allow_dict.items():
 
             source_value: Any = basis_config.get(source_key)

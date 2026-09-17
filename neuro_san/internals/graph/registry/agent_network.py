@@ -135,7 +135,7 @@ Some things to try:
         # List all agents in the same order as agent network HOCON.
         agent_list: List[str] = list(self.agent_spec_map.keys())
 
-        is_front_man_valid = True
+        is_front_man_valid: bool = True
         if len(agent_list) > 0:
 
             # Front-man is the **first** agent in the agent list
