@@ -186,6 +186,7 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
                 usage_metadata is None when the response carries none.
         """
         # Check for usage_metadata (Only work for langchain-core >= 0.2.2)
+        generation: Any = None
         try:
             generation = response.generations[0][0]
         except IndexError:
@@ -352,8 +353,9 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         :return: True if the message has no content and no tool calls
         """
         content: Any = message.content
+        has_content: bool = False
         if isinstance(content, str):
-            has_content: bool = content.strip() != EMPTY
+            has_content = content.strip() != EMPTY
         elif isinstance(content, list):
             has_content = not all(
                 LlmTokenCallbackHandler._is_blank_content_block(item) for item in content

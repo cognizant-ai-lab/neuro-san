@@ -135,8 +135,9 @@ class BaseToolFactory:
         #   network calls.
         session_factory: AsyncAgentSessionFactory = self.invocation_context.get_async_session_factory()
         adapter = ExternalToolAdapter(session_factory, name)
+        function_json: Dict[str, Any] = None
         try:
-            function_json: Dict[str, Any] = await adapter.get_function_json(self.invocation_context)
+            function_json = await adapter.get_function_json(self.invocation_context)
         except ValueError as exception:
             # Could not reach the server for the external agent, so tell about it
             message: str = f"Agent/tool {name} was unreachable. Not including it as a tool.\n"
@@ -282,8 +283,9 @@ class BaseToolFactory:
         # Get HTTP headers from sly_data if available
         http_headers: Dict[str, Any] = self.tool_caller.get_sly_data().get("http_headers", {})
 
+        server_url: str = None
         if isinstance(mcp_info, str):
-            server_url: str = mcp_info
+            server_url = mcp_info
         else:
             server_url = mcp_info.get("url")
             allowed_tools = mcp_info.get("tools")
@@ -291,9 +293,11 @@ class BaseToolFactory:
         # Get specific headers for the MCP server if available
         headers: Dict[str, Any] = http_headers.get(server_url)
 
+        mcp_adapter: LangChainMcpAdapter = None
+        mcp_tools: List[BaseTool] = None
         try:
             mcp_adapter = LangChainMcpAdapter()
-            mcp_tools: List[BaseTool] = await mcp_adapter.get_mcp_tools(server_url, allowed_tools, headers)
+            mcp_tools = await mcp_adapter.get_mcp_tools(server_url, allowed_tools, headers)
 
         # MCP errors are nested exceptions.
         except ExceptionGroup as nested_exception:

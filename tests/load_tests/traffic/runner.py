@@ -27,9 +27,7 @@ from concurrent.futures import as_completed
 from concurrent.futures import CancelledError
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
-from typing import Dict
 from typing import List
-from typing import Optional
 from typing import Tuple
 
 from tests.load_tests.config import FAILURE_LOG_LIMIT
@@ -40,20 +38,17 @@ from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
-from tests.load_tests.config import POLL_INTERVAL_SECONDS
 from tests.load_tests.config import THREAD_JOIN_TIMEOUT
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.monitoring.heartbeat import Heartbeat
-from tests.load_tests.traffic.cli_builder import CliBuilder
 from tests.load_tests.traffic.http_client import HttpClient
-from tests.load_tests.traffic.process_monitor import ProcessMonitor
+from tests.load_tests.traffic.output_parser import OutputParser
 
 logger = logging.getLogger(__name__)
 
 # Grace period after Ctrl-C for in-flight requests to wind down before
-# they are recorded as KILLED.  Sized above the subprocess poll interval
-# so killed subprocess requests have time to resolve.
-INTERRUPT_GRACE_SECONDS = 2 * POLL_INTERVAL_SECONDS + 2.0
+# they are recorded as KILLED.
+INTERRUPT_GRACE_SECONDS = 2.0
 
 
 class TrafficRunner:
@@ -71,104 +66,19 @@ class TrafficRunner:
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _run_one_tracked(self, request_id, global_request_id,
-                         output_dir, failed_ref,
-                         cancel_event=None) -> RequestResult:
+                         output_dir, failed_ref) -> RequestResult:
         """Run one request and increment failed_ref on failure."""
-        if getattr(self._args, "http_client", False):
-            result = self.run_one_http(
-                request_id, global_request_id, output_dir,
-            )
-        else:
-            result = self.run_one(
-                request_id, global_request_id, output_dir,
-                cancel_event=cancel_event,
-            )
+        result = self.run_one_http(
+            request_id, global_request_id, output_dir,
+        )
         if result.get("status") != STATUS_CREATED:
             failed_ref.value = (failed_ref.value or 0) + 1
         return result
 
-    # pylint: disable=too-many-locals
-    def run_one(self, request_id, global_request_id,
-                output_dir=None, cancel_event=None) -> RequestResult:
-        """Execute a single request with idle-timeout detection.
-
-        Returns a result dict with status, elapsed, prompt, and parsed fields.
-        """
-        prompt = self._profile.get_prompt(
-            global_request_id, same_prompt=self._args.same_prompt,
-            allow_caching=self._args.allow_caching,
-        )
-        prompt_file = CliBuilder.write_prompt_file(global_request_id, prompt)
-
-        try:
-            start = time.time()
-            status, stdout, stderr, returncode, ttft = (
-                ProcessMonitor.execute_with_idle_detection(
-                    CliBuilder.build_cli_command(
-                        self._args.host, self._args.port,
-                        self._args.agent, prompt_file,
-                        include_tokens=self._args.include_tokens,
-                        use_https=getattr(self._args, "https", False),
-                        chat_filter_type=getattr(
-                            self._args, "chat_filter", "maximal",
-                        ).upper(),
-                    ),
-                    self._args.request_timeout, self._args.idle_timeout,
-                    cancel_event,
-                )
-            )
-            elapsed = time.time() - start
-
-            parsed_fields: Dict[str, str] = {
-                field: CliBuilder.parse_stdout_field(stdout, field)
-                for field in self._profile.success_fields
-            }
-
-            self._save_request_output(
-                output_dir, request_id, stdout, stderr,
-            )
-
-            status, failure_reason = self._validate_result(
-                status, returncode, stdout, parsed_fields,
-            )
-            self._log_request_result(
-                request_id, status, elapsed,
-                parsed_fields=parsed_fields,
-                failure_reason=failure_reason,
-                stderr=stderr,
-                output_dir=output_dir,
-            )
-
-            result = {
-                "request_id": f"request-{request_id}",
-                "status": status,
-                "elapsed": elapsed,
-                "ttft": ttft,
-                "start_time": start,
-                "end_time": start + elapsed,
-                "prompt": prompt,
-                "failure_reason": failure_reason,
-                "error": (
-                    CliBuilder.last_stderr_line(stderr)
-                    if status != STATUS_CREATED else None
-                ),
-            }
-            result.update(parsed_fields)
-            if self._args.include_tokens:
-                self._attach_token_data(result, stdout)
-            return result
-        finally:
-            CliBuilder.cleanup_prompt_file(prompt_file)
-
     # pylint: disable=too-many-locals,too-many-branches
     def run_one_http(self, request_id, global_request_id,
                      output_dir=None) -> RequestResult:
-        """Execute a single request via direct HTTP.
-
-        Uses thread-based HTTP POST instead of spawning a
-        subprocess, reducing per-request memory from ~96 MB
-        to ~1-2 MB.
-        """
+        """Execute a single request via in-thread HTTP."""
         prompt = self._profile.get_prompt(
             global_request_id,
             same_prompt=self._args.same_prompt,
@@ -189,10 +99,8 @@ class TrafficRunner:
         )
         elapsed = time.time() - start
 
-        # Subprocess mode extracts fields via regex over the
-        # entire stdout (answer text + sly_data).  Match that
-        # behaviour: for any success field not already found in
-        # sly_data, search the answer text with the same regex.
+        # For any success field not found in sly_data, fall back to a regex
+        # search of the answer text.
         for field in self._profile.success_fields:
             if not parsed_fields.get(field) and response_text:
                 match = re.search(
@@ -232,16 +140,15 @@ class TrafficRunner:
         elif status == STATUS_FAILED and not response_text:
             failure_reason = "empty response from agent"
 
-        # A FAILED status with no failure_reason at this point means
-        # HttpClient caught an exception and returned its traceback as
-        # response_text.  Route that to stderr (like subprocess mode)
-        # instead of saving it as the agent's answer.
+        # A FAILED status with no failure_reason means HttpClient caught an
+        # exception and returned its traceback as response_text. Route that
+        # to stderr instead of saving it as the agent's answer.
         stderr = ""
         stdout = self._http_saved_stdout(response_text, token_data)
         if status == STATUS_FAILED and failure_reason is None:
             stderr = response_text
             stdout = ""
-            failure_reason = CliBuilder.last_stderr_line(stderr)
+            failure_reason = OutputParser.last_stderr_line(stderr)
 
         self._save_request_output(
             output_dir, request_id, stdout, stderr,
@@ -274,78 +181,6 @@ class TrafficRunner:
             self._attach_http_token_data(result, token_data)
         return result
 
-    def _validate_result(self, status, returncode, stdout,
-                         parsed_fields,
-                         ) -> Tuple[str, Optional[str]]:
-        """Determine final status and failure reason for a request."""
-        failure_reason = None
-        if status in (STATUS_TIMEOUT, STATUS_KILLED):
-            return status, failure_reason
-        if self._profile.success_fields:
-            if self._args.skip_reservation_check:
-                required = [
-                    f for f in self._profile.success_fields
-                    if f != "reservation_id"
-                ]
-            else:
-                required = self._profile.success_fields
-            passed = returncode == 0 and all(
-                parsed_fields.get(f) for f in required
-            )
-        else:
-            passed = returncode == 0
-        if passed and not stdout.strip():
-            passed = False
-            failure_reason = "empty response from agent"
-        if passed:
-            matched = self._check_failure_patterns(stdout)
-            if matched is not None:
-                passed = False
-                failure_reason = (
-                    f"response matched failure pattern: {matched}"
-                )
-        status = STATUS_CREATED if passed else STATUS_FAILED
-        if status == STATUS_FAILED and not failure_reason:
-            failure_reason = self._diagnose_failure(
-                returncode, parsed_fields, stdout,
-            )
-        return status, failure_reason
-
-    def _check_failure_patterns(self, stdout) -> Optional[str]:
-        """Check stdout against the profile's failure patterns.
-
-        Returns the first matched pattern, or None if no match.
-        """
-        for pattern in self._profile.failure_patterns:
-            if pattern in stdout:
-                return pattern
-        return None
-
-    @staticmethod
-    def _attach_token_data(result, stdout) -> None:
-        """Parse token accounting from stdout and attach to result."""
-        token_data = CliBuilder.parse_token_accounting(stdout)
-        if not token_data:
-            return
-        models_dict = token_data.get("models", {})
-        model = TrafficRunner._extract_model(models_dict)
-        all_models = TrafficRunner._extract_all_models(
-            models_dict,
-        )
-        prompt_tok = token_data.get("prompt_tokens", 0)
-        completion_tok = token_data.get("completion_tokens", 0)
-        result.update({
-            "total_tokens": token_data.get("total_tokens", 0),
-            "prompt_tokens": prompt_tok,
-            "completion_tokens": completion_tok,
-            "llm_calls": token_data.get("successful_requests", 0),
-            "model": model,
-            "all_models": all_models,
-            "cost_usd": CostEstimator.estimate(
-                prompt_tok, completion_tok, model,
-            ),
-        })
-
     @staticmethod
     def _extract_model(models_dict) -> str:
         """Extract the specific model name from the nested models dict.
@@ -374,11 +209,8 @@ class TrafficRunner:
         return all_models
 
     def _http_saved_stdout(self, response_text, token_data) -> str:
-        """Final answer plus Token Accounting JSON (agent_cli parity).
-
-        In HTTP mode the client receives the answer and token
-        accounting on separate channels; join them so the saved
-        per-request file matches subprocess (agent_cli) output.
+        """Final answer plus Token Accounting JSON, joined so the saved
+        per-request file carries both.
         """
         saved = response_text or ""
         if self._args.include_tokens and token_data:
@@ -393,9 +225,8 @@ class TrafficRunner:
     def _attach_http_token_data(result, token_data) -> None:
         """Attach token accounting from HTTP response to result.
 
-        Same logic as _attach_token_data but accepts the
-        token_accounting dict directly instead of parsing from
-        stdout.
+        Accepts the token_accounting dict directly instead of
+        parsing from stdout.
         """
         if not token_data:
             return
@@ -440,8 +271,7 @@ class TrafficRunner:
         peak_sys_mem_pct_ref, peak_sys_cpu_ref,
         peak_sys_threads_ref, server_died, interrupted).
 
-        When ``cancel_event`` becomes set (Ctrl-C), in-flight
-        subprocess requests are killed and the stage returns early
+        When ``cancel_event`` becomes set (Ctrl-C), the stage returns early
         with whatever completed so far, marking the remainder KILLED.
         """
         results_list: List[RequestResult] = []
@@ -500,7 +330,7 @@ class TrafficRunner:
                 pool.submit(
                     self._run_one_tracked,
                     i + 1, global_offset + i,
-                    output_dir, failed_ref, cancel_event,
+                    output_dir, failed_ref,
                 )
                 for i in range(num_requests)
             )
@@ -544,10 +374,8 @@ class TrafficRunner:
     ) -> Tuple[int, bool]:
         """Collect future results, cancelling stragglers on timeout/Ctrl-C.
 
-        Polls in short slices so a set ``cancel_event`` (Ctrl-C) is
-        noticed promptly: the event tells in-flight subprocesses to
-        die, then their futures resolve as KILLED.  Returns
-        (num_killed, interrupted).
+        Polls in short slices so a set ``cancel_event`` (Ctrl-C) is noticed
+        promptly. Returns (num_killed, interrupted).
         """
         pending = set(futures)
         killed = 0
@@ -578,11 +406,9 @@ class TrafficRunner:
         for fut in pending:
             fut.cancel()
         if interrupted:
-            # Give in-flight requests a short grace to wind down:
-            # subprocess requests are killed via cancel_event and
-            # resolve within a poll interval.  Anything still stuck
-            # after the grace (e.g. an un-killable in-thread HTTP
-            # request) is recorded as KILLED without blocking on it.
+            # Give in-flight requests a short grace to wind down; anything
+            # still stuck after the grace is recorded as KILLED without
+            # blocking on it.
             grace_deadline = time.time() + INTERRUPT_GRACE_SECONDS
             for fut in list(pending):
                 remaining = max(0.0, grace_deadline - time.time())
@@ -610,38 +436,6 @@ class TrafficRunner:
             else:
                 results_list.append(fut.result())
         return killed, interrupted
-
-    def _diagnose_failure(self, returncode, parsed_fields,
-                          stdout) -> str:
-        """Return a human-readable reason why a request was marked FAILED."""
-        reasons = []
-        if returncode != 0:
-            reasons.append(f"non-zero exit code ({returncode})")
-        for field in self._profile.success_fields:
-            if field == "reservation_id" and self._args.skip_reservation_check:
-                continue
-            if not parsed_fields.get(field):
-                reasons.append(f"missing {field}")
-        token_hint = self._detect_empty_llm_response(stdout)
-        if token_hint:
-            reasons.append(token_hint)
-        return "; ".join(reasons) if reasons else "unknown"
-
-    @staticmethod
-    def _detect_empty_llm_response(stdout) -> Optional[str]:
-        """Check token accounting for signs of an empty LLM response."""
-        tokens = CliBuilder.parse_token_accounting(stdout)
-        if not tokens:
-            return "no token data"
-        empty = tokens.get("empty_responses", 0)
-        completion = tokens.get("completion_tokens", 0)
-        if empty > 0:
-            return (
-                f"empty LLM response "
-                f"({completion} completion tokens, "
-                f"{empty} empty response(s))"
-            )
-        return "incomplete response"
 
     def _log_request_result(self, request_id, status, elapsed, *,
                             parsed_fields, failure_reason,
@@ -694,7 +488,7 @@ class TrafficRunner:
         if failure_reason:
             logger.info("  reason: %s", failure_reason)
         if is_failure:
-            last_err = CliBuilder.last_stderr_line(stderr)
+            last_err = OutputParser.last_stderr_line(stderr)
             if last_err and last_err.strip():
                 logger.info("  stderr: %s", last_err)
 

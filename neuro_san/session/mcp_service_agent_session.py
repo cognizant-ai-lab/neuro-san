@@ -21,6 +21,7 @@ from typing import List
 from typing import Generator
 
 import json
+
 import requests
 
 from leaf_common.time.timeout import Timeout
@@ -104,6 +105,7 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         headers["Content-Type"] = "application/json"
 
         path: str = self.get_request_path("initialize")
+        response_dict: Dict[str, Any] = None
         try:
             response = requests.post(path, json=handshake_dict, headers=headers, timeout=self.timeout_in_seconds)
             response.raise_for_status()
@@ -152,6 +154,7 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         headers[self.MCP_PROTOCOL_VERSION] = self.protocol_version
 
         path: str = self.get_request_path("tools/list")
+        response_dict: Dict[str, Any] = None
         try:
             response = requests.post(path, json=use_request_dict, headers=headers, timeout=self.timeout_in_seconds)
             response.raise_for_status()
@@ -160,10 +163,12 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
             raise ValueError(self.help_message(path)) from exc
 
         tools_list: List[Dict[str, Any]] = response_dict.get("result", {}).get("tools", [])
+        name: str = None
+        tool_description: str = None
         for tool in tools_list:
-            name: str = tool.get("name", None)
+            name = tool.get("name", None)
             if name == self.agent_name:
-                tool_description: str = tool.get("description", None)
+                tool_description = tool.get("description", None)
                 if tool_description is not None:
                     return {
                         "function": {"description": tool_description}
@@ -212,8 +217,9 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         path: str = self.get_request_path("streaming_chat")
         try:
             with requests.post(path, json=mcp_payload, headers=headers,
-                               timeout=self.streaming_timeout_in_seconds) as response:
+                               stream=True, timeout=self.streaming_timeout_in_seconds) as response:
                 response.raise_for_status()
+
                 for line in response.iter_lines(decode_unicode=True):
                     if line.strip():  # Skip empty lines
                         # Each line is a JSON object representing an MCP tool call(chat) response
@@ -222,6 +228,21 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                         yield result_dict
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(self.help_message(path)) from exc
+
+    def close(self):
+        """
+        No-op: this MCP session cannot cancel an in-flight tool call.
+
+        The MCP transport here is request/response, not streaming: requests.post()
+        does not return until the server sends response headers, and the neuro-san
+        MCP handler writes the response only after awaiting the full tool run (see
+        mcp_root_handler.py). There is therefore no abortable in-flight connection
+        to release mid-run -- closing anything client-side cannot terminate the
+        server-side work -- so this session deliberately does NOT claim to support
+        cancellation. Provided as a documented no-op so callers can treat all
+        session types uniformly.
+        """
+        return
 
     def get_request_path(self, method: str) -> str:
         """
