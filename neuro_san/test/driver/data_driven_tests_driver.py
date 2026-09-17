@@ -294,10 +294,12 @@ class DataDrivenTestsDriver:
             # promise -- their server-side work runs to completion regardless. Leaving
             # them unregistered keeps the timeout behavior honest (and, for MCP with a
             # connect timeout, preserves the connect_timeout_in_seconds passed above).
-            if isinstance(session, AbstractHttpServiceAgentSession):
+            if connection in ("http", "https"):
                 # Register the session so a timeout on the main thread can close it
                 # (dropping the connection) even while this worker thread is blocked
                 # reading the streaming response.
+                # We only register HTTP-based sessions because they are the only ones
+                # that can be cancelled on a timeout.
                 canceller.register(session)
             chat_context: Dict[str, Any] = None
             # Track sly_data across interactions to allow accumulation and persistence
