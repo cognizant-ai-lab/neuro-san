@@ -25,9 +25,11 @@ from unittest import TestCase
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
+from neuro_san.session.mcp_service_agent_session import MCP_VERSION
 from neuro_san.session.mcp_service_agent_session import McpServiceAgentSession
 
 
+# pylint: disable=too-many-public-methods
 class TestMcpServiceAgentSession(TestCase):
     """
     Unit tests for McpServiceAgentSession's tool naming. Users pass the network name
@@ -70,7 +72,11 @@ class TestMcpServiceAgentSession(TestCase):
 
         body: Dict[str, Any] = {"jsonrpc": "2.0", "id": 1, "result": {}}
         if method == "initialize":
-            body["result"] = {"protocolVersion": "2025-06-18"}
+            body["result"] = {
+                "protocolVersion": MCP_VERSION,
+                "capabilities": {},
+                "serverInfo": {"name": "test_server", "version": "1.0.0"},
+            }
         elif method == "tools/list":
             body["result"] = {"tools": tools}
 
@@ -302,3 +308,111 @@ class TestMcpServiceAgentSession(TestCase):
             function_dict: Dict[str, Any] = session.function({})
         self.assertIsNone(function_dict)
         self.assertIsNone(session.find_tool_for_network([{"name": "anything"}, {"description": "nameless"}]))
+
+    @staticmethod
+    def create_response(response_dict: Any) -> MagicMock:
+        """Creates a successful HTTP response containing response_dict."""
+        response: MagicMock = MagicMock()
+        response.text = json.dumps(response_dict)
+        return response
+
+    def call_function_with_response(self, response_dict: Any) -> Dict[str, Any]:
+        """Calls function() with the given tools/list response."""
+        initialize_response: MagicMock = self.create_response({
+            "result": {
+                "protocolVersion": MCP_VERSION,
+                "capabilities": {},
+                "serverInfo": {"name": "test_server", "version": "1.0.0"},
+            }
+        })
+        initialized_response: MagicMock = self.create_response({})
+        tools_response: MagicMock = self.create_response(response_dict)
+
+        with patch(self.POST_TARGET, side_effect=[initialize_response, initialized_response, tools_response]):
+            session = McpServiceAgentSession(agent_name="hello_world")
+            return session.function({})
+
+    def test_function_rejects_invalid_tools_response(self) -> None:
+        """The tools/list structure is validated before iteration."""
+        invalid_responses = (
+            ([], "Invalid MCP tools/list response: response must be an object"),
+            ({"result": None}, "Invalid MCP tools/list response: 'result' must be an object"),
+            ({"result": []}, "Invalid MCP tools/list response: 'result' must be an object"),
+            ({"result": {}}, "Invalid MCP tools/list response: 'tools' must be an array"),
+            ({"result": {"tools": None}}, "Invalid MCP tools/list response: 'tools' must be an array"),
+            ({"result": {"tools": "hello_world"}}, "Invalid MCP tools/list response: 'tools' must be an array"),
+        )
+
+        for response_dict, expected_message in invalid_responses:
+            with self.subTest(response_dict=response_dict):
+                with self.assertRaises(ValueError) as context:
+                    self.call_function_with_response(response_dict)
+                self.assertEqual(expected_message, str(context.exception))
+
+    def test_function_surfaces_json_rpc_error(self) -> None:
+        """A successful HTTP response containing a JSON-RPC error is surfaced."""
+        with self.assertRaises(ValueError) as context:
+            self.call_function_with_response({"error": {"code": -32602, "message": "Invalid params"}})
+        self.assertEqual("MCP tools/list error -32602: Invalid params", str(context.exception))
+
+    def test_function_skips_invalid_tool_entry(self) -> None:
+        """An invalid entry does not prevent discovery of a valid tool."""
+        result: Dict[str, Any] = self.call_function_with_response({
+            "result": {
+                "tools": [None, {"name": "hello_world", "description": "Says hello"}],
+            }
+        })
+        self.assertEqual({"function": {"description": "Says hello"}}, result)
+
+    def test_function_accepts_neuro_san_tool_schema(self) -> None:
+        """The client accepts the tool schema shape returned by neuro-san servers."""
+        result: Dict[str, Any] = self.call_function_with_response({
+            "result": {
+                "tools": [{
+                    "name": "hello_world",
+                    "description": "Says hello",
+                    "inputSchema": {
+                        "$ref": "#/components/schemas/ChatRequest",
+                        "components": {"schemas": {}},
+                    },
+                }],
+            }
+        })
+        self.assertEqual({"function": {"description": "Says hello"}}, result)
+
+    def test_initialize_rejects_invalid_response(self) -> None:
+        """The initialize response and result object are validated."""
+        invalid_responses = (
+            ([], "Invalid MCP initialize response: response must be an object"),
+            ({"result": None}, "Invalid MCP initialize response: 'result' must be an object"),
+            ({"result": []}, "Invalid MCP initialize response: 'result' must be an object"),
+            ({"result": {"protocolVersion": MCP_VERSION}},
+             "Invalid MCP initialize response: 'result' does not match InitializeResult"),
+        )
+
+        for response_dict, expected_message in invalid_responses:
+            with self.subTest(response_dict=response_dict):
+                response: MagicMock = self.create_response(response_dict)
+                with patch(self.POST_TARGET, return_value=response):
+                    with self.assertRaises(ValueError) as context:
+                        McpServiceAgentSession(agent_name="hello_world")
+                self.assertEqual(expected_message, str(context.exception))
+
+    def test_initialize_surfaces_json_rpc_error(self) -> None:
+        """A JSON-RPC error in the initialize response is surfaced."""
+        response: MagicMock = self.create_response({
+            "error": {"code": -32602, "message": "Invalid params"},
+        })
+        with patch(self.POST_TARGET, return_value=response):
+            with self.assertRaises(ValueError) as context:
+                McpServiceAgentSession(agent_name="hello_world")
+        self.assertEqual("MCP initialize error -32602: Invalid params", str(context.exception))
+
+    def test_function_accepts_more_than_one_thousand_tools(self) -> None:
+        """The client does not impose a limit absent from the MCP specification."""
+        tools: List[Dict[str, Any]] = [{"name": f"tool_{index}"} for index in range(1001)]
+        tools.append({"name": "hello_world", "description": "Says hello"})
+
+        result: Dict[str, Any] = self.call_function_with_response({"result": {"tools": tools}})
+
+        self.assertEqual({"function": {"description": "Says hello"}}, result)
