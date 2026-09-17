@@ -169,7 +169,8 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
         # while it is still awaiting response headers. If close() raced in between
         # the check above and here, tear the session down and bail.
         abort: bool = False
-        with self._stream_lock:
+        with self._stream_lock as next_with:
+            _ = next_with
             if self._closed:
                 abort = True
             else:
@@ -311,7 +312,8 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
                     response.close()
             return
         # RuntimeError is raised only if the loop is not running -- nothing to abort.
-        with suppress(RuntimeError):
+        with suppress(RuntimeError) as next_with:
+            _ = next_with
             if response is not None:
                 # ClientResponse.close() is synchronous; run it on the owning loop.
                 # Unblocks an in-flight read once headers have arrived.
