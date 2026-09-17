@@ -44,7 +44,6 @@ from neuro_san.client.agent_session_factory import AgentSessionFactory
 from neuro_san.client.streaming_input_processor import StreamingInputProcessor
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
-from neuro_san.session.abstract_http_service_agent_session import AbstractHttpServiceAgentSession
 from neuro_san.session.direct_agent_session import DirectAgentSession
 from neuro_san.test.driver.session_canceller import SessionCanceller
 from neuro_san.test.driver.timed_assert_capture import TimedAssertCapture
