@@ -110,11 +110,13 @@ class TestRoundTrip(S3ReservationsStorageTestBase):
             returned_network.get_config().get("name"),
             "Original agent_spec['name'] was not preserved through S3 round-trip.",
         )
-        # The reader resolves the spec through NetworkConfigFilterChain before building the
+        # The reader resolves the spec through ResolvedNetworkConfigFilter before building the
         # AgentNetwork (see S3ReservationsReader.get_one_reservation), so the tools come back
         # with the top-level defaults applied - here the network-level llm_config copied onto
         # the front man. Compare against the resolved form of what was written, which is what
-        # any client of the storage is meant to receive.
+        # any client of the storage is meant to receive. The bare chain is enough to build
+        # that expectation because only "tools" is compared and the filter's extra step (dropping
+        # a top-level commondefs block) does not touch it.
         resolved_spec: Dict[str, Any] = NetworkConfigFilterChain().filter_config(agent_spec)
         self.assertEqual(
             resolved_spec.get("tools"),

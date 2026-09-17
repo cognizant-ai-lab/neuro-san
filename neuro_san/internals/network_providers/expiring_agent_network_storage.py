@@ -21,7 +21,6 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
-from copy import deepcopy
 import logging
 import time
 
@@ -30,7 +29,7 @@ from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.utils.startable import Startable
 
 from neuro_san.interfaces.reservation import Reservation
-from neuro_san.internals.graph.filters.network_config_filter_chain import NetworkConfigFilterChain
+from neuro_san.internals.graph.filters.resolved_network_config_filter import ResolvedNetworkConfigFilter
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
@@ -131,49 +130,6 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         """
         return time.time() > reservation.get_expiration_time_in_seconds()
 
-    @staticmethod
-    def filter_reservations(reservations_dict: Dict[Reservation, Dict[str, Any]]) \
-            -> Dict[Reservation, Dict[str, Any]]:
-        """
-        Runs every agent network spec in the given mapping through the standard
-        NetworkConfigFilterChain and strips the consumed "commondefs" block.
-
-        Networks loaded from hocon files get this treatment in AgentNetworkRestorer.filter_config(),
-        but reservation specs are plain dictionaries assembled in code and handed to us directly,
-        so without this step none of the top-level defaults that DefaultsConfigFilter distributes
-        (llm_config, verbose, max_steps, max_execution_seconds, max_attempts, error_formatter,
-        error_fragments, and the front-man-only sly_data_schema) is ever applied to their agents,
-        and no commondefs substitution happens.  Most visibly, the "global" top-level sly_data_schema
-        that a deployment's llm_config.hocon defines alongside llm_config would never be merged into
-        the front man's function.sly_data_schema, so the /function endpoint of a temporary network
-        would not tell clients that it needs BYOK keys in sly_data.llm_config.
-
-        The "commondefs" block is removed from the resolved spec because the chain has consumed it:
-        the commondefs filters resolve one level of substitution per pass and never strip the block
-        themselves, so a spec that kept it would come out different on every pass.  Without it the
-        remaining filters are idempotent, which is what lets the S3/local readers safely run the
-        chain again on a spec written by this method.
-
-        :param reservations_dict: A mapping of Reservation -> agent network spec as deployed
-        :return: A new mapping with the same Reservation keys whose values are the fully resolved
-                 agent network specs.  Every value is a copy: the caller's dictionaries are never
-                 returned or mutated, so a base-storage writer that injects metadata into what it
-                 is given (S3ReservationsWriter does) cannot reach them either.
-        """
-        filter_chain: ConfigFilter = NetworkConfigFilterChain()
-        filtered: Dict[Reservation, Dict[str, Any]] = {}
-        for reservation, agent_spec in reservations_dict.items():
-            resolved: Dict[str, Any] = filter_chain.filter_config(agent_spec)
-            if resolved is agent_spec:
-                # The chain only copies when there are tools to work on; for anything else it
-                # hands back the caller's own dict.  Copy it ourselves so that neither the
-                # commondefs removal below nor a metadata-injecting writer touches the caller's object.
-                resolved = deepcopy(agent_spec)
-            if isinstance(resolved, dict):
-                resolved.pop("commondefs", None)
-            filtered[reservation] = resolved
-        return filtered
-
     async def add_reservations(self, reservations_dict: Dict[Reservation, Dict[str, Any]],
                                source: str = None):
         """
@@ -186,13 +142,20 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             # Nothing to do
             return
 
-        # Resolve every spec through the standard filter chain *before* anything is stored.
+        # Resolve every spec *before* anything is stored.  See ResolvedNetworkConfigFilter for
+        # why a reservation spec needs this at all (top-level defaults such as the BYOK
+        # sly_data_schema never reach its agents otherwise).
         # Other instances hydrate temporary networks from the base storage (S3, local files, ...),
         # not from this instance's memory, so persisting the resolved spec is what makes their
-        # read-side filter pass a no-op and has every instance serve the same network.
+        # read-side pass of the same filter a no-op and has every instance serve the same network.
         # The same resolved dictionaries are then used for the in-memory AgentNetworks below,
         # so any metadata a writer adds to them stays consistent with what is served here.
-        use_reservations: Dict[Reservation, Dict[str, Any]] = self.filter_reservations(reservations_dict)
+        # The filter always returns a copy, so the caller's dictionaries are neither stored
+        # nor mutated, and a metadata-injecting writer (S3ReservationsWriter) cannot reach them.
+        spec_filter: ConfigFilter = ResolvedNetworkConfigFilter()
+        use_reservations: Dict[Reservation, Dict[str, Any]] = {}
+        for reservation, agent_spec in reservations_dict.items():
+            use_reservations[reservation] = spec_filter.filter_config(agent_spec)
 
         if self.base_storage is not None:
             # If we have a source storage, then we need to add these reservations there first:

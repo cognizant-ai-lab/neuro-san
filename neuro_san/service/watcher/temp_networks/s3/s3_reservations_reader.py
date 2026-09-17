@@ -31,7 +31,7 @@ from botocore.exceptions import ClientError
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 
 from neuro_san.interfaces.reservation import Reservation
-from neuro_san.internals.graph.filters.network_config_filter_chain import NetworkConfigFilterChain
+from neuro_san.internals.graph.filters.resolved_network_config_filter import ResolvedNetworkConfigFilter
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
 from neuro_san.service.watcher.temp_networks.s3.aws_sync_client_worker import AwsSyncClientWorker
@@ -123,20 +123,19 @@ class S3ReservationsReader:
             # Reconstruct the AgentNetwork object using the agent spec dictionary
             # and reservation ID - which is our agent name in this design.
             #
-            # ExpiringAgentNetworkStorage.filter_reservations() resolves specs through the
-            # filter chain (and strips the consumed commondefs) before they are written, so
-            # for objects it wrote this second pass is a no-op.  It still matters for objects
-            # written by instances predating that behavior (rolling upgrades) or by other
-            # writers, which would otherwise be served without their top-level defaults
-            # applied (e.g. the front man's sly_data_schema).
+            # ExpiringAgentNetworkStorage runs specs through ResolvedNetworkConfigFilter before
+            # they are written, so for objects it wrote this second pass is a no-op.  It still
+            # matters for objects written by instances predating that behavior (rolling
+            # upgrades) or by other writers, which would otherwise be served without their
+            # top-level defaults applied (e.g. the front man's sly_data_schema).
             #
             # Those foreign objects never went through the reservationist's validators, so
-            # the chain (or AgentNetwork itself) can raise on a malformed shape.  Treat that
+            # the filter (or AgentNetwork itself) can raise on a malformed shape.  Treat that
             # like any other unreadable object - log it and report the reservation as absent -
             # rather than letting the exception escape onto the request path.  This mirrors
             # LocalReservationsStorage.get_one_reservation().
             try:
-                resolved_spec: Dict[str, Any] = NetworkConfigFilterChain().filter_config(agent_spec)
+                resolved_spec: Dict[str, Any] = ResolvedNetworkConfigFilter().filter_config(agent_spec)
                 agent_network = AgentNetwork(resolved_spec, reservation.get_reservation_id())
             except Exception as exception:  # pylint: disable=broad-exception-caught
                 sensitive_logger = SensitiveLogger(self.logger)

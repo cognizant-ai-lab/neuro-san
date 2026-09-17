@@ -58,7 +58,7 @@ from typing import Tuple
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 
 from neuro_san.interfaces.reservation import Reservation
-from neuro_san.internals.graph.filters.network_config_filter_chain import NetworkConfigFilterChain
+from neuro_san.internals.graph.filters.resolved_network_config_filter import ResolvedNetworkConfigFilter
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.abstract_reservations_storage import AbstractReservationsStorage
 from neuro_san.internals.reservations.reservation_dictionary_converter import ReservationDictionaryConverter
@@ -251,13 +251,13 @@ class LocalReservationsStorage(AbstractReservationsStorage):
             if time.time() > reservation.get_expiration_time_in_seconds():
                 self.logger.debug("%s: reservation %s is expired", self._name, reservation_id)
                 return None, None
-            # Specs written through ExpiringAgentNetworkStorage.filter_reservations() are already
-            # resolved with their commondefs stripped, so for those this second pass is a no-op;
-            # it only changes files written by older instances or by other tooling.  See
-            # filter_reservations() for why an unresolved spec is a problem.  Any exception the
-            # chain raises on a malformed foreign spec lands in the broad except below and is
-            # reported as "not present", like every other reconstruction failure.
-            resolved_spec: Dict[str, Any] = NetworkConfigFilterChain().filter_config(agent_spec)
+            # Specs written through ExpiringAgentNetworkStorage have already been through
+            # ResolvedNetworkConfigFilter, so for those this second pass is a no-op; it only
+            # changes files written by older instances or by other tooling.  See that filter
+            # for why an unresolved spec is a problem.  Any exception the filter raises on a
+            # malformed foreign spec lands in the broad except below and is reported as
+            # "not present", like every other reconstruction failure.
+            resolved_spec: Dict[str, Any] = ResolvedNetworkConfigFilter().filter_config(agent_spec)
             agent_network = AgentNetwork(resolved_spec, reservation.get_reservation_id())
         except Exception as exc:  # pylint: disable=broad-exception-caught
             # Any shape error during reconstruction -- treat as "not present"

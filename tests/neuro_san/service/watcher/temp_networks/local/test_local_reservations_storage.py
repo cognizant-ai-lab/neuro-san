@@ -41,14 +41,14 @@ class TestLocalReservationsStorage(IsolatedAsyncioTestCase):
     which predate the one-test-module-per-class convention. New tests for this class
     belong here.
 
-    The read path resolves each stored agent spec through NetworkConfigFilterChain
+    The read path resolves each stored agent spec through ResolvedNetworkConfigFilter
     before building the AgentNetwork.  ExpiringAgentNetworkStorage already resolves
     specs before writing them, but a file written directly (by an older server instance
     during a rolling upgrade, or by other tooling) may still hold a raw spec, and
     get_one_reservation() must hand back the same resolved network either way.
     """
 
-    async def test_get_one_reservation_resolves_raw_spec(self):
+    async def test_get_one_reservation_resolves_raw_spec(self) -> None:
         """
         A raw spec written straight to disk comes back with the global sly_data_schema
         merged into the front man, while the file itself is left exactly as written.
@@ -84,3 +84,27 @@ class TestLocalReservationsStorage(IsolatedAsyncioTestCase):
             front_man_spec: Dict[str, Any] = ByokAgentSpecBuilder.front_man_spec(got_network)
             self.assertEqual(["llm_config"], front_man_spec["function"]["sly_data_schema"]["required"])
             self.assertIn("fallbacks", front_man_spec["llm_config"])
+
+    async def test_get_one_reservation_strips_legacy_commondefs(self) -> None:
+        """
+        A raw spec on disk that still carries a commondefs block (written by an older
+        instance) has the substitution applied and the block dropped when read, exactly
+        as the write side does now, so every instance serves the same network.
+        """
+        with tempfile.TemporaryDirectory() as base_path:
+            storage: LocalReservationsStorage = LocalReservationsStorage(base_path=base_path)
+            storage.start()
+            reservation: AgentReservation = LocalReservationsTestHelpers.make_reservation(prefix="legacy",
+                                                                                          lifetime_s=3600.0)
+            reservation_id: str = reservation.get_reservation_id()
+            agent_spec: Dict[str, Any] = ByokAgentSpecBuilder.make_spec(reservation_id)
+            agent_spec["commondefs"] = {"replacement_strings": {"greet": "hello"}}
+            agent_spec["tools"][0]["instructions"] = "{greet}"
+            await storage.add_reservations({reservation: agent_spec}, source="unit-test")
+
+            got_network: Optional[AgentNetwork]
+            _, got_network = storage.get_one_reservation(reservation_id)
+
+            self.assertIsInstance(got_network, AgentNetwork)
+            self.assertEqual("hello", ByokAgentSpecBuilder.front_man_spec(got_network)["instructions"])
+            self.assertNotIn("commondefs", got_network.get_config())

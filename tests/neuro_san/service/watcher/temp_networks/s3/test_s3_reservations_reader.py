@@ -35,12 +35,12 @@ class TestS3ReservationsReader(S3ReservationsStorageTestBase):
     Unit tests for S3ReservationsReader, reached through the reader that
     S3ReservationsStorageTestBase wires to an in-memory fake S3 client.
 
-    The read path resolves each stored agent spec through NetworkConfigFilterChain
+    The read path resolves each stored agent spec through ResolvedNetworkConfigFilter
     before building the AgentNetwork.  ExpiringAgentNetworkStorage already resolves
     specs before writing them, so in steady state that is a no-op; it matters for
     objects written by older instances during a rolling upgrade or by other tooling.
     Such objects never went through the reservationist's validators, so the reader
-    must also treat a spec that makes the chain raise as "not present" rather than
+    must also treat a spec that makes the filter raise as "not present" rather than
     let the exception escape onto the request path, matching LocalReservationsStorage.
     """
 
@@ -70,7 +70,7 @@ class TestS3ReservationsReader(S3ReservationsStorageTestBase):
         self.fake_s3.objects[key] = json.dumps(agent_spec).encode("utf-8")
         return reservation_id
 
-    def test_get_one_reservation_resolves_raw_spec(self):
+    def test_get_one_reservation_resolves_raw_spec(self) -> None:
         """
         Reading a raw spec yields an AgentNetwork whose front man carries the merged
         global sly_data_schema and the network-level llm_config.
@@ -89,7 +89,27 @@ class TestS3ReservationsReader(S3ReservationsStorageTestBase):
                       front_man_spec["function"]["sly_data_schema"]["properties"]["llm_config"]["properties"])
         self.assertIn("fallbacks", front_man_spec["llm_config"])
 
-    def test_get_one_reservation_reports_chain_error_as_absent(self):
+    def test_get_one_reservation_strips_legacy_commondefs(self) -> None:
+        """
+        A raw spec that still carries a commondefs block (older instances stored specs as
+        deployed) has the substitution applied and the block dropped, exactly as the write
+        side does now, so every instance serves the same network.
+        """
+        reservation_id: str = self._put_raw_byok_reservation(
+            "byok-legacy-commondefs", {"commondefs": {"replacement_strings": {"greet": "hello"}}})
+        spec_key: str = S3Util.get_obj_key_for_reservation(self.PREFIX, reservation_id)
+        stored: Dict[str, Any] = json.loads(self.fake_s3.objects[spec_key])
+        stored["tools"][0]["instructions"] = "{greet}"
+        self.fake_s3.objects[spec_key] = json.dumps(stored).encode("utf-8")
+
+        agent_network: Optional[AgentNetwork]
+        _, agent_network = self.storage.reader.get_one_reservation(reservation_id)
+
+        self.assertIsInstance(agent_network, AgentNetwork)
+        self.assertEqual("hello", ByokAgentSpecBuilder.front_man_spec(agent_network)["instructions"])
+        self.assertNotIn("commondefs", agent_network.get_config())
+
+    def test_get_one_reservation_reports_chain_error_as_absent(self) -> None:
         """
         A commondefs block that is not a dictionary makes the commondefs filter raise;
         the reader must swallow that and report the reservation as absent.
@@ -101,7 +121,7 @@ class TestS3ReservationsReader(S3ReservationsStorageTestBase):
 
         self.assertEqual((None, None), result)
 
-    def test_get_one_reservation_reports_defaults_merge_error_as_absent(self):
+    def test_get_one_reservation_reports_defaults_merge_error_as_absent(self) -> None:
         """
         A global sly_data_schema whose "required" is a string instead of a list makes
         DefaultsConfigFilter's union raise; the same policy applies.

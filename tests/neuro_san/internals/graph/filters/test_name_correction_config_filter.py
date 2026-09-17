@@ -49,7 +49,7 @@ class TestNameCorrectionConfigFilter(TestCase):
             ]
         }
 
-    def test_corrects_slash_in_name_and_in_references(self):
+    def test_corrects_slash_in_name_and_in_references(self) -> None:
         """
         A helper named "help/er" is renamed to "help_er" in its own "name" field, and the
         front man's reference to it is rewritten to match, with no stray key left behind.
@@ -63,7 +63,7 @@ class TestNameCorrectionConfigFilter(TestCase):
         self.assertNotIn("help/er", helper)
         self.assertEqual(["help_er"], filtered["tools"][0]["tools"])
 
-    def test_valid_names_are_left_untouched(self):
+    def test_valid_names_are_left_untouched(self) -> None:
         """
         A spec whose names are already valid comes back value-equal to the input.
         """
@@ -74,7 +74,7 @@ class TestNameCorrectionConfigFilter(TestCase):
 
         self.assertEqual(expected, filtered)
 
-    def test_non_string_references_are_left_alone(self):
+    def test_non_string_references_are_left_alone(self) -> None:
         """
         Dictionary entries in a tools list (e.g. MCP server definitions) are not names and
         must pass through unchanged while string references are still corrected.
@@ -86,7 +86,7 @@ class TestNameCorrectionConfigFilter(TestCase):
 
         self.assertEqual(["help_er", mcp_tool], filtered["tools"][0]["tools"])
 
-    def test_uncorrectable_name_is_logged_and_left_as_is(self):
+    def test_uncorrectable_name_is_logged_and_left_as_is(self) -> None:
         """
         A tool without a name cannot be corrected: the filter logs an error and leaves the
         spec unchanged rather than raising.
