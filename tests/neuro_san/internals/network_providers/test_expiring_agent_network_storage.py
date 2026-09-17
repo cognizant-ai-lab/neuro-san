@@ -14,15 +14,24 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from typing import Any
+from typing import Dict
+
+from copy import deepcopy
 import time
 from unittest import IsolatedAsyncioTestCase
 
 from neuro_san.interfaces.reservation import Reservation
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.network_providers.expiring_agent_network_storage \
     import ExpiringAgentNetworkStorage
 
+from tests.neuro_san.internals.network_providers.byok_agent_spec_builder \
+    import ByokAgentSpecBuilder
 from tests.neuro_san.internals.network_providers.recording_listener \
     import RecordingListener
+from tests.neuro_san.internals.network_providers.recording_reservations_storage \
+    import RecordingReservationsStorage
 
 
 # pylint: disable=too-many-public-methods
@@ -394,3 +403,78 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
             set(storage.agents_table.keys()),
             set(storage.access_times.keys())
         )
+
+    async def test_add_reservations_merges_global_sly_data_schema_into_front_man(self):
+        """
+        A reservation spec never passes through AgentNetworkRestorer, so add_reservations
+        must resolve it itself (ResolvedNetworkConfigFilter).  The visible effect is that the
+        deployment-wide sly_data_schema ends up on the front man's function, which is
+        what the /function endpoint serves to clients deciding whether to send BYOK keys.
+        """
+        storage: ExpiringAgentNetworkStorage = self._make_storage()
+        r_a: Reservation = self._make_reservation("agent_a")
+        await storage.add_reservations({r_a: ByokAgentSpecBuilder.make_spec("agent_a")}, source="test")
+
+        agent_network: AgentNetwork = storage.agents_table["agent_a"]
+        front_man_spec: Dict[str, Any] = ByokAgentSpecBuilder.front_man_spec(agent_network)
+        sly_data_schema: Dict[str, Any] = front_man_spec["function"]["sly_data_schema"]
+        self.assertEqual(["llm_config"], sly_data_schema["required"])
+        self.assertIn("openai_api_key", sly_data_schema["properties"]["llm_config"]["properties"])
+
+        # The other top-level defaults are applied as well: llm_config lands on every agent...
+        self.assertIn("fallbacks", front_man_spec["llm_config"])
+        helper_spec: Dict[str, Any] = agent_network.get_agent_tool_spec("helper")
+        self.assertIn("fallbacks", helper_spec["llm_config"])
+        # ... and so does every other top-level default the runtime reads per agent.
+        self.assertEqual(600, front_man_spec["max_execution_seconds"])
+        self.assertEqual(600, helper_spec["max_execution_seconds"])
+        # ... but only the front man advertises the sly_data_schema.
+        self.assertNotIn("sly_data_schema", helper_spec["function"])
+
+    async def test_add_reservations_writes_resolved_spec_to_base_storage(self):
+        """
+        The base storage is what other server instances read from, so the spec it receives
+        must already be resolved: that is what makes their read-side filter pass a no-op and
+        has every instance serve the same network.  The in-memory AgentNetwork must also be
+        built from the very dictionary handed to the base storage, so metadata a writer adds
+        to it (e.g. the S3 writer's reservation block) stays consistent with what is served here.
+        """
+        storage: ExpiringAgentNetworkStorage = self._make_storage()
+        base_storage: RecordingReservationsStorage = RecordingReservationsStorage()
+        storage.set_base_storage(base_storage)
+        r_a: Reservation = self._make_reservation("agent_a")
+        await storage.add_reservations({r_a: ByokAgentSpecBuilder.make_spec("agent_a")}, source="test")
+
+        self.assertEqual(1, len(base_storage.received))
+        self.assertEqual(["test"], base_storage.sources)
+        written: Dict[Reservation, Dict[str, Any]] = base_storage.received[0]
+        self.assertEqual([r_a], list(written.keys()))
+        written_spec: Dict[str, Any] = written[r_a]
+        self.assertEqual(["llm_config"], written_spec["tools"][0]["function"]["sly_data_schema"]["required"])
+        self.assertIs(written_spec, storage.agents_table["agent_a"].get_config())
+
+    async def test_add_reservations_does_not_mutate_caller_spec(self):
+        """
+        Filtering must not leak into the caller's dictionary: reservationists and coded tools
+        may keep using the spec they deployed.  The spec deliberately exercises every filter
+        that writes into a spec (defaults, commondefs substitution and stripping, and the
+        in-place name correction of a "/" agent name) as well as a metadata-injecting base
+        storage writer, and the caller's dictionary must still come out untouched.
+        """
+        storage: ExpiringAgentNetworkStorage = self._make_storage()
+        storage.set_base_storage(RecordingReservationsStorage(inject_metadata=True))
+        spec: Dict[str, Any] = ByokAgentSpecBuilder.make_spec("agent_a")
+        spec["commondefs"] = {"replacement_strings": {"greet": "hello"}}
+        spec["tools"][0]["tools"] = ["help/er"]
+        spec["tools"][1]["name"] = "help/er"
+        expected: Dict[str, Any] = deepcopy(spec)
+        r_a: Reservation = self._make_reservation("agent_a")
+        await storage.add_reservations({r_a: spec}, source="test")
+
+        # The whole dictionary, not just the keys the filters are known to touch.
+        self.assertEqual(expected, spec)
+        # ... while the stored network did get the correction and the metadata.
+        stored: Dict[str, Any] = storage.agents_table["agent_a"].get_config()
+        self.assertEqual("help_er", stored["tools"][1]["name"])
+        self.assertEqual(["help_er"], stored["tools"][0]["tools"])
+        self.assertIn("reservation", stored["metadata"])

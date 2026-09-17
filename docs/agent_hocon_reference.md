@@ -522,6 +522,8 @@ While this is intended only for use with a front-man agent only, it can sometime
 have partial definitions for sly_data_schema that pertain to all agent networks in the manifest
 defined globally with this key while network-specific definitions can be defined with the `sly_data_schema`
 key within the front-man tool.
+The same merge is applied to networks deployed at runtime through the Reservations API
+(temporary networks), so a global definition reaches their front man as well.
 
 For more details, see the [sly_data_schema](#sly_data_schema-1) key below.
 

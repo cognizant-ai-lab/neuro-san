@@ -67,3 +67,42 @@ class AsyncAgentSession(AgentSessionConstants):
             are produced until the system decides there are no more messages to be sent.
         """
         raise NotImplementedError
+
+    def close(self):
+        """
+        Close the session, releasing any underlying client connection.
+
+        For remote sessions this drops the client connection to the service and
+        unblocks an in-flight streaming_chat() on the client side. It does NOT
+        directly cancel the server-side work: the neuro-san service ends the
+        corresponding request only when it next detects the dropped connection --
+        that is, on its next result or heartbeat flush. So termination is prompt
+        while the service is streaming results (or a keep-alive heartbeat is
+        enabled), but a request that produces no output, with heartbeat and
+        request-timeout disabled, may keep running server-side until it does.
+        In short: close() guarantees release of the client connection, not
+        immediate server-side termination.
+
+        This is a synchronous method (no await needed) so it can be invoked from
+        a supervising sync context or another thread; implementations that own an
+        event-loop-bound client schedule the actual close on that loop.
+        Safe to call more than once.
+
+        A remote session is single-use with respect to close(): once closed it
+        cannot be reused -- subsequent streaming_chat(), function() and
+        connectivity() calls raise AgentSessionClosedError (see is_closed()).
+
+        The default implementation is a no-op: sessions that hold no external
+        connection (e.g. in-process direct sessions) have nothing to close and
+        are never considered closed.
+        """
+        return
+
+    def is_closed(self) -> bool:
+        """
+        :return: True if close() has been called on this session, in which case
+                 further streaming_chat()/function()/connectivity() calls raise
+                 AgentSessionClosedError. The default is False for sessions that
+                 hold no external connection and therefore cannot be closed.
+        """
+        return False

@@ -16,7 +16,6 @@
 """
 Supervisor for managing fresh worker processes in multi-instance HTTP server mode.
 """
-from contextlib import ExitStack
 from typing import Any
 from typing import List
 from typing import Optional
@@ -28,6 +27,7 @@ import sys
 import time
 
 from argparse import ArgumentParser
+from threading import Thread
 
 from neuro_san.service.http.config.http_server_config import DEFAULT_HTTP_SERVER_INSTANCES
 
@@ -55,6 +55,11 @@ class WorkerSupervisor:
     WORKER_ENV: str = "NEURO_SAN_WORKER"
     WORKER_ID_ENV: str = "NEURO_SAN_WORKER_ID"
     NUM_WORKERS_ENV: str = "NEURO_SAN_NUM_WORKERS"
+    SUPERVISOR_PID_ENV: str = "NEURO_SAN_SUPERVISOR_PID"
+
+    active_workers: List[subprocess.Popen] = []
+    shutdown_requested: bool = False
+    received_signal: Optional[int] = None
 
     @staticmethod
     def is_worker() -> bool:
@@ -86,7 +91,15 @@ class WorkerSupervisor:
         except ValueError:
             return 1
 
-    active_workers: List[subprocess.Popen] = []
+    @classmethod
+    def monitor_supervisor(cls):
+        """
+        Stop a worker if its supervisor exits without terminating it.
+        """
+        supervisor_pid = int(os.environ[cls.SUPERVISOR_PID_ENV])
+        while os.getppid() == supervisor_pid:
+            time.sleep(0.1)
+        os._exit(1)  # pylint: disable=protected-access
 
     @classmethod
     def stop_workers(cls, _signal_number: Optional[int] = None, _frame: Optional[Any] = None):
@@ -96,12 +109,17 @@ class WorkerSupervisor:
         :param _signal_number: Signal number passed by signal handler (optional).
         :param _frame: Stack frame passed by signal handler (optional).
         """
+        cls.shutdown_requested = True
+        cls.received_signal = _signal_number
         for worker in cls.active_workers:
             if worker.poll() is None:
-                worker.terminate()
+                try:
+                    worker.terminate()
+                except ProcessLookupError:
+                    pass
 
     @classmethod
-    def run(cls) -> int:
+    def run(cls) -> int:  # pylint: disable=too-many-branches
         """
         Start fresh worker processes instead of forking this process.
 
@@ -109,6 +127,7 @@ class WorkerSupervisor:
         """
         # A worker must continue into ServerMainLoop instead of recursively supervising.
         if cls.is_worker():
+            Thread(target=cls.monitor_supervisor, daemon=True).start()
             return -1
 
         # Parse only the instance argument here. ServerMainLoop remains
@@ -145,35 +164,41 @@ class WorkerSupervisor:
         else:
             worker_command = [sys.executable, *sys.argv]
 
-        # ExitStack closes every Popen resource even when startup, signal
-        # handling, or worker monitoring raises an exception.
+        cls.active_workers = []
+        cls.shutdown_requested = False
+        cls.received_signal = None
+        signal.signal(signal.SIGINT, cls.stop_workers)
+        signal.signal(signal.SIGTERM, cls.stop_workers)
+
         try:
-            with ExitStack() as stack:
-                cls.active_workers = []
-                for i in range(worker_count):
-                    worker_env = os.environ.copy()
-                    worker_env[cls.WORKER_ENV] = "1"
-                    worker_env[cls.WORKER_ID_ENV] = str(i)
-                    worker_env[cls.NUM_WORKERS_ENV] = str(worker_count)
-                    cls.active_workers.append(
-                        stack.enter_context(subprocess.Popen(worker_command, env=worker_env))
-                    )
-
-                signal.signal(signal.SIGINT, cls.stop_workers)
-                signal.signal(signal.SIGTERM, cls.stop_workers)
-
-                # Keep supervising until any worker exits. A worker failure should
-                # stop its peers and become the supervisor's process exit status.
-                while not any(worker.poll() is not None for worker in cls.active_workers):
-                    time.sleep(0.1)
-
-                exit_code = next(
-                    (worker.returncode for worker in cls.active_workers if worker.returncode not in (None, 0)),
-                    0,
+            for i in range(worker_count):
+                if cls.shutdown_requested:
+                    break
+                worker_env = os.environ.copy()
+                worker_env[cls.WORKER_ENV] = "1"
+                worker_env[cls.WORKER_ID_ENV] = str(i)
+                worker_env[cls.NUM_WORKERS_ENV] = str(worker_count)
+                worker_env[cls.SUPERVISOR_PID_ENV] = str(os.getpid())
+                cls.active_workers.append(
+                    # A Popen context manager only waits on exit; the finally block below terminates first.
+                    # pylint: disable-next=consider-using-with
+                    subprocess.Popen(worker_command, env=worker_env, start_new_session=True)
                 )
-                cls.stop_workers()
-                for worker in cls.active_workers:
-                    worker.wait()
-                return exit_code
+
+            # Keep supervising until any worker exits. A worker failure should
+            # stop its peers and become the supervisor's process exit status.
+            while not cls.shutdown_requested and \
+                    not any(worker.poll() is not None for worker in cls.active_workers):
+                time.sleep(0.1)
+
+            if cls.received_signal is not None:
+                return 128 + cls.received_signal
+            return next(
+                (worker.returncode for worker in cls.active_workers if worker.returncode not in (None, 0)),
+                0,
+            )
         finally:
+            cls.stop_workers()
+            for worker in cls.active_workers:
+                worker.wait()
             cls.active_workers = []
