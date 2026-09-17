@@ -267,10 +267,24 @@ class DataDrivenTestsDriver:
                     use_direct=use_direct,
                     metadata=metadata,
                     connect_timeout_in_seconds=timeout_in_seconds)
-            # Register the session so a timeout on the main thread can close it
-            # (dropping the connection) even while this worker thread is blocked
-            # reading the streaming response.
-            canceller.register(session)
+
+            if connection.lower() == "mcp":
+                # MCP is a request/response transport with no abortable in-flight
+                # connection (McpServiceAgentSession.close() is a no-op). A timed-out
+                # MCP test cannot drop the connection, so the server-side tool runs
+                # to completion -- cancellation-on-timeout is unsupported for MCP.
+                # Make that explicit instead of registering an un-cancellable session
+                # and pretending cancel() drops its connection.
+                asserts.assertIsNone(
+                    timeout_in_seconds,
+                    "connection 'mcp' does not support cancellation on timeout: a "
+                    "timed-out MCP request runs the server-side tool to completion. "
+                    "Remove timeout_in_seconds or use a cancellable connection.")
+            else:
+                # Register the session so a timeout on the main thread can close it
+                # (dropping the connection) even while this worker thread is blocked
+                # reading the streaming response.
+                canceller.register(session)
             chat_context: Dict[str, Any] = None
             # Track sly_data across interactions to allow accumulation and persistence
             carried_sly_data: Dict[str, Any] = None
