@@ -31,10 +31,10 @@ class SessionCanceller:
 
     A test executes on a worker thread which creates one or more AgentSessions
     and drives their streaming_chat(). When the driver's main thread decides the
-    test has timed out, it calls cancel() on that test's SessionCanceller, which
-    closes every session registered so far -- dropping the client connection so
-    the neuro-san service observes the disconnect and terminates the
-    corresponding server-side request instead of running it to completion.
+    test has timed out, it calls cancel() on that test's SessionCanceller, which closes
+    every session registered so far. The service may detect the dropped connection on
+    a subsequent result or heartbeat and terminate the server-side request; a silent
+    stream may continue running until it produces output.
 
     There is one SessionCanceller per test (per future), but a test can open more
     than one session -- one per entry in its "connections" list -- so register()
