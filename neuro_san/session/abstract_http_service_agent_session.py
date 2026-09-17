@@ -149,3 +149,12 @@ class AbstractHttpServiceAgentSession(AgentSessionConstants):
             policy/database to be sure the your user has the correct permissions for the network.
         """
         return message
+
+    @staticmethod
+    def decode_utf8(instring: bytearray) -> str:
+        """
+        :param instring: The bytes to decode
+        :return: The decoded string
+        """
+        decoded: str = instring.decode("utf-8")
+        return decoded

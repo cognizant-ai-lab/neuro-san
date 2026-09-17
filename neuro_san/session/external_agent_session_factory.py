@@ -110,9 +110,9 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
             return None
 
         # Create the session.
-        host = agent_location.get("host")
-        port = agent_location.get("port")
-        agent_name = agent_location.get("agent_name")
+        host: str = agent_location.get("host")
+        port: str = agent_location.get("port")
+        agent_name: str = agent_location.get("agent_name")
 
         # Note: It's possible we might want some filtering/translation of
         #       metadata keys not unlike what we are doing for sly_data.
