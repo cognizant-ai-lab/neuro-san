@@ -187,10 +187,9 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             return
 
         # Resolve every spec through the standard filter chain *before* anything is stored.
-        # Doing this ahead of the base storage write matters for multi-instance deployments:
-        # other instances hydrate temporary networks from the base storage (S3, local files, ...),
-        # so the persisted spec has to be the resolved one or those instances would serve a
-        # network that never got its defaults (e.g. the front man's sly_data_schema).
+        # Other instances hydrate temporary networks from the base storage (S3, local files, ...),
+        # not from this instance's memory, so persisting the resolved spec is what makes their
+        # read-side filter pass a no-op and has every instance serve the same network.
         # The same resolved dictionaries are then used for the in-memory AgentNetworks below,
         # so any metadata a writer adds to them stays consistent with what is served here.
         use_reservations: Dict[Reservation, Dict[str, Any]] = self.filter_reservations(reservations_dict)

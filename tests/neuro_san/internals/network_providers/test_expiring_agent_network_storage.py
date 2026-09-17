@@ -457,9 +457,9 @@ class TestExpiringAgentNetworkStorage(IsolatedAsyncioTestCase):
 
     async def test_add_reservations_writes_resolved_spec_to_base_storage(self):
         """
-        The base storage is the source of truth for other server instances, so the spec it
-        receives must already be resolved; filtering only the in-memory copy would leave
-        every other instance serving the raw spec.  The in-memory AgentNetwork must also be
+        The base storage is what other server instances read from, so the spec it receives
+        must already be resolved: that is what makes their read-side filter pass a no-op and
+        has every instance serve the same network.  The in-memory AgentNetwork must also be
         built from the very dictionary handed to the base storage, so metadata a writer adds
         to it (e.g. the S3 writer's reservation block) stays consistent with what is served here.
         """
