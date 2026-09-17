@@ -92,6 +92,20 @@ class TestSessionCanceller:
         canceller: SessionCanceller = SessionCanceller()
         canceller.cancel()
 
+    def test_cancel_is_idempotent(self):
+        """
+        cancel() called more than once (the driver may cancel on timeout and again
+        on shutdown for a still-running test) closes each session only once.
+        """
+        canceller: SessionCanceller = SessionCanceller()
+        session: CountingSession = CountingSession()
+        canceller.register(session)
+
+        canceller.cancel()
+        canceller.cancel()
+
+        assert session.get_close_count() == 1
+
     def test_concurrent_register_and_cancel_closes_each_once(self):
         """
         Thread-safety invariant: with many worker threads calling register() while

@@ -44,6 +44,7 @@ from neuro_san.client.agent_session_factory import AgentSessionFactory
 from neuro_san.client.streaming_input_processor import StreamingInputProcessor
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
+from neuro_san.session.abstract_http_service_agent_session import AbstractHttpServiceAgentSession
 from neuro_san.session.direct_agent_session import DirectAgentSession
 from neuro_san.test.driver.session_canceller import SessionCanceller
 from neuro_san.test.driver.timed_assert_capture import TimedAssertCapture
@@ -96,15 +97,15 @@ class DataDrivenTestsDriver:
 
         # Loop through each test execution in parallel
         executor: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=len(tests))
+        # Map each future to a canceller that can drop its client connection(s) if the
+        # test times out or we exit early. Declared out here so the finally can reach it.
+        future_cancellers: Dict[Future, SessionCanceller] = {}
         try:
             futures: List[Future] = []
             iteration_index: int = 0
             future_timeouts: Dict[Future, Optional[float]] = {}
             # Map each future to its corresponding iteration index for logging and reporting.
             future_indices: Dict[Future, Optional[int]] = {}
-            # Map each future to a canceller that can drop its client connection(s)
-            # if the test times out, so the neuro-san service terminates the request.
-            future_cancellers: Dict[Future, SessionCanceller] = {}
 
             for test_case in tests:
                 # Don't include an iteration index if there is only one test to do.
@@ -173,11 +174,29 @@ class DataDrivenTestsDriver:
                     # Fast path: we have enough successful tests, so we can stop waiting for more.
                     break
         finally:
+            # Reaching num_need_success breaks the loop above with other tests possibly
+            # still running. shutdown(cancel_futures=True) only drops futures that never
+            # started; already-running futures (and their server-side requests) keep
+            # going, so drop their connections here too.
+            self.cancel_running_futures(future_cancellers)
             # We are done with running tests, so we can shut down the executor and cancel any remaining futures.
             # Note: this is not a blocking call, but if some timed out tests are still running,
             # they will continue to run in the background. We are just not waiting for them anymore.
             executor.shutdown(wait=False, cancel_futures=True)
         return run_results
+
+    def cancel_running_futures(self, future_cancellers: Dict[Future, SessionCanceller]):
+        """
+        Cancel the sessions of any futures that are still running, dropping their
+        client connection(s) so the neuro-san service terminates the server-side work
+        instead of finishing results we no longer collect. cancel() and close() are
+        idempotent, so re-cancelling an already-timed-out future is harmless.
+
+        :param future_cancellers: Mapping of each Future to its SessionCanceller.
+        """
+        for fut, canceller in future_cancellers.items():
+            if not fut.done():
+                canceller.cancel()
 
     def get_new_capture(self, test_index: Optional[int] = None) -> TimedAssertCapture:
         """
@@ -268,19 +287,14 @@ class DataDrivenTestsDriver:
                     metadata=metadata,
                     connect_timeout_in_seconds=timeout_in_seconds)
 
-            if connection.lower() == "mcp":
-                # MCP is a request/response transport with no abortable in-flight
-                # connection (McpServiceAgentSession.close() is a no-op). A timed-out
-                # MCP test cannot drop the connection, so the server-side tool runs
-                # to completion -- cancellation-on-timeout is unsupported for MCP.
-                # Make that explicit instead of registering an un-cancellable session
-                # and pretending cancel() drops its connection.
-                asserts.assertIsNone(
-                    timeout_in_seconds,
-                    "connection 'mcp' does not support cancellation on timeout: a "
-                    "timed-out MCP request runs the server-side tool to completion. "
-                    "Remove timeout_in_seconds or use a cancellable connection.")
-            else:
+            # Only HTTP-based sessions (sync or async) have a close() that actually
+            # drops an in-flight connection, so only those can be cancelled on a
+            # timeout. Direct sessions run in-process and MCP is a request/response
+            # transport whose close() is a no-op, so registering them would be a false
+            # promise -- their server-side work runs to completion regardless. Leaving
+            # them unregistered keeps the timeout behavior honest (and, for MCP with a
+            # connect timeout, preserves the connect_timeout_in_seconds passed above).
+            if isinstance(session, AbstractHttpServiceAgentSession):
                 # Register the session so a timeout on the main thread can close it
                 # (dropping the connection) even while this worker thread is blocked
                 # reading the streaming response.

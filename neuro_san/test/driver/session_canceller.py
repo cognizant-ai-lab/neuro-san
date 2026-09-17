@@ -70,9 +70,13 @@ class SessionCanceller:
     def cancel(self):
         """
         Mark cancelled and close every registered session, dropping their
-        connections. Safe to call once from the main thread.
+        connections. Idempotent: the driver may call this once when a test times
+        out and again on shutdown for a test still running, so a second call is a
+        no-op and each session is closed only once.
         """
         with self._lock:
+            if self._cancelled:
+                return
             self._cancelled = True
             sessions: List[AgentSession] = list(self._sessions)
         for session in sessions:
