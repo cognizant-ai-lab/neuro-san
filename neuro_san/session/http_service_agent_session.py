@@ -23,18 +23,25 @@ from typing import Optional
 import json
 
 from threading import Lock
+from threading import Thread
 from contextlib import suppress
 
 import requests
 
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.session.abstract_http_service_agent_session import AbstractHttpServiceAgentSession
+from neuro_san.session.agent_session_closed_error import AgentSessionClosedError
 
 
 class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
     """
     Implementation of AgentSession that talks to an HTTP service.
     This is largely only used by command-line tests.
+
+    A session is single-use with respect to close(): after close() (typically
+    called from another thread to cancel an in-flight streaming_chat()) the
+    session is closed and any further streaming_chat()/function()/connectivity()
+    call raises AgentSessionClosedError.
     """
 
     def __init__(self, *args, **kwargs):
@@ -62,6 +69,7 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                     protobufs structure. Has the following keys:
                 "function" - the dictionary description of the function
         """
+        self._raise_if_closed()
         path: str = self.get_request_path("function")
         try:
             response = requests.get(path, json=request_dict, headers=self.get_headers(),
@@ -82,6 +90,7 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                                     each node in the agent network the service
                                     wants the client ot know about.
         """
+        self._raise_if_closed()
         path: str = self.get_request_path("connectivity")
         try:
             response = requests.get(path, json=request_dict, headers=self.get_headers(),
@@ -108,12 +117,13 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         separator: bytes = b"\n"
         max_chunk_size: int = 64 * 1024
         path: str = self.get_request_path("streaming_chat")
+        accumulator: bytearray = bytearray(b"")
+        index: int = 0
+        unicode_line: str = ""
 
-        # Abort before issuing the request if close() has already been called
-        # (e.g. the caller cancelled before first iterating this generator).
-        with self._stream_lock:
-            if self._closed:
-                return
+        # A closed session is single-use: fail loudly rather than yielding an
+        # empty stream that looks like "the agent returned no messages".
+        self._raise_if_closed()
 
         try:
             with requests.post(path, json=request_dict, headers=self.get_headers(),
@@ -126,7 +136,7 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                 # If the session was already closed, abort before consuming any stream.
                 with self._stream_lock:
                     if self._closed:
-                        return
+                        raise AgentSessionClosedError("HTTP agent session has been closed")
                     self._active_response = response
 
                 # Iterate over the content stream as it comes in.
@@ -145,11 +155,11 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                     accumulator.extend(data)
 
                     # Try to find our line separator
-                    index: int = accumulator.find(separator)
+                    index = accumulator.find(separator)
                     while index >= 0:
 
                         # Grab a single line
-                        unicode_line: str = accumulator[:index].decode("utf-8").strip()
+                        unicode_line = accumulator[:index].decode("utf-8").strip()
                         if unicode_line:  # Skip empty lines
                             # We have a line with something in it.
                             # Decode and yield as a dictionary
@@ -164,12 +174,18 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
 
                 # If there is anything left in the accumulator, yield it
                 if len(accumulator) > 0:
-                    unicode_line: str = accumulator.decode("utf-8").strip()
+                    unicode_line = accumulator.decode("utf-8").strip()
                     if unicode_line:
                         result_dict = json.loads(unicode_line)
                         yield result_dict
 
         except Exception as exc:  # pylint: disable=broad-exception-caught
+            if self.is_closed():
+                # The read was interrupted by a deliberate close() from another
+                # thread, not a real connectivity failure. Raise a dedicated error
+                # so callers can tell cancellation apart from a lost connection.
+                raise AgentSessionClosedError(
+                    "HTTP agent session was closed during streaming_chat()") from exc
             raise ValueError(self.help_message(path)) from exc
         finally:
             # The request is over (normally, by error, or because close() dropped
@@ -177,24 +193,33 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
             with self._stream_lock:
                 self._active_response = None
 
+    def is_closed(self) -> bool:
+        """:return: True if close() has been called on this session."""
+        with self._stream_lock:
+            return self._closed
+
+    def _raise_if_closed(self):
+        """Raise AgentSessionClosedError if this session has been closed."""
+        if self.is_closed():
+            raise AgentSessionClosedError("HTTP agent session has been closed")
+
     def close(self):
         """
-        Close this session by dropping any in-flight streaming connection.
+        Close this session, marking it closed and best-effort dropping any
+        in-flight streaming connection. Non-blocking and safe to call from a
+        different thread than the one iterating streaming_chat(), and safe to call
+        more than once. Returns immediately.
 
-        Marks the session closed and closes the currently-streaming response (if
-        any), releasing its socket and unblocking the read in streaming_chat() on
-        the client side. Safe to call from a different thread than the one
-        iterating streaming_chat(), and safe to call more than once.
-
-        Client-side scope: close() reliably drops the connection once response
-        headers have arrived (i.e. once streaming has begun). A request still
-        blocked on the very first header round-trip cannot be force-interrupted
-        through the synchronous `requests` library from another thread; that
-        window is bounded in practice because the neuro-san streaming service
-        flushes response headers immediately, before doing the agent work, so the
-        long-running wait is the post-header streaming read -- which close() does
-        interrupt. (The async client has no such window: it aborts the underlying
-        client session, cancelling even a pre-header request.)
+        Client-side scope (best-effort): the streaming response is closed on a
+        background daemon thread rather than the caller's thread, because closing
+        a `requests` streaming response while another thread is blocked reading it
+        can itself block. Closing the response reliably interrupts the reader
+        WHILE DATA IS FLOWING (results streaming, or a keep-alive heartbeat
+        enabled) -- the reader's next read then fails and streaming_chat() raises
+        AgentSessionClosedError. A read blocked on a fully silent stream (no
+        results and heartbeat disabled) may NOT be interrupted through the
+        synchronous `requests` library from another thread; such a stream is not
+        reliably cancellable here. (The async client has no such limitation.)
 
         Server-side scope: close() releases the client connection; it does NOT
         directly cancel the server-side work. The neuro-san service ends the
@@ -204,11 +229,20 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         with heartbeat and request-timeout disabled may keep running server-side
         until it does.
         """
+        response: Optional[requests.Response] = None
         with self._stream_lock:
             self._closed = True
-            response: Optional[requests.Response] = self._active_response
+            response = self._active_response
             self._active_response = None
         if response is not None:
-            with suppress(Exception):
-                # Best-effort: the connection may already be torn down.
-                response.close()
+            # Close off the caller's thread: closing a streaming response that
+            # another thread is blocked reading can block, and close() must never
+            # hang its caller.
+            Thread(target=self._close_response, args=(response,),
+                   name="HttpServiceAgentSession-close", daemon=True).start()
+
+    @staticmethod
+    def _close_response(response: requests.Response):
+        """Best-effort close of a streaming response; swallow any error."""
+        with suppress(Exception):
+            response.close()
