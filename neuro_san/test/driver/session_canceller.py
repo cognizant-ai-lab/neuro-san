@@ -35,6 +35,12 @@ class SessionCanceller:
     closes every session registered so far -- dropping the client connection so
     the neuro-san service observes the disconnect and terminates the
     corresponding server-side request instead of running it to completion.
+
+    There is one SessionCanceller per test (per future), but a test can open more
+    than one session -- one per entry in its "connections" list -- so register()
+    accumulates a list and cancel() closes them all. The list is also what makes
+    the cancel-before-register race safe: a session registered after cancel() has
+    fired is closed immediately (see register()) rather than lingering unclosed.
     """
 
     def __init__(self):
