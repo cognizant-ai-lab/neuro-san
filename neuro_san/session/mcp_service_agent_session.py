@@ -23,6 +23,7 @@ from typing import Generator
 import json
 
 import requests
+from requests import Response
 
 from leaf_common.time.timeout import Timeout
 
@@ -105,6 +106,7 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         headers["Content-Type"] = "application/json"
 
         path: str = self.get_request_path("initialize")
+        response: Response = None
         response_dict: Dict[str, Any] = None
         try:
             response = requests.post(path, json=handshake_dict, headers=headers, timeout=self.timeout_in_seconds)
@@ -154,6 +156,7 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         headers[self.MCP_PROTOCOL_VERSION] = self.protocol_version
 
         path: str = self.get_request_path("tools/list")
+        response: Response = None
         response_dict: Dict[str, Any] = None
         try:
             response = requests.post(path, json=use_request_dict, headers=headers, timeout=self.timeout_in_seconds)
@@ -200,7 +203,7 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
             are produced until the system decides there are no more messages to be sent.
         """
         # Pack the chat request dictionary into an MCP method call format:
-        mcp_payload = {
+        mcp_payload: Dict[str, Any] = {
             "jsonrpc": "2.0",
             "id": 1,
             "method": "tools/call",
@@ -223,7 +226,7 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                 for line in response.iter_lines(decode_unicode=True):
                     if line.strip():  # Skip empty lines
                         # Each line is a JSON object representing an MCP tool call(chat) response
-                        result_dict = json.loads(line)
+                        result_dict: Dict[str, Any] = json.loads(line)
                         result_dict = McpChatResponseDictionaryConverter().to_dict(result_dict)
                         yield result_dict
         except Exception as exc:  # pylint: disable=broad-exception-caught
