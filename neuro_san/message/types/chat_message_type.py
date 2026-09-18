@@ -36,21 +36,21 @@ class ChatMessageType(IntEnum):
     Python enum to mimic protobufs for chat.ChatMessageType without dragging in all of gRPC.
     These all need to match what is defined in chat.proto
     """
-    UNKNOWN_MESSAGE_TYPE: int = 0
-    SYSTEM: int = 1
-    HUMAN: int = 2
-    AI: int = 4
+    UNKNOWN_MESSAGE_TYPE = 0
+    SYSTEM = 1
+    HUMAN = 2
+    AI = 4
 
-    AGENT: int = 100
-    AGENT_FRAMEWORK: int = 101
-    AGENT_TOOL_RESULT: int = 103
-    AGENT_PROGRESS: int = 104
+    AGENT = 100
+    AGENT_FRAMEWORK = 101
+    AGENT_TOOL_RESULT = 103
+    AGENT_PROGRESS = 104
 
     # Adding something? Don't forget to update the maps below.
 
 
 # Convenience mappings going between constants and class types
-_MESSAGE_TYPE_TO_CHAT_MESSAGE_TYPE: Dict[Type[BaseMessage], ChatMessageType] = {
+MESSAGE_TYPE_TO_CHAT_MESSAGE_TYPE: Dict[Type[BaseMessage], ChatMessageType] = {
     # Needs to match chat.proto
     SystemMessage: ChatMessageType.SYSTEM,
     HumanMessage: ChatMessageType.HUMAN,
@@ -62,7 +62,7 @@ _MESSAGE_TYPE_TO_CHAT_MESSAGE_TYPE: Dict[Type[BaseMessage], ChatMessageType] = {
     AgentProgressMessage: ChatMessageType.AGENT_PROGRESS,
 }
 
-_CHAT_MESSAGE_TYPE_TO_STRING: Dict[ChatMessageType, str] = {
+CHAT_MESSAGE_TYPE_TO_STRING: Dict[ChatMessageType, str] = {
 
     ChatMessageType.UNKNOWN_MESSAGE_TYPE: "UNKNOWN",
 

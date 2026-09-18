@@ -246,7 +246,13 @@ class ContentUtils:
 
         if isinstance(content, list):
             content_list: List[Any] = content
-            if all(isinstance(item, str) for item in content_list):
+            all_strings: bool = True
+            item: Any = None
+            for item in content_list:
+                if not isinstance(item, str):
+                    all_strings = False
+                    break
+            if all_strings:
                 # A list of plain strings carries no block structure at all -
                 # collapse to text rather than promoting it to a block list.
                 return ContentUtils.flatten_to_text(message)

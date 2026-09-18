@@ -22,8 +22,8 @@ from typing import Union
 from langchain_core.messages.base import BaseMessage
 
 from neuro_san.message.types.chat_message_type import ChatMessageType
-from neuro_san.message.types.chat_message_type import _CHAT_MESSAGE_TYPE_TO_STRING
-from neuro_san.message.types.chat_message_type import _MESSAGE_TYPE_TO_CHAT_MESSAGE_TYPE
+from neuro_san.message.types.chat_message_type import CHAT_MESSAGE_TYPE_TO_STRING
+from neuro_san.message.types.chat_message_type import MESSAGE_TYPE_TO_CHAT_MESSAGE_TYPE
 
 
 class ChatMessageTypeUtil:
@@ -38,8 +38,7 @@ class ChatMessageTypeUtil:
         """
         base_message_type: Type[BaseMessage] = type(base_message)
         chat_message_type: ChatMessageType = \
-            _MESSAGE_TYPE_TO_CHAT_MESSAGE_TYPE.get(base_message_type,
-                                                   ChatMessageType.UNKNOWN_MESSAGE_TYPE)
+            MESSAGE_TYPE_TO_CHAT_MESSAGE_TYPE.get(base_message_type, ChatMessageType.UNKNOWN_MESSAGE_TYPE)
         return chat_message_type
 
     @staticmethod
@@ -74,7 +73,7 @@ class ChatMessageTypeUtil:
         :param chat_message_type: A ChatMessageType instance
         :return: A string corresponding to the chat_message_type
         """
-        message_type_str: str = _CHAT_MESSAGE_TYPE_TO_STRING.get(chat_message_type)
+        message_type_str: str = CHAT_MESSAGE_TYPE_TO_STRING.get(chat_message_type)
         if message_type_str is None:
-            message_type_str = _CHAT_MESSAGE_TYPE_TO_STRING.get(ChatMessageType.UNKNOWN_MESSAGE_TYPE)
+            message_type_str = CHAT_MESSAGE_TYPE_TO_STRING.get(ChatMessageType.UNKNOWN_MESSAGE_TYPE)
         return message_type_str
