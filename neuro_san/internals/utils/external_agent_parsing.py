@@ -17,6 +17,7 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Union
 
 from urllib.parse import ParseResult
@@ -40,7 +41,8 @@ class ExternalAgentParsing:
         :param server_port: The port that the server is listening on
                             Does not have to be set for all operations.
         :return: A Dictionary with the following keys:
-                "host" - the hostname where the agent lives
+                "host" - the hostname where the agent lives; an IPv6 literal
+                         keeps its square brackets so it can be placed in a URL
                 "port" - the port on the host which serves up the agent (if any)
                 "agent_name" - the name of the agent on that host
                 "scheme" - the url scheme of the reference ("http" or
@@ -55,8 +57,12 @@ class ExternalAgentParsing:
         if agent_url is None or len(agent_url) == 0:
             return None
 
+        port_number: Optional[int] = None
         try:
             parse_result: ParseResult = urlparse(agent_url)
+            # .port raises ValueError for a non-numeric or out-of-range port,
+            # which is as unparseable as a malformed netloc.
+            port_number = parse_result.port
         except ValueError:
             # e.g. mismatched brackets parsed as an invalid IPv6 netloc.
             # Unparseable means "not an external agent", per this method's
@@ -82,12 +88,18 @@ class ExternalAgentParsing:
 
         host: str = None
         port: str = None
-        if len(parse_result.netloc) > 0:
-            # We have a host specified
-            split: List[str] = parse_result.netloc.split(":")
-            host = split[0]
-            if len(split) > 1:
-                port = split[1]
+        if parse_result.hostname:
+            # hostname/port are bracket-aware, unlike a naive netloc.split(":"),
+            # which turned "[2001:db8::1]" into host "[2001" and port "db8".
+            # hostname also drops any userinfo and lower-cases the name.
+            host = parse_result.hostname
+            if ":" in host:
+                # hostname strips the brackets from an IPv6 literal; put them
+                # back so the session layer can build "https://[v6]:443/...".
+                host = f"[{host}]"
+            if port_number is not None:
+                # Keep the historical str type for the port.
+                port = str(port_number)
 
         # Special case for detecting localhost
         if host is None or len(host) == 0:

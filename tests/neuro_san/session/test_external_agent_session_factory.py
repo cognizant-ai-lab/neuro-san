@@ -165,3 +165,15 @@ class TestExternalAgentSessionFactory(TestCase):
         with patch.dict(os.environ, {"AGENT_SESSION_REQUIRE_HTTPS": "true"}):
             with self.assertRaises(ValueError):
                 session.get_request_path("function")
+
+    def test_create_session_ipv6_https_reference_builds_bracketed_url(self) -> None:
+        """
+        Tests that a bracketed IPv6 https reference ends up as a well-formed
+        https url with the brackets kept around the address and the 443
+        default port after them.
+        """
+        session: AsyncAgentSession = \
+            self.factory.create_session("https://[2001:db8::1]/deep/math_guy", self.invocation_context)
+        self.assertIsInstance(session, AsyncHttpServiceAgentSession)
+        self.assertEqual(session.get_request_path("function"),
+                         "https://[2001:db8::1]:443/api/v1/deep/math_guy/function")

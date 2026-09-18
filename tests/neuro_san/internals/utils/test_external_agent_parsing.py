@@ -137,3 +137,40 @@ class TestExternalAgentParsing(TestCase):
         self.assertEqual(agent_location.get("host"), "localhost")
         self.assertEqual(agent_location.get("port"), 9000)
         self.assertEqual(agent_location.get("scheme"), "https")
+
+    def test_parse_external_agent_ipv6_https_without_port_defaults_to_443(self) -> None:
+        """
+        Tests that a bracketed IPv6 https reference keeps its brackets as the host
+        and still receives the https default port, instead of being split on the
+        wrong colon into a malformed host and port.
+        """
+        agent_location: Dict[str, str] = \
+            ExternalAgentParsing.parse_external_agent("https://[2001:db8::1]/deep/math_guy")
+        self.assertIsNotNone(agent_location)
+        self.assertEqual(agent_location.get("host"), "[2001:db8::1]")
+        self.assertEqual(agent_location.get("port"), "443")
+        self.assertEqual(agent_location.get("scheme"), "https")
+        self.assertEqual(agent_location.get("agent_name"), "deep/math_guy")
+
+    def test_parse_external_agent_ipv6_with_explicit_port_keeps_port(self) -> None:
+        """
+        Tests that an explicit port on a bracketed IPv6 reference is the port
+        after the closing bracket, not a piece of the address.
+        """
+        agent_location: Dict[str, str] = \
+            ExternalAgentParsing.parse_external_agent("http://[::1]:8042/math_guy")
+        self.assertIsNotNone(agent_location)
+        self.assertEqual(agent_location.get("host"), "[::1]")
+        self.assertEqual(agent_location.get("port"), "8042")
+        self.assertEqual(agent_location.get("scheme"), "http")
+
+    def test_parse_external_agent_non_numeric_port_returns_none(self) -> None:
+        """
+        Tests that a reference whose port is not a number is treated as
+        unparseable and returns None, rather than handing a bogus port to
+        the session layer.
+        """
+        agent_location: Dict[str, str] = \
+            ExternalAgentParsing.parse_external_agent("http://agents.example.com:abc/math_guy")
+        self.assertIsNone(agent_location)
+        self.assertFalse(ExternalAgentParsing.is_external_agent("http://agents.example.com:abc/math_guy"))
