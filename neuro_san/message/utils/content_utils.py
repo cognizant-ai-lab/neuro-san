@@ -373,7 +373,7 @@ class ContentUtils:
 
         content_blocks: Any = chat_message.get("content_blocks")
         content_blocks_list: List[Any] = content_blocks
-        if content_blocks is not None and len(content_blocks_list) != 0:
+        if content_blocks is not None and not (isinstance(content_blocks, list) and len(content_blocks_list) == 0):
             if ContentUtils.looks_like_blocks(content_blocks):
                 return content_blocks
             return None
