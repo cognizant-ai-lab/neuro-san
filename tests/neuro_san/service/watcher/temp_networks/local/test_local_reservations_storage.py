@@ -30,6 +30,8 @@ from typing import Set
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import patch
 
+from typing_extensions import override
+
 from neuro_san.interfaces.reservation import Reservation
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
@@ -72,6 +74,7 @@ class TestLocalReservationsStorage(IsolatedAsyncioTestCase):
     patch.dict(os.environ) so the change is undone even if they fail.
     """
 
+    @override
     def setUp(self) -> None:
         """
         Create a fresh temporary directory for the test and register its removal.
