@@ -31,6 +31,10 @@ class NameCorrectionConfigFilter(ConfigFilter):
     """
     ConfigFilter implementation for correcting potentially invalid internal
     agent names within a single registry.
+
+    A corrected name is propagated to every reference other tools hold to it,
+    both in their "tools" lists and in their "args.tools" (the coded-tool
+    convention for declaring downstream agents), so both ends of each edge agree.
     """
 
     def filter_config(self, basis_config: Dict[str, Any]) \
@@ -79,20 +83,27 @@ class NameCorrectionConfigFilter(ConfigFilter):
         for tool in tools:
             agent_tools: List[str] = []
             agent_tools = tool.get("tools", agent_tools)
-            if not isinstance(agent_tools, List) or len(agent_tools) == 0:
-                # Nothing to correct
-                continue
+            # This is an if rather than a continue on purpose: a coded tool typically has
+            # no "tools" list at all, yet still needs its args.tools rewritten below.
+            if isinstance(agent_tools, list) and len(agent_tools) > 0:
+                new_agent_tools: List[str] = []
+                for agent_tool in agent_tools:
+                    # Replace string tool names with corrected versions if available,
+                    # leave complex tool objects (e.g. MCP dictionaries) as-is
+                    if isinstance(agent_tool, str):
+                        new_agent_tools.append(corrections.get(agent_tool, agent_tool))
+                    else:
+                        new_agent_tools.append(agent_tool)
 
-            new_agent_tools: List[str] = []
-            for agent_tool in agent_tools:
-                # Replace string tool names with corrected versions if available,
-                # leave complex tool objects (e.g. MCP dictionaries) as-is
-                if isinstance(agent_tool, str):
-                    new_agent_tools.append(corrections.get(agent_tool, agent_tool))
-                else:
-                    new_agent_tools.append(agent_tool)
+                tool["tools"] = new_agent_tools
 
-            tool["tools"] = new_agent_tools
+            # CodedTools deriving from BranchActivation declare the agents they might call
+            # in args.tools rather than in tools (see "tools (args)" in agent_hocon_reference.md).
+            # ToolsShapeValidator.validate_args_tools and ConnectivityReporter (through
+            # AbstractNetworkValidator.coerce_args_tools) both read that key, so a reference
+            # left under the old name would make connectivity report an edge to an agent that
+            # no longer exists, and the coded tool itself would fail to find its renamed child.
+            self.correct_args_tools(tool, corrections)
 
         # Spit out information about errors
         logger = logging.getLogger(self.__class__.__name__)
@@ -104,6 +115,45 @@ class NameCorrectionConfigFilter(ConfigFilter):
             logger.info("Correcting %s to %s", str(original), str(correction))
 
         return basis_config
+
+    @staticmethod
+    def correct_args_tools(tool: Dict[str, Any], corrections: Dict[str, str]) -> None:
+        """
+        Rewrites, in place, the agent-name references a tool holds in its args.tools
+        using the given corrections table.
+
+        args.tools is accepted in the same two shapes ToolsShapeValidator.validate_args_tools
+        and AbstractNetworkValidator.coerce_args_tools understand: a list of agent-name
+        strings, or a dict of label -> agent-name string. Only string entries (list elements,
+        dict values) are rewritten. Dict keys, non-string entries and any other shape are left
+        untouched, since ToolsShapeValidator is the place that reports malformed shapes.
+        Neither "args" nor "args.tools" is created where absent.
+
+        :param tool: The agent/tool spec dictionary whose args.tools is corrected in place
+        :param corrections: A dictionary of original agent name -> corrected agent name
+        """
+        args: Any = tool.get("args")
+        if not isinstance(args, dict) or "tools" not in args:
+            # Nothing to correct.  Do not create args or args.tools here: this filter only
+            # rewrites names and must otherwise hand every tool back value-equal to its input,
+            # so it never invents keys the author did not write.
+            return
+
+        args_tools: Any = args.get("tools")
+        if isinstance(args_tools, list):
+            # List form: every element is an agent name. Rewrite by index so that the list
+            # object and any non-string entries stay exactly as they were given.
+            for index, agent_tool in enumerate(args_tools):
+                if isinstance(agent_tool, str):
+                    args_tools[index] = corrections.get(agent_tool, agent_tool)
+        elif isinstance(args_tools, dict):
+            # Dict form: label -> agent name.  Only the values are names; the labels are the
+            # coded tool's own lookup keys and must stay stable.  Assigning to existing keys
+            # while iterating is safe; only adding or removing keys would not be.
+            for label, agent_tool in args_tools.items():
+                if isinstance(agent_tool, str):
+                    args_tools[label] = corrections.get(agent_tool, agent_tool)
+        # Any other shape is malformed. ToolsShapeValidator reports it, so leave it alone.
 
     def validate_name(self, name: str) -> str:
         """
