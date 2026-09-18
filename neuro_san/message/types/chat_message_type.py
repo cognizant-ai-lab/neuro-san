@@ -19,7 +19,6 @@ from __future__ import annotations
 from enum import IntEnum
 from typing import Dict
 from typing import Type
-from typing import Union
 
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
@@ -37,65 +36,17 @@ class ChatMessageType(IntEnum):
     Python enum to mimic protobufs for chat.ChatMessageType without dragging in all of gRPC.
     These all need to match what is defined in chat.proto
     """
-    UNKNOWN_MESSAGE_TYPE = 0
-    SYSTEM = 1
-    HUMAN = 2
-    AI = 4
+    UNKNOWN_MESSAGE_TYPE: int = 0
+    SYSTEM: int = 1
+    HUMAN: int = 2
+    AI: int = 4
 
-    AGENT = 100
-    AGENT_FRAMEWORK = 101
-    AGENT_TOOL_RESULT = 103
-    AGENT_PROGRESS = 104
+    AGENT: int = 100
+    AGENT_FRAMEWORK: int = 101
+    AGENT_TOOL_RESULT: int = 103
+    AGENT_PROGRESS: int = 104
 
     # Adding something? Don't forget to update the maps below.
-
-    @classmethod
-    def from_message(cls, base_message: BaseMessage) -> ChatMessageType:
-        """
-        :param base_message: A base message instance
-        :return: The ChatMessageType corresponding to the base_message
-        """
-        base_message_type: Type[BaseMessage] = type(base_message)
-        chat_message_type: ChatMessageType = \
-            _MESSAGE_TYPE_TO_CHAT_MESSAGE_TYPE.get(base_message_type, cls.UNKNOWN_MESSAGE_TYPE)
-        return chat_message_type
-
-    @classmethod
-    def from_response_type(cls, response_type: Union[str, ChatMessageType]) -> ChatMessageType:
-        """
-        :param response_type: A type from a response instance
-        :return: The ChatMessageType corresponding to the base_message
-        """
-        message_type: ChatMessageType = ChatMessageType.UNKNOWN_MESSAGE_TYPE
-
-        if response_type is None:
-            # Return early
-            return message_type
-
-        if isinstance(response_type, ChatMessageType):
-            return response_type
-
-        if isinstance(response_type, int):
-            return ChatMessageType(response_type)
-
-        try:
-            # Normal case: We have a 1:1 mapping of ChatMessageType to what is in grpc def
-            message_type = ChatMessageType[response_type]
-        except KeyError as exception:
-            raise ValueError(f"Got message type {response_type} (type {response_type.__class__.__name__})."
-                             " Are ChatMessageType and chat.proto out of sync?") from exception
-        return message_type
-
-    @classmethod
-    def to_string(cls, chat_message_type: ChatMessageType) -> str:
-        """
-        :param chat_message_type: A ChatMessageType instance
-        :return: A string corresponding to the chat_message_type
-        """
-        message_type_str: str = _CHAT_MESSAGE_TYPE_TO_STRING.get(chat_message_type)
-        if message_type_str is None:
-            message_type_str = _CHAT_MESSAGE_TYPE_TO_STRING.get(cls.UNKNOWN_MESSAGE_TYPE)
-        return message_type_str
 
 
 # Convenience mappings going between constants and class types

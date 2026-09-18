@@ -21,6 +21,7 @@ from enum import Enum
 from leaf_common.serialization.interface.dictionary_converter import DictionaryConverter
 
 from neuro_san.message.types.chat_message_type import ChatMessageType
+from neuro_san.message.types.chat_message_type_util import ChatMessageTypeUtil
 
 
 class ChatMessageConverter(DictionaryConverter):
@@ -59,8 +60,7 @@ class ChatMessageConverter(DictionaryConverter):
         # Ensure that we return ChatMessageType as a string in output json
         response_type = message_dict.get('type', None)
         if response_type is not None:
-            message_dict['type'] =\
-                ChatMessageType.from_response_type(response_type).name
+            message_dict['type'] = ChatMessageTypeUtil.from_response_type(response_type).name
         chat_context: Dict[str, Any] = message_dict.get('chat_context', None)
         if chat_context is not None:
             for chat_history in chat_context.get("chat_histories", []):

@@ -29,6 +29,7 @@ import json
 from unittest import TestCase
 
 from neuro_san.message.types.chat_message_type import ChatMessageType
+from neuro_san.message.types.chat_message_type_util import ChatMessageTypeUtil
 from neuro_san.service.http.handlers.streaming_chat_handler import StreamingChatHandler
 
 
@@ -68,7 +69,7 @@ class TestStreamingChatHandlerHeartbeatFrame(TestCase):
         """
         parsed = json.loads(StreamingChatHandler._build_keep_alive_frame().rstrip("\n"))
         chat_message = parsed["response"]
-        expected_type_name: str = ChatMessageType.to_string(ChatMessageType.AGENT_PROGRESS)
+        expected_type_name: str = ChatMessageTypeUtil.to_string(ChatMessageType.AGENT_PROGRESS)
 
         assert chat_message == {"type": expected_type_name, "text": ""}, (
             f"Heartbeat ChatMessage must be exactly an empty AGENT_PROGRESS; got {chat_message}."
