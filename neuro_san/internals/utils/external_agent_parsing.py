@@ -17,10 +17,13 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Union
 
 from urllib.parse import ParseResult
 from urllib.parse import urlparse
+
+from neuro_san.interfaces.agent_session_constants import AgentSessionConstants
 
 
 class ExternalAgentParsing:
@@ -32,13 +35,20 @@ class ExternalAgentParsing:
     @staticmethod
     def parse_external_agent(agent_url: str, server_port: int = None) -> Dict[str, str]:
         """
+        Parses an external agent reference into the host, port, agent name and scheme it points at.
+
         :param agent_url: The URL describing where to find the desired agent.
         :param server_port: The port that the server is listening on
                             Does not have to be set for all operations.
         :return: A Dictionary with the following keys:
-                "host" - the hostname where the agent lives
+                "host" - the hostname where the agent lives; an IPv6 literal
+                         keeps its square brackets so it can be placed in a URL
                 "port" - the port on the host which serves up the agent (if any)
                 "agent_name" - the name of the agent on that host
+                "scheme" - the url scheme of the reference ("http" or
+                           "https"), or "" when the reference has no
+                           scheme, e.g. "/math_guy" for an agent on the
+                           same server.
 
                 OR
 
@@ -47,7 +57,17 @@ class ExternalAgentParsing:
         if agent_url is None or len(agent_url) == 0:
             return None
 
-        parse_result: ParseResult = urlparse(agent_url)
+        port_number: Optional[int] = None
+        try:
+            parse_result: ParseResult = urlparse(agent_url)
+            # .port raises ValueError for a non-numeric or out-of-range port,
+            # which is as unparseable as a malformed netloc.
+            port_number = parse_result.port
+        except ValueError:
+            # e.g. mismatched brackets parsed as an invalid IPv6 netloc.
+            # Unparseable means "not an external agent", per this method's
+            # contract of returning None on unsuccessful parsing.
+            return None
         if parse_result is None:
             return None
 
@@ -56,18 +76,43 @@ class ExternalAgentParsing:
             # an agent that lives on the same server.
             return None
 
-        if not parse_result.path.startswith("/"):
-            # This is not an external agent specification
+        # An authority that is present but carries no host ("http://user@/agent",
+        # "http://:8080/agent") is malformed. It must not fall through to the
+        # localhost default below, which would silently turn a broken remote
+        # reference into a call to a local agent of the same name. An explicit
+        # but empty port ("https://host:/agent") is malformed too: .port reports
+        # it as None, so without this check it would receive a default port.
+        # The host-info part is what follows any userinfo "@".
+        hostinfo: str = parse_result.netloc.rsplit("@", 1)[-1]
+        malformed_authority: bool = bool(parse_result.netloc) and \
+            (not parse_result.hostname or hostinfo.endswith(":"))
+        if not parse_result.path.startswith("/") or malformed_authority:
+            # Either not an external agent specification, or unparseable.
             return None
+
+        # No normalization is done on the scheme: the network validators
+        # (AbstractNetworkValidator.is_url_or_path) only recognize the lower-case
+        # "http://" and "https://" spellings in hocon tool references, so that is
+        # the only form that reaches this parser in normal operation.
+        scheme: str = parse_result.scheme or ""
 
         host: str = None
         port: str = None
-        if len(parse_result.netloc) > 0:
-            # We have a host specified
-            split: List[str] = parse_result.netloc.split(":")
-            host = split[0]
-            if len(split) > 1:
-                port = split[1]
+        if parse_result.hostname:
+            # hostname/port are bracket-aware, unlike a naive netloc.split(":"),
+            # which turned "[2001:db8::1]" into host "[2001" and port "db8".
+            # hostname also drops any userinfo and lower-cases the name.
+            host = parse_result.hostname
+            if ":" in host:
+                # hostname strips the brackets from an IPv6 literal; put them
+                # back so the session layer can build "https://[v6]:443/...".
+                host = f"[{host}]"
+            if port_number is not None:
+                # .port only validated the number. Return the port as written in
+                # the reference ("0443" stays "0443"), as this parser always has.
+                # When present, the port is what follows the last ":" of the
+                # netloc, which is bracket-safe because an IPv6 literal ends in "]".
+                port = parse_result.netloc.rsplit(":", 1)[1]
 
         # Special case for detecting localhost
         if host is None or len(host) == 0:
@@ -79,12 +124,24 @@ class ExternalAgentParsing:
             # If this is not set, it will default to None, which is fine.
             port = server_port
 
-        # Get the agent name from the URL by looking at the path
+        if port is None and scheme == "https":
+            # An https reference without an explicit port is expected to reach
+            # a TLS-terminating proxy on the well-known https port, not the bare
+            # 8080 dev server the session layer defaults to. Only https gets this
+            # treatment: http and scheme-less references keep port None so the
+            # session layer's own http default still applies. This runs after
+            # the localhost rule so a configured server_port wins for localhost.
+            port = str(AgentSessionConstants.DEFAULT_HTTPS_PORT)
+
+        # Get the agent name from the URL by looking at the path.
         # Remove any leading slashes from the path for the agent name.
-        # Note: While we need to get the agent name for proper gRPC routing,
-        #       this is not yet super robust against any non-default case
-        #       where some other entity needs a non-standard path for routing
-        #       (like a load balancer).  Cross that bridge when we get to it.
+        # Note: The agent name becomes the {agent_name} segment of the
+        #       /api/v1/{agent_name}/{method} http path and the key for the
+        #       Direct-session registry lookup on the same server, so it may
+        #       itself contain "/" for nested registries. This is not yet
+        #       robust against any non-default case where some other entity
+        #       needs a non-standard path for routing (like a load balancer).
+        #       Cross that bridge when we get to it.
         agent_name: str = parse_result.path
         while agent_name.startswith("/"):
             agent_name = agent_name[1:]
@@ -94,6 +151,7 @@ class ExternalAgentParsing:
             "host": host,
             "port": port,
             "agent_name": agent_name,
+            "scheme": scheme,
         }
         return return_dict
 

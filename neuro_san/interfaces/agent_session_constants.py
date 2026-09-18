@@ -25,4 +25,10 @@ class AgentSessionConstants:
     # This port number will also be mentioned in its Dockerfile
     DEFAULT_HTTP_PORT: int = 8080
 
+    # Default port for https:// references to agents served elsewhere.
+    # Unlike the bare http dev server above, an https reference is expected to
+    # hit a TLS-terminating proxy or load balancer in front of the server,
+    # which listens on the well-known https port rather than on 8080.
+    DEFAULT_HTTPS_PORT: int = 443
+
     DEFAULT_PORT: int = DEFAULT_HTTP_PORT

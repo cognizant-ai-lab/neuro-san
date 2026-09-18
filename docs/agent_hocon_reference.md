@@ -486,6 +486,8 @@ While this is intended only for use with a front-man agent only, it can sometime
 have partial definitions for sly_data_schema that pertain to all agent networks in the manifest
 defined globally with this key while network-specific definitions can be defined with the `sly_data_schema`
 key within the front-man tool.
+The same merge is applied to networks deployed at runtime through the Reservations API
+(temporary networks), so a global definition reaches their front man as well.
 
 For more details, see the [sly_data_schema](#sly_data_schema-1) key below.
 
@@ -751,7 +753,26 @@ This allows common agent network definitions to be used as functions for other l
 
 Furthermore, it is also possible to reference agents on other neuro-san _servers_ by using a URL as a tool reference.
 
-Example: `http://localhost:8080/math_guy`
+Examples: `http://localhost:8080/math_guy` or `https://agents.example.com/deep/math_guy`
+
+The path of the URL is the served agent's name. It may contain `/` when the remote server keeps its
+registries in nested directories, as in `deep/math_guy` above.
+
+Which port is used depends on the kind of reference:
+
+- An `https://` reference without an explicit port uses the well-known https port (443), on the assumption
+  that a TLS-terminating proxy or load balancer sits in front of the remote neuro-san server.
+- An `http://` reference without an explicit port uses the neuro-san server's default http port (8080).
+- Exception for `localhost`: a `http://localhost/...` or `https://localhost/...` reference without an explicit
+  port uses the referencing server's own configured port, the same as a `/name` reference, so the 443 default
+  above does not apply to it.
+- A same-server `/name` reference (see above) resolves on the server running the referencing network,
+  so no host or port is involved.
+
+When a server runs with `AGENT_SESSION_REQUIRE_HTTPS=true` (the default in the shipped Dockerfile), only `https://`
+URL references to remote servers are accepted; a remote `http://` reference fails when the tool is called.
+Same-server references are unaffected, because they are resolved in-process without an http session: that is
+every `/name` reference, and an `http://localhost/...` reference to a network this same server serves.
 
 This enables entire ecosystems of agent webs.
 

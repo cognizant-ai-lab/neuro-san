@@ -24,10 +24,12 @@ from typing import Tuple
 import logging
 import time
 
+from leaf_common.config.config_filter import ConfigFilter
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 from leaf_common.utils.startable import Startable
 
 from neuro_san.interfaces.reservation import Reservation
+from neuro_san.internals.graph.filters.resolved_network_config_filter import ResolvedNetworkConfigFilter
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_network_provider import AgentNetworkProvider
 from neuro_san.internals.interfaces.reservations_storage import ReservationsStorage
@@ -140,9 +142,24 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
             # Nothing to do
             return
 
+        # Resolve every spec *before* anything is stored.  See ResolvedNetworkConfigFilter for
+        # why a reservation spec needs this at all (top-level defaults such as the BYOK
+        # sly_data_schema never reach its agents otherwise).
+        # Other instances hydrate temporary networks from the base storage (S3, local files, ...),
+        # not from this instance's memory, so persisting the resolved spec is what makes their
+        # read-side pass of the same filter a no-op and has every instance serve the same network.
+        # The same resolved dictionaries are then used for the in-memory AgentNetworks below,
+        # so any metadata a writer adds to them stays consistent with what is served here.
+        # The filter always returns a copy, so the caller's dictionaries are neither stored
+        # nor mutated, and a metadata-injecting writer (S3ReservationsWriter) cannot reach them.
+        spec_filter: ConfigFilter = ResolvedNetworkConfigFilter()
+        use_reservations: Dict[Reservation, Dict[str, Any]] = {}
+        for reservation, agent_spec in reservations_dict.items():
+            use_reservations[reservation] = spec_filter.filter_config(agent_spec)
+
         if self.base_storage is not None:
             # If we have a source storage, then we need to add these reservations there first:
-            await self.base_storage.add_reservations(reservations_dict, source=source)
+            await self.base_storage.add_reservations(use_reservations, source=source)
 
         # Figure out what's new vs what's not.
         # Need to do this while holding the lock
@@ -150,7 +167,7 @@ class ExpiringAgentNetworkStorage(AbstractReservationsStorage, AgentNetworkStora
         replaced: List[str] = []
         now: float = time.time()
         with self.lock:
-            for reservation, agent_spec in reservations_dict.items():
+            for reservation, agent_spec in use_reservations.items():
 
                 agent_name: str = reservation.get_reservation_id()
                 is_new = self.agents_table.get(agent_name) is None

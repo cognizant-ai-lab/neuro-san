@@ -45,6 +45,7 @@ from neuro_san.client.streaming_input_processor import StreamingInputProcessor
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
 from neuro_san.session.direct_agent_session import DirectAgentSession
+from neuro_san.test.driver.session_canceller import SessionCanceller
 from neuro_san.test.driver.timed_assert_capture import TimedAssertCapture
 from neuro_san.test.evaluators.agent_evaluator_factory import AgentEvaluatorFactory
 from neuro_san.test.interfaces.agent_evaluator import AgentEvaluator
@@ -95,6 +96,9 @@ class DataDrivenTestsDriver:
 
         # Loop through each test execution in parallel
         executor: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=len(tests))
+        # Map each future to a canceller that can drop its client connection(s) if the
+        # test times out or we exit early. Declared out here so the finally can reach it.
+        future_cancellers: Dict[Future, SessionCanceller] = {}
         try:
             futures: List[Future] = []
             iteration_index: int = 0
@@ -120,11 +124,13 @@ class DataDrivenTestsDriver:
                     continue
 
                 timeout_in_seconds: Optional[float] = test_case.get("timeout_in_seconds", None)
+                canceller: SessionCanceller = SessionCanceller()
                 future: Future = executor.submit(
-                    self.capture_one_iteration, test_case, timeouts, iteration_index)
+                    self.capture_one_iteration, test_case, timeouts, iteration_index, canceller)
                 futures.append(future)
                 future_timeouts[future] = timeout_in_seconds
                 future_indices[future] = iteration_index
+                future_cancellers[future] = canceller
                 if iteration_index is not None:
                     iteration_index += 1
 
@@ -133,6 +139,10 @@ class DataDrivenTestsDriver:
                 test_index: Optional[int] = future_indices.get(fut)
                 if timed_out:
                     # This test iteration has timed out.
+                    # Close its client connection(s) so the neuro-san service sees
+                    # the disconnect and terminates the still-running server-side
+                    # request instead of finishing work whose result we discard.
+                    future_cancellers[fut].cancel()
                     # We can't get the result, but we can still record the timeout.
                     timed_capture = self.get_new_capture(test_index=test_index)
                     timed_capture.set_execution_time(float('inf'))  # Indicate that it timed out
@@ -163,11 +173,29 @@ class DataDrivenTestsDriver:
                     # Fast path: we have enough successful tests, so we can stop waiting for more.
                     break
         finally:
+            # Reaching num_need_success breaks the loop above with other tests possibly
+            # still running. shutdown(cancel_futures=True) only drops futures that never
+            # started; already-running futures (and their server-side requests) keep
+            # going, so drop their connections here too.
+            self.cancel_running_futures(future_cancellers)
             # We are done with running tests, so we can shut down the executor and cancel any remaining futures.
             # Note: this is not a blocking call, but if some timed out tests are still running,
             # they will continue to run in the background. We are just not waiting for them anymore.
             executor.shutdown(wait=False, cancel_futures=True)
         return run_results
+
+    def cancel_running_futures(self, future_cancellers: Dict[Future, SessionCanceller]):
+        """
+        Cancel the sessions of any futures that are still running, dropping their
+        client connection(s) so the neuro-san service terminates the server-side work
+        instead of finishing results we no longer collect. cancel() and close() are
+        idempotent, so re-cancelling an already-timed-out future is harmless.
+
+        :param future_cancellers: Mapping of each Future to its SessionCanceller.
+        """
+        for fut, canceller in future_cancellers.items():
+            if not fut.done():
+                canceller.cancel()
 
     def get_new_capture(self, test_index: Optional[int] = None) -> TimedAssertCapture:
         """
@@ -179,13 +207,16 @@ class DataDrivenTestsDriver:
         """
         return TimedAssertCapture(self.asserts_basis, test_index=test_index)
 
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     def capture_one_iteration(self, test_case: Dict[str, Any], timeouts: List[Timeout],
-                              iteration_index: int) -> TimedAssertCapture:
+                              iteration_index: int, canceller: SessionCanceller) -> TimedAssertCapture:
         """
 
         :param test_case: The dictionary describing the data-driven test case
         :param timeouts: A list of timeout objects to check
         :param iteration_index: The index of this test iteration for the success_ratio
+        :param canceller: The SessionCanceller to register this iteration's sessions with,
+                          so a timeout can drop their connections.
         :return: A TimedAssertCapture object for the iteration.
         """
         # Capture the asserts for this iteration and add it to the list for later
@@ -194,7 +225,7 @@ class DataDrivenTestsDriver:
         fixture_hocon_name: str = test_case.get("fixture_name", "unknown_fixture")
         start_time: float = monotonic()
         # Perform a single iteration of the test.
-        self.one_iteration(test_case, assert_capture, timeouts, fixture_hocon_name, iteration_index)
+        self.one_iteration(test_case, assert_capture, timeouts, fixture_hocon_name, iteration_index, canceller)
         end_time: float = monotonic()
         assert_capture.set_execution_time(end_time - start_time)
 
@@ -202,7 +233,8 @@ class DataDrivenTestsDriver:
 
     # pylint: disable=too-many-locals, too-many-arguments, too-many-positional-arguments
     def one_iteration(self, test_case: Dict[str, Any], asserts: AssertForwarder,
-                      timeouts: List[Timeout], fixture_hocon_name: str, iteration_index: int):
+                      timeouts: List[Timeout], fixture_hocon_name: str, iteration_index: int,
+                      canceller: SessionCanceller):
         """
         Perform a single iteration on the test case.
 
@@ -211,6 +243,8 @@ class DataDrivenTestsDriver:
         :param timeouts: A list of timeout objects to check
         :param fixture_hocon_name: A string containing the name of the fixture hocon file
         :param iteration_index: The index of this test iteration for the success_ratio
+        :param canceller: The SessionCanceller to register created sessions with,
+                          so a timeout can drop their connections.
         """
 
         # Get the agent to use
@@ -251,6 +285,21 @@ class DataDrivenTestsDriver:
                     use_direct=use_direct,
                     metadata=metadata,
                     connect_timeout_in_seconds=timeout_in_seconds)
+
+            # Only HTTP-based sessions (sync or async) have a close() that actually
+            # drops an in-flight connection, so only those can be cancelled on a
+            # timeout. Direct sessions run in-process and MCP is a request/response
+            # transport whose close() is a no-op, so registering them would be a false
+            # promise -- their server-side work runs to completion regardless. Leaving
+            # them unregistered keeps the timeout behavior honest (and, for MCP with a
+            # connect timeout, preserves the connect_timeout_in_seconds passed above).
+            if connection in ("http", "https"):
+                # Register the session so a timeout on the main thread can close it
+                # (dropping the connection) even while this worker thread is blocked
+                # reading the streaming response.
+                # We only register HTTP-based sessions because they are the only ones
+                # that can be cancelled on a timeout.
+                canceller.register(session)
             chat_context: Dict[str, Any] = None
             # Track sly_data across interactions to allow accumulation and persistence
             carried_sly_data: Dict[str, Any] = None
