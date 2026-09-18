@@ -332,7 +332,7 @@ class LangChainRunContext(RunContext):
 
         return create_agent(
             model=llm,
-            tools=self.tools,
+            tools=self.tools + (self.llm_config.get("provider_tools") or []),
             middleware=middleware,
             checkpointer=checkpointer,
             system_prompt=instructions,
