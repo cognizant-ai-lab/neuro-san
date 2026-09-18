@@ -27,6 +27,7 @@ import math
 
 from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.content import KNOWN_BLOCK_TYPES
+from langchain_core.messages.util.decode_utils import DecodeUtils
 
 
 class ContentUtils:
@@ -513,7 +514,7 @@ class ContentUtils:
             # Convert bytes to base64
             bytes_value: bytes = bytes(value)
             encoded: bytes = base64.b64encode(bytes_value)
-            return ContentUtils.decode(encoded, "ascii")
+            return DecodeUtils.decode(encoded, "ascii")
         if isinstance(value, dict):
             safe_dict: Dict[str, Any] = {}
             for key, item in value.items():
@@ -525,16 +526,3 @@ class ContentUtils:
                 safe_list.append(ContentUtils.to_json_safe(item))
             return safe_list
         return str(value)
-
-    @staticmethod
-    def decode(instring: bytearray | bytes, encoding: str = "utf-8") -> str:
-        """
-        :param instring: The bytes or bytearray to decode
-        :param encoding: The encoding to use
-        :return: The decoded string
-        """
-        if not instring:
-            return ""
-
-        decoded: str = instring.decode(encoding)
-        return decoded
