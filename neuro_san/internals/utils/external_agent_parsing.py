@@ -74,8 +74,11 @@ class ExternalAgentParsing:
             # This is not an external agent specification
             return None
 
-        # urlparse already lower-cases the scheme, but be explicit so callers
-        # comparing against "https" do not depend on that implementation detail.
+        # urlparse already lower-cases the scheme; the explicit lower() only keeps
+        # the "https" comparison below independent of that detail. It is not a
+        # promise that upper-case schemes work end to end: the network validators
+        # (AbstractNetworkValidator.is_url_or_path) only recognize the lower-case
+        # "http://" and "https://" spellings in hocon tool references.
         scheme: str = (parse_result.scheme or "").lower()
 
         host: str = None

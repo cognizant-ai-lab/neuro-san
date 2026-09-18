@@ -39,8 +39,8 @@ class TestExternalAgentParsing(TestCase):
 
     def test_parse_external_agent_unparseable_url_returns_none(self) -> None:
         """
-        Tests that a url urlparse cannot handle (mismatched bracket read as
-        an invalid IPv6 netloc) returns None per this method's contract
+        Tests that a url that urlparse cannot handle (a mismatched bracket,
+        read as an invalid IPv6 netloc) returns None per this method's contract
         instead of raising ValueError. Such urls can reach this code from
         agent hocons: ToolsShapeValidator does not inspect MCP dict
         internals and UrlNetworkValidator accepts any http(s)-prefixed
@@ -85,17 +85,6 @@ class TestExternalAgentParsing(TestCase):
         self.assertEqual(agent_location.get("host"), "agents.example.com")
         self.assertEqual(agent_location.get("port"), "8443")
         self.assertEqual(agent_location.get("scheme"), "https")
-
-    def test_parse_external_agent_scheme_is_lower_cased(self) -> None:
-        """
-        Tests that an upper-case scheme in the reference is reported
-        lower-cased so callers can compare against "https" directly.
-        """
-        agent_location: Dict[str, str] = \
-            ExternalAgentParsing.parse_external_agent("HTTPS://Host/agent")
-        self.assertIsNotNone(agent_location)
-        self.assertEqual(agent_location.get("scheme"), "https")
-        self.assertEqual(agent_location.get("port"), "443")
 
     def test_parse_external_agent_http_without_port_leaves_port_none(self) -> None:
         """
