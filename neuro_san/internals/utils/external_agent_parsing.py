@@ -43,10 +43,10 @@ class ExternalAgentParsing:
                 "host" - the hostname where the agent lives
                 "port" - the port on the host which serves up the agent (if any)
                 "agent_name" - the name of the agent on that host
-                "scheme" - the lower-cased url scheme of the reference
-                           ("http" or "https"), or "" when the reference
-                           has no scheme, e.g. "/math_guy" for an agent
-                           on the same server.
+                "scheme" - the url scheme of the reference ("http" or
+                           "https"), or "" when the reference has no
+                           scheme, e.g. "/math_guy" for an agent on the
+                           same server.
 
                 OR
 
@@ -74,12 +74,11 @@ class ExternalAgentParsing:
             # This is not an external agent specification
             return None
 
-        # urlparse already lower-cases the scheme; the explicit lower() only keeps
-        # the "https" comparison below independent of that detail. It is not a
-        # promise that upper-case schemes work end to end: the network validators
+        # No normalization is done on the scheme: the network validators
         # (AbstractNetworkValidator.is_url_or_path) only recognize the lower-case
-        # "http://" and "https://" spellings in hocon tool references.
-        scheme: str = (parse_result.scheme or "").lower()
+        # "http://" and "https://" spellings in hocon tool references, so that is
+        # the only form that reaches this parser in normal operation.
+        scheme: str = parse_result.scheme or ""
 
         host: str = None
         port: str = None
