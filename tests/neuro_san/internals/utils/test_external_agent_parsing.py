@@ -186,3 +186,31 @@ class TestExternalAgentParsing(TestCase):
         self.assertIsNotNone(agent_location)
         self.assertEqual(agent_location.get("port"), "0443")
         self.assertEqual(agent_location.get("scheme"), "https")
+
+    def test_parse_external_agent_authority_without_host_returns_none(self) -> None:
+        """
+        Tests that an authority with userinfo but no host is treated as
+        unparseable instead of falling back to localhost, which would turn a
+        broken remote reference into a call to a local agent of the same name.
+        """
+        self.assertIsNone(ExternalAgentParsing.parse_external_agent("http://user@/math_guy"))
+        self.assertFalse(ExternalAgentParsing.is_external_agent("http://user@/math_guy"))
+
+    def test_parse_external_agent_port_only_authority_returns_none(self) -> None:
+        """
+        Tests that an authority consisting of a port alone, with no host, is
+        also treated as unparseable rather than defaulting to localhost.
+        """
+        self.assertIsNone(ExternalAgentParsing.parse_external_agent("http://:8080/math_guy"))
+
+    def test_parse_external_agent_empty_authority_still_means_same_server(self) -> None:
+        """
+        Tests that a reference with an empty authority keeps resolving to the
+        same server, as it always has, so only a present-but-hostless authority
+        is rejected.
+        """
+        agent_location: Dict[str, str] = \
+            ExternalAgentParsing.parse_external_agent("http:///math_guy", server_port=9000)
+        self.assertIsNotNone(agent_location)
+        self.assertEqual(agent_location.get("host"), "localhost")
+        self.assertEqual(agent_location.get("port"), 9000)
