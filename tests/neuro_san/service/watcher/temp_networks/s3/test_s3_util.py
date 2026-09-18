@@ -14,37 +14,27 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-
 from unittest import TestCase
 
 from botocore.exceptions import BotoCoreError
-from botocore.exceptions import ClientError
 from botocore.exceptions import EndpointConnectionError
 from botocore.exceptions import NoCredentialsError
 from botocore.exceptions import PartialCredentialsError
 
 from neuro_san.service.watcher.temp_networks.s3.s3_util import S3Util
 
-
-def _make_client_error(code: str, operation_name: str = "GetObject") -> ClientError:
-    """
-    Build a ClientError carrying the given S3 error code, shaped the way
-    boto3 surfaces credential rejections (HTTP 400 with a parsed body code).
-    """
-    return ClientError(
-        {
-            "Error": {
-                "Code": code,
-                "Message": f"{code} (test)",
-            },
-            "ResponseMetadata": {"HTTPStatusCode": 400},
-        },
-        operation_name,
-    )
+from tests.neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage_test_base \
+    import S3ReservationsStorageTestBase
 
 
-class TestCredentialRejectionGate(TestCase):
+class TestS3Util(TestCase):
     """
+    Unit tests for S3Util, currently its credential-rejection gate
+    S3Util.is_credential_rejection_error. Pure classification tests: no
+    storage, no fake bucket, so this class derives from TestCase rather
+    than S3ReservationsStorageTestBase and only borrows the base's
+    make_client_error() factory for the error shape.
+
     Pins recovery from S3 rejecting a request's session token as
     InvalidToken ("The provided token is malformed or otherwise invalid")
     on the reservation READ path.
@@ -67,12 +57,13 @@ class TestCredentialRejectionGate(TestCase):
     The widened gate (S3Util.is_credential_rejection_error) treats
     InvalidToken like ExpiredToken: discard the session + client,
     re-resolve the credential chain, and retry. Without the widening, the
-    recovery test below fails with get_one_reservation() returning
-    (None, None) after a single client construction - the exact #1310
-    failure mode.
+    end-to-end recovery test
+    TestS3ReservationsReader.test_invalid_token_triggers_rebuild_and_read_succeeds
+    fails with get_one_reservation() returning (None, None) after a single
+    client construction - the exact #1310 failure mode.
     """
 
-    def test_codes_that_trigger_re_resolution(self):
+    def test_codes_that_trigger_re_resolution(self) -> None:
         """
         Expired, malformed/mismatched, and refresh-required token codes must
         trigger a rebuild: with keyless clients, each can only mean the
@@ -82,11 +73,11 @@ class TestCredentialRejectionGate(TestCase):
         for code in ("ExpiredToken", "ExpiredTokenException", "InvalidToken", "TokenRefreshRequired"):
             with self.subTest(code=code):
                 self.assertTrue(
-                    S3Util.is_credential_rejection_error(_make_client_error(code)),
+                    S3Util.is_credential_rejection_error(S3ReservationsStorageTestBase.make_client_error(code)),
                     f"Expected {code} to trigger credential re-resolution.",
                 )
 
-    def test_codes_that_must_surface(self):
+    def test_codes_that_must_surface(self) -> None:
         """
         Rotated long-lived key pairs and signing problems must NOT be
         retried: re-resolution cannot fix them, and retrying would mask
@@ -95,11 +86,11 @@ class TestCredentialRejectionGate(TestCase):
         for code in ("InvalidAccessKeyId", "SignatureDoesNotMatch", "AccessDenied", "NoSuchKey"):
             with self.subTest(code=code):
                 self.assertFalse(
-                    S3Util.is_credential_rejection_error(_make_client_error(code)),
+                    S3Util.is_credential_rejection_error(S3ReservationsStorageTestBase.make_client_error(code)),
                     f"Expected {code} NOT to trigger credential re-resolution.",
                 )
 
-    def test_local_resolution_failures_trigger_re_resolution(self):
+    def test_local_resolution_failures_trigger_re_resolution(self) -> None:
         """
         NoCredentialsError / PartialCredentialsError are raised locally by
         botocore when the chain resolves empty or half-written (e.g. a
@@ -114,7 +105,7 @@ class TestCredentialRejectionGate(TestCase):
             PartialCredentialsError(provider="shared-credentials-file",
                                     cred_var="aws_secret_access_key")))
 
-    def test_other_local_errors_must_surface(self):
+    def test_other_local_errors_must_surface(self) -> None:
         """
         Generic BotoCoreErrors (network trouble, endpoint problems) are not
         credential rejections: re-resolving the chain cannot fix them, so

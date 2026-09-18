@@ -142,7 +142,8 @@ class SlyDataRedactor(ConfigFilter):
             true_dict: Dict[str, Any] = {}
             key: str = None
             for key in allow_dict:
-                true_dict[key] = True
+                use_key: str = key
+                true_dict[use_key] = True
             allow_dict = true_dict
 
         # Got rid of all the easy cases.
@@ -150,6 +151,7 @@ class SlyDataRedactor(ConfigFilter):
         # For now, just do top-level keys. Can get more complicated later if need be.
         redacted: Dict[str, Any] = {}
         source_key: str = None
+        dest_key: Any = None
         for source_key, dest_key in allow_dict.items():
 
             source_value: Any = basis_config.get(source_key)
@@ -159,7 +161,8 @@ class SlyDataRedactor(ConfigFilter):
 
             if isinstance(dest_key, str):
                 # Translate the key
-                redacted[dest_key] = source_value
+                use_dest_key: str = dest_key
+                redacted[use_dest_key] = source_value
             elif isinstance(dest_key, bool) and bool(dest_key):
                 # Use the same key and the same value in the explicit allow
                 redacted[source_key] = source_value

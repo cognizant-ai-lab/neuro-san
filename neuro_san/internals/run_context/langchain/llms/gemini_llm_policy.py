@@ -63,6 +63,18 @@ class GeminiLlmPolicy(LlmPolicy):
             thinking_level=config.get("thinking_level"),
             thinking_budget=config.get("thinking_budget"),
 
+            # When true, Gemini returns its thought summaries as thinking blocks in the
+            # message content, so the reasoning behind a reply becomes visible to the caller.
+            # A summary is not guaranteed on every reply: the model may reason without
+            # emitting one.  Thought signatures (which carry the model's reasoning across
+            # tool calls within a single request) round-trip regardless of this flag, so
+            # leaving it unset never affects tool calling.  We use config.get() rather than
+            # get_bool() so that an absent key stays None and langchain omits the field from
+            # the thinking config instead of sending an explicit false.
+            # See https://docs.langchain.com/oss/python/integrations/chat/google_generative_ai
+            # and https://ai.google.dev/gemini-api/docs/thinking
+            include_thoughts=config.get("include_thoughts"),
+
             # Streaming is configurable via the "streaming" key in llm_config; defaults
             # to False so existing agents keep their long-standing non-streaming behavior.
             # We pass streaming explicitly (rather than relying on LangChain's default) so
