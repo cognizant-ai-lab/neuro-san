@@ -21,12 +21,15 @@ import time
 from contextlib import contextmanager
 
 from typing import Any
+from typing import Callable
 from typing import Dict
+from typing import Iterator
 
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import patch
 
 from botocore.exceptions import ClientError
+from typing_extensions import override
 
 from neuro_san.internals.reservations.agent_reservation import AgentReservation
 from neuro_san.service.watcher.temp_networks.s3.s3_reservations_storage import S3ReservationsStorage
@@ -57,7 +60,16 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
     # the _put_* helpers below to construct object keys directly.
     PREFIX: str = "reservations/"
 
-    def setUp(self):
+    @override
+    def setUp(self) -> None:
+        """
+        Build a hermetic S3ReservationsStorage around an in-memory fake.
+
+        Pins the environment (no expiration thread, fake AWS credentials,
+        no host config files), patches both create_client seams so the sync
+        and async workers receive FakeS3Client / FakeAsyncS3Client, and
+        starts the storage under test. Every patch is undone via addCleanup.
+        """
         # Force the env-driven expiration interval to 0 so no background
         # thread is started during tests, regardless of the developer's local
         # environment. clear=False means only these keys are overridden; all
@@ -150,6 +162,7 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
         fake bucket (matching the writer's on-disk schema, bypassing the
         writer) so read paths have something real to fetch.
 
+        :param reservation_id: The reservation id, which also names the S3 object
         :return: the reservation id (readers derive the S3 key from it)
         """
         key: str = S3Util.get_obj_key_for_reservation(self.PREFIX, reservation_id)
@@ -169,7 +182,7 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
         return reservation_id
 
     @contextmanager
-    def _fresh_reader_client(self, create_client_replacement):
+    def _fresh_reader_client(self, create_client_replacement: Callable[..., Any]) -> Iterator[None]:
         """
         Re-patch the sync create_client seam with the given replacement and
         discard the reader worker's long-lived client, so that the client
@@ -178,6 +191,11 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
         this base's setUp (under its own create_client patch) and the
         replacement would never be consulted - making any assertion about
         it vacuous.
+
+        :param create_client_replacement: The callable (a MagicMock or bound
+                method) patched onto Session.create_client for the with-block
+        :return: A context manager; the reader's next client build inside the
+                with-block goes through the replacement
         """
         with patch(
             "neuro_san.service.watcher.temp_networks.s3.aws_sync_client_worker.Session.create_client",
@@ -194,6 +212,7 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
         "ExpiredToken").
 
         :param operation_name: The AWS operation name, e.g. "GetObject"
+        :return: A ClientError with code "ExpiredToken" and an HTTP 400 status
         """
         return ClientError(
             {
@@ -207,11 +226,41 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
         )
 
     @staticmethod
+    def make_client_error(code: str, operation_name: str = "GetObject") -> ClientError:
+        """
+        Build a ClientError carrying the given S3 error code, shaped the way
+        boto3 surfaces credential rejections (HTTP 400 with a parsed body code).
+
+        Shared by TestS3Util (which derives from TestCase, not this base, and
+        calls it through the class) and by InvalidTokenS3Client, so the
+        error shape the credential-rejection gate is tested against is the
+        same one the reader-recovery test injects.
+
+        :param code: The S3 error code to carry, e.g. "InvalidToken"
+        :param operation_name: The AWS operation name, e.g. "GetObject"
+        :return: A ClientError with that code and an HTTP 400 status
+        """
+        return ClientError(
+            {
+                "Error": {
+                    "Code": code,
+                    "Message": f"{code} (test)",
+                },
+                "ResponseMetadata": {"HTTPStatusCode": 400},
+            },
+            operation_name,
+        )
+
+    @staticmethod
     def _make_reservation(reservation_id: str,
                           lifetime_seconds: float = 3600.0) -> AgentReservation:
         """
         Build an AgentReservation with a deterministic id and a future
         expiration so the reservation is considered active.
+
+        :param reservation_id: The stable id to give the reservation
+        :param lifetime_seconds: How long the reservation is meant to live
+        :return: The AgentReservation
         """
         reservation = AgentReservation(
             # Total seconds the reservation is intended to live.
@@ -237,6 +286,9 @@ class S3ReservationsStorageTestBase(IsolatedAsyncioTestCase):
         entry. This is enough surface area to verify that arbitrary spec
         fields round-trip through S3 without being silently dropped or
         clobbered by the storage's metadata injection.
+
+        :param name: The network's authored name (the top-level "name" field)
+        :return: The agent spec dictionary
         """
         return {
             # The network's authored name (matches the bare "name" field

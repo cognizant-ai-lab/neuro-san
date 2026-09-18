@@ -115,9 +115,9 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
             return None
 
         # Create the session.
-        host = agent_location.get("host")
-        port = agent_location.get("port")
-        agent_name = agent_location.get("agent_name")
+        host: str = agent_location.get("host")
+        port: str = agent_location.get("port")
+        agent_name: str = agent_location.get("agent_name")
 
         # Note: It's possible we might want some filtering/translation of
         #       metadata keys not unlike what we are doing for sly_data.
@@ -134,7 +134,7 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
             agent_network_provider: AgentNetworkProvider = None
             for network_storage_name in self.get_networks_order(self.network_storage_dict):
 
-                network_storage = self.network_storage_dict.get(network_storage_name)
+                network_storage: AgentNetworkStorage = self.network_storage_dict.get(network_storage_name)
                 # Be sure we have something
                 agent_network_provider = network_storage.get_agent_network_provider(agent_name)
                 if agent_network_provider is None:
