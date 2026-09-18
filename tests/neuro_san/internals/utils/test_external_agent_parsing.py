@@ -214,3 +214,13 @@ class TestExternalAgentParsing(TestCase):
         self.assertIsNotNone(agent_location)
         self.assertEqual(agent_location.get("host"), "localhost")
         self.assertEqual(agent_location.get("port"), 9000)
+
+    def test_parse_external_agent_empty_explicit_port_returns_none(self) -> None:
+        """
+        Tests that a trailing colon with no port digits is treated as a
+        malformed port and returns None, rather than quietly receiving the
+        scheme's default port.
+        """
+        self.assertIsNone(ExternalAgentParsing.parse_external_agent("https://agents.example.com:/math_guy"))
+        self.assertIsNone(ExternalAgentParsing.parse_external_agent("http://[::1]:/math_guy"))
+        self.assertIsNone(ExternalAgentParsing.parse_external_agent("http://user@agents.example.com:/math_guy"))

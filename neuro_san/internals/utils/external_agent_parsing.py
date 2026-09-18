@@ -79,8 +79,13 @@ class ExternalAgentParsing:
         # An authority that is present but carries no host ("http://user@/agent",
         # "http://:8080/agent") is malformed. It must not fall through to the
         # localhost default below, which would silently turn a broken remote
-        # reference into a call to a local agent of the same name.
-        malformed_authority: bool = bool(parse_result.netloc) and not parse_result.hostname
+        # reference into a call to a local agent of the same name. An explicit
+        # but empty port ("https://host:/agent") is malformed too: .port reports
+        # it as None, so without this check it would receive a default port.
+        # The host-info part is what follows any userinfo "@".
+        hostinfo: str = parse_result.netloc.rsplit("@", 1)[-1]
+        malformed_authority: bool = bool(parse_result.netloc) and \
+            (not parse_result.hostname or hostinfo.endswith(":"))
         if not parse_result.path.startswith("/") or malformed_authority:
             # Either not an external agent specification, or unparseable.
             return None
