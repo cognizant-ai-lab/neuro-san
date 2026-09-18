@@ -98,8 +98,11 @@ class ExternalAgentParsing:
                 # back so the session layer can build "https://[v6]:443/...".
                 host = f"[{host}]"
             if port_number is not None:
-                # Keep the historical str type for the port.
-                port = str(port_number)
+                # .port only validated the number. Return the port as written in
+                # the reference ("0443" stays "0443"), as this parser always has.
+                # When present, the port is what follows the last ":" of the
+                # netloc, which is bracket-safe because an IPv6 literal ends in "]".
+                port = parse_result.netloc.rsplit(":", 1)[1]
 
         # Special case for detecting localhost
         if host is None or len(host) == 0:

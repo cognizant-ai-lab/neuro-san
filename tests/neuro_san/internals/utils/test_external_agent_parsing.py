@@ -174,3 +174,15 @@ class TestExternalAgentParsing(TestCase):
             ExternalAgentParsing.parse_external_agent("http://agents.example.com:abc/math_guy")
         self.assertIsNone(agent_location)
         self.assertFalse(ExternalAgentParsing.is_external_agent("http://agents.example.com:abc/math_guy"))
+
+    def test_parse_external_agent_explicit_port_text_is_preserved(self) -> None:
+        """
+        Tests that an explicit port is returned exactly as written in the
+        reference, so a leading zero is not normalized away even though the
+        port is validated as a number.
+        """
+        agent_location: Dict[str, str] = \
+            ExternalAgentParsing.parse_external_agent("https://agents.example.com:0443/math_guy")
+        self.assertIsNotNone(agent_location)
+        self.assertEqual(agent_location.get("port"), "0443")
+        self.assertEqual(agent_location.get("scheme"), "https")
