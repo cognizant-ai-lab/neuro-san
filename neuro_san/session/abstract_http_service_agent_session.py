@@ -122,7 +122,7 @@ class AbstractHttpServiceAgentSession(AgentSessionConstants):
         :param path: url path of a request
         :return: help message
         """
-        message = f"""
+        message: str = f"""
         Some basic suggestions to help debug connectivity issues:
         1. Ensure the server is running and reachable:
            ping <server_address>
@@ -149,3 +149,12 @@ class AbstractHttpServiceAgentSession(AgentSessionConstants):
             policy/database to be sure the your user has the correct permissions for the network.
         """
         return message
+
+    @staticmethod
+    def decode_utf8(instring: bytearray) -> str:
+        """
+        :param instring: The bytes to decode
+        :return: The decoded string
+        """
+        decoded: str = instring.decode("utf-8")
+        return decoded

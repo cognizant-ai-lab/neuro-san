@@ -173,3 +173,38 @@ class TestConnectivityReporter(TestCase):
         }
         tools: List[str] = ConnectivityReporter.assemble_tool_list(agent_spec)
         self.assertEqual(tools, ["agent_a", "agent_b"])
+
+    def test_malformed_url_does_not_crash_network_connectivity(self) -> None:
+        """
+        Tests that a string tool reference whose url cannot be parsed
+        (mismatched bracket read as an invalid IPv6 netloc) does not crash
+        the whole connectivity report. UrlNetworkValidator accepts any
+        http(s)-prefixed string, so such a url can reach the reporter, where
+        the recursion used to die with ValueError inside urlparse via
+        is_external_agent. The string form is used here because
+        assemble_tool_list drops dict-form (MCP) entries before recursing.
+        """
+        config: Dict[str, Any] = {
+            "tools": [
+                {
+                    "name": "front_man",
+                    "instructions": "test",
+                    "tools": ["http://[oops/mcp"],
+                }
+            ]
+        }
+        agent_network: AgentNetwork = AgentNetwork(config, "malformed_url_network")
+
+        # The reporter's self-built factory reads AGENT_TOOLBOX_INFO_FILE at
+        # construction. Keep the test hermetic against the environment.
+        with patch.dict(os.environ):
+            os.environ.pop("AGENT_TOOLBOX_INFO_FILE", None)
+            reporter = ConnectivityReporter(agent_network)
+            messages: List[Dict[str, Any]] = reporter.report_network_connectivity()
+
+        # The unparseable reference is still advertised on the front man, but
+        # it resolves to no known agent, so no node of its own is reported.
+        self.assertEqual(len(messages), 1)
+        connectivity: Dict[str, Any] = messages[0]
+        self.assertEqual(connectivity.get("origin"), "front_man")
+        self.assertEqual(connectivity.get("tools"), ["http://[oops/mcp"])

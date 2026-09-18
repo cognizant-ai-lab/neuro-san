@@ -1775,6 +1775,12 @@
                 # Supported models
                 # - Gemini 3 Pro (gemini-3-pro-preview): supported values are "low", "high" (default)
                 # - Gemini 3 Flash (gemini-3-flash-preview): supported values are "minimal", "low", "medium", "high" (default)
+                # - Gemini 3.7 Flash (gemini-3.7-flash): supported values are "low", "medium" (default), "high".
+                #   "minimal" is not supported and the API returns an error.
+                #   See https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash
+                # - Gemini 3.8 Flash (gemini-3.8-flash): supported values are "low", "medium" (default), "high".
+                #   "minimal" is not supported and the API returns an error.
+                #   See https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash
                 # See https://ai.google.dev/gemini-api/docs/gemini-3#thinking_level
 
                 "thinking_budget": null, # Indicates the thinking budget in tokens.
@@ -1784,6 +1790,15 @@
                 # Set to -1 for dynamic thinking (model decides)
                 # Set to a positive integer to constrain token usage
                 # See https://docs.langchain.com/oss/python/integrations/chat/google_generative_ai#gemini-2-5-models%3A-thinking_budget
+
+                "include_thoughts": null, # Whether to return thought summaries (bool or null).
+                # When true, Gemini adds its thought summaries to the reply as thinking blocks in the
+                # message content. A summary is not guaranteed on every reply: the model may reason
+                # without emitting one. Thought signatures, which carry the model's reasoning across
+                # tool calls within a request, round-trip regardless of this setting, so leaving it
+                # null never affects tool calling.
+                # See https://ai.google.dev/gemini-api/docs/thinking and
+                # https://docs.langchain.com/oss/python/integrations/chat/google_generative_ai
             }
         },
         "bedrock": {
