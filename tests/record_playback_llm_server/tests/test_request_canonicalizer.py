@@ -33,7 +33,7 @@ class TestRequestCanonicalizer(TestCase):
     PATH: str = "/v1/chat/completions"
 
     @staticmethod
-    def _key(body: Dict[str, Any], method: str = "POST", path: str = "/v1/chat/completions") -> str:
+    def _key(body: Dict[str, Any], method: str = "POST", path: str = PATH) -> str:
         """
         Computes the cassette key for a JSON body.
 
