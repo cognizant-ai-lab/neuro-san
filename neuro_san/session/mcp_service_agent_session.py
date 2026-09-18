@@ -22,7 +22,8 @@ from typing import Generator
 
 import json
 
-import requests
+from requests import post
+from requests import Response
 
 from leaf_common.time.timeout import Timeout
 
@@ -105,16 +106,19 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         headers["Content-Type"] = "application/json"
 
         path: str = self.get_request_path("initialize")
+        response: Response = None
         response_dict: Dict[str, Any] = None
         try:
-            response = requests.post(path, json=handshake_dict, headers=headers, timeout=self.timeout_in_seconds)
+            response = post(path, json=handshake_dict, headers=headers, timeout=self.timeout_in_seconds)
             response.raise_for_status()
             response_dict = json.loads(response.text)
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(self.help_message(path)) from exc
 
         # Extract the protocol version from the handshake response
-        self.protocol_version: str = response_dict.get("result", {}).get("protocolVersion", None)
+        empty_dict: Dict[str, Any] = {}
+        result_dict: Dict[str, Any] = response_dict.get("result", empty_dict)
+        self.protocol_version: str = result_dict.get("protocolVersion", None)
 
         # Confirm the protocol version is supported by this client
         if self.protocol_version not in [MCP_VERSION]:
@@ -126,7 +130,7 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
             "method": "notifications/initialized"
         }
         try:
-            response = requests.post(path, json=ack_dict, headers=headers, timeout=self.timeout_in_seconds)
+            response = post(path, json=ack_dict, headers=headers, timeout=self.timeout_in_seconds)
             response.raise_for_status()
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(self.help_message(path)) from exc
@@ -154,21 +158,26 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         headers[self.MCP_PROTOCOL_VERSION] = self.protocol_version
 
         path: str = self.get_request_path("tools/list")
+        response: Response = None
         response_dict: Dict[str, Any] = None
         try:
-            response = requests.post(path, json=use_request_dict, headers=headers, timeout=self.timeout_in_seconds)
+            response = post(path, json=use_request_dict, headers=headers, timeout=self.timeout_in_seconds)
             response.raise_for_status()
             response_dict = json.loads(response.text)
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(self.help_message(path)) from exc
 
-        tools_list: List[Dict[str, Any]] = response_dict.get("result", {}).get("tools", [])
+        empty_dict: Dict[str, Any] = {}
+        empty_list: List[Dict[str, Any]] = []
+        result_dict: Dict[str, Any] = response_dict.get("result", empty_dict)
+        tools_list: List[Dict[str, Any]] = result_dict.get("tools", empty_list)
         name: str = None
         tool_description: str = None
         for tool in tools_list:
-            name = tool.get("name", None)
+            use_tool: Dict[str, Any] = tool
+            name = use_tool.get("name", None)
             if name == self.agent_name:
-                tool_description = tool.get("description", None)
+                tool_description = use_tool.get("description", None)
                 if tool_description is not None:
                     return {
                         "function": {"description": tool_description}
@@ -200,7 +209,7 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
             are produced until the system decides there are no more messages to be sent.
         """
         # Pack the chat request dictionary into an MCP method call format:
-        mcp_payload = {
+        mcp_payload: Dict[str, Any] = {
             "jsonrpc": "2.0",
             "id": 1,
             "method": "tools/call",
@@ -216,14 +225,14 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
 
         path: str = self.get_request_path("streaming_chat")
         try:
-            with requests.post(path, json=mcp_payload, headers=headers,
-                               stream=True, timeout=self.streaming_timeout_in_seconds) as response:
+            with post(path, json=mcp_payload, headers=headers,
+                      stream=True, timeout=self.streaming_timeout_in_seconds) as response:
                 response.raise_for_status()
 
                 for line in response.iter_lines(decode_unicode=True):
                     if line.strip():  # Skip empty lines
                         # Each line is a JSON object representing an MCP tool call(chat) response
-                        result_dict = json.loads(line)
+                        result_dict: Dict[str, Any] = json.loads(line)
                         result_dict = McpChatResponseDictionaryConverter().to_dict(result_dict)
                         yield result_dict
         except Exception as exc:  # pylint: disable=broad-exception-caught
