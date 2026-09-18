@@ -20,6 +20,7 @@ import json
 
 from typing import Any
 from typing import Dict
+from typing import Optional
 from unittest import TestCase
 
 from tests.record_playback_llm_server.request_canonicalizer import RequestCanonicalizer
@@ -32,18 +33,20 @@ class TestRequestCanonicalizer(TestCase):
 
     PATH: str = "/v1/chat/completions"
 
-    @staticmethod
-    def _key(body: Dict[str, Any], method: str = "POST", path: str = PATH) -> str:
+    @classmethod
+    def _key(cls, body: Dict[str, Any], method: str = "POST", path: Optional[str] = None) -> str:
         """
         Computes the cassette key for a JSON body.
 
         :param body: The request body to serialize and hash
         :param method: The HTTP method of the request
-        :param path: The upstream path of the request
+        :param path: The upstream path of the request, or None for the class default PATH
         :return: The canonical cassette key
         """
+        # Resolved at call time so that PATH stays the single source of truth for the default.
+        upstream_path: str = path if path is not None else cls.PATH
         body_bytes: bytes = json.dumps(body).encode()
-        return RequestCanonicalizer.key(method, path, body_bytes)
+        return RequestCanonicalizer.key(method, upstream_path, body_bytes)
 
     def test_key_ignores_json_key_order(self) -> None:
         """

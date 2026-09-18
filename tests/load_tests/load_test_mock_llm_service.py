@@ -68,6 +68,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import List
+from typing import Optional
 from typing import Tuple
 
 import psutil
@@ -354,7 +355,7 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         # than exit: a deployment may pin Chat Completions through a per-network llm_info_file.
         # An empty value counts as unset: the shipped Dockerfiles define AGENT_LLM_INFO_FILE=""
         # and DefaultLlmFactory ignores an empty path just like a missing variable.
-        llm_info_file: str = server_env.get("AGENT_LLM_INFO_FILE")
+        llm_info_file: Optional[str] = server_env.get("AGENT_LLM_INFO_FILE")
         if not llm_info_file:
             logger.warning(
                 "neuro-san server does not have AGENT_LLM_INFO_FILE set.\n"
