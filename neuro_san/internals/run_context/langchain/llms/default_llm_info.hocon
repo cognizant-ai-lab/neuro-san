@@ -1543,6 +1543,8 @@
                 # days); false keeps every request stateless. Stateless reasoning replay in the tool-calling loop
                 # still works, because the Responses API includes encrypted_content on reasoning items by default:
                 # https://developers.openai.com/api/docs/guides/reasoning
+                # That replay only comes into play when reasoning is on. At the default reasoning effort of models
+                # such as gpt-5.2, which is none, no reasoning items are produced and there is nothing to replay.
                 #   false - (default) do not store responses server-side.
                 #   true  - let OpenAI store responses so they can be retrieved later.
                 #   null  - omit the field entirely, for gateways that reject fields they do not know.
