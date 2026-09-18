@@ -22,6 +22,7 @@ from typing import Optional
 from typing import Union
 
 import base64
+from copy import copy
 import math
 
 from langchain_core.messages.base import BaseMessage
@@ -282,9 +283,11 @@ class ContentUtils:
             update_dict["content"] = normalized
             return ContentUtils.message_model_copy(message, update_dict)
 
-        response_metadata: Dict[str, Any] = message.response_metadata
-        if response_metadata is None:
+        response_metadata: Dict[str, Any] = None
+        if message.response_metadata is None:
             response_metadata = {}
+        else:
+            response_metadata = copy(message.response_metadata)
         response_metadata["output_version"] = ContentUtils.OUTPUT_VERSION_V1
 
         update_dict = {
