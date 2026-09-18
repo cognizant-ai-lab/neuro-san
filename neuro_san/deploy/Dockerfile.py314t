@@ -576,6 +576,9 @@ ENV AGENT_MCP_ONLY="false"
 # When set to "true", this parameter requires https for internal agent session communication.
 # The default is "true". Developers should set this to false to work locally without acquiring certificates.
 # Strongly consider keeping this on for production deployments.
+# This also governs external-agent references in the tools lists of agent network hocons:
+# https:// references are allowed, http:// references are rejected when the tool is called,
+# and same-server "/name" references are normally resolved in-process and so are unaffected.
 ENV AGENT_SESSION_REQUIRE_HTTPS="true"
 
 # When set to "false", this parameter will squelch the logging of sensitive information

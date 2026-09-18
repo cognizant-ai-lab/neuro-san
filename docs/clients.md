@@ -22,12 +22,15 @@ There are two ways to connect to an agent network:
 
 ### HTTP / MCP (client-server)
 
-client → Server → use_direct=False (hardcoded) → HTTP → external network
+client → Server → use_direct=True (hardcoded) → in-process → same-server external network (`/name`)
+client → Server → http / https → external network on another server (`http://...` / `https://...`)
 
 The client sends requests to a running server. The server runs the agent network and resolves
-any external networks (tools prefixed with `/`) via HTTP back to itself.
+same-server external networks (tools prefixed with `/`) in-process: it constructs its
+`ExternalAgentSessionFactory` with `use_direct=True`, so no HTTP round trip back to itself is made.
+External networks referenced by URL are called over http or https, matching the URL's scheme.
 
-`use_direct` is hardcoded to `False` on the server — the client's setting is ignored.
+`use_direct` is hardcoded to `True` on the server — the client's setting is ignored.
 
 Requires starting the server first:
     ```python

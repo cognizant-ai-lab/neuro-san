@@ -22,6 +22,8 @@ from typing import Union
 from urllib.parse import ParseResult
 from urllib.parse import urlparse
 
+from neuro_san.interfaces.agent_session_constants import AgentSessionConstants
+
 
 class ExternalAgentParsing:
     """
@@ -32,6 +34,8 @@ class ExternalAgentParsing:
     @staticmethod
     def parse_external_agent(agent_url: str, server_port: int = None) -> Dict[str, str]:
         """
+        Parses an external agent reference into the host, port, agent name and scheme it points at.
+
         :param agent_url: The URL describing where to find the desired agent.
         :param server_port: The port that the server is listening on
                             Does not have to be set for all operations.
@@ -39,6 +43,10 @@ class ExternalAgentParsing:
                 "host" - the hostname where the agent lives
                 "port" - the port on the host which serves up the agent (if any)
                 "agent_name" - the name of the agent on that host
+                "scheme" - the lower-cased url scheme of the reference
+                           ("http" or "https"), or "" when the reference
+                           has no scheme, e.g. "/math_guy" for an agent
+                           on the same server.
 
                 OR
 
@@ -47,7 +55,13 @@ class ExternalAgentParsing:
         if agent_url is None or len(agent_url) == 0:
             return None
 
-        parse_result: ParseResult = urlparse(agent_url)
+        try:
+            parse_result: ParseResult = urlparse(agent_url)
+        except ValueError:
+            # e.g. mismatched brackets parsed as an invalid IPv6 netloc.
+            # Unparseable means "not an external agent", per this method's
+            # contract of returning None on unsuccessful parsing.
+            return None
         if parse_result is None:
             return None
 
@@ -59,6 +73,10 @@ class ExternalAgentParsing:
         if not parse_result.path.startswith("/"):
             # This is not an external agent specification
             return None
+
+        # urlparse already lower-cases the scheme, but be explicit so callers
+        # comparing against "https" do not depend on that implementation detail.
+        scheme: str = (parse_result.scheme or "").lower()
 
         host: str = None
         port: str = None
@@ -79,12 +97,24 @@ class ExternalAgentParsing:
             # If this is not set, it will default to None, which is fine.
             port = server_port
 
-        # Get the agent name from the URL by looking at the path
+        if port is None and scheme == "https":
+            # An https reference without an explicit port is expected to reach
+            # a TLS-terminating proxy on the well-known https port, not the bare
+            # 8080 dev server the session layer defaults to. Only https gets this
+            # treatment: http and scheme-less references keep port None so the
+            # session layer's own http default still applies. This runs after
+            # the localhost rule so a configured server_port wins for localhost.
+            port = str(AgentSessionConstants.DEFAULT_HTTPS_PORT)
+
+        # Get the agent name from the URL by looking at the path.
         # Remove any leading slashes from the path for the agent name.
-        # Note: While we need to get the agent name for proper gRPC routing,
-        #       this is not yet super robust against any non-default case
-        #       where some other entity needs a non-standard path for routing
-        #       (like a load balancer).  Cross that bridge when we get to it.
+        # Note: The agent name becomes the {agent_name} segment of the
+        #       /api/v1/{agent_name}/{method} http path and the key for the
+        #       Direct-session registry lookup on the same server, so it may
+        #       itself contain "/" for nested registries. This is not yet
+        #       robust against any non-default case where some other entity
+        #       needs a non-standard path for routing (like a load balancer).
+        #       Cross that bridge when we get to it.
         agent_name: str = parse_result.path
         while agent_name.startswith("/"):
             agent_name = agent_name[1:]
@@ -94,6 +124,7 @@ class ExternalAgentParsing:
             "host": host,
             "port": port,
             "agent_name": agent_name,
+            "scheme": scheme,
         }
         return return_dict
 

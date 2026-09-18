@@ -789,7 +789,22 @@ This allows common agent network definitions to be used as functions for other l
 
 Furthermore, it is also possible to reference agents on other neuro-san _servers_ by using a URL as a tool reference.
 
-Example: `http://localhost:8080/math_guy`
+Examples: `http://localhost:8080/math_guy` or `https://agents.example.com/deep/math_guy`
+
+The path of the URL is the served agent's name. It may contain `/` when the remote server keeps its
+registries in nested directories, as in `deep/math_guy` above.
+
+Which port is used depends on the kind of reference:
+
+- An `https://` reference without an explicit port uses the well-known https port (443), on the assumption
+  that a TLS-terminating proxy or load balancer sits in front of the remote neuro-san server.
+- An `http://` reference without an explicit port uses the neuro-san server's default http port (8080).
+- A same-server `/name` reference (see above) resolves on the server running the referencing network,
+  so no host or port is involved.
+
+When a server runs with `AGENT_SESSION_REQUIRE_HTTPS=true` (the default in the shipped Dockerfile), only `https://`
+URL references are accepted; an `http://` reference fails when the tool is called. Same-server `/name` references
+are normally resolved in-process and so are unaffected.
 
 This enables entire ecosystems of agent webs.
 
