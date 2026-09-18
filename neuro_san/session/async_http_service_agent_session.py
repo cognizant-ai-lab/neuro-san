@@ -32,6 +32,7 @@ from aiohttp import ClientResponse
 from aiohttp import ClientSession
 from aiohttp import ClientTimeout
 
+from neuro_san.message.utils.content_utils import ContentUtils
 from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.session.abstract_http_service_agent_session import AbstractHttpServiceAgentSession
 from neuro_san.session.agent_session_closed_error import AgentSessionClosedError
@@ -210,7 +211,7 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
 
                             # Grab a single line
                             single_line_bytes: bytearray = accumulator[:index]
-                            unicode_line = self.decode_utf8(single_line_bytes)
+                            unicode_line = ContentUtils.decode(single_line_bytes, "utf-8")
                             unicode_line = unicode_line.strip()
                             if unicode_line:    # Skip empty lines
                                 # We have a line with something in it.
@@ -226,7 +227,7 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
 
                     # If there is anything left in the accumulator, yield it
                     if len(accumulator) > 0:
-                        unicode_line = self.decode_utf8(accumulator)
+                        unicode_line = ContentUtils.decode(accumulator, "utf-8")
                         unicode_line = unicode_line.strip()
                         if unicode_line:
                             result_dict: Dict[str, Any] = json.loads(unicode_line)

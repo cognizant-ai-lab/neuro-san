@@ -424,7 +424,11 @@ class ContentUtils:
         if isinstance(value, float):
             return value if math.isfinite(value) else str(value)
         if isinstance(value, (bytes, bytearray)):
-            return base64.b64encode(bytes(value)).decode("ascii")
+            # Convert bytes to base64
+            bytes_value: bytes = bytes(value)
+            encoded: bytes = base64.b64encode(bytes_value)
+            encoded_bytearray: bytearray = bytearray(encoded)
+            return ContentUtils.decode(encoded_bytearray, "ascii")
         if isinstance(value, dict):
             safe_dict: Dict[str, Any] = {}
             for key, item in value.items():
@@ -436,3 +440,16 @@ class ContentUtils:
                 safe_list.append(ContentUtils.to_json_safe(item))
             return safe_list
         return str(value)
+
+    @staticmethod
+    def decode(instring: bytearray, encoding: str = "utf-8") -> str:
+        """
+        :param instring: The bytes to decode
+        :param encoding: The encoding to use
+        :return: The decoded string
+        """
+        if not instring:
+            return ""
+
+        decoded: str = instring.decode(encoding)
+        return decoded
