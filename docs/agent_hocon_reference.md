@@ -806,8 +806,9 @@ Which port is used depends on the kind of reference:
   so no host or port is involved.
 
 When a server runs with `AGENT_SESSION_REQUIRE_HTTPS=true` (the default in the shipped Dockerfile), only `https://`
-URL references are accepted; an `http://` reference fails when the tool is called. Same-server `/name` references
-are normally resolved in-process and so are unaffected.
+URL references to remote servers are accepted; a remote `http://` reference fails when the tool is called.
+Same-server references are unaffected, because they are resolved in-process without an http session: that is
+every `/name` reference, and an `http://localhost/...` reference to a network this same server serves.
 
 This enables entire ecosystems of agent webs.
 
