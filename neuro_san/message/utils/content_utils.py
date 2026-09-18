@@ -27,7 +27,8 @@ import math
 
 from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.content import KNOWN_BLOCK_TYPES
-from langchain_core.messages.util.decode_utils import DecodeUtils
+
+from neuro_san.message.util.decode_utils import DecodeUtils
 
 
 class ContentUtils:
