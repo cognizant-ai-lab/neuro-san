@@ -29,6 +29,7 @@ from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.internals.journals.origination import Origination
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
 from neuro_san.message.types.chat_message_type import ChatMessageType
+from neuro_san.message.types.chat_message_type_util import ChatMessageTypeUtil
 from neuro_san.session.direct_agent_session import DirectAgentSession
 from neuro_san.session.mcp_service_agent_session import McpServiceAgentSession
 
@@ -146,7 +147,7 @@ class StreamingInputProcessor:
         """
         chat_request = {
             "user_message": {
-                "type": ChatMessageType.HUMAN.name,
+                "type": ChatMessageTypeUtil.to_string(ChatMessageType.HUMAN),
                 "text": user_input
             }
         }
@@ -191,7 +192,7 @@ class StreamingInputProcessor:
             return empty
         response: Dict[str, Any] = content_seq[0]
         return {
-            "type": ChatMessageType.AGENT_FRAMEWORK.name,
+            "type": ChatMessageTypeUtil.to_string(ChatMessageType.AGENT_FRAMEWORK),
             "text": response.get("text", "")
         }
 
