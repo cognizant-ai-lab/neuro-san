@@ -32,6 +32,7 @@ from neuro_san.message.types.agent_framework_message import AgentFrameworkMessag
 from neuro_san.message.types.agent_progress_message import AgentProgressMessage
 from neuro_san.message.types.agent_tool_result_message import AgentToolResultMessage
 from neuro_san.message.types.chat_message_type import ChatMessageType
+from neuro_san.message.types.chat_message_type_util import ChatMessageTypeUtil
 from neuro_san.message.utils.content_utils import ContentUtils
 
 
@@ -69,7 +70,7 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         """
 
         message: BaseMessage = obj
-        message_type: ChatMessageType = ChatMessageType.from_message(message)
+        message_type: ChatMessageType = ChatMessageTypeUtil.from_message(message)
         chat_message: Dict[str, Any] = {
             "type": message_type,
             # No mime_data for now
@@ -143,7 +144,7 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
             return base_message
 
         content: str = chat_message.get("text")
-        chat_message_type: ChatMessageType = ChatMessageType.from_response_type(chat_message.get("type"))
+        chat_message_type: ChatMessageType = ChatMessageTypeUtil.from_response_type(chat_message.get("type"))
 
         if chat_message_type == ChatMessageType.SYSTEM:
             base_message = SystemMessage(content=content)

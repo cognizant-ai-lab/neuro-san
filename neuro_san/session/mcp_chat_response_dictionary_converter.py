@@ -22,6 +22,7 @@ from typing import Sequence
 from leaf_common.serialization.interface.dictionary_converter import DictionaryConverter
 
 from neuro_san.message.types.chat_message_type import ChatMessageType
+from neuro_san.message.types.chat_message_type_util import ChatMessageTypeUtil
 
 
 class McpChatResponseDictionaryConverter(DictionaryConverter):
@@ -55,7 +56,7 @@ class McpChatResponseDictionaryConverter(DictionaryConverter):
         response: Dict[str, Any] = content_seq[0]
         final_response: Dict[str, Any] = {
             "response": {
-                "type": ChatMessageType.AGENT_FRAMEWORK.name,
+                "type": ChatMessageTypeUtil.to_string(ChatMessageType.AGENT_FRAMEWORK),
                 "text": response.get("text", "")
             },
             "mcp_response": chat_response
