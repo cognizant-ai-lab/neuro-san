@@ -44,7 +44,7 @@ from neuro_san.internals.run_context.langchain.llms.standard_langchain_llm_facto
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
 from neuro_san.internals.run_context.langchain.util.argument_validator import ArgumentValidator
 
-KEYS_TO_REMOVE_FOR_USER_CLASS: Set[str] = {"class", "verbose"}
+KEYS_TO_REMOVE_FOR_USER_CLASS: Set[str] = {"class", "provider_tools", "verbose"}
 
 # Lazily import specific errors from llm providers
 API_KEY_ERRORS: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
@@ -616,7 +616,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             if isinstance(fallback, list):
                 # Fallback lists grouped by further lists of fallbacks are peers for randomization.
                 sub_config: Dict[str, Any] = {
-                    "fallbacks": fallback
+                    "fallbacks": fallback,
+                    "provider_tools": config.get("provider_tools"),
                 }
                 one_llm_resources = self.create_llm_with_fallbacks(sub_config, sly_data=sly_data, num_fallbacks=None,
                                                                    randomize_peers=True)
@@ -674,6 +675,14 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             }
 
         if len(fallback_llm_resources) > 0:
+
+            if config.get("provider_tools"):
+                main_policy_type = type(main_llm_resources.get_llm_policy())
+                fallback_policy_types = {
+                    type(resources.get_llm_policy()) for resources in fallback_llm_resources
+                }
+                if fallback_policy_types != {main_policy_type}:
+                    raise ValueError("provider_tools requires all fallback LLMs to use the same provider")
 
             if randomize_peers:
                 # Prepare a list of all LlmResources to be randomized, including the main one

@@ -312,13 +312,38 @@ in answers provided by the LLM.  By default this value is 0.7.
 #### Other LLM-specific Parameters
 
 LLMs all come with various parameters like temperature that can be set on them.
-As long as a parameter is a scalar listed in the args section for your LLM's class in the
+As long as a parameter is listed in the args section for your LLM's class in the
 [llm_info hocon file](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon)
 file, you can set that parameter in any llm_config within its own technical limits however you like.
 
 Note: _We strongly recommend to **not** set secrets as values within any source file, including hocon files._
 These files tend to creep into source control repos, and it is **very** bad practice
 to expose secrets by checking them in.
+
+#### provider_tools
+
+The optional `provider_tools` key is a list of provider-native tool dictionaries. These tools run on the model
+provider's servers rather than in neuro-san. The dictionaries are passed through unchanged, so their shapes must
+match the provider selected by `model_name` or `class`. See the
+[provider-specific reference](./llm_info_hocon_reference.md#provider_tools) for supported shapes and limitations.
+
+```hocon
+"llm_config": {
+    "model_name": "gpt-5.2",
+    "provider_tools": [
+        {"type": "web_search"},
+        {"type": "code_interpreter", "container": {"type": "auto"}}
+    ]
+}
+```
+
+An agent-level list replaces the network-level list. Set it to `[]` or `null` to clear inherited tools. The model
+decides whether to use a provider tool; neuro-san does not force a tool choice. All entries in a fallback chain must
+use the same provider when `provider_tools` is non-empty because LangChain binds the same list to every fallback.
+
+Provider tool activity and results are carried over neuro-san's text-only response and history interfaces. Provider
+billing for searches, code execution, or other built-ins is separate from neuro-san's token accounting. Do not put
+API keys or other secrets inside provider tool dictionaries; use the provider's normal credential configuration.
 
 #### OpenAI Reasoning and Responses API Parameters
 
@@ -412,7 +437,8 @@ Set the `class` key to one of the values listed below, then specify the model us
 You may only provide parameters that are explicitly defined for that provider's class under the
 `classes.<class>.args` section of
 [`default_llm_info.hocon`](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon).
-Unsupported parameters will be ignored
+Unsupported parameters will be ignored. `provider_tools` is the exception: neuro-san consumes it when creating the
+agent and does not pass it to the chat-model constructor.
 
 **2. For custom providers (not in `default_llm_info.hocon`)**
 

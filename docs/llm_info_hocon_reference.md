@@ -275,6 +275,24 @@ especially useful in combination with model aliasing when privately hosted LLMs
 need to specify specific endpoints that are used over and over again in your agent
 definitions.
 
+##### `provider_tools`
+
+`provider_tools` is declared in the `args` blocks for the `openai`, `anthropic`, and `gemini` classes so it can be
+set in an agent's `llm_config`. It is consumed by the run context and is not a constructor argument. Values are raw
+provider-native dictionaries:
+
+- OpenAI: `{"type": "web_search"}` or
+  `{"type": "code_interpreter", "container": {"type": "auto"}}`.
+- Anthropic: server tools such as
+  `{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}`. Supported server types include
+  `web_search_`, `web_fetch_`, `code_execution_`, `tool_search_`, and `mcp_toolset` variants. Client-side types such
+  as `bash_`, `text_editor_`, `computer_`, and `memory_` are not executed by neuro-san.
+- Gemini: `{"google_search": {}}` or `{"code_execution": {}}`. Gemini built-ins must be used on an agent with no
+  other tools because Gemini rejects or mis-converts mixed built-in and function-tool requests.
+
+The list is provider-specific rather than portable. A non-empty declaration therefore requires all models in a
+fallback chain, including peer groups, to use the same provider.
+
 #### `factories`
 
 You can list your own factory classes that create a BaseLanguageModel instance given a config if the
