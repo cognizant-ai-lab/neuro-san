@@ -22,10 +22,13 @@ from typing import Optional
 from typing import Union
 
 import base64
+from copy import copy
 import math
 
 from langchain_core.messages.base import BaseMessage
 from langchain_core.messages.content import KNOWN_BLOCK_TYPES
+
+from neuro_san.message.utils.decode_utils import DecodeUtils
 
 
 class ContentUtils:
@@ -87,21 +90,27 @@ class ContentUtils:
         if content is None:
             return ""
         if isinstance(content, str):
-            return content
+            content_string: str = content
+            return content_string
         if not isinstance(content, list):
             # Not a legal langchain content shape, but do not crash over it.
             return str(content)
 
+        content_list: List[Any] = content
         parts: List[str] = []
-        for item in content:
+        for item in content_list:
             if isinstance(item, str):
-                parts.append(item)
-            elif isinstance(item, dict) and item.get("type") == "text":
-                text_value: Any = item.get("text")
-                # Like BaseMessage.text, a non-string text value contributes
-                # nothing (never the literal "None").
-                if isinstance(text_value, str):
-                    parts.append(text_value)
+                item_string: str = item
+                parts.append(item_string)
+            elif isinstance(item, dict):
+                item_dict: Dict[str, Any] = item
+                if item_dict.get("type") == "text":
+                    text_value: Any = item_dict.get("text")
+                    # Like BaseMessage.text, a non-string text value contributes
+                    # nothing (never the literal "None").
+                    if isinstance(text_value, str):
+                        text_value_string: str = text_value
+                        parts.append(text_value_string)
         return "".join(parts)
 
     @staticmethod
@@ -121,13 +130,24 @@ class ContentUtils:
         :param source: A BaseMessage, or raw message content
         :return: True if the content is empty in the sense above
         """
-        content: Any = source.content if isinstance(source, BaseMessage) else source
+        content: Any = source
+        if isinstance(source, BaseMessage):
+            content = source.content
+
         if content is None:
             return True
+
         if isinstance(content, str):
-            return content.strip() == ""
+            string_content: str = content
+            return string_content.strip() == ""
+
         if isinstance(content, list):
-            return all(ContentUtils._is_blank_block(item) for item in content)
+            list_content: List[Any] = content
+            for item in list_content:
+                if not ContentUtils._is_blank_block(item):
+                    return False
+            return True
+
         return not bool(content)
 
     @staticmethod
@@ -171,11 +191,19 @@ class ContentUtils:
         :param message: The BaseMessage whose content to standardize
         :return: A JSON-safe list of standard content-block dictionaries
         """
-        blocks: List[Dict[str, Any]] = [
-            block for block in message.content_blocks
-            if block.get("type") not in ContentUtils.TOOL_CALL_BLOCK_TYPES
-        ]
-        return ContentUtils.to_json_safe(blocks)
+        blocks: List[Dict[str, Any]] = []
+
+        content_blocks: List[Dict[str, Any]] = message.content_blocks
+        block: Dict[str, Any] = None
+        for block in content_blocks:
+            use_block: Dict[str, Any] = block
+            block_type: str = use_block.get("type")
+            if block_type in ContentUtils.TOOL_CALL_BLOCK_TYPES:
+                continue
+            blocks.append(use_block)
+
+        json_safe_blocks: List[Dict[str, Any]] = ContentUtils.to_json_safe(blocks)
+        return json_safe_blocks
 
     @staticmethod
     def is_trivial(blocks: List[Dict[str, Any]]) -> bool:
@@ -215,14 +243,26 @@ class ContentUtils:
         """
         content: Any = message.content
         if isinstance(content, str):
-            return content
-        if isinstance(content, list) and all(isinstance(item, str) for item in content):
-            # A list of plain strings carries no block structure at all -
-            # collapse to text rather than promoting it to a block list.
-            return ContentUtils.flatten_to_text(message)
+            content_string: str = content
+            return content_string
+
+        if isinstance(content, list):
+            content_list: List[Any] = content
+            all_strings: bool = True
+            item: Any = None
+            for item in content_list:
+                if not isinstance(item, str):
+                    all_strings = False
+                    break
+            if all_strings:
+                # A list of plain strings carries no block structure at all -
+                # collapse to text rather than promoting it to a block list.
+                return ContentUtils.flatten_to_text(message)
+
         blocks: List[Dict[str, Any]] = ContentUtils.standard_blocks(message)
         if not blocks or ContentUtils.is_trivial(blocks):
             return ContentUtils.flatten_to_text(message)
+
         return blocks
 
     @staticmethod
@@ -243,18 +283,37 @@ class ContentUtils:
         :return: The same message instance if nothing changed,
                  otherwise a model_copy with normalized content
         """
+        update_dict: Dict[str, Any] = {}
         normalized: Union[str, List[Dict[str, Any]]] = ContentUtils.normalize_content(message)
         if isinstance(normalized, str):
             if normalized == message.content:
                 return message
-            return message.model_copy(update={"content": normalized})
+            update_dict["content"] = normalized
+            return ContentUtils.message_model_copy(message, update_dict)
 
-        response_metadata: Dict[str, Any] = dict(message.response_metadata or {})
+        response_metadata: Dict[str, Any] = None
+        if message.response_metadata is None:
+            response_metadata = {}
+        else:
+            response_metadata = copy(message.response_metadata)
         response_metadata["output_version"] = ContentUtils.OUTPUT_VERSION_V1
-        return message.model_copy(update={
+
+        update_dict = {
             "content": normalized,
             "response_metadata": response_metadata,
-        })
+        }
+        return ContentUtils.message_model_copy(message, update_dict)
+
+    @staticmethod
+    def message_model_copy(message: BaseMessage, update_dict: Dict[str, Any]) -> BaseMessage:
+        """
+        Funnel method to return a model_copy() of the message with the given update_dict applied.
+
+        :param message: The BaseMessage to copy
+        :param update_dict: The dictionary to update the message with
+        :return: A model_copy() of the message with the update_dict applied
+        """
+        return message.model_copy(update=update_dict)
 
     @staticmethod
     def looks_like_blocks(value: Any) -> bool:
@@ -273,14 +332,22 @@ class ContentUtils:
         """
         if not isinstance(value, list) or len(value) == 0:
             return False
-        for item in value:
+
+        list_value: List[Any] = value
+        item: Any = None
+        for item in list_value:
+
             if not isinstance(item, dict):
                 return False
-            if item.get("type") not in KNOWN_BLOCK_TYPES:
+
+            item_dict: Dict[str, Any] = item
+            item_type: str = item_dict.get("type")
+
+            if item_type not in KNOWN_BLOCK_TYPES:
                 return False
-            if item.get("type") in ContentUtils.TOOL_CALL_BLOCK_TYPES:
+            if item_type in ContentUtils.TOOL_CALL_BLOCK_TYPES:
                 return False
-            if "source_type" in item:
+            if "source_type" in item_dict:
                 return False
         return True
 
@@ -313,13 +380,18 @@ class ContentUtils:
             return None
 
         content_blocks: Any = chat_message.get("content_blocks")
-        if content_blocks is not None and content_blocks != []:
+        content_blocks_list: List[Any] = content_blocks
+        if content_blocks is not None and not (isinstance(content_blocks, list) and len(content_blocks_list) == 0):
             if ContentUtils.looks_like_blocks(content_blocks):
                 return content_blocks
             return None
 
         mime_data: Any = chat_message.get("mime_data")
-        if not isinstance(mime_data, list) or len(mime_data) == 0:
+        if not isinstance(mime_data, list):
+            return None
+
+        mime_data_list: List[Any] = mime_data
+        if len(mime_data_list) == 0:
             return None
 
         blocks: List[Dict[str, Any]] = []
@@ -327,14 +399,19 @@ class ContentUtils:
         if isinstance(text, str) and text:
             blocks.append({"type": "text", "text": text})
 
-        for entry in mime_data:
+        entry: Any = None
+        for entry in mime_data_list:
+
             if not isinstance(entry, dict):
                 return None
-            mime_type: str = str(entry.get("mime_type") or "")
-            mime_bytes: Any = entry.get("mime_bytes")
+            entry_dict: Dict[str, Any] = entry
+
+            mime_type: str = str(entry_dict.get("mime_type") or "")
+            mime_bytes: Any = entry_dict.get("mime_bytes")
             if not isinstance(mime_bytes, str) or not mime_bytes or not mime_type:
                 return None
-            blocks.append(ContentUtils._data_block(mime_type, mime_bytes))
+            mime_bytes_str: str = mime_bytes
+            blocks.append(ContentUtils._data_block(mime_type, mime_bytes_str))
 
         return blocks
 
@@ -352,31 +429,42 @@ class ContentUtils:
         :param source: A BaseMessage, or raw message content
         :return: The history-safe text. Never None.
         """
-        content: Any = source.content if isinstance(source, BaseMessage) else source
+        content: Any = source
+        if isinstance(source, BaseMessage):
+            content = source.content
+
         if content is None or isinstance(content, str):
             return content or ""
         if not isinstance(content, list):
             return str(content)
+        content_list: List[Any] = content
 
         parts: List[str] = []
-        for item in content:
+        item: Dict[str, Any] | str = None
+        for item in content_list:
+
             if isinstance(item, str):
-                parts.append(item)
+                string_item: str = item
+                parts.append(string_item)
                 continue
+
             if not isinstance(item, dict):
                 continue
-            block_type: Any = item.get("type")
+
+            dict_item: Dict[str, Any] = item
+
+            block_type: Any = dict_item.get("type")
             if block_type == "text":
-                text_value: Any = item.get("text")
+                text_value: Any = dict_item.get("text")
                 if isinstance(text_value, str):
                     parts.append(text_value)
             elif block_type in ContentUtils.DATA_BLOCK_TYPES:
-                inline_text: Any = item.get("text")
+                inline_text: Any = dict_item.get("text")
                 if isinstance(inline_text, str) and inline_text:
                     # A text-plain block can carry its text inline.
                     parts.append(inline_text)
                 else:
-                    mime_type: str = str(item.get("mime_type") or "unknown")
+                    mime_type: str = str(dict_item.get("mime_type") or "unknown")
                     parts.append(f"[{block_type} attachment: {mime_type}]")
         return "".join(parts)
 
@@ -424,7 +512,10 @@ class ContentUtils:
         if isinstance(value, float):
             return value if math.isfinite(value) else str(value)
         if isinstance(value, (bytes, bytearray)):
-            return base64.b64encode(bytes(value)).decode("ascii")
+            # Convert bytes to base64
+            bytes_value: bytes = bytes(value)
+            encoded: bytes = base64.b64encode(bytes_value)
+            return DecodeUtils.decode(encoded, "ascii")
         if isinstance(value, dict):
             safe_dict: Dict[str, Any] = {}
             for key, item in value.items():
