@@ -47,6 +47,14 @@ class AgentNetwork(AgentNetworkInspector):
         # False otherwise.
         self.is_mcp_network: bool = False
 
+        # The name this network is advertised under when served as an MCP tool.
+        # It is kept apart from self.name because network names carry the registry
+        # sub-directory with a "/" (for example "deep/math_guy"), and LLM providers
+        # such as OpenAI and Anthropic reject "/" in tool names. The network name
+        # stays the internal key everywhere; this is only the outward-facing spelling.
+        # None until set_as_mcp_tool() is called.
+        self.mcp_tool_name: str = None
+
         self.first_agent: str = None
 
         agent_specs: List[Dict[str, Any]] = self.config.get("tools")
@@ -62,11 +70,21 @@ class AgentNetwork(AgentNetworkInspector):
         """
         return self.config
 
-    def set_as_mcp_tool(self):
+    def set_as_mcp_tool(self, tool_name: str = None) -> None:
         """
         Marks this agent network as being served as an MCP tool.
+
+        :param tool_name: The name to advertise the tool under. When None (the default)
+                          the network name itself is used, which preserves the historical
+                          behavior for callers that do not care about provider-safe names.
         """
         self.is_mcp_network = True
+        # An empty string is treated like None: an MCP tool must have some name,
+        # and the network name is the only sensible fallback.
+        if tool_name:
+            self.mcp_tool_name = tool_name
+        else:
+            self.mcp_tool_name = self.name
 
     def is_mcp_tool(self) -> bool:
         """
@@ -74,6 +92,25 @@ class AgentNetwork(AgentNetworkInspector):
                  False otherwise.
         """
         return self.is_mcp_network
+
+    def get_mcp_tool_name(self) -> str:
+        """
+        Gets the name this network is advertised under as an MCP tool.
+
+        :return: The advertised MCP tool name, or None if it is not served as an MCP tool.
+        """
+        return self.mcp_tool_name
+
+    def clear_mcp_tool(self) -> None:
+        """
+        Withdraws this agent network from being served as an MCP tool.
+
+        Used when two networks would otherwise advertise the same tool name and
+        one of them has to give way. The network itself stays served over the
+        regular (non-MCP) APIs.
+        """
+        self.is_mcp_network = False
+        self.mcp_tool_name = None
 
     def register(self, agent_spec: Dict[str, Any]):
         """
