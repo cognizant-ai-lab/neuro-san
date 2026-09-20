@@ -20,6 +20,7 @@ See class comment for details
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Tuple
 
 import asyncio
@@ -79,8 +80,10 @@ class McpToolsProcessor:
             if provider is not None:
                 agent_network: AgentNetwork = provider.get_agent_network()
                 if agent_network.is_mcp_tool():
-                    tool_dict: Dict[str, Any] = await self._get_tool_description(agent_name, metadata)
-                    tools_description.append(tool_dict)
+                    tool_dict: Optional[Dict[str, Any]] = \
+                        await self._get_tool_description(agent_name, agent_network, metadata)
+                    if tool_dict is not None:
+                        tools_description.append(tool_dict)
         return {
             "jsonrpc": "2.0",
             "id": RequestUtil.safe_request_id(request_id),
@@ -112,9 +115,14 @@ class McpToolsProcessor:
         # pylint: disable=too-many-arguments
         # pylint: disable=too-many-positional-arguments
 
+        # Clients address the tool by its advertised name (e.g. "deep__math_guy"),
+        # but the authorizer and the service table are keyed by network name
+        # ("deep/math_guy"). Error strings keep the name the client used.
+        network_name: str = self._resolve_network_name(tool_name)
+
         is_authorized: bool = False
         service_provider: AsyncAgentServiceProvider = None
-        is_authorized, service_provider = await self.agent_policy.allow_agent(tool_name, metadata)
+        is_authorized, service_provider = await self.agent_policy.allow_agent(network_name, metadata)
 
         if service_provider is None:
             # No such tool is found:
@@ -212,8 +220,17 @@ class McpToolsProcessor:
         call_result["result"]["content"][0]["text"] = RequestUtil.safe_message(result_text)
         return call_result
 
-    async def _get_tool_description(self, agent_name: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
+    async def _get_tool_description(self, agent_name: str, agent_network: AgentNetwork,
+                                    metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Build the MCP tool description for one agent network.
 
+        :param agent_name: network name; this is the key the authorizer and the service table use
+        :param agent_network: the AgentNetwork carrying the name to advertise the tool under
+        :param metadata: http-level request metadata
+        :return: json dictionary describing the tool in MCP format,
+                 or None if the caller is not authorized for the network or it has no service.
+        """
         is_authorized: bool = False
         service_provider: AsyncAgentServiceProvider = None
         is_authorized, service_provider = await self.agent_policy.allow_agent(agent_name, metadata)
@@ -224,11 +241,43 @@ class McpToolsProcessor:
         service: AsyncAgentService = service_provider.get_service()
         function_dict: Dict[str, Any] = await service.function({}, metadata)
         tool_description: str = function_dict.get("function", {}).get("description", "")
-        return {
-            "name": agent_name,
+
+        # Nested networks are advertised under a provider-safe name ("deep__math_guy")
+        # because "/" in a tool name fails OpenAI and Anthropic requests outright.
+        tool_name: str = agent_network.get_mcp_tool_name() or agent_name
+        tool_dict: Dict[str, Any] = {
+            "name": tool_name,
             "description": tool_description,
             "inputSchema": self.tool_request_validator.get_request_schema()
         }
+        if tool_name != agent_name:
+            # MCP 2025-06-18 gives Tool an optional human-readable "title".
+            # Carrying the original network name there lets clients show
+            # where a renamed tool came from.
+            tool_dict["title"] = agent_name
+        return tool_dict
+
+    def _resolve_network_name(self, tool_name: str) -> str:
+        """
+        Map an advertised MCP tool name back to the network name it stands for.
+
+        :param tool_name: tool name as sent by the client in a tools/call request
+        :return: the network name whose advertised MCP tool name equals tool_name,
+                 or tool_name unchanged when no network advertises it.
+                 Passing the name through keeps top-level networks (whose two
+                 spellings coincide) and the legacy slash spelling working.
+        """
+        public_storage: AgentNetworkStorage = self.network_storage_dict.get(StorageClass.PUBLIC)
+        for agent_name in public_storage.get_agent_names():
+            provider: AgentNetworkProvider = public_storage.get_agent_network_provider(agent_name)
+            if provider is None:
+                continue
+            agent_network: AgentNetwork = provider.get_agent_network()
+            if agent_network is None or not agent_network.is_mcp_tool():
+                continue
+            if agent_network.get_mcp_tool_name() == tool_name:
+                return agent_name
+        return tool_name
 
     async def _extract_tool_response_part(
             self, response_dict: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
