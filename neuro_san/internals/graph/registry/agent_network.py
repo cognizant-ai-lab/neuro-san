@@ -47,12 +47,31 @@ class AgentNetwork(AgentNetworkInspector):
         # False otherwise.
         self.is_mcp_network: bool = False
 
-        # The name this network is advertised under when served as an MCP tool.
+        # The name this network is advertised under when served as an MCP tool:
+        # the "name" of its entry in a tools/list response, and the name MCP
+        # clients send back in tools/call.
+        #
         # It is kept apart from self.name because network names carry the registry
-        # sub-directory with a "/" (for example "deep/math_guy"), and LLM providers
-        # such as OpenAI and Anthropic reject "/" in tool names. The network name
-        # stays the internal key everywhere; this is only the outward-facing spelling.
-        # None until set_as_mcp_tool() is called.
+        # sub-directory with a "/" (a network loaded from registries/deep/math_guy.hocon
+        # is named "deep/math_guy"), and LLM providers such as OpenAI and Anthropic
+        # only accept tool names matching ^[a-zA-Z0-9_-]+$. A "/" in a tool name
+        # fails the whole request of any agent that has the tool in its tool list,
+        # so nested networks need a different outward-facing spelling. The caller of
+        # set_as_mcp_tool() chooses it, normally with McpToolNamePolicy.to_tool_name():
+        #
+        #   self.name          mcp_tool_name
+        #   "math_guy"         "math_guy"        top-level: nothing to replace, same name
+        #   "deep/math_guy"    "deep__math_guy"  nested: "/" becomes "__"
+        #   "deep/math_guy"    "calculator"      manifest entry sets "mcp_name": "calculator"
+        #
+        # The network name stays the internal key everywhere else (network storage,
+        # agent authorization, the /api/v1/{agent_name} http path). This field is
+        # only the spelling shown to MCP clients; when the two differ, the MCP tool
+        # description can still carry self.name in its "title" field so clients can
+        # see which network a renamed tool stands for.
+        #
+        # None until set_as_mcp_tool() is called, i.e. for networks that are not
+        # served as MCP tools at all.
         self.mcp_tool_name: str = None
 
         self.first_agent: str = None
@@ -72,11 +91,33 @@ class AgentNetwork(AgentNetworkInspector):
 
     def set_as_mcp_tool(self, tool_name: str = None) -> None:
         """
-        Marks this agent network as being served as an MCP tool.
+        Marks this agent network as being served as an MCP tool, under the given name.
 
-        :param tool_name: The name to advertise the tool under. When None (the default)
-                          the network name itself is used, which preserves the historical
-                          behavior for callers that do not care about provider-safe names.
+        Examples, for a network loaded from registries/deep/math_guy.hocon
+        (self.name is "deep/math_guy"):
+
+            network.set_as_mcp_tool()
+                is_mcp_tool() -> True, get_mcp_tool_name() -> "deep/math_guy"
+                (the historical behavior; OpenAI and Anthropic reject the "/")
+            network.set_as_mcp_tool(McpToolNamePolicy.to_tool_name(network.name))
+                get_mcp_tool_name() -> "deep__math_guy"
+            network.set_as_mcp_tool("calculator")
+                get_mcp_tool_name() -> "calculator"   (an explicit manifest "mcp_name")
+
+        For a top-level network (self.name is "math_guy") the first two calls both
+        give "math_guy", since there is nothing to replace.
+
+        :param tool_name: The name to advertise the tool under in tools/list and
+                          tools/call. Normally this is the provider-safe spelling of
+                          the network name from McpToolNamePolicy.to_tool_name()
+                          ("deep/math_guy" gives "deep__math_guy"; a top-level
+                          "math_guy" is already safe and stays "math_guy"), or an
+                          explicit "mcp_name" from the network's manifest entry.
+                          When None or empty (the default) the network name itself is
+                          used unchanged, which preserves the historical behavior for
+                          callers that do not care about provider-safe names. Note that
+                          a nested network advertised that way keeps its "/", which
+                          OpenAI and Anthropic reject in tool names.
         """
         self.is_mcp_network = True
         # An empty string is treated like None: an MCP tool must have some name,
@@ -107,7 +148,19 @@ class AgentNetwork(AgentNetworkInspector):
 
         Used when two networks would otherwise advertise the same tool name and
         one of them has to give way. The network itself stays served over the
-        regular (non-MCP) APIs.
+        regular (non-MCP) APIs: it remains in network storage, so it can still be
+        reached at /api/v1/{name}/... over http and as a same-server "/{name}"
+        external agent. It only disappears from MCP tools/list and tools/call.
+
+        Example: registries/a/b.hocon (network "a/b") and registries/a__b.hocon
+        (network "a__b") both derive the MCP tool name "a__b". The network whose
+        own name already is that tool name keeps it, so the other one is cleared:
+
+            a_slash_b.clear_mcp_tool()
+                a_slash_b.is_mcp_tool() -> False, a_slash_b.get_mcp_tool_name() -> None
+                tools/list then shows a single "a__b" tool, backed by network "a__b"
+
+        Calling set_as_mcp_tool() again makes the network an MCP tool once more.
         """
         self.is_mcp_network = False
         self.mcp_tool_name = None
