@@ -15,6 +15,10 @@
 #
 # END COPYRIGHT
 
+from typing import List
+
+from logging import INFO
+
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
@@ -48,6 +52,23 @@ class TestLangChainMcpAdapter:
         LangChainMcpAdapter._mcp_servers_info = None
         yield
         LangChainMcpAdapter._mcp_servers_info = None
+
+    @staticmethod
+    def _make_tool(name: str) -> MagicMock:
+        """
+        Builds a StructuredTool-shaped mock carrying a real string name.
+
+        The name must be assigned after construction: MagicMock's name= kwarg
+        only sets the mock's repr, and with spec=StructuredTool reading .name
+        without an explicit assignment raises AttributeError.
+
+        :param name: The tool name the fake MCP server advertises.
+        :return: A MagicMock with .name and .tags set like a fresh MCP tool.
+        """
+        tool: MagicMock = MagicMock(spec=StructuredTool)
+        tool.name = name
+        tool.tags = []
+        return tool
 
     def test_init(self, adapter):
         """Test adapter initialization"""
@@ -200,16 +221,18 @@ class TestLangChainMcpAdapter:
         self, mock_client_class, adapter
     ):
         """Test that langchain_tool tags are added to all tools"""
-        tools = [
-            MagicMock(spec=StructuredTool, name=f"tool{i}", tags=[])
-            for i in range(3)
-        ]
+        # Names are assigned explicitly: MagicMock(name=...) only sets the repr,
+        # and the adapter now reads tool.name on every tool to check it is safe.
+        tools: List[MagicMock] = []
+        for index in range(3):
+            tools.append(self._make_tool(f"tool{index}"))
 
         mock_client = mock_client_class.return_value
         mock_client.get_tools = AsyncMock(return_value=tools)
 
         result = await adapter.get_mcp_tools("https://mcp.example.com/mcp")
 
+        assert len(result) == 3
         for tool in result:
             assert "langchain_tool" in tool.tags
 
@@ -323,3 +346,192 @@ class TestLangChainMcpAdapter:
         assert LangChainMcpAdapter._mcp_servers_info == {}
         # The real underlying cause is surfaced in the log so users can diagnose.
         assert "Cannot resolve variable ${YDC_API_KEY}" in caplog.text
+
+    @staticmethod
+    def _make_tools(names: List[str]) -> List[MagicMock]:
+        """
+        Builds one StructuredTool-shaped mock per name, in order.
+
+        Renaming mutates a mock's .name in place, so a test that calls
+        get_mcp_tools() more than once needs a fresh list for each call.
+
+        :param names: The tool names the fake MCP server advertises.
+        :return: The mocks, in the same order as names.
+        """
+        tools: List[MagicMock] = []
+        for name in names:
+            tools.append(TestLangChainMcpAdapter._make_tool(name))
+        return tools
+
+    @pytest.mark.asyncio
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
+    async def test_get_mcp_tools_renames_only_unsafe_names(
+        self, mock_client_class: MagicMock, adapter: LangChainMcpAdapter, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """
+        A server tool named with a "/" is exposed to the LLM under the
+        provider-safe "__" spelling and the rename is logged at INFO, while a
+        tool whose name is already safe is returned unchanged with no log line.
+
+        :param mock_client_class: Patched MultiServerMCPClient class.
+        :param adapter: Fresh adapter under test.
+        :param caplog: pytest log capture fixture.
+        """
+        # The routine rename is INFO, below caplog's default WARNING threshold.
+        caplog.set_level(INFO)
+        mock_client = mock_client_class.return_value
+        mock_client.get_tools = AsyncMock(return_value=self._make_tools(["basic/music_nerd_pro", "Safe_tool-1"]))
+
+        tools: List[StructuredTool] = await adapter.get_mcp_tools("https://mcp.example.com/mcp")
+
+        assert len(tools) == 2
+        assert tools[0].name == "basic__music_nerd_pro"
+        assert tools[1].name == "Safe_tool-1"
+        assert "langchain_tool" in tools[0].tags
+        assert "tool 'basic/music_nerd_pro' renamed to 'basic__music_nerd_pro'" in caplog.text
+        # The operator must be told the server still sees the original name.
+        assert "still called with the original name" in caplog.text
+        assert "'Safe_tool-1' renamed" not in caplog.text
+        assert "match no tool" not in caplog.text
+
+    @pytest.mark.asyncio
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
+    async def test_get_mcp_tools_allow_list_accepts_either_spelling(
+        self, mock_client_class: MagicMock, adapter: LangChainMcpAdapter, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """
+        An allow-list entry keeps the matching "/" server tool whether written in
+        the server's original spelling or in the provider-safe spelling seen in
+        logs and thinking output. An entry matching nothing yields no tools and
+        logs a warning naming the entry and the tools the server does offer,
+        instead of dropping it silently.
+
+        :param mock_client_class: Patched MultiServerMCPClient class.
+        :param adapter: Fresh adapter under test.
+        :param caplog: pytest log capture fixture.
+        """
+        server_names: List[str] = ["basic/music_nerd_pro", "other_tool"]
+        mock_client = mock_client_class.return_value
+        mock_client.get_tools = AsyncMock(side_effect=[
+            self._make_tools(server_names),
+            self._make_tools(server_names),
+            self._make_tools(server_names),
+        ])
+        server_url: str = "https://mcp.example.com/mcp"
+
+        original_spelling: List[StructuredTool] = await adapter.get_mcp_tools(
+            server_url, allowed_tools=["basic/music_nerd_pro"])
+        safe_spelling: List[StructuredTool] = await adapter.get_mcp_tools(
+            server_url, allowed_tools=["basic__music_nerd_pro"])
+        assert "match no tool" not in caplog.text
+        unmatched: List[StructuredTool] = await adapter.get_mcp_tools(server_url, allowed_tools=["nope"])
+
+        assert len(original_spelling) == 1
+        assert original_spelling[0].name == "basic__music_nerd_pro"
+        assert len(safe_spelling) == 1
+        assert safe_spelling[0].name == "basic__music_nerd_pro"
+        assert len(unmatched) == 0
+        assert "match no tool on the server" in caplog.text
+        assert "nope" in caplog.text
+        assert "basic/music_nerd_pro" in caplog.text
+        assert "other_tool" in caplog.text
+
+    @pytest.mark.asyncio
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
+    async def test_get_mcp_tools_allow_list_exact_spelling_selects_one_tool(
+        self, mock_client_class: MagicMock, adapter: LangChainMcpAdapter, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """
+        When a server offers both "a/b" and "a__b", an allow list naming "a/b"
+        keeps exactly the "a/b" tool (then renamed) and one naming "a__b" keeps
+        exactly the literal "a__b" tool. Neither case is a collision, so nothing
+        is skipped and the author never silently gets the tool they did not name.
+
+        :param mock_client_class: Patched MultiServerMCPClient class.
+        :param adapter: Fresh adapter under test.
+        :param caplog: pytest log capture fixture.
+        """
+        first_slash: MagicMock = self._make_tool("a/b")
+        first_safe: MagicMock = self._make_tool("a__b")
+        second_slash: MagicMock = self._make_tool("a/b")
+        second_safe: MagicMock = self._make_tool("a__b")
+        mock_client = mock_client_class.return_value
+        mock_client.get_tools = AsyncMock(side_effect=[[first_slash, first_safe], [second_slash, second_safe]])
+        server_url: str = "https://mcp.example.com/mcp"
+
+        by_slash: List[StructuredTool] = await adapter.get_mcp_tools(server_url, allowed_tools=["a/b"])
+        by_safe: List[StructuredTool] = await adapter.get_mcp_tools(server_url, allowed_tools=["a__b"])
+
+        assert len(by_slash) == 1
+        # Identity, not just name: the "a/b" tool the author asked for is the survivor.
+        assert by_slash[0] is first_slash
+        assert by_slash[0].name == "a__b"
+        assert len(by_safe) == 1
+        assert by_safe[0] is second_safe
+        assert by_safe[0].name == "a__b"
+        assert "skipping it" not in caplog.text
+        assert "match no tool" not in caplog.text
+
+    @pytest.mark.asyncio
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
+    async def test_get_mcp_tools_skips_colliding_tools(
+        self, mock_client_class: MagicMock, adapter: LangChainMcpAdapter, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """
+        Without an allow list, two tools mapping to one safe name are a collision:
+        the tool needing no rename wins even when listed second ("a/b" vs "a__b"),
+        and when both need renaming the first one listed wins ("a.b" vs "a b").
+        The loser is skipped with a warning either way.
+
+        :param mock_client_class: Patched MultiServerMCPClient class.
+        :param adapter: Fresh adapter under test.
+        :param caplog: pytest log capture fixture.
+        """
+        slash_tool: MagicMock = self._make_tool("a/b")
+        safe_tool: MagicMock = self._make_tool("a__b")
+        dot_tool: MagicMock = self._make_tool("a.b")
+        space_tool: MagicMock = self._make_tool("a b")
+        mock_client = mock_client_class.return_value
+        mock_client.get_tools = AsyncMock(side_effect=[[slash_tool, safe_tool], [dot_tool, space_tool]])
+        server_url: str = "https://mcp.example.com/mcp"
+
+        safe_wins: List[StructuredTool] = await adapter.get_mcp_tools(server_url)
+        first_wins: List[StructuredTool] = await adapter.get_mcp_tools(server_url)
+
+        assert len(safe_wins) == 1
+        # Identity, not just name: the literal "a__b" tool is the survivor.
+        assert safe_wins[0] is safe_tool
+        assert safe_wins[0].name == "a__b"
+        assert "tool 'a/b' would be renamed to 'a__b'" in caplog.text
+        assert "skipping it" in caplog.text
+        assert len(first_wins) == 1
+        assert first_wins[0] is dot_tool
+        assert first_wins[0].name == "a_b"
+        assert "tool 'a b' would be renamed to 'a_b'" in caplog.text
+
+    @pytest.mark.asyncio
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
+    async def test_get_mcp_tools_warns_when_renamed_name_exceeds_soft_limit(
+        self, mock_client_class: MagicMock, adapter: LangChainMcpAdapter, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """
+        A rename that pushes a name past the 64-character OpenAI cap is kept
+        (Anthropic and local providers accept it) but a warning is logged.
+
+        :param mock_client_class: Patched MultiServerMCPClient class.
+        :param adapter: Fresh adapter under test.
+        :param caplog: pytest log capture fixture.
+        """
+        # 34 + "/" + 34 = 69 chars originally; "__" makes the safe name 70 chars.
+        original_name: str = ("a" * 34) + "/" + ("b" * 34)
+        expected_name: str = ("a" * 34) + "__" + ("b" * 34)
+        mock_client = mock_client_class.return_value
+        mock_client.get_tools = AsyncMock(return_value=[self._make_tool(original_name)])
+
+        tools: List[StructuredTool] = await adapter.get_mcp_tools("https://mcp.example.com/mcp")
+
+        assert len(tools) == 1
+        assert len(expected_name) == 70
+        assert tools[0].name == expected_name
+        assert "over the 64-character OpenAI tool-name cap" in caplog.text
+        assert "is 70 characters long" in caplog.text

@@ -19,6 +19,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Set
 
 from copy import copy
 from logging import Logger
@@ -29,12 +30,27 @@ from langchain_core.tools import BaseTool
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from neuro_san.internals.run_context.langchain.mcp.mcp_servers_info_restorer import McpServersInfoRestorer
 from neuro_san.internals.run_context.langchain.mcp.mcp_tool_error_handler import McpToolErrorHandler
+from neuro_san.internals.utils.mcp_tool_name_policy import McpToolNamePolicy
 
 
 class LangChainMcpAdapter:
     """
     Adapter class to fetch tools from a Multi-Client Protocol (MCP) server and return them as
     LangChain-compatible tools. This class provides static methods for interacting with MCP servers.
+
+    Tool names are made provider-safe on the way in. OpenAI and Anthropic reject
+    a whole request when any tool name falls outside ^[a-zA-Z0-9_-]+$, so a
+    server tool such as "basic/music_nerd_pro" is exposed to the LLM as
+    "basic__music_nerd_pro" via McpToolNamePolicy.filter(). Only the
+    LangChain-side name changes: langchain_mcp_adapters builds each tool's
+    coroutine as a closure over the original mcp.types.Tool and calls the server
+    with that object's name, so the server never sees the renamed spelling.
+    Allow-list entries may be written in either spelling; when a server offers
+    both spellings of one name, an entry selects the tool it spells exactly.
+    Two tools on one server that would map to the same safe name are a
+    collision; the tool that needed no rename (or, failing that, the first one
+    listed) is kept and the other is skipped with a warning. Thinking output and journal entries show
+    the renamed spelling because they read the LangChain tool name.
     """
 
     _mcp_info_lock: Lock = Lock()
@@ -46,6 +62,9 @@ class LangChainMcpAdapter:
         """
         self.client_allowed_tools: List[str] = []
         self.logger: Logger = getLogger(self.__class__.__name__)
+        # Maps server tool names to provider-safe ones and matches allow-list
+        # entries in either spelling; built once per adapter.
+        self.tool_name_policy: McpToolNamePolicy = McpToolNamePolicy()
 
     def _load_mcp_servers_info(self):
         """
@@ -76,12 +95,23 @@ class LangChainMcpAdapter:
         """
         Fetches tools from the given MCP server and returns them as a list of LangChain-compatible tools.
 
+        Tools are filtered by the allow list first (matching against the server's
+        original names), then renamed with McpToolNamePolicy.filter() so the
+        names the LLM sees are accepted by OpenAI and Anthropic. A tool whose safe
+        name collides with another tool's from the same server is skipped with a
+        warning, and a renamed name longer than the 64-character OpenAI cap is
+        kept but warned about.
+
         :param server_url: URL of the MCP server, e.g. https://mcp.deepwiki.com/mcp or http://localhost:8000/mcp/
         :param allowed_tools: Optional list of tool names to filter from the server's available tools.
-                              If None, all tools from the server will be returned.
+                              Entries may use either the server's original spelling
+                              (e.g. "basic/music_nerd_pro") or the provider-safe spelling
+                              (e.g. "basic__music_nerd_pro"). If None, the "tools" list from
+                              the MCP servers info for this server is used; if that is also
+                              absent or empty, all tools from the server will be returned.
         :param headers: Optional dictionary of HTTP headers to include in the MCP requests.
-
-        :return: A list of LangChain BaseTool instances retrieved from the MCP server.
+        :return: A list of LangChain BaseTool instances retrieved from the MCP server,
+                 with provider-safe names.
         """
         if self._mcp_servers_info is None:
             self._load_mcp_servers_info()
@@ -117,11 +147,13 @@ class LangChainMcpAdapter:
         if client_allowed_tools is None:
             # Check if MCP server info has a "tools" field to use as allowed tools.
             client_allowed_tools = self._mcp_servers_info.get(server_url, {}).get("tools", [])
-        # If client allowed tools is an empty list, do not filter the tools.
-        if client_allowed_tools:
-            mcp_tools = [tool for tool in mcp_tools if tool.name in client_allowed_tools]
-
         self.client_allowed_tools = client_allowed_tools
+
+        # Filter before renaming so the allow list is matched against the names
+        # the server actually advertised; McpToolNamePolicy.select_allowed()
+        # takes care of accepting the provider-safe spelling as well.
+        mcp_tools = self._filter_allowed_tools(server_url, mcp_tools, client_allowed_tools)
+        mcp_tools = self._rename_tools_for_providers(server_url, mcp_tools)
 
         for tool in mcp_tools:
             # Add "langchain_tool" tags so journal callback can idenitify it.
@@ -144,3 +176,117 @@ class LangChainMcpAdapter:
                 tool.coroutine = McpToolErrorHandler(tool).async_invoke
 
         return mcp_tools
+
+    def _filter_allowed_tools(
+            self,
+            server_url: str,
+            mcp_tools: List[BaseTool],
+            client_allowed_tools: List[str]
+    ) -> List[BaseTool]:
+        """
+        Keeps only the tools permitted by the allow list, warning about entries
+        that match nothing the server advertised.
+
+        :param server_url: URL of the MCP server the tools came from, for log messages.
+        :param mcp_tools: All tools returned by the server, still carrying their original names.
+        :param client_allowed_tools: Allow-list entries in either the original or the
+                                     provider-safe spelling. None or empty means no filtering.
+        :return: The tools whose original name matches at least one allow-list entry,
+                 in server order; mcp_tools itself when there is no allow list.
+        """
+        # An empty or absent allow list has always meant "take everything".
+        if not client_allowed_tools:
+            return mcp_tools
+
+        original_names: List[str] = []
+        for tool in mcp_tools:
+            original_names.append(tool.name)
+
+        # Entries that match nothing used to be dropped silently, leaving the
+        # hocon author guessing why a tool never appeared. Log what the server
+        # actually offers so a typo or an upstream rename is visible.
+        unmatched: List[str] = self.tool_name_policy.find_unmatched(client_allowed_tools, original_names)
+        if unmatched:
+            self.logger.warning(
+                "MCP server %s: allow-list entries %s match no tool on the server. Available tools: %s",
+                server_url, unmatched, original_names)
+
+        # Each entry resolves to one advertised tool, exact spelling first, so an
+        # allow list naming "a/b" does not also pull in a literal "a__b" the
+        # server happens to offer, which the rename step would otherwise have to
+        # choose between (and would choose the one the author did not name).
+        selected: List[str] = self.tool_name_policy.select_allowed(client_allowed_tools, original_names)
+
+        filtered_tools: List[BaseTool] = []
+        for tool in mcp_tools:
+            if tool.name in selected:
+                filtered_tools.append(tool)
+
+        return filtered_tools
+
+    def _collect_safe_names(self, mcp_tools: List[BaseTool]) -> Set[str]:
+        """
+        Collects the names of the tools that are already provider-safe and so
+        will not be renamed.
+
+        :param mcp_tools: The tools to inspect, carrying their original names.
+        :return: The set of tool names that McpToolNamePolicy.filter() leaves unchanged.
+        """
+        safe_names: Set[str] = set()
+        for tool in mcp_tools:
+            if self.tool_name_policy.filter(tool.name) == tool.name:
+                safe_names.add(tool.name)
+        return safe_names
+
+    def _rename_tools_for_providers(self, server_url: str, mcp_tools: List[BaseTool]) -> List[BaseTool]:
+        """
+        Renames tools whose names LLM providers would reject, skipping any whose
+        safe name collides with another tool from the same server.
+
+        Only the LangChain tool's name is changed. The coroutine built by
+        langchain_mcp_adapters closes over the original mcp.types.Tool and keeps
+        calling the server with the original name.
+
+        :param server_url: URL of the MCP server the tools came from, for log messages.
+        :param mcp_tools: The tools to rename, already filtered by the allow list.
+        :return: The tools to expose to the LLM, in server order, with provider-safe names.
+        """
+        # Seed with the names that need no rename so that a tool literally named
+        # "a__b" always beats a tool "a/b" that would be renamed to the same
+        # thing, whichever order the server listed them in.
+        taken_names: Set[str] = self._collect_safe_names(mcp_tools)
+
+        kept_tools: List[BaseTool] = []
+        for tool in mcp_tools:
+            safe_name: str = self.tool_name_policy.filter(tool.name)
+            if safe_name == tool.name:
+                kept_tools.append(tool)
+                continue
+
+            if safe_name in taken_names:
+                # Exposing two tools under one name would make the LLM's choice
+                # ambiguous, so the later arrival is dropped rather than exposed.
+                self.logger.warning(
+                    "MCP server %s: tool '%s' would be renamed to '%s', which another tool on the same "
+                    "server already uses; skipping it.",
+                    server_url, tool.name, safe_name)
+                continue
+
+            taken_names.add(safe_name)
+            # Expected, per-run housekeeping: create_mcp_tool() builds a fresh
+            # adapter on every agent run, so this would spam WARNING otherwise.
+            self.logger.info(
+                "MCP server %s: tool '%s' renamed to '%s' for LLM tool-name compatibility; "
+                "the server is still called with the original name",
+                server_url, tool.name, safe_name)
+            if self.tool_name_policy.is_over_soft_limit(safe_name):
+                # "__" is longer than "/", so a rename can push a name past the
+                # OpenAI cap. Anthropic and local providers accept it, so warn only.
+                self.logger.warning(
+                    "MCP server %s: renamed tool '%s' is %d characters long, over the %d-character "
+                    "OpenAI tool-name cap; OpenAI models may reject requests that include it.",
+                    server_url, safe_name, len(safe_name), McpToolNamePolicy.SOFT_MAX_LENGTH)
+            tool.name = safe_name
+            kept_tools.append(tool)
+
+        return kept_tools
