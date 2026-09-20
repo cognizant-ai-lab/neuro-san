@@ -120,15 +120,17 @@ class TestMcpToolNamePolicy(TestCase):
         """
         self.assertFalse(McpToolNamePolicy.matches("deep/math_guy", "deep/music_nerd"))
 
-    def test_matches_requires_separator_for_mangled_comparison(self) -> None:
+    def test_matches_is_symmetric_for_every_unsafe_character(self) -> None:
         """
-        Comparing both sides in mangled form is reserved for entries carrying a "/":
-        an entry "a.b" must not claim an unrelated tool "a_b" just because both
-        mangle to "a_b", while "a/b.c" still matches a server that renamed it to "a__b_c".
+        An entry written with any unsafe character matches the tool a renaming
+        server advertises under the mangled spelling, not only entries with "/".
         """
-        self.assertFalse(McpToolNamePolicy.matches("a.b", "a_b"))
-        self.assertFalse(McpToolNamePolicy.matches("a b", "a_b"))
+        self.assertTrue(McpToolNamePolicy.matches("a.b", "a_b"))
+        self.assertTrue(McpToolNamePolicy.matches("a b", "a_b"))
         self.assertTrue(McpToolNamePolicy.matches("a/b.c", "a__b_c"))
+        # The mangled spellings still have to be the same.
+        self.assertFalse(McpToolNamePolicy.matches("a.b", "a-b"))
+        self.assertFalse(McpToolNamePolicy.matches("a.b", "a__b"))
 
     def test_resolve_prefers_exact_spelling(self) -> None:
         """
@@ -137,6 +139,10 @@ class TestMcpToolNamePolicy(TestCase):
         originals: List[str] = ["a/b", "a__b"]
         self.assertEqual("a/b", McpToolNamePolicy.resolve("a/b", originals))
         self.assertEqual("a__b", McpToolNamePolicy.resolve("a__b", originals))
+        # The same holds for other unsafe characters: an exact "a.b" is not
+        # confused with a literal "a_b" the server also offers.
+        self.assertEqual("a.b", McpToolNamePolicy.resolve("a.b", ["a_b", "a.b"]))
+        self.assertEqual("a_b", McpToolNamePolicy.resolve("a_b", ["a_b", "a.b"]))
 
     def test_resolve_falls_back_to_safe_spelling(self) -> None:
         """

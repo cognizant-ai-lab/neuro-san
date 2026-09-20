@@ -167,14 +167,15 @@ class McpToolNamePolicy:
             return True
 
         # Finally compare both sides in mangled form so an entry written with
-        # the original "/" still matches a server that has already renamed its
-        # tools (the server-side fix). Only entries carrying a NETWORK_SEPARATOR
-        # get this treatment: the server-side rename applies to network names,
-        # which are registry paths, and without the gate the lossy
-        # UNSAFE_REPLACEMENT mapping would let an entry "a.b" claim an unrelated
-        # tool "a_b".
-        if McpToolNamePolicy.NETWORK_SEPARATOR not in entry:
-            return False
+        # the original spelling still matches a server that has already renamed
+        # its tools. The server-side rename applies to_tool_name() to the whole
+        # network name, so this has to cover every unsafe character, not only
+        # the "/" of nested registry paths: a network "a.b" is advertised as
+        # "a_b" and the entry "a.b" must still select it. The mapping is lossy
+        # ("a.b" and "a b" both become "a_b"), so an entry could in principle
+        # claim an unrelated tool that happens to carry the mangled spelling;
+        # resolve() keeps that in check by preferring an exact spelling whenever
+        # the server offers one.
         return McpToolNamePolicy.to_tool_name(entry) == mangled_original
 
     @staticmethod
