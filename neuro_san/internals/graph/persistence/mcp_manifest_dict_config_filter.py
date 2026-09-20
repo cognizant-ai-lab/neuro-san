@@ -17,6 +17,9 @@
 from typing import Any
 from typing import Dict
 
+from logging import getLogger
+from logging import Logger
+
 from leaf_common.config.config_filter import ConfigFilter
 
 from neuro_san.internals.interfaces.storage_class import StorageClass
@@ -26,8 +29,29 @@ class McpManifestDictConfigFilter(ConfigFilter):
     """
     Implementation of the ConfigFilter interface that reads the contents
     of a single manifest configuration dictionary for an agent networks/registry,
-    making sure the mcp setting is consistent with the rest of the manifest dictionary.
+    making sure the mcp settings are consistent with the rest of the manifest dictionary.
+
+    Two keys are handled:
+        "mcp"       - boolean; defaults to False. True implies "public" is True.
+        "mcp_name"  - optional string naming the tool the network is advertised as
+                      over MCP. A usable value implies "mcp" (and therefore "public")
+                      is True. Absent means the tool name is derived from the network
+                      name later, by RegistryManifestRestorer, which is also where the
+                      name is validated so that the check happens exactly once with
+                      the final value.
     """
+
+    def __init__(self, manifest_file: str = None, agent_network: str = None) -> None:
+        """
+        Constructor
+
+        :param manifest_file: The name of the manifest file we are processing for logging purposes
+        :param agent_network: The name of the agent network for logging purposes
+        """
+        super().__init__()
+        self.manifest_file: str = manifest_file
+        self.agent_network: str = agent_network
+        self.logger: Logger = getLogger(self.__class__.__name__)
 
     def filter_config(self, basis_config: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -44,5 +68,23 @@ class McpManifestDictConfigFilter(ConfigFilter):
             basis_config["mcp"] = False
         if basis_config["mcp"]:
             basis_config[StorageClass.PUBLIC] = True
+
+        if "mcp_name" in basis_config:
+            mcp_name: Any = basis_config.get("mcp_name")
+            if isinstance(mcp_name, str) and mcp_name:
+                # Naming the tool only makes sense when the network is served as one,
+                # so a usable mcp_name switches "mcp" on the same way "mcp" switches
+                # "public" on above.
+                basis_config["mcp"] = True
+                basis_config[StorageClass.PUBLIC] = True
+            else:
+                # Drop the bad value rather than keep it: downstream code treats any
+                # present mcp_name as the name to advertise, and a non-string there
+                # would surface as a confusing failure much later, at tools/list time.
+                self.logger.warning("Manifest entry for %s in file %s has an \"mcp_name\" that is not a " +
+                                    "non-empty string (%s). Ignoring it; the MCP tool name will be derived " +
+                                    "from the network name instead.",
+                                    self.agent_network, self.manifest_file, repr(mcp_name))
+                del basis_config["mcp_name"]
 
         return basis_config

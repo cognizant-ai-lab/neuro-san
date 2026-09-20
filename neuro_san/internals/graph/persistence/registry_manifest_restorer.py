@@ -53,6 +53,7 @@ from neuro_san.internals.graph.persistence.served_manifest_config_filter import 
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_name_mapper import AgentNameMapper
 from neuro_san.internals.interfaces.storage_class import StorageClass
+from neuro_san.internals.utils.mcp_tool_name_policy import McpToolNamePolicy
 from neuro_san.internals.validation.network.manifest_network_validator import ManifestNetworkValidator
 
 
@@ -120,7 +121,84 @@ class RegistryManifestRestorer(Restorer):
         for storage_type, storage_dict in all_agent_networks.items():
             all_agent_networks[storage_type] = config_filter.filter_config(storage_dict)
 
+        # Two networks can only be seen to claim the same MCP tool name once every
+        # manifest has been overlaid and the unserved (None) entries are gone,
+        # so this has to run last.
+        self.resolve_mcp_tool_name_collisions(all_agent_networks)
+
         return all_agent_networks
+
+    def resolve_mcp_tool_name_collisions(self, all_agent_networks: Dict[str, Dict[str, AgentNetwork]]) -> None:
+        """
+        Makes sure no two public networks are advertised under the same MCP tool name.
+
+        Tool names are derived from network names by replacing "/" with "__"
+        (or come from an explicit "mcp_name" in the manifest), so distinct networks
+        such as "a/b" and "a__b" can end up with the same tool name. MCP clients
+        address tools by name alone, so one of the two has to stop being an MCP tool.
+        The loser stays served over the regular APIs; only its MCP exposure is withdrawn.
+
+        :param all_agent_networks: a nested map of storage type -> (mapping of name -> agent networks),
+                                   modified in place for any losing network.
+        """
+        public_networks: Dict[str, AgentNetwork] = all_agent_networks.get(StorageClass.PUBLIC, {})
+        if not public_networks:
+            return
+
+        # Map of tool name -> network name currently holding it.
+        owners: Dict[str, str] = {}
+
+        # Sorted so the outcome does not depend on manifest or dict ordering
+        # between server restarts.
+        for network_name in sorted(public_networks.keys()):
+            agent_network: AgentNetwork = public_networks.get(network_name)
+            # ServedManifestConfigFilter has already dropped None entries, but this
+            # method is also callable on its own, so stay defensive.
+            if agent_network is None or not agent_network.is_mcp_tool():
+                continue
+
+            tool_name: str = agent_network.get_mcp_tool_name()
+            if tool_name not in owners:
+                owners[tool_name] = network_name
+                continue
+
+            self.resolve_one_mcp_tool_name_collision(public_networks, owners, tool_name, network_name)
+
+    def resolve_one_mcp_tool_name_collision(self, public_networks: Dict[str, AgentNetwork],
+                                            owners: Dict[str, str],
+                                            tool_name: str,
+                                            contender_name: str) -> None:
+        """
+        Decides which of two networks keeps a contested MCP tool name and withdraws the other.
+
+        :param public_networks: mapping of network name -> AgentNetwork for the public storage class
+        :param owners: mapping of tool name -> network name currently holding it; updated in place
+                       when the contender wins.
+        :param tool_name: The contested MCP tool name
+        :param contender_name: The network name that also wants tool_name, found after the current owner
+        """
+        owner_name: str = owners.get(tool_name)
+
+        # Prefer the network whose tool name is its own network name unchanged.
+        # That one was never renamed, so clients that already address it by that
+        # name keep working, and the collision is attributable to the other
+        # network's rename (or its explicit mcp_name), which the manifest author
+        # can fix with a different mcp_name. Otherwise the first one seen keeps it.
+        loser_name: str = contender_name
+        if tool_name == contender_name and tool_name != owner_name:
+            loser_name = owner_name
+            owners[tool_name] = contender_name
+
+        # Whoever owners now points at is the winner.
+        winner_name: str = owners.get(tool_name)
+
+        loser: AgentNetwork = public_networks.get(loser_name)
+        loser.clear_mcp_tool()
+
+        self.logger.error("MCP tool name '%s' is claimed by both network '%s' and network '%s'. " +
+                          "Keeping it for '%s'; '%s' will not be served as an MCP tool. " +
+                          "Give one of them a distinct \"mcp_name\" in its manifest entry to resolve this.",
+                          tool_name, owner_name, contender_name, winner_name, loser_name)
 
     # pylint: disable=too-many-locals
     def restore_one_manifest(self, manifest_file: str) -> Dict[str, Dict[str, AgentNetwork]]:
@@ -352,9 +430,52 @@ class RegistryManifestRestorer(Restorer):
 
         # Check if this agent network has been declared as MCP tool:
         if usable_network and manifest_dict.get("mcp", False):
-            agent_network.set_as_mcp_tool()
+            tool_name: str = RegistryManifestRestorer.derive_mcp_tool_name(network_name, manifest_dict)
+            agent_network.set_as_mcp_tool(tool_name)
 
         return agent_network
+
+    @staticmethod
+    def derive_mcp_tool_name(network_name: str, manifest_dict: Dict[str, Any]) -> str:
+        """
+        Works out the name an MCP-enabled network is advertised under as a tool.
+
+        An explicit "mcp_name" in the manifest entry wins. Otherwise the name is
+        derived from the network name by McpToolNamePolicy, so the "/" that
+        registry sub-directories put into network names never reaches LLM
+        providers (OpenAI, Anthropic) that reject it in tool names.
+
+        Problems are warned about rather than refused: lenient clients such as
+        local models still accept unusual names, so refusing to expose the tool
+        would be a regression for them.
+
+        :param network_name: The network name, used as the derivation basis and in log lines
+        :param manifest_dict: The (already filtered) manifest dictionary for the network
+        :return: The tool name to advertise. Never None or empty for a non-empty network_name.
+        """
+        logger: Logger = getLogger(__name__)
+
+        # The policy is stateless, and this method sits on the static
+        # restore_one_agent_network() chain, so a local instance is the
+        # simplest way to reach the default McpToolNameFilter mapping.
+        policy: McpToolNamePolicy = McpToolNamePolicy()
+        tool_name: str = manifest_dict.get("mcp_name")
+        if not tool_name:
+            tool_name = policy.filter(network_name)
+
+        if not policy.is_valid_tool_name(tool_name):
+            logger.warning("MCP tool name '%s' for network '%s' does not match %s, which OpenAI and " +
+                           "Anthropic require of tool names. Exposing it anyway; clients using those " +
+                           "providers will fail to call it. Set a conforming \"mcp_name\" in the manifest.",
+                           tool_name, network_name, McpToolNamePolicy.TOOL_NAME_PATTERN)
+
+        if policy.is_over_soft_limit(tool_name):
+            logger.warning("MCP tool name '%s' for network '%s' is longer than %d characters, " +
+                           "which is OpenAI's limit for tool names. Exposing it anyway; consider a " +
+                           "shorter \"mcp_name\" in the manifest.",
+                           tool_name, network_name, McpToolNamePolicy.SOFT_MAX_LENGTH)
+
+        return tool_name
 
     @staticmethod
     def restore_one_agent_network(manifest_dir: str, agent_filepath: str, manifest_key: str,

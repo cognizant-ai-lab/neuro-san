@@ -72,6 +72,34 @@ as an MCP tool. In this case, it will be listed by an MCP "tools/list" command.
 A true value implies that the network will be available as an MCP tool.
 Note that a true value specified for "mcp" key will implicitly set "public" key also to true.
 
+##### mcp_name
+
+The value for the optional "mcp_name" key is a string: the name under which the network
+is advertised as an MCP tool in "tools/list" and addressed in "tools/call".
+Specifying a non-empty "mcp_name" implicitly sets "mcp" (and therefore "public") to true.
+
+When "mcp_name" is absent, the tool name is derived from the network name by replacing
+every "/" with "__", so a network at `deep/math_guy.hocon` is advertised as `deep__math_guy`.
+This is done because LLM providers such as OpenAI and Anthropic reject "/" in tool names.
+For a top-level network the derived tool name is simply the network name.
+
+| network name (from the hocon path) | manifest entry               | advertised MCP tool name |
+|------------------------------------|------------------------------|--------------------------|
+| `math_guy`                         | `"mcp": true`               | `math_guy`               |
+| `deep/math_guy`                    | `"mcp": true`               | `deep__math_guy`         |
+| `deep/math_guy`                    | `"mcp_name": "calculator"`  | `calculator`             |
+
+Tool names are expected to match `^[a-zA-Z0-9_-]{1,128}$`. A name that does not
+(for example an "mcp_name" containing "/") is still exposed, but a warning is logged at
+server startup since clients using OpenAI or Anthropic models will not be able to call it.
+OpenAI additionally caps tool names at 64 characters; longer names are also warned about.
+
+Two public networks must not resolve to the same tool name (for example the networks
+`a/b` and `a__b`, or two entries with the same "mcp_name"). When they do, the server logs
+an error and keeps the tool name for the network whose own name is that tool name unchanged;
+otherwise the first network in sorted order keeps it. The other network stays served over the
+regular APIs but is not exposed as an MCP tool. Give one of them a distinct "mcp_name" to resolve this.
+
 ##### periodic
 
 Agents who have their front man's [invocation](./agent_hocon_reference.md#invocation) set to "event"
