@@ -28,6 +28,7 @@ from requests import Response
 from leaf_common.time.timeout import Timeout
 
 from neuro_san.interfaces.agent_session import AgentSession
+from neuro_san.internals.utils.mcp_tool_name_filter import McpToolNameFilter
 from neuro_san.session.abstract_http_service_agent_session import AbstractHttpServiceAgentSession
 from neuro_san.session.mcp_chat_response_dictionary_converter import McpChatResponseDictionaryConverter
 
@@ -81,6 +82,16 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         super().__init__(host=host, port=port, timeout_in_seconds=timeout_in_seconds,
                          metadata=metadata, security_cfg=security_cfg, umbrella_timeout=umbrella_timeout,
                          streaming_timeout_in_seconds=streaming_timeout_in_seconds, agent_name=agent_name)
+
+        # The server advertises nested networks under a provider-safe tool name
+        # ("deep/math_guy" becomes "deep__math_guy"), but users keep passing the
+        # network name (e.g. --agent deep/math_guy), so translate once here.
+        # For a top-level network the two spellings are identical.
+        # function() later replaces this with whichever spelling the server
+        # actually advertised, so tools/call also works against servers from
+        # before the rename, which only know the network name.
+        self.mcp_tool_name: str = McpToolNameFilter().filter(agent_name)
+
         # Do initial handshake and protocol negotiation
         handshake_dict: Dict[str, Any] = {
             "jsonrpc": "2.0",
@@ -176,7 +187,12 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         for tool in tools_list:
             use_tool: Dict[str, Any] = tool
             name = use_tool.get("name", None)
-            if name == self.agent_name:
+            # Accept both spellings: servers before the rename advertise the network
+            # name itself, servers after it advertise the provider-safe name.
+            if name in (self.agent_name, self.mcp_tool_name):
+                # Remember the spelling this server uses so tools/call sends
+                # a name the server can resolve.
+                self.mcp_tool_name = name
                 tool_description = use_tool.get("description", None)
                 if tool_description is not None:
                     return {
@@ -208,13 +224,20 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
             Note that responses to the chat input might be numerous and will come as they
             are produced until the system decides there are no more messages to be sent.
         """
+        # Call the tool by the name function() saw the server advertise, or by
+        # the provider-safe name when function() has not run. The network name
+        # is only a fallback for the degenerate case of no agent name at all.
+        tool_name: str = self.mcp_tool_name
+        if tool_name is None:
+            tool_name = self.agent_name
+
         # Pack the chat request dictionary into an MCP method call format:
         mcp_payload: Dict[str, Any] = {
             "jsonrpc": "2.0",
             "id": 1,
             "method": "tools/call",
             "params": {
-                "name": self.agent_name,
+                "name": tool_name,
                 "arguments": request_dict,
             },
         }
