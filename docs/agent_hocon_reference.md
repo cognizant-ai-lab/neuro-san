@@ -859,6 +859,16 @@ MCP servers can be configured in two formats:
 
     - `tools` key filters which specific tools from the MCP server are made available.
     If omitted, all tools on the server will be accessible.
+    - Any tool name outside `^[a-zA-Z0-9_-]+$` is renamed before the LLM sees it, because OpenAI
+    and Anthropic reject such names and fail the whole request: "/" becomes "__" and any other
+    unsafe character becomes "_". The MCP server is still called with the original name. When the
+    MCP server is itself a neuro-san server, its nested agent networks therefore appear as, for
+    example, `deep__math_guy` for the network `deep/math_guy`.
+    - Both spellings are accepted in the `tools` allow list. When a server offers both spellings of
+    one name, an entry selects the tool it spells exactly.
+    - Two tools that would be renamed to the same name are a collision: the tool that needed no
+    rename (or, failing that, the first one listed) is kept and the other is dropped with a warning.
+    - Thinking output and journal entries show the renamed name, since that is the name the LLM uses.
 
 ##### Authentication
 
