@@ -145,7 +145,11 @@ class TestOpenAILlmPolicy:
         llm: ChatOpenAI = self._build_llm(policies, {"reasoning": {"effort": "low"}})
         payload: Dict[str, Any] = self._request_payload(llm)
 
-        assert llm.use_responses_api is None
+        # The policy forwards use_responses_api from llm_config unchanged, so it must not have pinned
+        # Chat Completions. Do not assert None here: langchain-openai 1.6.3 added a model validator
+        # that materializes the inferred endpoint on the instance (True once "reasoning" is set),
+        # while earlier releases leave the attribute None.
+        assert llm.use_responses_api is not False
         assert llm._use_responses_api(llm._default_params) is True
         assert "n" not in payload
         assert payload["reasoning"] == {"effort": "low"}

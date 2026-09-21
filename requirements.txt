@@ -48,7 +48,21 @@ pydantic>=2.9.2,<3.0
 # and all the ensuing transient dependencies for the world.
 # For a list of other LLMs we support out of the box, see requirements-build.txt
 # NOTE: This version should be aligned with the langchain and langchain-core versions above.
-langchain-openai>=1.0.0,<2.0
+# Ceiling <1.6.3 (temporary): langchain-openai 1.6.3 changes endpoint inference under our
+# use_responses_api: null default. gpt-6* models with tools and gpt-5.6-sol now auto-route to
+# the Responses API, and the inferred endpoint is written onto the ChatOpenAI instance at
+# construction. Both are fine, but they must land as a deliberate neuro-san change: #1332 makes
+# the Responses API the default and lifts this ceiling.
+langchain-openai>=1.0.0,<1.6.3
+
+# Pinned explicitly (it is otherwise only a transitive dependency of langchain-openai).
+# Floor 2.45.0 matches langchain-openai's own requirement. Ceiling <3 (temporary): openai 3.0
+# (2026-08-12) switched its HTTP stack to httpx2 and no longer installs httpx. OpenAILlmPolicy
+# and AzureLlmPolicy build an httpx.AsyncClient (proxy, timeout, connection limits) and pass it
+# as http_client, which openai 3.x accepts only through a runtime-only escape hatch its migration
+# guide calls temporary. Stay on 2.x until those clients are migrated to httpx2; that migration
+# lifts this ceiling.
+openai>=2.45.0,<3
 
 httpx>=0.28.1
 
