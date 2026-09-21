@@ -20,106 +20,61 @@ from typing import List
 from typing import Optional
 from typing import Set
 
+from neuro_san.internals.interfaces.string_filter import StringFilter
+from neuro_san.internals.utils.mcp_tool_name_filter import McpToolNameFilter
 
-class McpToolNamePolicy:
+
+class McpToolNamePolicy(StringFilter):
     """
-    Single source of truth for turning a neuro-san network name into a
-    tool name that LLM providers will accept, and for matching allow-list
-    entries against either spelling.
+    Single source of truth for how neuro-san names MCP tools: the mapping from
+    a network name to a provider-safe tool name, the validation of such names,
+    and the matching of allow-list entries written in either spelling.
 
-    Network names come from registry paths and may contain "/" (for example
-    "deep/math_guy"). OpenAI and Anthropic both reject tool names outside
-    ^[a-zA-Z0-9_-]+$, so a "/" in a tool name fails the whole request.
+    The mapping itself is a StringFilter supplied at construction, defaulting
+    to McpToolNameFilter, which turns "deep/math_guy" into "deep__math_guy".
+    This class is a StringFilter as well and delegates filter() to that
+    mapping, so callers that only need the mapping can hold a policy, and
+    callers that want a different or composed mapping can inject one. The
+    matching methods go through the same filter, so they follow whatever
+    mapping was injected.
+
     The MCP server that exposes networks as tools, the bundled MCP client
-    session, and the LangChain MCP adapter all need to agree on the rename,
-    otherwise a name fixed on one side gets mangled again on the other.
-    Putting the rule here keeps them in step and makes the mapping
-    idempotent: applying it to an already-safe name changes nothing.
-
-    All methods are static; the class carries no instance state.
+    session and the LangChain MCP adapter all use this policy, otherwise a
+    name fixed on one side would get mangled again on the other.
     """
-
-    # Separator between registry path segments in neuro-san network names
-    # (for example "deep/math_guy"). Registry paths are the source of the "/"
-    # that provider tool-name regexes reject.
-    NETWORK_SEPARATOR: str = "/"
-
-    # What NETWORK_SEPARATOR becomes in a tool name. "__" is used rather than
-    # "." because "." fails both the OpenAI and Anthropic regexes, and rather
-    # than "-" because a single hyphen is ambiguous with hyphenated stems
-    # ("a-b" could be the network "a/b" or a network literally named "a-b").
-    # "__" is also the separator ExternalAgentParsing.get_safe_agent_name uses
-    # for "/" (that helper additionally prefixes a leading "__"), so external
-    # agents and MCP tools follow the same separator convention.
-    SEPARATOR: str = "__"
-
-    # Substitute for any character outside the provider-safe set that is not
-    # a NETWORK_SEPARATOR (for example "." or whitespace). A single "_" keeps
-    # such names visibly distinct from the double-underscore path separator.
-    UNSAFE_REPLACEMENT: str = "_"
 
     # Strictest tool-name shape common to OpenAI and Anthropic: ASCII letters,
-    # digits, underscore and hyphen. The length cap is Anthropic's 128;
-    # OpenAI's tighter 64 is handled as a soft limit below.
+    # digits, underscore and hyphen, at most 128 characters, which is
+    # Anthropic's cap.
     TOOL_NAME_PATTERN: str = r"^[a-zA-Z0-9_-]{1,128}$"
 
-    # OpenAI caps tool names at 64 characters. This is warn-only because the
-    # same name is still valid for Anthropic and for lenient local providers,
-    # so callers log rather than refuse the tool.
+    # OpenAI caps tool names at 64 characters, tighter than the 128 of
+    # TOOL_NAME_PATTERN. It is a soft limit here: the same name is still valid
+    # for Anthropic and for lenient local providers, so callers are expected
+    # to warn about a longer name rather than refuse the tool.
     SOFT_MAX_LENGTH: int = 64
 
-    @staticmethod
-    def to_tool_name(network_name: str) -> str:
+    def __init__(self, tool_name_filter: StringFilter = None):
         """
-        Converts a neuro-san network name into a provider-safe tool name.
+        Constructor
 
-        Every NETWORK_SEPARATOR becomes SEPARATOR and every remaining character
-        outside ASCII letters, digits, underscore and hyphen becomes
-        UNSAFE_REPLACEMENT. The mapping is idempotent, so a name that has
-        already been converted comes back unchanged.
-
-        :param network_name: The network (or tool) name to convert. None and
-                             the empty string are passed through untouched so
-                             callers can feed optional values straight in.
-        :return: The provider-safe tool name, or the input itself when it is
-                 None or empty.
+        :param tool_name_filter: The StringFilter that maps a network name to a
+                    provider-safe tool name. Defaults to McpToolNameFilter.
         """
-        if network_name is None:
-            return None
-        if not network_name:
-            return ""
+        self.tool_name_filter: StringFilter = tool_name_filter
+        if self.tool_name_filter is None:
+            self.tool_name_filter = McpToolNameFilter()
 
-        # Map the path separator before the per-character pass so a "/" becomes
-        # "__" rather than a lone "_". Doing it the other way round would lose
-        # the distinction between a path segment boundary and an unsafe char.
-        separated: str = network_name.replace(McpToolNamePolicy.NETWORK_SEPARATOR,
-                                              McpToolNamePolicy.SEPARATOR)
-
-        safe_chars: List[str] = []
-        for char in separated:
-            if McpToolNamePolicy.is_safe_char(char):
-                safe_chars.append(char)
-            else:
-                safe_chars.append(McpToolNamePolicy.UNSAFE_REPLACEMENT)
-
-        return "".join(safe_chars)
-
-    @staticmethod
-    def is_safe_char(char: str) -> bool:
+    def filter(self, in_string: str) -> str:
         """
-        Tells whether a single character is allowed in a provider-safe tool name.
+        Converts a network (or tool) name into its provider-safe spelling,
+        using the tool-name filter this policy was constructed with.
 
-        :param char: A one-character string to test.
-        :return: True if the character is an ASCII letter, ASCII digit,
-                 underscore or hyphen; False otherwise.
+        :param in_string: The network or tool name to convert. With the default
+                          filter, None and the empty string come back unchanged.
+        :return: The provider-safe tool name.
         """
-        # str.isalnum() is True for non-ASCII letters and digits (e.g. "é",
-        # "²"), which the provider regexes reject, so the ASCII check comes first.
-        if not char.isascii():
-            return False
-        if char.isalnum():
-            return True
-        return char in (McpToolNamePolicy.UNSAFE_REPLACEMENT, "-")
+        return self.tool_name_filter.filter(in_string)
 
     @staticmethod
     def is_valid_tool_name(name: str) -> bool:
@@ -145,8 +100,7 @@ class McpToolNamePolicy:
         """
         return name is not None and len(name) > McpToolNamePolicy.SOFT_MAX_LENGTH
 
-    @staticmethod
-    def matches(entry: str, original_name: str) -> bool:
+    def matches(self, entry: str, original_name: str) -> bool:
         """
         Tells whether one allow-list entry refers to the given original tool name,
         accepting either the original spelling or the provider-safe spelling.
@@ -162,13 +116,13 @@ class McpToolNamePolicy:
 
         # Authors often copy the name the LLM saw in logs or thinking output,
         # which is the already-mangled spelling.
-        mangled_original: str = McpToolNamePolicy.to_tool_name(original_name)
+        mangled_original: str = self.filter(original_name)
         if entry == mangled_original:
             return True
 
         # Finally compare both sides in mangled form so an entry written with
         # the original spelling still matches a server that has already renamed
-        # its tools. The server-side rename applies to_tool_name() to the whole
+        # its tools. The server-side rename applies the filter to the whole
         # network name, so this has to cover every unsafe character, not only
         # the "/" of nested registry paths: a network "a.b" is advertised as
         # "a_b" and the entry "a.b" must still select it. The mapping is lossy
@@ -176,10 +130,9 @@ class McpToolNamePolicy:
         # claim an unrelated tool that happens to carry the mangled spelling;
         # resolve() keeps that in check by preferring an exact spelling whenever
         # the server offers one.
-        return McpToolNamePolicy.to_tool_name(entry) == mangled_original
+        return self.filter(entry) == mangled_original
 
-    @staticmethod
-    def resolve(entry: str, original_names: List[str]) -> Optional[str]:
+    def resolve(self, entry: str, original_names: List[str]) -> Optional[str]:
         """
         Finds the one advertised tool an allow-list entry refers to.
 
@@ -203,13 +156,12 @@ class McpToolNamePolicy:
             return entry
 
         for original_name in original_names:
-            if McpToolNamePolicy.matches(entry, original_name):
+            if self.matches(entry, original_name):
                 return original_name
 
         return None
 
-    @staticmethod
-    def select_allowed(allowed_names: List[str], original_names: List[str]) -> List[str]:
+    def select_allowed(self, allowed_names: List[str], original_names: List[str]) -> List[str]:
         """
         Picks the advertised tools an allow list permits, resolving each entry
         to exactly one tool with resolve().
@@ -224,7 +176,7 @@ class McpToolNamePolicy:
         selected: Set[str] = set()
         if allowed_names:
             for entry in allowed_names:
-                chosen: Optional[str] = McpToolNamePolicy.resolve(entry, original_names)
+                chosen: Optional[str] = self.resolve(entry, original_names)
                 if chosen is not None:
                     selected.add(chosen)
 
@@ -238,8 +190,7 @@ class McpToolNamePolicy:
 
         return ordered
 
-    @staticmethod
-    def find_unmatched(allowed_names: List[str], original_names: List[str]) -> List[str]:
+    def find_unmatched(self, allowed_names: List[str], original_names: List[str]) -> List[str]:
         """
         Finds allow-list entries that do not correspond to any advertised tool,
         so callers can warn about typos or renamed tools.
@@ -255,7 +206,7 @@ class McpToolNamePolicy:
             return unmatched
 
         for entry in allowed_names:
-            if McpToolNamePolicy.resolve(entry, original_names) is None:
+            if self.resolve(entry, original_names) is None:
                 unmatched.append(entry)
 
         return unmatched

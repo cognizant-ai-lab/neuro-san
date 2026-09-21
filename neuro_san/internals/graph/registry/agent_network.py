@@ -57,7 +57,7 @@ class AgentNetwork(AgentNetworkInspector):
         # only accept tool names matching ^[a-zA-Z0-9_-]+$. A "/" in a tool name
         # fails the whole request of any agent that has the tool in its tool list,
         # so nested networks need a different outward-facing spelling. The caller of
-        # set_as_mcp_tool() chooses it, normally with McpToolNamePolicy.to_tool_name():
+        # set_as_mcp_tool() chooses it, normally with McpToolNameFilter().filter():
         #
         #   self.name          mcp_tool_name
         #   "math_guy"         "math_guy"        top-level: nothing to replace, same name
@@ -99,7 +99,7 @@ class AgentNetwork(AgentNetworkInspector):
             network.set_as_mcp_tool()
                 is_mcp_tool() -> True, get_mcp_tool_name() -> "deep/math_guy"
                 (the historical behavior; OpenAI and Anthropic reject the "/")
-            network.set_as_mcp_tool(McpToolNamePolicy.to_tool_name(network.name))
+            network.set_as_mcp_tool(McpToolNameFilter().filter(network.name))
                 get_mcp_tool_name() -> "deep__math_guy"
             network.set_as_mcp_tool("calculator")
                 get_mcp_tool_name() -> "calculator"   (an explicit manifest "mcp_name")
@@ -109,7 +109,7 @@ class AgentNetwork(AgentNetworkInspector):
 
         :param tool_name: The name to advertise the tool under in tools/list and
                           tools/call. Normally this is the provider-safe spelling of
-                          the network name from McpToolNamePolicy.to_tool_name()
+                          the network name from McpToolNameFilter().filter()
                           ("deep/math_guy" gives "deep__math_guy"; a top-level
                           "math_guy" is already safe and stays "math_guy"), or an
                           explicit "mcp_name" from the network's manifest entry.

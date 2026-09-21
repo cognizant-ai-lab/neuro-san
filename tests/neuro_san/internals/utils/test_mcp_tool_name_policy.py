@@ -17,55 +17,61 @@
 from typing import List
 
 from unittest import TestCase
+from unittest.mock import MagicMock
 
+from typing_extensions import override
+
+from neuro_san.internals.interfaces.string_filter import StringFilter
 from neuro_san.internals.utils.mcp_tool_name_policy import McpToolNamePolicy
 
 
 class TestMcpToolNamePolicy(TestCase):
     """
-    Unit tests for McpToolNamePolicy: the network-name to tool-name mapping,
-    its validation helpers, and allow-list matching under either spelling.
+    Unit tests for McpToolNamePolicy: delegation of the name mapping to its
+    StringFilter, the validation helpers, and allow-list matching under
+    either spelling.
     """
 
-    def test_to_tool_name_maps_slashes(self) -> None:
+    @override
+    def setUp(self) -> None:
         """
-        Every "/" in a registry path becomes a double underscore, not just the first.
+        Creates a policy with the default McpToolNameFilter mapping.
         """
-        self.assertEqual("deep__math_guy", McpToolNamePolicy.to_tool_name("deep/math_guy"))
-        self.assertEqual("a__b__c", McpToolNamePolicy.to_tool_name("a/b/c"))
+        self.policy: McpToolNamePolicy = McpToolNamePolicy()
 
-    def test_to_tool_name_leaves_safe_name_untouched(self) -> None:
+    @staticmethod
+    def upper_case(in_string: str) -> str:
         """
-        A name already made of letters, digits, underscore and hyphen is returned as-is.
-        """
-        safe_name: str = "Music_nerd-pro9"
-        self.assertEqual(safe_name, McpToolNamePolicy.to_tool_name(safe_name))
+        Stand-in filter behavior for the injection test.
 
-    def test_to_tool_name_passes_none_and_empty_through(self) -> None:
+        :param in_string: The string to transform
+        :return: The string in upper case
         """
-        None and the empty string come back unchanged so optional values can be fed in directly.
-        """
-        self.assertIsNone(McpToolNamePolicy.to_tool_name(None))
-        self.assertEqual("", McpToolNamePolicy.to_tool_name(""))
+        return in_string.upper()
 
-    def test_to_tool_name_replaces_unsafe_chars(self) -> None:
+    def test_filter_delegates_to_default_filter(self) -> None:
         """
-        ".", whitespace and non-ASCII letters (which str.isalnum() accepts) each become one underscore.
+        With no filter injected, the policy maps names the way McpToolNameFilter does.
         """
-        self.assertEqual("Agent_1", McpToolNamePolicy.to_tool_name("Agent.1"))
-        self.assertEqual("Agent_2", McpToolNamePolicy.to_tool_name("Agent 2"))
-        self.assertEqual("caf_", McpToolNamePolicy.to_tool_name("café"))
+        self.assertEqual("deep__math_guy", self.policy.filter("deep/math_guy"))
+        self.assertEqual("Agent_1", self.policy.filter("Agent.1"))
+        self.assertIsNone(self.policy.filter(None))
 
-    def test_to_tool_name_is_idempotent(self) -> None:
+    def test_injected_filter_drives_mapping_and_matching(self) -> None:
         """
-        Applying the mapping twice yields the same result as applying it once,
-        so a name fixed on the server side is not mangled again by the client.
+        A different StringFilter can be injected, and the matching methods follow it:
+        with an upper-casing filter, "abc" matches a server tool advertised as "ABC".
         """
-        samples: List[str] = ["deep/math_guy", "a/b/c", "Agent.1", "Agent 2", "plain", "x__y", "a-b"]
-        for sample in samples:
-            once: str = McpToolNamePolicy.to_tool_name(sample)
-            twice: str = McpToolNamePolicy.to_tool_name(once)
-            self.assertEqual(once, twice, f"mapping not idempotent for {sample!r}")
+        upper_filter: MagicMock = MagicMock(spec=StringFilter)
+        upper_filter.filter.side_effect = self.upper_case
+        policy: McpToolNamePolicy = McpToolNamePolicy(upper_filter)
+
+        self.assertEqual("ABC", policy.filter("abc"))
+        self.assertTrue(policy.matches("abc", "ABC"))
+        self.assertFalse(policy.matches("abc", "XYZ"))
+        self.assertEqual(["ABC"], policy.select_allowed(["abc"], ["ABC", "XYZ"]))
+        # The default "/" mapping is not in play with this filter.
+        self.assertFalse(policy.matches("deep/math_guy", "deep__math_guy"))
 
     def test_is_valid_tool_name_accepts_valid(self) -> None:
         """
@@ -110,39 +116,39 @@ class TestMcpToolNamePolicy(TestCase):
         provider-safe name of a "/" tool, or with the original "/" against a server
         that has already renamed the tool.
         """
-        self.assertTrue(McpToolNamePolicy.matches("deep/math_guy", "deep/math_guy"))
-        self.assertTrue(McpToolNamePolicy.matches("deep__math_guy", "deep/math_guy"))
-        self.assertTrue(McpToolNamePolicy.matches("deep/math_guy", "deep__math_guy"))
+        self.assertTrue(self.policy.matches("deep/math_guy", "deep/math_guy"))
+        self.assertTrue(self.policy.matches("deep__math_guy", "deep/math_guy"))
+        self.assertTrue(self.policy.matches("deep/math_guy", "deep__math_guy"))
 
     def test_matches_rejects_unrelated_name(self) -> None:
         """
         An entry that matches under no spelling does not match.
         """
-        self.assertFalse(McpToolNamePolicy.matches("deep/math_guy", "deep/music_nerd"))
+        self.assertFalse(self.policy.matches("deep/math_guy", "deep/music_nerd"))
 
     def test_matches_is_symmetric_for_every_unsafe_character(self) -> None:
         """
         An entry written with any unsafe character matches the tool a renaming
         server advertises under the mangled spelling, not only entries with "/".
         """
-        self.assertTrue(McpToolNamePolicy.matches("a.b", "a_b"))
-        self.assertTrue(McpToolNamePolicy.matches("a b", "a_b"))
-        self.assertTrue(McpToolNamePolicy.matches("a/b.c", "a__b_c"))
+        self.assertTrue(self.policy.matches("a.b", "a_b"))
+        self.assertTrue(self.policy.matches("a b", "a_b"))
+        self.assertTrue(self.policy.matches("a/b.c", "a__b_c"))
         # The mangled spellings still have to be the same.
-        self.assertFalse(McpToolNamePolicy.matches("a.b", "a-b"))
-        self.assertFalse(McpToolNamePolicy.matches("a.b", "a__b"))
+        self.assertFalse(self.policy.matches("a.b", "a-b"))
+        self.assertFalse(self.policy.matches("a.b", "a__b"))
 
     def test_resolve_prefers_exact_spelling(self) -> None:
         """
         When a server offers both "a/b" and "a__b", each entry resolves to the tool it spells exactly.
         """
         originals: List[str] = ["a/b", "a__b"]
-        self.assertEqual("a/b", McpToolNamePolicy.resolve("a/b", originals))
-        self.assertEqual("a__b", McpToolNamePolicy.resolve("a__b", originals))
+        self.assertEqual("a/b", self.policy.resolve("a/b", originals))
+        self.assertEqual("a__b", self.policy.resolve("a__b", originals))
         # The same holds for other unsafe characters: an exact "a.b" is not
         # confused with a literal "a_b" the server also offers.
-        self.assertEqual("a.b", McpToolNamePolicy.resolve("a.b", ["a_b", "a.b"]))
-        self.assertEqual("a_b", McpToolNamePolicy.resolve("a_b", ["a_b", "a.b"]))
+        self.assertEqual("a.b", self.policy.resolve("a.b", ["a_b", "a.b"]))
+        self.assertEqual("a_b", self.policy.resolve("a_b", ["a_b", "a.b"]))
 
     def test_resolve_falls_back_to_safe_spelling(self) -> None:
         """
@@ -150,11 +156,11 @@ class TestMcpToolNamePolicy(TestCase):
         the provider-safe spelling, and to None when nothing matches or the server
         advertised nothing.
         """
-        self.assertEqual("a__b", McpToolNamePolicy.resolve("a/b", ["a__b"]))
-        self.assertEqual("a/b", McpToolNamePolicy.resolve("a__b", ["a/b"]))
-        self.assertIsNone(McpToolNamePolicy.resolve("a/b", ["other"]))
-        self.assertIsNone(McpToolNamePolicy.resolve("a/b", None))
-        self.assertIsNone(McpToolNamePolicy.resolve("a/b", []))
+        self.assertEqual("a__b", self.policy.resolve("a/b", ["a__b"]))
+        self.assertEqual("a/b", self.policy.resolve("a__b", ["a/b"]))
+        self.assertIsNone(self.policy.resolve("a/b", ["other"]))
+        self.assertIsNone(self.policy.resolve("a/b", None))
+        self.assertIsNone(self.policy.resolve("a/b", []))
 
     def test_select_allowed_prefers_exact_spelling(self) -> None:
         """
@@ -163,8 +169,8 @@ class TestMcpToolNamePolicy(TestCase):
         never has to choose between two tools the author did not both ask for.
         """
         originals: List[str] = ["a/b", "a__b"]
-        self.assertEqual(["a/b"], McpToolNamePolicy.select_allowed(["a/b"], originals))
-        self.assertEqual(["a__b"], McpToolNamePolicy.select_allowed(["a__b"], originals))
+        self.assertEqual(["a/b"], self.policy.select_allowed(["a/b"], originals))
+        self.assertEqual(["a__b"], self.policy.select_allowed(["a__b"], originals))
 
     def test_select_allowed_keeps_server_order_without_duplicates(self) -> None:
         """
@@ -174,18 +180,18 @@ class TestMcpToolNamePolicy(TestCase):
         allowed: List[str] = ["deep__music_nerd", "deep/math_guy", "deep/music_nerd"]
         originals: List[str] = ["deep/math_guy", "deep/music_nerd", "other"]
         self.assertEqual(["deep/math_guy", "deep/music_nerd"],
-                         McpToolNamePolicy.select_allowed(allowed, originals))
+                         self.policy.select_allowed(allowed, originals))
 
     def test_select_allowed_degenerate_lists(self) -> None:
         """
         A None or empty allow list selects nothing, as do entries matching no tool
         or a server that advertised nothing.
         """
-        self.assertEqual([], McpToolNamePolicy.select_allowed(None, ["deep/math_guy"]))
-        self.assertEqual([], McpToolNamePolicy.select_allowed([], ["deep/math_guy"]))
-        self.assertEqual([], McpToolNamePolicy.select_allowed(["nope"], ["deep/math_guy"]))
-        self.assertEqual([], McpToolNamePolicy.select_allowed(["deep/math_guy"], None))
-        self.assertEqual([], McpToolNamePolicy.select_allowed(["deep/math_guy"], []))
+        self.assertEqual([], self.policy.select_allowed(None, ["deep/math_guy"]))
+        self.assertEqual([], self.policy.select_allowed([], ["deep/math_guy"]))
+        self.assertEqual([], self.policy.select_allowed(["nope"], ["deep/math_guy"]))
+        self.assertEqual([], self.policy.select_allowed(["deep/math_guy"], None))
+        self.assertEqual([], self.policy.select_allowed(["deep/math_guy"], []))
 
     def test_find_unmatched_reports_only_unmatched_in_order(self) -> None:
         """
@@ -194,16 +200,16 @@ class TestMcpToolNamePolicy(TestCase):
         """
         allowed: List[str] = ["zeta/typo", "deep__math_guy", "alpha.typo", "deep/music_nerd"]
         originals: List[str] = ["deep/math_guy", "deep/music_nerd"]
-        self.assertEqual(["zeta/typo", "alpha.typo"], McpToolNamePolicy.find_unmatched(allowed, originals))
-        self.assertEqual([], McpToolNamePolicy.find_unmatched(["deep/math_guy", "deep__music_nerd"], originals))
+        self.assertEqual(["zeta/typo", "alpha.typo"], self.policy.find_unmatched(allowed, originals))
+        self.assertEqual([], self.policy.find_unmatched(["deep/math_guy", "deep__music_nerd"], originals))
 
     def test_find_unmatched_degenerate_lists(self) -> None:
         """
         None or empty allow lists produce no unmatched entries; when the server
         advertises nothing, every entry is unmatched.
         """
-        self.assertEqual([], McpToolNamePolicy.find_unmatched(None, ["deep/math_guy"]))
-        self.assertEqual([], McpToolNamePolicy.find_unmatched([], ["deep/math_guy"]))
+        self.assertEqual([], self.policy.find_unmatched(None, ["deep/math_guy"]))
+        self.assertEqual([], self.policy.find_unmatched([], ["deep/math_guy"]))
         allowed: List[str] = ["deep/math_guy", "other"]
-        self.assertEqual(allowed, McpToolNamePolicy.find_unmatched(allowed, None))
-        self.assertEqual(allowed, McpToolNamePolicy.find_unmatched(allowed, []))
+        self.assertEqual(allowed, self.policy.find_unmatched(allowed, None))
+        self.assertEqual(allowed, self.policy.find_unmatched(allowed, []))
