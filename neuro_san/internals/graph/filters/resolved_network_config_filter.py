@@ -90,9 +90,9 @@ class ResolvedNetworkConfigFilter(ConfigFilter):
             # below, and anything the caller does with the result, cannot touch the input.
             resolved = deepcopy(basis_config)
 
-        if isinstance(resolved, dict):
+        if isinstance(resolved, dict) and "commondefs" in resolved:
             # The chain has consumed this block.  Leaving it in would make a second pass
             # substitute again, so the output would not be a fixed point.
-            resolved.pop("commondefs", None)
+            del resolved["commondefs"]
 
         return resolved

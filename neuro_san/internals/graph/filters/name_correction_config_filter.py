@@ -37,8 +37,7 @@ class NameCorrectionConfigFilter(ConfigFilter):
     convention for declaring downstream agents), so both ends of each edge agree.
     """
 
-    def filter_config(self, basis_config: Dict[str, Any]) \
-            -> Dict[str, Any]:
+    def filter_config(self, basis_config: Dict[str, Any]) -> Dict[str, Any]:
         """
         Filters the given basis config.
 
@@ -64,10 +63,11 @@ class NameCorrectionConfigFilter(ConfigFilter):
         errors: List[str] = []
 
         # Loop through all the tools making corrections or logging errors.
+        tool: Dict[str, Any] = None
         for tool in tools:
 
-            name = tool.get("name")
-            new_name = self.validate_name(name)
+            name: str = tool.get("name")
+            new_name: str = self.validate_name(name)
 
             if new_name.startswith("Error: "):
                 # Add to the errors
@@ -143,16 +143,24 @@ class NameCorrectionConfigFilter(ConfigFilter):
         if isinstance(args_tools, list):
             # List form: every element is an agent name. Rewrite by index so that the list
             # object and any non-string entries stay exactly as they were given.
-            for index, agent_tool in enumerate(args_tools):
+            args_tools_list: List[str] = args_tools
+            index: int = 0
+            agent_tool: Any = None
+            for index, agent_tool in enumerate(args_tools_list):
                 if isinstance(agent_tool, str):
-                    args_tools[index] = corrections.get(agent_tool, agent_tool)
+                    agent_tool_string: str = agent_tool
+                    args_tools_list[index] = corrections.get(agent_tool_string, agent_tool_string)
         elif isinstance(args_tools, dict):
             # Dict form: label -> agent name.  Only the values are names; the labels are the
             # coded tool's own lookup keys and must stay stable.  Assigning to existing keys
             # while iterating is safe; only adding or removing keys would not be.
-            for label, agent_tool in args_tools.items():
+            args_tools_dict: Dict[str, Any] = args_tools
+            label: str = None
+            agent_tool: Any = None
+            for label, agent_tool in args_tools_dict.items():
                 if isinstance(agent_tool, str):
-                    args_tools[label] = corrections.get(agent_tool, agent_tool)
+                    agent_tool_string: str = agent_tool
+                    args_tools_dict[label] = corrections.get(agent_tool_string, agent_tool_string)
         # Any other shape is malformed. ToolsShapeValidator reports it, so leave it alone.
 
     def validate_name(self, name: str) -> str:
