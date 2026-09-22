@@ -17,17 +17,18 @@
 import os
 import tempfile
 from argparse import Namespace
+from typing import List
+from typing import Optional
 from unittest import TestCase
 
+from neuro_san import TOP_LEVEL_DIR
 from tests.load_tests.config import DEFAULT_FIXTURES_HOCON_DIR
 from tests.load_tests.validation.input_validator import InputValidator
 
 # Real fixtures, not mocks: tests/fixtures/load_tests/hello_world/*.hocon
-PROJECT_ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", ".."),
-)
-HELLO_WORLD_FIXTURES = os.path.join(
-    PROJECT_ROOT, DEFAULT_FIXTURES_HOCON_DIR, "hello_world",
+PROJECT_ROOT: str = TOP_LEVEL_DIR.get_file_in_basis("..")
+HELLO_WORLD_FIXTURES: str = TOP_LEVEL_DIR.get_file_in_basis(
+    os.path.join("..", DEFAULT_FIXTURES_HOCON_DIR, "hello_world"),
 )
 
 
@@ -41,8 +42,9 @@ class TestValidateFixturesHoconDir(TestCase):
     """
 
     @staticmethod
-    def _validator(*, agent="hello_world", fixtures_hocon_dir=None,
-                   project_root=PROJECT_ROOT):
+    def _validator(*, agent: str = "hello_world",
+                   fixtures_hocon_dir: Optional[str] = None,
+                   project_root: Optional[str] = PROJECT_ROOT) -> InputValidator:
         """Build a validator with only the args this method reads."""
         return InputValidator(Namespace(
             agent=agent,
@@ -50,19 +52,18 @@ class TestValidateFixturesHoconDir(TestCase):
             project_root=project_root,
         ))
 
-    def test_flag_absent_returns_empty_list(self):
+    def test_flag_absent_returns_empty_list(self) -> None:
         """No flag means prompts come from the JSON profile."""
-        self.assertEqual(
-            self._validator().validate_fixtures_hocon_dir(), [],
-        )
+        files: List[str] = self._validator().validate_fixtures_hocon_dir()
+        self.assertEqual(files, [])
 
-    def test_default_dir_resolves_hello_world_fixtures(self):
+    def test_default_dir_resolves_hello_world_fixtures(self) -> None:
         """DIR default + agent name -> tests/fixtures/load_tests/hello_world."""
-        files = self._validator(
+        files: List[str] = self._validator(
             fixtures_hocon_dir=DEFAULT_FIXTURES_HOCON_DIR,
         ).validate_fixtures_hocon_dir()
 
-        expected = sorted(
+        expected: List[str] = sorted(
             os.path.join(HELLO_WORLD_FIXTURES, name)
             for name in os.listdir(HELLO_WORLD_FIXTURES)
             if name.endswith(".hocon")
@@ -70,9 +71,9 @@ class TestValidateFixturesHoconDir(TestCase):
         self.assertEqual(files, expected)
         self.assertEqual(len(files), 5)
 
-    def test_prefixed_agent_uses_base_name(self):
+    def test_prefixed_agent_uses_base_name(self) -> None:
         """basic/hello_world resolves to the hello_world subfolder."""
-        files = self._validator(
+        files: List[str] = self._validator(
             agent="basic/hello_world",
             fixtures_hocon_dir=DEFAULT_FIXTURES_HOCON_DIR,
         ).validate_fixtures_hocon_dir()
@@ -81,15 +82,15 @@ class TestValidateFixturesHoconDir(TestCase):
             all(f.startswith(HELLO_WORLD_FIXTURES) for f in files),
         )
 
-    def test_absolute_dir_is_used_as_is(self):
+    def test_absolute_dir_is_used_as_is(self) -> None:
         """An absolute DIR ignores --project-root."""
-        files = self._validator(
+        files: List[str] = self._validator(
             fixtures_hocon_dir=os.path.dirname(HELLO_WORLD_FIXTURES),
             project_root="/nonexistent",
         ).validate_fixtures_hocon_dir()
         self.assertEqual(len(files), 5)
 
-    def test_missing_agent_dir_exits(self):
+    def test_missing_agent_dir_exits(self) -> None:
         """No <DIR>/<agent>/ folder -> exit 1."""
         with self.assertRaises(SystemExit) as ctx:
             self._validator(
@@ -98,7 +99,7 @@ class TestValidateFixturesHoconDir(TestCase):
             ).validate_fixtures_hocon_dir()
         self.assertEqual(ctx.exception.code, 1)
 
-    def test_empty_agent_dir_exits(self):
+    def test_empty_agent_dir_exits(self) -> None:
         """Folder exists but holds no *.hocon -> exit 1."""
         with tempfile.TemporaryDirectory() as parent:
             os.mkdir(os.path.join(parent, "hello_world"))
