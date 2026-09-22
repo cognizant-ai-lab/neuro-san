@@ -178,7 +178,8 @@ class DefaultsConfigFilter(ConfigFilter):
 
                 # The merged value is the union of the two sets with no duplicates (stable order)
                 one_field_key: str = f"{tool_dest_key}.{one_field}"
-                merged_dict: Dict[str, Any] = dict.fromkeys(basis_field + tool_field)
+                merged_lists: List[str] = basis_field + tool_field
+                merged_dict: Dict[str, Any] = dict.fromkeys(merged_lists)
                 merged_field: List[str] = list(merged_dict)
                 self.set_tool_value(tool, one_field_key, merged_field)
 
