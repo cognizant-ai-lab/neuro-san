@@ -168,7 +168,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         """Initialize the orchestrator with parsed arguments."""
         self.args = args
         self.input_validator = InputValidator(args)
-        # Step 2 (builder) consumes this list; empty means JSON prompts.
         self.hocon_files: List[str] = (
             self.input_validator.validate_fixtures_hocon_dir()
         )
