@@ -81,6 +81,18 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         super().__init__(host=host, port=port, timeout_in_seconds=timeout_in_seconds,
                          metadata=metadata, security_cfg=security_cfg, umbrella_timeout=umbrella_timeout,
                          streaming_timeout_in_seconds=streaming_timeout_in_seconds, agent_name=agent_name)
+
+        # The name the server advertises for this network, learned by function()
+        # from tools/list. A server may advertise a network under a name other
+        # than the network name (see AgentNetwork.set_as_mcp_tool(): nested
+        # "deep/math_guy" becomes the provider-safe "deep__math_guy", or an
+        # alias such as "calculator"), while users keep passing the network name
+        # (e.g. --agent deep/math_guy). Until function() has looked, tools/call
+        # uses the network name, which every neuro-san server accepts: older
+        # servers key on it directly and newer ones pass an unadvertised name
+        # through to the same network-keyed lookup.
+        self.advertised_tool_name: str = None
+
         # Do initial handshake and protocol negotiation
         handshake_dict: Dict[str, Any] = {
             "jsonrpc": "2.0",
@@ -171,18 +183,57 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         empty_list: List[Dict[str, Any]] = []
         result_dict: Dict[str, Any] = response_dict.get("result", empty_dict)
         tools_list: List[Dict[str, Any]] = result_dict.get("tools", empty_list)
-        name: str = None
-        tool_description: str = None
+        use_tool: Dict[str, Any] = self.find_tool_for_network(tools_list)
+        if use_tool is None:
+            # Nothing stands for the network any more, so forget whatever an
+            # earlier listing advertised; tools/call then falls back to the
+            # network name rather than a stale one.
+            self.advertised_tool_name = None
+            return None
+
+        # Remember the name this server uses so tools/call sends a name the
+        # server can resolve. When the network is advertised under an alias,
+        # this is a name we could not have derived from the network name.
+        self.advertised_tool_name = use_tool.get("name", None)
+        tool_description: str = use_tool.get("description", None)
+        if tool_description is None:
+            return None
+
+        return {
+            "function": {"description": tool_description}
+        }
+
+    def find_tool_for_network(self, tools_list: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Picks the tools/list entry that stands for the network this session was
+        created for.
+
+        The contract this relies on: a server that advertises a network under
+        any name other than the network name puts the network name in the
+        entry's MCP "title" (see AgentNetwork.set_as_mcp_tool() for how such
+        names arise, e.g. the provider-safe "deep__math_guy" or an alias like
+        "calculator"). So when an entry has a title, the title says which
+        network it stands for; an entry without one stands for the network only
+        if its "name" is the network name. Servers to date advertise every
+        network under its own name and send no title, so against them this
+        reduces to matching the name. The client never guesses from the
+        spelling: an unrelated network can legitimately be named
+        "deep__math_guy", and an entry named "math_guy" but titled "x/y" is
+        x/y's tool, not math_guy's.
+
+        :param tools_list: The "tools" list of a tools/list result
+        :return: The first entry that stands for the network, or None if there is none
+        """
         for tool in tools_list:
             use_tool: Dict[str, Any] = tool
-            name = use_tool.get("name", None)
-            if name == self.agent_name:
-                tool_description = use_tool.get("description", None)
-                if tool_description is not None:
-                    return {
-                        "function": {"description": tool_description}
-                    }
-
+            name: str = use_tool.get("name", None)
+            if name is None:
+                # Not a callable tool entry: tools/call needs a name.
+                continue
+            # An empty title carries no information, so it falls back to the name.
+            network_name: str = use_tool.get("title", None) or name
+            if network_name == self.agent_name:
+                return use_tool
         return None
 
     def connectivity(self, request_dict: Dict[str, Any]) -> Dict[str, Any]:
@@ -208,13 +259,20 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
             Note that responses to the chat input might be numerous and will come as they
             are produced until the system decides there are no more messages to be sent.
         """
+        # Call the tool by the name function() saw the server advertise. A caller
+        # that skips function() (e.g. SimpleOneShot) has not learned it, so it
+        # sends the network name instead, which every neuro-san server accepts.
+        tool_name: str = self.advertised_tool_name
+        if tool_name is None:
+            tool_name = self.agent_name
+
         # Pack the chat request dictionary into an MCP method call format:
         mcp_payload: Dict[str, Any] = {
             "jsonrpc": "2.0",
             "id": 1,
             "method": "tools/call",
             "params": {
-                "name": self.agent_name,
+                "name": tool_name,
                 "arguments": request_dict,
             },
         }
