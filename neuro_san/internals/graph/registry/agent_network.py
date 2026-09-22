@@ -78,6 +78,7 @@ class AgentNetwork(AgentNetworkInspector):
 
         agent_specs: List[Dict[str, Any]] = self.config.get("tools")
         if agent_specs is not None:
+            agent_spec: Dict[str, Any] = None
             for agent_spec in agent_specs:
                 self.register(agent_spec)
 
@@ -197,7 +198,7 @@ Some things to try:
         :return: The agent name as per the spec
         """
         extractor = DictionaryExtractor(agent_spec)
-        name = extractor.get("function.name")
+        name: str = extractor.get("function.name", None)
         if name is None:
             name = agent_spec.get("name")
 
@@ -270,7 +271,7 @@ However, the front man must not be:
                  if not defined, returns 0.0
         """
         extractor = DictionaryExtractor(self.config)
-        timeout = extractor.get("request_timeout_seconds")
+        timeout: float = extractor.get("request_timeout_seconds", None)
         if timeout is None:
             return 0.0
         return float(timeout)
