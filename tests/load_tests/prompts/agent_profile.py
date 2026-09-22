@@ -120,6 +120,19 @@ class AgentProfile:
         When hocon_files is given, the prompts come from those
         test-case hocons (interactions[].text) instead of the JSON;
         every other setting still comes from the JSON profile.
+        See _find_json_profile() for the JSON search order.
+        """
+        path: str = cls._find_json_profile(agent_name, profile_path, project_root)
+        data: Dict[str, Any] = cls._read_json(path)
+        if hocon_files:
+            data = {**data, "prompts": cls._prompts_from_hocons(agent_name, hocon_files)}
+        logger.info("Loaded agent profile: %s", path)
+        return cls(agent_name, data)
+
+    @classmethod
+    def _find_json_profile(cls, agent_name: str, profile_path: Optional[str],
+                           project_root: Optional[str]) -> str:
+        """Return the path of the JSON profile.
 
         Search order:
         1. --profile-path directory: look for {base}.json there
@@ -132,17 +145,6 @@ class AgentProfile:
         the base name (hello_world) is tried as a fallback so
         --profile-path is not required for prefixed agents.
         """
-        path: str = cls._find_json_profile(agent_name, profile_path, project_root)
-        data: Dict[str, Any] = cls._read_json(path)
-        if hocon_files:
-            data = {**data, "prompts": cls._prompts_from_hocons(agent_name, hocon_files)}
-        logger.info("Loaded agent profile: %s", path)
-        return cls(agent_name, data)
-
-    @classmethod
-    def _find_json_profile(cls, agent_name: str, profile_path: Optional[str],
-                           project_root: Optional[str]) -> str:
-        """Return the path of the JSON profile (see load() for search order)."""
         agent_base: str = ProjectPaths.agent_base_name(agent_name)
 
         if profile_path:
@@ -226,7 +228,7 @@ class AgentProfile:
             for interaction in interactions:
                 text: Optional[str] = interaction.get("text")
                 if text:
-                    prompts.append(str(text))
+                    prompts.append(text)
 
         if not prompts:
             logger.error(
