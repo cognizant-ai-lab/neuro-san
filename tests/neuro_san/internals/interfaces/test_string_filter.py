@@ -16,7 +16,7 @@
 # END COPYRIGHT
 from unittest import TestCase
 
-from neuro_san.internals.interfaces.string_filter import StringFilter
+from leaf_common.filters.string_filter import StringFilter
 
 
 class TestStringFilter(TestCase):
