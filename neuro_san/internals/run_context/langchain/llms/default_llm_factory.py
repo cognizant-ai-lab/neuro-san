@@ -254,7 +254,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         model_name: str = use_config.get("model_name")
 
         # Follow any alias to the entry that carries the class and model details.
-        resolved: Tuple[Dict[str, Any], str] = self.resolve_llm_entry(model_name)
+        resolved: Tuple[Dict[str, Any], str] = self._resolve_llm_entry(model_name)
         llm_entry: Dict[str, Any] = resolved[0]
         use_model_name: str = resolved[1]
 
@@ -296,7 +296,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         chat_classes: Dict[str, Any] = self.llm_infos.get("classes", {})
         return chat_class_name in chat_classes
 
-    def find_llm_entry(self, model_name: str) -> Tuple[Optional[Dict[str, Any]], str]:
+    def _find_llm_entry(self, model_name: str) -> Tuple[Optional[Dict[str, Any]], str]:
         """
         Looks up the llm_info entry for a model name, following at most one alias hop.
 
@@ -323,20 +323,20 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         resolved_entry: Dict[str, Any] = self.llm_infos.get(use_model_name) if is_alias else llm_entry
         return resolved_entry, use_model_name
 
-    def resolve_llm_entry(self, model_name: str) -> Tuple[Dict[str, Any], str]:
+    def _resolve_llm_entry(self, model_name: str) -> Tuple[Dict[str, Any], str]:
         """
         Looks up the llm_info entry for a model name, following at most one alias hop,
         and insists that an entry exists.
 
         :param model_name: The model name from the config
-        :return: A tuple of (llm_entry, use_model_name) as described in find_llm_entry(),
+        :return: A tuple of (llm_entry, use_model_name) as described in _find_llm_entry(),
                 with llm_entry guaranteed not to be None.
         :raises ValueError: if there is no entry for model_name, or for the alias target
         """
         if self.llm_infos.get(model_name) is None:
             raise ValueError(f"No llm entry for model_name {model_name}")
 
-        found: Tuple[Optional[Dict[str, Any]], str] = self.find_llm_entry(model_name)
+        found: Tuple[Optional[Dict[str, Any]], str] = self._find_llm_entry(model_name)
         llm_entry: Dict[str, Any] = found[0]
         use_model_name: str = found[1]
         if llm_entry is None:
@@ -358,7 +358,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 When an alias points at a name that has no entry of its own, that name is
                 returned as-is so the provider can be the judge of it.
         """
-        found: Tuple[Optional[Dict[str, Any]], str] = self.find_llm_entry(model_name)
+        found: Tuple[Optional[Dict[str, Any]], str] = self._find_llm_entry(model_name)
         llm_entry: Dict[str, Any] = found[0]
         use_model_name: str = found[1]
         if llm_entry is None:
@@ -637,7 +637,7 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         # already been replaced by the entry's own "use_model_name" (if any), so for
         # redirect entries like azure-gpt-4o this looks up the target entry, which is
         # where max_output_tokens actually lives.
-        llm_entry: Dict[str, Any] = self.resolve_llm_entry(model_name)[0]
+        llm_entry: Dict[str, Any] = self._resolve_llm_entry(model_name)[0]
 
         entry_max_tokens: Optional[int] = llm_entry.get("max_output_tokens")
         prompt_token_fraction: Optional[float] = config.get("prompt_token_fraction")

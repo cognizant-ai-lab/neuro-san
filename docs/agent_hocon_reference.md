@@ -398,11 +398,9 @@ You can use the `class` key in two ways:
 
 Set the `class` key to one of the values listed below, then specify the model using the `model_name` key.
 
-The `model_name` is still looked up in `default_llm_info.hocon` (and in any [llm_info_file](#llm_info_file)
-extension), so an alias such as `claude-opus` or `gpt-4o` resolves to the same concrete model id it would
-without `class`. A `model_name` that is not listed there is passed to the provider unchanged, which is how
-you use a model neuro-san does not know about yet while still getting that class's default arguments.
-The `class` you give is always the one instantiated, even when the alias entry belongs to a different class.
+The `model_name` may be one of the aliases in `default_llm_info.hocon`, such as `claude-opus`; it resolves the
+same way as without `class`, and a `model_name` that is not listed there is passed to the provider unchanged.
+See [use_model_name](./llm_info_hocon_reference.md#use_model_name) for the details.
 
 | LLM Provider               | Class Value         |
 |:---------------------------|:--------------------|
@@ -430,8 +428,7 @@ Set the `class` key to the full Python path of the desired LangChain-compatible 
 ```
 
 Then, provide any constructor arguments supported by that class in `llm_config`.
-Everything, including the model name, is handed to that class exactly as written; the aliases in
-`default_llm_info.hocon` are not applied in this mode.
+Everything, including the model name, is handed to that class exactly as written.
 
 For a full list of available chat model classes and their parameters, refer to:
 [LangChain Chat Integrations Documentation](https://python.langchain.com/docs/integrations/chat/)

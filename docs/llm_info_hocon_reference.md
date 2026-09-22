@@ -229,9 +229,28 @@ became the official "gpt-4o", there was another version called "gpt-4o-2024-05-1
 
 You can use the `use_model_name` key for your own model aliasing purposes as well however you like.
 
-Aliases are followed both when an `llm_config` gives only a `model_name` and when it also names one of
-the classes from the [`classes`](#classes) table via `class`. They are not applied when `class` is the
-full python path of a langchain chat model class, since nothing from this file is used in that case.
+An entry that has a `use_model_name` and at most one other key (such as `model_info_url`) is an alias:
+everything about the model, including its `class`, is taken from the entry it points at. An entry that
+has its own details as well as a `use_model_name` is not an alias. It keeps its own `class` (and so its
+class argument defaults), while the model id sent to the provider and the `max_output_tokens` used for
+`max_tokens` come from the entry it points at. The `azure-*` entries work this way: each sets
+`"class": "azure-openai"` itself and points `use_model_name` at the matching OpenAI entry.
+
+How a `model_name` in an agent network's `llm_config` is resolved depends on what else that `llm_config` says:
+
+- Only a `model_name`: an alias is followed and the target entry supplies the `class`, the class argument
+  defaults and `max_output_tokens`. A `model_name` that is not in this file is an error.
+- A `model_name` together with a `class` from the [`classes`](#classes) table, for example
+  `"class": "anthropic"`: an alias is followed so that the provider receives the concrete model id, but
+  the `class` you gave is the one instantiated, even when the alias entry belongs to another class.
+  A `model_name` that is not in this file is passed to the provider unchanged, so a model neuro-san does
+  not know about yet can still be used with that class's argument defaults. An alias whose target has no
+  entry of its own resolves to the target name and is likewise left for the provider to judge.
+- A `class` that is the full python path of a langchain chat model class: nothing from this file is used,
+  so the `model_name` is handed to that class exactly as written.
+
+Because an alias points at a concrete version, resolving it means that `"model_name": "gpt-4o"` sends
+`gpt-4o-2024-08-06` (or whatever the alias currently points at), whether or not a `class` is given.
 
 ### `classes`
 

@@ -106,11 +106,13 @@ class TestDefaultLlmFactory(TestCase):
 
         :return: The hocon text
         """
-        return "{\n" \
-               f'    "{self.DANGLING_ALIAS}": {{\n' \
-               f'        "use_model_name": "{self.DANGLING_TARGET}"\n' \
-               "    }\n" \
-               "}\n"
+        return f"""
+        {{
+            "{self.DANGLING_ALIAS}": {{
+                "use_model_name": "{self.DANGLING_TARGET}"
+            }}
+        }}
+        """
 
     def _alias_target(self, alias: str) -> str:
         """
@@ -308,11 +310,13 @@ class TestDefaultLlmFactory(TestCase):
         """
         A sparse user overlay that adds a second key to a one-key alias keeps it behaving as an alias.
         """
-        extra_hocon: str = "{\n" \
-                           f'    "{self.ANTHROPIC_ALIAS}": {{\n' \
-                           '        "model_info_url": "https://example.com/claude"\n' \
-                           "    }\n" \
-                           "}\n"
+        extra_hocon: str = f"""
+        {{
+            "{self.ANTHROPIC_ALIAS}": {{
+                "model_info_url": "https://example.com/claude"
+            }}
+        }}
+        """
         factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(extra_hocon)
         target: str = self._alias_target(self.ANTHROPIC_ALIAS)
         config: Dict[str, Any] = {"model_name": self.ANTHROPIC_ALIAS}
@@ -341,12 +345,3 @@ class TestDefaultLlmFactory(TestCase):
         resolve_model_name_alias() hands back a name llm_info does not know, unchanged.
         """
         self.assertEqual(self.UNKNOWN_MODEL, self.factory.resolve_model_name_alias(self.UNKNOWN_MODEL))
-
-    def test_find_llm_entry_unknown_name_returns_none(self) -> None:
-        """
-        find_llm_entry() never raises: an unknown name yields no entry and the name itself.
-        """
-        found: Any = self.factory.find_llm_entry(self.UNKNOWN_MODEL)
-
-        self.assertIsNone(found[0])
-        self.assertEqual(self.UNKNOWN_MODEL, found[1])
