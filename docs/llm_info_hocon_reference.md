@@ -229,6 +229,10 @@ became the official "gpt-4o", there was another version called "gpt-4o-2024-05-1
 
 You can use the `use_model_name` key for your own model aliasing purposes as well however you like.
 
+Aliases are followed both when an `llm_config` gives only a `model_name` and when it also names one of
+the classes from the [`classes`](#classes) table via `class`. They are not applied when `class` is the
+full python path of a langchain chat model class, since nothing from this file is used in that case.
+
 ### `classes`
 
 A dictionary describing the details needed to instatiate the class of langchain BaseLanguageModel

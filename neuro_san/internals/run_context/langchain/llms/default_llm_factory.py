@@ -227,6 +227,23 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             # giving priority to values in config.
             full_config = self.overlayer.overlay(config_from_class_in_llm_info, config)
 
+            # Users do not always know whether a model_name is one of our aliases
+            # (e.g. "claude-opus") or a real provider model id, so for our own classes
+            # follow any alias to the model id the provider actually accepts.
+            # See https://github.com/cognizant-ai-lab/neuro-san/issues/1298
+            #
+            # Full langchain class paths are deliberately left alone: with those the user
+            # brings both the model and its arguments and nothing from llm_info applies.
+            #
+            # This has to happen before replace_any_required_api_keys(), which can turn
+            # full_config into a set of missing sly_data keys that cannot be indexed.
+            if self.is_llm_info_class(class_from_llm_config):
+                alias_model_name: Any = full_config.get("model_name")
+                # Only strings can be looked up. A missing model_name is legitimate for
+                # some classes (e.g. azure-openai selects the model by deployment_name).
+                if isinstance(alias_model_name, str):
+                    full_config["model_name"] = self.resolve_model_name_alias(alias_model_name)
+
             # Get any required api keys into the full config.
             full_config = self.replace_any_required_api_keys(full_config, sly_data)
             return full_config
@@ -236,17 +253,10 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         model_name: str = use_config.get("model_name")
 
-        llm_entry: Dict[str, Any] = self.llm_infos.get(model_name)
-        if llm_entry is None:
-            raise ValueError(f"No llm entry for model_name {model_name}")
-
-        # Get some bits from the llm_entry
-        use_model_name: str = llm_entry.get("use_model_name", model_name)
-        if len(llm_entry.keys()) <= 2 and use_model_name is not None:
-            # We effectively have an alias. Switch out the llm entry.
-            llm_entry = self.llm_infos.get(use_model_name)
-            if llm_entry is None:
-                raise ValueError(f"No llm entry for use_model_name {use_model_name} in {model_name}")
+        # Follow any alias to the entry that carries the class and model details.
+        resolved: Tuple[Dict[str, Any], str] = self.resolve_llm_entry(model_name)
+        llm_entry: Dict[str, Any] = resolved[0]
+        use_model_name: str = resolved[1]
 
         # Take a look at the chat classes.
         chat_class_name: str = llm_entry.get("class")
@@ -272,6 +282,92 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             full_config["max_tokens"] = self.get_max_prompt_tokens(full_config)
 
         return full_config
+
+    def is_llm_info_class(self, chat_class_name: str) -> bool:
+        """
+        Tells whether a "class" value from an llm_config names one of the classes in the
+        llm_info "classes" table (stock ones like "openai" or "anthropic", or ones a user
+        added through their own llm_info_file), as opposed to the full python path of a
+        langchain chat model class.
+
+        :param chat_class_name: The value of the "class" key from an llm_config
+        :return: True if the class is defined in the llm_info "classes" table
+        """
+        chat_classes: Dict[str, Any] = self.llm_infos.get("classes", {})
+        return chat_class_name in chat_classes
+
+    def find_llm_entry(self, model_name: str) -> Tuple[Optional[Dict[str, Any]], str]:
+        """
+        Looks up the llm_info entry for a model name, following at most one alias hop.
+
+        An alias is an entry with at most two keys whose "use_model_name" points at the
+        real entry (e.g. "claude-fable" -> "claude-fable-5-1"). Entries with more keys
+        keep their own details even when they carry a "use_model_name" of their own
+        (e.g. the azure-* entries, whose "class" must win over their target's).
+        This method never raises; callers decide how to treat a missing entry.
+
+        :param model_name: The model name from the config
+        :return: A tuple of (llm_entry, use_model_name). llm_entry is the entry after any
+                alias hop, or None when either model_name or the alias target has no entry.
+                use_model_name is the name the alias pointed at, or model_name itself when
+                there was no alias.
+        """
+        llm_entry: Dict[str, Any] = self.llm_infos.get(model_name)
+        if llm_entry is None:
+            return None, model_name
+
+        use_model_name: str = llm_entry.get("use_model_name", model_name)
+        # The two-key limit is what lets a sparse user overlay such as
+        # {"claude-fable": {"model_info_url": ...}} keep behaving as an alias.
+        is_alias: bool = len(llm_entry.keys()) <= 2 and use_model_name is not None
+        resolved_entry: Dict[str, Any] = self.llm_infos.get(use_model_name) if is_alias else llm_entry
+        return resolved_entry, use_model_name
+
+    def resolve_llm_entry(self, model_name: str) -> Tuple[Dict[str, Any], str]:
+        """
+        Looks up the llm_info entry for a model name, following at most one alias hop,
+        and insists that an entry exists.
+
+        :param model_name: The model name from the config
+        :return: A tuple of (llm_entry, use_model_name) as described in find_llm_entry(),
+                with llm_entry guaranteed not to be None.
+        :raises ValueError: if there is no entry for model_name, or for the alias target
+        """
+        if self.llm_infos.get(model_name) is None:
+            raise ValueError(f"No llm entry for model_name {model_name}")
+
+        found: Tuple[Optional[Dict[str, Any]], str] = self.find_llm_entry(model_name)
+        llm_entry: Dict[str, Any] = found[0]
+        use_model_name: str = found[1]
+        if llm_entry is None:
+            raise ValueError(f"No llm entry for use_model_name {use_model_name} in {model_name}")
+
+        return llm_entry, use_model_name
+
+    def resolve_model_name_alias(self, model_name: str) -> str:
+        """
+        Turns a model name that might be an llm_info alias into the model id the provider
+        accepts, without requiring the name to be known to llm_info at all.
+
+        This serves llm_configs that name one of our classes explicitly: the model may be one
+        we know (possibly under an alias) or one we have never heard of, and either way the
+        user's class is what gets instantiated.
+
+        :param model_name: The model name from the config
+        :return: The resolved model id, or model_name unchanged when llm_info does not know it.
+                When an alias points at a name that has no entry of its own, that name is
+                returned as-is so the provider can be the judge of it.
+        """
+        found: Tuple[Optional[Dict[str, Any]], str] = self.find_llm_entry(model_name)
+        llm_entry: Dict[str, Any] = found[0]
+        use_model_name: str = found[1]
+        if llm_entry is None:
+            # Either an unknown model (use_model_name == model_name) or a dangling alias target.
+            return use_model_name
+
+        # Full entries can carry a "use_model_name" of their own (e.g. azure-gpt-4o -> gpt-4o-2024-08-06).
+        # This mirrors how create_full_llm_config() fills in model_name when no class is given.
+        return llm_entry.get("use_model_name", use_model_name)
 
     def get_chat_class_args(self, chat_class_name: str, use_model_name: str = None) -> Dict[str, Any]:
         """
@@ -536,14 +632,12 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
 
         model_name: str = config.get("model_name")
 
-        llm_entry: Dict[str, Any] = self.llm_infos.get(model_name)
-        if llm_entry is None:
-            raise ValueError(f"No llm entry for model_name {model_name}")
-
-        use_model_name: str = llm_entry.get("use_model_name", model_name)
-        if len(llm_entry.keys()) <= 2 and use_model_name is not None:
-            # We effectively have an alias. Switch out the llm entry.
-            llm_entry = self.llm_infos.get(use_model_name)
+        # Follow any alias to the entry that carries max_output_tokens.
+        # Note that by the time create_full_llm_config() calls this, model_name has
+        # already been replaced by the entry's own "use_model_name" (if any), so for
+        # redirect entries like azure-gpt-4o this looks up the target entry, which is
+        # where max_output_tokens actually lives.
+        llm_entry: Dict[str, Any] = self.resolve_llm_entry(model_name)[0]
 
         entry_max_tokens: Optional[int] = llm_entry.get("max_output_tokens")
         prompt_token_fraction: Optional[float] = config.get("prompt_token_fraction")

@@ -235,7 +235,8 @@ call.
 
 **Anthropic Model Names:** The model names `claude-haiku`, `claude-sonnet`, `claude-opus`, and `claude-fable`
 are aliases that automatically reference the latest versions of their respective Anthropic model lines.
-This aliasing is recommended because Anthropic frequently deprecates older model versions. For information
+This aliasing is recommended because Anthropic frequently deprecates older model versions. The aliases
+resolve whether or not you also set `"class": "anthropic"`. For information
 on current models and deprecation schedules, see the
 [Anthropic model deprecations documentation](https://platform.claude.com/docs/en/about-claude/model-deprecations).
 
@@ -397,6 +398,12 @@ You can use the `class` key in two ways:
 
 Set the `class` key to one of the values listed below, then specify the model using the `model_name` key.
 
+The `model_name` is still looked up in `default_llm_info.hocon` (and in any [llm_info_file](#llm_info_file)
+extension), so an alias such as `claude-opus` or `gpt-4o` resolves to the same concrete model id it would
+without `class`. A `model_name` that is not listed there is passed to the provider unchanged, which is how
+you use a model neuro-san does not know about yet while still getting that class's default arguments.
+The `class` you give is always the one instantiated, even when the alias entry belongs to a different class.
+
 | LLM Provider               | Class Value         |
 |:---------------------------|:--------------------|
 | Anthropic                  | anthropic           |
@@ -423,6 +430,8 @@ Set the `class` key to the full Python path of the desired LangChain-compatible 
 ```
 
 Then, provide any constructor arguments supported by that class in `llm_config`.
+Everything, including the model name, is handed to that class exactly as written; the aliases in
+`default_llm_info.hocon` are not applied in this mode.
 
 For a full list of available chat model classes and their parameters, refer to:
 [LangChain Chat Integrations Documentation](https://python.langchain.com/docs/integrations/chat/)
