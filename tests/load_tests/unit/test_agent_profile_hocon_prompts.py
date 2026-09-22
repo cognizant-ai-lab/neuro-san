@@ -15,8 +15,11 @@
 # END COPYRIGHT
 
 import glob
+import json
 import os
 import tempfile
+from typing import Any
+from typing import Dict
 from typing import List
 from unittest import TestCase
 
@@ -48,13 +51,14 @@ class TestAgentProfileHoconPrompts(TestCase):
 
     @staticmethod
     def _write_hocon(folder: str, name: str, agent: str, texts: List[str]) -> str:
-        """Write a minimal test-case hocon and return its path."""
+        """Write a minimal test-case hocon (JSON is valid hocon) and return its path."""
         path: str = os.path.join(folder, name)
-        interactions: str = ", ".join(f'{{ "text": "{t}" }}' for t in texts)
+        test_case: Dict[str, Any] = {
+            "agent": agent,
+            "interactions": [{"text": text} for text in texts],
+        }
         with open(path, "w", encoding="utf-8") as fh:
-            fh.write(
-                f'{{ "agent": "{agent}", "interactions": [{interactions}] }}'
-            )
+            json.dump(test_case, fh)
         return path
 
     def test_prompts_come_from_hocon_files(self) -> None:
