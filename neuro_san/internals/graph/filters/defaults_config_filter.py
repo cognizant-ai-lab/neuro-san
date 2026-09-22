@@ -168,7 +168,8 @@ class DefaultsConfigFilter(ConfigFilter):
 
             # Case of unioning a single field
             if isinstance(union_fields, str):
-                union_fields = [union_fields]
+                union_fields_string: str = union_fields
+                union_fields = [union_fields_string]
 
             one_field: str = None
             for one_field in union_fields:
@@ -180,7 +181,7 @@ class DefaultsConfigFilter(ConfigFilter):
                 one_field_key: str = f"{tool_dest_key}.{one_field}"
                 merged_lists: List[str] = basis_field + tool_field
                 merged_dict: Dict[str, Any] = dict.fromkeys(merged_lists)
-                merged_field: List[str] = list(merged_dict)
+                merged_field: List[str] = list(merged_dict.keys())
                 self.set_tool_value(tool, one_field_key, merged_field)
 
     def set_tool_value(self, target: Dict[str, Any], key: str, value: Any):

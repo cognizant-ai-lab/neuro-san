@@ -96,6 +96,6 @@ class StringCommonDefsConfigFilter(AbstractCommonDefsConfigFilter):
             # We want to replace any instance of "{<search>}" in a string
             # with the replace value.  In order to preserve the curly braces
             # in an f-string, we need to double them.
-            replacement_value: str = replacement_value.replace(f"{{{search}}}", replace_string)
+            replacement_value = replacement_value.replace(f"{{{search}}}", replace_string)
 
         return replacement_value

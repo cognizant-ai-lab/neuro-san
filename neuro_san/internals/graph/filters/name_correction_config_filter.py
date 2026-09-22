@@ -65,8 +65,8 @@ class NameCorrectionConfigFilter(ConfigFilter):
         # Loop through all the tools making corrections or logging errors.
         tool: Dict[str, Any] = None
         for tool in tools:
-
-            name: str = tool.get("name")
+            use_tool: Dict[str, Any] = tool
+            name: str = use_tool.get("name")
             new_name: str = self.validate_name(name)
 
             if new_name.startswith("Error: "):
@@ -76,13 +76,14 @@ class NameCorrectionConfigFilter(ConfigFilter):
                 # Make a correction to the tool's own "name" field.  The references other
                 # tools hold to it are rewritten below from the corrections table, so both
                 # sides of every edge end up using the corrected name.
-                tool["name"] = new_name
+                use_tool["name"] = new_name
                 corrections[name] = new_name
 
         # Make the name corrections consistent in the tool lists
         for tool in tools:
+            use_tool: Dict[str, Any] = tool
             agent_tools: List[str] = []
-            agent_tools = tool.get("tools", agent_tools)
+            agent_tools = use_tool.get("tools", agent_tools)
             # This is an if rather than a continue on purpose: a coded tool typically has
             # no "tools" list at all, yet still needs its args.tools rewritten below.
             if isinstance(agent_tools, list) and len(agent_tools) > 0:
@@ -103,7 +104,7 @@ class NameCorrectionConfigFilter(ConfigFilter):
             # AbstractNetworkValidator.coerce_args_tools) both read that key, so a reference
             # left under the old name would make connectivity report an edge to an agent that
             # no longer exists, and the coded tool itself would fail to find its renamed child.
-            self.correct_args_tools(tool, corrections)
+            self.correct_args_tools(use_tool, corrections)
 
         # Spit out information about errors
         logger = logging.getLogger(self.__class__.__name__)
@@ -133,13 +134,20 @@ class NameCorrectionConfigFilter(ConfigFilter):
         :param corrections: A dictionary of original agent name -> corrected agent name
         """
         args: Any = tool.get("args")
-        if not isinstance(args, dict) or "tools" not in args:
+        if not isinstance(args, dict):
             # Nothing to correct.  Do not create args or args.tools here: this filter only
             # rewrites names and must otherwise hand every tool back value-equal to its input,
             # so it never invents keys the author did not write.
             return
 
-        args_tools: Any = args.get("tools")
+        args_dict: Dict[str, Any] = args
+        if "tools" not in args_dict.keys():
+            # Nothing to correct.  Do not create args or args.tools here: this filter only
+            # rewrites names and must otherwise hand every tool back value-equal to its input,
+            # so it never invents keys the author did not write.
+            return
+
+        args_tools: Any = args_dict.get("tools")
         if isinstance(args_tools, list):
             # List form: every element is an agent name. Rewrite by index so that the list
             # object and any non-string entries stay exactly as they were given.
