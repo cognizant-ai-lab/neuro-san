@@ -160,7 +160,7 @@ class AgentProfile:
                 return cls._load_from_file(agent_name, candidate)
 
         # Resolve project root: --project-root flag → PYTHONPATH fallback
-        resolved_root = cls._resolve_project_root(project_root)
+        resolved_root = cls.resolve_project_root(project_root)
         if resolved_root:
             for name in (agent_name, agent_base):
                 candidate = os.path.normpath(os.path.join(
@@ -182,7 +182,7 @@ class AgentProfile:
         raise SystemExit(1)
 
     @classmethod
-    def _resolve_project_root(cls, project_root=None) -> Optional[str]:
+    def resolve_project_root(cls, project_root=None) -> Optional[str]:
         """Resolve the project root directory.
 
         Priority: explicit --project-root → first entry in PYTHONPATH.

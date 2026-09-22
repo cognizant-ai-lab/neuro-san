@@ -26,6 +26,7 @@ import argparse
 import os
 from typing import Set
 
+from tests.load_tests.config import DEFAULT_FIXTURES_HOCON_DIR
 from tests.load_tests.config import DEFAULT_IDLE_TIMEOUT_SECONDS
 from tests.load_tests.config import DEFAULT_TIMEOUT_SECONDS
 from tests.load_tests.config import LEVEL_ADV
@@ -71,6 +72,23 @@ class LoadTestArguments:
                  "Without this, searches built-in profiles/. "
                  "Can also be set via LOAD_TEST_PROFILE_PATH "
                  "env var.",
+        )
+        parser.add_argument(
+            "--fixtures-hocon-dir",
+            nargs="?",
+            const=DEFAULT_FIXTURES_HOCON_DIR,
+            default=None,
+            metavar="DIR",
+            help="Take prompts from test-case HOCON files instead of the "
+                 "JSON profile. DIR is the parent fixtures directory; the "
+                 "agent subfolder is derived from --agent, e.g. "
+                 "--agent hello_world -> DIR/hello_world/*.hocon. "
+                 "Given without a value, DIR defaults to "
+                 f"{DEFAULT_FIXTURES_HOCON_DIR} under the project root "
+                 "(--project-root or PYTHONPATH). Each interactions[].text "
+                 "becomes a prompt; success_fields, failure_patterns and "
+                 "estimated_tokens_per_request still come from the JSON "
+                 "profile.",
         )
         parser.add_argument(
             "--project-root",

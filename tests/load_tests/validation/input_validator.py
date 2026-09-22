@@ -35,6 +35,7 @@ from tests.load_tests.config import LEVEL_ADV
 from tests.load_tests.config import RequestResult
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.confirm import Confirm
+from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.reporting.system_resources import SystemResources
 
 logger = logging.getLogger(__name__)
@@ -69,6 +70,55 @@ class InputValidator:
                 agent,
             )
             sys.exit(1)
+
+    def validate_fixtures_hocon_dir(self) -> List[str]:
+        """Resolve --fixtures-hocon-dir into a sorted list of *.hocon files.
+
+        Returns an empty list when the flag was not given, meaning
+        prompts come from the JSON profile as before. When given, the
+        hocon files take precedence over the profile's prompts; the
+        profile is still used for the remaining settings.
+
+        The flag names the parent fixtures directory (default
+        tests/fixtures/load_tests); the agent subfolder is derived
+        from --agent the same way AgentProfile.load derives the JSON
+        filename: basic/hello_world -> hello_world.
+        """
+        parent_dir: Optional[str] = self._args.fixtures_hocon_dir
+        if not parent_dir:
+            return []
+
+        if not os.path.isabs(parent_dir):
+            project_root = AgentProfile.resolve_project_root(
+                self._args.project_root
+            )
+            parent_dir = os.path.join(project_root or os.getcwd(), parent_dir)
+
+        agent_base: str = self._args.agent.rsplit("/", 1)[-1]
+        hocon_dir: str = os.path.join(parent_dir, agent_base)
+
+        if not os.path.isdir(hocon_dir):
+            logger.error(
+                "ERROR: no hocon fixtures directory for agent '%s':\n"
+                "  Expected: %s\n"
+                "  Check --fixtures-hocon-dir / --project-root.",
+                self._args.agent, hocon_dir,
+            )
+            sys.exit(1)
+
+        files: List[str] = sorted(
+            os.path.join(hocon_dir, name)
+            for name in os.listdir(hocon_dir)
+            if name.endswith(".hocon")
+            and os.path.isfile(os.path.join(hocon_dir, name))
+        )
+        if not files:
+            logger.error(
+                "ERROR: no *.hocon files found in:\n  %s", hocon_dir,
+            )
+            sys.exit(1)
+
+        return files
 
     def resolve_stages(self) -> List[int]:
         """Return the list of concurrency stages to run.
