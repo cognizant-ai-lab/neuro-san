@@ -89,7 +89,7 @@ class InputValidator:
             return []
 
         if not os.path.isabs(parent_dir):
-            project_root = ProjectPaths.resolve_project_root(
+            project_root: Optional[str] = ProjectPaths.resolve_project_root(
                 self._args.project_root
             )
             parent_dir = os.path.join(project_root or os.getcwd(), parent_dir)

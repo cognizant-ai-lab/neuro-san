@@ -125,7 +125,7 @@ class AgentProfile:
         the base name (hello_world) is tried as a fallback so
         --profile-path is not required for prefixed agents.
         """
-        agent_base = ProjectPaths.agent_base_name(agent_name)
+        agent_base: str = ProjectPaths.agent_base_name(agent_name)
 
         if profile_path:
             if os.path.isfile(profile_path):
@@ -162,7 +162,7 @@ class AgentProfile:
                 return cls._load_from_file(agent_name, candidate)
 
         # Resolve project root: --project-root flag → PYTHONPATH fallback
-        resolved_root = ProjectPaths.resolve_project_root(project_root)
+        resolved_root: Optional[str] = ProjectPaths.resolve_project_root(project_root)
         if resolved_root:
             for name in (agent_name, agent_base):
                 candidate = os.path.normpath(os.path.join(

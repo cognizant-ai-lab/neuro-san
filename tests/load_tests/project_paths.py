@@ -37,9 +37,9 @@ class ProjectPaths:
         if project_root:
             return os.path.abspath(project_root)
 
-        python_path = os.environ.get("PYTHONPATH")
+        python_path: Optional[str] = os.environ.get("PYTHONPATH")
         if python_path:
-            first_entry = python_path.split(os.pathsep)[0]
+            first_entry: str = python_path.split(os.pathsep)[0]
             if os.path.isdir(first_entry):
                 return os.path.abspath(first_entry)
 

@@ -206,7 +206,7 @@ SEPARATOR_WIDTH = 60
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 DEFAULT_STAGES = [10, 30, 50, 100]
 # Parent dir of per-agent load-test hocon fixtures, relative to project root
-DEFAULT_FIXTURES_HOCON_DIR = os.path.join("tests", "fixtures", "load_tests")
+DEFAULT_FIXTURES_HOCON_DIR: str = os.path.join("tests", "fixtures", "load_tests")
 DEFAULT_TIMEOUT_SECONDS = 1200
 DEFAULT_IDLE_TIMEOUT_SECONDS = 900
 NETWORK_LOOKAHEAD_LINES = 10
