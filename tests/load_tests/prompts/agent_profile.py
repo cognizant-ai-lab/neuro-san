@@ -24,6 +24,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from neuro_san.test.util.tests_util import TestsUtil
 from tests.load_tests.project_paths import ProjectPaths
 
 logger = logging.getLogger(__name__)
@@ -111,8 +112,14 @@ class AgentProfile:
         return f"{base_prompt} (request {request_id})"
 
     @classmethod
-    def load(cls, agent_name, profile_path=None, project_root=None) -> "AgentProfile":
+    def load(cls, agent_name: str, profile_path: Optional[str] = None,
+             project_root: Optional[str] = None,
+             hocon_files: Optional[List[str]] = None) -> "AgentProfile":
         """Load an agent profile from a JSON file.
+
+        When hocon_files is given, the prompts come from those
+        test-case hocons (interactions[].text) instead of the JSON;
+        every other setting still comes from the JSON profile.
 
         Search order:
         1. --profile-path directory: look for {base}.json there
@@ -125,6 +132,19 @@ class AgentProfile:
         the base name (hello_world) is tried as a fallback so
         --profile-path is not required for prefixed agents.
         """
+        profile: "AgentProfile" = cls._load_json(
+            agent_name, profile_path, project_root,
+        )
+        if hocon_files:
+            profile._data["prompts"] = cls._prompts_from_hocons(
+                agent_name, hocon_files,
+            )
+        return profile
+
+    @classmethod
+    def _load_json(cls, agent_name: str, profile_path: Optional[str],
+                   project_root: Optional[str]) -> "AgentProfile":
+        """Find and load the JSON profile (see load() for search order)."""
         agent_base: str = ProjectPaths.agent_base_name(agent_name)
 
         if profile_path:
@@ -182,6 +202,46 @@ class AgentProfile:
             "".join(f"  - {p}\n" for p in searched),
         )
         raise SystemExit(1)
+
+    @classmethod
+    def _prompts_from_hocons(cls, agent_name: str, hocon_files: List[str]) -> List[str]:
+        """Collect interactions[].text from test-case hocon files.
+
+        Each hocon's "agent" must match agent_name (or its base name).
+        Aborts when a file is for another agent or no text is found.
+        """
+        agent_base: str = ProjectPaths.agent_base_name(agent_name)
+        prompts: List[str] = []
+        for path in hocon_files:
+            test_case: Dict[str, Any] = TestsUtil.parse_hocon_test_case(None, path)
+            hocon_agent: str = test_case.get("agent", "")
+            if hocon_agent not in (agent_name, agent_base):
+                logger.error(
+                    "Hocon agent does not match --agent.\n"
+                    "  File: %s\n"
+                    "  Hocon agent: %s\n"
+                    "  --agent: %s\nAborting.",
+                    path, hocon_agent, agent_name,
+                )
+                raise SystemExit(1)
+            interactions: List[Dict[str, Any]] = test_case.get("interactions", [])
+            for interaction in interactions:
+                text: Optional[str] = interaction.get("text")
+                if text:
+                    prompts.append(str(text))
+
+        if not prompts:
+            logger.error(
+                "No interactions[].text found in %d hocon file(s) for "
+                "agent '%s'.\nAborting.",
+                len(hocon_files), agent_name,
+            )
+            raise SystemExit(1)
+        logger.info(
+            "Loaded %d prompt(s) from %d hocon file(s) for agent '%s'",
+            len(prompts), len(hocon_files), agent_name,
+        )
+        return prompts
 
     @classmethod
     def _load_from_file(cls, agent_name, path) -> "AgentProfile":
