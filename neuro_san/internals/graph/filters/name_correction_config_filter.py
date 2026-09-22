@@ -37,6 +37,7 @@ class NameCorrectionConfigFilter(ConfigFilter):
     convention for declaring downstream agents), so both ends of each edge agree.
     """
 
+    # pylint: disable=too-many-locals
     def filter_config(self, basis_config: Dict[str, Any]) -> Dict[str, Any]:
         """
         Filters the given basis config.
