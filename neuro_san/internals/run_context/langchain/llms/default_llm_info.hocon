@@ -801,7 +801,7 @@
         "capabilities": [ "tools" ],
         "context_window_size": 1000000,
         "max_output_tokens": 128000,
-        # https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-opus-5.html
+        # https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-opus-5-5.html
         "knowledge_cutoff": "06/2026",
         # https://platform.claude.com/docs/en/about-claude/pricing
         "price_per_1k_input_tokens": 0.004,
