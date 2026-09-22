@@ -184,6 +184,10 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         tools_list: List[Dict[str, Any]] = result_dict.get("tools", empty_list)
         use_tool: Dict[str, Any] = self.find_tool_for_network(tools_list)
         if use_tool is None:
+            # Nothing stands for the network any more, so forget whatever an
+            # earlier listing advertised; tools/call then falls back to the
+            # network name rather than a stale one.
+            self.advertised_tool_name = None
             return None
 
         # Remember the name this server uses so tools/call sends a name the

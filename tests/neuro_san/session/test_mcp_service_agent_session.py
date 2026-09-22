@@ -253,6 +253,26 @@ class TestMcpServiceAgentSession(TestCase):
         payload: Dict[str, Any] = self.find_payload(mock_post, "tools/call")
         self.assertEqual(self.TOOL_NAME, payload["params"]["name"])
 
+    def test_function_forgets_advertised_name_when_network_disappears(self) -> None:
+        """
+        If a later tools/list no longer contains the network, function() drops the
+        name it learned earlier and tools/call goes back to the network name.
+        """
+        # The fake server reads this list on every call, so emptying it between
+        # calls simulates the network being withdrawn.
+        tools: List[Dict[str, Any]] = [self.RENAMED_TOOL]
+        with patch(self.POST_TARGET, side_effect=partial(self.fake_post, tools)) as mock_post:
+            session = McpServiceAgentSession(agent_name=self.NETWORK_NAME)
+            first: Dict[str, Any] = session.function({})
+            tools.clear()
+            second: Dict[str, Any] = session.function({})
+            list(session.streaming_chat({"user_message": {"text": "2+2"}}))
+        self.assertEqual({"function": {"description": self.DESCRIPTION}}, first)
+        self.assertIsNone(second)
+        self.assertIsNone(session.advertised_tool_name)
+        payload: Dict[str, Any] = self.find_payload(mock_post, "tools/call")
+        self.assertEqual(self.NETWORK_NAME, payload["params"]["name"])
+
     def test_find_tool_for_network_skips_entry_without_name(self) -> None:
         """
         A tools/list entry with no "name" cannot be called, so it never matches,
