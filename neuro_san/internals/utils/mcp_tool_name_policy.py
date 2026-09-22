@@ -20,7 +20,8 @@ from typing import List
 from typing import Optional
 from typing import Set
 
-from neuro_san.internals.interfaces.string_filter import StringFilter
+from leaf_common.filters.string_filter import StringFilter
+
 from neuro_san.internals.utils.mcp_tool_name_filter import McpToolNameFilter
 
 
