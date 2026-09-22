@@ -20,7 +20,8 @@ from unittest import TestCase
 
 from typing_extensions import override
 
-from neuro_san.internals.interfaces.string_filter import StringFilter
+from leaf_common.filters.string_filter import StringFilter
+
 from neuro_san.internals.utils.mcp_tool_name_filter import McpToolNameFilter
 
 

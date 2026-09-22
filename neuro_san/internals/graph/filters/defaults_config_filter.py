@@ -14,9 +14,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-See class comment for details
-"""
 
 from typing import Any
 from typing import Dict
@@ -37,7 +34,7 @@ class DefaultsConfigFilter(ConfigFilter):
 
     # A mapping of source keys for defaults at the top level to destination
     # keys on the specific tool where the top-level defaults (if any) should be copied.
-    DEFAULTS_MAPPING: Dict[str, Dict[str, Any]] = {
+    DEFAULTS_MAPPING: Dict[str, Any] = {
         # A value of None implies using a default dictionary where the source key as the same destination
         # key in the tool as well and it applies to all tools.
         "llm_config": None,
@@ -65,11 +62,10 @@ class DefaultsConfigFilter(ConfigFilter):
         Constructor
         """
         super().__init__()
-        self.overlayer = DictionaryOverlay()
+        self.overlayer: DictionaryOverlay = DictionaryOverlay()
 
     # pylint: disable=too-many-locals
-    def filter_config(self, basis_config: Dict[str, Any]) \
-            -> Dict[str, Any]:
+    def filter_config(self, basis_config: Dict[str, Any]) -> Dict[str, Any]:
         """
         Filters the given basis config.
 
@@ -114,7 +110,7 @@ class DefaultsConfigFilter(ConfigFilter):
             tool_dest_dict: Dict[str, Any] = None
             for basis_source_key, tool_dest_dict in self.DEFAULTS_MAPPING.items():
 
-                basis_value = basis_extractor.get(basis_source_key)
+                basis_value: Any = basis_extractor.get(basis_source_key, None)
                 if basis_value is None:
                     # No value to fill out.
                     continue
@@ -128,14 +124,14 @@ class DefaultsConfigFilter(ConfigFilter):
                         "union_fields": None,
                     }
 
-                tool_dest_key = use_tool_dest_dict.get("dest_key", basis_source_key)
-                tool_front_man_only = use_tool_dest_dict.get("front_man_only", False)
+                tool_dest_key: str = use_tool_dest_dict.get("dest_key", basis_source_key)
+                tool_front_man_only: bool = use_tool_dest_dict.get("front_man_only", False)
 
                 if tool_front_man_only and not is_front_man:
                     # Skip this one.
                     continue
 
-                tool_value = tool_extractor.get(tool_dest_key)
+                tool_value: Any = tool_extractor.get(tool_dest_key, None)
                 if tool_value is None:
                     # If the tool does not have a value, use the basis_value whole cloth
                     self.set_tool_value(tool, tool_dest_key, deepcopy(basis_value))
@@ -172,7 +168,8 @@ class DefaultsConfigFilter(ConfigFilter):
 
             # Case of unioning a single field
             if isinstance(union_fields, str):
-                union_fields = [union_fields]
+                union_fields_string: str = union_fields
+                union_fields = [union_fields_string]
 
             one_field: str = None
             for one_field in union_fields:
@@ -182,7 +179,9 @@ class DefaultsConfigFilter(ConfigFilter):
 
                 # The merged value is the union of the two sets with no duplicates (stable order)
                 one_field_key: str = f"{tool_dest_key}.{one_field}"
-                merged_field: List[str] = list(dict.fromkeys(basis_field + tool_field))
+                merged_lists: List[str] = basis_field + tool_field
+                merged_dict: Dict[str, Any] = dict.fromkeys(merged_lists)
+                merged_field: List[str] = list(merged_dict.keys())
                 self.set_tool_value(tool, one_field_key, merged_field)
 
     def set_tool_value(self, target: Dict[str, Any], key: str, value: Any):
@@ -210,7 +209,7 @@ class DefaultsConfigFilter(ConfigFilter):
 
         # Find the current value of the first part
         first_part: str = parts[0]
-        part_value = target.get(first_part)
+        part_value: Any = target.get(first_part)
         if part_value is None:
             # There is no existing value for the first part, so make it a dictionary
             target[first_part] = {}
@@ -220,5 +219,6 @@ class DefaultsConfigFilter(ConfigFilter):
             return
 
         # Reassemble a shorter key for recursion
-        remaining_parts: str = ".".join(parts[1:])
+        remaining_parts_list: List[str] = parts[1:]
+        remaining_parts: str = ".".join(remaining_parts_list)
         self.set_tool_value(part_value, remaining_parts, value)
