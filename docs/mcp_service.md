@@ -27,11 +27,13 @@ easy scalability of neuro-san/MCP deployment.
 
 In the scope of MCP protocol, each public neuro-san agent network is represented by an MCP tool
 (see [MCP tools](https://modelcontextprotocol.io/specification/2025-06-18/server/tools)).
-The tool name is the network name with every "/" replaced by "__"
-(so the nested network `deep/math_guy` is advertised as the tool `deep__math_guy`),
+The tool name is derived from the network name: every "/" becomes "__" and any other
+character outside `A-Z`, `a-z`, `0-9`, `_` and `-` becomes `_`
+(so the nested network `deep/math_guy` is advertised as the tool `deep__math_guy`,
+and a network named `Agent.1` as `Agent_1`),
 unless the manifest entry sets an explicit `mcp_name`
 (see [manifest reference](./manifest_hocon_reference.md#mcp_name)).
-For a top-level network the tool name and the network name are identical.
+For a top-level network made only of those characters the tool name and the network name are identical.
 The rename exists because LLM providers such as OpenAI and Anthropic only accept tool names
 matching `^[a-zA-Z0-9_-]+$`, so a "/" in a tool name fails the whole request
 (see [neuro-san-studio#600](https://github.com/cognizant-ai-lab/neuro-san-studio/issues/600)).
@@ -211,8 +213,9 @@ replicated from neuro-san OpenAPI specification:
             }
     }
     ```
-where the tool name is the agent network name with "/" replaced by "__"
-(or the manifest's `mcp_name`, see [above](#agent-networks-as-mcp-tools)),
+where the tool name is the advertised MCP tool name (the network name with "/" replaced by "__"
+and any other unsafe character by "_", or the manifest's `mcp_name`,
+see [above](#agent-networks-as-mcp-tools)),
 and tool description is what is returned by "function" neuro-san API call.
 See [Infrastructure](../README.md#infrastructure)
 

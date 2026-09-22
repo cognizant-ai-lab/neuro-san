@@ -16,9 +16,14 @@
 # END COPYRIGHT
 from typing import Any
 from typing import Dict
+from typing import List
 
 from logging import ERROR
 from logging import WARNING
+from os import makedirs
+from os.path import dirname
+from os.path import join
+from tempfile import TemporaryDirectory
 from unittest import TestCase
 
 from neuro_san.internals.graph.persistence.agent_filetree_mapper import AgentFileTreeMapper
@@ -28,6 +33,8 @@ from neuro_san.internals.interfaces.storage_class import StorageClass
 from neuro_san.internals.validation.network.manifest_network_validator import ManifestNetworkValidator
 
 
+# One test per rule of the derivation, collision and manifest-key handling adds up.
+# pylint: disable=too-many-public-methods
 class TestRegistryManifestRestorer(TestCase):
     """
     Unit tests for the MCP tool naming done by RegistryManifestRestorer:
@@ -233,6 +240,127 @@ class TestRegistryManifestRestorer(TestCase):
 
         self.assertTrue(literal_network.is_mcp_tool())
         self.assertFalse(path_network.is_mcp_tool())
+
+    def test_resolve_collisions_reserves_own_name_of_aliased_network(self) -> None:
+        """
+        "a/b" derives to "a__b" while the network literally named "a__b" is advertised
+        under the alias "other". The two advertised names differ, but "a__b" is still
+        how a client that has not seen tools/list addresses the literal network, so
+        "a/b" may not take it: the literal network keeps its alias, "a/b" loses MCP exposure.
+        "a/b" sorts first, so its claim is the earlier one.
+        """
+        path_network: AgentNetwork = self.make_agent_network("a/b")
+        path_network.set_as_mcp_tool("a__b")
+        literal_network: AgentNetwork = self.make_agent_network("a__b")
+        literal_network.set_as_mcp_tool("other")
+        all_agent_networks: Dict[str, Dict[str, AgentNetwork]] = {
+            StorageClass.PUBLIC: {"a/b": path_network, "a__b": literal_network}
+        }
+
+        with self.assertLogs(self.INSTANCE_LOGGER, level=ERROR) as captured:
+            self.make_restorer().resolve_mcp_tool_name_collisions(all_agent_networks)
+
+        self.assertTrue(literal_network.is_mcp_tool())
+        self.assertEqual("other", literal_network.get_mcp_tool_name())
+        self.assertFalse(path_network.is_mcp_tool())
+        self.assertEqual(1, len(captured.output))
+        self.assertIn("'a__b'", captured.output[0])
+
+    def test_resolve_collisions_reserved_name_wins_when_seen_first(self) -> None:
+        """
+        Same rule with the reserved name seen first: "alpha" (alias "zzz") sorts before
+        "beta", whose alias "alpha" is the other network's own name. "beta" loses.
+        """
+        alpha: AgentNetwork = self.make_agent_network("alpha")
+        alpha.set_as_mcp_tool("zzz")
+        beta: AgentNetwork = self.make_agent_network("beta")
+        beta.set_as_mcp_tool("alpha")
+        all_agent_networks: Dict[str, Dict[str, AgentNetwork]] = {
+            StorageClass.PUBLIC: {"alpha": alpha, "beta": beta}
+        }
+
+        with self.assertLogs(self.INSTANCE_LOGGER, level=ERROR):
+            self.make_restorer().resolve_mcp_tool_name_collisions(all_agent_networks)
+
+        self.assertTrue(alpha.is_mcp_tool())
+        self.assertEqual("zzz", alpha.get_mcp_tool_name())
+        self.assertFalse(beta.is_mcp_tool())
+
+    def test_resolve_collisions_reserves_name_of_non_mcp_network(self) -> None:
+        """
+        A public network that is not an MCP tool still reserves its own name: "a/b" may not be
+        advertised as "a__b" while a network named "a__b" exists, or a tools/call for "a__b"
+        would be answered by "a/b" instead of being refused as not available over MCP.
+        """
+        path_network: AgentNetwork = self.make_agent_network("a/b")
+        path_network.set_as_mcp_tool("a__b")
+        plain_network: AgentNetwork = self.make_agent_network("a__b")
+        all_agent_networks: Dict[str, Dict[str, AgentNetwork]] = {
+            StorageClass.PUBLIC: {"a/b": path_network, "a__b": plain_network}
+        }
+
+        with self.assertLogs(self.INSTANCE_LOGGER, level=ERROR):
+            self.make_restorer().resolve_mcp_tool_name_collisions(all_agent_networks)
+
+        self.assertFalse(path_network.is_mcp_tool())
+        self.assertFalse(plain_network.is_mcp_tool())
+        self.assertIs(plain_network, all_agent_networks[StorageClass.PUBLIC]["a__b"])
+
+    NETWORK_HOCON: str = '{ "tools": [ { "name": "front", "function": { "description": "x" } } ] }\n'
+
+    def write_registry(self, registry_dir: str) -> List[str]:
+        """
+        Writes a small registry to disk: four networks, each listed by its own manifest file.
+
+        One entry per manifest keeps the restorer single-threaded per file, which
+        sidesteps the known thread-safety problem in pyhocon parsing and makes the
+        test deterministic. Collisions are still resolved across all manifests.
+
+        :param registry_dir: The directory to write into
+        :return: The manifest file paths, in the order to restore them
+        """
+        entries: Dict[str, str] = {
+            "a/b": '{ "a/b.hocon": { "serve": true, "mcp": true } }',
+            "a__b": '{ "a__b.hocon": { "serve": true, "mcp": true } }',
+            "c": '{ "c.hocon": { "serve": true, "mcp_name": "calc" } }',
+            "d": '{ "d.hocon": { "serve": true, "mcp": false, "mcp_name": "solo" } }',
+        }
+        manifest_files: List[str] = []
+        for network_name, manifest_text in entries.items():
+            network_file: str = join(registry_dir, f"{network_name}.hocon")
+            makedirs(dirname(network_file), exist_ok=True)
+            with open(network_file, "w", encoding="utf-8") as hocon:
+                hocon.write(self.NETWORK_HOCON)
+            manifest_file: str = join(registry_dir, f"manifest_{network_name.replace('/', '_')}.hocon")
+            with open(manifest_file, "w", encoding="utf-8") as manifest:
+                manifest.write(manifest_text + "\n")
+            manifest_files.append(manifest_file)
+        return manifest_files
+
+    def test_restore_wires_mcp_name_and_collision_resolution_end_to_end(self) -> None:
+        """
+        Restoring real manifest and network files runs the whole chain: the "mcp_name"
+        manifest key is honoured, an explicit "mcp": false is not undone by it, and the
+        "a/b" vs "a__b" collision is resolved after all manifests are loaded.
+        """
+        with TemporaryDirectory() as registry_dir:
+            manifest_files: List[str] = self.write_registry(registry_dir)
+            restorer = RegistryManifestRestorer(manifest_files=manifest_files)
+            with self.assertLogs(self.INSTANCE_LOGGER, level=ERROR) as captured:
+                networks: Dict[str, Dict[str, AgentNetwork]] = restorer.restore()
+
+        public: Dict[str, AgentNetwork] = networks[StorageClass.PUBLIC]
+        self.assertTrue(public["a__b"].is_mcp_tool())
+        self.assertEqual("a__b", public["a__b"].get_mcp_tool_name())
+        # The nested network lost the collision but is still served.
+        self.assertFalse(public["a/b"].is_mcp_tool())
+        self.assertTrue(public["c"].is_mcp_tool())
+        self.assertEqual("calc", public["c"].get_mcp_tool_name())
+        # "mcp": false kept "d" out of MCP and therefore out of the public storage.
+        self.assertNotIn("d", public)
+        self.assertFalse(networks[StorageClass.PROTECTED]["d"].is_mcp_tool())
+        self.assertEqual(1, len(captured.output))
+        self.assertIn("'a__b'", captured.output[0])
 
     def test_resolve_collisions_without_collision_is_silent(self) -> None:
         """

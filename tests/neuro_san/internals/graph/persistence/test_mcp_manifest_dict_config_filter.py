@@ -123,6 +123,21 @@ class TestMcpManifestDictConfigFilter(TestCase):
         self.assertNotIn("mcp_name", filtered)
         self.assertFalse(filtered.get("mcp"))
 
+    def test_explicit_mcp_false_beats_mcp_name_with_warning(self) -> None:
+        """
+        An entry that opts out with "mcp": false keeps that choice even when it also names
+        an "mcp_name": the network is not switched on, and the ineffective name is warned about.
+        """
+        basis_config: Dict[str, Any] = {"mcp": False, "mcp_name": "solo"}
+        with self.assertLogs(self.LOGGER_NAME, level=WARNING) as captured:
+            filtered: Dict[str, Any] = self.make_filter().filter_config(basis_config)
+        self.assertFalse(filtered.get("mcp"))
+        self.assertFalse(filtered.get(StorageClass.PUBLIC))
+        self.assertEqual("solo", filtered.get("mcp_name"))
+        self.assertEqual(1, len(captured.output))
+        self.assertIn("solo", captured.output[0])
+        self.assertIn("deep/math_guy", captured.output[0])
+
     def test_bad_mcp_name_does_not_undo_explicit_mcp_true(self) -> None:
         """
         Dropping a bad "mcp_name" only removes that key; an explicit "mcp": true still stands.

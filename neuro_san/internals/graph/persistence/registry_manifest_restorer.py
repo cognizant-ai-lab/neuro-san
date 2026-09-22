@@ -138,6 +138,14 @@ class RegistryManifestRestorer(Restorer):
         address tools by name alone, so one of the two has to stop being an MCP tool.
         The loser stays served over the regular APIs; only its MCP exposure is withdrawn.
 
+        Every public network's own name is reserved as well, whether or not it is an
+        MCP tool and whatever it is advertised as: a client that has not seen
+        tools/list (or predates the rename) addresses a network by that name, and
+        McpToolsProcessor passes it through to the network. Letting "a/b" be
+        advertised as "a__b" while a network named "a__b" exists would route such
+        calls to the wrong network, or answer them instead of refusing them when
+        "a__b" is not an MCP tool.
+
         :param all_agent_networks: a nested map of storage type -> (mapping of name -> agent networks),
                                    modified in place for any losing network.
         """
@@ -154,15 +162,25 @@ class RegistryManifestRestorer(Restorer):
             agent_network: AgentNetwork = public_networks.get(network_name)
             # ServedManifestConfigFilter has already dropped None entries, but this
             # method is also callable on its own, so stay defensive.
-            if agent_network is None or not agent_network.is_mcp_tool():
+            if agent_network is None:
                 continue
 
-            tool_name: str = agent_network.get_mcp_tool_name()
-            if tool_name not in owners:
-                owners[tool_name] = network_name
-                continue
+            # Every network claims its own name (see above); an MCP network also
+            # claims its advertised name when that differs. The own name goes first
+            # so that if the advertised name loses below, the reservation stands.
+            # A network whose only claim is its own name can never lose, so
+            # clear_mcp_tool() is never called on a non-MCP network.
+            claims: List[str] = [network_name]
+            if agent_network.is_mcp_tool():
+                tool_name: str = agent_network.get_mcp_tool_name()
+                if tool_name != network_name:
+                    claims.append(tool_name)
 
-            self.resolve_one_mcp_tool_name_collision(public_networks, owners, tool_name, network_name)
+            for claim in claims:
+                if claim not in owners:
+                    owners[claim] = network_name
+                    continue
+                self.resolve_one_mcp_tool_name_collision(public_networks, owners, claim, network_name)
 
     def resolve_one_mcp_tool_name_collision(self, public_networks: Dict[str, AgentNetwork],
                                             owners: Dict[str, str],

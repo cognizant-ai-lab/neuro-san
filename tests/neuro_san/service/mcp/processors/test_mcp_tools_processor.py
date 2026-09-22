@@ -18,6 +18,7 @@ from typing import Any
 from typing import AsyncGenerator
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Tuple
 
 import json
@@ -132,7 +133,7 @@ class TestMcpToolsProcessor(IsolatedAsyncioTestCase):
         return agent_name == allowed_name, service_provider
 
     @staticmethod
-    def find_tool(tools: List[Dict[str, Any]], name: str) -> Dict[str, Any]:
+    def find_tool(tools: List[Dict[str, Any]], name: str) -> Optional[Dict[str, Any]]:
         """
         Finds the tools/list entry advertised under the given name.
 
@@ -234,6 +235,41 @@ class TestMcpToolsProcessor(IsolatedAsyncioTestCase):
         self.agent_policy.allow_agent.assert_awaited_once_with("no_such_tool", {})
         self.assertIn("no_such_tool", json.dumps(result))
 
+    async def test_call_tool_not_found_error_names_tool_as_called(self) -> None:
+        """
+        When the advertised name differs from the network name, a "not found" error
+        names the tool the way the client called it, not the network it mapped to.
+        """
+        self.agent_policy.allow_agent = AsyncMock(return_value=(True, None))
+        result: Dict[str, Any] = await self.processor.call_tool(
+            3, {}, self.NESTED_TOOL_NAME, {"type": "HUMAN", "text": "hi"}, None, None, None)
+        self.agent_policy.allow_agent.assert_awaited_once_with(self.NESTED_NAME, {})
+        text: str = json.dumps(result)
+        self.assertIn(f"Tool not found: {self.NESTED_TOOL_NAME}", text)
+        self.assertNotIn(self.NESTED_NAME, text)
+
+    async def test_call_tool_not_authorized_error_names_tool_as_called(self) -> None:
+        """
+        Same for the "not authorized" error.
+        """
+        self.agent_policy.allow_agent = AsyncMock(return_value=(False, self.service_provider))
+        result: Dict[str, Any] = await self.processor.call_tool(
+            3, {}, self.NESTED_TOOL_NAME, {"type": "HUMAN", "text": "hi"}, None, None, None)
+        text: str = json.dumps(result)
+        self.assertIn(f"Tool not authorized: {self.NESTED_TOOL_NAME}", text)
+        self.assertNotIn(self.NESTED_NAME, text)
+
+    async def test_call_tool_not_available_error_names_tool_as_called(self) -> None:
+        """
+        Same for the "not available as MCP tool" error.
+        """
+        self.service.is_mcp_tool.return_value = False
+        result: Dict[str, Any] = await self.processor.call_tool(
+            3, {}, self.NESTED_TOOL_NAME, {"type": "HUMAN", "text": "hi"}, None, None, None)
+        text: str = json.dumps(result)
+        self.assertIn(f"Service not available as MCP tool: {self.NESTED_TOOL_NAME}", text)
+        self.assertNotIn(self.NESTED_NAME, text)
+
     def test_resolve_network_name_maps_safe_name_back(self) -> None:
         """
         The advertised name resolves to the network name it stands for.
@@ -253,5 +289,7 @@ class TestMcpToolsProcessor(IsolatedAsyncioTestCase):
         A network that is not an MCP tool never claims a tool name, even if its stale
         mcp_tool_name attribute would match.
         """
-        self.nested.clear_mcp_tool()
+        # clear_mcp_tool() would also drop the name; flip only the flag so the
+        # stale name is really there to be ignored.
+        self.nested.is_mcp_network = False
         self.assertEqual(self.NESTED_TOOL_NAME, self.processor._resolve_network_name(self.NESTED_TOOL_NAME))

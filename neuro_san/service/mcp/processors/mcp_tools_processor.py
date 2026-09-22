@@ -252,8 +252,10 @@ class McpToolsProcessor:
         }
         if tool_name != agent_name:
             # MCP 2025-06-18 gives Tool an optional human-readable "title".
-            # Carrying the original network name there lets clients show
-            # where a renamed tool came from.
+            # Whenever the advertised name differs from the network name, the
+            # title carries the network name. This is a contract, not decoration:
+            # McpServiceAgentSession.find_tool_for_network() identifies its
+            # network by the title and never guesses from the spelling.
             tool_dict["title"] = agent_name
         return tool_dict
 
@@ -265,7 +267,12 @@ class McpToolsProcessor:
         :return: the network name whose advertised MCP tool name equals tool_name,
                  or tool_name unchanged when no network advertises it.
                  Passing the name through keeps top-level networks (whose two
-                 spellings coincide) and the legacy slash spelling working.
+                 spellings coincide) and the legacy slash spelling working. The
+                 latter is also what a client sends before it has seen tools/list
+                 (McpServiceAgentSession.streaming_chat() without a prior
+                 function() call, as SimpleOneShot does). The lookup is
+                 unambiguous because RegistryManifestRestorer reserves every
+                 public network's own name: no other network may advertise it.
         """
         public_storage: AgentNetworkStorage = self.network_storage_dict.get(StorageClass.PUBLIC)
         for agent_name in public_storage.get_agent_names():

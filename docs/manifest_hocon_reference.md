@@ -76,18 +76,29 @@ Note that a true value specified for "mcp" key will implicitly set "public" key 
 
 The value for the optional "mcp_name" key is a string: the name under which the network
 is advertised as an MCP tool in "tools/list" and addressed in "tools/call".
-Specifying a non-empty "mcp_name" implicitly sets "mcp" (and therefore "public") to true.
+Specifying a non-empty "mcp_name" implicitly sets "mcp" (and therefore "public") to true,
+unless the entry explicitly sets "mcp" to false, which wins: the name then has no effect and
+a warning is logged at server startup.
 
 When "mcp_name" is absent, the tool name is derived from the network name by replacing
-every "/" with "__", so a network at `deep/math_guy.hocon` is advertised as `deep__math_guy`.
-This is done because LLM providers such as OpenAI and Anthropic reject "/" in tool names.
-For a top-level network the derived tool name is simply the network name.
+every "/" with "__" and every other character outside `A-Z`, `a-z`, `0-9`, `_` and `-` with `_`,
+so a network at `deep/math_guy.hocon` is advertised as `deep__math_guy` and one named `Agent.1`
+as `Agent_1`. This is done because LLM providers such as OpenAI and Anthropic only accept tool
+names made of those characters. For a top-level network made only of them the derived tool name
+is simply the network name.
 
 | network name (from the hocon path) | manifest entry               | advertised MCP tool name |
 |------------------------------------|------------------------------|--------------------------|
 | `math_guy`                         | `"mcp": true`               | `math_guy`               |
 | `deep/math_guy`                    | `"mcp": true`               | `deep__math_guy`         |
+| `Agent.1`                          | `"mcp": true`               | `Agent_1`                |
 | `deep/math_guy`                    | `"mcp_name": "calculator"`  | `calculator`             |
+
+Whenever the advertised name differs from the network name, the "tools/list" entry also
+carries the network name in its MCP `title` field; neuro-san's own MCP client uses it to
+find the network it was asked for. Clients that list allowed tools by name, for example an
+agent network whose "tools" entry points at this server, must use the advertised name
+(`calculator`), not the network name.
 
 Tool names are expected to match `^[a-zA-Z0-9_-]{1,128}$`. A name that does not
 (for example an "mcp_name" containing "/") is still exposed, but a warning is logged at
@@ -99,6 +110,9 @@ Two public networks must not resolve to the same tool name (for example the netw
 an error and keeps the tool name for the network whose own name is that tool name unchanged;
 otherwise the first network in sorted order keeps it. The other network stays served over the
 regular APIs but is not exposed as an MCP tool. Give one of them a distinct "mcp_name" to resolve this.
+Every public network's own name is reserved in the same way, whether or not it is an MCP tool and
+whatever it is advertised as: `a/b` cannot be advertised as `a__b` while a public network named
+`a__b` exists, because a client that has not seen "tools/list" addresses that network as `a__b`.
 
 ##### periodic
 
