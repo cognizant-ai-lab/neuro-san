@@ -31,6 +31,7 @@ from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 from neuro_san.internals.journals.origination import Origination
 from neuro_san.message.processors.message_processor import MessageProcessor
 from neuro_san.message.types.chat_message_type import ChatMessageType
+from neuro_san.message.types.chat_message_type_util import ChatMessageTypeUtil
 
 
 # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -110,8 +111,8 @@ class ThinkingFileMessageProcessor(MessageProcessor):
 
         timestamp: float = time()
         response_type: str = response.get("type")
-        message_type: ChatMessageType = ChatMessageType.from_response_type(response_type)
-        message_type_str: str = ChatMessageType.to_string(message_type)
+        message_type: ChatMessageType = ChatMessageTypeUtil.from_response_type(response_type)
+        message_type_str: str = ChatMessageTypeUtil.to_string(message_type)
 
         text: str = response.get("text")
         structure: Dict[str, Any] = response.get("structure")

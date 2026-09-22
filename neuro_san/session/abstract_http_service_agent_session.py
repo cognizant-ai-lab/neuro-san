@@ -122,7 +122,7 @@ class AbstractHttpServiceAgentSession(AgentSessionConstants):
         :param path: url path of a request
         :return: help message
         """
-        message = f"""
+        message: str = f"""
         Some basic suggestions to help debug connectivity issues:
         1. Ensure the server is running and reachable:
            ping <server_address>

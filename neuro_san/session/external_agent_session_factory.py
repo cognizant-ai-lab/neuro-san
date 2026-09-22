@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from typing import Any
 from typing import Dict
 from typing import List
 
@@ -96,8 +97,12 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
                                           invocation_context: InvocationContext,
                                           invocation: str = None) -> AsyncAgentSession:
         """
+        Creates the session for an external agent from its parsed location, in-process when possible.
+
         :param agent_location: An agent location dictionary returned by
-                    ExternalAgentParsing.parse_external_agent()
+                    ExternalAgentParsing.parse_external_agent().
+                    When its "scheme" is "https", the http session built here
+                    talks https; any other (or absent) scheme talks plain http.
         :param invocation_context: The context policy container that pertains to the invocation
                     of the agent.
         :param invocation: String describing how the agent wants to be invoked.
@@ -110,9 +115,9 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
             return None
 
         # Create the session.
-        host = agent_location.get("host")
-        port = agent_location.get("port")
-        agent_name = agent_location.get("agent_name")
+        host: str = agent_location.get("host")
+        port: str = agent_location.get("port")
+        agent_name: str = agent_location.get("agent_name")
 
         # Note: It's possible we might want some filtering/translation of
         #       metadata keys not unlike what we are doing for sly_data.
@@ -129,7 +134,7 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
             agent_network_provider: AgentNetworkProvider = None
             for network_storage_name in self.get_networks_order(self.network_storage_dict):
 
-                network_storage = self.network_storage_dict.get(network_storage_name)
+                network_storage: AgentNetworkStorage = self.network_storage_dict.get(network_storage_name)
                 # Be sure we have something
                 agent_network_provider = network_storage.get_agent_network_provider(agent_name)
                 if agent_network_provider is None:
@@ -153,10 +158,37 @@ class ExternalAgentSessionFactory(AsyncAgentSessionFactory):
             #   b)  We figure that the regular connection aspects to the server in question
             #       have already been sorted out in the obligitory call to function() that
             #       precedes any streaming_chat() call.
+            security_cfg: Dict[str, Any] = self.get_security_cfg(agent_location)
             session = AsyncHttpServiceAgentSession(host, port, agent_name=agent_name,
-                                                   metadata=metadata, streaming_timeout_in_seconds=None)
+                                                   metadata=metadata, security_cfg=security_cfg,
+                                                   streaming_timeout_in_seconds=None)
 
         return session
+
+    @staticmethod
+    def get_security_cfg(agent_location: Dict[str, str]) -> Dict[str, Any]:
+        """
+        Derives the security_cfg for an http session from the scheme of the
+        parsed external agent reference.
+
+        :param agent_location: An agent location dictionary returned by
+                    ExternalAgentParsing.parse_external_agent()
+        :return: An empty dict when the reference used the https scheme, so that
+                AbstractHttpServiceAgentSession.get_request_path() builds an
+                https url. None otherwise, which keeps plain http.
+        """
+        # Dicts built by older callers may predate the "scheme" key.
+        # Treat those as plain http, which is what they always got.
+        scheme: str = agent_location.get("scheme", "")
+
+        security_cfg: Dict[str, Any] = None
+        if scheme == "https":
+            # get_request_path() only checks security_cfg for being non-None
+            # to pick the https scheme; the dict contents are not consulted.
+            # An empty dict is the same "for now, to get the https scheme"
+            # convention neuro_san/client/agent_session_factory.py uses.
+            security_cfg = {}
+        return security_cfg
 
     def is_use_direct(self) -> bool:
         """

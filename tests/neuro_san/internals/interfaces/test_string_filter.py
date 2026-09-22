@@ -14,21 +14,19 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from unittest import TestCase
+
+from neuro_san.internals.interfaces.string_filter import StringFilter
 
 
-class AgentSessionConstants:
+class TestStringFilter(TestCase):
     """
-    Interface for shared constants between AgentSession and AsyncAgentSession
+    Unit tests for the StringFilter interface.
     """
 
-    # Default port for the Agent HTTP Service
-    # This port number will also be mentioned in its Dockerfile
-    DEFAULT_HTTP_PORT: int = 8080
-
-    # Default port for https:// references to agents served elsewhere.
-    # Unlike the bare http dev server above, an https reference is expected to
-    # hit a TLS-terminating proxy or load balancer in front of the server,
-    # which listens on the well-known https port rather than on 8080.
-    DEFAULT_HTTPS_PORT: int = 443
-
-    DEFAULT_PORT: int = DEFAULT_HTTP_PORT
+    def test_filter_is_abstract(self) -> None:
+        """
+        The interface itself does not filter anything; implementations must override filter().
+        """
+        with self.assertRaises(NotImplementedError):
+            StringFilter().filter("anything")

@@ -32,6 +32,7 @@ from aiohttp import ClientResponse
 from aiohttp import ClientSession
 from aiohttp import ClientTimeout
 
+from neuro_san.message.utils.decode_utils import DecodeUtils
 from neuro_san.interfaces.async_agent_session import AsyncAgentSession
 from neuro_san.session.abstract_http_service_agent_session import AbstractHttpServiceAgentSession
 from neuro_san.session.agent_session_closed_error import AgentSessionClosedError
@@ -124,6 +125,7 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(self.help_message(path)) from exc
 
+    # pylint: disable=too-many-locals
     async def streaming_chat(self, request_dict: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:
         """
         :param request_dict: A dictionary version of the ChatRequest
@@ -168,7 +170,8 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
         # while it is still awaiting response headers. If close() raced in between
         # the check above and here, tear the session down and bail.
         abort: bool = False
-        with self._stream_lock:
+        with self._stream_lock as next_with:
+            _ = next_with
             if self._closed:
                 abort = True
             else:
@@ -207,11 +210,13 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
                         while index >= 0:
 
                             # Grab a single line
-                            unicode_line = accumulator[:index].decode("utf-8").strip()
+                            single_line_bytes: bytearray = accumulator[:index]
+                            unicode_line = DecodeUtils.decode(single_line_bytes, "utf-8")
+                            unicode_line = unicode_line.strip()
                             if unicode_line:    # Skip empty lines
                                 # We have a line with something in it.
                                 # Decode and yield as a dictionary
-                                result_dict = json.loads(unicode_line)
+                                result_dict: Dict[str, Any] = json.loads(unicode_line)
                                 yield result_dict
 
                             # Remove the previous line from the accumulator
@@ -222,9 +227,10 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
 
                     # If there is anything left in the accumulator, yield it
                     if len(accumulator) > 0:
-                        unicode_line = accumulator.decode("utf-8").strip()
+                        unicode_line = DecodeUtils.decode(accumulator, "utf-8")
+                        unicode_line = unicode_line.strip()
                         if unicode_line:
-                            result_dict = json.loads(unicode_line)
+                            result_dict: Dict[str, Any] = json.loads(unicode_line)
                             yield result_dict
 
         except (asyncio.TimeoutError, ClientOSError, ClientPayloadError) as exc:
@@ -307,7 +313,8 @@ class AsyncHttpServiceAgentSession(AbstractHttpServiceAgentSession, AsyncAgentSe
                     response.close()
             return
         # RuntimeError is raised only if the loop is not running -- nothing to abort.
-        with suppress(RuntimeError):
+        with suppress(RuntimeError) as next_with:
+            _ = next_with
             if response is not None:
                 # ClientResponse.close() is synchronous; run it on the owning loop.
                 # Unblocks an in-flight read once headers have arrived.

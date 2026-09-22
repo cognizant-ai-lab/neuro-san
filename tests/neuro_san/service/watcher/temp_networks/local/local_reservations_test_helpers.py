@@ -14,14 +14,6 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Shared test builders for LocalReservationsStorage unit tests.
-
-The class defined here is imported by sibling test_local_reservations_storage_*.py
-modules. Grouping the helpers into a single class (rather than module-level
-functions) matches the project's coding policy of one class per file with
-no stand-alone functions.
-"""
 import time
 from typing import Any
 from typing import Dict
@@ -33,7 +25,12 @@ from neuro_san.internals.reservations.agent_reservation import AgentReservation
 class LocalReservationsTestHelpers:
     """
     Static-method container for constructing reservations and agent specs
-    used by the LocalReservationsStorage test suite.
+    used by the LocalReservationsStorage test suite, imported by the sibling
+    test_local_reservations_storage.py module (TestLocalReservationsStorage).
+
+    The helpers are grouped into a class rather than written as module-level
+    functions to match the project's coding policy of one class per file
+    with no stand-alone functions.
     """
 
     @staticmethod

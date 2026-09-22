@@ -18,6 +18,7 @@ from typing import Any
 from typing import Dict
 
 from neuro_san.message.types.chat_message_type import ChatMessageType
+from neuro_san.message.types.chat_message_type_util import ChatMessageTypeUtil
 
 
 class MessageFilter:
@@ -41,7 +42,7 @@ class MessageFilter:
         :return: The ChatMessageType of the chat_message_dict
         """
         response_type: str = chat_message_dict.get("type")
-        message_type: ChatMessageType = ChatMessageType.from_response_type(response_type)
+        message_type: ChatMessageType = ChatMessageTypeUtil.from_response_type(response_type)
         return message_type
 
     def allow_message(self, chat_message_dict: Dict[str, Any], message_type: ChatMessageType) -> bool:

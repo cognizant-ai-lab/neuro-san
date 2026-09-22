@@ -1,4 +1,3 @@
-
 # Copyright © 2023-2026 Cognizant Technology Solutions Corp, www.cognizant.com.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,20 +14,20 @@
 #
 # END COPYRIGHT
 
-
-class AgentSessionConstants:
+class DecodeUtils:
     """
-    Interface for shared constants between AgentSession and AsyncAgentSession
+    Utility class for decoding bytes or bytearrays for funnelling to a common policy point.
     """
 
-    # Default port for the Agent HTTP Service
-    # This port number will also be mentioned in its Dockerfile
-    DEFAULT_HTTP_PORT: int = 8080
+    @staticmethod
+    def decode(instring: bytearray | bytes, encoding: str = "utf-8") -> str:
+        """
+        :param instring: The bytes or bytearray to decode
+        :param encoding: The encoding to use
+        :return: The decoded string
+        """
+        if not instring:
+            return ""
 
-    # Default port for https:// references to agents served elsewhere.
-    # Unlike the bare http dev server above, an https reference is expected to
-    # hit a TLS-terminating proxy or load balancer in front of the server,
-    # which listens on the well-known https port rather than on 8080.
-    DEFAULT_HTTPS_PORT: int = 443
-
-    DEFAULT_PORT: int = DEFAULT_HTTP_PORT
+        decoded: str = instring.decode(encoding)
+        return decoded

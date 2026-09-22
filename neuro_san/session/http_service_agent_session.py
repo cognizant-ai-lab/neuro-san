@@ -26,8 +26,11 @@ from threading import Lock
 from threading import Thread
 from contextlib import suppress
 
-import requests
+from requests import get
+from requests import post
+from requests import Response
 
+from neuro_san.message.utils.decode_utils import DecodeUtils
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.session.abstract_http_service_agent_session import AbstractHttpServiceAgentSession
 from neuro_san.session.agent_session_closed_error import AgentSessionClosedError
@@ -56,7 +59,7 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         self._stream_lock: Lock = Lock()
         # The response of the currently-streaming request, if any, so close()
         # can drop its connection and unblock the streaming read.
-        self._active_response: Optional[requests.Response] = None
+        self._active_response: Optional[Response] = None
         # Once closed, no further streaming request will be started.
         self._closed: bool = False
 
@@ -72,9 +75,9 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         self._raise_if_closed()
         path: str = self.get_request_path("function")
         try:
-            response = requests.get(path, json=request_dict, headers=self.get_headers(),
-                                    timeout=self.timeout_in_seconds)
-            result_dict = json.loads(response.text)
+            response: Response = get(path, json=request_dict, headers=self.get_headers(),
+                                     timeout=self.timeout_in_seconds)
+            result_dict: Dict[str, Any] = json.loads(response.text)
             return result_dict
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(self.help_message(path)) from exc
@@ -93,9 +96,9 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         self._raise_if_closed()
         path: str = self.get_request_path("connectivity")
         try:
-            response = requests.get(path, json=request_dict, headers=self.get_headers(),
-                                    timeout=self.timeout_in_seconds)
-            result_dict = json.loads(response.text)
+            response: Response = get(path, json=request_dict, headers=self.get_headers(),
+                                     timeout=self.timeout_in_seconds)
+            result_dict: Dict[str, Any] = json.loads(response.text)
             return result_dict
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(self.help_message(path)) from exc
@@ -126,9 +129,9 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         self._raise_if_closed()
 
         try:
-            with requests.post(path, json=request_dict, headers=self.get_headers(),
-                               stream=True,
-                               timeout=self.streaming_timeout_in_seconds) as response:
+            with post(path, json=request_dict, headers=self.get_headers(),
+                      stream=True,
+                      timeout=self.streaming_timeout_in_seconds) as response:
                 response.raise_for_status()
 
                 # Register this response so close() (possibly from another thread)
@@ -158,11 +161,13 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                     while index >= 0:
 
                         # Grab a single line
-                        unicode_line = accumulator[:index].decode("utf-8").strip()
+                        single_line_bytes: bytearray = accumulator[:index]
+                        unicode_line = DecodeUtils.decode(single_line_bytes, "utf-8")
+                        unicode_line = unicode_line.strip()
                         if unicode_line:  # Skip empty lines
                             # We have a line with something in it.
                             # Decode and yield as a dictionary
-                            result_dict = json.loads(unicode_line)
+                            result_dict: Dict[str, Any] = json.loads(unicode_line)
                             yield result_dict
 
                         # Remove the previous line from the accumulator
@@ -173,9 +178,10 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
 
                 # If there is anything left in the accumulator, yield it
                 if len(accumulator) > 0:
-                    unicode_line = accumulator.decode("utf-8").strip()
+                    unicode_line = DecodeUtils.decode(accumulator, "utf-8")
+                    unicode_line = unicode_line.strip()
                     if unicode_line:
-                        result_dict = json.loads(unicode_line)
+                        result_dict: Dict[str, Any] = json.loads(unicode_line)
                         yield result_dict
 
         except Exception as exc:  # pylint: disable=broad-exception-caught
@@ -228,7 +234,7 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         with heartbeat and request-timeout disabled may keep running server-side
         until it does.
         """
-        response: Optional[requests.Response] = None
+        response: Optional[Response] = None
         with self._stream_lock:
             self._closed = True
             response = self._active_response
@@ -241,7 +247,7 @@ class HttpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                    name="HttpServiceAgentSession-close", daemon=True).start()
 
     @staticmethod
-    def _close_response(response: requests.Response):
+    def _close_response(response: Response):
         """Best-effort close of a streaming response; swallow any error."""
         with suppress(Exception):
             response.close()
