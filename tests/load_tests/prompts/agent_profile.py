@@ -132,19 +132,17 @@ class AgentProfile:
         the base name (hello_world) is tried as a fallback so
         --profile-path is not required for prefixed agents.
         """
-        profile: "AgentProfile" = cls._load_json(
-            agent_name, profile_path, project_root,
-        )
+        path: str = cls._find_json_profile(agent_name, profile_path, project_root)
+        data: Dict[str, Any] = cls._read_json(path)
         if hocon_files:
-            profile._data["prompts"] = cls._prompts_from_hocons(
-                agent_name, hocon_files,
-            )
-        return profile
+            data = {**data, "prompts": cls._prompts_from_hocons(agent_name, hocon_files)}
+        logger.info("Loaded agent profile: %s", path)
+        return cls(agent_name, data)
 
     @classmethod
-    def _load_json(cls, agent_name: str, profile_path: Optional[str],
-                   project_root: Optional[str]) -> "AgentProfile":
-        """Find and load the JSON profile (see load() for search order)."""
+    def _find_json_profile(cls, agent_name: str, profile_path: Optional[str],
+                           project_root: Optional[str]) -> str:
+        """Return the path of the JSON profile (see load() for search order)."""
         agent_base: str = ProjectPaths.agent_base_name(agent_name)
 
         if profile_path:
@@ -167,7 +165,7 @@ class AgentProfile:
                     candidate, profile_path, agent_base,
                 )
                 raise SystemExit(1)
-            return cls._load_from_file(agent_name, candidate)
+            return candidate
 
         searched = []
 
@@ -179,7 +177,7 @@ class AgentProfile:
             candidate = os.path.join(profiles_dir, f"{name}.json")
             searched.append(candidate)
             if os.path.isfile(candidate):
-                return cls._load_from_file(agent_name, candidate)
+                return candidate
 
         # Resolve project root: --project-root flag → PYTHONPATH fallback
         resolved_root: Optional[str] = ProjectPaths.resolve_project_root(project_root)
@@ -191,7 +189,7 @@ class AgentProfile:
                 ))
                 searched.append(candidate)
                 if os.path.isfile(candidate):
-                    return cls._load_from_file(agent_name, candidate)
+                    return candidate
 
         logger.error(
             "No profile found for agent '%s'.\n"
@@ -244,13 +242,12 @@ class AgentProfile:
         return prompts
 
     @classmethod
-    def _load_from_file(cls, agent_name, path) -> "AgentProfile":
-        """Load profile data from a JSON file."""
+    def _read_json(cls, path: str) -> Dict[str, Any]:
+        """Read profile data from a JSON file."""
         try:
             with open(path, "r", encoding="utf-8") as fh:
                 data: Dict[str, Any] = json.load(fh)
-            logger.info("Loaded agent profile: %s", path)
-            return cls(agent_name, data)
+            return data
         except (OSError, json.JSONDecodeError) as exc:
             logger.error("Failed to load profile %s: %s\nAborting.", path, exc)
             raise SystemExit(1) from exc
