@@ -56,7 +56,21 @@ pydantic>=2.9.2,<3.0
 # reasoning items by their encrypted_content when store is false, which the stateless
 # default relies on for tool-calling loops. langchain-openai 1.4.0 itself requires
 # langchain-core>=1.5.0 and openai>=2.45.0.
+# The temporary <1.6.3 ceiling from #1377 is lifted here: it only guarded the previous
+# use_responses_api: null default against 1.6.3's changed endpoint inference (gpt-6* with tools
+# and gpt-5.6-sol auto-routing to the Responses API, and the inferred endpoint being written onto
+# the ChatOpenAI instance). With true as the class default the explicit value wins and that
+# inference no longer decides the endpoint for the openai class.
 langchain-openai>=1.4.0,<2.0
+
+# Pinned explicitly (it is otherwise only a transitive dependency of langchain-openai).
+# Floor 2.45.0 matches langchain-openai's own requirement. Ceiling <3 (temporary): openai 3.0
+# (2026-08-12) switched its HTTP stack to httpx2 and no longer installs httpx. OpenAILlmPolicy
+# and AzureLlmPolicy build an httpx.AsyncClient (proxy, timeout, connection limits) and pass it
+# as http_client, which openai 3.x accepts only through a runtime-only escape hatch its migration
+# guide calls temporary. Stay on 2.x until those clients are migrated to httpx2; that migration
+# lifts this ceiling.
+openai>=2.45.0,<3
 
 httpx>=0.28.1
 
