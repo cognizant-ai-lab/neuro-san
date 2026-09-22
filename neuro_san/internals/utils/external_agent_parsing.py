@@ -58,8 +58,9 @@ class ExternalAgentParsing:
             return None
 
         port_number: Optional[int] = None
+        parse_result: ParseResult = None
         try:
-            parse_result: ParseResult = urlparse(agent_url)
+            parse_result = urlparse(agent_url)
             # .port raises ValueError for a non-numeric or out-of-range port,
             # which is as unparseable as a malformed netloc.
             port_number = parse_result.port
