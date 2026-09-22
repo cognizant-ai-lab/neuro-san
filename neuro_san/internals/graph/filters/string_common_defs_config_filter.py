@@ -68,16 +68,25 @@ class StringCommonDefsConfigFilter(AbstractCommonDefsConfigFilter):
 
         replacement_value: str = source_value
 
+        search: str = None
+        replace: Any = None
         for search, replace in replacements.items():
 
-            if replace is None or len(replace) == 0:
-                # Nothing in the dicitonary of replacements.
+            if replace is None:
+                # Nothing in the dictionary of replacements.
                 # Leave the string as-is.
                 # Move along. Nothing to see here.
                 continue
 
             if not isinstance(replace, str) or not isinstance(search, str):
                 # Unclear what the user is getting at. Skip.
+                continue
+
+            replace_string: str = replace
+            if len(replace_string) == 0:
+                # Nothing in the dictionary of replacements.
+                # Leave the string as-is.
+                # Move along. Nothing to see here.
                 continue
 
             if search not in replacement_value:
@@ -87,6 +96,6 @@ class StringCommonDefsConfigFilter(AbstractCommonDefsConfigFilter):
             # We want to replace any instance of "{<search>}" in a string
             # with the replace value.  In order to preserve the curly braces
             # in an f-string, we need to double them.
-            replacement_value = replacement_value.replace(f"{{{search}}}", replace)
+            replacement_value = replacement_value.replace(f"{{{search}}}", replace_string)
 
         return replacement_value
