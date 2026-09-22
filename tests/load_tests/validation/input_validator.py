@@ -35,7 +35,7 @@ from tests.load_tests.config import LEVEL_ADV
 from tests.load_tests.config import RequestResult
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.confirm import Confirm
-from tests.load_tests.prompts.agent_profile import AgentProfile
+from tests.load_tests.project_paths import ProjectPaths
 from tests.load_tests.reporting.system_resources import SystemResources
 
 logger = logging.getLogger(__name__)
@@ -89,12 +89,12 @@ class InputValidator:
             return []
 
         if not os.path.isabs(parent_dir):
-            project_root = AgentProfile.resolve_project_root(
+            project_root = ProjectPaths.resolve_project_root(
                 self._args.project_root
             )
             parent_dir = os.path.join(project_root or os.getcwd(), parent_dir)
 
-        agent_base: str = self._args.agent.rsplit("/", 1)[-1]
+        agent_base: str = ProjectPaths.agent_base_name(self._args.agent)
         hocon_dir: str = os.path.join(parent_dir, agent_base)
 
         if not os.path.isdir(hocon_dir):

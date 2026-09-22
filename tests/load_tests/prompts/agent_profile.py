@@ -24,6 +24,8 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from tests.load_tests.project_paths import ProjectPaths
+
 logger = logging.getLogger(__name__)
 
 
@@ -123,7 +125,7 @@ class AgentProfile:
         the base name (hello_world) is tried as a fallback so
         --profile-path is not required for prefixed agents.
         """
-        agent_base = agent_name.rsplit("/", 1)[-1]
+        agent_base = ProjectPaths.agent_base_name(agent_name)
 
         if profile_path:
             if os.path.isfile(profile_path):
@@ -160,7 +162,7 @@ class AgentProfile:
                 return cls._load_from_file(agent_name, candidate)
 
         # Resolve project root: --project-root flag → PYTHONPATH fallback
-        resolved_root = cls.resolve_project_root(project_root)
+        resolved_root = ProjectPaths.resolve_project_root(project_root)
         if resolved_root:
             for name in (agent_name, agent_base):
                 candidate = os.path.normpath(os.path.join(
@@ -180,23 +182,6 @@ class AgentProfile:
             "".join(f"  - {p}\n" for p in searched),
         )
         raise SystemExit(1)
-
-    @classmethod
-    def resolve_project_root(cls, project_root=None) -> Optional[str]:
-        """Resolve the project root directory.
-
-        Priority: explicit --project-root → first entry in PYTHONPATH.
-        """
-        if project_root:
-            return os.path.abspath(project_root)
-
-        python_path = os.environ.get("PYTHONPATH")
-        if python_path:
-            first_entry = python_path.split(os.pathsep)[0]
-            if os.path.isdir(first_entry):
-                return os.path.abspath(first_entry)
-
-        return None
 
     @classmethod
     def _load_from_file(cls, agent_name, path) -> "AgentProfile":
