@@ -83,13 +83,14 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                          streaming_timeout_in_seconds=streaming_timeout_in_seconds, agent_name=agent_name)
 
         # The name the server advertises for this network, learned by function()
-        # from tools/list. Servers may advertise a nested network under a
-        # provider-safe spelling ("deep/math_guy" becomes "deep__math_guy") or a
-        # custom manifest "mcp_name" ("calculator"), while users keep passing the
-        # network name (e.g. --agent deep/math_guy). Until function() has looked,
-        # tools/call uses the network name, which every neuro-san server accepts:
-        # older servers key on it directly and newer ones pass an unadvertised
-        # name through to the same network-keyed lookup.
+        # from tools/list. A server may advertise a network under a name other
+        # than the network name (see AgentNetwork.set_as_mcp_tool(): nested
+        # "deep/math_guy" becomes the provider-safe "deep__math_guy", or an
+        # alias such as "calculator"), while users keep passing the network name
+        # (e.g. --agent deep/math_guy). Until function() has looked, tools/call
+        # uses the network name, which every neuro-san server accepts: older
+        # servers key on it directly and newer ones pass an unadvertised name
+        # through to the same network-keyed lookup.
         self.advertised_tool_name: str = None
 
         # Do initial handshake and protocol negotiation
@@ -191,8 +192,8 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
             return None
 
         # Remember the name this server uses so tools/call sends a name the
-        # server can resolve. Under a custom "mcp_name" this is a name we could
-        # not have derived from the network name.
+        # server can resolve. When the network is advertised under an alias,
+        # this is a name we could not have derived from the network name.
         self.advertised_tool_name = use_tool.get("name", None)
         tool_description: str = use_tool.get("description", None)
         if tool_description is None:
@@ -207,13 +208,16 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         Picks the tools/list entry that stands for the network this session was
         created for.
 
-        A server that renames a tool, whether to the provider-safe spelling
-        ("deep__math_guy") or to a custom manifest "mcp_name" ("calculator"),
-        keeps the network name in the entry's MCP "title". So when an entry has
-        a title, the title says which network it stands for; an entry without
-        one stands for the network only if its "name" is the network name, as
-        servers from before the rename advertise it. The client never guesses
-        from the spelling: an unrelated network can legitimately be named
+        The contract this relies on: a server that advertises a network under
+        any name other than the network name puts the network name in the
+        entry's MCP "title" (see AgentNetwork.set_as_mcp_tool() for how such
+        names arise, e.g. the provider-safe "deep__math_guy" or an alias like
+        "calculator"). So when an entry has a title, the title says which
+        network it stands for; an entry without one stands for the network only
+        if its "name" is the network name. Servers to date advertise every
+        network under its own name and send no title, so against them this
+        reduces to matching the name. The client never guesses from the
+        spelling: an unrelated network can legitimately be named
         "deep__math_guy", and an entry named "math_guy" but titled "x/y" is
         x/y's tool, not math_guy's.
 

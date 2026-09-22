@@ -31,12 +31,12 @@ from neuro_san.session.mcp_service_agent_session import McpServiceAgentSession
 class TestMcpServiceAgentSession(TestCase):
     """
     Unit tests for McpServiceAgentSession's tool naming. Users pass the network name
-    ("deep/math_guy"), but a server may advertise the tool under the provider-safe
-    spelling ("deep__math_guy") or under a custom manifest "mcp_name" ("calculator"),
-    carrying the network name in the MCP "title". The session must find its tool in
-    tools/list by that title, or by name when there is no title, then call it by the
-    name the server advertised. Before it has looked, it calls by the network name,
-    which every neuro-san server accepts.
+    ("deep/math_guy"), but a server may advertise the network under another name,
+    such as the provider-safe spelling ("deep__math_guy") or an alias ("calculator"),
+    carrying the network name in the MCP "title" (see AgentNetwork.set_as_mcp_tool()).
+    The session must find its tool in tools/list by that title, or by name when there
+    is no title, then call it by the name the server advertised. Before it has looked,
+    it calls by the network name, which every neuro-san server accepts.
     """
 
     POST_TARGET: str = "neuro_san.session.mcp_service_agent_session.post"
@@ -45,7 +45,8 @@ class TestMcpServiceAgentSession(TestCase):
     CUSTOM_NAME: str = "calculator"
     DESCRIPTION: str = "Does math"
 
-    # What one tools/list entry looks like from each kind of server.
+    # What one tools/list entry looks like from each kind of server: the network
+    # under its own name, under the provider-safe spelling, or under an alias.
     LEGACY_TOOL: Dict[str, Any] = {"name": NETWORK_NAME, "description": DESCRIPTION}
     RENAMED_TOOL: Dict[str, Any] = {"name": TOOL_NAME, "title": NETWORK_NAME, "description": DESCRIPTION}
     CUSTOM_TOOL: Dict[str, Any] = {"name": CUSTOM_NAME, "title": NETWORK_NAME, "description": DESCRIPTION}
@@ -161,9 +162,9 @@ class TestMcpServiceAgentSession(TestCase):
 
     def test_function_matches_title_when_server_uses_custom_name(self) -> None:
         """
-        Against a server that advertises the network under a custom "mcp_name",
-        function() recognises the entry by its title and records the custom
-        name so the following tools/call uses it.
+        Against a server that advertises the network under an alias unrelated to
+        its name, function() recognises the entry by its title and records the
+        alias so the following tools/call uses it.
         """
         with self.patch_post(self.CUSTOM_TOOL) as mock_post:
             session = McpServiceAgentSession(agent_name=self.NETWORK_NAME)
@@ -176,7 +177,7 @@ class TestMcpServiceAgentSession(TestCase):
 
     def test_function_ignores_custom_name_titled_for_another_network(self) -> None:
         """
-        A title naming some other network does not make a custom-named tool match,
+        A title naming some other network does not make an aliased tool match,
         and nothing is recorded as advertised.
         """
         with self.patch_post(self.CUSTOM_TOOL):
