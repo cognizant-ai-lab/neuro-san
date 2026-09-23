@@ -14,19 +14,14 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-from unittest import TestCase
 
-from neuro_san.internals.interfaces.string_filter import StringFilter
-
-
-class TestStringFilter(TestCase):
-    """
-    Unit tests for the StringFilter interface.
-    """
-
-    def test_filter_is_abstract(self) -> None:
-        """
-        The interface itself does not filter anything; implementations must override filter().
-        """
-        with self.assertRaises(NotImplementedError):
-            StringFilter().filter("anything")
+# Load-test prompt for the hello_world agent.
+# Schema: https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/test_case_hocon_reference.md
+{
+    "agent": "hello_world",
+    "interactions": [
+        {
+            "text": "Can you greet me in different languages?"
+        }
+    ]
+}
