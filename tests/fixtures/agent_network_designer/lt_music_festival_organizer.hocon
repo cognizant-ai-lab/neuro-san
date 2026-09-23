@@ -15,13 +15,13 @@
 #
 # END COPYRIGHT
 
-# Load-test prompt for the hello_world agent.
+# Load-test prompt for the agent_network_designer agent.
 # One interaction per file: each prompt is fired as an independent
 # single-turn request. Agent-wide settings (failure_patterns) may be
 # repeated in every file; they are merged across the folder.
 # Schema: https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/test_case_hocon_reference.md
 {
-    "agent": "hello_world",
+    "agent": "agent_network_designer",
 
     # A response containing any of these is a failure even on HTTP 200.
     "failure_patterns": [
@@ -31,7 +31,15 @@
 
     "interactions": [
         {
-            "text": "Can you greet me in different languages?"
+            "text": "Create an agent network for a music festival organizer",
+
+            # Each sly_data key must come back with a non-empty value.
+            "response": {
+                "sly_data": {
+                    "reservation_id": {},
+                    "agent_network_name": {}
+                }
+            }
         }
     ]
 }
