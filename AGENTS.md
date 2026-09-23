@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Rules for coding agents in neuro-san. Follow them and the checks in §6 pass on the first run.
+Rules for coding agents in neuro-san. Follow them and make sure the checks in §6 pass on the first run.
 
 ---
 
@@ -31,7 +31,7 @@ Rules for coding agents in neuro-san. Follow them and the checks in §6 pass on 
 - **One module, one class.** Each `.py` file defines exactly one class (a handful of pre-existing exceptions are
   not precedent). Split helper logic into a separate module rather than adding a second class to an existing file.
 - **No module-level functions, no nested functions, no lambdas.** Every function is a method (or `@staticmethod`)
-  on the module's class. A helper a method needs becomes another method on the same class; bind arguments with
+  on the module's class. If a method needs a helper, make it another method on the same class; bind arguments with
   `functools.partial` on a method or `@staticmethod` where a lambda would otherwise have been used.
 - **No comprehensions.** Use explicit `for` loops instead of list/dict/set/generator comprehensions, even when a
   comprehension would be shorter.
@@ -98,11 +98,10 @@ Rules for coding agents in neuro-san. Follow them and the checks in §6 pass on 
 ## 5. Git workflow
 
 - Branch off `main` with a short, descriptive branch name; never commit directly to `main`.
-- **Never commit unless explicitly told to.** Finishing a change, fixing a bug, or completing a feature is not
-  implicit permission to `git commit` or `git push`. Staging (`git add`) without committing is fine; ask before
-  committing.
+- **Never `git add`, `git commit` or `git push` unless explicitly told to.** Finishing a change, fixing a bug, or
+  completing a feature is not implicit permission. Leave changes unstaged so the reviewer can inspect them first.
 
-## 6. Opening the PR
+## 6. Checks before opening the PR
 
 ```bash
 python -m neuro_san.client.hocon_validator_cli path/to/agent.hocon --verbose   # HOCON structure, no LLM calls
