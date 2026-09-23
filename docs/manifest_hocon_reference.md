@@ -79,6 +79,8 @@ is advertised as an MCP tool in "tools/list" and addressed in "tools/call".
 Specifying a non-empty "mcp_name" implicitly sets "mcp" (and therefore "public") to true,
 unless the entry explicitly sets "mcp" to false, which wins: the name then has no effect and
 a warning is logged at server startup.
+For the whole path from manifest entry to "tools/call", see
+[Agent networks as MCP tools](./mcp_service.md#agent-networks-as-mcp-tools).
 
 When "mcp_name" is absent, the tool name is derived from the network name by replacing
 every "/" with "__" and every other character outside `A-Z`, `a-z`, `0-9`, `_` and `-` with `_`,
