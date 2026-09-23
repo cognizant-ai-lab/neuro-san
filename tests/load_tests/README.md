@@ -153,6 +153,7 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--no-tokens`              | off         | Disable per-request token accounting         |
 | `--minimal`                | off         | Ask the server for the bare minimum of messages: only the final answer, cutting traffic and progress-event work — but it also drops the token-accounting message, so client-side LLM/token reporting is unavailable (tokens then come only from the server log) |
 | `--profile-path`           | auto        | Directory containing profile JSON files (or `LOAD_TEST_PROFILE_PATH` env var) |
+| `--fixtures-hocon-dir [DIR]` | off       | Build the whole profile (prompts, checks) from test-case hocon files in `DIR/<agent>/*.hocon`; the JSON profile is not read. Flag alone defaults to `tests/fixtures/load_tests`. See [Profiles from hocon files](#profiles-from-hocon-files) |
 | `--host`                   | localhost   | Neuro-san server host                        |
 | `--port`                   | 8080        | Neuro-san server port                        |
 | `--num-requests`           | 3           | Requests per round in flat mode              |
@@ -298,6 +299,62 @@ server-side errors returned inside a successful HTTP 200 response
 downgraded from CREATED to FAILED.  The load test client does not
 check for API keys itself — it communicates with the server over
 HTTP, so keys are only needed on the server side.
+
+### Profiles from hocon files
+
+With `--fixtures-hocon-dir`, the JSON profile is not read at all: the
+whole profile comes from test-case hocon files in `DIR/<agent>/*.hocon`,
+in the same format the data-driven tests use
+(`docs/test_case_hocon_reference.md`).
+
+```bash
+# Uses tests/fixtures/load_tests/hello_world/*.hocon
+python -m tests.load_tests.load_test_cli --agent hello_world --fixtures-hocon-dir --client-only
+
+# Custom parent directory: /my/fixtures/agent_network_designer/*.hocon
+python -m tests.load_tests.load_test_cli --agent agent_network_designer --fixtures-hocon-dir /my/fixtures
+```
+
+The agent subfolder is derived from `--agent` (`basic/hello_world` →
+`hello_world`). Each file holds exactly one interaction and yields one
+prompt; every request is fired as an independent single-turn call.
+
+```hocon
+{
+    "agent": "agent_network_designer",
+    "failure_patterns": ["No fully-specified LLM found"],
+    "interactions": [
+        {
+            "text": "Create an agent network for a pet grooming salon",
+            "response": {
+                "sly_data": {
+                    "reservation_id": {},
+                    "agent_network_name": {}
+                }
+            }
+        }
+    ]
+}
+```
+
+| Hocon key | Becomes | Merged across files |
+|---|---|---|
+| `interactions[0].text` | one prompt | list, file order |
+| `interactions[0].response.sly_data` keys | `success_fields` — each key must come back with a non-empty value | union |
+| `failure_patterns` (optional) | `failure_patterns` | union |
+| `estimated_tokens_per_request` (optional, reporting only) | `estimated_tokens_per_request` | max |
+
+Only the *presence* of each `sly_data` key is checked today; the check
+body (`keywords`, `value`, …) is reserved for a follow-up. The built-in
+checks (request completed, non-empty answer, no failure pattern) always
+apply.
+
+The run aborts (exit 1) when the folder has no `*.hocon` files, a file's
+`agent` does not match `--agent`, a file has more than one interaction,
+`response.sly_data` is not a map, or no file has any text.
+`raw_results.json` records `profile_source`, `fixtures_hocon_dir` and the
+`hocon_files` list under `config`, and the pre-run `Config:` line shows
+`profile_source=hocon (N files)`.
 
 ## Output
 
@@ -536,6 +593,7 @@ tests/load_tests/
   config.py                    Constants, TypedDicts, compiled patterns
   confirm.py                   Confirm (strict y/n prompt)
   cost_estimator.py            CostEstimator (per-model pricing)
+  project_paths.py             ProjectPaths (project root / agent base name)
 
   monitoring/
     heartbeat.py               Heartbeat (progress + peak RSS tracking)
@@ -543,8 +601,11 @@ tests/load_tests/
     server_log_monitor.py      ServerLogMonitor (log parsing)
 
   prompts/
-    agent_profile.py           AgentProfile (prompt/validation config)
+    agent_profile.py           AgentProfile (prompt/validation config; from JSON or hocon files)
     profiles/                  Per-agent JSON profiles
+
+tests/fixtures/load_tests/
+  <agent>/*.hocon              Test-case hocons used with --fixtures-hocon-dir
 
   reporting/
     disconnection_reporter.py  DisconnectionReporter

@@ -54,6 +54,17 @@ class JsonMetadata:
                 "If true, prompts are sent verbatim and caches may "
                 "serve responses. If false, a unique per-request "
                 "suffix defeats caching.",
+            "config.profile_source":
+                "Where the profile (prompts and checks) came from: "
+                "'json profile' or 'hocon (N files)' when "
+                "--fixtures-hocon-dir was used.",
+            "config.fixtures_hocon_dir":
+                "Parent directory of the test-case hocon files, "
+                "or null when the JSON profile was used.",
+            "config.hocon_files":
+                "Test-case hocon files the profile was built from "
+                "(one prompt per file). Empty when the JSON profile "
+                "was used.",
             "aggregates.total_elapsed_seconds":
                 "Sum of wall-clock time across all stages.",
             "aggregates.avg_latency_seconds":

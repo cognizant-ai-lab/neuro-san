@@ -115,19 +115,19 @@ class AgentProfile:
     def load(cls, agent_name: str, profile_path: Optional[str] = None,
              project_root: Optional[str] = None,
              hocon_files: Optional[List[str]] = None) -> "AgentProfile":
-        """Load an agent profile from a JSON file.
+        """Load an agent profile.
 
-        When hocon_files is given, the prompts come from those
-        test-case hocons (interactions[].text) instead of the JSON;
-        every other setting still comes from the JSON profile.
-        See _find_json_profile() for the JSON search order.
+        When hocon_files is given, the whole profile is built from those
+        test-case hocons and no JSON profile is read; see
+        _profile_from_hocons() for the hocon keys used.
+        Otherwise the profile comes from a JSON file; see
+        _find_json_profile() for the search order.
         """
-        path: str = cls._find_json_profile(agent_name, profile_path, project_root)
-        data: Dict[str, Any] = cls._read_json(path)
         if hocon_files:
-            data = {**data, "prompts": cls._prompts_from_hocons(agent_name, hocon_files)}
+            return cls(agent_name, cls._profile_from_hocons(agent_name, hocon_files))
+        path: str = cls._find_json_profile(agent_name, profile_path, project_root)
         logger.info("Loaded agent profile: %s", path)
-        return cls(agent_name, data)
+        return cls(agent_name, cls._read_json(path))
 
     @classmethod
     def _find_json_profile(cls, agent_name: str, profile_path: Optional[str],
@@ -204,43 +204,35 @@ class AgentProfile:
         raise SystemExit(1)
 
     @classmethod
-    def _prompts_from_hocons(cls, agent_name: str, hocon_files: List[str]) -> List[str]:
-        """Collect one prompt per test-case hocon file.
+    def _profile_from_hocons(cls, agent_name: str, hocon_files: List[str]) -> Dict[str, Any]:
+        """Build the profile dict from test-case hocon files.
 
-        A load-test hocon must hold exactly one interaction: the load test
-        fires each prompt as an independent single-turn request, so a
-        multi-turn conversation cannot be replayed here.
-        Each hocon's "agent" must match agent_name (or its base name).
-        Aborts when a file is for another agent, has more than one
-        interaction, or no text is found.
+        Per file (one prompt each, see _read_load_test_hocon):
+          interactions[0].text              -> prompts
+          interactions[0].response.sly_data -> success_fields (its keys;
+              each must come back non-empty, same as the JSON list)
+        Agent-wide, may appear in any file and are merged across files:
+          failure_patterns                  -> union, in first-seen order
+          estimated_tokens_per_request      -> max
+
+        Aborts when no text is found in any file.
         """
-        agent_base: str = ProjectPaths.agent_base_name(agent_name)
         prompts: List[str] = []
+        success_fields: List[str] = []
+        failure_patterns: List[str] = []
+        estimated_tokens: Optional[int] = None
         for path in hocon_files:
-            test_case: Dict[str, Any] = TestsUtil.parse_hocon_test_case(None, path)
-            hocon_agent: str = test_case.get("agent", "")
-            if hocon_agent not in (agent_name, agent_base):
-                logger.error(
-                    "Hocon agent does not match --agent.\n"
-                    "  File: %s\n"
-                    "  Hocon agent: %s\n"
-                    "  --agent: %s\nAborting.",
-                    path, hocon_agent, agent_name,
-                )
-                raise SystemExit(1)
-            interactions: List[Dict[str, Any]] = test_case.get("interactions", [])
-            if len(interactions) > 1:
-                logger.error(
-                    "Load-test hocon must have exactly one interaction.\n"
-                    "  File: %s\n"
-                    "  Interactions: %d\nAborting.",
-                    path, len(interactions),
-                )
-                raise SystemExit(1)
-            first: Dict[str, Any] = interactions[0] if interactions else {}
-            text: Optional[str] = first.get("text")
+            test_case: Dict[str, Any] = cls._read_load_test_hocon(agent_name, path)
+            interaction: Dict[str, Any] = next(iter(test_case.get("interactions", [])), {})
+            text: Optional[str] = interaction.get("text")
             if text:
                 prompts.append(text)
+            response: Dict[str, Any] = interaction.get("response", {})
+            cls._extend_unique(success_fields, list(response.get("sly_data", {}).keys()))
+            cls._extend_unique(failure_patterns, test_case.get("failure_patterns", []))
+            tokens: Optional[int] = test_case.get("estimated_tokens_per_request")
+            if tokens is not None:
+                estimated_tokens = max(tokens, estimated_tokens or 0)
 
         if not prompts:
             logger.error(
@@ -250,10 +242,71 @@ class AgentProfile:
             )
             raise SystemExit(1)
         logger.info(
-            "Loaded %d prompt(s) from %d hocon file(s) for agent '%s'",
+            "Loaded %d prompt(s) from %d hocon file(s) for agent '%s' "
+            "(success_fields=%s, failure_patterns=%d)",
             len(prompts), len(hocon_files), agent_name,
+            success_fields, len(failure_patterns),
         )
-        return prompts
+        data: Dict[str, Any] = {
+            "prompts": prompts,
+            "success_fields": success_fields,
+            "failure_patterns": failure_patterns,
+        }
+        if estimated_tokens is not None:
+            data["estimated_tokens_per_request"] = estimated_tokens
+        return data
+
+    @classmethod
+    def _read_load_test_hocon(cls, agent_name: str, path: str) -> Dict[str, Any]:
+        """Parse and validate one load-test hocon; return its test-case dict.
+
+        A load-test hocon must hold exactly one interaction: the load test
+        fires each prompt as an independent single-turn request, so a
+        multi-turn conversation cannot be replayed here.
+        Its "agent" must match agent_name (or its base name), and
+        response.sly_data, if present, must be a field -> check map as in
+        docs/test_case_hocon_reference.md (a bare list is a common mistake).
+        Aborts on any of these.
+        """
+        test_case: Dict[str, Any] = TestsUtil.parse_hocon_test_case(None, path)
+        hocon_agent: str = test_case.get("agent", "")
+        if hocon_agent not in (agent_name, ProjectPaths.agent_base_name(agent_name)):
+            logger.error(
+                "Hocon agent does not match --agent.\n"
+                "  File: %s\n"
+                "  Hocon agent: %s\n"
+                "  --agent: %s\nAborting.",
+                path, hocon_agent, agent_name,
+            )
+            raise SystemExit(1)
+        interactions: List[Dict[str, Any]] = test_case.get("interactions", [])
+        if len(interactions) > 1:
+            logger.error(
+                "Load-test hocon must have exactly one interaction.\n"
+                "  File: %s\n"
+                "  Interactions: %d\nAborting.",
+                path, len(interactions),
+            )
+            raise SystemExit(1)
+        interaction: Dict[str, Any] = interactions[0] if interactions else {}
+        sly_checks: Any = interaction.get("response", {}).get("sly_data", {})
+        if not isinstance(sly_checks, dict):
+            logger.error(
+                "response.sly_data must be a map of field -> check "
+                "(see docs/test_case_hocon_reference.md).\n"
+                "  File: %s\n"
+                "  Got: %r\nAborting.",
+                path, sly_checks,
+            )
+            raise SystemExit(1)
+        return test_case
+
+    @staticmethod
+    def _extend_unique(target: List[str], items: List[str]) -> None:
+        """Append items not already in target, preserving order."""
+        for item in items:
+            if item not in target:
+                target.append(item)
 
     @classmethod
     def _read_json(cls, path: str) -> Dict[str, Any]:
