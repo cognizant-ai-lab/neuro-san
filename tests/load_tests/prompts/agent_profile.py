@@ -205,10 +205,14 @@ class AgentProfile:
 
     @classmethod
     def _prompts_from_hocons(cls, agent_name: str, hocon_files: List[str]) -> List[str]:
-        """Collect interactions[].text from test-case hocon files.
+        """Collect one prompt per test-case hocon file.
 
+        A load-test hocon must hold exactly one interaction: the load test
+        fires each prompt as an independent single-turn request, so a
+        multi-turn conversation cannot be replayed here.
         Each hocon's "agent" must match agent_name (or its base name).
-        Aborts when a file is for another agent or no text is found.
+        Aborts when a file is for another agent, has more than one
+        interaction, or no text is found.
         """
         agent_base: str = ProjectPaths.agent_base_name(agent_name)
         prompts: List[str] = []
@@ -225,14 +229,22 @@ class AgentProfile:
                 )
                 raise SystemExit(1)
             interactions: List[Dict[str, Any]] = test_case.get("interactions", [])
-            for interaction in interactions:
-                text: Optional[str] = interaction.get("text")
-                if text:
-                    prompts.append(text)
+            if len(interactions) > 1:
+                logger.error(
+                    "Load-test hocon must have exactly one interaction.\n"
+                    "  File: %s\n"
+                    "  Interactions: %d\nAborting.",
+                    path, len(interactions),
+                )
+                raise SystemExit(1)
+            first: Dict[str, Any] = interactions[0] if interactions else {}
+            text: Optional[str] = first.get("text")
+            if text:
+                prompts.append(text)
 
         if not prompts:
             logger.error(
-                "No interactions[].text found in %d hocon file(s) for "
+                "No interactions[0].text found in %d hocon file(s) for "
                 "agent '%s'.\nAborting.",
                 len(hocon_files), agent_name,
             )

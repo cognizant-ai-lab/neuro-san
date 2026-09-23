@@ -81,14 +81,15 @@ class TestAgentProfileHoconPrompts(TestCase):
         self.assertEqual(profile.agent_name, "basic/hello_world")
         self.assertEqual(len(profile.prompts), len(HELLO_WORLD_HOCONS))
 
-    def test_multiple_interactions_in_one_file_all_used(self) -> None:
-        """A hocon with several interactions yields several prompts."""
+    def test_multiple_interactions_exits_1(self) -> None:
+        """A multi-turn hocon is not a load-test prompt; abort."""
         with tempfile.TemporaryDirectory() as tmp:
             path: str = self._write_hocon(
                 tmp, "multi.hocon", "hello_world", ["first", "second"],
             )
-            profile: AgentProfile = self._load("hello_world", [path])
-        self.assertEqual(profile.prompts, ["first", "second"])
+            with self.assertRaises(SystemExit) as ctx:
+                self._load("hello_world", [path])
+        self.assertEqual(ctx.exception.code, 1)
 
     def test_agent_mismatch_exits_1(self) -> None:
         """A hocon for a different agent aborts the run."""
