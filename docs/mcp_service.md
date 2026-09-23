@@ -27,11 +27,13 @@ easy scalability of neuro-san/MCP deployment.
 
 In the scope of MCP protocol, each public neuro-san agent network is represented by an MCP tool
 (see [MCP tools](https://modelcontextprotocol.io/specification/2025-06-18/server/tools)).
-This is how a manifest entry such as `"deep/math_guy.hocon": { "mcp": true }` becomes one:
+This is how a manifest entry such as `"deep/math_guy.hocon": { "serve": true, "mcp": true }`
+becomes one:
 
 1. **The entry is read.** `"mcp": true` also makes the network public, since only public networks
-   are visible over MCP. A plain `"deep/math_guy.hocon": true` entry means the same thing.
-   Setting an `"mcp_name"` switches `"mcp"` on as well
+   are visible over MCP. Like any dictionary entry it still needs `"serve": true`, or the network
+   is not served at all. A plain `"deep/math_guy.hocon": true` entry means served, public and MCP
+   all at once. Setting an `"mcp_name"` switches `"mcp"` on as well
    (see [manifest reference](./manifest_hocon_reference.md#mcp_name)).
 2. **The tool name is chosen when the network is loaded.** It is the `"mcp_name"` if the entry has
    one. Otherwise it is derived from the network name: every "/" becomes "__" and any other

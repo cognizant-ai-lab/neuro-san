@@ -78,7 +78,8 @@ The value for the optional "mcp_name" key is a string: the name under which the 
 is advertised as an MCP tool in "tools/list" and addressed in "tools/call".
 Specifying a non-empty "mcp_name" implicitly sets "mcp" (and therefore "public") to true,
 unless the entry explicitly sets "mcp" to false, which wins: the name then has no effect and
-a warning is logged at server startup.
+a warning is logged at server startup. It does not imply "serve": like any dictionary entry,
+one with an "mcp_name" is only served when it also says "serve": true.
 For the whole path from manifest entry to "tools/call", see
 [Agent networks as MCP tools](./mcp_service.md#agent-networks-as-mcp-tools).
 
