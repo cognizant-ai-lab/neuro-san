@@ -173,6 +173,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         )
         self.profile = AgentProfile.load(
             args.agent, args.profile_path, args.project_root,
+            hocon_files=self.hocon_files,
         )
         self.server_proc = None
         self.server_log = args.server_log
