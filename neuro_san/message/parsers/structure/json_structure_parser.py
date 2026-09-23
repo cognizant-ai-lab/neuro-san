@@ -52,6 +52,8 @@ class JsonStructureParser(StructureParser):
             "{": "}",
         }
 
+        meat: str = None
+        one_remainder: str = None
         meat, one_remainder = self._extract_delimited_block(content, delimiters)
         self.remainder = one_remainder
 
