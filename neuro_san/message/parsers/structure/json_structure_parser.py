@@ -86,6 +86,8 @@ class JsonStructureParser(StructureParser):
         :return: A tuple of (main block content, remainder string)
         """
         # Try each delimiter pair in order
+        start: str = None
+        end: str = None
         for start, end in delimiters.items():
             # Build a regex pattern to find content between start and end delimiters
             # - re.escape ensures special characters like "{" are treated literally
@@ -100,9 +102,13 @@ class JsonStructureParser(StructureParser):
                 main: str = match.group(0).strip()
 
                 # Remove the matched block (including delimiters) from the input string
-                remainder: str = text[:match.start()] + text[match.end():]
+                pre_remainder: str = text[:match.start()]
+                post_remainder: str = text[match.end():]
+                remainder: str = pre_remainder + post_remainder
+                stripped_remainder: str = remainder.strip()
 
-                return main, remainder.strip()
+                return main, stripped_remainder
 
         # If no matching delimiters were found, return None and the full cleaned-up input
-        return None, text.strip()
+        stripped_text: str = text.strip()
+        return None, stripped_text
