@@ -36,5 +36,5 @@ class ManifestDictFilterChain(ConfigFilterChain):
         super().__init__()
 
         # Order matters
-        self.register(McpManifestDictConfigFilter())
+        self.register(McpManifestDictConfigFilter(manifest_file, agent_network))
         self.register(PeriodicManifestDictConfigFilter(manifest_file, agent_network))
