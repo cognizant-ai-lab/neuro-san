@@ -7,7 +7,7 @@ and document steps you can take to further harden your system if you are concern
 
 Note that within this document we do not mention the specific lines of code that are false positives,
 nor do we mention the specific file in which they are contained because we reserve the right to
-modify source during improvements and refactors more often that this file, however we expect the false
+modify source during improvements and refactors more often than this file, however we expect the false
 positive reports to linger.  Please refer to the SAST report itself for the release with which you are
 concerned for the specific files and lines of code.  When examining those lines of code for yourself,
 note that we tend to add a comment as to the nature of the false positive within the code itself

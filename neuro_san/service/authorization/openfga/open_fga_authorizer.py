@@ -280,7 +280,7 @@ class OpenFgaAuthorizer(AbstractAuthorizer):
         #    configured at deploy-time to be  providing the response is under complete
         #    control of those overseeing the deployment.
         # If developers are still concerned about this as a security risk, we welcome
-        # propsed improvements via pull requests from an engaged community.
+        # proposed improvements via pull requests from an engaged community.
         response: ReadResponse = await self.fga_client.read(body, options)
 
         # Process the response
