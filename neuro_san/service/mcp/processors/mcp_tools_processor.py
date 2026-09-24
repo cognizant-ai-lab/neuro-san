@@ -272,7 +272,9 @@ class McpToolsProcessor:
                  (McpServiceAgentSession.streaming_chat() without a prior
                  function() call, as SimpleOneShot does). The lookup is
                  unambiguous because RegistryManifestRestorer reserves every
-                 public network's own name: no other network may advertise it.
+                 public network's network name: "a/b" cannot be advertised as
+                 "a__b" while a network "a__b" exists, so a name is never both
+                 one network's advertised name and another's network name.
         """
         public_storage: AgentNetworkStorage = self.network_storage_dict.get(StorageClass.PUBLIC)
         for agent_name in public_storage.get_agent_names():

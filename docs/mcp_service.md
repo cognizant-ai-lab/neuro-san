@@ -32,8 +32,10 @@ becomes one:
 
 1. **The entry is read.** `"mcp": true` also makes the network public, since only public networks
    are visible over MCP. Like any dictionary entry it still needs `"serve": true`, or the network
-   is not served at all. A plain `"deep/math_guy.hocon": true` entry means served, public and MCP
-   all at once. Setting an `"mcp_name"` switches `"mcp"` on as well
+   is not served at all, and it needs `"mcp": true` written out: a dictionary entry that only says
+   `"public": true` is listed by the Concierge service but is not an MCP tool. A plain
+   `"deep/math_guy.hocon": true` entry means served, public and MCP all at once. Setting an
+   `"mcp_name"` switches `"mcp"` on as well
    (see [manifest reference](./manifest_hocon_reference.md#mcp_name)).
 2. **The tool name is chosen when the network is loaded.** It is the `"mcp_name"` if the entry has
    one. Otherwise it is derived from the network name: every "/" becomes "__" and any other
@@ -44,10 +46,11 @@ becomes one:
    (see [neuro-san-studio#600](https://github.com/cognizant-ai-lab/neuro-san-studio/issues/600)).
    A name that still breaks that rule is exposed anyway, with a warning at server startup.
 3. **Name clashes are resolved once every manifest is loaded.** Two networks may not end up with
-   the same tool name, and no network may be advertised under another public network's own name.
-   The network whose own name is contested keeps it; when neither network's own name is involved,
-   the first in sorted order keeps it. The other network is dropped from MCP with an error in the
-   log and stays reachable over the http and gRPC APIs. See the
+   the same tool name, and no network may be advertised under another public network's network
+   name (`a/b` cannot be advertised as `a__b` while a network `a__b` exists). The network that is
+   really called that keeps the name; when neither network is, the first in sorted order keeps it.
+   The other network is dropped from MCP with an error in the log and stays reachable over the
+   http and gRPC APIs. See the
    [manifest reference](./manifest_hocon_reference.md#mcp_name) for the exact rule.
 4. **`tools/list` advertises the network under its tool name.** When that differs from the network
    name, the entry also carries the optional MCP `title` field holding the network name, which is

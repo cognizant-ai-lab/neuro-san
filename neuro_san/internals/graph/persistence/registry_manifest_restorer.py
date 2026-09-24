@@ -138,13 +138,14 @@ class RegistryManifestRestorer(Restorer):
         address tools by name alone, so one of the two has to stop being an MCP tool.
         The loser stays served over the regular APIs; only its MCP exposure is withdrawn.
 
-        Every public network's own name is reserved as well, whether or not it is an
-        MCP tool and whatever it is advertised as: a client that has not seen
-        tools/list (or predates the rename) addresses a network by that name, and
-        McpToolsProcessor passes it through to the network. Letting "a/b" be
-        advertised as "a__b" while a network named "a__b" exists would route such
-        calls to the wrong network, or answer them instead of refusing them when
-        "a__b" is not an MCP tool.
+        Every public network's network name is reserved as well, whether or not it
+        is an MCP tool and whatever it is advertised as: the name "a__b" belongs to
+        the network "a__b", so "a/b" may not be advertised as "a__b" while that
+        network exists. A client that has not seen tools/list (or predates the
+        rename) addresses a network by its network name, and McpToolsProcessor
+        passes that name through to the network, so letting "a/b" take "a__b" would
+        route such calls to the wrong network, or answer them instead of refusing
+        them when "a__b" is not an MCP tool.
 
         :param all_agent_networks: a nested map of storage type -> (mapping of name -> agent networks),
                                    modified in place for any losing network.
@@ -165,11 +166,13 @@ class RegistryManifestRestorer(Restorer):
             if agent_network is None:
                 continue
 
-            # Every network claims its own name (see above); an MCP network also
-            # claims its advertised name when that differs. The own name goes first
-            # so that if the advertised name loses below, the reservation stands.
-            # A network whose only claim is its own name can never lose, so
-            # clear_mcp_tool() is never called on a non-MCP network.
+            # Every network claims its network name ("deep/math_guy" claims
+            # "deep/math_guy", see above); an MCP network also claims its
+            # advertised name when that differs ("deep__math_guy" or "calculator").
+            # The network name goes first so that if the advertised name loses
+            # below, the reservation stands. A network whose only claim is its
+            # network name can never lose, so clear_mcp_tool() is never called on
+            # a non-MCP network.
             claims: List[str] = [network_name]
             if agent_network.is_mcp_tool():
                 tool_name: str = agent_network.get_mcp_tool_name()
@@ -197,7 +200,8 @@ class RegistryManifestRestorer(Restorer):
         """
         owner_name: str = owners.get(tool_name)
 
-        # Prefer the network whose tool name is its own network name unchanged.
+        # Prefer the network whose tool name is its network name unchanged: the
+        # tool name "a__b" goes to the network "a__b", not to "a/b".
         # That one was never renamed, so clients that already address it by that
         # name keep working, and the collision is attributable to the other
         # network's rename (or its explicit mcp_name), which the manifest author

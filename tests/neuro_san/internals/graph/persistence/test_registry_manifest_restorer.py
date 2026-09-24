@@ -177,7 +177,7 @@ class TestRegistryManifestRestorer(TestCase):
     def test_resolve_collisions_keeps_unmangled_network(self) -> None:
         """
         When a renamed network ("deep/math_guy" with mcp_name "math_guy") collides with a network
-        literally named "math_guy", the network whose own name is the tool name keeps it,
+        literally named "math_guy", the network whose network name is the tool name ("math_guy") keeps it,
         even though it sorts after the contender, and the other loses MCP exposure with an error log.
         """
         top: AgentNetwork = self.make_agent_network(self.TOP_NAME)
@@ -269,7 +269,7 @@ class TestRegistryManifestRestorer(TestCase):
     def test_resolve_collisions_reserved_name_wins_when_seen_first(self) -> None:
         """
         Same rule with the reserved name seen first: "alpha" (alias "zzz") sorts before
-        "beta", whose alias "alpha" is the other network's own name. "beta" loses.
+        "beta", whose alias "alpha" is the other network's network name. "beta" loses.
         """
         alpha: AgentNetwork = self.make_agent_network("alpha")
         alpha.set_as_mcp_tool("zzz")
@@ -288,7 +288,7 @@ class TestRegistryManifestRestorer(TestCase):
 
     def test_resolve_collisions_reserves_name_of_non_mcp_network(self) -> None:
         """
-        A public network that is not an MCP tool still reserves its own name: "a/b" may not be
+        A public network that is not an MCP tool still reserves its network name: "a/b" may not be
         advertised as "a__b" while a network named "a__b" exists, or a tools/call for "a__b"
         would be answered by "a/b" instead of being refused as not available over MCP.
         """

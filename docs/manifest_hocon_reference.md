@@ -71,6 +71,9 @@ as an MCP tool. In this case, it will be listed by an MCP "tools/list" command.
 
 A true value implies that the network will be available as an MCP tool.
 Note that a true value specified for "mcp" key will implicitly set "public" key also to true.
+The reverse does not hold: for a dictionary entry the default is false, so `"public": true` on its
+own lists the network in the Concierge service but does not make it an MCP tool. The bare `true`
+form of an entry sets "serve", "public" and "mcp" all to true.
 
 ##### mcp_name
 
@@ -110,10 +113,11 @@ OpenAI additionally caps tool names at 64 characters; longer names are also warn
 
 Two public networks must not resolve to the same tool name (for example the networks
 `a/b` and `a__b`, or two entries with the same "mcp_name"). When they do, the server logs
-an error and keeps the tool name for the network whose own name is that tool name unchanged;
+an error and keeps the tool name for the network whose network name is that tool name
+(`a__b` stays with the network `a__b`, not with `a/b`);
 otherwise the first network in sorted order keeps it. The other network stays served over the
 regular APIs but is not exposed as an MCP tool. Give one of them a distinct "mcp_name" to resolve this.
-Every public network's own name is reserved in the same way, whether or not it is an MCP tool and
+Every public network's network name is reserved in the same way, whether or not it is an MCP tool and
 whatever it is advertised as: `a/b` cannot be advertised as `a__b` while a public network named
 `a__b` exists, because a client that has not seen "tools/list" addresses that network as `a__b`.
 
