@@ -481,14 +481,16 @@ Have external tools that can be found in the local agent manifest use a service 
         empty_list: List[Dict[str, Any]] = []
         if self.args.tags:
             tags = set()
-            for agent_info in response_dict.get("agents", empty_list):
+            agent_infos: List[Dict[str, Any]] = response_dict.get("agents", empty_list)
+            for agent_info in agent_infos:
                 agent_tags: List[str] = agent_info.get("tags", empty_list)
                 tags.update(agent_tags)
             print(f"Available tags:\n{json.dumps(list(tags), indent=4, sort_keys=True)}")
 
         elif self.args.tag:
             print(f"Available agents for tag {self.args.tag}:\n")
-            for agent_info in response_dict.get("agents", empty_list):
+            agent_infos: List[Dict[str, Any]] = response_dict.get("agents", empty_list)
+            for agent_info in agent_infos:
                 agent_tags: List[str] = agent_info.get("tags", empty_list)
                 if self.args.tag in agent_tags:
                     print(json.dumps(agent_info, indent=4, sort_keys=True))

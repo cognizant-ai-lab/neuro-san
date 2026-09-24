@@ -20,7 +20,7 @@ from typing import Dict
 from typing import List
 from typing import Generator
 
-import json
+from json import loads
 
 from requests import post
 from requests import Response
@@ -30,6 +30,7 @@ from leaf_common.time.timeout import Timeout
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.session.abstract_http_service_agent_session import AbstractHttpServiceAgentSession
 from neuro_san.session.mcp_chat_response_dictionary_converter import McpChatResponseDictionaryConverter
+from neuro_san.session.session_util import SessionUtil
 
 # MCP protocol version supported by this MCP session
 # Protocol specification is available at:
@@ -123,7 +124,7 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         try:
             response = post(path, json=handshake_dict, headers=headers, timeout=self.timeout_in_seconds)
             response.raise_for_status()
-            response_dict = json.loads(response.text)
+            response_dict = loads(response.text)
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(self.help_message(path)) from exc
 
@@ -175,7 +176,7 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         try:
             response = post(path, json=use_request_dict, headers=headers, timeout=self.timeout_in_seconds)
             response.raise_for_status()
-            response_dict = json.loads(response.text)
+            response_dict = loads(response.text)
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(self.help_message(path)) from exc
 
@@ -183,6 +184,8 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         empty_list: List[Dict[str, Any]] = []
         result_dict: Dict[str, Any] = response_dict.get("result", empty_dict)
         tools_list: List[Dict[str, Any]] = result_dict.get("tools", empty_list)
+
+        tools_list = SessionUtil.limit_agents_list(tools_list)
         use_tool: Dict[str, Any] = self.find_tool_for_network(tools_list)
         if use_tool is None:
             # Nothing stands for the network any more, so forget whatever an
@@ -290,7 +293,7 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
                 for line in response.iter_lines(decode_unicode=True):
                     if line.strip():  # Skip empty lines
                         # Each line is a JSON object representing an MCP tool call(chat) response
-                        result_dict: Dict[str, Any] = json.loads(line)
+                        result_dict: Dict[str, Any] = loads(line)
                         result_dict = McpChatResponseDictionaryConverter().to_dict(result_dict)
                         yield result_dict
         except Exception as exc:  # pylint: disable=broad-exception-caught
