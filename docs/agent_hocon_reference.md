@@ -879,7 +879,9 @@ MCP servers can be configured in two formats:
     server offers both spellings of one name, an entry selects the tool it spells exactly.
     - Two tools on one server that end up with the same name, advertised twice or renamed alike, are a
     collision: the tool that needed no rename (or, failing that, the first one listed) is kept and the
-    other is dropped with a warning. Tools from different servers are not compared, as before.
+    other is dropped with a warning. Across servers, and against the network's other tools, the first
+    tool in the agent's `tools` list to use a name keeps it; a later MCP tool with the same name is
+    skipped with a warning.
     - Thinking output and journal entries show the renamed name, since that is the name the LLM uses.
 
 ##### Authentication

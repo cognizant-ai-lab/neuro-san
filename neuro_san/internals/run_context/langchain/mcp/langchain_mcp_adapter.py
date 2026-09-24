@@ -49,11 +49,11 @@ class LangChainMcpAdapter:
     both spellings of one name, an entry selects the tool it spells exactly.
     Two tools on one server that would end up with the same name, advertised
     twice or renamed alike, are a collision; the tool that needed no rename (or, failing that, the first one
-    listed) is kept and the other is skipped with a warning. Tools from
-    different servers are not compared, as before: LangChain dispatches by
-    name, so two servers offering the same name shadow each other whether or
-    not a rename produced it. Thinking output and journal entries show the
-    renamed spelling because they read the LangChain tool name.
+    listed) is kept and the other is skipped with a warning. Across servers,
+    and against the network's other tools, BaseToolFactory applies the same
+    idea: an MCP tool whose exposed name an earlier tool already uses is
+    skipped. Thinking output and journal entries show the renamed spelling
+    because they read the LangChain tool name.
     A current neuro-san server already advertises its networks under
     provider-safe names (see McpToolsProcessor), so its tools normally pass
     through unchanged; the rename here covers other MCP servers and older

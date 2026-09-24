@@ -91,6 +91,11 @@ class BaseToolFactory:
         # through a SensitiveLogger, which respects the LEAF_LOG_SENSITIVE
         # env var setting.
         self.sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+        # Names of the tools this factory has created so far for its agent
+        # network, so a later tool that would expose the same name is caught.
+        # LangChain dispatches tool calls by name, so two tools under one name
+        # would leave the LLM's call ambiguous.
+        self.exposed_tool_names: Set[str] = set()
 
     async def create_base_tool(self, name: str) -> Union[BaseTool, List[BaseTool]]:
         """
@@ -103,10 +108,39 @@ class BaseToolFactory:
         inspector: AgentNetworkInspector = self.tool_caller.get_inspector()
         agent_spec: Dict[str, Any] = inspector.get_agent_tool_spec(name)
 
+        created: Union[BaseTool, List[BaseTool]] = None
         if agent_spec is None:
-            return await self.create_external_tool(name)
+            created = await self.create_external_tool(name)
+        else:
+            created = await self.create_internal_tool(name, agent_spec)
 
-        return await self.create_internal_tool(name, agent_spec)
+        await self._remember_tool_names(created)
+        return created
+
+    async def _remember_tool_names(self, created: Union[BaseTool, List[BaseTool]]) -> None:
+        """
+        Records the names of newly created tools and reports any that repeat a
+        name already exposed in this agent network.
+
+        MCP tools that repeat a name never get here: create_mcp_tool() drops
+        them. Any other repeat is only reported, since dropping a coded or
+        internal tool would change behaviour that predates the name check.
+
+        :param created: What create_base_tool() produced: a tool, a list of tools, or None.
+        """
+        tools: List[BaseTool] = []
+        if isinstance(created, list):
+            tools = created
+        elif created is not None:
+            tools = [created]
+
+        for tool in tools:
+            if tool.name in self.exposed_tool_names:
+                message: str = (f"Tool '{tool.name}' has the same name as another tool in this agent network; "
+                                "the LLM cannot tell them apart.")
+                await self.journal.write_message(AgentMessage(content=message))
+                self.logger.warning(message)
+            self.exposed_tool_names.add(tool.name)
 
     async def create_external_tool(self, name: Union[str, Dict[str, Any]]) -> Union[BaseTool, List[BaseTool]]:
         """
@@ -321,7 +355,34 @@ class BaseToolFactory:
             await self.journal.write_message(agent_message)
             self.logger.info(message)
 
-        return mcp_tools
+        return await self._skip_mcp_tools_already_named(server_url, mcp_tools)
+
+    async def _skip_mcp_tools_already_named(self, server_url: str, mcp_tools: List[BaseTool]) -> List[BaseTool]:
+        """
+        Drops MCP tools whose exposed name an earlier tool of this agent network
+        already uses.
+
+        LangChainMcpAdapter resolves name collisions within one server only. Two
+        servers, or a server and a coded tool, can still expose one name, for
+        example "a/b" renamed to "a__b" on one server and a literal "a__b" on
+        another. The first tool to claim a name keeps it, in the order of the
+        agent's "tools" list.
+
+        :param server_url: URL of the MCP server the tools came from, for messages.
+        :param mcp_tools: The tools the adapter returned for that server.
+        :return: The tools whose names are not yet exposed, in the same order.
+        """
+        kept_tools: List[BaseTool] = []
+        for tool in mcp_tools:
+            if tool.name in self.exposed_tool_names:
+                message: str = (f"MCP tool '{tool.name}' from {server_url} has the same name as a tool already "
+                                "in this agent network; skipping it. Rename one of them or narrow the "
+                                "\"tools\" allow list.")
+                await self.journal.write_message(AgentMessage(content=message))
+                self.logger.warning(message)
+                continue
+            kept_tools.append(tool)
+        return kept_tools
 
     async def create_toolbox_tool(self, toolbox: str, agent_spec: Dict[str, Any], name: str) -> BaseTool:
         """Create tool from toolbox"""

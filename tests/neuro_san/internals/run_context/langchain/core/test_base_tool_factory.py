@@ -16,13 +16,18 @@
 
 from typing import Any
 from typing import Dict
+from typing import List
 
 from copy import deepcopy
 
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import pytest
+
+from langchain_core.tools import BaseTool
+from langchain_core.tools import StructuredTool
 
 from neuro_san.internals.run_context.langchain.core.base_tool_factory import BaseToolFactory
 from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
@@ -351,3 +356,78 @@ class TestBaseToolFactory:
 
         assert result is None
         factory.journal.write_message.assert_not_awaited()
+
+    @staticmethod
+    def make_mcp_factory() -> BaseToolFactory:
+        """
+        :return: A BaseToolFactory whose inspector knows no local agents (so every
+                 name is treated as external) and whose sly_data carries no headers
+        """
+        inspector = MagicMock()
+        inspector.get_agent_tool_spec = MagicMock(return_value=None)
+
+        tool_caller = MagicMock()
+        tool_caller.get_inspector = MagicMock(return_value=inspector)
+        tool_caller.get_sly_data = MagicMock(return_value={})
+
+        journal = MagicMock()
+        journal.write_message = AsyncMock()
+
+        return BaseToolFactory(tool_caller, MagicMock(), journal)
+
+    @staticmethod
+    def make_named_tool(name: str) -> MagicMock:
+        """
+        :param name: The exposed tool name
+        :return: A StructuredTool-shaped mock carrying that name
+        """
+        tool = MagicMock(spec=StructuredTool)
+        tool.name = name
+        return tool
+
+    @pytest.mark.asyncio
+    @patch("neuro_san.internals.run_context.langchain.core.base_tool_factory.LangChainMcpAdapter")
+    async def test_mcp_tool_repeating_an_exposed_name_is_skipped(self, mock_adapter_class: MagicMock) -> None:
+        """
+        The adapter resolves collisions within one server only. When a second
+        server exposes a name the first already took ("a/b" renamed to "a__b"
+        on one, a literal "a__b" on the other), the factory keeps the first and
+        skips the second with a journal message, leaving unrelated tools alone.
+
+        :param mock_adapter_class: Patched LangChainMcpAdapter class.
+        """
+        first_server_tool = self.make_named_tool("a__b")
+        second_server_tool = self.make_named_tool("a__b")
+        other_tool = self.make_named_tool("other_tool")
+        mock_adapter = mock_adapter_class.return_value
+        mock_adapter.unmatched_allowed_tools = []
+        mock_adapter.get_mcp_tools = AsyncMock(side_effect=[[first_server_tool], [second_server_tool, other_tool]])
+        factory = self.make_mcp_factory()
+
+        first: List[BaseTool] = await factory.create_base_tool("https://one.example.com/mcp")
+        second: List[BaseTool] = await factory.create_base_tool("https://two.example.com/mcp")
+
+        assert first == [first_server_tool]
+        assert second == [other_tool]
+        assert factory.exposed_tool_names == {"a__b", "other_tool"}
+        factory.journal.write_message.assert_awaited_once()
+        reported = factory.journal.write_message.await_args.args[0]
+        assert "MCP tool 'a__b' from https://two.example.com/mcp" in reported.content
+        assert "skipping it" in reported.content
+
+    @pytest.mark.asyncio
+    async def test_non_mcp_tool_repeating_an_exposed_name_is_reported_but_kept(self) -> None:
+        """
+        A coded or internal tool that repeats an exposed name is reported in the
+        journal but not dropped, since dropping it would change behaviour that
+        predates the name check.
+        """
+        factory = self.make_mcp_factory()
+        # pylint: disable=protected-access
+        await factory._remember_tool_names(self.make_named_tool("search"))
+        await factory._remember_tool_names([self.make_named_tool("search"), self.make_named_tool("lookup")])
+
+        assert factory.exposed_tool_names == {"search", "lookup"}
+        factory.journal.write_message.assert_awaited_once()
+        reported = factory.journal.write_message.await_args.args[0]
+        assert "Tool 'search' has the same name as another tool" in reported.content
