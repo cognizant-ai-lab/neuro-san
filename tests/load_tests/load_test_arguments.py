@@ -26,6 +26,7 @@ import argparse
 import os
 from typing import Set
 
+from tests.load_tests.config import DEFAULT_FIXTURES_HOCON_DIR
 from tests.load_tests.config import DEFAULT_IDLE_TIMEOUT_SECONDS
 from tests.load_tests.config import DEFAULT_TIMEOUT_SECONDS
 from tests.load_tests.config import LEVEL_ADV
@@ -71,6 +72,18 @@ class LoadTestArguments:
                  "Without this, searches built-in profiles/. "
                  "Can also be set via LOAD_TEST_PROFILE_PATH "
                  "env var.",
+        )
+        parser.add_argument(
+            "--fixtures-hocon-dir",
+            nargs="?",
+            const=DEFAULT_FIXTURES_HOCON_DIR,
+            default=None,
+            metavar="DIR",
+            help="Parent directory of test-case HOCON files to use as "
+                 "prompts. The agent subfolder is derived from --agent "
+                 "(e.g. basic/hello_world → DIR/hello_world/*.hocon). "
+                 f"Without a value, defaults to {DEFAULT_FIXTURES_HOCON_DIR} "
+                 "under the project root.",
         )
         parser.add_argument(
             "--project-root",
