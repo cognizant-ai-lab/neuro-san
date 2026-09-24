@@ -37,6 +37,7 @@ from neuro_san.client.concierge_session_factory import ConciergeSessionFactory
 from neuro_san.client.streaming_input_processor import StreamingInputProcessor
 from neuro_san.interfaces.agent_session import AgentSession
 from neuro_san.interfaces.concierge_session import ConciergeSession
+from neuro_san.session.session_util import SessionUtil
 
 
 class AgentCli:
@@ -481,14 +482,18 @@ Have external tools that can be found in the local agent manifest use a service 
         empty_list: List[Dict[str, Any]] = []
         if self.args.tags:
             tags = set()
-            for agent_info in response_dict.get("agents", empty_list):
+            agent_infos: List[Dict[str, Any]] = response_dict.get("agents", empty_list)
+            agent_infos = SessionUtil.limit_agents_list(agent_infos)
+            for agent_info in agent_infos:
                 agent_tags: List[str] = agent_info.get("tags", empty_list)
                 tags.update(agent_tags)
             print(f"Available tags:\n{json.dumps(list(tags), indent=4, sort_keys=True)}")
 
         elif self.args.tag:
             print(f"Available agents for tag {self.args.tag}:\n")
-            for agent_info in response_dict.get("agents", empty_list):
+            agent_infos: List[Dict[str, Any]] = response_dict.get("agents", empty_list)
+            agent_infos = SessionUtil.limit_agents_list(agent_infos)
+            for agent_info in agent_infos:
                 agent_tags: List[str] = agent_info.get("tags", empty_list)
                 if self.args.tag in agent_tags:
                     print(json.dumps(agent_info, indent=4, sort_keys=True))
