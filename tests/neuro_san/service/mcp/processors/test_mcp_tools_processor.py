@@ -27,6 +27,7 @@ from functools import partial
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
+from unittest.mock import patch
 
 from typing_extensions import override
 
@@ -60,15 +61,15 @@ class TestMcpToolsProcessor(IsolatedAsyncioTestCase):
         """
         # Real storage and real networks: the processor reads is_mcp_tool() and
         # get_mcp_tool_name() off them, which is exactly what is under test.
-        storage: AgentNetworkStorage = AgentNetworkStorage()
+        self.storage: AgentNetworkStorage = AgentNetworkStorage()
 
         self.nested: AgentNetwork = self.make_agent_network(self.NESTED_NAME)
         self.nested.set_as_mcp_tool(self.NESTED_TOOL_NAME)
-        storage.add_agent_network(self.NESTED_NAME, self.nested)
+        self.storage.add_agent_network(self.NESTED_NAME, self.nested)
 
         self.top: AgentNetwork = self.make_agent_network(self.TOP_NAME)
         self.top.set_as_mcp_tool(self.TOP_NAME)
-        storage.add_agent_network(self.TOP_NAME, self.top)
+        self.storage.add_agent_network(self.TOP_NAME, self.top)
 
         self.service: MagicMock = MagicMock()
         self.service.function = AsyncMock(return_value={"function": {"description": self.DESCRIPTION}})
@@ -88,7 +89,7 @@ class TestMcpToolsProcessor(IsolatedAsyncioTestCase):
         validator.get_request_schema.return_value = self.SCHEMA
 
         self.processor: McpToolsProcessor = McpToolsProcessor(
-            MagicMock(), {StorageClass.PUBLIC: storage}, self.agent_policy, validator)
+            MagicMock(), {StorageClass.PUBLIC: self.storage}, self.agent_policy, validator)
 
     def make_agent_network(self, network_name: str) -> AgentNetwork:
         """
@@ -292,4 +293,30 @@ class TestMcpToolsProcessor(IsolatedAsyncioTestCase):
         # clear_mcp_tool() would also drop the name; flip only the flag so the
         # stale name is really there to be ignored.
         self.nested.is_mcp_network = False
+        self.assertEqual(self.NESTED_TOOL_NAME, self.processor._resolve_network_name(self.NESTED_TOOL_NAME))
+
+    def test_resolve_network_name_skips_scan_for_network_names(self) -> None:
+        """
+        A name that is itself a public network's network name is answered from the
+        storage table without scanning the other networks; only an advertised name
+        that differs from its network name pays for the scan.
+        """
+        with patch.object(self.storage, "get_agent_names", wraps=self.storage.get_agent_names) as scan:
+            self.assertEqual(self.TOP_NAME, self.processor._resolve_network_name(self.TOP_NAME))
+            self.assertEqual(self.NESTED_NAME, self.processor._resolve_network_name(self.NESTED_NAME))
+            scan.assert_not_called()
+            self.assertEqual(self.NESTED_NAME, self.processor._resolve_network_name(self.NESTED_TOOL_NAME))
+            scan.assert_called_once()
+
+    def test_resolve_network_name_lets_network_name_mean_itself(self) -> None:
+        """
+        Should storage hold both a network "deep__math_guy" and a network
+        "deep/math_guy" advertised as "deep__math_guy", the name means the network
+        so called. RegistryManifestRestorer's reservation rule keeps this from
+        lasting, but a manifest reload replaces networks one at a time, so a
+        stale network can be advertised under a newly added network's name for
+        a moment.
+        """
+        lookalike: AgentNetwork = self.make_agent_network(self.NESTED_TOOL_NAME)
+        self.storage.add_agent_network(self.NESTED_TOOL_NAME, lookalike)
         self.assertEqual(self.NESTED_TOOL_NAME, self.processor._resolve_network_name(self.NESTED_TOOL_NAME))

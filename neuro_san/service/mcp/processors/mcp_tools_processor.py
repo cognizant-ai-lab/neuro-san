@@ -261,22 +261,41 @@ class McpToolsProcessor:
 
     def _resolve_network_name(self, tool_name: str) -> str:
         """
-        Map an advertised MCP tool name back to the network name it stands for.
+        Map the tool name a client sent in tools/call to the network name it stands for.
 
         :param tool_name: tool name as sent by the client in a tools/call request
-        :return: the network name whose advertised MCP tool name equals tool_name,
-                 or tool_name unchanged when no network advertises it.
-                 Passing the name through keeps top-level networks (whose two
-                 spellings coincide) and the legacy slash spelling working. The
-                 latter is also what a client sends before it has seen tools/list
-                 (McpServiceAgentSession.streaming_chat() without a prior
-                 function() call, as SimpleOneShot does). The lookup is
-                 unambiguous because RegistryManifestRestorer reserves every
-                 public network's network name: "a/b" cannot be advertised as
-                 "a__b" while a network "a__b" exists, so a name is never both
-                 one network's advertised name and another's network name.
+        :return: tool_name unchanged when it is itself a public network's network
+                 name, whatever that network is advertised as; otherwise the
+                 network name whose advertised MCP tool name equals tool_name;
+                 otherwise tool_name unchanged.
+                 Passing a network name through keeps top-level networks (whose
+                 two spellings coincide) and the legacy slash spelling working.
+                 The latter is also what a client sends before it has seen
+                 tools/list (McpServiceAgentSession.streaming_chat() without a
+                 prior function() call, as SimpleOneShot does). The first two
+                 rules cannot disagree once storage has settled, because
+                 RegistryManifestRestorer reserves every public network's network
+                 name: "a/b" cannot be advertised as "a__b" while a network "a__b"
+                 exists, so a name is never both one network's advertised name
+                 and another's network name.
         """
         public_storage: AgentNetworkStorage = self.network_storage_dict.get(StorageClass.PUBLIC)
+
+        # Fast path: a name that is itself a public network's network name means
+        # that network. Top-level names, the legacy slash spelling, and any other
+        # network name a client sends resolve here with one dictionary lookup;
+        # only names that are not network names (renamed tools such as
+        # "deep__math_guy" or "calculator", and unknown names) pay for the scan
+        # below. Answering without the scan is safe because of the reservation
+        # described in the docstring: once storage has settled, the scan could
+        # not have returned anything else. The two can differ only mid-reload,
+        # while AgentNetworkStorage.setup_agent_networks() has added a new
+        # network but not yet replaced a stale one still advertised under its
+        # name, and then this is the answer the reservation intends: the name
+        # belongs to the network so called.
+        if public_storage.get_agent_network_provider(tool_name).get_agent_network() is not None:
+            return tool_name
+
         for agent_name in public_storage.get_agent_names():
             provider: AgentNetworkProvider = public_storage.get_agent_network_provider(agent_name)
             if provider is None:
