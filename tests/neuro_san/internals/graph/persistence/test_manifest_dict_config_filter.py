@@ -30,7 +30,7 @@ class TestManifestDictConfigFilter(TestCase):
     Unit tests for ManifestDictConfigFilter's hand-off of dictionary entries to the
     per-entry filter chain: the manifest file and the entry key must reach
     McpManifestDictConfigFilter so that its warnings say which entry they are about,
-    and an "mcp_name" in an entry must come out the other end as an MCP-enabled,
+    and an "mcp" dictionary in an entry must come out the other end as an MCP-enabled,
     public entry.
     """
 
@@ -38,29 +38,41 @@ class TestManifestDictConfigFilter(TestCase):
     MANIFEST_FILE: str = "manifest.hocon"
     ENTRY_KEY: str = "deep/math_guy.hocon"
 
-    def test_bad_mcp_name_warning_names_manifest_and_entry(self) -> None:
+    def test_bad_name_warning_names_manifest_and_entry(self) -> None:
         """
-        A non-string "mcp_name" is dropped by the chain with a warning that names both the
-        manifest file and the entry, which only works if the chain was given them.
+        A non-string "name" in the "mcp" dictionary is dropped by the chain with a warning
+        that names both the manifest file and the entry, which only works if the chain was
+        given them.
         """
         config_filter = ManifestDictConfigFilter(self.MANIFEST_FILE)
-        basis_config: Dict[str, Any] = {self.ENTRY_KEY: {"serve": True, "mcp_name": 42}}
+        basis_config: Dict[str, Any] = {self.ENTRY_KEY: {"serve": True, "mcp": {"name": 42}}}
         with self.assertLogs(self.MCP_LOGGER_NAME, level=WARNING) as captured:
             filtered: Dict[str, Dict[str, Any]] = config_filter.filter_config(basis_config)
-        self.assertNotIn("mcp_name", filtered[self.ENTRY_KEY])
+        self.assertIsNone(filtered[self.ENTRY_KEY]["mcp"].get("name"))
         self.assertEqual(1, len(captured.output))
         self.assertIn(self.MANIFEST_FILE, captured.output[0])
         self.assertIn(self.ENTRY_KEY, captured.output[0])
 
-    def test_dict_entry_with_mcp_name_comes_out_mcp_and_public(self) -> None:
+    def test_dict_entry_with_name_comes_out_mcp_and_public(self) -> None:
         """
-        A dictionary entry naming an "mcp_name" is switched on as an MCP tool and made
+        A dictionary entry with "mcp": { "name": ... } is switched on as an MCP tool and made
         public by the chain, and keeps the name for RegistryManifestRestorer to use.
         """
         config_filter = ManifestDictConfigFilter(self.MANIFEST_FILE)
-        basis_config: Dict[str, Any] = {self.ENTRY_KEY: {"serve": True, "mcp_name": "calculator"}}
+        basis_config: Dict[str, Any] = {self.ENTRY_KEY: {"serve": True, "mcp": {"name": "calculator"}}}
         filtered: Dict[str, Dict[str, Any]] = config_filter.filter_config(basis_config)
         entry: Dict[str, Any] = filtered[self.ENTRY_KEY]
-        self.assertTrue(entry.get("mcp"))
+        self.assertEqual({"enable": True, "name": "calculator"}, entry.get("mcp"))
         self.assertTrue(entry.get(StorageClass.PUBLIC))
-        self.assertEqual("calculator", entry.get("mcp_name"))
+
+    def test_bare_true_entry_comes_out_mcp_enabled(self) -> None:
+        """
+        The traditional `"x.hocon": true` entry expands to served, public and MCP-enabled,
+        with the "mcp" template boolean normalised to the settings dictionary.
+        """
+        config_filter = ManifestDictConfigFilter(self.MANIFEST_FILE)
+        filtered: Dict[str, Dict[str, Any]] = config_filter.filter_config({self.ENTRY_KEY: True})
+        entry: Dict[str, Any] = filtered[self.ENTRY_KEY]
+        self.assertTrue(entry.get("serve"))
+        self.assertTrue(entry.get(StorageClass.PUBLIC))
+        self.assertEqual({"enable": True, "name": None}, entry.get("mcp"))

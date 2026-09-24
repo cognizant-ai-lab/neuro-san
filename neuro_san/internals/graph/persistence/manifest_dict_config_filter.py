@@ -53,15 +53,13 @@ class ManifestDictConfigFilter(ConfigFilter):
             {
                 "serve": <bool>,
                 "public": <bool>,
-                "mcp": <bool>,
+                "mcp": <bool or dict>,
                 "periodic": <bool or dict>,
             }
 
-        Dictionary entries may additionally carry an optional "mcp_name" string:
-        the name the network is advertised under as an MCP tool. When absent,
-        the MCP tool name is derived from the network name (see McpToolNamePolicy).
-        It is not part of the default template because "absent" is what triggers
-        the derivation.
+        The "mcp" value is itself either a boolean or a dictionary of MCP settings
+        ({"enable": <bool>, "name": <str>}); McpManifestDictConfigFilter normalises
+        every form to that dictionary. See that class for the keys and defaults.
 
         :param basis_config: The config dictionary to act as the basis
                 for filtering

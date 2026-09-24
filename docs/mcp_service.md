@@ -32,13 +32,14 @@ becomes one:
 
 1. **The entry is read.** `"mcp": true` also makes the network public, since only public networks
    are visible over MCP. Like any dictionary entry it still needs `"serve": true`, or the network
-   is not served at all, and it needs `"mcp": true` written out: a dictionary entry that only says
-   `"public": true` is listed by the Concierge service but is not an MCP tool. A plain
-   `"deep/math_guy.hocon": true` entry means served, public and MCP all at once. Setting an
-   `"mcp_name"` switches `"mcp"` on as well
-   (see [manifest reference](./manifest_hocon_reference.md#mcp_name)).
-2. **The tool name is chosen when the network is loaded.** It is the `"mcp_name"` if the entry has
-   one. Otherwise it is derived from the network name: every "/" becomes "__" and any other
+   is not served at all, and it needs an `"mcp"` entry that switches the tool on: a dictionary entry
+   that only says `"public": true` is listed by the Concierge service but is not an MCP tool. A plain
+   `"deep/math_guy.hocon": true` entry means served, public and MCP all at once. `"mcp"` also
+   takes a dictionary, `"mcp": { "name": "calculator" }`, which switches it on as well
+   (see [manifest reference](./manifest_hocon_reference.md#mcp)).
+2. **The tool name is chosen when the network is loaded.** It is the `"name"` inside the `"mcp"`
+   dictionary if the entry gives one. Otherwise it is derived from the network name: every "/"
+   becomes "__" and any other
    character outside `A-Z`, `a-z`, `0-9`, `_` and `-` becomes `_`, so `deep/math_guy` is advertised
    as `deep__math_guy` and `Agent.1` as `Agent_1`. A top-level name made only of those characters
    is unchanged. The rename exists because LLM providers such as OpenAI and Anthropic only accept
@@ -51,7 +52,7 @@ becomes one:
    really called that keeps the name; when neither network is, the first in sorted order keeps it.
    The other network is dropped from MCP with an error in the log and stays reachable over the
    http and gRPC APIs. See the
-   [manifest reference](./manifest_hocon_reference.md#mcp_name) for the exact rule.
+   [manifest reference](./manifest_hocon_reference.md#mcp) for the exact rule.
 4. **`tools/list` advertises the network under its tool name.** When that differs from the network
    name, the entry also carries the optional MCP `title` field holding the network name, which is
    how neuro-san's own MCP client finds the network it was asked for. The tool description is the
@@ -233,7 +234,7 @@ replicated from neuro-san OpenAPI specification:
     }
     ```
 where the tool name is the advertised MCP tool name (the network name with "/" replaced by "__"
-and any other unsafe character by "_", or the manifest's `mcp_name`,
+and any other unsafe character by "_", or the `"name"` in the manifest entry's `"mcp"` settings,
 see [above](#agent-networks-as-mcp-tools)),
 and tool description is what is returned by "function" neuro-san API call.
 See [Infrastructure](../README.md#infrastructure)

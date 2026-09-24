@@ -48,6 +48,7 @@ from neuro_san import REGISTRIES_DIR
 from neuro_san.internals.graph.persistence.agent_filetree_mapper import AgentFileTreeMapper
 from neuro_san.internals.graph.persistence.agent_network_restorer import AgentNetworkRestorer
 from neuro_san.internals.graph.persistence.manifest_filter_chain import ManifestFilterChain
+from neuro_san.internals.graph.persistence.mcp_manifest_dict_config_filter import McpManifestDictConfigFilter
 from neuro_san.internals.graph.persistence.raw_manifest_restorer import RawManifestRestorer
 from neuro_san.internals.graph.persistence.served_manifest_config_filter import ServedManifestConfigFilter
 from neuro_san.internals.graph.registry.agent_network import AgentNetwork
@@ -133,7 +134,7 @@ class RegistryManifestRestorer(Restorer):
         Makes sure no two public networks are advertised under the same MCP tool name.
 
         Tool names are derived from network names by replacing "/" with "__"
-        (or come from an explicit "mcp_name" in the manifest), so distinct networks
+        (or come from an explicit "name" in the manifest's "mcp" settings), so distinct networks
         such as "a/b" and "a__b" can end up with the same tool name. MCP clients
         address tools by name alone, so one of the two has to stop being an MCP tool.
         The loser stays served over the regular APIs; only its MCP exposure is withdrawn.
@@ -204,8 +205,8 @@ class RegistryManifestRestorer(Restorer):
         # tool name "a__b" goes to the network "a__b", not to "a/b".
         # That one was never renamed, so clients that already address it by that
         # name keep working, and the collision is attributable to the other
-        # network's rename (or its explicit mcp_name), which the manifest author
-        # can fix with a different mcp_name. Otherwise the first one seen keeps it.
+        # network's rename (or its explicit "mcp" "name"), which the manifest author
+        # can fix with a different "name". Otherwise the first one seen keeps it.
         loser_name: str = contender_name
         if tool_name == contender_name and tool_name != owner_name:
             loser_name = owner_name
@@ -219,7 +220,8 @@ class RegistryManifestRestorer(Restorer):
 
         self.logger.error("MCP tool name '%s' is claimed by both network '%s' and network '%s'. " +
                           "Keeping it for '%s'; '%s' will not be served as an MCP tool. " +
-                          "Give one of them a distinct \"mcp_name\" in its manifest entry to resolve this.",
+                          "Give one of them a distinct \"name\" in the \"mcp\" settings of its manifest " +
+                          "entry to resolve this.",
                           tool_name, owner_name, contender_name, winner_name, loser_name)
 
     # pylint: disable=too-many-locals
@@ -451,20 +453,47 @@ class RegistryManifestRestorer(Restorer):
             return agent_network
 
         # Check if this agent network has been declared as MCP tool:
-        if usable_network and manifest_dict.get("mcp", False):
-            tool_name: str = RegistryManifestRestorer.derive_mcp_tool_name(network_name, manifest_dict)
+        mcp_settings: Dict[str, Any] = RegistryManifestRestorer.get_mcp_settings(manifest_dict)
+        if usable_network and mcp_settings.get(McpManifestDictConfigFilter.ENABLE_KEY):
+            tool_name: str = RegistryManifestRestorer.derive_mcp_tool_name(network_name, mcp_settings)
             agent_network.set_as_mcp_tool(tool_name)
 
         return agent_network
 
     @staticmethod
-    def derive_mcp_tool_name(network_name: str, manifest_dict: Dict[str, Any]) -> str:
+    def get_mcp_settings(manifest_dict: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Reads the "mcp" settings of a manifest entry.
+
+        The manifest filter chain has normally already turned "mcp" into the
+        settings dictionary (see McpManifestDictConfigFilter). Callers that bypass
+        the chain get the same defaults here, minus the warnings and the type
+        checks: a dictionary is on unless it says otherwise, and any other value
+        is read for its truth value as "enable".
+
+        :param manifest_dict: The manifest dictionary for the network
+        :return: A new dictionary with at least the "enable" and "name" keys
+        """
+        value: Any = manifest_dict.get(McpManifestDictConfigFilter.MCP_KEY)
+        settings: Dict[str, Any] = {
+            McpManifestDictConfigFilter.ENABLE_KEY: False,
+            McpManifestDictConfigFilter.NAME_KEY: None
+        }
+        if isinstance(value, dict):
+            settings[McpManifestDictConfigFilter.ENABLE_KEY] = True
+            settings.update(value)
+        else:
+            settings[McpManifestDictConfigFilter.ENABLE_KEY] = bool(value)
+        return settings
+
+    @staticmethod
+    def derive_mcp_tool_name(network_name: str, mcp_settings: Dict[str, Any]) -> str:
         """
         Works out the name an MCP-enabled network is advertised under as a tool.
 
-        An explicit "mcp_name" in the manifest entry wins. Otherwise the name is
-        derived from the network name by McpToolNamePolicy, so the "/" that
-        registry sub-directories put into network names never reaches LLM
+        An explicit "name" in the manifest entry's "mcp" settings wins. Otherwise
+        the name is derived from the network name by McpToolNamePolicy, so the "/"
+        that registry sub-directories put into network names never reaches LLM
         providers (OpenAI, Anthropic) that reject it in tool names.
 
         Problems are warned about rather than refused: lenient clients such as
@@ -472,7 +501,7 @@ class RegistryManifestRestorer(Restorer):
         would be a regression for them.
 
         :param network_name: The network name, used as the derivation basis and in log lines
-        :param manifest_dict: The (already filtered) manifest dictionary for the network
+        :param mcp_settings: The (already filtered) "mcp" settings of the manifest entry
         :return: The tool name to advertise. Never None or empty for a non-empty network_name.
         """
         logger: Logger = getLogger(__name__)
@@ -481,20 +510,21 @@ class RegistryManifestRestorer(Restorer):
         # restore_one_agent_network() chain, so a local instance is the
         # simplest way to reach the default McpToolNameFilter mapping.
         policy: McpToolNamePolicy = McpToolNamePolicy()
-        tool_name: str = manifest_dict.get("mcp_name")
+        tool_name: str = mcp_settings.get(McpManifestDictConfigFilter.NAME_KEY)
         if not tool_name:
             tool_name = policy.filter(network_name)
 
         if not policy.is_valid_tool_name(tool_name):
             logger.warning("MCP tool name '%s' for network '%s' does not match %s, which OpenAI and " +
                            "Anthropic require of tool names. Exposing it anyway; clients using those " +
-                           "providers will fail to call it. Set a conforming \"mcp_name\" in the manifest.",
+                           "providers will fail to call it. Set a conforming \"name\" in the manifest " +
+                           "entry's \"mcp\" settings.",
                            tool_name, network_name, McpToolNamePolicy.TOOL_NAME_PATTERN)
 
         if policy.is_over_soft_limit(tool_name):
             logger.warning("MCP tool name '%s' for network '%s' is longer than %d characters, " +
                            "which is OpenAI's limit for tool names. Exposing it anyway; consider a " +
-                           "shorter \"mcp_name\" in the manifest.",
+                           "shorter \"name\" in the manifest entry's \"mcp\" settings.",
                            tool_name, network_name, McpToolNamePolicy.SOFT_MAX_LENGTH)
 
         return tool_name

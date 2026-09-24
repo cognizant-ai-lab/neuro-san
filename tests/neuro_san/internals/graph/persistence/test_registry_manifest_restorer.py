@@ -85,7 +85,8 @@ class TestRegistryManifestRestorer(TestCase):
 
     def test_mcp_true_derives_provider_safe_tool_name(self) -> None:
         """
-        With "mcp": true and no "mcp_name", a nested network is advertised with "/" turned into "__".
+        With "mcp": true and no name, a nested network is advertised with "/" turned into "__".
+        The bare boolean is what callers that bypass the manifest filter chain still pass.
         """
         agent_network: AgentNetwork = self.make_agent_network(self.NESTED_NAME)
         result: AgentNetwork = self.process(agent_network, {"serve": True, "mcp": True})
@@ -103,14 +104,48 @@ class TestRegistryManifestRestorer(TestCase):
         result: AgentNetwork = self.process(agent_network, {"serve": True, "mcp": True})
         self.assertEqual(self.TOP_NAME, result.get_mcp_tool_name())
 
-    def test_mcp_name_overrides_derivation(self) -> None:
+    def test_name_overrides_derivation(self) -> None:
         """
-        An explicit "mcp_name" wins over the derived name.
+        An explicit "name" in the "mcp" settings wins over the derived name.
         """
         agent_network: AgentNetwork = self.make_agent_network(self.NESTED_NAME)
-        result: AgentNetwork = self.process(agent_network, {"serve": True, "mcp": True, "mcp_name": "calc"})
+        manifest_dict: Dict[str, Any] = {"serve": True, "mcp": {"enable": True, "name": "calc"}}
+        result: AgentNetwork = self.process(agent_network, manifest_dict)
         self.assertTrue(result.is_mcp_tool())
         self.assertEqual("calc", result.get_mcp_tool_name())
+
+    def test_mcp_settings_with_enable_false_is_not_an_mcp_tool(self) -> None:
+        """
+        The normalised settings dictionary with "enable": false keeps the network off MCP
+        even though it carries a name.
+        """
+        agent_network: AgentNetwork = self.make_agent_network(self.NESTED_NAME)
+        manifest_dict: Dict[str, Any] = {"serve": True, "mcp": {"enable": False, "name": "calc"}}
+        result: AgentNetwork = self.process(agent_network, manifest_dict)
+        self.assertFalse(result.is_mcp_tool())
+        self.assertIsNone(result.get_mcp_tool_name())
+
+    def test_get_mcp_settings_accepts_dictionary_and_boolean(self) -> None:
+        """
+        The settings reader applies the filter's defaults to whatever it is given: a
+        dictionary is on unless it says "enable": false, a bare boolean is the "enable"
+        value, and an absent key is off.
+        """
+        self.assertEqual({"enable": True, "name": "calc"},
+                         RegistryManifestRestorer.get_mcp_settings({"mcp": {"name": "calc"}}))
+        self.assertEqual({"enable": False, "name": "calc"},
+                         RegistryManifestRestorer.get_mcp_settings({"mcp": {"enable": False, "name": "calc"}}))
+        self.assertEqual({"enable": True, "name": None}, RegistryManifestRestorer.get_mcp_settings({"mcp": True}))
+        self.assertEqual({"enable": False, "name": None}, RegistryManifestRestorer.get_mcp_settings({}))
+
+    def test_get_mcp_settings_returns_a_new_dictionary(self) -> None:
+        """
+        The reader never hands back or mutates the caller's dictionary.
+        """
+        given: Dict[str, Any] = {"name": "calc"}
+        settings: Dict[str, Any] = RegistryManifestRestorer.get_mcp_settings({"mcp": given})
+        self.assertIsNot(given, settings)
+        self.assertEqual({"name": "calc"}, given)
 
     def test_mcp_false_is_not_an_mcp_tool(self) -> None:
         """
@@ -128,7 +163,7 @@ class TestRegistryManifestRestorer(TestCase):
         but the network is still exposed, so lenient clients keep working.
         """
         agent_network: AgentNetwork = self.make_agent_network(self.NESTED_NAME)
-        manifest_dict: Dict[str, Any] = {"serve": True, "mcp": True, "mcp_name": "deep/math_guy"}
+        manifest_dict: Dict[str, Any] = {"serve": True, "mcp": {"name": "deep/math_guy"}}
         with self.assertLogs(self.MODULE_LOGGER, level=WARNING) as captured:
             result: AgentNetwork = self.process(agent_network, manifest_dict)
         self.assertTrue(result.is_mcp_tool())
@@ -159,11 +194,11 @@ class TestRegistryManifestRestorer(TestCase):
         with self.assertNoLogs(self.MODULE_LOGGER, level=WARNING):
             self.process(agent_network, {"serve": True, "mcp": True})
 
-    def test_derive_mcp_tool_name_ignores_empty_mcp_name(self) -> None:
+    def test_derive_mcp_tool_name_ignores_empty_name(self) -> None:
         """
-        An empty "mcp_name" (which the filter normally strips) falls back to derivation.
+        An empty "name" (which the filter normally strips) falls back to derivation.
         """
-        tool_name: str = RegistryManifestRestorer.derive_mcp_tool_name(self.NESTED_NAME, {"mcp_name": ""})
+        tool_name: str = RegistryManifestRestorer.derive_mcp_tool_name(self.NESTED_NAME, {"name": ""})
         self.assertEqual(self.NESTED_TOOL_NAME, tool_name)
 
     def make_restorer(self) -> RegistryManifestRestorer:
@@ -176,7 +211,7 @@ class TestRegistryManifestRestorer(TestCase):
 
     def test_resolve_collisions_keeps_unmangled_network(self) -> None:
         """
-        When a renamed network ("deep/math_guy" with mcp_name "math_guy") collides with a network
+        When a renamed network ("deep/math_guy" advertised as "math_guy") collides with a network
         literally named "math_guy", the network whose network name is the tool name ("math_guy") keeps it,
         even though it sorts after the contender, and the other loses MCP exposure with an error log.
         """
@@ -204,7 +239,7 @@ class TestRegistryManifestRestorer(TestCase):
 
     def test_resolve_collisions_keeps_first_seen_when_neither_is_unmangled(self) -> None:
         """
-        Two networks with the same explicit mcp_name: the first in sorted network-name order keeps it.
+        Two networks with the same explicit "mcp" "name": the first in sorted network-name order keeps it.
         """
         alpha: AgentNetwork = self.make_agent_network("alpha")
         alpha.set_as_mcp_tool("calc")
@@ -322,8 +357,8 @@ class TestRegistryManifestRestorer(TestCase):
         entries: Dict[str, str] = {
             "a/b": '{ "a/b.hocon": { "serve": true, "mcp": true } }',
             "a__b": '{ "a__b.hocon": { "serve": true, "mcp": true } }',
-            "c": '{ "c.hocon": { "serve": true, "mcp_name": "calc" } }',
-            "d": '{ "d.hocon": { "serve": true, "mcp": false, "mcp_name": "solo" } }',
+            "c": '{ "c.hocon": { "serve": true, "mcp": { "name": "calc" } } }',
+            "d": '{ "d.hocon": { "serve": true, "mcp": { "enable": false, "name": "solo" } } }',
         }
         manifest_files: List[str] = []
         for network_name, manifest_text in entries.items():
@@ -337,11 +372,11 @@ class TestRegistryManifestRestorer(TestCase):
             manifest_files.append(manifest_file)
         return manifest_files
 
-    def test_restore_wires_mcp_name_and_collision_resolution_end_to_end(self) -> None:
+    def test_restore_wires_mcp_settings_and_collision_resolution_end_to_end(self) -> None:
         """
-        Restoring real manifest and network files runs the whole chain: the "mcp_name"
-        manifest key is honoured, an explicit "mcp": false is not undone by it, and the
-        "a/b" vs "a__b" collision is resolved after all manifests are loaded.
+        Restoring real manifest and network files runs the whole chain: the boolean and the
+        dictionary forms of "mcp" are both honoured, "enable": false keeps a named network off
+        MCP, and the "a/b" vs "a__b" collision is resolved after all manifests are loaded.
         """
         with TemporaryDirectory() as registry_dir:
             manifest_files: List[str] = self.write_registry(registry_dir)
@@ -356,7 +391,7 @@ class TestRegistryManifestRestorer(TestCase):
         self.assertFalse(public["a/b"].is_mcp_tool())
         self.assertTrue(public["c"].is_mcp_tool())
         self.assertEqual("calc", public["c"].get_mcp_tool_name())
-        # "mcp": false kept "d" out of MCP and therefore out of the public storage.
+        # "enable": false kept "d" out of MCP and therefore out of the public storage.
         self.assertNotIn("d", public)
         self.assertFalse(networks[StorageClass.PROTECTED]["d"].is_mcp_tool())
         self.assertEqual(1, len(captured.output))
