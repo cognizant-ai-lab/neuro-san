@@ -119,6 +119,17 @@ class TestAgentProfileHoconPrompts(TestCase):
                 self._load("hello_world", [path])
         self.assertEqual(ctx.exception.code, 1)
 
+    def test_response_not_a_map_exits_1(self) -> None:
+        """response itself must be a map, not a string or list."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path: str = self._write_hocon(
+                tmp, "bad.hocon", "hello_world", [],
+                interactions=[{"text": "hi", "response": "reservation_id"}],
+            )
+            with self.assertRaises(SystemExit) as ctx:
+                self._load("hello_world", [path])
+        self.assertEqual(ctx.exception.code, 1)
+
     def test_prefixed_agent_accepts_base_name_in_hocon(self) -> None:
         """--agent basic/hello_world matches hocons whose agent is hello_world."""
         profile: AgentProfile = self._load("basic/hello_world", self._fixture_hocons("hello_world"))

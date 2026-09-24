@@ -215,6 +215,11 @@ class AgentProfile:
           failure_patterns                  -> union, in first-seen order
           estimated_tokens_per_request      -> max
 
+        Only the keys of response.sly_data are used here; the check body
+        under each key (keywords, value, ...) is not applied yet. That is
+        the job of the data-driven AgentEvaluators
+        (neuro_san/test/evaluators), which TrafficRunner does not call yet.
+
         Aborts when no text is found in any file.
         """
         prompts: List[str] = []
@@ -264,7 +269,7 @@ class AgentProfile:
         fires each prompt as an independent single-turn request, so a
         multi-turn conversation cannot be replayed here.
         Its "agent" must match agent_name (or its base name), and
-        response.sly_data, if present, must be a field -> check map as in
+        response and response.sly_data, if present, must be maps as in
         docs/test_case_hocon_reference.md (a bare list is a common mistake).
         Aborts on any of these.
         """
@@ -289,14 +294,15 @@ class AgentProfile:
             )
             raise SystemExit(1)
         interaction: Dict[str, Any] = interactions[0] if interactions else {}
-        sly_checks: Any = interaction.get("response", {}).get("sly_data", {})
+        response: Any = interaction.get("response", {})
+        sly_checks: Any = response.get("sly_data", {}) if isinstance(response, dict) else None
         if not isinstance(sly_checks, dict):
             logger.error(
-                "response.sly_data must be a map of field -> check "
+                "response and response.sly_data must be maps of field -> check "
                 "(see docs/test_case_hocon_reference.md).\n"
                 "  File: %s\n"
                 "  Got: %r\nAborting.",
-                path, sly_checks,
+                path, sly_checks if isinstance(response, dict) else response,
             )
             raise SystemExit(1)
         return test_case
