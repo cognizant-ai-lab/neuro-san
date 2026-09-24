@@ -764,3 +764,56 @@ class TestLangChainMcpAdapter:
         assert tools[0].name == long_safe_name
         assert "is 70 characters long, over the 64-character OpenAI tool-name cap" in caplog.text
         assert "renamed to" not in caplog.text
+
+    @pytest.mark.asyncio
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
+    async def test_get_mcp_tools_skips_nameless_tools(
+        self, mock_client_class: MagicMock, adapter: LangChainMcpAdapter, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """
+        A tool advertised with an empty or missing name is skipped with a warning
+        that says so, rather than exposed under an empty name with a length
+        warning, and the other tools are unaffected.
+
+        :param mock_client_class: Patched MultiServerMCPClient class.
+        :param adapter: Fresh adapter under test.
+        :param caplog: pytest log capture fixture.
+        """
+        empty_name: MagicMock = self._make_tool("")
+        no_name: MagicMock = self._make_tool(None)
+        good: MagicMock = self._make_tool("good_tool")
+        mock_client = mock_client_class.return_value
+        mock_client.get_tools = AsyncMock(return_value=[empty_name, no_name, good])
+
+        tools: List[StructuredTool] = await adapter.get_mcp_tools("https://mcp.example.com/mcp")
+
+        assert len(tools) == 1
+        assert tools[0] is good
+        assert "advertised without a name" in caplog.text
+        assert "characters long" not in caplog.text
+
+    @pytest.mark.asyncio
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
+    async def test_get_mcp_tools_ignores_non_string_allow_list_entries(
+        self, mock_client_class: MagicMock, adapter: LangChainMcpAdapter, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """
+        Allow-list entries that are not non-empty strings are set aside with a
+        warning instead of raising inside the name matching; the string entries
+        still select their tools and are not reported as unmatched.
+
+        :param mock_client_class: Patched MultiServerMCPClient class.
+        :param adapter: Fresh adapter under test.
+        :param caplog: pytest log capture fixture.
+        """
+        mock_client = mock_client_class.return_value
+        mock_client.get_tools = AsyncMock(return_value=self._make_tools(["good_tool", "other_tool"]))
+
+        tools: List[StructuredTool] = await adapter.get_mcp_tools(
+            "https://mcp.example.com/mcp", allowed_tools=[42, "", None, "good_tool"])
+
+        assert len(tools) == 1
+        assert tools[0].name == "good_tool"
+        assert adapter.unmatched_allowed_tools == []
+        assert "are not non-empty strings" in caplog.text
+        assert "42" in caplog.text

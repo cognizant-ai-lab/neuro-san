@@ -114,7 +114,8 @@ class LangChainMcpAdapter:
         exposed name would duplicate another tool's from the same server is
         skipped with a warning, and a name longer than the 64-character OpenAI
         cap (or the 128-character Anthropic cap), renamed or not, is kept but
-        warned about.
+        warned about. A tool advertised without a name is skipped, and allow-list
+        entries that are not non-empty strings are ignored, each with a warning.
 
         :param server_url: URL of the MCP server, e.g. https://mcp.deepwiki.com/mcp or http://localhost:8000/mcp/
         :param allowed_tools: Optional list of tool names to filter from the server's available tools.
@@ -205,7 +206,9 @@ class LangChainMcpAdapter:
         :param server_url: URL of the MCP server the tools came from, for log messages.
         :param mcp_tools: All tools returned by the server, still carrying their original names.
         :param client_allowed_tools: Allow-list entries in either the original or the
-                                     provider-safe spelling. None or empty means no filtering.
+                                     provider-safe spelling. None or empty means no filtering;
+                                     entries that are not non-empty strings are ignored with
+                                     a warning.
         :return: The tools some allow-list entry resolves to, each entry choosing the
                  tool it spells exactly when the server offers both spellings and the
                  provider-safe equivalent otherwise, in server order; mcp_tools itself
@@ -216,6 +219,22 @@ class LangChainMcpAdapter:
         if not client_allowed_tools:
             return mcp_tools
 
+        # The policy mangles each entry with a string filter, so anything that
+        # is not a non-empty string is set aside with a warning rather than
+        # raising inside the matching. Before renaming existed such an entry was
+        # simply never equal to a tool name.
+        usable_entries: List[str] = []
+        invalid_entries: List[Any] = []
+        for entry in client_allowed_tools:
+            if isinstance(entry, str) and entry:
+                usable_entries.append(entry)
+            else:
+                invalid_entries.append(entry)
+        if invalid_entries:
+            self.logger.warning(
+                "MCP server %s: allow-list entries %s are not non-empty strings; ignoring them.",
+                server_url, invalid_entries)
+
         original_names: List[str] = []
         for tool in mcp_tools:
             original_names.append(tool.name)
@@ -223,7 +242,7 @@ class LangChainMcpAdapter:
         # Entries that match nothing used to be dropped silently, leaving the
         # hocon author guessing why a tool never appeared. Log what the server
         # actually offers so a typo or an upstream rename is visible.
-        unmatched: List[str] = self.tool_name_policy.find_unmatched(client_allowed_tools, original_names)
+        unmatched: List[str] = self.tool_name_policy.find_unmatched(usable_entries, original_names)
         self.unmatched_allowed_tools = unmatched
         if unmatched:
             self.logger.warning(
@@ -234,7 +253,7 @@ class LangChainMcpAdapter:
         # allow list naming "a/b" does not also pull in a literal "a__b" the
         # server happens to offer, which the rename step would otherwise have to
         # choose between (and would choose the one the author did not name).
-        selected: List[str] = self.tool_name_policy.select_allowed(client_allowed_tools, original_names)
+        selected: List[str] = self.tool_name_policy.select_allowed(usable_entries, original_names)
 
         filtered_tools: List[BaseTool] = []
         for tool in mcp_tools:
@@ -253,7 +272,8 @@ class LangChainMcpAdapter:
         """
         safe_names: Set[str] = set()
         for tool in mcp_tools:
-            if self.tool_name_policy.filter(tool.name) == tool.name:
+            # A missing name is skipped later, so it must not reserve anything.
+            if tool.name and self.tool_name_policy.filter(tool.name) == tool.name:
                 safe_names.add(tool.name)
         return safe_names
 
@@ -282,6 +302,13 @@ class LangChainMcpAdapter:
 
         kept_tools: List[BaseTool] = []
         for tool in mcp_tools:
+            if not tool.name:
+                # No LLM can call a nameless tool, and filter() would pass the
+                # empty name straight through to a misleading length warning.
+                self.logger.warning(
+                    "MCP server %s: a tool is advertised without a name; skipping it.", server_url)
+                continue
+
             safe_name: str = self.tool_name_policy.filter(tool.name)
             if safe_name == tool.name:
                 if safe_name in kept_names:
