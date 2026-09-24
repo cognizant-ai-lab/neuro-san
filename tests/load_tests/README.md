@@ -620,7 +620,8 @@ tests/load_tests/
     server_log_monitor.py      ServerLogMonitor (log parsing)
 
   prompts/
-    agent_profile.py           AgentProfile (prompt/validation config; from JSON or hocon files)
+    agent_profile.py           AgentProfile (data: prompts, success_fields, failure_patterns)
+    agent_profile_factory.py   AgentProfileFactory (builds it from the JSON profile or hocon files)
     profiles/                  Per-agent JSON profiles
 
   reporting/

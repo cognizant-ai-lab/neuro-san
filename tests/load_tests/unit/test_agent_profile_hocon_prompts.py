@@ -26,6 +26,7 @@ from unittest import TestCase
 from neuro_san import TOP_LEVEL_DIR
 from tests.load_tests.config import DEFAULT_FIXTURES_HOCON_DIR
 from tests.load_tests.prompts.agent_profile import AgentProfile
+from tests.load_tests.prompts.agent_profile_factory import AgentProfileFactory
 
 # Real fixtures, not mocks: tests/fixtures/load_tests/<agent>/*.hocon
 PROJECT_ROOT: str = TOP_LEVEL_DIR.get_file_in_basis("..")
@@ -33,7 +34,7 @@ PROJECT_ROOT: str = TOP_LEVEL_DIR.get_file_in_basis("..")
 
 class TestAgentProfileHoconPrompts(TestCase):
     """
-    Unit tests for AgentProfile.load(..., hocon_files=...).
+    Unit tests for AgentProfileFactory.create(..., hocon_files=...).
 
     With hocon files the whole profile (prompts, success_fields,
     failure_patterns, estimated_tokens_per_request) comes from them;
@@ -55,7 +56,7 @@ class TestAgentProfileHoconPrompts(TestCase):
     @staticmethod
     def _load(agent: str, hocon_files: List[str]) -> AgentProfile:
         """Load the profile from the given hocons."""
-        return AgentProfile.load(
+        return AgentProfileFactory().create(
             agent, project_root=PROJECT_ROOT, hocon_files=hocon_files,
         )
 

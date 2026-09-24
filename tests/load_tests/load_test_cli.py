@@ -71,7 +71,7 @@ from tests.load_tests.load_test_arguments import LoadTestArguments
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
-from tests.load_tests.prompts.agent_profile import AgentProfile
+from tests.load_tests.prompts.agent_profile_factory import AgentProfileFactory
 from tests.load_tests.reporting.cross_run_comparison import CrossRunComparison
 from tests.load_tests.reporting.rebuild_results import ResultsRebuilder
 from tests.load_tests.reporting.disconnection_reporter import DisconnectionReporter
@@ -171,7 +171,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         self.hocon_files: List[str] = (
             self.input_validator.validate_fixtures_hocon_dir()
         )
-        self.profile = AgentProfile.load(
+        self.profile = AgentProfileFactory().create(
             args.agent, args.profile_path, args.project_root,
             hocon_files=self.hocon_files,
         )
