@@ -185,6 +185,12 @@ class McpServiceAgentSession(AbstractHttpServiceAgentSession, AgentSession):
         result_dict: Dict[str, Any] = response_dict.get("result", empty_dict)
         tools_list: List[Dict[str, Any]] = result_dict.get("tools", empty_list)
 
+        # CheckMarx flags the parse above as the source of an "Unchecked Input for Loop
+        # Condition" in find_tool_for_network().  The listing comes from whatever MCP server
+        # this client was pointed at, so bound it with MAX_AGENTS_FROM_EXTERNAL_SERVER (unset
+        # or 0 = unlimited) before searching it.  A network listed beyond the limit is then
+        # not found; SessionUtil logs a warning when it truncates so that can be traced.
+        # See neuro_san/deploy/SAST_FALSE_POSITIVES.md.
         tools_list = SessionUtil.limit_agents_list(tools_list)
         use_tool: Dict[str, Any] = self.find_tool_for_network(tools_list)
         if use_tool is None:
