@@ -65,12 +65,68 @@ discovery.
 
 ##### mcp
 
-The value for the "mcp" key is a boolean.
-This says whether or not the agent should be exposed through MCP protocol API
-as an MCP tool. In this case, it will be listed by an MCP "tools/list" command.
+The "mcp" key says whether or not the agent should be exposed through the MCP protocol API
+as an MCP tool, listed by an MCP "tools/list" command. Like "periodic", its value is either a
+boolean or a dictionary.
 
-A true value implies that the network will be available as an MCP tool.
-Note that a true value specified for "mcp" key will implicitly set "public" key also to true.
+An enabled MCP tool is always public: enabling MCP in either form implicitly sets the "public"
+key to true. The reverse does not hold: for a dictionary entry the default is off, so
+`"public": true` on its own lists the network in the Concierge service but does not make it an
+MCP tool. Nor does MCP imply "serve": like any dictionary entry, an MCP one is only served when
+it also says "serve": true. The bare `true` form of an entry sets "serve", "public" and "mcp"
+all to true. For the whole path from manifest entry to "tools/call", see
+[Agent networks as MCP tools](./mcp_service.md#agent-networks-as-mcp-tools).
+
+_boolean_: true exposes the network as an MCP tool under a name derived from the network name
+           (see "name" below); false, or leaving the key out of a dictionary entry, does not.
+
+_dictionary_: fine-grained control over the MCP tool. Giving the dictionary at all switches the
+              tool on unless it says "enable": false. The keys are:
+
+###### enable
+
+A boolean, default true when the dictionary is present. False keeps the network off MCP while
+leaving the rest of the settings in place for when it is switched back on.
+
+###### name
+
+An optional string: the name under which the network is advertised in "tools/list" and addressed
+in "tools/call".
+
+When "name" is absent, the tool name is derived from the network name by replacing
+every "/" with "__" and every other character outside `A-Z`, `a-z`, `0-9`, `_` and `-` with `_`,
+so a network at `deep/math_guy.hocon` is advertised as `deep__math_guy` and one named `Agent.1`
+as `Agent_1`. This is done because LLM providers such as OpenAI and Anthropic only accept tool
+names made of those characters. For a top-level network made only of them the derived tool name
+is simply the network name.
+
+| network name (from the hocon path) | manifest entry                        | advertised MCP tool name |
+|------------------------------------|---------------------------------------|--------------------------|
+| `math_guy`                         | `"mcp": true`                        | `math_guy`               |
+| `deep/math_guy`                    | `"mcp": true`                        | `deep__math_guy`         |
+| `Agent.1`                          | `"mcp": true`                        | `Agent_1`                |
+| `deep/math_guy`                    | `"mcp": { "name": "calculator" }`    | `calculator`             |
+
+Whenever the advertised name differs from the network name, the "tools/list" entry also
+carries the network name in its MCP `title` field; neuro-san's own MCP client uses it to
+find the network it was asked for. Clients that list allowed tools by name, for example an
+agent network whose "tools" entry points at this server, must use the advertised name
+(`calculator`), not the network name.
+
+Tool names are expected to match `^[a-zA-Z0-9_-]{1,128}$`. A name that does not
+(for example a "name" containing "/") is still exposed, but a warning is logged at
+server startup since clients using OpenAI or Anthropic models will not be able to call it.
+OpenAI additionally caps tool names at 64 characters; longer names are also warned about.
+
+Two public networks must not resolve to the same tool name (for example the networks
+`a/b` and `a__b`, or two entries with the same "name"). When they do, the server logs
+an error and keeps the tool name for the network whose network name is that tool name
+(`a__b` stays with the network `a__b`, not with `a/b`);
+otherwise the first network in sorted order keeps it. The other network stays served over the
+regular APIs but is not exposed as an MCP tool. Give one of them a distinct "name" to resolve this.
+Every public network's network name is reserved in the same way, whether or not it is an MCP tool and
+whatever it is advertised as: `a/b` cannot be advertised as `a__b` while a public network named
+`a__b` exists, because a client that has not seen "tools/list" addresses that network as `a__b`.
 
 ##### periodic
 

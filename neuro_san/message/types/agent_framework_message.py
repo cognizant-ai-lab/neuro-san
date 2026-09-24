@@ -106,6 +106,8 @@ class AgentFrameworkMessage(TracedMessage):
                 The default implementation simply ensures that there is something in the
                 value to trace display to maximize information.
         """
+        new_key: str = None
+        new_value: Any = None
         new_key, new_value = super().translate_for_trace(key, value)
         if not new_key:
             return None, None
