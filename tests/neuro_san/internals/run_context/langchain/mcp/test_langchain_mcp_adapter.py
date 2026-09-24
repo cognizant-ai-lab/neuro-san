@@ -712,3 +712,55 @@ class TestLangChainMcpAdapter:
         assert "over the 128-character tool-name cap" in caplog.text
         assert "is 202 characters long" in caplog.text
         assert "over the 64-character OpenAI tool-name cap" not in caplog.text
+
+    @pytest.mark.asyncio
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
+    async def test_get_mcp_tools_skips_duplicate_safe_names(
+        self, mock_client_class: MagicMock, adapter: LangChainMcpAdapter, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """
+        A server that advertises one already-safe name twice yields that tool once:
+        the first is kept, the duplicate is skipped with a warning, and unrelated
+        tools are unaffected.
+
+        :param mock_client_class: Patched MultiServerMCPClient class.
+        :param adapter: Fresh adapter under test.
+        :param caplog: pytest log capture fixture.
+        """
+        first: MagicMock = self._make_tool("search")
+        duplicate: MagicMock = self._make_tool("search")
+        other: MagicMock = self._make_tool("other_tool")
+        mock_client = mock_client_class.return_value
+        mock_client.get_tools = AsyncMock(return_value=[first, duplicate, other])
+
+        tools: List[StructuredTool] = await adapter.get_mcp_tools("https://mcp.example.com/mcp")
+
+        assert len(tools) == 2
+        assert tools[0] is first
+        assert tools[1] is other
+        assert "tool 'search' is advertised more than once" in caplog.text
+
+    @pytest.mark.asyncio
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
+    async def test_get_mcp_tools_warns_when_unchanged_name_exceeds_soft_limit(
+        self, mock_client_class: MagicMock, adapter: LangChainMcpAdapter, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """
+        A name that needs no rename but is already over the 64-character OpenAI
+        cap is kept unchanged and warned about, without any rename log line.
+
+        :param mock_client_class: Patched MultiServerMCPClient class.
+        :param adapter: Fresh adapter under test.
+        :param caplog: pytest log capture fixture.
+        """
+        caplog.set_level(INFO)
+        long_safe_name: str = "a" * 70
+        mock_client = mock_client_class.return_value
+        mock_client.get_tools = AsyncMock(return_value=[self._make_tool(long_safe_name)])
+
+        tools: List[StructuredTool] = await adapter.get_mcp_tools("https://mcp.example.com/mcp")
+
+        assert len(tools) == 1
+        assert tools[0].name == long_safe_name
+        assert "is 70 characters long, over the 64-character OpenAI tool-name cap" in caplog.text
+        assert "renamed to" not in caplog.text

@@ -872,14 +872,14 @@ MCP servers can be configured in two formats:
     `deep__math_guy` for the network `deep/math_guy` (see
     [Agent networks as MCP tools](./mcp_service.md#agent-networks-as-mcp-tools)); a `deep/math_guy`
     tool from an older neuro-san server is renamed here the same way, so the LLM sees
-    `deep__math_guy` either way. A renamed name longer than 64 characters (OpenAI's cap) or 128
-    (Anthropic's) is kept but warned about.
+    `deep__math_guy` either way. A name longer than 64 characters (OpenAI's cap) or 128 (Anthropic's),
+    renamed or not, is kept but warned about.
     - Both spellings are accepted in the `tools` allow list, so `"tools": ["deep/math_guy"]` selects
     the tool whether the server advertises it as `deep/math_guy` or as `deep__math_guy`. When a
     server offers both spellings of one name, an entry selects the tool it spells exactly.
-    - Two tools on one server that would be renamed to the same name are a collision: the tool that
-    needed no rename (or, failing that, the first one listed) is kept and the other is dropped with a
-    warning. Tools from different servers are not compared, as before.
+    - Two tools on one server that end up with the same name, advertised twice or renamed alike, are a
+    collision: the tool that needed no rename (or, failing that, the first one listed) is kept and the
+    other is dropped with a warning. Tools from different servers are not compared, as before.
     - Thinking output and journal entries show the renamed name, since that is the name the LLM uses.
 
 ##### Authentication
