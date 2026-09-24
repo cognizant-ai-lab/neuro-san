@@ -333,14 +333,6 @@ class LoadTestArguments:
                  "then come only from the server log).",
         )
         parser.add_argument(
-            "--skip-reservation-check",
-            action="store_true",
-            default=False,
-            help="Skip reservation_id validation. A request is "
-                 "marked CREATED if other success fields are "
-                 "present, even without a reservation_id.",
-        )
-        parser.add_argument(
             "--scale",
             type=int,
             default=1,

@@ -20,6 +20,8 @@ Built by AgentProfileFactory; this class only carries the data.
 """
 
 import logging
+from typing import Any
+from typing import Dict
 from typing import List
 from typing import Optional
 
@@ -58,18 +60,31 @@ class AgentProfile:
 
     @property
     def success_fields(self) -> List[str]:
-        """Return list of stdout fields that must be present for success.
+        """Return the JSON profile's sly_data keys that must come back non-empty.
 
-        For agent_network_designer: ["reservation_id", "agent_network_name"]
-        For generic agents: [] (just check exit code)
+        Only JSON profiles carry this; AgentProfileFactory turns it into
+        the equivalent `responses` block, which is what TrafficRunner
+        checks. Hocon profiles state their checks in `responses` directly.
         """
         return self._data.get("success_fields", [])
+
+    @property
+    def responses(self) -> List[Dict[str, Any]]:
+        """Return the per-prompt response checks, parallel to prompts.
+
+        Each entry is a test-case hocon "response" block (text /
+        structure / sly_data with AgentEvaluator checks such as
+        keywords, value, not_value, gist). See
+        docs/test_case_hocon_reference.md. A JSON profile gets one
+        block, built from its success_fields, shared by all prompts.
+        """
+        return self._data.get("responses", [])
 
     @property
     def failure_patterns(self) -> List[str]:
         """Return substrings that indicate a failed response.
 
-        When any pattern is found in stdout, a request that would
+        When any pattern is found in the answer text, a request that would
         otherwise be marked CREATED is downgraded to FAILED.  This
         catches cases where the server returns an error message
         inside a successful HTTP 200 response (e.g. missing API key).
@@ -97,12 +112,24 @@ class AgentProfile:
                 self.agent_name,
             )
             raise SystemExit(1)
-        if same_prompt:
-            return prompts[0]
-        base_prompt = prompts[request_id % len(prompts)]
+        base_prompt = prompts[self._pool_index(request_id, same_prompt, len(prompts))]
         if allow_caching:
             return base_prompt
         # The suffix makes every prompt unique, so no cache along the
         # path (LLM prompt cache, agent network, proxy) can serve the
         # response and the run measures real work, not cache hits.
         return f"{base_prompt} (request {request_id})"
+
+    def get_response(self, request_id, same_prompt=False) -> Dict[str, Any]:
+        """Return the response checks for the prompt get_prompt() gives request_id."""
+        responses = self.responses
+        if not responses:
+            return {}
+        return responses[self._pool_index(request_id, same_prompt, len(responses))]
+
+    @staticmethod
+    def _pool_index(request_id, same_prompt, size) -> int:
+        """Index into a per-prompt pool: first entry in same_prompt mode, else cycle."""
+        if same_prompt:
+            return 0
+        return request_id % size
