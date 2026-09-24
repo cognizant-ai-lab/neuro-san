@@ -62,7 +62,7 @@ class AgentNetwork(AgentNetworkInspector):
         #   self.name          mcp_tool_name
         #   "math_guy"         "math_guy"        top-level: nothing to replace, same name
         #   "deep/math_guy"    "deep__math_guy"  nested: "/" becomes "__"
-        #   "deep/math_guy"    "calculator"      manifest entry sets "mcp_name": "calculator"
+        #   "deep/math_guy"    "calculator"      manifest entry sets "mcp": { "name": "calculator" }
         #
         # The network name stays the internal key everywhere else (network storage,
         # agent authorization, the /api/v1/{agent_name} http path). This field is
@@ -103,7 +103,7 @@ class AgentNetwork(AgentNetworkInspector):
             network.set_as_mcp_tool(McpToolNameFilter().filter(network.name))
                 get_mcp_tool_name() -> "deep__math_guy"
             network.set_as_mcp_tool("calculator")
-                get_mcp_tool_name() -> "calculator"   (an explicit manifest "mcp_name")
+                get_mcp_tool_name() -> "calculator"   (an explicit "name" in the manifest's "mcp" settings)
 
         For a top-level network (self.name is "math_guy") the first two calls both
         give "math_guy", since there is nothing to replace.
@@ -113,7 +113,7 @@ class AgentNetwork(AgentNetworkInspector):
                           the network name from McpToolNameFilter().filter()
                           ("deep/math_guy" gives "deep__math_guy"; a top-level
                           "math_guy" is already safe and stays "math_guy"), or an
-                          explicit "mcp_name" from the network's manifest entry.
+                          explicit "name" from the "mcp" settings of the network's manifest entry.
                           When None or empty (the default) the network name itself is
                           used unchanged, which preserves the historical behavior for
                           callers that do not care about provider-safe names. Note that

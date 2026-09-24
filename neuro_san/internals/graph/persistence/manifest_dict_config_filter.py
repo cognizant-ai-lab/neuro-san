@@ -53,7 +53,13 @@ class ManifestDictConfigFilter(ConfigFilter):
             {
                 "serve": <bool>,
                 "public": <bool>,
+                "mcp": <bool or dict>,
+                "periodic": <bool or dict>,
             }
+
+        The "mcp" value is itself either a boolean or a dictionary of MCP settings
+        ({"enable": <bool>, "name": <str>}); McpManifestDictConfigFilter normalises
+        every form to that dictionary. See that class for the keys and defaults.
 
         :param basis_config: The config dictionary to act as the basis
                 for filtering
