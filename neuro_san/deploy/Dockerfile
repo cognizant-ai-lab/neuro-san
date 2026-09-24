@@ -452,6 +452,11 @@ ENV LEAF_LOG_SENSITIVE="false"
 # when unrestricted).
 ENV AGENT_TOOL_PATH_ONLY="true"
 
+# Limits the number of agents considered from external servers' listings
+# to avoid exorbitantly long loops in handling them.  Negative values or
+# 0 (the default) means the number of agents listed is unlimited.
+ENV MAX_AGENTS_FROM_EXTERNAL_SERVER="0"
+
 #
 # Authorization
 #
