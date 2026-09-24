@@ -143,9 +143,9 @@ Some suggestions:
 4. Servers will skip manifest entries that have errors. They will also print out which
    agents they are actually serving.  Check your server output for each of these.
 5. Is the server itself actually running?
-6. If MAX_AGENTS_FROM_EXTERNAL_SERVER is set in your environment, this client only looked
-   at that many entries of the server's listing, so the agent may be past the cut-off.
-   Raise or unset it and try again.
+6. If MAX_AGENTS_FROM_EXTERNAL_SERVER is set to a positive number in your environment,
+   this client only looked at that many entries of the server's listing, so the agent may
+   be past the cut-off.  Raise or unset it and try again.
 """
 
         empty: Dict[str, Any] = {}

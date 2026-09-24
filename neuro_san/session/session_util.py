@@ -16,7 +16,6 @@
 # END COPYRIGHT
 
 from typing import Any
-from typing import List
 from typing import Optional
 
 from logging import getLogger
@@ -67,10 +66,14 @@ class SessionUtil:
         return max(max_agents, 0)
 
     @staticmethod
-    def limit_agents_list(agents_list: List[Any]) -> List[Any]:
+    def limit_agents_list(agents_list: Any) -> Any:
         """
         Limits an agent/tool listing from a server to at most MAX_AGENTS_FROM_EXTERNAL_SERVER
         entries when that variable holds a positive integer.
+
+        The parameter and return are typed Any rather than List because the value comes
+        straight out of a server's JSON and this method promises to hand back whatever it was
+        given when that is not a list.
 
         :param agents_list: List of agents/tools as returned by the server.  Anything that is
                     not a list (None, or an otherwise malformed payload) is returned unchanged

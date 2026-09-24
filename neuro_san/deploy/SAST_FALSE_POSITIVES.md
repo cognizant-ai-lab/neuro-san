@@ -62,9 +62,10 @@ lists.  If you run `agent_cli` against a server you do not control, you can boun
 `MAX_AGENTS_FROM_EXTERNAL_SERVER` in the client's environment:
 
 * A positive integer limits the listing to that many entries.  The client logs a warning whenever the
-  limit truncates a listing.  `agent_cli --list`, `--tags` and `--tag` then simply show a shorter
-  listing; `agent_cli --mcp` cannot find an agent listed beyond the limit and reports it as
-  "not implemented on the server".
+  limit truncates a listing.  `agent_cli --list`, `--tags` and `--tag` over `--connection http` or
+  `https` then simply show a shorter listing (the default `--connection direct` lists the agents
+  loaded in-process and is unaffected); `agent_cli --mcp` cannot find an agent listed beyond the
+  limit and reports it as "not implemented on the server".
 * Unset, empty, 0 (the default) and negative values mean no limit.
 * Anything that is not an integer is ignored with a warning, so a typo does not silently pass for a limit.
 
