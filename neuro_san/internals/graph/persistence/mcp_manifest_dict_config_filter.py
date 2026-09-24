@@ -126,8 +126,11 @@ class McpManifestDictConfigFilter(ConfigFilter):
                                 self.agent_network, self.manifest_file, repr(enable), bool(enable))
             settings[self.ENABLE_KEY] = bool(enable)
 
+        # Only a name the author actually wrote is judged; a missing key is the
+        # normal "derive it" case and gets no warning. An explicit null, an empty
+        # string or a non-string are all mistakes worth pointing out.
         name: Any = settings.get(self.NAME_KEY)
-        if name is not None and not (isinstance(name, str) and name):
+        if self.NAME_KEY in value and not (isinstance(name, str) and name):
             # Drop the bad value rather than keep it: downstream code treats any
             # present name as the name to advertise, and a non-string there would
             # surface as a confusing failure much later, at tools/list time.

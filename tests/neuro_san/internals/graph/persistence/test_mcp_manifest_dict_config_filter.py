@@ -135,6 +135,17 @@ class TestMcpManifestDictConfigFilter(TestCase):
         self.assertIn("deep/math_guy", captured.output[0])
         self.assertIn("42", captured.output[0])
 
+    def test_explicit_null_name_is_dropped_with_warning(self) -> None:
+        """
+        Writing "name": null is a mistake, not the same as leaving the key out, so it is
+        warned about like any other unusable value; the tool stays enabled with a derived name.
+        """
+        basis_config: Dict[str, Any] = {"mcp": {"name": None}}
+        with self.assertLogs(self.LOGGER_NAME, level=WARNING) as captured:
+            filtered: Dict[str, Any] = self.make_filter().filter_config(basis_config)
+        self.assertEqual({"enable": True, "name": None}, filtered.get("mcp"))
+        self.assertIn("None", captured.output[0])
+
     def test_empty_name_is_dropped_with_warning(self) -> None:
         """
         An empty string is not a usable tool name and is treated like a non-string.
