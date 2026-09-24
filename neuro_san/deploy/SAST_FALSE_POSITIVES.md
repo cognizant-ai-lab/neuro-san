@@ -68,7 +68,7 @@ For production: set AGENT_SESSION_REQUIRE_HTTPS=true (and configure https) to fo
 
 ### Information Exposure Through an Error Message / Filtering Sensitive Logs
 
-Destionation Classes:
+Destination Classes:
     LangChainOpenAIFunctionTool
     AwsSyncClientWorker
     AwsAsyncClientWorker
