@@ -25,7 +25,8 @@ easy scalability of neuro-san/MCP deployment.
 
 ## Agent networks as MCP tools
 
-In the scope of MCP protocol, each public neuro-san agent network is represented by an MCP tool
+In the scope of MCP protocol, each public neuro-san agent network with MCP enabled is represented by an
+MCP tool
 (see [MCP tools](https://modelcontextprotocol.io/specification/2025-06-18/server/tools)).
 This is how a manifest entry such as `"deep/math_guy.hocon": { "serve": true, "mcp": true }`
 becomes one:
