@@ -48,7 +48,7 @@ Destination Class: Same
 We consider this to be a false positive for a couple of reasons:
 1. Use of OpenFgaAuthorizer is completely optional and never a default.
 2. Should OpenFgaAuthorizer be used at all, the OpenFGA server which is
-   configured at deploy-time to be  providing the response is under complete
+   configured at deploy-time to be providing the response is assumed to be under complete
    control of those overseeing the deployment.
 If developers are still concerned about this as a security risk, we welcome
 propsed improvements via pull requests from an engaged community.
