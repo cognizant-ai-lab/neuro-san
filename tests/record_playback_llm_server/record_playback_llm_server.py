@@ -41,13 +41,16 @@ environment variables:
     RECORD_PLAYBACK_UPSTREAM_BASE_URL   e.g. "https://api.openai.com/v1"
     RECORD_PLAYBACK_UPSTREAM_API_KEY    bearer credential for that host
 
-Point a neuro-san agent network at this proxy exactly like a real endpoint:
+Point a neuro-san agent network at this proxy exactly like a real endpoint. The
+`openai` class defaults to the Responses API and this proxy only implements
+`/v1/chat/completions`, so pin Chat Completions with use_responses_api = false:
 
     llm_config {
         class = "openai"
         model_name = "gpt-4.1"
         openai_api_base = "http://localhost:8899/v1"
         openai_api_key = "not-needed"
+        use_responses_api = false
     }
 """
 from __future__ import annotations

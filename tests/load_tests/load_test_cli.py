@@ -71,7 +71,7 @@ from tests.load_tests.load_test_arguments import LoadTestArguments
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
-from tests.load_tests.prompts.agent_profile import AgentProfile
+from tests.load_tests.prompts.agent_profile_factory import AgentProfileFactory
 from tests.load_tests.reporting.cross_run_comparison import CrossRunComparison
 from tests.load_tests.reporting.rebuild_results import ResultsRebuilder
 from tests.load_tests.reporting.disconnection_reporter import DisconnectionReporter
@@ -167,8 +167,13 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
     def __init__(self, args) -> None:
         """Initialize the orchestrator with parsed arguments."""
         self.args = args
-        self.profile = AgentProfile.load(
+        self.input_validator = InputValidator(args)
+        self.hocon_files: List[str] = (
+            self.input_validator.validate_fixtures_hocon_dir()
+        )
+        self.profile = AgentProfileFactory().create(
             args.agent, args.profile_path, args.project_root,
+            hocon_files=self.hocon_files,
         )
         self.server_proc = None
         self.server_log = args.server_log
@@ -177,7 +182,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             if self.server_log else None
         )
         self.runner = TrafficRunner(args, self.profile)
-        self.input_validator = InputValidator(args)
         self.resource_reporter = ResourceReporter()
         self.probe_result = None
         self._output_dir = None
@@ -187,6 +191,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         self._interrupted = False
         self._cancel_event = threading.Event()
         self._server_ns_version = None
+
+    def _profile_source(self) -> str:
+        """Describe where the profile came from, for logs and raw_results.json."""
+        if self.hocon_files:
+            return f"hocon ({len(self.hocon_files)} files)"
+        return "json profile"
 
     # pylint: disable=too-many-locals
     def _run_all_stages(self, stages, total_cap) -> List[StageSummary]:
@@ -2264,12 +2274,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             "\nConfig: agent=%s, mode=%s, level=%s, "
             "stages=%s, rounds=%s, max_requests=%s, host=%s, port=%s, "
             "timeout=%ss, idle_timeout=%ss, "
-            "stage_timeout=%ss, prompt_mode=%s",
+            "stage_timeout=%ss, prompt_mode=%s, profile_source=%s",
             self.args.agent, mode, level, stages,
             self.args.num_rounds, total_cap,
             self.args.host, self.args.port, self.args.request_timeout,
             self.args.idle_timeout, self.args.stage_timeout,
-            prompt_mode,
+            prompt_mode, self._profile_source(),
         )
         if monitor_resources:
             logger.info("  settle_time=%ss", self.args.settle_time)
@@ -2715,6 +2725,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 "num_requests": self.args.num_requests,
                 "same_prompt": self.args.same_prompt,
                 "allow_caching": self.args.allow_caching,
+                "profile_source": self._profile_source(),
+                "fixtures_hocon_dir": self.args.fixtures_hocon_dir,
+                "hocon_files": self.hocon_files,
                 "chat_filter": self.args.chat_filter,
                 "server_log": self.server_log,
                 "estimated_tokens_per_request": (

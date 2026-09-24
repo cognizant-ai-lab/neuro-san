@@ -49,6 +49,7 @@ class TestExportRawJsonAggregates(TestCase):
         orchestrator._output_dir = self._dir
         orchestrator._server_ns_version = "0.6.92"
         orchestrator.server_log = None
+        orchestrator.hocon_files = []
         orchestrator.profile = SimpleNamespace(
             estimated_tokens_per_request=1000,
         )
@@ -62,6 +63,7 @@ class TestExportRawJsonAggregates(TestCase):
             total_timeout=600, settle_time=5, max_workers=10,
             num_rounds=1, num_requests=3, same_prompt=False,
             allow_caching=False, chat_filter=None,
+            fixtures_hocon_dir=None,
         )
         return orchestrator
 

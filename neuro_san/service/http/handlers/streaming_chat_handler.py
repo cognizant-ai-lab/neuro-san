@@ -34,6 +34,7 @@ import uuid
 import tornado
 
 from neuro_san.message.types.chat_message_type import ChatMessageType
+from neuro_san.message.types.chat_message_type_util import ChatMessageTypeUtil
 from neuro_san.service.generic.async_agent_service import AsyncAgentService
 from neuro_san.service.http.handlers.base_request_handler import BaseRequestHandler
 from neuro_san.service.utils.http_llm_tracer import HttpxLlmTracer
@@ -78,7 +79,7 @@ class StreamingChatHandler(BaseRequestHandler):
         :return: The exact string to write per heartbeat tick.
         """
         chat_message: Dict[str, Any] = {
-            "type": ChatMessageType.to_string(ChatMessageType.AGENT_PROGRESS),
+            "type": ChatMessageTypeUtil.to_string(ChatMessageType.AGENT_PROGRESS),
             "text": "",
         }
         return json.dumps({"response": chat_message}) + "\n"

@@ -242,7 +242,8 @@ call.
 
 **Anthropic Model Names:** The model names `claude-haiku`, `claude-sonnet`, `claude-opus`, and `claude-fable`
 are aliases that automatically reference the latest versions of their respective Anthropic model lines.
-This aliasing is recommended because Anthropic frequently deprecates older model versions. For information
+This aliasing is recommended because Anthropic frequently deprecates older model versions. The aliases
+resolve whether or not you also set `"class": "anthropic"`. For information
 on current models and deprecation schedules, see the
 [Anthropic model deprecations documentation](https://platform.claude.com/docs/en/about-claude/model-deprecations).
 
@@ -346,6 +347,10 @@ You can use the `class` key in two ways:
 
 Set the `class` key to one of the values listed below, then specify the model using the `model_name` key.
 
+The `model_name` may be one of the aliases in `default_llm_info.hocon`, such as `claude-opus`; it resolves the
+same way as without `class`, and a `model_name` that is not listed there is passed to the provider unchanged.
+See [use_model_name](./llm_info_hocon_reference.md#use_model_name) for the details.
+
 | LLM Provider               | Class Value         |
 |:---------------------------|:--------------------|
 | Anthropic                  | anthropic           |
@@ -374,6 +379,7 @@ Set the `class` key to the full Python path of the desired LangChain-compatible 
 ```
 
 Then, provide any constructor arguments supported by that class in `llm_config`.
+Everything, including the model name, is handed to that class exactly as written.
 
 Note that this route bypasses both the provider policy and the model alias table in
 [`default_llm_info.hocon`](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon).
