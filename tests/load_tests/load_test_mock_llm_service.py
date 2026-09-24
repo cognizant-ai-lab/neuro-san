@@ -341,7 +341,6 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 "neuro-san server does not have OPENAI_API_BASE set.\n"
                 "  Mock LLM server is running on port %s.\n"
                 "  Restart the server with:\n"
-                "    export AGENT_LLM_INFO_FILE=tests/mock_llm_server/llm_info_chat_completions.hocon\n"
                 "    export OPENAI_API_BASE=%s\n"
                 "    python -m neuro_san.service.main_loop.server_main_loop",
                 mock_port, expected_url,
@@ -367,8 +366,6 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 "    python -m neuro_san.service.main_loop.server_main_loop",
                 CHAT_COMPLETIONS_LLM_INFO_PATH, expected_url,
             )
-        else:
-            logger.info("  AGENT_LLM_INFO_FILE=%s", llm_info_file)
 
         if mock_port not in api_base:
             logger.error(
@@ -376,7 +373,6 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 "  Mock LLM server is running on port %s,\n"
                 "  but OPENAI_API_BASE=%s\n"
                 "  Restart the server with:\n"
-                "    export AGENT_LLM_INFO_FILE=tests/mock_llm_server/llm_info_chat_completions.hocon\n"
                 "    export OPENAI_API_BASE=%s\n"
                 "    python -m neuro_san.service.main_loop.server_main_loop",
                 mock_port, mock_port, api_base, expected_url,
@@ -396,8 +392,7 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
         if self.server_proc is None:
             logger.error(
                 "neuro-san server process not found.\n"
-                "Start it with the Chat Completions overlay and OPENAI_API_BASE pointing to the mock LLM server:\n"
-                "  export AGENT_LLM_INFO_FILE=tests/mock_llm_server/llm_info_chat_completions.hocon\n"
+                "Start it with OPENAI_API_BASE pointing to the mock LLM server:\n"
                 "  export OPENAI_API_BASE=http://localhost:8888/v1\n"
                 "  python -m neuro_san.service.main_loop.server_main_loop"
             )
@@ -410,7 +405,6 @@ class MockLlmLoadTest:  # pylint: disable=too-many-instance-attributes
                 "Start the mock LLM server first, then the neuro-san server:\n"
                 "  python -m tests.mock_llm_server.mock_llm_server --port 8888\n"
                 "Then:\n"
-                "  export AGENT_LLM_INFO_FILE=tests/mock_llm_server/llm_info_chat_completions.hocon\n"
                 "  export OPENAI_API_BASE=http://localhost:8888/v1\n"
                 "  python -m neuro_san.service.main_loop.server_main_loop"
             )
