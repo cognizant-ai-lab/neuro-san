@@ -14,18 +14,14 @@
 #
 # END COPYRIGHT
 
-"""Agent profile loader — reads agent-specific prompts and configuration."""
+"""Agent profile — agent-specific prompts and response checks.
 
-import json
+Built by AgentProfileFactory; this class only carries the data.
+"""
+
 import logging
-import os
-from typing import Any
-from typing import Dict
 from typing import List
 from typing import Optional
-
-from neuro_san.test.util.tests_util import TestsUtil
-from tests.load_tests.project_paths import ProjectPaths
 
 logger = logging.getLogger(__name__)
 
@@ -110,158 +106,3 @@ class AgentProfile:
         # path (LLM prompt cache, agent network, proxy) can serve the
         # response and the run measures real work, not cache hits.
         return f"{base_prompt} (request {request_id})"
-
-    @classmethod
-    def load(cls, agent_name: str, profile_path: Optional[str] = None,
-             project_root: Optional[str] = None,
-             hocon_files: Optional[List[str]] = None) -> "AgentProfile":
-        """Load an agent profile from a JSON file.
-
-        When hocon_files is given, the prompts come from those
-        test-case hocons (interactions[].text) instead of the JSON;
-        every other setting still comes from the JSON profile.
-        See _find_json_profile() for the JSON search order.
-        """
-        path: str = cls._find_json_profile(agent_name, profile_path, project_root)
-        data: Dict[str, Any] = cls._read_json(path)
-        if hocon_files:
-            data = {**data, "prompts": cls._prompts_from_hocons(agent_name, hocon_files)}
-        logger.info("Loaded agent profile: %s", path)
-        return cls(agent_name, data)
-
-    @classmethod
-    def _find_json_profile(cls, agent_name: str, profile_path: Optional[str],
-                           project_root: Optional[str]) -> str:
-        """Return the path of the JSON profile.
-
-        Search order:
-        1. --profile-path directory: look for {base}.json there
-        2. ./profiles/{agent_name}.json then ./profiles/{base}.json
-        3. {project_root}/tests/load_tests/prompts/profiles/{name}.json
-           where project_root comes from --project-root or PYTHONPATH
-        4. Not found → abort
-
-        When agent_name includes a prefix (e.g. basic/hello_world),
-        the base name (hello_world) is tried as a fallback so
-        --profile-path is not required for prefixed agents.
-        """
-        agent_base: str = ProjectPaths.agent_base_name(agent_name)
-
-        if profile_path:
-            if os.path.isfile(profile_path):
-                logger.error(
-                    "--profile-path should be a directory, not a "
-                    "file.\n"
-                    "  Got: %s\n"
-                    "  Try: --profile-path %s",
-                    profile_path, os.path.dirname(profile_path),
-                )
-                raise SystemExit(1)
-            candidate = os.path.join(profile_path, f"{agent_base}.json")
-            if not os.path.isfile(candidate):
-                logger.error(
-                    "Profile not found: %s\n"
-                    "  --profile-path directory: %s\n"
-                    "  Expected file: %s.json\n"
-                    "  Aborting.",
-                    candidate, profile_path, agent_base,
-                )
-                raise SystemExit(1)
-            return candidate
-
-        searched = []
-
-        # Search in the built-in profiles directory next to this module
-        profiles_dir = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "profiles",
-        )
-        for name in (agent_name, agent_base):
-            candidate = os.path.join(profiles_dir, f"{name}.json")
-            searched.append(candidate)
-            if os.path.isfile(candidate):
-                return candidate
-
-        # Resolve project root: --project-root flag → PYTHONPATH fallback
-        resolved_root: Optional[str] = ProjectPaths.resolve_project_root(project_root)
-        if resolved_root:
-            for name in (agent_name, agent_base):
-                candidate = os.path.normpath(os.path.join(
-                    resolved_root, "tests", "load_tests",
-                    "prompts", "profiles", f"{name}.json",
-                ))
-                searched.append(candidate)
-                if os.path.isfile(candidate):
-                    return candidate
-
-        logger.error(
-            "No profile found for agent '%s'.\n"
-            "Searched:\n%s\n"
-            "Create a profile JSON or use --profile-path to specify one.\n"
-            "Aborting.",
-            agent_name,
-            "".join(f"  - {p}\n" for p in searched),
-        )
-        raise SystemExit(1)
-
-    @classmethod
-    def _prompts_from_hocons(cls, agent_name: str, hocon_files: List[str]) -> List[str]:
-        """Collect one prompt per test-case hocon file.
-
-        A load-test hocon must hold exactly one interaction: the load test
-        fires each prompt as an independent single-turn request, so a
-        multi-turn conversation cannot be replayed here.
-        Each hocon's "agent" must match agent_name (or its base name).
-        Aborts when a file is for another agent, has more than one
-        interaction, or no text is found.
-        """
-        agent_base: str = ProjectPaths.agent_base_name(agent_name)
-        prompts: List[str] = []
-        for path in hocon_files:
-            test_case: Dict[str, Any] = TestsUtil.parse_hocon_test_case(None, path)
-            hocon_agent: str = test_case.get("agent", "")
-            if hocon_agent not in (agent_name, agent_base):
-                logger.error(
-                    "Hocon agent does not match --agent.\n"
-                    "  File: %s\n"
-                    "  Hocon agent: %s\n"
-                    "  --agent: %s\nAborting.",
-                    path, hocon_agent, agent_name,
-                )
-                raise SystemExit(1)
-            interactions: List[Dict[str, Any]] = test_case.get("interactions", [])
-            if len(interactions) > 1:
-                logger.error(
-                    "Load-test hocon must have exactly one interaction.\n"
-                    "  File: %s\n"
-                    "  Interactions: %d\nAborting.",
-                    path, len(interactions),
-                )
-                raise SystemExit(1)
-            first: Dict[str, Any] = interactions[0] if interactions else {}
-            text: Optional[str] = first.get("text")
-            if text:
-                prompts.append(text)
-
-        if not prompts:
-            logger.error(
-                "No interactions[0].text found in %d hocon file(s) for "
-                "agent '%s'.\nAborting.",
-                len(hocon_files), agent_name,
-            )
-            raise SystemExit(1)
-        logger.info(
-            "Loaded %d prompt(s) from %d hocon file(s) for agent '%s'",
-            len(prompts), len(hocon_files), agent_name,
-        )
-        return prompts
-
-    @classmethod
-    def _read_json(cls, path: str) -> Dict[str, Any]:
-        """Read profile data from a JSON file."""
-        try:
-            with open(path, "r", encoding="utf-8") as fh:
-                data: Dict[str, Any] = json.load(fh)
-            return data
-        except (OSError, json.JSONDecodeError) as exc:
-            logger.error("Failed to load profile %s: %s\nAborting.", path, exc)
-            raise SystemExit(1) from exc

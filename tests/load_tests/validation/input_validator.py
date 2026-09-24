@@ -81,7 +81,7 @@ class InputValidator:
 
         The flag names the parent fixtures directory (default
         tests/fixtures/load_tests); the agent subfolder is derived
-        from --agent the same way AgentProfile.load derives the JSON
+        from --agent the same way AgentProfileFactory derives the JSON
         filename: basic/hello_world -> hello_world.
         """
         parent_dir: Optional[str] = self._args.fixtures_hocon_dir
