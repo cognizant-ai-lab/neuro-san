@@ -17,12 +17,14 @@
 
 from typing import Any
 from typing import Dict
+from typing import List
 
 from json import loads
 from requests import get as http_get
 
 from neuro_san.interfaces.concierge_session import ConciergeSession
 from neuro_san.session.abstract_http_service_agent_session import AbstractHttpServiceAgentSession
+from neuro_san.session.session_util import SessionUtil
 
 
 class HttpConciergeSession(AbstractHttpServiceAgentSession, ConciergeSession):
@@ -45,6 +47,13 @@ class HttpConciergeSession(AbstractHttpServiceAgentSession, ConciergeSession):
             response = http_get(path, json=request_dict, headers=self.get_headers(),
                                 timeout=self.timeout_in_seconds)
             result_dict = loads(response.text)
+
+            # Potentially limit the number of agents to the value of the MAX_AGENTS_FROM_EXTERNAL_SERVER env var,
+            empty_list: List[str] = []
+            agent_infos: List[Dict[str, Any]] = result_dict.get("agents", empty_list)
+            agent_infos = SessionUtil.limit_agents_list(agent_infos)
+
+            result_dict["agents"] = agent_infos
             return result_dict
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise ValueError(self.help_message(path)) from exc
