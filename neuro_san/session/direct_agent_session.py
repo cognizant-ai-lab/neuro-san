@@ -165,7 +165,7 @@ class DirectAgentSession(AgentSession):
         extractor = DictionaryExtractor(request_dict)
 
         # Get the user input.
-        user_input = extractor.get("user_message.text")
+        user_input: str = extractor.get("user_message.text")
 
         # Create the gateway to the internals.
         chat_session = DataDrivenChatSession(agent_network=self.agent_network)
