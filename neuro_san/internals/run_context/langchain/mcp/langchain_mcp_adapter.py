@@ -49,8 +49,15 @@ class LangChainMcpAdapter:
     both spellings of one name, an entry selects the tool it spells exactly.
     Two tools on one server that would map to the same safe name are a
     collision; the tool that needed no rename (or, failing that, the first one
-    listed) is kept and the other is skipped with a warning. Thinking output and journal entries show
-    the renamed spelling because they read the LangChain tool name.
+    listed) is kept and the other is skipped with a warning. Tools from
+    different servers are not compared, as before: LangChain dispatches by
+    name, so two servers offering the same name shadow each other whether or
+    not a rename produced it. Thinking output and journal entries show the
+    renamed spelling because they read the LangChain tool name.
+    A current neuro-san server already advertises its networks under
+    provider-safe names (see McpToolsProcessor), so its tools normally pass
+    through unchanged; the rename here covers other MCP servers and older
+    neuro-san servers.
     """
 
     _mcp_info_lock: Lock = Lock()
@@ -65,6 +72,12 @@ class LangChainMcpAdapter:
         # Maps server tool names to provider-safe ones and matches allow-list
         # entries in either spelling; built once per adapter.
         self.tool_name_policy: McpToolNamePolicy = McpToolNamePolicy()
+        # Allow-list entries the last get_mcp_tools() call could not match to any
+        # tool the server advertised, in either spelling. BaseToolFactory reports
+        # these to the user; comparing the entries with the renamed tools instead
+        # would flag "deep/math_guy" as missing after it was exposed as
+        # "deep__math_guy".
+        self.unmatched_allowed_tools: List[str] = []
 
     def _load_mcp_servers_info(self):
         """
@@ -99,8 +112,8 @@ class LangChainMcpAdapter:
         original names), then renamed with McpToolNamePolicy.filter() so the
         names the LLM sees are accepted by OpenAI and Anthropic. A tool whose safe
         name collides with another tool's from the same server is skipped with a
-        warning, and a renamed name longer than the 64-character OpenAI cap is
-        kept but warned about.
+        warning, and a renamed name longer than the 64-character OpenAI cap (or
+        the 128-character Anthropic cap) is kept but warned about.
 
         :param server_url: URL of the MCP server, e.g. https://mcp.deepwiki.com/mcp or http://localhost:8000/mcp/
         :param allowed_tools: Optional list of tool names to filter from the server's available tools.
@@ -181,20 +194,24 @@ class LangChainMcpAdapter:
             self,
             server_url: str,
             mcp_tools: List[BaseTool],
-            client_allowed_tools: List[str]
+            client_allowed_tools: Optional[List[str]]
     ) -> List[BaseTool]:
         """
         Keeps only the tools permitted by the allow list, warning about entries
-        that match nothing the server advertised.
+        that match nothing the server advertised and recording them in
+        unmatched_allowed_tools.
 
         :param server_url: URL of the MCP server the tools came from, for log messages.
         :param mcp_tools: All tools returned by the server, still carrying their original names.
         :param client_allowed_tools: Allow-list entries in either the original or the
                                      provider-safe spelling. None or empty means no filtering.
-        :return: The tools whose original name matches at least one allow-list entry,
-                 in server order; mcp_tools itself when there is no allow list.
+        :return: The tools some allow-list entry resolves to, each entry choosing the
+                 tool it spells exactly when the server offers both spellings and the
+                 provider-safe equivalent otherwise, in server order; mcp_tools itself
+                 when there is no allow list.
         """
         # An empty or absent allow list has always meant "take everything".
+        self.unmatched_allowed_tools = []
         if not client_allowed_tools:
             return mcp_tools
 
@@ -206,6 +223,7 @@ class LangChainMcpAdapter:
         # hocon author guessing why a tool never appeared. Log what the server
         # actually offers so a typo or an upstream rename is visible.
         unmatched: List[str] = self.tool_name_policy.find_unmatched(client_allowed_tools, original_names)
+        self.unmatched_allowed_tools = unmatched
         if unmatched:
             self.logger.warning(
                 "MCP server %s: allow-list entries %s match no tool on the server. Available tools: %s",
@@ -279,7 +297,16 @@ class LangChainMcpAdapter:
                 "MCP server %s: tool '%s' renamed to '%s' for LLM tool-name compatibility; "
                 "the server is still called with the original name",
                 server_url, tool.name, safe_name)
-            if self.tool_name_policy.is_over_soft_limit(safe_name):
+            if not McpToolNamePolicy.is_valid_tool_name(safe_name):
+                # The characters are safe after filter(), so only the 128-character
+                # cap in TOOL_NAME_PATTERN can fail here. The tool is kept anyway,
+                # as the server side does, for lenient local providers.
+                self.logger.warning(
+                    "MCP server %s: renamed tool '%s' is %d characters long, over the 128-character "
+                    "tool-name cap that Anthropic enforces (OpenAI's is %d); requests that include it "
+                    "will fail on those providers.",
+                    server_url, safe_name, len(safe_name), McpToolNamePolicy.SOFT_MAX_LENGTH)
+            elif self.tool_name_policy.is_over_soft_limit(safe_name):
                 # "__" is longer than "/", so a rename can push a name past the
                 # OpenAI cap. Anthropic and local providers accept it, so warn only.
                 self.logger.warning(
