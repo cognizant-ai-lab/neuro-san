@@ -51,7 +51,7 @@ We consider this to be a false positive for a couple of reasons:
    configured at deploy-time to be providing the response is assumed to be under complete
    control of those overseeing the deployment.
 If developers are still concerned about this as a security risk, we welcome
-propsed improvements via pull requests from an engaged community.
+proposed improvements via pull requests from an engaged community.
 
 ### Communication Over HTTP
 
