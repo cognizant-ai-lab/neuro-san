@@ -132,7 +132,7 @@ To add a new test case:
         export PYTHONPATH=$(pwd)
         export AGENT_TOOL_PATH="./neuro_san/coded_tools"
         export AGENT_MANIFEST_FILE="./neuro_san/registries/manifest.hocon"
-        pytest -s --verbose -m "integration" -k "my_agent_my_new_test" --timer-top-n 100
+        pytest -s --verbose -m "integration" -k "my_agent_my_new_test" --durations=100
 
    The `-k` filter name is derived from the HOCON path: slashes become `_`
    and `.hocon` is stripped.
