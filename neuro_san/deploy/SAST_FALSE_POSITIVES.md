@@ -23,6 +23,7 @@ Destination Class: Same
 The complaint is that the fileobj object is not closed before returning from the function,
 however this is precisely filling the contract required by AbstractPersistenceMechanism parent class
 which requires an open file-like object returned from the open_source_for_read() method.
+The caller always does the closing, so this is not a security issue or resource leak.
 
 ## neuro-san package
 
