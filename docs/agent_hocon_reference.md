@@ -25,6 +25,7 @@ Items in ***bold*** are essentials. Try to understand these first.
         - [fallbacks](#fallbacks)
         - [temperature](#temperature)
         - [Other LLM-specific Parameters](#other-llm-specific-parameters)
+        - [provider_tools](#provider_tools)
         - [Client-Provided API Keys](#client-provided-api-keys)
     - [***tools*** - list of agent/tool definitions](#tools)
     - [commondefs](#commondefs)
@@ -327,7 +328,8 @@ temperature, so only set one if your model supports it.
 LLMs all come with various parameters like temperature that can be set on them.
 As long as a parameter is a scalar listed in the args section for your LLM's class in the
 [llm_info hocon file](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon)
-file, you can set that parameter in any llm_config within its own technical limits however you like.
+file (or the list-valued `provider_tools` key, below), you can set that parameter in any llm_config within its
+own technical limits however you like.
 
 A few of those parameters decide which endpoint a request goes to, or are rejected by some models.
 They are described per provider in the
@@ -338,6 +340,35 @@ back to Chat Completions (also behind gateways such as LiteLLM), Anthropic think
 Note: _We strongly recommend to **not** set secrets as values within any source file, including hocon files._
 These files tend to creep into source control repos, and it is **very** bad practice
 to expose secrets by checking them in.
+
+#### provider_tools
+
+The optional `provider_tools` key is a list of provider-native tool dictionaries. These tools run on the model
+provider's servers rather than in neuro-san. The dictionaries are passed through unchanged, so their shapes must
+match the provider selected by `model_name` or `class`. See the
+[provider-specific reference](./llm_info_hocon_reference.md#provider-tools) for supported shapes and limitations.
+
+```hocon
+"llm_config": {
+    "model_name": "gpt-5.2",
+    "provider_tools": [
+        {"type": "web_search"},
+        {"type": "code_interpreter", "container": {"type": "auto"}}
+    ]
+}
+```
+
+An agent-level list replaces the network-level list. Set it to `[]` or `null` to clear inherited tools. The model
+decides whether to use a provider tool; neuro-san does not force a tool choice. All entries in a fallback chain must
+use the same provider when `provider_tools` is non-empty because LangChain binds the same list to every fallback.
+
+Provider tool activity and results are carried over neuro-san's text-only response and history interfaces. Provider
+billing for searches, code execution, or other built-ins is separate from neuro-san's token accounting. Do not put
+API keys or other secrets inside provider tool dictionaries; use the provider's normal credential configuration.
+
+OpenAI built-in tools are available only through the Responses API, so `use_responses_api: false` cannot be used
+with `provider_tools`. The `azure-openai` (see [#1307](https://github.com/cognizant-ai-lab/neuro-san/issues/1307)),
+`anthropic-bedrock`, `bedrock`, `ollama`, `nvidia`, and `openrouter` classes do not support `provider_tools`.
 
 #### class
 
@@ -369,6 +400,8 @@ You may only provide parameters that are explicitly defined for that provider's 
 Unsupported parameters will be ignored.  More precisely, any parameter that the provider's policy does not
 forward to the underlying chat model is silently dropped, with no error or warning.  This differs from the
 custom class route described in section 2 below, where unknown parameters raise an error instead.
+`provider_tools` is an exception: neuro-san consumes it while creating the agent and does not pass it to the
+chat-model constructor.
 
 **2. For custom providers (not in `default_llm_info.hocon`)**
 
