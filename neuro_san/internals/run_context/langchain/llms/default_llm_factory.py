@@ -44,7 +44,7 @@ from neuro_san.internals.run_context.langchain.llms.standard_langchain_llm_facto
 from neuro_san.internals.run_context.langchain.util.api_key_error_check import ApiKeyErrorCheck
 from neuro_san.internals.run_context.langchain.util.argument_validator import ArgumentValidator
 
-KEYS_TO_REMOVE_FOR_USER_CLASS: Set[str] = {"class", "verbose"}
+KEYS_TO_REMOVE_FOR_USER_CLASS: Set[str] = {"class", "provider_tools", "verbose"}
 
 # Lazily import specific errors from llm providers
 API_KEY_ERRORS: Tuple[Type[Any], ...] = ResolverUtil.create_type_tuple([
@@ -677,6 +677,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
                 for that type.  If there were valid and useable fallbacks specified,
                 those will be set up as fallbacks for the model on the LlmResources object.
         """
+        provider_tools: Optional[List[Dict[str, Any]]] = config.get("provider_tools")
+
         # Prepare a list of fallbacks.  By default, the llm_config itself is a single-entry fallback list.
         fallbacks: List[Dict[str, Any]] = [config]
         fallbacks = config.get("fallbacks", fallbacks)
@@ -710,7 +712,8 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             if isinstance(fallback, list):
                 # Fallback lists grouped by further lists of fallbacks are peers for randomization.
                 sub_config: Dict[str, Any] = {
-                    "fallbacks": fallback
+                    "fallbacks": fallback,
+                    "provider_tools": provider_tools,
                 }
                 one_llm_resources = self.create_llm_with_fallbacks(sub_config, sly_data=sly_data, num_fallbacks=None,
                                                                    randomize_peers=True)
@@ -768,6 +771,26 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             }
 
         if len(fallback_llm_resources) > 0:
+
+            if provider_tools:
+                main_policy_type = type(main_llm_resources.get_llm_policy())
+                fallback_policy_types: Set[type] = set()
+                for resources in fallback_llm_resources:
+                    fallback_policy_types.add(type(resources.get_llm_policy()))
+
+                # User-defined dotted classes do not attach a policy, so different
+                # custom classes both appear as NoneType and cannot be distinguished here.
+                if fallback_policy_types != {main_policy_type}:
+                    policy_types: Set[type] = {main_policy_type}
+                    policy_types.update(fallback_policy_types)
+                    policy_names: List[str] = []
+                    for policy_type in policy_types:
+                        policy_names.append(policy_type.__name__)
+                    policy_names.sort()
+                    raise ValueError(
+                        "provider_tools requires all fallback LLMs to use the same provider; "
+                        f"found {', '.join(policy_names)}"
+                    )
 
             if randomize_peers:
                 # Prepare a list of all LlmResources to be randomized, including the main one
