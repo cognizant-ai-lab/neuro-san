@@ -14,12 +14,15 @@
 #
 # END COPYRIGHT
 
-"""Agent profile — agent-specific prompts and response checks.
+"""
+Agent profile — agent-specific prompts and response checks.
 
 Built by AgentProfileFactory; this class only carries the data.
 """
 
 import logging
+from typing import Any
+from typing import Dict
 from typing import List
 from typing import Optional
 
@@ -27,58 +30,83 @@ logger = logging.getLogger(__name__)
 
 
 class AgentProfile:
-    """Configuration profile for a specific agent under test."""
+    """
+    Configuration profile for a specific agent under test.
+    """
 
-    def __init__(self, agent_name, profile_data) -> None:
-        """Initialize the profile from a loaded profile dict."""
-        self.agent_name = agent_name
-        self._data = profile_data
+    def __init__(self, agent_name: str, profile_data: Dict[str, Any]) -> None:
+        """
+        Initialize the profile from a loaded profile dict.
 
-    @property
-    def prompts(self) -> List[str]:
-        """Return the list of prompts for this agent."""
+        :param agent_name: Name of the agent under test
+        :param profile_data: The loaded profile (JSON or hocon-derived) as a dict
+        """
+        self.agent_name: str = agent_name
+        self._data: Dict[str, Any] = profile_data
+
+    def get_prompts(self) -> List[str]:
+        """
+        :return: The list of prompts for this agent
+        """
         return self._data.get("prompts", [])
 
-    @property
-    def estimated_tokens_per_request(self) -> Optional[int]:
-        """Return the estimated token usage per request, or None if unknown."""
+    def get_estimated_tokens_per_request(self) -> Optional[int]:
+        """
+        :return: The estimated token usage per request, or None if unknown
+        """
         return self._data.get("estimated_tokens_per_request")
 
-    @property
-    def primary_start_pattern(self) -> str:
-        """Return regex pattern to identify primary request starts in server log."""
-        default = f"Start {self.agent_name}/streaming_chat"
+    def get_primary_start_pattern(self) -> str:
+        """
+        :return: Regex pattern to identify primary request starts in the server log
+        """
+        default: str = f"Start {self.agent_name}/streaming_chat"
         return self._data.get("primary_start_pattern", default)
 
-    @property
-    def primary_finish_pattern(self) -> str:
-        """Return regex pattern to identify primary request completions in server log."""
-        default = f"Finish {self.agent_name}/streaming_chat"
+    def get_primary_finish_pattern(self) -> str:
+        """
+        :return: Regex pattern to identify primary request completions in the server log
+        """
+        default: str = f"Finish {self.agent_name}/streaming_chat"
         return self._data.get("primary_finish_pattern", default)
 
-    @property
-    def success_fields(self) -> List[str]:
-        """Return list of stdout fields that must be present for success.
+    def get_success_fields(self) -> List[str]:
+        """
+        Only JSON profiles carry this; AgentProfileFactory turns it into
+        the equivalent `responses` block, which is what TrafficRunner
+        checks. Hocon profiles state their checks in `responses` directly.
 
-        For agent_network_designer: ["reservation_id", "agent_network_name"]
-        For generic agents: [] (just check exit code)
+        :return: The JSON profile's sly_data keys that must come back non-empty
         """
         return self._data.get("success_fields", [])
 
-    @property
-    def failure_patterns(self) -> List[str]:
-        """Return substrings that indicate a failed response.
+    def get_responses(self) -> List[Dict[str, Any]]:
+        """
+        Each entry is a test-case hocon "response" block (text /
+        structure / sly_data with AgentEvaluator checks such as
+        keywords, value, not_value, gist). See
+        docs/test_case_hocon_reference.md. A JSON profile gets one
+        block, built from its success_fields, shared by all prompts.
 
-        When any pattern is found in stdout, a request that would
+        :return: The per-prompt response checks, parallel to prompts
+        """
+        return self._data.get("responses", [])
+
+    def get_failure_patterns(self) -> List[str]:
+        """
+        When any pattern is found in the answer text, a request that would
         otherwise be marked CREATED is downgraded to FAILED.  This
         catches cases where the server returns an error message
         inside a successful HTTP 200 response (e.g. missing API key).
+
+        :return: Substrings that indicate a failed response
         """
         return self._data.get("failure_patterns", [])
 
-    def get_prompt(self, request_id, same_prompt=False,
-                   allow_caching=False) -> str:
-        """Return the prompt for a given request.
+    def get_prompt(self, request_id: int, same_prompt: bool = False,
+                   allow_caching: bool = False) -> str:
+        """
+        Return the prompt for a given request.
 
         In same_prompt mode, always returns the first prompt.
         In varied mode, cycles through the pool and appends the request_id.
@@ -87,8 +115,13 @@ class AgentProfile:
         can serve the response.  In allow_caching mode the suffix is
         dropped, so requests that reuse a pool prompt are eligible
         for those caches.
+
+        :param request_id: Global request number, used to cycle through the pool
+        :param same_prompt: When True every request uses the first prompt
+        :param allow_caching: When True the unique request_id suffix is not added
+        :return: The prompt text to send
         """
-        prompts = self.prompts
+        prompts: List[str] = self.get_prompts()
         if not prompts:
             logger.error(
                 "Agent profile '%s' has an empty prompts list.\n"
@@ -97,12 +130,42 @@ class AgentProfile:
                 self.agent_name,
             )
             raise SystemExit(1)
-        if same_prompt:
-            return prompts[0]
-        base_prompt = prompts[request_id % len(prompts)]
+        base_prompt: str = prompts[self._pool_index(request_id, same_prompt, len(prompts))]
         if allow_caching:
             return base_prompt
         # The suffix makes every prompt unique, so no cache along the
         # path (LLM prompt cache, agent network, proxy) can serve the
         # response and the run measures real work, not cache hits.
         return f"{base_prompt} (request {request_id})"
+
+    def get_response(self, request_id: int, same_prompt: bool = False) -> Dict[str, Any]:
+        """
+        Return the response checks for the prompt get_prompt() gives request_id.
+
+        :param request_id: Global request number, used to cycle through the pool
+        :param same_prompt: When True every request uses the first entry
+        :return: The hocon ``response`` block, or {} when the profile has none
+        """
+        responses: List[Dict[str, Any]] = self.get_responses()
+        if not responses:
+            return {}
+        return responses[self._pool_index(request_id, same_prompt, len(responses))]
+
+    @staticmethod
+    def _pool_index(request_id: int, same_prompt: bool, size: int) -> int:
+        """
+        Index into a per-prompt pool.
+
+        :param request_id: Global request number
+        :param same_prompt: When True always pick the first entry
+        :param size: Number of entries in the pool
+        :return: 0 in same_prompt mode, else request_id modulo size
+        """
+        if same_prompt:
+            return 0
+        # Requests are numbered 0, 1, 2, ... across the whole run, and the
+        # pool is usually smaller than the run.  The modulo walks the pool
+        # in order so consecutive requests get different prompts, and wraps
+        # back to the first entry once every prompt has been used, so the
+        # same prompt (and its response checks) recur evenly over a long run.
+        return request_id % size

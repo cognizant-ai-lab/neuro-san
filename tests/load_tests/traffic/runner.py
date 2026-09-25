@@ -19,18 +19,28 @@
 import json
 import logging
 import os
-import re
 import sys
 import threading
 import time
+from argparse import Namespace
 from concurrent.futures import as_completed
 from concurrent.futures import CancelledError
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
+from typing import Any
+from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Tuple
 
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
+
+from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
+from neuro_san.test.driver.assert_capture import AssertCapture
+from neuro_san.test.driver.data_driven_tests_driver import DataDrivenTestsDriver
+
 from tests.load_tests.config import FAILURE_LOG_LIMIT
+from tests.load_tests.config import FAILURE_REASON_LINE_LIMIT
 from tests.load_tests.config import Formatters
 from tests.load_tests.config import RequestResult
 from tests.load_tests.config import SharedRef
@@ -41,7 +51,9 @@ from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.config import THREAD_JOIN_TIMEOUT
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.monitoring.heartbeat import Heartbeat
+from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.traffic.http_client import HttpClient
+from tests.load_tests.traffic.load_test_assert_forwarder import LoadTestAssertForwarder
 from tests.load_tests.traffic.output_parser import OutputParser
 
 logger = logging.getLogger(__name__)
@@ -58,17 +70,29 @@ class TrafficRunner:
     do not need to thread them through every method.
     """
 
-    def __init__(self, args, profile) -> None:
-        self._args = args
-        self._profile = profile
-        self._failure_log_lock = threading.Lock()
-        self._failures_logged = 0
+    def __init__(self, args: Namespace, profile: AgentProfile) -> None:
+        """
+        :param args: Parsed load-test command line
+        :param profile: Prompts and response checks for the agent under test
+        """
+        self._args: Namespace = args
+        self._profile: AgentProfile = profile
+        self._failure_log_lock: threading.Lock = threading.Lock()
+        self._failures_logged: int = 0
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
-    def _run_one_tracked(self, request_id, global_request_id,
-                         output_dir, failed_ref) -> RequestResult:
-        """Run one request and increment failed_ref on failure."""
-        result = self.run_one_http(
+    def _run_one_tracked(self, request_id: int, global_request_id: int,
+                         output_dir: Optional[str], failed_ref: SharedRef) -> RequestResult:
+        """
+        Run one request and increment failed_ref on failure.
+
+        :param request_id: Request number within the current stage
+        :param global_request_id: Request number across the whole run
+        :param output_dir: Directory for per-request output files, or None
+        :param failed_ref: Shared counter of failed requests
+        :return: The request result
+        """
+        result: RequestResult = self.run_one_http(
             request_id, global_request_id, output_dir,
         )
         if result.get("status") != STATUS_CREATED:
@@ -76,16 +100,29 @@ class TrafficRunner:
         return result
 
     # pylint: disable=too-many-locals,too-many-branches
-    def run_one_http(self, request_id, global_request_id,
-                     output_dir=None) -> RequestResult:
-        """Execute a single request via in-thread HTTP."""
-        prompt = self._profile.get_prompt(
+    def run_one_http(self, request_id: int, global_request_id: int,
+                     output_dir: Optional[str] = None) -> RequestResult:
+        """
+        Execute a single request via in-thread HTTP and check its response.
+
+        :param request_id: Request number within the current stage
+        :param global_request_id: Request number across the whole run,
+                                  used to pick the prompt and its response checks
+        :param output_dir: Directory for per-request output files, or None
+        :return: The request result
+        """
+        prompt: str = self._profile.get_prompt(
             global_request_id,
             same_prompt=self._args.same_prompt,
             allow_caching=self._args.allow_caching,
         )
-        start = time.time()
-        status, parsed_fields, response_text, ttft, token_data = (
+        start: float = time.time()
+        status: str
+        processor: Optional[BasicMessageProcessor]
+        response_text: str
+        ttft: float
+        token_data: Dict[str, Any]
+        status, processor, response_text, ttft, token_data = (
             HttpClient.execute_request(
                 self._args.host, self._args.port,
                 self._args.agent, prompt,
@@ -97,54 +134,30 @@ class TrafficRunner:
                 ).upper(),
             )
         )
-        elapsed = time.time() - start
+        elapsed: float = time.time() - start
 
-        # For any success field not found in sly_data, fall back to a regex
-        # search of the answer text.
-        for field in self._profile.success_fields:
-            if not parsed_fields.get(field) and response_text:
-                match = re.search(
-                    rf'"{field}"\s*:\s*"([^"]+)"',
-                    response_text,
-                )
-                if match:
-                    parsed_fields[field] = match.group(1)
-
-        failure_reason = None
+        parsed_fields: Dict[str, str] = {}
+        if processor is not None:
+            parsed_fields = HttpClient.flatten_string_fields(processor.get_sly_data())
+        failure_reason: Optional[str] = None
         if status == STATUS_CREATED:
-            for pattern in self._profile.failure_patterns:
-                if pattern in response_text:
-                    status = STATUS_FAILED
-                    failure_reason = (
-                        "response matched failure pattern: "
-                        + pattern
-                    )
-                    break
-            if status == STATUS_CREATED:
-                if self._args.skip_reservation_check:
-                    required = [
-                        f for f in self._profile.success_fields
-                        if f != "reservation_id"
-                    ]
-                else:
-                    required = self._profile.success_fields
-                missing = [
-                    f for f in required
-                    if not parsed_fields.get(f)
-                ]
-                if missing:
-                    status = STATUS_FAILED
-                    failure_reason = (
-                        "missing " + ", ".join(missing)
-                    )
+            failure_reason = self.check_response(
+                processor,
+                self._profile.get_response(
+                    global_request_id,
+                    same_prompt=self._args.same_prompt,
+                ),
+            )
+            if failure_reason:
+                status = STATUS_FAILED
         elif status == STATUS_FAILED and not response_text:
             failure_reason = "empty response from agent"
 
         # A FAILED status with no failure_reason means HttpClient caught an
         # exception and returned its traceback as response_text. Route that
         # to stderr instead of saving it as the agent's answer.
-        stderr = ""
-        stdout = self._http_saved_stdout(response_text, token_data)
+        stderr: str = ""
+        stdout: str = self._http_saved_stdout(response_text, token_data)
         if status == STATUS_FAILED and failure_reason is None:
             stderr = response_text
             stdout = ""
@@ -162,7 +175,7 @@ class TrafficRunner:
             output_dir=output_dir,
         )
 
-        result = {
+        result: RequestResult = {
             "request_id": f"request-{request_id}",
             "status": status,
             "elapsed": elapsed,
@@ -207,6 +220,88 @@ class TrafficRunner:
             if isinstance(provider_models, dict):
                 all_models.extend(provider_models.keys())
         return all_models
+
+    def check_response(self, processor: BasicMessageProcessor,
+                       response_checks: Dict[str, Any]) -> Optional[str]:
+        """
+        Apply the data-driven response checks to one completed request.
+
+        Reuses the test framework: DataDrivenTestsDriver.test_response_keys
+        walks the hocon ``response`` block (text / structure / sly_data)
+        and dispatches each leaf to its AgentEvaluator (keywords, value,
+        not_value, gist, ...). The profile's failure_patterns are the
+        same thing as ``text: { not_keywords: [...] }`` and are checked
+        through the same path. An AssertCapture collects the failed
+        assertions instead of raising, so one request never stops the
+        run.
+
+        :param processor: The BasicMessageProcessor that saw the whole response stream
+        :param response_checks: The hocon ``response`` block for this request's prompt
+        :return: A one-line reason when any check failed, else None
+        """
+        asserts = AssertCapture(LoadTestAssertForwarder())
+        driver = DataDrivenTestsDriver(asserts)
+        blocks = [response_checks]
+        if self._profile.get_failure_patterns():
+            blocks.append(
+                {"text": {"not_keywords": self._profile.get_failure_patterns()}},
+            )
+        reasons: List[str] = []
+        for block in blocks:
+            extractor = DictionaryExtractor(block)
+            # One test_response_keys call per top-level test key
+            # (text, sly_data.<field>, ...) so each failure can be
+            # labelled with the key it belongs to; the evaluators'
+            # own messages only show the compared values.
+            for key in self._top_level_keys(block):
+                seen = len(asserts.get_asserts())
+                driver.test_response_keys(
+                    processor, extractor, [key], asserts, [],
+                )
+                for failure in asserts.get_asserts()[seen:]:
+                    reasons.append(f"{key}: {self._first_line(str(failure))}")
+        if not reasons:
+            return None
+        return "; ".join(reasons)
+
+    @staticmethod
+    def _top_level_keys(block: Dict[str, Any]) -> List[str]:
+        """
+        Return the test keys of a response block.
+
+        :param block: A hocon ``response`` block
+        :return: text and structure when present, plus sly_data.<field>
+                 for each field under sly_data
+        """
+        keys: List[str] = []
+        for test_key in DataDrivenTestsDriver.TEST_KEYS:
+            checks = block.get(test_key)
+            if checks is None:
+                continue
+            if test_key == "sly_data" and isinstance(checks, dict):
+                for field in checks:
+                    keys.append(f"{test_key}.{field}")
+            else:
+                keys.append(test_key)
+        return keys
+
+    @staticmethod
+    def _first_line(message: str) -> str:
+        """
+        Return the first non-empty line of an assertion message, shortened.
+
+        :param message: The AssertionError text, possibly multi-line
+        :return: Its first non-empty line, cut to FAILURE_REASON_LINE_LIMIT
+        """
+        line: str = message
+        for part in message.splitlines():
+            if part.strip():
+                line = part
+                break
+        line = line.strip()
+        if len(line) <= FAILURE_REASON_LINE_LIMIT:
+            return line
+        return line[:FAILURE_REASON_LINE_LIMIT - 3] + "..."
 
     def _http_saved_stdout(self, response_text, token_data) -> str:
         """Final answer plus Token Accounting JSON, joined so the saved
@@ -481,10 +576,7 @@ class TrafficRunner:
             Formatters.fmt_duration(elapsed, precision=2),
         )
         for field, value in parsed_fields.items():
-            if field == "reservation_id" and self._args.skip_reservation_check:
-                logger.info("  %s: skipped", field)
-            else:
-                logger.info("  %s: %s", field, value or "")
+            logger.info("  %s: %s", field, value or "")
         if failure_reason:
             logger.info("  reason: %s", failure_reason)
         if is_failure:
