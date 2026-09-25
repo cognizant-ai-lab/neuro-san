@@ -121,7 +121,13 @@ class AgentProfile:
         return f"{base_prompt} (request {request_id})"
 
     def get_response(self, request_id: int, same_prompt: bool = False) -> Dict[str, Any]:
-        """Return the response checks for the prompt get_prompt() gives request_id."""
+        """
+        Return the response checks for the prompt get_prompt() gives request_id.
+
+        :param request_id: Global request number, used to cycle through the pool
+        :param same_prompt: When True every request uses the first entry
+        :return: The hocon ``response`` block, or {} when the profile has none
+        """
         responses = self.responses
         if not responses:
             return {}
@@ -129,7 +135,14 @@ class AgentProfile:
 
     @staticmethod
     def _pool_index(request_id: int, same_prompt: bool, size: int) -> int:
-        """Index into a per-prompt pool: first entry in same_prompt mode, else cycle."""
+        """
+        Index into a per-prompt pool.
+
+        :param request_id: Global request number
+        :param same_prompt: When True always pick the first entry
+        :param size: Number of entries in the pool
+        :return: 0 in same_prompt mode, else request_id modulo size
+        """
         if same_prompt:
             return 0
         return request_id % size

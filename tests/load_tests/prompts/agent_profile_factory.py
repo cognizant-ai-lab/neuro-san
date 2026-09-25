@@ -60,7 +60,8 @@ class AgentProfileFactory:
         return AgentProfile(agent_name, data)
 
     def _response_from_success_fields(self, success_fields: List[str]) -> Dict[str, Any]:
-        """Express a JSON profile's success_fields as a hocon-style response block.
+        """
+        Express a JSON profile's success_fields as a hocon-style response block.
 
         Each field becomes sly_data.<field>: { not_value: "" }, i.e. the
         ValueAgentEvaluator requires it to be present and non-empty. The
@@ -69,9 +70,17 @@ class AgentProfileFactory:
         in a list (agent_reservations[0].reservation_id) can only be named
         by its top-level key (agent_reservations): the check then passes
         for any non-empty list, even one whose reservation_id is empty.
+
+        :param success_fields: sly_data keys the JSON profile requires
+        :return: A response block with one not_value check per field,
+                 or {} when there are no fields
         """
-        sly_checks: Dict[str, Any] = {field: {"not_value": ""} for field in success_fields}
-        return {"sly_data": sly_checks} if sly_checks else {}
+        sly_checks: Dict[str, Any] = {}
+        for field in success_fields:
+            sly_checks[field] = {"not_value": ""}
+        if not sly_checks:
+            return {}
+        return {"sly_data": sly_checks}
 
     def _find_json_profile(self, agent_name: str, profile_path: Optional[str],
                            project_root: Optional[str]) -> str:
@@ -185,11 +194,15 @@ class AgentProfileFactory:
                 len(hocon_files), agent_name,
             )
             raise SystemExit(1)
+        checked: int = 0
+        for response in responses:
+            if response:
+                checked += 1
         logger.info(
             "Loaded %d prompt(s) from %d hocon file(s) for agent '%s' "
             "(response checks in %d, failure_patterns=%d)",
             len(prompts), len(hocon_files), agent_name,
-            sum(1 for response in responses if response), len(failure_patterns),
+            checked, len(failure_patterns),
         )
         data: Dict[str, Any] = {
             "prompts": prompts,
@@ -246,11 +259,15 @@ class AgentProfileFactory:
         return test_case
 
     def _warn_empty_checks(self, path: str, response: Dict[str, Any]) -> None:
-        """Warn about response.sly_data keys with an empty check body.
+        """
+        Warn about response.sly_data keys with an empty check body.
 
         The data-driven framework treats `"key": {}` as "no test", so
         such a key is never evaluated; presence is spelled
         `"key": { "not_value": "" }`.
+
+        :param path: The hocon file the response block came from, for the message
+        :param response: The interaction's response block
         """
         for key, check in response.get("sly_data", {}).items():
             if check == {}:
