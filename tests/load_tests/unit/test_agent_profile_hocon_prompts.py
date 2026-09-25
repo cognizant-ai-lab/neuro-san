@@ -90,11 +90,40 @@ class TestAgentProfileHoconPrompts(TestCase):
         # Same pattern in every file -> listed once
         self.assertEqual(len(profile.failure_patterns), 2)
 
-    def test_success_fields_come_from_response_sly_data_keys(self) -> None:
-        """Each response.sly_data key becomes a required success field."""
+    def test_responses_come_from_hocon_response_blocks(self) -> None:
+        """Each fixture's response block is kept, parallel to its prompt."""
         profile: AgentProfile = self._load_fixtures("agent_network_designer")
         self.assertEqual(len(profile.prompts), len(self._fixture_hocons("agent_network_designer")))
-        self.assertEqual(profile.success_fields, ["reservation_id", "agent_network_name"])
+        self.assertEqual(len(profile.responses), len(profile.prompts))
+        self.assertEqual(profile.success_fields, [])
+        self.assertEqual(
+            profile.get_response(3).get("sly_data"),
+            {"agent_network_name": {"not_value": ""}, "agent_reservations": {"not_value": ""}},
+        )
+
+    def test_response_follows_prompt_selection(self) -> None:
+        """get_response() picks the same pool entry as get_prompt()."""
+        with tempfile.TemporaryDirectory() as tmp:
+            first: str = self._write_hocon(
+                tmp, "a.hocon", "x", [],
+                interactions=[{"text": "one", "response": {"text": {"keywords": ["1"]}}}],
+            )
+            second: str = self._write_hocon(tmp, "b.hocon", "x", ["two"])
+            profile: AgentProfile = self._load("x", [first, second])
+        self.assertEqual(profile.get_prompt(1, allow_caching=True), "two")
+        self.assertEqual(profile.get_response(1), {})
+        self.assertEqual(profile.get_response(2), {"text": {"keywords": ["1"]}})
+        self.assertEqual(profile.get_response(1, same_prompt=True), {"text": {"keywords": ["1"]}})
+
+    def test_json_success_fields_become_not_value_checks(self) -> None:
+        """A JSON profile's success_fields turn into sly_data not_value checks."""
+        profile: AgentProfile = AgentProfileFactory().create(
+            "agent_network_designer", project_root=PROJECT_ROOT,
+        )
+        self.assertEqual(
+            profile.get_response(0),
+            {"sly_data": {"agent_reservations": {"not_value": ""}, "agent_network_name": {"not_value": ""}}},
+        )
 
     def test_json_profile_not_needed_with_hocons(self) -> None:
         """An agent with no JSON profile loads fine from hocons alone."""

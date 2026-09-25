@@ -19,7 +19,6 @@
 import json
 import logging
 import os
-import re
 import sys
 import threading
 import time
@@ -28,7 +27,15 @@ from concurrent.futures import CancelledError
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from typing import List
+from typing import Optional
 from typing import Tuple
+from unittest import TestCase
+
+from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
+
+from neuro_san.test.driver.assert_capture import AssertCapture
+from neuro_san.test.driver.data_driven_tests_driver import DataDrivenTestsDriver
+from neuro_san.test.unittest.unit_test_assert_forwarder import UnitTestAssertForwarder
 
 from tests.load_tests.config import FAILURE_LOG_LIMIT
 from tests.load_tests.config import Formatters
@@ -85,7 +92,7 @@ class TrafficRunner:
             allow_caching=self._args.allow_caching,
         )
         start = time.time()
-        status, parsed_fields, response_text, ttft, token_data = (
+        status, processor, response_text, ttft, token_data = (
             HttpClient.execute_request(
                 self._args.host, self._args.port,
                 self._args.agent, prompt,
@@ -99,44 +106,21 @@ class TrafficRunner:
         )
         elapsed = time.time() - start
 
-        # For any success field not found in sly_data, fall back to a regex
-        # search of the answer text.
-        for field in self._profile.success_fields:
-            if not parsed_fields.get(field) and response_text:
-                match = re.search(
-                    rf'"{field}"\s*:\s*"([^"]+)"',
-                    response_text,
-                )
-                if match:
-                    parsed_fields[field] = match.group(1)
-
+        parsed_fields = (
+            HttpClient.string_fields(processor.get_sly_data())
+            if processor is not None else {}
+        )
         failure_reason = None
         if status == STATUS_CREATED:
-            for pattern in self._profile.failure_patterns:
-                if pattern in response_text:
-                    status = STATUS_FAILED
-                    failure_reason = (
-                        "response matched failure pattern: "
-                        + pattern
-                    )
-                    break
-            if status == STATUS_CREATED:
-                if self._args.skip_reservation_check:
-                    required = [
-                        f for f in self._profile.success_fields
-                        if f != "reservation_id"
-                    ]
-                else:
-                    required = self._profile.success_fields
-                missing = [
-                    f for f in required
-                    if not parsed_fields.get(f)
-                ]
-                if missing:
-                    status = STATUS_FAILED
-                    failure_reason = (
-                        "missing " + ", ".join(missing)
-                    )
+            failure_reason = self.check_response(
+                processor,
+                self._profile.get_response(
+                    global_request_id,
+                    same_prompt=self._args.same_prompt,
+                ),
+            )
+            if failure_reason:
+                status = STATUS_FAILED
         elif status == STATUS_FAILED and not response_text:
             failure_reason = "empty response from agent"
 
@@ -207,6 +191,70 @@ class TrafficRunner:
             if isinstance(provider_models, dict):
                 all_models.extend(provider_models.keys())
         return all_models
+
+    def check_response(self, processor, response_checks) -> Optional[str]:
+        """Apply the data-driven response checks to one completed request.
+
+        Reuses the test framework: DataDrivenTestsDriver.test_response_keys
+        walks the hocon ``response`` block (text / structure / sly_data)
+        and dispatches each leaf to its AgentEvaluator (keywords, value,
+        not_value, gist, ...). The profile's failure_patterns are the
+        same thing as ``text: { not_keywords: [...] }`` and are checked
+        through the same path. An AssertCapture collects the failed
+        assertions instead of raising, so one request never stops the
+        run.
+
+        Returns a one-line reason when any check failed, else None.
+        """
+        asserts = AssertCapture(UnitTestAssertForwarder(TestCase()))
+        driver = DataDrivenTestsDriver(asserts)
+        blocks = [response_checks]
+        if self._profile.failure_patterns:
+            blocks.append(
+                {"text": {"not_keywords": self._profile.failure_patterns}},
+            )
+        reasons = []
+        for block in blocks:
+            extractor = DictionaryExtractor(block)
+            # One test_response_keys call per top-level test key
+            # (text, sly_data.<field>, ...) so each failure can be
+            # labelled with the key it belongs to; the evaluators'
+            # own messages only show the compared values.
+            for key in self._top_level_keys(block):
+                seen = len(asserts.get_asserts())
+                driver.test_response_keys(
+                    processor, extractor, [key], asserts, [],
+                )
+                reasons.extend(
+                    f"{key}: {self._first_line(str(failure))}"
+                    for failure in asserts.get_asserts()[seen:]
+                )
+        if not reasons:
+            return None
+        return "; ".join(reasons)
+
+    @staticmethod
+    def _top_level_keys(block) -> List[str]:
+        """Return the test keys of a response block: text, structure, and
+        sly_data.<field> for each field under sly_data."""
+        keys = []
+        for test_key in DataDrivenTestsDriver.TEST_KEYS:
+            checks = block.get(test_key)
+            if checks is None:
+                continue
+            if test_key == "sly_data" and isinstance(checks, dict):
+                keys.extend(f"{test_key}.{field}" for field in checks)
+            else:
+                keys.append(test_key)
+        return keys
+
+    @staticmethod
+    def _first_line(message) -> str:
+        """Return the first non-empty line of an assertion message, shortened."""
+        line = next(
+            (part for part in message.splitlines() if part.strip()), message,
+        ).strip()
+        return line if len(line) <= 200 else line[:197] + "..."
 
     def _http_saved_stdout(self, response_text, token_data) -> str:
         """Final answer plus Token Accounting JSON, joined so the saved
@@ -481,10 +529,7 @@ class TrafficRunner:
             Formatters.fmt_duration(elapsed, precision=2),
         )
         for field, value in parsed_fields.items():
-            if field == "reservation_id" and self._args.skip_reservation_check:
-                logger.info("  %s: skipped", field)
-            else:
-                logger.info("  %s: %s", field, value or "")
+            logger.info("  %s: %s", field, value or "")
         if failure_reason:
             logger.info("  reason: %s", failure_reason)
         if is_failure:

@@ -428,9 +428,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             actual_requests, counts, elapsed,
             timeout=self.args.request_timeout,
             idle_timeout=self.args.idle_timeout,
-            skip_reservation_check=(
-                self.args.skip_reservation_check
-            ),
             show_counts=not only_stage,
         )
         should_abort = server_died or interrupted

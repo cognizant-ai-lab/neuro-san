@@ -32,6 +32,9 @@ from typing import Tuple
 from neuro_san.client.streaming_input_processor import (
     StreamingInputProcessor,
 )
+from neuro_san.message.processors.basic_message_processor import (
+    BasicMessageProcessor,
+)
 from neuro_san.session.http_service_agent_session import (
     HttpServiceAgentSession,
 )
@@ -58,13 +61,12 @@ class HttpClient:
             host, port, agent, prompt, *,
             timeout, idle_timeout, use_https=False,
             chat_filter_type="MAXIMAL",
-    ) -> Tuple[str, Dict[str, str], str, float, Dict]:
+    ) -> Tuple[str, Optional[BasicMessageProcessor], str, float, Dict]:
         """Send one streaming_chat request in-thread.
 
         Creates an ``HttpServiceAgentSession`` and a
         ``StreamingInputProcessor``, then calls ``process_once()``
-        to send the request, consume the streaming response,
-        and extract sly_data fields.  When ``use_https`` is True,
+        to send the request and consume the streaming response.  When ``use_https`` is True,
         a ``security_cfg`` is supplied so the session connects
         over HTTPS/TLS instead of plain HTTP.
 
@@ -75,8 +77,11 @@ class HttpClient:
         cap rather than exactly at it; the wait for that message is
         itself bounded by ``idle_timeout``.
 
-        Returns (status, parsed_fields, response_text, ttft,
-        token_accounting).
+        Returns (status, processor, response_text, ttft,
+        token_accounting). ``processor`` is the BasicMessageProcessor
+        that saw the whole stream (answer, structure, sly_data), for
+        the caller's response checks; None when the request did not
+        complete.
         """
         # The argument list and local state track the streaming_chat
         # request surface rather than an internal design.
@@ -132,7 +137,7 @@ class HttpClient:
         try:
             state = processor.process_once(state)
         except _RequestTimeout:
-            return (STATUS_TIMEOUT, {}, "", 0.0, {})
+            return (STATUS_TIMEOUT, None, "", 0.0, {})
         # Broad by design: process_once() drives the third-party
         # HTTP/streaming stack, whose failure surface (connection,
         # decode, gRPC/transport errors) is not enumerable here.  This
@@ -141,30 +146,22 @@ class HttpClient:
         except Exception:  # pylint: disable=broad-exception-caught
             elapsed = time.time() - start
             if elapsed >= timeout:
-                return (STATUS_TIMEOUT, {}, "", 0.0, {})
+                return (STATUS_TIMEOUT, None, "", 0.0, {})
             # Include the full chained traceback so the root cause
             # (ReadTimeout, ConnectionError, HTTPError, ...) survives
             # the generic help text raised by the session client.
             error_text = traceback.format_exc()
             logger.debug("HTTP request failed:\n%s", error_text)
-            return (STATUS_FAILED, {}, error_text, 0.0, {})
+            return (STATUS_FAILED, None, error_text, 0.0, {})
 
         elapsed = time.time() - start
         if elapsed >= timeout:
-            return (STATUS_TIMEOUT, {}, "", 0.0, {})
+            return (STATUS_TIMEOUT, None, "", 0.0, {})
 
         answer_text = state.get("last_chat_response") or ""
-        returned_sly_data = state.get(
-            "returned_sly_data",
-        ) or {}
         token_accounting = state.get(
             "token_accounting",
         ) or {}
-
-        parsed_fields: Dict[str, str] = {}
-        HttpClient._extract_string_fields(
-            returned_sly_data, parsed_fields,
-        )
 
         status = (
             STATUS_CREATED if answer_text
@@ -172,20 +169,27 @@ class HttpClient:
         )
         ttft = first_response[0] if first_response else 0.0
         return (
-            status, parsed_fields, answer_text,
+            status, processor.get_message_processor(), answer_text,
             ttft, token_accounting,
         )
+
+    @staticmethod
+    def string_fields(sly_data) -> Dict[str, str]:
+        """Return every string-valued field in sly_data, keyed by its own name.
+
+        For reporting: fields like ``reservation_id`` may be nested inside
+        lists (``sly_data["agent_reservations"][0]["reservation_id"]``),
+        and a flat top-level scan would miss them.
+        """
+        parsed_fields: Dict[str, str] = {}
+        HttpClient._extract_string_fields(sly_data, parsed_fields)
+        return parsed_fields
 
     @staticmethod
     def _extract_string_fields(
             obj, parsed_fields,
     ):
-        """Recursively extract string-valued fields.
-
-        Fields like ``reservation_id`` may be nested inside lists (e.g.
-        ``sly_data["agent_reservations"][0]["reservation_id"]``). A flat
-        top-level scan misses them, so we recurse.
-        """
+        """Recursively collect string-valued fields into parsed_fields."""
         if isinstance(obj, dict):
             for key, value in obj.items():
                 if isinstance(value, str):

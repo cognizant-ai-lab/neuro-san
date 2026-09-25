@@ -45,6 +45,14 @@ class FakeSession:
             }
 
 
+class FakeMessageProcessor:
+    """Stand-in for the BasicMessageProcessor handed back to the caller."""
+
+    def get_sly_data(self):
+        """Return the sly_data the fake stream produced."""
+        return {"reservation_id": "abc-1"}
+
+
 class FakeProcessor:
     """Stand-in for StreamingInputProcessor that drains the stream."""
 
@@ -52,13 +60,16 @@ class FakeProcessor:
         """Keep the session whose streaming_chat is consumed."""
         self._session = session
 
+    def get_message_processor(self):
+        """Return the message processor, as the real class does."""
+        return FakeMessageProcessor()
+
     def process_once(self, state):
         """Consume every streamed message, as the real processor does."""
         for _ in self._session.streaming_chat({}):
             pass
         updated = dict(state)
         updated["last_chat_response"] = "answer"
-        updated["returned_sly_data"] = {"reservation_id": "abc-1"}
         return updated
 
 
@@ -94,7 +105,7 @@ class TestHttpRequestTimeout(TestCase):
 
     def test_streaming_past_the_cap_is_a_timeout(self):
         """A stream that outruns the cap reports TIMEOUT."""
-        (status, _fields, _text, _ttft, _tokens), _session = self._execute(
+        (status, _processor, _text, _ttft, _tokens), _session = self._execute(
             timeout=0.3, message_count=20, message_interval=0.05,
         )
 
@@ -118,12 +129,12 @@ class TestHttpRequestTimeout(TestCase):
 
     def test_request_within_the_cap_succeeds(self):
         """A request that finishes in time is unaffected."""
-        (status, fields, text, ttft, _tokens), session = self._execute(
+        (status, processor, text, ttft, _tokens), session = self._execute(
             timeout=30, message_count=3, message_interval=0.01,
         )
 
         self.assertEqual(status, STATUS_CREATED)
         self.assertEqual(text, "answer")
-        self.assertEqual(fields.get("reservation_id"), "abc-1")
+        self.assertEqual(processor.get_sly_data().get("reservation_id"), "abc-1")
         self.assertEqual(session.sent, 3)
         self.assertGreater(ttft, 0.0)

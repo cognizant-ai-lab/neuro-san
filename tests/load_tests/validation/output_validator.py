@@ -61,7 +61,6 @@ class OutputValidator:
     @staticmethod
     def log_stage_results(actual_requests, counts, elapsed, *,
                           timeout, idle_timeout,
-                          skip_reservation_check=False,
                           show_counts=True) -> None:
         """Log per-stage summary of request results.
 
@@ -71,13 +70,9 @@ class OutputValidator:
         """
         if show_counts:
             logger.info("\n  Requests: %s", actual_requests)
-            if skip_reservation_check:
-                confirm_label = "output fields confirmed"
-            else:
-                confirm_label = "success criteria met"
             logger.info(
-                "    Created: %s  (%s)",
-                counts.get(STATUS_CREATED, 0), confirm_label,
+                "    Created: %s  (success criteria met)",
+                counts.get(STATUS_CREATED, 0),
             )
             logger.info(
                 "    Failed:  %s  (error or crash)",
