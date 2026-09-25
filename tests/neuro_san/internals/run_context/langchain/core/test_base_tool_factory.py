@@ -365,9 +365,11 @@ class TestBaseToolFactory:
         """
         inspector = MagicMock()
         inspector.get_agent_tool_spec = MagicMock(return_value=None)
+        inspector.get_network_name = MagicMock(return_value="deep/math_guy")
 
         tool_caller = MagicMock()
         tool_caller.get_inspector = MagicMock(return_value=inspector)
+        tool_caller.get_name = MagicMock(return_value="researcher")
         tool_caller.get_sly_data = MagicMock(return_value={})
 
         journal = MagicMock()
@@ -412,8 +414,13 @@ class TestBaseToolFactory:
         assert factory.exposed_tool_names == {"a__b", "other_tool"}
         factory.journal.write_message.assert_awaited_once()
         reported = factory.journal.write_message.await_args.args[0]
-        assert "MCP tool 'a__b' from https://two.example.com/mcp" in reported.content
+        agent_location: str = "agent 'researcher' of agent network 'deep/math_guy'"
+        assert reported.content.startswith(f"{agent_location}: MCP tool 'a__b' from https://two.example.com/mcp")
         assert "skipping it" in reported.content
+        assert "hocon file" in reported.content
+        # The adapter is told the same agent location, so its own warnings can start with it.
+        for adapter_call in mock_adapter_class.call_args_list:
+            assert adapter_call.args == (agent_location,)
 
     @pytest.mark.asyncio
     async def test_non_mcp_tool_repeating_an_exposed_name_is_reported_but_kept(self) -> None:
@@ -430,4 +437,6 @@ class TestBaseToolFactory:
         assert factory.exposed_tool_names == {"search", "lookup"}
         factory.journal.write_message.assert_awaited_once()
         reported = factory.journal.write_message.await_args.args[0]
-        assert "Tool 'search' has the same name as another tool" in reported.content
+        assert reported.content.startswith(
+            "agent 'researcher' of agent network 'deep/math_guy': tool 'search' has the same name as another tool")
+        assert "hocon file" in reported.content

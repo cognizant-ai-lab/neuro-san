@@ -91,6 +91,12 @@ class BaseToolFactory:
         # through a SensitiveLogger, which respects the LEAF_LOG_SENSITIVE
         # env var setting.
         self.sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+        # Where a problem has to be fixed: the agent whose "tools" list is being
+        # built and the network, hence the hocon file, it lives in. Every message
+        # for the user starts with it, so nobody has to guess which file to open.
+        inspector: AgentNetworkInspector = tool_caller.get_inspector()
+        self.agent_location: str = (f"agent '{tool_caller.get_name()}' of agent network "
+                                    f"'{inspector.get_network_name()}'")
         # Names of the tools this factory has created so far for its agent
         # network, so a later tool that would expose the same name is caught.
         # LangChain dispatches tool calls by name, so two tools under one name
@@ -136,9 +142,9 @@ class BaseToolFactory:
 
         for tool in tools:
             if tool.name in self.exposed_tool_names:
-                message: str = (f"Tool '{tool.name}' has the same name as another tool in this agent network; "
-                                "the LLM cannot tell them apart. Rename one of them, or drop one from the "
-                                "agent's \"tools\" list.")
+                message: str = (f"{self.agent_location}: tool '{tool.name}' has the same name as another tool of "
+                                "this agent; the LLM cannot tell them apart. Rename one of them, or drop one "
+                                "from the agent's \"tools\" list in its hocon file.")
                 await self.journal.write_message(AgentMessage(content=message))
                 self.logger.warning(message)
             self.exposed_tool_names.add(tool.name)
@@ -331,13 +337,13 @@ class BaseToolFactory:
         mcp_adapter: LangChainMcpAdapter = None
         mcp_tools: List[BaseTool] = None
         try:
-            mcp_adapter = LangChainMcpAdapter()
+            mcp_adapter = LangChainMcpAdapter(self.agent_location)
             mcp_tools = await mcp_adapter.get_mcp_tools(server_url, allowed_tools, headers)
 
         # MCP errors are nested exceptions.
         except ExceptionGroup as nested_exception:
             # Could not reach the MCP server
-            message: str = f"The URL {server_url} was unreachable. Not including it as a tool.\n"
+            message: str = f"{self.agent_location}: the URL {server_url} was unreachable. Not including it as a tool.\n"
             message += ExceptionUtil.get_exception_details(nested_exception)
             agent_message = AgentMessage(content=message)
             await self.journal.write_message(agent_message)
@@ -351,7 +357,7 @@ class BaseToolFactory:
         # the adapter which entries really matched nothing.
         invalid_names: List[str] = mcp_adapter.get_unmatched_allowed_tools()
         if invalid_names:
-            message = f"The following tools cannot be found in {server_url}: {invalid_names}"
+            message = f"{self.agent_location}: the following tools cannot be found in {server_url}: {invalid_names}"
             agent_message = AgentMessage(content=message)
             await self.journal.write_message(agent_message)
             self.logger.info(message)
@@ -376,9 +382,9 @@ class BaseToolFactory:
         kept_tools: List[BaseTool] = []
         for tool in mcp_tools:
             if tool.name in self.exposed_tool_names:
-                message: str = (f"MCP tool '{tool.name}' from {server_url} has the same name as a tool already "
-                                "in this agent network; skipping it. Rename one of them or narrow the "
-                                "\"tools\" allow list.")
+                message: str = (f"{self.agent_location}: MCP tool '{tool.name}' from {server_url} has the same name as "
+                                "a tool already in this agent's tool list; skipping it. Rename one of them, or "
+                                "narrow the \"tools\" allow list under this server in the agent's hocon file.")
                 await self.journal.write_message(AgentMessage(content=message))
                 self.logger.warning(message)
                 continue

@@ -775,3 +775,51 @@ class TestLangChainMcpAdapter(IsolatedAsyncioTestCase):
         self.assertEqual(self.adapter.get_unmatched_allowed_tools(), [])
         self.assertIn("are not non-empty strings", output)
         self.assertIn("42", output)
+
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
+    async def test_warnings_say_who_asked_and_where_the_allow_list_lives(self, mock_client_class: MagicMock) -> None:
+        """
+        With an agent location given, an allow-list warning starts with it and names the
+        place to edit: the "tools" list in the agent's hocon file when the list was
+        passed in.
+
+        :param mock_client_class: Patched MultiServerMCPClient class.
+        """
+        agent_location: str = "agent 'researcher' of agent network 'deep/math_guy'"
+        adapter: LangChainMcpAdapter = LangChainMcpAdapter(agent_location)
+        mock_client: MagicMock = mock_client_class.return_value
+        mock_client.get_tools = AsyncMock(return_value=self._make_tools(["good_tool"]))
+
+        with self.assertLogs(self.ADAPTER_LOGGER, level=WARNING) as captured:
+            await adapter.get_mcp_tools(self.SERVER_URL, allowed_tools=["nope"])
+        output: str = "\n".join(captured.output)
+
+        self.assertIn(f"{agent_location}: MCP server {self.SERVER_URL}: allow-list entries ['nope']", output)
+        self.assertIn("hocon file", output)
+        self.assertNotIn("servers info file", output)
+
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpServersInfoRestorer')
+    @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
+    async def test_warnings_name_the_servers_info_file_when_the_allow_list_came_from_it(
+            self, mock_client_class: MagicMock, mock_restorer_class: MagicMock) -> None:
+        """
+        When the allow list came from the MCP servers info file, the warning names
+        that file rather than the agent's hocon file.
+
+        :param mock_client_class: Patched MultiServerMCPClient class.
+        :param mock_restorer_class: Patched McpServersInfoRestorer class.
+        """
+        mock_restorer: MagicMock = mock_restorer_class.return_value
+        mock_restorer.restore.return_value = {self.SERVER_URL: {"tools": ["nope"]}}
+        mock_restorer.get_file_path.return_value = "/etc/neuro-san/mcp_info.hocon"
+        mock_client: MagicMock = mock_client_class.return_value
+        mock_client.get_tools = AsyncMock(return_value=self._make_tools(["good_tool"]))
+
+        with self.assertLogs(self.ADAPTER_LOGGER, level=WARNING) as captured:
+            await self.adapter.get_mcp_tools(self.SERVER_URL)
+        output: str = "\n".join(captured.output)
+
+        self.assertIn("the MCP servers info file /etc/neuro-san/mcp_info.hocon", output)
+        self.assertNotIn("hocon file'", output)
+        # No agent location was given to this adapter, so the message starts with the server.
+        self.assertIn(f"WARNING:{self.ADAPTER_LOGGER}:MCP server {self.SERVER_URL}:", output)
