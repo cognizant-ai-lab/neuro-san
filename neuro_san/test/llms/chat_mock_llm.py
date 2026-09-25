@@ -41,8 +41,8 @@ class ChatMockLlm(BaseChatModel):
     """
     A custom chat model that echoes the input.
 
-    Inputs starting with THINKING_MARKER, OPENAI_REASONING_MARKER or
-    GEMINI_THINKING_MARKER make _generate return provider-shaped block content
+    Inputs starting with ANTHROPIC_THINKING_MARKER, OPENAI_REASONING_MARKER
+    or GEMINI_THINKING_MARKER make _generate return provider-shaped block content
     ahead of the echoed text instead of the plain echo; see the constants below.
 
     Adapted from https://python.langchain.com/docs/how_to/custom_chat_model/
@@ -58,7 +58,7 @@ class ChatMockLlm(BaseChatModel):
     # ClassVar keeps these constants rather than pydantic model fields.
     #
     # Anthropic with extended thinking: a thinking block, then the text.
-    THINKING_MARKER: ClassVar[str] = "emit thinking:"
+    ANTHROPIC_THINKING_MARKER: ClassVar[str] = "emit anthropic thinking:"
     # OpenAI on the Responses API with reasoning summaries: the raw reasoning
     # item, then the text item, as langchain-openai's default responses/v1
     # output delivers them.
@@ -111,13 +111,13 @@ class ChatMockLlm(BaseChatModel):
         response_metadata: Dict[str, Any] = {  # Use for response metadata
             "model_name": self.model_name,
         }
-        if text.startswith(self.THINKING_MARKER):
+        if text.startswith(self.ANTHROPIC_THINKING_MARKER):
             # Respond like ChatAnthropic with extended thinking enabled:
             # a thinking block FIRST, then the text answer. Shape confirmed
             # against a live claude-sonnet-5 reply (2026-09-11), where the
             # block arrives with a signature and, by default, empty text;
             # claude-fable-5-1 (2026-09-13) returned the same layout.
-            answer: str = text[len(self.THINKING_MARKER):].strip()
+            answer: str = text[len(self.ANTHROPIC_THINKING_MARKER):].strip()
             content = [
                 {"type": "thinking", "thinking": "Mock thinking.", "signature": "mock-signature"},
                 {"type": "text", "text": answer},

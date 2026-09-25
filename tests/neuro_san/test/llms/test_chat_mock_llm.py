@@ -34,7 +34,7 @@ class TestChatMockLlm(TestCase):
     """
     Tests for the block-aware behaviors of the mock chat model:
     the plain-string echo is unchanged, list-of-blocks input does not crash
-    token counting or streaming, and the THINKING_MARKER,
+    token counting or streaming, and the ANTHROPIC_THINKING_MARKER,
     OPENAI_REASONING_MARKER and GEMINI_THINKING_MARKER hooks produce
     Anthropic-style thinking-first, OpenAI Responses-style reasoning-first and
     Gemini-style thinking-then-signed-text block content for keyless testing.
@@ -74,14 +74,14 @@ class TestChatMockLlm(TestCase):
         streamed_text = "".join(ContentUtils.flatten_to_text(chunk.content) for chunk in streamed)
         assert streamed_text == "Describe this image."
 
-    def test_thinking_marker_emits_thinking_first_blocks(self):
+    def test_anthropic_thinking_marker_emits_thinking_first_blocks(self):
         """
         The marker makes _generate respond like ChatAnthropic with extended
         thinking: a thinking block first, then the text answer, with
         model_provider stamped so standardization translates it.
         """
         llm = self.make_llm()
-        result = llm.invoke([HumanMessage(content="emit thinking: the answer")])
+        result = llm.invoke([HumanMessage(content="emit anthropic thinking: the answer")])
 
         assert isinstance(result.content, list)
         assert result.content[0]["type"] == "thinking"

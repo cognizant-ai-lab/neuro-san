@@ -19,7 +19,7 @@
           "tool": "echoer"
         }
       ],
-      "text": "emit thinking: the answer",
+      "text": "emit anthropic thinking: the answer",
       "type": 2
     }
   },
@@ -49,13 +49,13 @@
           "Token counts are approximate and estimated using tiktoken.",
           "time_taken_in_seconds includes overhead from Langchain and Neuro SAN"
         ],
-        "completion_tokens": 5,
+        "completion_tokens": 7,
         "empty_responses": 0,
-        "prompt_tokens": 5,
+        "prompt_tokens": 7,
         "successful_requests": 1,
         "time_taken_in_seconds": 0.0,
         "total_cost": 0.0,
-        "total_tokens": 10
+        "total_tokens": 14
       },
       "text": "",
       "type": 100
@@ -75,26 +75,26 @@
           "Token counts are approximate and estimated using tiktoken.",
           "time_taken_in_seconds includes overhead from Langchain and Neuro SAN"
         ],
-        "completion_tokens": 5,
+        "completion_tokens": 7,
         "empty_responses": 0,
         "models": {
           "ChatMockLlm": {
             "echo": {
-              "completion_tokens": 5,
+              "completion_tokens": 7,
               "empty_responses": 0,
-              "prompt_tokens": 5,
+              "prompt_tokens": 7,
               "successful_requests": 1,
               "time_taken_in_seconds": 0.0,
               "total_cost": 0.0,
-              "total_tokens": 10
+              "total_tokens": 14
             }
           }
         },
-        "prompt_tokens": 5,
+        "prompt_tokens": 7,
         "successful_requests": 1,
         "time_taken_in_seconds": 0.0,
         "total_cost": 0.0,
-        "total_tokens": 10
+        "total_tokens": 14
       },
       "text": "",
       "type": 100
@@ -113,7 +113,7 @@
                     "tool": "echoer"
                   }
                 ],
-                "text": "emit thinking: the answer",
+                "text": "emit anthropic thinking: the answer",
                 "type": 2
               },
               {

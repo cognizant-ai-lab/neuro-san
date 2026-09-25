@@ -69,7 +69,7 @@ class TestDirectAgentSessionGoldenParity(TestCase):
       the second, so the history round trip is covered as well. This golden also
       passes on main as it was before the first #1222 PR (7fbebb1b), which is
       the byte-identical guarantee the issue asked for;
-    * a single turn using the mock's "emit thinking:" marker, which makes the mock
+    * a single turn using the mock's "emit anthropic thinking:" marker, which makes the mock
       answer with an Anthropic-style thinking block ahead of the text, so the
       golden shows that block content arriving at the converter reaches the wire
       as the text alone. The wire stays text-only in Phase 1; the journal side of
@@ -288,16 +288,16 @@ class TestDirectAgentSessionGoldenParity(TestCase):
         self.assert_text_only_wire(actual)
         self.check_against_golden("echo_two_turns_maximal.json", actual)
 
-    def test_thinking_marker_answer_matches_golden(self) -> None:
+    def test_anthropic_thinking_marker_answer_matches_golden(self) -> None:
         """
         An answer the mock emits as [thinking, text] blocks reaches the wire as
         the text alone, in exactly the golden stream, so block content never
         changes what a text-only client sees.
         """
-        actual: List[Dict[str, Any]] = self.run_conversation(["emit thinking: the answer"])
+        actual: List[Dict[str, Any]] = self.run_conversation(["emit anthropic thinking: the answer"])
 
         self.assert_text_only_wire(actual)
-        self.check_against_golden("echo_thinking_marker_maximal.json", actual)
+        self.check_against_golden("echo_anthropic_thinking_marker_maximal.json", actual)
 
     def test_openai_reasoning_marker_answer_matches_golden(self) -> None:
         """
