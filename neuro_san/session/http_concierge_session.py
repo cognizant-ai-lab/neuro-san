@@ -48,11 +48,7 @@ class HttpConciergeSession(AbstractHttpServiceAgentSession, ConciergeSession):
                                 timeout=self.timeout_in_seconds)
             result_dict = loads(response.text)
 
-            # CheckMarx flags the parse above as the source of an "Unchecked Input for Loop
-            # Condition" whose loops are in AgentCli.list().  The listing comes from whatever
-            # server this client was pointed at, so bound it here at the source with
-            # MAX_AGENTS_FROM_EXTERNAL_SERVER (unset or 0 = unlimited).
-            # See neuro_san/deploy/SAST_FALSE_POSITIVES.md.
+            # Potentially limit the number of agents to the value of the MAX_AGENTS_FROM_EXTERNAL_SERVER env var
             empty_list: List[Dict[str, Any]] = []
             agent_infos: List[Dict[str, Any]] = result_dict.get("agents", empty_list)
             result_dict["agents"] = SessionUtil.limit_agents_list(agent_infos)

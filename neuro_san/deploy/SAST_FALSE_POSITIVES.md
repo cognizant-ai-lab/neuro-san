@@ -14,20 +14,6 @@ concerned for the specific files and lines of code; it is attached to each GitHu
 note that we tend to add a comment as to the nature of the false positive within the code itself
 as well as this document.
 
-## A note on defaults
-
-Several sections below end with a "For production" setting.  Each of those environment variables
-has two defaults to keep in mind:
-
-* The default the library code uses when the variable is not set at all (leaf-common's, in the
-  case of `LEAF_LOG_SENSITIVE`).  These lean towards developer convenience.
-* The default baked into the Dockerfiles under `neuro_san/deploy`.  These lean towards production,
-  so a container built from them already has the "For production" value unless something overrides it.
-
-One thing that does override them is `neuro_san/deploy/run.sh`, the script for running that container
-on a developer's machine: it deliberately passes `AGENT_SESSION_REQUIRE_HTTPS=false` and
-`LEAF_LOG_SENSITIVE=true`.  Do not reuse it as-is for a production deployment.
-
 ## leaf-common package
 
 ### Improper Resource Shutdown or Release
@@ -36,45 +22,34 @@ on a developer's machine: it deliberately passes `AGENT_SESSION_REQUIRE_HTTPS=fa
 * Destination Class: Same
 
 The complaint is that the fileobj object is not closed before returning from the function,
-however this is precisely filling the contract of the PersistenceMechanism interface, inherited
-through the AbstractPersistenceMechanism parent class, which allows an open file-like object
-to be returned from the open_source_for_read() method.
+however this is precisely filling the contract required by AbstractPersistenceMechanism parent class
+which requires an open file-like object returned from the open_source_for_read() method.
 The caller always does the closing, so this is not a security issue or resource leak.
 
 ## neuro-san package
 
 ### Unchecked Input Loop Conditions
 
-* Source Class: McpServiceAgentSession, Destination Class: Same
-* Source Class: HttpConciergeSession, Destination Class: AgentCli
+Source Classes:
 
-These are cases where neuro-san *client* code -- in practice the `agent_cli` command-line tool --
-asks the server it has been pointed at for the list of agents or tools that server serves, and then
-loops over that list.  The complaint is that nothing bounds the length of the list the server sends back.
+* McpServiceAgentSession
+* HttpConciergeSession
 
-Neither class is used by the neuro-san server, so these two reports do not describe a way to attack a
-deployed server.  (The server does fetch tool listings from MCP servers that an agent network names
-among its tools, through LangChainMcpAdapter.  That is a different path, not flagged by these reports
-and not bounded by this variable.)
+These are all cases where we are getting lists of external agents/tools from other servers.
+By default to limit developer frustration, we allow any number of agents to be returned from any server.
+In the vast majority of deployments, the agents from other servers and the references to the servers enabling
+those agents are static and well-known to the deployers of neuro-san systems and are not abusers of these agent lists.
+However, security considerations require us to allow deployments to be more careful when they need to be.
 
-By default, to limit developer frustration, the client considers however many agents or tools a server
-lists.  If you run `agent_cli` against a server you do not control, you can bound that with
-`MAX_AGENTS_FROM_EXTERNAL_SERVER` in the client's environment:
+For production: set MAX_AGENTS_FROM_EXTERNAL_SERVER to an integer limit comfortable for your deployment.
 
-* A positive integer limits the listing to that many entries.  The client logs a warning whenever the
-  limit truncates a listing.  `agent_cli --list`, `--tags` and `--tag` over `--connection http` or
-  `https` then simply show a shorter listing (the default `--connection direct` lists the agents
-  loaded in-process and is unaffected); `agent_cli --mcp` cannot find an agent listed beyond the
-  limit and reports it as "not implemented on the server".
-* Unset, empty, 0 (the default) and negative values mean no limit.
-* Anything that is not an integer is ignored with a warning, so a typo does not silently pass for a limit.
+* A positive integer keeps only that many entries of a listing, and logs a warning when it does.
+* Unset, 0 (the default) or a negative value means unlimited.
+* A value that is not an integer is ignored with a warning.
 
-The Dockerfiles set this variable to its default of 0 so that it is documented next to the other
-settings.  The server never reads it, but `agent_cli` run inside the container does.
-
-Note that the bound cleared the McpServiceAgentSession entry from the report, but the same bound in
-HttpConciergeSession has not stopped the scanner from reporting the HttpConciergeSession / AgentCli
-pair, so expect that entry to linger.  We consider it a false positive for the reasons above.
+The client sessions listed above honor it today;
+[#1398](https://github.com/cognizant-ai-lab/neuro-san/issues/1398) tracks extending it to LangChainMcpAdapter,
+which fetches tool listings from MCP servers on the server side.
 
 * Source Class: OpenFgaAuthorizer
 * Destination Class: Same
@@ -100,8 +75,8 @@ The caller decides whether to use https by providing appropriate session/securit
 HTTP support is kept for ease of local development where certificates are often unavailable and
 an extreme undue burden on development.
 
-For production: set `AGENT_SESSION_REQUIRE_HTTPS=true` (and configure https) to forbid http.
-The library default is `false`; the Dockerfiles already set `true`.
+For production: set AGENT_SESSION_REQUIRE_HTTPS=true (and configure https) to forbid http.
+The Dockerfiles already do; `run.sh` sets it back to false for local development.
 
 ### Information Exposure Through an Error Message / Filtering Sensitive Logs
 
@@ -113,14 +88,14 @@ Destination Classes:
 * HttpxLlmTracer
 * RegistryManifestRestorer
 * ProfilerControlHandler
-* HttpLogger (reached from HttpServer, which the report names as the source)
+* HttpLogger
 * AuthorizerFactory
 
 We employ a special SensitiveLogger class in all of these locations to optionally
 forbid the logging of sensitive information, such as exceptions or use of specific class names
-in cases of dynamic resolution.  When forbidden, the whole log line is dropped rather than redacted.
-By default the library does log this information for developer convenience, as in all cases the
-need to impart whatever sensitive information is to be logged is critical to the development cycle.
+in cases of dynamic resolution.  By default, the sensitive information is indeed logged
+for developer convenience, as in all cases the need to impart whatever sensitive information
+is to be logged is critical to the development cycle.
 
-For production: set `LEAF_LOG_SENSITIVE=false` to keep such information out of the logs.
-The library default is `true` (log it); the Dockerfiles already set `false`.
+For production: set LEAF_LOG_SENSITIVE="false" to keep such information out of the logs.
+The Dockerfiles already do; `run.sh` sets it back to true for local development.

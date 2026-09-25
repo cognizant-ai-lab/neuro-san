@@ -605,11 +605,9 @@ ENV LEAF_LOG_SENSITIVE="false"
 # when unrestricted).
 ENV AGENT_TOOL_PATH_ONLY="true"
 
-# Bounds how many entries the agent_cli client considers from the agent/tool listing
-# returned by the server it is pointed at (see neuro_san/deploy/SAST_FALSE_POSITIVES.md).
-# Only client code reads this -- for instance agent_cli run inside this container;
-# the server itself never consults it.  Negative values, 0 (the default) or anything
-# that is not an integer mean the listing is not limited.
+# Limits the number of agents considered from external servers' listings
+# to avoid exorbitantly long loops in handling them.  Negative values or
+# 0 (the default) means the number of agents listed is unlimited.
 ENV MAX_AGENTS_FROM_EXTERNAL_SERVER="0"
 
 #

@@ -25,14 +25,8 @@ from os import environ
 
 class SessionUtil:
     """
-    Static utility class with common session policy.
-
-    Currently this holds the MAX_AGENTS_FROM_EXTERNAL_SERVER policy, which bounds how many
-    entries a client-side session considers from an agent/tool listing returned by the
-    server it was pointed at.  It is what answers the SAST "Unchecked Input for Loop
-    Condition" reports against McpServiceAgentSession and HttpConciergeSession
-    (see neuro_san/deploy/SAST_FALSE_POSITIVES.md).  Only client code such as agent_cli
-    reaches those sessions; the neuro-san server itself never consults this variable.
+    Static utility class with common session policy: currently the MAX_AGENTS_FROM_EXTERNAL_SERVER
+    bound on how many entries to take from another server's agent/tool listing.
     """
 
     MAX_AGENTS_ENV_VAR: str = "MAX_AGENTS_FROM_EXTERNAL_SERVER"
@@ -40,14 +34,10 @@ class SessionUtil:
     @staticmethod
     def get_max_agents() -> int:
         """
-        Reads the MAX_AGENTS_FROM_EXTERNAL_SERVER environment variable.
+        Reads MAX_AGENTS_FROM_EXTERNAL_SERVER.  Unset, empty, 0 and negative mean "no limit";
+        a non-integer also means "no limit" and is logged as a warning so a typo is not silent.
 
-        Unset, empty, zero and negative values all mean "no limit".  A value that is not an
-        integer also means "no limit", and is logged as a warning: it is most likely a typo
-        in a setting somebody meant to turn on, and silently ignoring it would leave them
-        believing the limit is in force.
-
-        :return: The positive limit the variable holds, or 0 meaning no limit
+        :return: The positive limit, or 0 meaning no limit
         """
         max_agents_str: Optional[str] = environ.get(SessionUtil.MAX_AGENTS_ENV_VAR)
         if max_agents_str is None or max_agents_str.strip() == "":
@@ -69,20 +59,12 @@ class SessionUtil:
     def limit_agents_list(agents_list: Any) -> Any:
         """
         Limits an agent/tool listing from a server to at most MAX_AGENTS_FROM_EXTERNAL_SERVER
-        entries when that variable holds a positive integer.
+        entries.  Typed Any because the value comes straight from the server's JSON; anything
+        that is not a list is returned unchanged.
 
-        The parameter and return are typed Any rather than List because the value comes
-        straight out of a server's JSON and this method promises to hand back whatever it was
-        given when that is not a list.
-
-        :param agents_list: List of agents/tools as returned by the server.  Anything that is
-                    not a list (None, or an otherwise malformed payload) is returned unchanged
-                    rather than raising from a slice here; the caller sees the same shape it
-                    would have seen with no limit set.
-        :return: The same list when there is no limit or the list already fits within it,
-                    otherwise a copy holding only the first MAX_AGENTS_FROM_EXTERNAL_SERVER
-                    entries.  Truncation is logged as a warning so that an agent missing from
-                    the result can be traced back to this setting.
+        :param agents_list: List of agents/tools as returned by the server
+        :return: The same list when no limit applies, otherwise the first
+                    MAX_AGENTS_FROM_EXTERNAL_SERVER entries (truncation is logged as a warning)
         """
         if not isinstance(agents_list, list):
             return agents_list
