@@ -18,6 +18,8 @@ import time
 from unittest import TestCase
 from unittest.mock import patch
 
+from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
+
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.traffic.http_client import HttpClient
@@ -45,14 +47,6 @@ class FakeSession:
             }
 
 
-class FakeMessageProcessor:
-    """Stand-in for the BasicMessageProcessor handed back to the caller."""
-
-    def get_sly_data(self):
-        """Return the sly_data the fake stream produced."""
-        return {"reservation_id": "abc-1"}
-
-
 class FakeProcessor:
     """Stand-in for StreamingInputProcessor that drains the stream."""
 
@@ -60,9 +54,14 @@ class FakeProcessor:
         """Keep the session whose streaming_chat is consumed."""
         self._session = session
 
-    def get_message_processor(self):
-        """Return the message processor, as the real class does."""
-        return FakeMessageProcessor()
+    def get_message_processor(self) -> BasicMessageProcessor:
+        """Return a real message processor that has seen the stream's sly_data."""
+        processor = BasicMessageProcessor()
+        processor.process_message({
+            "type": "AGENT_FRAMEWORK", "chat_context": {},
+            "sly_data": {"reservation_id": "abc-1"},
+        })
+        return processor
 
     def process_once(self, state):
         """Consume every streamed message, as the real processor does."""
