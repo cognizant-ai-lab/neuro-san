@@ -41,15 +41,25 @@ class ChatMockLlm(BaseChatModel):
     """
     A custom chat model that echoes the input.
 
+    Inputs starting with ANTHROPIC_THINKING_MARKER, OPENAI_REASONING_MARKER
+    or GEMINI_THINKING_MARKER make _generate return provider-shaped block content
+    ahead of the echoed text instead of the plain echo; see the constants below.
+
     Adapted from https://python.langchain.com/docs/how_to/custom_chat_model/
     """
 
-    # When the (flattened) input starts with this marker, _generate responds
-    # with Anthropic-style thinking-first block content instead of an echo,
-    # so block handling can be tested end-to-end without live provider keys.
-    # _generate only: _stream ignores the marker and streams the echo.
-    # ClassVar keeps this a constant rather than a pydantic model field.
-    THINKING_MARKER: ClassVar[str] = "emit thinking:"
+    # An input starting with one of these markers makes _generate answer with
+    # provider-shaped block content instead of the echo, so block handling can be
+    # tested without provider keys. Each shape was checked against a live reply as
+    # delivered by the installed langchain package. _stream ignores the markers.
+    # ClassVar keeps these out of the pydantic fields.
+    #
+    # Anthropic extended thinking: a signed thinking block, then the text.
+    ANTHROPIC_THINKING_MARKER: ClassVar[str] = "emit anthropic thinking:"
+    # OpenAI Responses API (responses/v1 output): a reasoning item, then a text item.
+    OPENAI_REASONING_MARKER: ClassVar[str] = "emit openai reasoning:"
+    # Gemini 3 with include_thoughts: a thinking block, then a text block signed in extras.
+    GEMINI_THINKING_MARKER: ClassVar[str] = "emit gemini thinking:"
 
     # This is required field and it is possible to have multiple test models.
     model_name: str = Field(default=None, alias="model")
@@ -94,15 +104,35 @@ class ChatMockLlm(BaseChatModel):
         response_metadata: Dict[str, Any] = {  # Use for response metadata
             "model_name": self.model_name,
         }
-        if text.startswith(self.THINKING_MARKER):
-            # Respond like ChatAnthropic with extended thinking enabled:
-            # a thinking block FIRST, then the text answer.
-            answer: str = text[len(self.THINKING_MARKER):].strip()
+        if text.startswith(self.ANTHROPIC_THINKING_MARKER):
+            # ChatAnthropic with thinking on: the signed thinking block comes first.
+            answer: str = text[len(self.ANTHROPIC_THINKING_MARKER):].strip()
             content = [
                 {"type": "thinking", "thinking": "Mock thinking.", "signature": "mock-signature"},
                 {"type": "text", "text": answer},
             ]
             response_metadata["model_provider"] = "anthropic"
+        elif text.startswith(self.OPENAI_REASONING_MARKER):
+            # ChatOpenAI responses/v1: the reasoning item (id, summary parts, empty content,
+            # encrypted_content) comes first. The translator makes one reasoning block per summary part.
+            answer = text[len(self.OPENAI_REASONING_MARKER):].strip()
+            content = [
+                {"type": "reasoning", "id": "rs_mock", "content": [],
+                 "encrypted_content": "mock-encrypted-reasoning",
+                 "summary": [{"type": "summary_text", "text": "Mock reasoning, part one."},
+                             {"type": "summary_text", "text": "Mock reasoning, part two."}]},
+                {"type": "text", "text": answer, "id": "msg_mock", "annotations": []},
+            ]
+            response_metadata["model_provider"] = "openai"
+        elif text.startswith(self.GEMINI_THINKING_MARKER):
+            # ChatGoogleGenerativeAI on Gemini 3: an unsigned thinking block comes first; the
+            # thought signature rides on the text block, in its extras.
+            answer = text[len(self.GEMINI_THINKING_MARKER):].strip()
+            content = [
+                {"type": "thinking", "thinking": "Mock thinking."},
+                {"type": "text", "text": answer, "extras": {"signature": "mock-thought-signature"}},
+            ]
+            response_metadata["model_provider"] = "google_genai"
 
         message = AIMessage(
             content=content,

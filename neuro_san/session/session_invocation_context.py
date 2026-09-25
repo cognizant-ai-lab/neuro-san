@@ -286,7 +286,12 @@ class SessionInvocationContext(InvocationContext):
 
         # Be sure we have an executor
         if self.asyncio_executor is None:
+            # The previous exchange's resources were closed when its executor was returned.
+            self.resources = []
             self.asyncio_executor = self.async_executors_pool.get_executor()
+
+        # A new exchange gets its own finish_request().
+        self.request_finished = False
 
     def safe_shallow_copy(self, invocation: str = None) -> SessionInvocationContext:
         """
