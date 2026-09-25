@@ -348,7 +348,7 @@ class BaseToolFactory:
         # ("deep/math_guy" is exposed as "deep__math_guy"). Comparing the entries
         # with the exposed names here would report a tool that was found, so ask
         # the adapter which entries really matched nothing.
-        invalid_names: List[str] = mcp_adapter.unmatched_allowed_tools
+        invalid_names: List[str] = mcp_adapter.get_unmatched_allowed_tools()
         if invalid_names:
             message = f"The following tools cannot be found in {server_url}: {invalid_names}"
             agent_message = AgentMessage(content=message)

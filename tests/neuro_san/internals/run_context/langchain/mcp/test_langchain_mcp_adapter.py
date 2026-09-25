@@ -129,10 +129,9 @@ class TestLangChainMcpAdapter(IsolatedAsyncioTestCase):
 
     def test_init(self) -> None:
         """
-        A fresh adapter has an empty allow list, no unmatched entries and a logger.
+        A fresh adapter has no unmatched allow-list entries and a logger.
         """
-        self.assertEqual(self.adapter.client_allowed_tools, [])
-        self.assertEqual(self.adapter.unmatched_allowed_tools, [])
+        self.assertEqual(self.adapter.get_unmatched_allowed_tools(), [])
         self.assertIsNotNone(self.adapter.logger)
 
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
@@ -157,8 +156,7 @@ class TestLangChainMcpAdapter(IsolatedAsyncioTestCase):
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
     async def test_get_mcp_tools_with_allowed_tools_param(self, mock_client_class: MagicMock) -> None:
         """
-        An allow list passed in keeps only the tools it names and is recorded on
-        the adapter as written.
+        An allow list passed in keeps only the tools it names.
 
         :param mock_client_class: Patched MultiServerMCPClient class.
         """
@@ -170,7 +168,6 @@ class TestLangChainMcpAdapter(IsolatedAsyncioTestCase):
 
         self.assertEqual(len(tools), 1)
         self.assertEqual(tools[0].name, "allowed_tool")
-        self.assertEqual(self.adapter.client_allowed_tools, allowed_tools)
 
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpServersInfoRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
@@ -570,7 +567,7 @@ class TestLangChainMcpAdapter(IsolatedAsyncioTestCase):
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
     async def test_get_mcp_tools_records_unmatched_allow_list_entries(self, mock_client_class: MagicMock) -> None:
         """
-        unmatched_allowed_tools holds exactly the allow-list entries that matched
+        get_unmatched_allowed_tools() returns exactly the allow-list entries that matched
         no advertised tool in either spelling, so BaseToolFactory can report them
         instead of comparing the entries with the renamed tools. It is reset on
         every call and empty without an allow list.
@@ -587,14 +584,14 @@ class TestLangChainMcpAdapter(IsolatedAsyncioTestCase):
 
         with self.assertLogs(self.ADAPTER_LOGGER, level=WARNING) as captured:
             await self.adapter.get_mcp_tools(self.SERVER_URL, allowed_tools=["basic/music_nerd_pro", "nope"])
-        self.assertEqual(self.adapter.unmatched_allowed_tools, ["nope"])
+        self.assertEqual(self.adapter.get_unmatched_allowed_tools(), ["nope"])
         self.assertIn("nope", "\n".join(captured.output))
 
         await self.adapter.get_mcp_tools(self.SERVER_URL, allowed_tools=["basic__music_nerd_pro", "other_tool"])
-        self.assertEqual(self.adapter.unmatched_allowed_tools, [])
+        self.assertEqual(self.adapter.get_unmatched_allowed_tools(), [])
 
         await self.adapter.get_mcp_tools(self.SERVER_URL)
-        self.assertEqual(self.adapter.unmatched_allowed_tools, [])
+        self.assertEqual(self.adapter.get_unmatched_allowed_tools(), [])
 
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
     async def test_get_mcp_tools_allow_listed_pair_that_collides_keeps_the_first(
@@ -619,7 +616,7 @@ class TestLangChainMcpAdapter(IsolatedAsyncioTestCase):
         self.assertIs(tools[0], dot_tool)
         self.assertEqual(tools[0].name, "a_b")
         self.assertIn("tool 'a b' would be renamed to 'a_b'", "\n".join(captured.output))
-        self.assertEqual(self.adapter.unmatched_allowed_tools, [])
+        self.assertEqual(self.adapter.get_unmatched_allowed_tools(), [])
 
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.McpServersInfoRestorer')
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
@@ -642,7 +639,7 @@ class TestLangChainMcpAdapter(IsolatedAsyncioTestCase):
 
         self.assertEqual(len(tools), 1)
         self.assertEqual(tools[0].name, "basic__music_nerd_pro")
-        self.assertEqual(self.adapter.unmatched_allowed_tools, [])
+        self.assertEqual(self.adapter.get_unmatched_allowed_tools(), [])
 
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
     async def test_get_mcp_tools_allow_list_against_empty_server_warns(self, mock_client_class: MagicMock) -> None:
@@ -660,7 +657,7 @@ class TestLangChainMcpAdapter(IsolatedAsyncioTestCase):
                 self.SERVER_URL, allowed_tools=["some_tool"])
 
         self.assertEqual(tools, [])
-        self.assertEqual(self.adapter.unmatched_allowed_tools, ["some_tool"])
+        self.assertEqual(self.adapter.get_unmatched_allowed_tools(), ["some_tool"])
         self.assertIn("Available tools: []", "\n".join(captured.output))
 
     @patch('neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter.MultiServerMCPClient')
@@ -775,6 +772,6 @@ class TestLangChainMcpAdapter(IsolatedAsyncioTestCase):
 
         self.assertEqual(len(tools), 1)
         self.assertEqual(tools[0].name, "good_tool")
-        self.assertEqual(self.adapter.unmatched_allowed_tools, [])
+        self.assertEqual(self.adapter.get_unmatched_allowed_tools(), [])
         self.assertIn("are not non-empty strings", output)
         self.assertIn("42", output)

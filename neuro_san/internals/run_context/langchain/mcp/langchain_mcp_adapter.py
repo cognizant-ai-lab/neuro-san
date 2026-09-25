@@ -67,17 +67,29 @@ class LangChainMcpAdapter:
         """
         Constructor
         """
-        self.client_allowed_tools: List[str] = []
         self.logger: Logger = getLogger(self.__class__.__name__)
         # Maps server tool names to provider-safe ones and matches allow-list
         # entries in either spelling; built once per adapter.
         self.tool_name_policy: McpToolNamePolicy = McpToolNamePolicy()
         # Allow-list entries the last get_mcp_tools() call could not match to any
-        # tool the server advertised, in either spelling. BaseToolFactory reports
-        # these to the user; comparing the entries with the renamed tools instead
-        # would flag "deep/math_guy" as missing after it was exposed as
-        # "deep__math_guy".
+        # tool the server advertised, in either spelling. Read through
+        # get_unmatched_allowed_tools().
         self.unmatched_allowed_tools: List[str] = []
+
+    def get_unmatched_allowed_tools(self) -> List[str]:
+        """
+        Reports the allow-list entries the last get_mcp_tools() call could not
+        match to any tool the server advertised, in either spelling.
+
+        BaseToolFactory reports these to the user. It cannot compute them itself
+        by comparing the entries with the returned tools, because those carry
+        the renamed spelling: "deep/math_guy" would look missing after it was
+        exposed as "deep__math_guy".
+
+        :return: A copy of the unmatched entries, in allow-list order; empty when
+                 every entry matched or there was no allow list.
+        """
+        return list(self.unmatched_allowed_tools)
 
     def _load_mcp_servers_info(self):
         """
@@ -162,7 +174,6 @@ class LangChainMcpAdapter:
         if client_allowed_tools is None:
             # Check if MCP server info has a "tools" field to use as allowed tools.
             client_allowed_tools = self._mcp_servers_info.get(server_url, {}).get("tools", [])
-        self.client_allowed_tools = client_allowed_tools
 
         # Filter before renaming so the allow list is matched against the names
         # the server actually advertised; McpToolNamePolicy.select_allowed()
@@ -200,8 +211,8 @@ class LangChainMcpAdapter:
     ) -> List[BaseTool]:
         """
         Keeps only the tools permitted by the allow list, warning about entries
-        that match nothing the server advertised and recording them in
-        unmatched_allowed_tools.
+        that match nothing the server advertised and recording them for
+        get_unmatched_allowed_tools().
 
         :param server_url: URL of the MCP server the tools came from, for log messages.
         :param mcp_tools: All tools returned by the server, still carrying their original names.

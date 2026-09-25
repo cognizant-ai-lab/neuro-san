@@ -400,7 +400,7 @@ class TestBaseToolFactory:
         second_server_tool = self.make_named_tool("a__b")
         other_tool = self.make_named_tool("other_tool")
         mock_adapter = mock_adapter_class.return_value
-        mock_adapter.unmatched_allowed_tools = []
+        mock_adapter.get_unmatched_allowed_tools = MagicMock(return_value=[])
         mock_adapter.get_mcp_tools = AsyncMock(side_effect=[[first_server_tool], [second_server_tool, other_tool]])
         factory = self.make_mcp_factory()
 
