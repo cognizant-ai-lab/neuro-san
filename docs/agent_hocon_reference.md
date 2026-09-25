@@ -25,7 +25,6 @@ Items in ***bold*** are essentials. Try to understand these first.
         - [fallbacks](#fallbacks)
         - [temperature](#temperature)
         - [Other LLM-specific Parameters](#other-llm-specific-parameters)
-        - [OpenAI Reasoning and Responses API Parameters](#openai-reasoning-and-responses-api-parameters)
         - [Client-Provided API Keys](#client-provided-api-keys)
     - [***tools*** - list of agent/tool definitions](#tools)
     - [commondefs](#commondefs)
@@ -193,14 +192,18 @@ For further details, refer to the [toolbox](#toolbox) section below.
 ### llm_config
 
 An optional dictionary describing the default settings for agent LLMs when specifics
-are not available for an given agent.  The default setting when this is not present
-is to use an OpenAI gpt-4o model as the model_name for all agents.
+are not available for a given agent.  When this is not present, the model_name for all agents
+is the one in the `default_config` section of
+[default_llm_info.hocon](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon)
+(at the time of writing this is gpt-5.2).
 
 #### model_name
 
 The string model name to use for an agent in the network.
-When this is not present, the default model is "gpt-4o" which is a decent all-purpose tool-using agent
-which gets job done but doesn't cost a ton.
+When this is not present, the default is the `model_name` in the `default_config` section of
+[default_llm_info.hocon](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon)
+(at the time of writing this is gpt-5.2), a decent all-purpose tool-using model
+which gets the job done but doesn't cost a ton.
 
 You can use any model listed in the [default_llm_info.hocon](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon)
 file included with the neuro-san distribution without any further modification.
@@ -213,17 +216,21 @@ branches off work to any other agent/tool.  You can browse the `capabilities` se
 The most common situation is one where you will need your own access key set as an environment variable in order
 to use LLMs from various providers.
 
-| LLM Provider               | API Key environment variable                                 |
-|:---------------------------|:-------------------------------------------------------------|
-| Amazon Bedrock             | AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or AWS_PROFILE  |
-| Anthropic                  | ANTHROPIC_API_KEY                                            |
-| Anthropic via Bedrock      | AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or AWS_PROFILE  |
-| Azure OpenAI               | AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT               |
-| Google Gemini              | GOOGLE_API_KEY                                               |
-| NVidia                     | NVIDIA_API_KEY                                               |
-| Ollama                     | &lt;None required&gt;                                        |
-| OpenAI                     | OPENAI_API_KEY                                               |
-| OpenRouter                 | OPENROUTER_API_KEY                                           |
+| LLM Provider               | Environment variables                                              |
+|:---------------------------|:-------------------------------------------------------------------|
+| Amazon Bedrock             | AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or AWS_PROFILE        |
+| Anthropic                  | ANTHROPIC_API_KEY                                                  |
+| Anthropic via Bedrock      | AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or AWS_PROFILE        |
+| Azure OpenAI               | AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT and OPENAI_API_VERSION |
+| Google Gemini              | GOOGLE_API_KEY                                                     |
+| NVidia                     | NVIDIA_API_KEY                                                     |
+| Ollama                     | &lt;None required&gt;                                              |
+| OpenAI                     | OPENAI_API_KEY                                                     |
+| OpenRouter                 | OPENROUTER_API_KEY                                                 |
+
+Azure OpenAI also needs to know which deployment to call.  Give it as `deployment_name` in the llm_config
+or set the `AZURE_OPENAI_DEPLOYMENT_NAME` environment variable.  See
+[music_nerd_pro_llm_azure.hocon](../neuro_san/registries/music_nerd_pro_llm_azure.hocon) for a working example.
 
 For the Bedrock-based entries you can either set explicit credentials via
 `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` (plus optional `AWS_SESSION_TOKEN`
@@ -307,8 +314,13 @@ Example networks that advertise that their sly_data_schema needs external API ke
 #### temperature
 
 Pretty much any of the LLMs will take a floating-point temperature parameter as an argument.
-Roughly speaking, temperature is a number between 0.0 and 1.0 that indicates a relative amount of randomness
-in answers provided by the LLM.  By default this value is 0.7.
+Roughly speaking, temperature is a number that indicates a relative amount of randomness in answers provided
+by the LLM; the accepted range depends on the provider (the `gemini` class documents 0.0 to 2.0, for example),
+so check your model's documentation.  Most of the stock classes in
+[default_llm_info.hocon](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon)
+leave temperature `null`, which means it is omitted from the request and the provider's own default applies
+(the `gemini` class is the exception and sets 0.7).  Note that some reasoning models reject a custom
+temperature, so only set one if your model supports it.
 
 #### Other LLM-specific Parameters
 
@@ -317,78 +329,15 @@ As long as a parameter is a scalar listed in the args section for your LLM's cla
 [llm_info hocon file](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon)
 file, you can set that parameter in any llm_config within its own technical limits however you like.
 
+A few of those parameters decide which endpoint a request goes to, or are rejected by some models.
+They are described per provider in the
+[Provider-Specific Arguments](./llm_info_hocon_reference.md#provider-specific-arguments) section of the
+llm_info reference: which OpenAI endpoint is used and why the Responses API is now the default, how to switch
+back to Chat Completions (also behind gateways such as LiteLLM), Anthropic thinking and effort, and Gemini thinking.
+
 Note: _We strongly recommend to **not** set secrets as values within any source file, including hocon files._
 These files tend to creep into source control repos, and it is **very** bad practice
 to expose secrets by checking them in.
-
-#### OpenAI Reasoning and Responses API Parameters
-
-The `openai` class accepts a few parameters that only matter for OpenAI reasoning models and for choosing which
-OpenAI endpoint (Chat Completions or the Responses API) requests are sent to. All of them default to `null`.
-
-- `reasoning`: a dictionary passed through as the Responses API `reasoning` object, for example
-  `{"effort": "low", "summary": "auto"}`. Setting it makes langchain route requests to the Responses API.
-- `reasoning_effort`: a string such as `"low"`, `"medium"` or `"high"` that constrains how much reasoning the
-  model does (`"none"` disables reasoning on models that allow it, such as `gpt-5.6-*`; `gpt-6-astra` rejects
-  it). On the Chat Completions path it is sent as-is. On the Responses API path langchain folds it into
-  `reasoning.effort` **only when `reasoning` is absent**, so set either `reasoning` or `reasoning_effort`, not
-  both. Setting `reasoning_effort` on its own does not change the endpoint.
-- `verbosity`: a string (`"low"`, `"medium"` or `"high"`) that controls how long the model's answers are.
-- `use_responses_api`: a tri-state switch for the endpoint:
-    - `null` (the default): let langchain infer the endpoint from the other parameters and the model name, as
-      documented for
-      [`use_responses_api`](https://reference.langchain.com/python/langchain-openai/chat_models/base/BaseChatOpenAI/use_responses_api).
-      langchain switches to the Responses API when any Responses-only setting is present (`reasoning`, `include`,
-      `truncation`, `context_management`, `previous_response_id`, `text`, or a built-in tool such as web search)
-      or when the model is one it knows to be Responses-only (the `gpt-5.x-pro` and `codex` models). Of those,
-      the `openai` class only exposes `reasoning` and the model name, so everything else keeps using Chat
-      Completions and existing configurations behave exactly as before.
-    - `true`: always use the Responses API.
-    - `false`: always use Chat Completions.
-
-**Models that need the Responses API for tool calling.** OpenAI's newest models no longer accept function (tool)
-calls together with reasoning on Chat Completions, and every agent that lists `tools` is a tool-calling agent.
-A Chat Completions request from a `gpt-5.6-*` model that carries tools is rejected with an error such as:
-
-> Function tools with reasoning_effort are not supported for gpt-5.6-sol in /v1/chat/completions.
-> To use function tools, use /v1/responses or set reasoning_effort to 'none'.
-
-The two model families differ in what you can do about it:
-
-- `gpt-5.6-*` (`gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`): either set `"use_responses_api": true` and keep
-  reasoning, or stay on Chat Completions with `"reasoning_effort": "none"`, which makes tool calls work but
-  without any reasoning.
-- `gpt-6-astra`: the Responses API is the only option. The
-  [OpenAI reasoning guide](https://developers.openai.com/api/docs/guides/reasoning) states that
-  "Chat Completions does not support function calling with GPT-6 Astra" and that GPT-6 Astra
-  "does not support none reasoning effort" (the API answers HTTP 400), so the `"none"` workaround does not exist
-  for it. Any agent that uses tools with gpt-6-astra must set `"use_responses_api": true`.
-
-The minimal configuration is just the endpoint switch. The model's default reasoning effort applies; add
-`reasoning_effort` only when you want a different level.
-
-```hocon
-"llm_config": {
-    "model_name": "gpt-6-astra",
-    "use_responses_api": true
-}
-```
-
-**Parameters the Responses API rejects.** `presence_penalty`, `frequency_penalty`, `seed`, `logprobs` and
-`logit_bias` (plus `stop` on langchain-openai releases before 1.4) exist only on Chat Completions. The Responses
-API rejects requests that carry them, so remove them from any llm_config that reaches the Responses API, whether
-through `"use_responses_api": true` or through auto-routing. OpenAI's
-[migration guide](https://developers.openai.com/api/docs/guides/migrate-to-responses) lists the remaining
-differences between the two endpoints.
-
-**Interaction with fallbacks.** The rejections above surface as exceptions on the client side, but
-[fallbacks](#fallbacks) wrap the model so that any exception moves on to the next llm_config in the list. With
-fallbacks configured, a misconfigured primary model silently fails over instead of reporting the problem, so
-verify a new llm_config without fallbacks first.
-
-**Azure OpenAI.** The `azure-openai` class does not support the Responses API path yet (tracked in
-[#1307](https://github.com/cognizant-ai-lab/neuro-san/issues/1307)), so leave `use_responses_api` unset for
-Azure deployments.
 
 #### class
 
@@ -417,7 +366,9 @@ See [use_model_name](./llm_info_hocon_reference.md#use_model_name) for the detai
 You may only provide parameters that are explicitly defined for that provider's class under the
 `classes.<class>.args` section of
 [`default_llm_info.hocon`](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon).
-Unsupported parameters will be ignored
+Unsupported parameters will be ignored.  More precisely, any parameter that the provider's policy does not
+forward to the underlying chat model is silently dropped, with no error or warning.  This differs from the
+custom class route described in section 2 below, where unknown parameters raise an error instead.
 
 **2. For custom providers (not in `default_llm_info.hocon`)**
 
@@ -429,6 +380,19 @@ Set the `class` key to the full Python path of the desired LangChain-compatible 
 
 Then, provide any constructor arguments supported by that class in `llm_config`.
 Everything, including the model name, is handed to that class exactly as written.
+
+Note that this route bypasses both the provider policy and the model alias table in
+[`default_llm_info.hocon`](../neuro_san/internals/run_context/langchain/llms/default_llm_info.hocon).
+`DefaultLlmFactory` resolves the class path and constructs the class directly, passing the `llm_config`
+(minus `class` and `verbose`) to its constructor as keyword arguments. As a result:
+
+- The model must be given the way the class expects it, and as the provider's own API model name. For example
+  `ChatGoogleGenerativeAI` takes `model` rather than `model_name`, and the value must be `gemini-3-flash-preview`
+  rather than the neuro-san alias `gemini-3-flash`, because the alias and `use_model_name` redirections are never
+  consulted.
+- Settings derived from the llm_info entry are not applied. In particular `max_tokens` is not computed from
+  `max_output_tokens`, and the shared HTTP client (connection pooling, proxy and timeout handling) that the
+  `openai` and `azure-openai` policies set up is not created.
 
 For a full list of available chat model classes and their parameters, refer to:
 [LangChain Chat Integrations Documentation](https://python.langchain.com/docs/integrations/chat/)
