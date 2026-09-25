@@ -1551,6 +1551,8 @@
 
         "openai": {
             "args": {
+                # Consumed by LangChainRunContext, not passed to the chat-model constructor.
+                "provider_tools": null,
                 # Note that we can only supply arguments that are "Just Data" in nature.
                 # See https://python.langchain.com/api_reference/openai/chat_models/langchain_openai.chat_models.base.ChatOpenAI.html
                 "temperature": null,
@@ -1654,6 +1656,8 @@
         },
         "anthropic": {
             "args": {
+                # Consumed by LangChainRunContext, not passed to the chat-model constructor.
+                "provider_tools": null,
                 # Note that we can only supply arguments that are "Just Data" in nature.
                 # See https://python.langchain.com/api_reference/anthropic/chat_models/langchain_anthropic.chat_models.ChatAnthropic.html#langchain_anthropic.chat_models.ChatAnthropic
                 "max_tokens": null,
@@ -1823,6 +1827,8 @@
         },
         "gemini": {
             "args": {
+                # Consumed by LangChainRunContext, not passed to the chat-model constructor.
+                "provider_tools": null,
                 # Note that we can only supply arguments that are "Just Data" in nature.
                 # See https://python.langchain.com/api_reference/google_genai/chat_models/langchain_google_genai.chat_models.ChatGoogleGenerativeAI.html
                 "google_api_key": null,
