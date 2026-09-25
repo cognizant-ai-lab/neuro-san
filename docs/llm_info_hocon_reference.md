@@ -574,6 +574,26 @@ is `0.7`, so set `"temperature": 1.0` explicitly in the llm_config of any Gemini
 }
 ```
 
+### Provider Tools
+
+`provider_tools` configures tools that run on the model provider's servers. It is available for the `openai`,
+`anthropic`, and `gemini` classes. The run context consumes the list when creating the agent; it is not passed to
+the chat-model constructor.
+
+- OpenAI accepts Responses API built-ins such as `{"type": "web_search"}` and
+  `{"type": "code_interpreter", "container": {"type": "auto"}}`. Provider tools require the Responses API; do
+  not set `use_responses_api` to `false`.
+- Anthropic accepts server tools such as
+  `{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}`. Supported server-side families include
+  `web_search_`, `web_fetch_`, `code_execution_`, `tool_search_`, and `mcp_toolset`. Client-side tools such as
+  `bash_`, `text_editor_`, `computer_`, and `memory_` are not executed by neuro-san.
+- Gemini accepts one built-in entry, such as `{"google_search": {}}` or `{"code_execution": {}}`. Do not combine
+  a Gemini built-in with other provider tools or regular function tools.
+
+These dictionaries are provider-specific and are passed through unchanged. A non-empty list therefore requires
+every model in a fallback chain, including peer groups, to use the same provider. The `anthropic-bedrock`,
+`azure-openai`, `bedrock`, `nvidia`, `ollama`, and `openrouter` classes do not support `provider_tools`.
+
 ## Extending LLM Info Specifications
 
 You can extend the list of LLMs available in the neuro-san system by providing your own llm info file
