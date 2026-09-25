@@ -137,7 +137,8 @@ class BaseToolFactory:
         for tool in tools:
             if tool.name in self.exposed_tool_names:
                 message: str = (f"Tool '{tool.name}' has the same name as another tool in this agent network; "
-                                "the LLM cannot tell them apart.")
+                                "the LLM cannot tell them apart. Rename one of them, or drop one from the "
+                                "agent's \"tools\" list.")
                 await self.journal.write_message(AgentMessage(content=message))
                 self.logger.warning(message)
             self.exposed_tool_names.add(tool.name)

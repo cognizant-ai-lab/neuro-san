@@ -44,15 +44,19 @@ class McpToolNamePolicy(StringFilter):
     name fixed on one side would get mangled again on the other.
     """
 
-    # Strictest tool-name shape common to OpenAI and Anthropic: ASCII letters,
-    # digits, underscore and hyphen, at most 128 characters, which is
-    # Anthropic's cap.
-    TOOL_NAME_PATTERN: str = r"^[a-zA-Z0-9_-]{1,128}$"
+    # Anthropic caps tool names at 128 characters. Messages that mention the
+    # cap read this constant, so they cannot drift from the pattern below that
+    # enforces it.
+    MAX_LENGTH: int = 128
 
-    # OpenAI caps tool names at 64 characters, tighter than the 128 of
-    # TOOL_NAME_PATTERN. It is a soft limit here: the same name is still valid
-    # for Anthropic and for lenient local providers, so callers are expected
-    # to warn about a longer name rather than refuse the tool.
+    # Strictest tool-name shape common to OpenAI and Anthropic: ASCII letters,
+    # digits, underscore and hyphen, at most MAX_LENGTH characters.
+    TOOL_NAME_PATTERN: str = "^[a-zA-Z0-9_-]{1," + str(MAX_LENGTH) + "}$"
+
+    # OpenAI caps tool names at 64 characters, tighter than MAX_LENGTH. It is
+    # a soft limit here: the same name is still valid for Anthropic and for
+    # lenient local providers, so callers are expected to warn about a longer
+    # name rather than refuse the tool.
     SOFT_MAX_LENGTH: int = 64
 
     def __init__(self, tool_name_filter: StringFilter = None):

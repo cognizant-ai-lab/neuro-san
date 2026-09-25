@@ -63,10 +63,10 @@ becomes one:
    still send `deep/math_guy` keep working. The chat is streamed back as the tool result.
 
 The same rename runs in the other direction. When an agent network lists an MCP server among its
-tools (see [MCP Servers](./agent_hocon_reference.md#mcp-servers)), `LangChainMcpAdapter` renames any
-tool name that breaks the provider rule before the LLM sees it, and still calls the server with the
-original name. Tools from a current neuro-san server normally arrive already renamed, so this covers
-other MCP servers and older neuro-san servers.
+tools (see [MCP Servers](./agent_hocon_reference.md#mcp-servers)), neuro-san renames any tool name
+that breaks the provider rule before the LLM sees it, and still calls the server with the original
+name. Tools from a current neuro-san server normally arrive already renamed, so this covers other
+MCP servers and older neuro-san servers.
 
 Chat request to an agent network becomes a tool call, with the following json schema,
 replicated from neuro-san OpenAPI specification:
