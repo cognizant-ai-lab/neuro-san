@@ -110,7 +110,7 @@ class TrafficRunner:
         elapsed = time.time() - start
 
         parsed_fields = (
-            HttpClient.string_fields(processor.get_sly_data())
+            HttpClient.flatten_string_fields(processor.get_sly_data())
             if processor is not None else {}
         )
         failure_reason = None
