@@ -237,15 +237,20 @@ context with which it will proces input, essentially telling it what to do.
         try:
             message: BaseMessage = await callable_component.build()
 
+            # Add the component's sly_data to the mix.
+            # External tools have separate dictionaries of redacted sly_data that need to
+            # be reintegrated with the single copy that floats around the agent network.
+            component_sly_data: Dict[str, Any] = None
+            if isinstance(callable_component, AbstractCallableActivation):
+                sly_able_component: AbstractCallableActivation = callable_component
+                component_sly_data = sly_able_component.get_sly_data()
+
             # Prepare the tool output
             tool_output: Dict[str, Any] = {
                 "origin": callable_component.get_origin(),
                 "tool_call_id": component_tool_call.get_id(),
                 "output": message,
-                # Add the component's sly_data to the mix.
-                # External tools have separate dictionaries of redacted sly_data that need to
-                # be reintegrated with the single copy that floats around the agent network.
-                "sly_data": callable_component.sly_data
+                "sly_data": component_sly_data
             }
 
             return tool_output
