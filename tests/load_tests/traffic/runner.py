@@ -31,14 +31,12 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
-from unittest import TestCase
 
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
 from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
 from neuro_san.test.driver.assert_capture import AssertCapture
 from neuro_san.test.driver.data_driven_tests_driver import DataDrivenTestsDriver
-from neuro_san.test.unittest.unit_test_assert_forwarder import UnitTestAssertForwarder
 
 from tests.load_tests.config import FAILURE_LOG_LIMIT
 from tests.load_tests.config import FAILURE_REASON_LINE_LIMIT
@@ -53,6 +51,7 @@ from tests.load_tests.config import THREAD_JOIN_TIMEOUT
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.traffic.http_client import HttpClient
+from tests.load_tests.traffic.load_test_assert_forwarder import LoadTestAssertForwarder
 from tests.load_tests.traffic.output_parser import OutputParser
 
 logger = logging.getLogger(__name__)
@@ -211,7 +210,7 @@ class TrafficRunner:
 
         Returns a one-line reason when any check failed, else None.
         """
-        asserts = AssertCapture(UnitTestAssertForwarder(TestCase()))
+        asserts = AssertCapture(LoadTestAssertForwarder())
         driver = DataDrivenTestsDriver(asserts)
         blocks = [response_checks]
         if self._profile.failure_patterns:
