@@ -266,8 +266,12 @@ class TestDirectAgentSessionGoldenParity(TestCase):
 
     def assert_text_only_wire(self, stream: List[Dict[str, Any]]) -> None:
         """
-        Asserts the Phase 1 wire contract on every message: text is a plain
-        string and no content-block key leaks through.
+        Asserts the Phase 1 wire contract on every message: no content-block key
+        leaks through, and text, where present, is a plain string. Presence is
+        not required here on purpose. BaseMessageDictionaryConverter omits the
+        text key for a message whose content is an empty list, so that such a
+        message cannot become answer-eligible, and the golden comparison already
+        locks exactly which messages carry text (in these goldens, all of them).
 
         :param stream: The normalized response dicts.
         """
