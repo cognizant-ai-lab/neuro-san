@@ -47,6 +47,14 @@ class TestAgentNetwork(TestCase):
         }
         return AgentNetwork(config, self.NETWORK_NAME)
 
+    def test_get_network_name(self) -> None:
+        """
+        The network name given at construction is what the inspector reports,
+        so messages can point at the right hocon file.
+        """
+        agent_network: AgentNetwork = self.make_agent_network()
+        self.assertEqual(agent_network.get_network_name(), self.NETWORK_NAME)
+
     def test_not_mcp_tool_by_default(self) -> None:
         """
         A freshly constructed network is not an MCP tool and has no tool name.

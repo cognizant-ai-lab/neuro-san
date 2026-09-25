@@ -862,6 +862,24 @@ MCP servers can be configured in two formats:
 
     - `tools` key filters which specific tools from the MCP server are made available.
     If omitted, all tools on the server will be accessible.
+    - Any tool name outside `^[a-zA-Z0-9_-]+$` is renamed before the LLM sees it, because OpenAI
+    and Anthropic reject such names and fail the whole request: "/" becomes "__" and any other
+    unsafe character becomes "_". The MCP server is still called with the original name. A current
+    neuro-san server already advertises its nested agent networks under provider-safe names,
+    `deep__math_guy` for the network `deep/math_guy` (see
+    [Agent networks as MCP tools](./mcp_service.md#agent-networks-as-mcp-tools)); a `deep/math_guy`
+    tool from an older neuro-san server is renamed here the same way, so the LLM sees
+    `deep__math_guy` either way. A name longer than 64 characters (OpenAI's cap) or 128 (Anthropic's),
+    renamed or not, is kept but warned about.
+    - Both spellings are accepted in the `tools` allow list, so `"tools": ["deep/math_guy"]` selects
+    the tool whether the server advertises it as `deep/math_guy` or as `deep__math_guy`. When a
+    server offers both spellings of one name, an entry selects the tool it spells exactly.
+    - Two tools on one server that end up with the same name, advertised twice or renamed alike, are a
+    collision: the tool that needed no rename (or, failing that, the first one listed) is kept and the
+    other is dropped with a warning. Across servers, and against the network's other tools, the first
+    tool in the agent's `tools` list to use a name keeps it; a later MCP tool with the same name is
+    skipped with a warning.
+    - Thinking output and journal entries show the renamed name, since that is the name the LLM uses.
 
 ##### Authentication
 
