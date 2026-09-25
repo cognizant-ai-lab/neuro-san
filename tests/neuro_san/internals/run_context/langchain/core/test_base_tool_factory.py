@@ -29,6 +29,8 @@ import pytest
 from langchain_core.tools import BaseTool
 from langchain_core.tools import StructuredTool
 
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.graph.registry.agent_tool_registry import AgentToolRegistry
 from neuro_san.internals.run_context.langchain.core.base_tool_factory import BaseToolFactory
 from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
 
@@ -440,3 +442,24 @@ class TestBaseToolFactory:
         assert reported.content.startswith(
             "agent 'researcher' of agent network 'deep/math_guy': tool 'search' has the same name as another tool")
         assert "hocon file" in reported.content
+
+    def test_agent_location_is_built_from_the_real_inspector(self) -> None:
+        """
+        At run time the inspector is an AgentToolRegistry, not an AgentNetwork,
+        so the factory must be able to ask it for the network name. A mocked
+        inspector would not catch a method missing from the registry.
+        """
+        config: Dict[str, Any] = {
+            "tools": [
+                {"name": "researcher", "function": {"description": "x"}}
+            ]
+        }
+        registry = AgentToolRegistry(AgentNetwork(config, "deep/math_guy"))
+        tool_caller = MagicMock()
+        tool_caller.get_inspector = MagicMock(return_value=registry)
+        tool_caller.get_name = MagicMock(return_value="researcher")
+        tool_caller.get_sly_data = MagicMock(return_value={})
+
+        factory = BaseToolFactory(tool_caller, MagicMock(), MagicMock())
+
+        assert factory.agent_location == "agent 'researcher' of agent network 'deep/math_guy'"
