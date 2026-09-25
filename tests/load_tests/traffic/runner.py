@@ -41,6 +41,7 @@ from neuro_san.test.driver.data_driven_tests_driver import DataDrivenTestsDriver
 from neuro_san.test.unittest.unit_test_assert_forwarder import UnitTestAssertForwarder
 
 from tests.load_tests.config import FAILURE_LOG_LIMIT
+from tests.load_tests.config import FAILURE_REASON_LINE_LIMIT
 from tests.load_tests.config import Formatters
 from tests.load_tests.config import RequestResult
 from tests.load_tests.config import SharedRef
@@ -258,7 +259,9 @@ class TrafficRunner:
         line = next(
             (part for part in message.splitlines() if part.strip()), message,
         ).strip()
-        return line if len(line) <= 200 else line[:197] + "..."
+        if len(line) <= FAILURE_REASON_LINE_LIMIT:
+            return line
+        return line[:FAILURE_REASON_LINE_LIMIT - 3] + "..."
 
     def _http_saved_stdout(self, response_text, token_data) -> str:
         """Final answer plus Token Accounting JSON, joined so the saved

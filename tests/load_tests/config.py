@@ -214,6 +214,9 @@ TOKENS_PER_MILLION = 1_000_000
 # Max per-request failure blocks printed to the console before the rest
 # are suppressed (full detail always remains in raw_results.json).
 FAILURE_LOG_LIMIT = 10
+# Max length of one failed-check line in a request's failure reason;
+# longer evaluator messages are cut and end with "...".
+FAILURE_REASON_LINE_LIMIT = 200
 
 # Timeouts for short-lived operations (seconds)
 SOCKET_CHECK_TIMEOUT = 2
