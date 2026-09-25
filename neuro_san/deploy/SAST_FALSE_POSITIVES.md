@@ -9,7 +9,8 @@ Note that within this document we do not mention the specific lines of code that
 nor do we mention the specific file in which they are contained because we reserve the right to
 modify source during improvements and refactors more often than this file, however we expect the false
 positive reports to linger.  Please refer to the SAST report itself for the release with which you are
-concerned for the specific files and lines of code.  When examining those lines of code for yourself,
+concerned for the specific files and lines of code; it is attached to each GitHub release as
+`checkmarx-report.pdf`.  When examining those lines of code for yourself,
 note that we tend to add a comment as to the nature of the false positive within the code itself
 as well as this document.
 
@@ -17,8 +18,8 @@ as well as this document.
 
 ### Improper Resource Shutdown or Release
 
-Source Class: LocalFilePersistenceMechanism
-Destination Class: Same
+* Source Class: LocalFilePersistenceMechanism
+* Destination Class: Same
 
 The complaint is that the fileobj object is not closed before returning from the function,
 however this is precisely filling the contract required by AbstractPersistenceMechanism parent class
@@ -30,8 +31,9 @@ The caller always does the closing, so this is not a security issue or resource 
 ### Unchecked Input Loop Conditions
 
 Source Classes:
-    McpServiceAgentSession
-    HttpConciergeSession
+
+* McpServiceAgentSession
+* HttpConciergeSession
 
 These are all cases where we are getting lists of external agents/tools from other servers.
 By default to limit developer frustration, we allow any number of agents to be returned from any server.
@@ -40,24 +42,32 @@ those agents are static and well-known to the deployers of neuro-san systems and
 However, security considerations require us to allow deployments to be more careful when they need to be.
 
 For production: set MAX_AGENTS_FROM_EXTERNAL_SERVER to an integer limit comfortable for your deployment.
-    (the default is 0, which implies unlimited agents)
 
+* A positive integer keeps only that many entries of a listing, and logs a warning when it does.
+* Unset, 0 (the default) or a negative value means unlimited.
+* A value that is not an integer is ignored with a warning.
 
-Source Class: OpenFgaAuthorizer
-Destination Class: Same
+The client sessions listed above honor it today;
+[#1398](https://github.com/cognizant-ai-lab/neuro-san/issues/1398) tracks extending it to LangChainMcpAdapter,
+which fetches tool listings from MCP servers on the server side.
+
+* Source Class: OpenFgaAuthorizer
+* Destination Class: Same
 
 We consider this to be a false positive for a couple of reasons:
+
 1. Use of OpenFgaAuthorizer is completely optional and never a default.
 2. Should OpenFgaAuthorizer be used at all, the OpenFGA server which is
    configured at deploy-time to be providing the response is assumed to be under complete
    control of those overseeing the deployment.
+
 If developers are still concerned about this as a security risk, we welcome
 proposed improvements via pull requests from an engaged community.
 
 ### Communication Over HTTP
 
-Source Class: AbstractHttpServiceAgentSession
-Destination Class: HttpServiceAgentSession and HttpConciergeSession
+* Source Class: AbstractHttpServiceAgentSession
+* Destination Classes: HttpServiceAgentSession and HttpConciergeSession
 
 The string literal "http" is flagged as a medium-level "Communication over HTTP" issue.
 The method in AbstractHttpServiceAgentSession only builds the URL and also is afforded https as an option.
@@ -66,23 +76,26 @@ HTTP support is kept for ease of local development where certificates are often 
 an extreme undue burden on development.
 
 For production: set AGENT_SESSION_REQUIRE_HTTPS=true (and configure https) to forbid http.
+The Dockerfiles already do; `run.sh` sets it back to false for local development.
 
 ### Information Exposure Through an Error Message / Filtering Sensitive Logs
 
 Destination Classes:
-    LangChainOpenAIFunctionTool
-    AwsSyncClientWorker
-    AwsAsyncClientWorker
-    HttpLlmTracer
-    RegistryManifestRestorer
-    ProfilerControlHandler
-    HttpServer
-    AuthorizerFactory
+
+* LangChainOpenAIFunctionTool
+* AwsSyncClientWorker
+* AwsAsyncClientWorker
+* HttpxLlmTracer
+* RegistryManifestRestorer
+* ProfilerControlHandler
+* HttpLogger
+* AuthorizerFactory
 
 We employ a special SensitiveLogger class in all of these locations to optionally
-forbid the logging of senstive information, such as exceptions or use of specific class names
+forbid the logging of sensitive information, such as exceptions or use of specific class names
 in cases of dynamic resolution.  By default, the sensitive information is indeed logged
 for developer convenience, as in all cases the need to impart whatever sensitive information
 is to be logged is critical to the development cycle.
 
-For production: set LEAF_LOG_SENSITIVE="true" to forbid such information leaking to the logs.
+For production: set LEAF_LOG_SENSITIVE="false" to keep such information out of the logs.
+The Dockerfiles already do; `run.sh` sets it back to true for local development.
