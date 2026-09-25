@@ -286,7 +286,21 @@ class SessionInvocationContext(InvocationContext):
 
         # Be sure we have an executor
         if self.asyncio_executor is None:
+            # done_with_work() returned the previous exchange's executor only after
+            # close_of_request() and close_of_work() ran on every LingeringResource,
+            # so those resources are spent. Drop them, so the next finish_request()
+            # does not close them a second time and the list does not grow by one
+            # chat session per exchange over a long-lived client session.
+            self.resources = []
             self.asyncio_executor = self.async_executors_pool.get_executor()
+
+        # finish_request() runs at most once per exchange and records that in
+        # request_finished. This reset starts a new exchange, so the flag must clear.
+        # Otherwise the next finish_request() is a no-op and the executor obtained
+        # above is never returned to the pool: its thread leaks on every exchange
+        # after the first, which is how DirectAgentSession.reset() is used by
+        # clients that keep one session across turns (agent_cli, for one).
+        self.request_finished = False
 
     def safe_shallow_copy(self, invocation: str = None) -> SessionInvocationContext:
         """

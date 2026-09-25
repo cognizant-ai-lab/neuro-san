@@ -23,6 +23,9 @@ from copy import deepcopy
 from json import dumps
 from json import loads
 from os import environ
+from threading import active_count
+from time import monotonic
+from time import sleep
 from unittest import TestCase
 
 from leaf_common.asyncio.asyncio_executor_pool import AsyncioExecutorPool
@@ -85,6 +88,11 @@ class TestDirectAgentSessionGoldenParity(TestCase):
     in the token accounting messages; those are zeroed before comparing. Empty
     dicts are keep-alive frames from the sync generator and carry no content, so
     they are dropped.
+
+    Each conversation also checks that no thread outlives the session: the pool
+    shuts an executor down when the session returns it, so the thread count must
+    be back where it started once the session is closed. A reused session that
+    did not run finish_request() for a later turn would fail this check.
 
     To regenerate the golden files after an intended wire change, run the test
     with NEURO_SAN_UPDATE_GOLDEN=1. That run rewrites the files and reports the
@@ -157,6 +165,7 @@ class TestDirectAgentSessionGoldenParity(TestCase):
         :param turns: The user inputs, in order.
         :return: The normalized stream of response dicts across all turns.
         """
+        threads_before: int = active_count()
         session: DirectAgentSession = self.create_session()
         stream: List[Dict[str, Any]] = []
         chat_context: Optional[Dict[str, Any]] = None
@@ -182,7 +191,29 @@ class TestDirectAgentSessionGoldenParity(TestCase):
                 chat_context = processor.get_chat_context()
         finally:
             session.close()
+        # The pool shuts each returned executor down and joins its thread, so a
+        # thread that is still alive here belongs to a turn whose finish_request()
+        # never ran and whose executor was therefore never returned.
+        self.assertLessEqual(self.wait_for_thread_count(threads_before), threads_before,
+                             "a turn's executor thread outlived the session")
         return self.normalize(stream)
+
+    @staticmethod
+    def wait_for_thread_count(limit: int, timeout_seconds: float = 2.0) -> int:
+        """
+        Waits briefly for the thread count to fall to the given limit, since an
+        executor's thread finishes a moment after the pool shuts it down.
+
+        :param limit: The thread count to wait for.
+        :param timeout_seconds: How long to keep checking before giving up.
+        :return: The last thread count observed.
+        """
+        deadline: float = monotonic() + timeout_seconds
+        count: int = active_count()
+        while count > limit and monotonic() < deadline:
+            sleep(0.05)
+            count = active_count()
+        return count
 
     @staticmethod
     def normalize(stream: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
