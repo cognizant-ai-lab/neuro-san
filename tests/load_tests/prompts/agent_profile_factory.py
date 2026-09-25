@@ -55,7 +55,21 @@ class AgentProfileFactory:
             return AgentProfile(agent_name, self._profile_from_hocons(agent_name, hocon_files))
         path: str = self._find_json_profile(agent_name, profile_path, project_root)
         logger.info("Loaded agent profile: %s", path)
-        return AgentProfile(agent_name, self._read_json(path))
+        data: Dict[str, Any] = self._read_json(path)
+        data["responses"] = [self._response_from_success_fields(data.get("success_fields", []))]
+        return AgentProfile(agent_name, data)
+
+    def _response_from_success_fields(self, success_fields: List[str]) -> Dict[str, Any]:
+        """Express a JSON profile's success_fields as a hocon-style response block.
+
+        Each field becomes sly_data.<field>: { not_value: "" }, i.e. the
+        ValueAgentEvaluator requires it to be present and non-empty. The
+        field is a DictionaryExtractor path from the top of sly_data, so
+        a value nested in a list (agent_reservations[0].reservation_id)
+        is named by its top-level key (agent_reservations).
+        """
+        sly_checks: Dict[str, Any] = {field: {"not_value": ""} for field in success_fields}
+        return {"sly_data": sly_checks} if sly_checks else {}
 
     def _find_json_profile(self, agent_name: str, profile_path: Optional[str],
                            project_root: Optional[str]) -> str:
@@ -134,32 +148,29 @@ class AgentProfileFactory:
         """Build the profile dict from test-case hocon files.
 
         Per file (one prompt each, see _read_load_test_hocon):
-          interactions[0].text              -> prompts
-          interactions[0].response.sly_data -> success_fields (its keys;
-              each must come back non-empty, same as the JSON list)
+          interactions[0].text     -> prompts
+          interactions[0].response -> responses (kept as-is; TrafficRunner
+              hands each block to the data-driven AgentEvaluators, see
+              docs/test_case_hocon_reference.md)
         Agent-wide, may appear in any file and are merged across files:
-          failure_patterns                  -> union, in first-seen order
-          estimated_tokens_per_request      -> max
-
-        Only the keys of response.sly_data are used here; the check body
-        under each key (keywords, value, ...) is not applied yet. That is
-        the job of the data-driven AgentEvaluators
-        (neuro_san/test/evaluators), which TrafficRunner does not call yet.
+          failure_patterns             -> union, in first-seen order
+          estimated_tokens_per_request -> max
 
         Aborts when no text is found in any file.
         """
         prompts: List[str] = []
-        success_fields: List[str] = []
+        responses: List[Dict[str, Any]] = []
         failure_patterns: List[str] = []
         estimated_tokens: Optional[int] = None
         for path in hocon_files:
             test_case: Dict[str, Any] = self._read_load_test_hocon(agent_name, path)
             interaction: Dict[str, Any] = next(iter(test_case.get("interactions", [])), {})
             text: Optional[str] = interaction.get("text")
+            response: Dict[str, Any] = interaction.get("response", {})
             if text:
                 prompts.append(text)
-            response: Dict[str, Any] = interaction.get("response", {})
-            self._extend_unique(success_fields, list(response.get("sly_data", {}).keys()))
+                responses.append(response)
+            self._warn_empty_checks(path, response)
             self._extend_unique(failure_patterns, test_case.get("failure_patterns", []))
             tokens: Optional[int] = test_case.get("estimated_tokens_per_request")
             if tokens is not None:
@@ -174,13 +185,13 @@ class AgentProfileFactory:
             raise SystemExit(1)
         logger.info(
             "Loaded %d prompt(s) from %d hocon file(s) for agent '%s' "
-            "(success_fields=%s, failure_patterns=%d)",
+            "(response checks in %d, failure_patterns=%d)",
             len(prompts), len(hocon_files), agent_name,
-            success_fields, len(failure_patterns),
+            sum(1 for response in responses if response), len(failure_patterns),
         )
         data: Dict[str, Any] = {
             "prompts": prompts,
-            "success_fields": success_fields,
+            "responses": responses,
             "failure_patterns": failure_patterns,
         }
         if estimated_tokens is not None:
@@ -231,6 +242,21 @@ class AgentProfileFactory:
             )
             raise SystemExit(1)
         return test_case
+
+    def _warn_empty_checks(self, path: str, response: Dict[str, Any]) -> None:
+        """Warn about response.sly_data keys with an empty check body.
+
+        The data-driven framework treats `"key": {}` as "no test", so
+        such a key is never evaluated; presence is spelled
+        `"key": { "not_value": "" }`.
+        """
+        for key, check in response.get("sly_data", {}).items():
+            if check == {}:
+                logger.warning(
+                    "%s: response.sly_data.%s is {} and will not be checked; "
+                    "use { \"not_value\": \"\" } to require a non-empty value",
+                    path, key,
+                )
 
     @staticmethod
     def _extend_unique(target: List[str], items: List[str]) -> None:
