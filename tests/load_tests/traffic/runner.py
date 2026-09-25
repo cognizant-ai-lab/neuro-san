@@ -197,7 +197,8 @@ class TrafficRunner:
 
     def check_response(self, processor: BasicMessageProcessor,
                        response_checks: Dict[str, Any]) -> Optional[str]:
-        """Apply the data-driven response checks to one completed request.
+        """
+        Apply the data-driven response checks to one completed request.
 
         Reuses the test framework: DataDrivenTestsDriver.test_response_keys
         walks the hocon ``response`` block (text / structure / sly_data)
@@ -208,7 +209,9 @@ class TrafficRunner:
         assertions instead of raising, so one request never stops the
         run.
 
-        Returns a one-line reason when any check failed, else None.
+        :param processor: The BasicMessageProcessor that saw the whole response stream
+        :param response_checks: The hocon ``response`` block for this request's prompt
+        :return: A one-line reason when any check failed, else None
         """
         asserts = AssertCapture(LoadTestAssertForwarder())
         driver = DataDrivenTestsDriver(asserts)
@@ -217,7 +220,7 @@ class TrafficRunner:
             blocks.append(
                 {"text": {"not_keywords": self._profile.failure_patterns}},
             )
-        reasons = []
+        reasons: List[str] = []
         for block in blocks:
             extractor = DictionaryExtractor(block)
             # One test_response_keys call per top-level test key
@@ -229,35 +232,47 @@ class TrafficRunner:
                 driver.test_response_keys(
                     processor, extractor, [key], asserts, [],
                 )
-                reasons.extend(
-                    f"{key}: {self._first_line(str(failure))}"
-                    for failure in asserts.get_asserts()[seen:]
-                )
+                for failure in asserts.get_asserts()[seen:]:
+                    reasons.append(f"{key}: {self._first_line(str(failure))}")
         if not reasons:
             return None
         return "; ".join(reasons)
 
     @staticmethod
     def _top_level_keys(block: Dict[str, Any]) -> List[str]:
-        """Return the test keys of a response block: text, structure, and
-        sly_data.<field> for each field under sly_data."""
-        keys = []
+        """
+        Return the test keys of a response block.
+
+        :param block: A hocon ``response`` block
+        :return: text and structure when present, plus sly_data.<field>
+                 for each field under sly_data
+        """
+        keys: List[str] = []
         for test_key in DataDrivenTestsDriver.TEST_KEYS:
             checks = block.get(test_key)
             if checks is None:
                 continue
             if test_key == "sly_data" and isinstance(checks, dict):
-                keys.extend(f"{test_key}.{field}" for field in checks)
+                for field in checks:
+                    keys.append(f"{test_key}.{field}")
             else:
                 keys.append(test_key)
         return keys
 
     @staticmethod
     def _first_line(message: str) -> str:
-        """Return the first non-empty line of an assertion message, shortened."""
-        line = next(
-            (part for part in message.splitlines() if part.strip()), message,
-        ).strip()
+        """
+        Return the first non-empty line of an assertion message, shortened.
+
+        :param message: The AssertionError text, possibly multi-line
+        :return: Its first non-empty line, cut to FAILURE_REASON_LINE_LIMIT
+        """
+        line: str = message
+        for part in message.splitlines():
+            if part.strip():
+                line = part
+                break
+        line = line.strip()
         if len(line) <= FAILURE_REASON_LINE_LIMIT:
             return line
         return line[:FAILURE_REASON_LINE_LIMIT - 3] + "..."

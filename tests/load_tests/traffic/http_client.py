@@ -175,11 +175,15 @@ class HttpClient:
 
     @staticmethod
     def flatten_string_fields(sly_data: Dict[str, Any]) -> Dict[str, str]:
-        """Return every string-valued field in sly_data, keyed by its own name.
+        """
+        Return every string-valued field in sly_data, keyed by its own name.
 
         For reporting: fields like ``reservation_id`` may be nested inside
         lists (``sly_data["agent_reservations"][0]["reservation_id"]``),
         and a flat top-level scan would miss them.
+
+        :param sly_data: The sly_data dictionary returned by the agent
+        :return: Field name to string value, first occurrence wins
         """
         parsed_fields: Dict[str, str] = {}
         HttpClient._extract_string_fields(sly_data, parsed_fields)
