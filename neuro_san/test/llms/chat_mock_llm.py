@@ -48,24 +48,17 @@ class ChatMockLlm(BaseChatModel):
     Adapted from https://python.langchain.com/docs/how_to/custom_chat_model/
     """
 
-    # When the (flattened) input starts with one of these markers, _generate
-    # responds with provider-shaped block content instead of an echo, so block
-    # handling can be tested end-to-end without live provider keys. Each shape
-    # was checked against a real reply as delivered by the installed langchain
-    # packages (langchain-anthropic 1.5.0, langchain-openai 1.6.0,
-    # langchain-google-genai 4.3.1).
-    # _generate only: _stream ignores the markers and streams the echo.
-    # ClassVar keeps these constants rather than pydantic model fields.
+    # An input starting with one of these markers makes _generate answer with
+    # provider-shaped block content instead of the echo, so block handling can be
+    # tested without provider keys. Each shape was checked against a live reply as
+    # delivered by the installed langchain package. _stream ignores the markers.
+    # ClassVar keeps these out of the pydantic fields.
     #
-    # Anthropic with extended thinking: a thinking block, then the text.
+    # Anthropic extended thinking: a signed thinking block, then the text.
     ANTHROPIC_THINKING_MARKER: ClassVar[str] = "emit anthropic thinking:"
-    # OpenAI on the Responses API with reasoning summaries: the raw reasoning
-    # item, then the text item, as langchain-openai's default responses/v1
-    # output delivers them.
+    # OpenAI Responses API (responses/v1 output): a reasoning item, then a text item.
     OPENAI_REASONING_MARKER: ClassVar[str] = "emit openai reasoning:"
-    # Gemini 3 with include_thoughts on: a thinking block, then the text block
-    # carrying the thought signature in its extras, as langchain-google-genai
-    # delivers them.
+    # Gemini 3 with include_thoughts: a thinking block, then a text block signed in extras.
     GEMINI_THINKING_MARKER: ClassVar[str] = "emit gemini thinking:"
 
     # This is required field and it is possible to have multiple test models.
@@ -112,11 +105,7 @@ class ChatMockLlm(BaseChatModel):
             "model_name": self.model_name,
         }
         if text.startswith(self.ANTHROPIC_THINKING_MARKER):
-            # Respond like ChatAnthropic with extended thinking enabled:
-            # a thinking block FIRST, then the text answer. Shape confirmed
-            # against a live claude-sonnet-5 reply (2026-09-11), where the
-            # block arrives with a signature and, by default, empty text;
-            # claude-fable-5-1 (2026-09-13) returned the same layout.
+            # ChatAnthropic with thinking on: the signed thinking block comes first.
             answer: str = text[len(self.ANTHROPIC_THINKING_MARKER):].strip()
             content = [
                 {"type": "thinking", "thinking": "Mock thinking.", "signature": "mock-signature"},
@@ -124,15 +113,8 @@ class ChatMockLlm(BaseChatModel):
             ]
             response_metadata["model_provider"] = "anthropic"
         elif text.startswith(self.OPENAI_REASONING_MARKER):
-            # Respond like ChatOpenAI on the Responses API with reasoning
-            # summaries on: the reasoning item FIRST, carrying its id, two
-            # summary parts, an empty content list and the encrypted blob
-            # OpenAI returns unprompted, then the text item with its id and
-            # empty annotations. Pinned against a live gpt-5.2 reply
-            # (2026-09-13); the core translator turns the two summary parts
-            # into two reasoning blocks. gpt-6-astra (2026-09-13) returned the
-            # same item layout with an empty summary list, which the translator
-            # turns into a single reasoning block with empty text.
+            # ChatOpenAI responses/v1: the reasoning item (id, summary parts, empty content,
+            # encrypted_content) comes first. The translator makes one reasoning block per summary part.
             answer = text[len(self.OPENAI_REASONING_MARKER):].strip()
             content = [
                 {"type": "reasoning", "id": "rs_mock", "content": [],
@@ -143,15 +125,8 @@ class ChatMockLlm(BaseChatModel):
             ]
             response_metadata["model_provider"] = "openai"
         elif text.startswith(self.GEMINI_THINKING_MARKER):
-            # Respond like ChatGoogleGenerativeAI on Gemini 3 with
-            # include_thoughts on: a thinking block FIRST holding only the
-            # thought text, then the text block with the thought signature
-            # under "extras". Gemini 3 attaches the signature to the text part
-            # rather than the thought part, so the thinking block has no
-            # signature key. Pinned against live gemini-3-flash-preview and
-            # gemini-3.8-flash replies (2026-09-13); the core translator turns
-            # the thinking block into a reasoning block and leaves the text
-            # block's extras in place.
+            # ChatGoogleGenerativeAI on Gemini 3: an unsigned thinking block comes first; the
+            # thought signature rides on the text block, in its extras.
             answer = text[len(self.GEMINI_THINKING_MARKER):].strip()
             content = [
                 {"type": "thinking", "thinking": "Mock thinking."},

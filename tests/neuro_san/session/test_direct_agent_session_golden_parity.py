@@ -48,56 +48,32 @@ class TestDirectAgentSessionGoldenParity(TestCase):
     """
     Golden-parity test for the client-visible wire stream of a whole request.
 
-    Issue #1222 made the in-server message pipeline safe for LangChain content
-    blocks (reasoning, multiple text blocks, data blocks) while promising that
-    the dicts a client receives for ordinary text traffic do not change at all.
-    The converter and journal tests each lock one layer of that promise. This
-    test locks the composition: it drives the chat_mock_llm_echo network through
-    DirectAgentSession.streaming_chat with the MAXIMAL filter, so nothing the
-    network emits is filtered out, and compares the complete stream of response
-    dicts against a golden file checked into tests/neuro_san/session/golden.
+    Issue #1222 made the message pipeline safe for LangChain content blocks
+    while promising that the dicts a client receives for text traffic do not
+    change. This test locks that promise end to end: it drives the
+    chat_mock_llm_echo network through DirectAgentSession.streaming_chat with
+    the MAXIMAL filter, so nothing is filtered out, and compares the complete
+    stream of response dicts with a golden file under golden/.
 
     The network is a single front man with no tools, so the streams hold the
-    SYSTEM (first turn only, when the history is empty), HUMAN, AI, AGENT token
-    accounting and AGENT_FRAMEWORK answer messages. Tool results, sub-agent
-    origins, error frames, sly_data and structure parsing are not exercised here
-    and would need a tool-calling mock network.
+    SYSTEM (first turn only), HUMAN, AI, AGENT token accounting and
+    AGENT_FRAMEWORK messages. Tool results, sub-agent origins, error frames and
+    sly_data would need a tool-calling mock network.
 
-    Four conversations are locked:
+    Four conversations are locked: a two-turn echo, which carries chat_context
+    into the second turn and also passes on main as it was before the first
+    #1222 PR (7fbebb1b), and one turn for each provider marker of the mock
+    (Anthropic thinking, OpenAI reasoning, Gemini thinking), whose block
+    content must reach the wire as the text alone.
 
-    * a plain two-turn echo, which carries chat_context from the first turn into
-      the second, so the history round trip is covered as well. This golden also
-      passes on main as it was before the first #1222 PR (7fbebb1b), which is
-      the byte-identical guarantee the issue asked for;
-    * a single turn using the mock's "emit anthropic thinking:" marker, which makes the mock
-      answer with an Anthropic-style thinking block ahead of the text, so the
-      golden shows that block content arriving at the converter reaches the wire
-      as the text alone. The wire stays text-only in Phase 1; the journal side of
-      that answer is covered by test_originating_journal;
-    * the same for the mock's "emit openai reasoning:" marker, which imitates a
-      ChatOpenAI Responses API reply with reasoning summaries, a different raw
-      shape (reasoning item with id, summary parts and encrypted content, then
-      a text item) that must flatten to the same text-only wire;
-    * the same for the mock's "emit gemini thinking:" marker, which imitates a
-      ChatGoogleGenerativeAI reply from Gemini 3 with include_thoughts on, where
-      the thinking block carries no signature and the text block carries the
-      thought signature in its extras, the third raw shape that must flatten to
-      the same text-only wire.
+    time_taken_in_seconds values are zeroed before comparing, and the empty
+    keep-alive dicts are dropped. Each conversation also checks that no
+    executor thread outlives the session.
 
-    The only volatile fields in the stream are the time_taken_in_seconds values
-    in the token accounting messages; those are zeroed before comparing. Empty
-    dicts are keep-alive frames from the sync generator and carry no content, so
-    they are dropped.
-
-    Each conversation also checks that no thread outlives the session: the pool
-    shuts an executor down when the session returns it, so the thread count must
-    be back where it started once the session is closed. A reused session that
-    did not run finish_request() for a later turn would fail this check.
-
-    To regenerate the golden files after an intended wire change, run the test
-    with NEURO_SAN_UPDATE_GOLDEN=1. That run rewrites the files and reports the
-    tests as skipped, so it can never pass by comparing a file with itself;
-    review the diff, then run again without the variable.
+    To regenerate the goldens after an intended wire change, run the test with
+    NEURO_SAN_TEST_UPDATE_GOLDEN=1. The files are rewritten and the tests
+    report skipped, so a regeneration run can never pass by comparing a file
+    with itself.
     """
 
     # Registry hocon of the mock network under test. It has no tools and no
@@ -111,7 +87,7 @@ class TestDirectAgentSessionGoldenParity(TestCase):
     VOLATILE_KEY: str = "time_taken_in_seconds"
 
     # Set this environment variable to rewrite the golden files from the current run.
-    UPDATE_ENV_VAR: str = "NEURO_SAN_UPDATE_GOLDEN"
+    UPDATE_ENV_VAR: str = "NEURO_SAN_TEST_UPDATE_GOLDEN"
 
     def setUp(self) -> None:
         """
@@ -191,9 +167,7 @@ class TestDirectAgentSessionGoldenParity(TestCase):
                 chat_context = processor.get_chat_context()
         finally:
             session.close()
-        # The pool shuts each returned executor down and joins its thread, so a
-        # thread that is still alive here belongs to a turn whose finish_request()
-        # never ran and whose executor was therefore never returned.
+        # A thread still alive here belongs to a turn whose executor was never returned.
         self.assertLessEqual(self.wait_for_thread_count(threads_before), threads_before,
                              "a turn's executor thread outlived the session")
         return self.normalize(stream)
@@ -248,7 +222,7 @@ class TestDirectAgentSessionGoldenParity(TestCase):
     def check_against_golden(self, golden_name: str, actual: List[Dict[str, Any]]) -> None:
         """
         Compares the normalized stream with the golden file, or rewrites the
-        golden file when NEURO_SAN_UPDATE_GOLDEN is exactly "1".
+        golden file when NEURO_SAN_TEST_UPDATE_GOLDEN is exactly "1".
 
         :param golden_name: File name of the golden JSON under the golden directory.
         :param actual: The normalized stream from the current run.
