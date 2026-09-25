@@ -26,6 +26,8 @@ from concurrent.futures import as_completed
 from concurrent.futures import CancelledError
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
+from typing import Any
+from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -33,6 +35,7 @@ from unittest import TestCase
 
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
+from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
 from neuro_san.test.driver.assert_capture import AssertCapture
 from neuro_san.test.driver.data_driven_tests_driver import DataDrivenTestsDriver
 from neuro_san.test.unittest.unit_test_assert_forwarder import UnitTestAssertForwarder
@@ -192,7 +195,8 @@ class TrafficRunner:
                 all_models.extend(provider_models.keys())
         return all_models
 
-    def check_response(self, processor, response_checks) -> Optional[str]:
+    def check_response(self, processor: BasicMessageProcessor,
+                       response_checks: Dict[str, Any]) -> Optional[str]:
         """Apply the data-driven response checks to one completed request.
 
         Reuses the test framework: DataDrivenTestsDriver.test_response_keys
@@ -234,7 +238,7 @@ class TrafficRunner:
         return "; ".join(reasons)
 
     @staticmethod
-    def _top_level_keys(block) -> List[str]:
+    def _top_level_keys(block: Dict[str, Any]) -> List[str]:
         """Return the test keys of a response block: text, structure, and
         sly_data.<field> for each field under sly_data."""
         keys = []
@@ -249,7 +253,7 @@ class TrafficRunner:
         return keys
 
     @staticmethod
-    def _first_line(message) -> str:
+    def _first_line(message: str) -> str:
         """Return the first non-empty line of an assertion message, shortened."""
         line = next(
             (part for part in message.splitlines() if part.strip()), message,

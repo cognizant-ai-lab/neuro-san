@@ -174,7 +174,7 @@ class HttpClient:
         )
 
     @staticmethod
-    def string_fields(sly_data) -> Dict[str, str]:
+    def string_fields(sly_data: Dict[str, Any]) -> Dict[str, str]:
         """Return every string-valued field in sly_data, keyed by its own name.
 
         For reporting: fields like ``reservation_id`` may be nested inside

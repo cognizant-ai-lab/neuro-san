@@ -120,7 +120,7 @@ class AgentProfile:
         # response and the run measures real work, not cache hits.
         return f"{base_prompt} (request {request_id})"
 
-    def get_response(self, request_id, same_prompt=False) -> Dict[str, Any]:
+    def get_response(self, request_id: int, same_prompt: bool = False) -> Dict[str, Any]:
         """Return the response checks for the prompt get_prompt() gives request_id."""
         responses = self.responses
         if not responses:
@@ -128,7 +128,7 @@ class AgentProfile:
         return responses[self._pool_index(request_id, same_prompt, len(responses))]
 
     @staticmethod
-    def _pool_index(request_id, same_prompt, size) -> int:
+    def _pool_index(request_id: int, same_prompt: bool, size: int) -> int:
         """Index into a per-prompt pool: first entry in same_prompt mode, else cycle."""
         if same_prompt:
             return 0
