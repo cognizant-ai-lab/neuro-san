@@ -16,9 +16,19 @@
 # END COPYRIGHT
 
 # Load-test prompt for the hello_world agent.
+# One interaction per file: each prompt is fired as an independent
+# single-turn request. Agent-wide settings (failure_patterns) may be
+# repeated in every file; they are merged across the folder.
 # Schema: https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/test_case_hocon_reference.md
 {
     "agent": "hello_world",
+
+    # A response containing any of these is a failure even on HTTP 200.
+    "failure_patterns": [
+        "No fully-specified LLM found",
+        "API key to be set as an environment variable"
+    ],
+
     "interactions": [
         {
             "text": "Can you greet me in different languages?"

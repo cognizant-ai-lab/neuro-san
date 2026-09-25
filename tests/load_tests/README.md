@@ -28,11 +28,11 @@ memory the limit on concurrency; that transport has been removed.
 
 ## Quick Start
 
-Start the server (from neuro-san-studio):
+Start the server (from neuro-san-studio; `ns run --server-only` is the
+same thing):
 
 ```bash
-export PYTHONPATH=$(pwd)
-python -m neuro_san.service.main_loop.server_main_loop 2>&1 | tee logs/server.log
+python -m neuro_san_studio run --server-only 2>&1 | tee logs/server.log
 ```
 
 Run the load test (from neuro-san):
@@ -72,7 +72,7 @@ python -m tests.load_tests.load_test_cli --agent hello_world --level adv \
 | Fire requests + validate responses   |  Y  |  Y   |  Y  |
 | Server log (retries, disconnections) |     | auto | auto |
 | Resource monitoring (RSS, threads)   |  Y  |  Y   |  Y  |
-| Token accounting (from stdout)       |  Y  |  Y   |  Y  |
+| Token accounting (from chat stream)  |  Y  |  Y   |  Y  |
 | Pool reuse analysis                  |     |      | opt |
 | JSON export (`raw_results.json`)     |  Y  |  Y   |  Y  |
 
@@ -122,14 +122,6 @@ and a warning is shown during the cost confirmation if
 `max-workers < num-requests`. An explicit `--max-workers` always wins,
 and `--ramp` ignores both since its stages set their own concurrency.
 
-At `norm`/`adv`, server-log analysis is expected: it is auto-detected
-for a local server. If a local log isn't found you're prompted to
-continue without it; a remote host aborts (use `--client-only`). Pass
-`--no-server-log` to skip the prompt and
-opt out — server-log-dependent sections then print "not available".
-At `min` (the `--client-only`/`--server-only` profile) server-log
-analysis is always off.
-
 ## Traffic Modes
 
 **Flat** (default): `--num-requests 10` — fixed concurrency.
@@ -153,6 +145,7 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--no-tokens`              | off         | Disable per-request token accounting         |
 | `--minimal`                | off         | Ask the server for the bare minimum of messages: only the final answer, cutting traffic and progress-event work — but it also drops the token-accounting message, so client-side LLM/token reporting is unavailable (tokens then come only from the server log) |
 | `--profile-path`           | auto        | Directory containing profile JSON files (or `LOAD_TEST_PROFILE_PATH` env var) |
+| `--fixtures-hocon-dir [DIR]` | off       | Build the whole profile (prompts, checks) from test-case hocon files in `DIR/<agent>/*.hocon`; the JSON profile is not read. Flag alone defaults to `tests/fixtures/load_tests`. See [Profiles from hocon files](#profiles-from-hocon-files) |
 | `--host`                   | localhost   | Neuro-san server host                        |
 | `--port`                   | 8080        | Neuro-san server port                        |
 | `--num-requests`           | 3           | Requests per round in flat mode              |
@@ -171,11 +164,18 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--no-dry-run`             | off         | Skip the dry-run probe + cost confirmation (which run by default at min/norm; adv skips them already) |
 | `--full-concurrency`       | off         | Match `--max-workers` to `--num-requests` so all fire at once |
 | `--scale`                  | 1           | Multiply `--num-requests`, `--max-workers`, `--request-timeout`, `--idle-timeout`, `--stage-timeout`, `--total-timeout` by this factor. `--max-requests` auto-adjusts. |
-| `--skip-reservation-check` | off         | Skip reservation_id validation               |
+| `--skip-reservation-check` | off         | Drop `reservation_id` from the required `success_fields` (servers without reservation storage) |
+| `--https`                  | off         | Use HTTPS/TLS to reach the server; `--port` then defaults to 443 |
+| `--client-only`            | off         | Split-machine: fire requests and monitor the client only; forces `min` |
+| `--server-only`            | off         | Split-machine: monitor the server process/log only, fire nothing; forces `min` |
+| `--archive-server-log`     | off         | Gzip the server log into the output directory after the run (requires `--server-log`) |
 | `--output-dir`             | (none)      | Base directory for test output               |
+| `--history-file PATH`      | `<output-base>/history.jsonl` | Append-only JSONL trend record, one row per client run |
 | `--compare DIR`            | (none)      | Skip load test; scan DIR for previous runs and print a comparison table |
+| `--compare-agent`, `--compare-baseline N`, `--compare-runs` | (none) | Filter `--compare` by agent, minimum request count (baseline), or folder names |
 | `--trend PATH`             | (none)      | Skip load test; print one row per run from the history file, oldest first |
-| `--project-root`           | (none)      | Project root for profile discovery           |
+| `--rebuild DIR`, `--rebuild-all` | (none) | Reconstruct `raw_results.json` from the per-request files (e.g. after Ctrl+C); `--rebuild-all` redoes runs that already have one |
+| `--project-root`           | (none)      | Project root for profile and hocon-fixture discovery |
 
 ### Abort on timeout
 
@@ -288,16 +288,108 @@ to a custom directory (the filename is always derived from `--agent`).
 }
 ```
 
-`success_fields`: stdout fields that must be present for success.
+`success_fields`: fields that must come back non-empty in the response's
+`sly_data` (or as `"field": "value"` in the answer text) for success.
 Example: `["reservation_id", "agent_network_name"]` for
 agent_network_designer — the request is marked FAILED if any are missing.
 
-`failure_patterns`: substrings matched against stdout to catch
+`failure_patterns`: substrings matched against the answer text to catch
 server-side errors returned inside a successful HTTP 200 response
 (e.g. missing API key).  When any pattern matches, the request is
 downgraded from CREATED to FAILED.  The load test client does not
 check for API keys itself — it communicates with the server over
 HTTP, so keys are only needed on the server side.
+
+### Profiles from hocon files
+
+With `--fixtures-hocon-dir`, the JSON profile is not read at all: the
+whole profile comes from test-case hocon files in `DIR/<agent>/*.hocon`,
+in the same format the data-driven tests use
+(`docs/test_case_hocon_reference.md`).
+
+```bash
+# Uses tests/fixtures/load_tests/hello_world/*.hocon
+python -m tests.load_tests.load_test_cli --agent hello_world --fixtures-hocon-dir --client-only
+
+# Custom parent directory: /my/fixtures/agent_network_designer/*.hocon
+python -m tests.load_tests.load_test_cli --agent agent_network_designer --fixtures-hocon-dir /my/fixtures
+```
+
+The agent subfolder is derived from `--agent` (`basic/hello_world` →
+`hello_world`). Each file holds exactly one interaction and yields one
+prompt; every request is fired as an independent single-turn call.
+
+`DIR` is the *parent* directory; do not include the agent folder. A
+relative `DIR` is resolved against `--project-root` (or the current
+directory), so use an absolute path for fixtures kept in another repo,
+e.g. `--fixtures-hocon-dir /path/to/neuro-san-studio/tests/fixtures`.
+
+```hocon
+{
+    "agent": "agent_network_designer",
+    "failure_patterns": ["No fully-specified LLM found"],
+    "interactions": [
+        {
+            "text": "Create an agent network for a pet grooming salon",
+            "response": {
+                "sly_data": {
+                    "reservation_id": {},
+                    "agent_network_name": {}
+                }
+            }
+        }
+    ]
+}
+```
+
+| Hocon key | Becomes | Merged across files |
+|---|---|---|
+| `interactions[0].text` | one prompt | list, file order |
+| `interactions[0].response.sly_data` keys | `success_fields` — each key must come back with a non-empty value | union |
+| `failure_patterns` (optional) | `failure_patterns` | union |
+| `estimated_tokens_per_request` (optional, reporting only) | `estimated_tokens_per_request` | max |
+
+Only the *presence* of each `sly_data` key is checked today; the check
+body (`keywords`, `value`, …) is reserved for a follow-up. The built-in
+checks (request completed, non-empty answer, no failure pattern) always
+apply.
+
+The run aborts (exit 1) when the folder has no `*.hocon` files, a file's
+`agent` does not match `--agent`, a file has more than one interaction,
+`response.sly_data` is not a map, or no file has any text.
+`raw_results.json` records `profile_source`, `fixtures_hocon_dir` and the
+`hocon_files` list under `config`, and the pre-run `Config:` line shows
+`profile_source=hocon (N files)`.
+
+#### End-to-end example: agent_network_designer against a local Studio
+
+Terminal 1 — serve the agent from a neuro-san-studio checkout, with
+reservations enabled so each request returns a `reservation_id`:
+
+```bash
+cd <neuro-san-studio>
+source venv/bin/activate                          # .env with the LLM API key
+export NEURO_SAN_SERVER_HTTP_PORT=8080
+export AGENT_NETWORK_DESIGNER_USE_RESERVATIONS=true
+python -m neuro_san_studio run --server-only
+# ready when: curl -s localhost:8080/api/v1/list | grep agent_network_designer
+```
+
+Terminal 2 — run the load test from this repo:
+
+```bash
+python -m tests.load_tests.load_test_cli \
+  --agent agent_network_designer --fixtures-hocon-dir \
+  --client-only --no-dry-run --num-requests 2 --max-workers 2 \
+  --host localhost --port 8080 --output-dir /tmp/lt_ande
+```
+
+Expected: `LOAD TEST PASSED: all 2 requests completed successfully`, and
+`/tmp/lt_ande/min/<run>/raw_results.json` lists each request as
+`CREATED` with `agent_network_name` and `reservation_id` populated.
+Without `AGENT_NETWORK_DESIGNER_USE_RESERVATIONS=true` the server returns
+no `reservation_id`, so every request fails with `missing reservation_id`;
+add `--skip-reservation-check` to waive that field on such a server.
 
 ## Output
 
@@ -343,10 +435,10 @@ Top-level keys:
 | `stage_summaries`         | Per-round results, retries, server counts, tokens    |
 | `resource_rows`           | Server resource snapshots (before/after per round)   |
 | `client_resource_rows`    | Client resource snapshots (before/peak/settled)      |
-| `_schema`                 | 38 field descriptions for LLM self-service           |
-| `_thresholds`             | 16 health benchmarks (warning/critical levels)       |
-| `_analysis_hints`         | 10 diagnostic patterns to check                      |
-| `_units`                  | 16 unit labels (seconds, MB, USD, etc.)              |
+| `_schema`                 | Field descriptions for LLM self-service              |
+| `_thresholds`             | Health benchmarks (warning/critical levels)          |
+| `_analysis_hints`         | Diagnostic patterns to check                         |
+| `_units`                  | Unit labels (seconds, MB, USD, etc.)                 |
 | `_reporting_instructions` | Tells LLMs to report all checks, even clean ones     |
 
 The `_`-prefixed keys are metadata for LLM-driven analysis. Upload
@@ -498,35 +590,16 @@ first response.
 
 ## Code Quality
 
-This framework follows three review playbooks:
+Conventions: one class per file, no standalone functions, `.get()` for
+dict reads, `%`-formatting for logger calls, specific exception types,
+named constants, TypedDicts (`RequestResult`, `StageSummary`, …) at data
+boundaries, keyword-only arguments and explicit return types.
 
-- **Code_Fink (Dan):** One class per file, `.get()` for dict reads,
-  `.update()` for dict writes, no standalone functions, `%`-formatting
-  for logger calls, specific exception types, named constants for
-  magic numbers.
-
-- **Code_Francon (Olivier):** Silent `except/pass` blocks log via
-  `logger.debug`, `CostEstimator` extracted to its own file, README
-  documents all flags including `--output-dir`.
-
-- **Code_Sargent (Darren):** TypedDicts (`RequestResult`,
-  `StageSummary`, `StatusCounts`, `ServerCounts`, `TokenEntry`,
-  `NetworkTokenEntry`, `ResourceSnapshot`) replace `Dict[str, Any]`
-  at data boundaries. Keyword-only arguments (`*`) eliminate all
-  `too-many-positional-arguments` warnings. Explicit return type
-  annotations on every method.
-
-- **Copilot:** Empty-prompts validation in `AgentProfile`,
-  signed delta formatting (no more `+-3.0M`), Windows compatibility
-  fallbacks (`num_fds`/`select.select`/closed-pipe guards/temp dir),
-  clean error on invalid `--stages`, `ServerCounts` partial TypedDict,
-  auto-resolve profile from agent name, `--full-concurrency` matches
-  `--max-workers` to `--num-requests`, `adv` level defaults (50×3),
-  flat mode hides stage labels and
-  uses round-based output, PRE-RUN SUMMARY with numbered warnings
-  and estimated stage duration.
-
-Lint status: flake8 clean, pylint 10.00/10.
+```bash
+flake8 tests/load_tests
+pylint tests/load_tests
+python -m pytest tests/load_tests/unit -q
+```
 
 ## Architecture
 
@@ -536,6 +609,10 @@ tests/load_tests/
   config.py                    Constants, TypedDicts, compiled patterns
   confirm.py                   Confirm (strict y/n prompt)
   cost_estimator.py            CostEstimator (per-model pricing)
+  duration.py                  DurationParser (`90s`/`20m`/`2h` flag values)
+  load_test_arguments.py       LoadTestArguments (argparse definitions)
+  load_test_mock_llm_service.py  Mock-LLM load test (separate entry point)
+  project_paths.py             ProjectPaths (project root / agent base name)
 
   monitoring/
     heartbeat.py               Heartbeat (progress + peak RSS tracking)
@@ -543,7 +620,8 @@ tests/load_tests/
     server_log_monitor.py      ServerLogMonitor (log parsing)
 
   prompts/
-    agent_profile.py           AgentProfile (prompt/validation config)
+    agent_profile.py           AgentProfile (data: prompts, success_fields, failure_patterns)
+    agent_profile_factory.py   AgentProfileFactory (builds it from the JSON profile or hocon files)
     profiles/                  Per-agent JSON profiles
 
   reporting/
@@ -553,6 +631,7 @@ tests/load_tests/
     latency_analyzer.py        LatencyAnalyzer (completion timeline, degradation)
     summary_file_writer.py     SummaryFileWriter (summary.txt output)
     pool_analyzer.py           PoolAnalyzer
+    rebuild_results.py         RebuildResults (--rebuild)
     resource_reporter.py       ResourceReporter
     summary.py                 SummaryReporter
     system_resources.py        SystemResources (whole-system mem/cpu/threads)
@@ -568,6 +647,11 @@ tests/load_tests/
     environment_validator.py   EnvironmentValidator (mock LLM, server)
     input_validator.py         InputValidator (stages, cost probe)
     output_validator.py        OutputValidator (results, retries)
+
+  unit/                        Unit tests (python -m pytest tests/load_tests/unit)
+
+tests/fixtures/load_tests/
+  <agent>/*.hocon              Test-case hocons used with --fixtures-hocon-dir
 ```
 
 ## Notes

@@ -165,6 +165,8 @@ class OpenAILlmPolicy(LlmPolicy):
             top_p=config.get("top_p"),
             max_tokens=config.get("max_tokens"),  # This is always for output
             tiktoken_model_name=config.get("tiktoken_model_name"),
+            # Only takes effect on Chat Completions: langchain-openai drops stop from Responses API
+            # requests (the API has no such parameter) rather than failing.
             stop=config.get("stop"),
 
             # The following three parameters are for reasoning models only.
@@ -178,26 +180,50 @@ class OpenAILlmPolicy(LlmPolicy):
             # use_responses_api is a tri-state switch for which OpenAI endpoint ChatOpenAI uses.
             # https://reference.langchain.com/python/langchain-openai/chat_models/base/BaseChatOpenAI/use_responses_api
             # https://docs.langchain.com/oss/python/integrations/chat/openai#responses-api
+            #   True  - the class default in default_llm_info.hocon: every OpenAI model goes to the
+            #           Responses API. Tool calling with reasoning on the newest models needs this,
+            #           because Chat Completions rejects function tools combined with reasoning.
+            #           gpt-6-astra has no other option: Chat Completions has no function calling for it
+            #           and it rejects reasoning_effort "none". gpt-5.6-* would otherwise need
+            #           reasoning_effort "none" to call tools at all.
+            #           https://developers.openai.com/api/docs/guides/reasoning
+            #           https://developers.openai.com/api/docs/guides/migrate-to-responses
+            #   False - force Chat Completions. Needed for OpenAI-compatible gateways that only
+            #           implement /chat/completions. For gpt-5.6-* combine it with reasoning_effort
+            #           "none" so tool calls still work (without reasoning).
             #   None  - let langchain-openai infer the endpoint from the other parameters and the
             #           model name: any Responses-only setting (reasoning, include, truncation,
             #           context_management, previous_response_id, text, built-in tools) or a
-            #           Responses-only model (gpt-5.x-pro, codex) selects the Responses API. Of those,
-            #           this policy only forwards "reasoning", so everything else stays on Chat
-            #           Completions, which preserves behavior for existing configs.
-            #   True  - force the Responses API. Needed for tool calling with reasoning on the newest
-            #           models, because Chat Completions rejects function tools combined with reasoning.
-            #           gpt-6-astra has no other option: Chat Completions has no function calling for it
-            #           and it rejects reasoning_effort "none". gpt-5.6-* can alternatively stay on
-            #           Chat Completions with reasoning_effort "none" (tool calls work, no reasoning).
-            #           https://developers.openai.com/api/docs/guides/reasoning
-            #           https://developers.openai.com/api/docs/guides/migrate-to-responses
-            #   False - force Chat Completions.
+            #           Responses-only model (gpt-5.x-pro, codex) selects the Responses API, otherwise
+            #           Chat Completions. This was the class default before the Responses API became
+            #           the default endpoint.
             # This is deliberately forwarded raw instead of through ConfigUtil.get_bool():
-            # get_bool() turns an absent/null value into False, which would disable langchain's
-            # auto-routing, send a "reasoning" dict to Chat Completions, and pin the *-pro models
-            # to an endpoint OpenAI rejects. Only an explicit true/false in llm_config should
-            # override langchain's choice.
+            # get_bool() turns an absent/null value into False. An explicit false must reach langchain
+            # as False (pin Chat Completions), and a null must reach it as None so that inference still
+            # works for users who opt back into it; a null collapsed to False would send a "reasoning"
+            # dict to Chat Completions and pin the *-pro models to an endpoint OpenAI rejects.
             use_responses_api=config.get("use_responses_api"),
+
+            # store controls whether OpenAI keeps the response server-side. OpenAI stores by default
+            # (for 30 days); the class default in default_llm_info.hocon is false, which keeps every
+            # request stateless. Reasoning replay in the tool-calling loop still works statelessly,
+            # because the Responses API includes encrypted_content on reasoning items by default and
+            # langchain-openai replays any reasoning item that carries it. Chat Completions accepts
+            # store as well, so forwarding it is safe on either endpoint. Forwarded raw for the same
+            # reason as use_responses_api: a null must reach langchain as None so the field is left
+            # out of the request entirely (some gateways reject fields they do not know).
+            # https://developers.openai.com/api/docs/guides/reasoning
+            # https://docs.langchain.com/oss/python/integrations/chat/openai#responses-api
+            store=config.get("store"),
+
+            # include is the list of extra output fields to return, e.g. ["reasoning.encrypted_content"].
+            # OpenAI still accepts that legacy value but no longer requires it, because encrypted_content
+            # is included by default. Any non-None include is a Responses API routing trigger in
+            # langchain-openai, and the Chat Completions SDK call rejects the keyword outright, so it is
+            # forwarded raw and must never be given a non-null class default.
+            # https://developers.openai.com/api/docs/guides/reasoning
+            # https://reference.langchain.com/python/langchain-openai/chat_models/base/BaseChatOpenAI/use_responses_api
+            include=config.get("include"),
 
             # If omitted, this defaults to the global verbose value,
             # accessible via langchain_core.globals.get_verbose():
