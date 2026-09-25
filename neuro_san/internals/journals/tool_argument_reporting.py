@@ -53,7 +53,7 @@ class ToolArgumentReporting:
 
         # Remove policy object keys from the args that cannot be serialized in a message.
         for key in ToolArgumentReporting.POLICY_OBJECT_KEYS:
-            if key in modified_tool_args:
+            if key in modified_tool_args.keys():
                 del modified_tool_args[key]
 
         # Create a dictionary for a future journal entry for this invocation
