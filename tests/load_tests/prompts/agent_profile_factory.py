@@ -64,9 +64,11 @@ class AgentProfileFactory:
 
         Each field becomes sly_data.<field>: { not_value: "" }, i.e. the
         ValueAgentEvaluator requires it to be present and non-empty. The
-        field is a DictionaryExtractor path from the top of sly_data, so
-        a value nested in a list (agent_reservations[0].reservation_id)
-        is named by its top-level key (agent_reservations).
+        field is a DictionaryExtractor path from the top of sly_data.
+        DictionaryExtractor does not index into lists, so a value nested
+        in a list (agent_reservations[0].reservation_id) can only be named
+        by its top-level key (agent_reservations): the check then passes
+        for any non-empty list, even one whose reservation_id is empty.
         """
         sly_checks: Dict[str, Any] = {field: {"not_value": ""} for field in success_fields}
         return {"sly_data": sly_checks} if sly_checks else {}
