@@ -22,6 +22,7 @@ import os
 import sys
 import threading
 import time
+from argparse import Namespace
 from concurrent.futures import as_completed
 from concurrent.futures import CancelledError
 from concurrent.futures import ThreadPoolExecutor
@@ -50,6 +51,7 @@ from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.config import THREAD_JOIN_TIMEOUT
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.monitoring.heartbeat import Heartbeat
+from tests.load_tests.prompts.agent_profile import AgentProfile
 from tests.load_tests.traffic.http_client import HttpClient
 from tests.load_tests.traffic.load_test_assert_forwarder import LoadTestAssertForwarder
 from tests.load_tests.traffic.output_parser import OutputParser
@@ -68,17 +70,29 @@ class TrafficRunner:
     do not need to thread them through every method.
     """
 
-    def __init__(self, args, profile) -> None:
-        self._args = args
-        self._profile = profile
-        self._failure_log_lock = threading.Lock()
-        self._failures_logged = 0
+    def __init__(self, args: Namespace, profile: AgentProfile) -> None:
+        """
+        :param args: Parsed load-test command line
+        :param profile: Prompts and response checks for the agent under test
+        """
+        self._args: Namespace = args
+        self._profile: AgentProfile = profile
+        self._failure_log_lock: threading.Lock = threading.Lock()
+        self._failures_logged: int = 0
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
-    def _run_one_tracked(self, request_id, global_request_id,
-                         output_dir, failed_ref) -> RequestResult:
-        """Run one request and increment failed_ref on failure."""
-        result = self.run_one_http(
+    def _run_one_tracked(self, request_id: int, global_request_id: int,
+                         output_dir: Optional[str], failed_ref: SharedRef) -> RequestResult:
+        """
+        Run one request and increment failed_ref on failure.
+
+        :param request_id: Request number within the current stage
+        :param global_request_id: Request number across the whole run
+        :param output_dir: Directory for per-request output files, or None
+        :param failed_ref: Shared counter of failed requests
+        :return: The request result
+        """
+        result: RequestResult = self.run_one_http(
             request_id, global_request_id, output_dir,
         )
         if result.get("status") != STATUS_CREATED:
@@ -86,15 +100,28 @@ class TrafficRunner:
         return result
 
     # pylint: disable=too-many-locals,too-many-branches
-    def run_one_http(self, request_id, global_request_id,
-                     output_dir=None) -> RequestResult:
-        """Execute a single request via in-thread HTTP."""
-        prompt = self._profile.get_prompt(
+    def run_one_http(self, request_id: int, global_request_id: int,
+                     output_dir: Optional[str] = None) -> RequestResult:
+        """
+        Execute a single request via in-thread HTTP and check its response.
+
+        :param request_id: Request number within the current stage
+        :param global_request_id: Request number across the whole run,
+                                  used to pick the prompt and its response checks
+        :param output_dir: Directory for per-request output files, or None
+        :return: The request result
+        """
+        prompt: str = self._profile.get_prompt(
             global_request_id,
             same_prompt=self._args.same_prompt,
             allow_caching=self._args.allow_caching,
         )
-        start = time.time()
+        start: float = time.time()
+        status: str
+        processor: Optional[BasicMessageProcessor]
+        response_text: str
+        ttft: float
+        token_data: Dict[str, Any]
         status, processor, response_text, ttft, token_data = (
             HttpClient.execute_request(
                 self._args.host, self._args.port,
@@ -107,13 +134,12 @@ class TrafficRunner:
                 ).upper(),
             )
         )
-        elapsed = time.time() - start
+        elapsed: float = time.time() - start
 
-        parsed_fields = (
-            HttpClient.flatten_string_fields(processor.get_sly_data())
-            if processor is not None else {}
-        )
-        failure_reason = None
+        parsed_fields: Dict[str, str] = {}
+        if processor is not None:
+            parsed_fields = HttpClient.flatten_string_fields(processor.get_sly_data())
+        failure_reason: Optional[str] = None
         if status == STATUS_CREATED:
             failure_reason = self.check_response(
                 processor,
@@ -130,8 +156,8 @@ class TrafficRunner:
         # A FAILED status with no failure_reason means HttpClient caught an
         # exception and returned its traceback as response_text. Route that
         # to stderr instead of saving it as the agent's answer.
-        stderr = ""
-        stdout = self._http_saved_stdout(response_text, token_data)
+        stderr: str = ""
+        stdout: str = self._http_saved_stdout(response_text, token_data)
         if status == STATUS_FAILED and failure_reason is None:
             stderr = response_text
             stdout = ""
@@ -149,7 +175,7 @@ class TrafficRunner:
             output_dir=output_dir,
         )
 
-        result = {
+        result: RequestResult = {
             "request_id": f"request-{request_id}",
             "status": status,
             "elapsed": elapsed,
@@ -216,9 +242,9 @@ class TrafficRunner:
         asserts = AssertCapture(LoadTestAssertForwarder())
         driver = DataDrivenTestsDriver(asserts)
         blocks = [response_checks]
-        if self._profile.failure_patterns:
+        if self._profile.get_failure_patterns():
             blocks.append(
-                {"text": {"not_keywords": self._profile.failure_patterns}},
+                {"text": {"not_keywords": self._profile.get_failure_patterns()}},
             )
         reasons: List[str] = []
         for block in blocks:

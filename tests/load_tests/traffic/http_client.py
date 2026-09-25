@@ -25,19 +25,15 @@ import time
 import traceback
 from typing import Any
 from typing import Dict
+from typing import Iterator
 from typing import List
 from typing import Optional
 from typing import Tuple
+from typing import Union
 
-from neuro_san.client.streaming_input_processor import (
-    StreamingInputProcessor,
-)
-from neuro_san.message.processors.basic_message_processor import (
-    BasicMessageProcessor,
-)
-from neuro_san.session.http_service_agent_session import (
-    HttpServiceAgentSession,
-)
+from neuro_san.client.streaming_input_processor import StreamingInputProcessor
+from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
+from neuro_san.session.http_service_agent_session import HttpServiceAgentSession
 
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
@@ -58,11 +54,12 @@ class HttpClient:
 
     @staticmethod
     def execute_request(
-            host, port, agent, prompt, *,
-            timeout, idle_timeout, use_https=False,
-            chat_filter_type="MAXIMAL",
-    ) -> Tuple[str, Optional[BasicMessageProcessor], str, float, Dict]:
-        """Send one streaming_chat request in-thread.
+            host: str, port: int, agent: str, prompt: str, *,
+            timeout: float, idle_timeout: float, use_https: bool = False,
+            chat_filter_type: str = "MAXIMAL",
+    ) -> Tuple[str, Optional[BasicMessageProcessor], str, float, Dict[str, Any]]:
+        """
+        Send one streaming_chat request in-thread.
 
         Creates an ``HttpServiceAgentSession`` and a
         ``StreamingInputProcessor``, then calls ``process_once()``
@@ -77,19 +74,27 @@ class HttpClient:
         cap rather than exactly at it; the wait for that message is
         itself bounded by ``idle_timeout``.
 
-        Returns (status, processor, response_text, ttft,
-        token_accounting). ``processor`` is the BasicMessageProcessor
-        that saw the whole stream (answer, structure, sly_data), for
-        the caller's response checks; None when the request did not
-        complete.
+        :param host: Server host name
+        :param port: Server port
+        :param agent: Name of the agent network to call
+        :param prompt: User text to send
+        :param timeout: Cap in seconds on the whole request (--request-timeout)
+        :param idle_timeout: Cap in seconds between streamed messages (--idle-timeout)
+        :param use_https: When True connect over HTTPS/TLS
+        :param chat_filter_type: chat_filter_type to send with the request
+        :return: (status, processor, response_text, ttft, token_accounting).
+                 ``processor`` is the BasicMessageProcessor that saw the
+                 whole stream (answer, structure, sly_data), for the
+                 caller's response checks; None when the request did not
+                 complete.
         """
         # The argument list and local state track the streaming_chat
         # request surface rather than an internal design.
         # pylint: disable=too-many-arguments,too-many-locals
-        start = time.time()
+        start: float = time.time()
 
         security_cfg: Optional[Dict[str, Any]] = {} if use_https else None
-        session = HttpServiceAgentSession(
+        session: HttpServiceAgentSession = HttpServiceAgentSession(
             host=host,
             port=str(port),
             agent_name=agent,
@@ -104,7 +109,7 @@ class HttpClient:
         first_response: List[float] = []
         original_streaming_chat = session.streaming_chat
 
-        def timed_streaming_chat(request_dict):
+        def timed_streaming_chat(request_dict: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
             # Nested to close over original_streaming_chat, start, and
             # first_response so the first streamed message is timed
             # without threading that state through process_once().
@@ -117,7 +122,7 @@ class HttpClient:
 
         session.streaming_chat = timed_streaming_chat
 
-        processor = StreamingInputProcessor(
+        processor: StreamingInputProcessor = StreamingInputProcessor(
             default_input="DEFAULT",
             thinking_file=None,
             session=session,
@@ -144,13 +149,13 @@ class HttpClient:
         # is a per-request isolation boundary — any single request must
         # be recorded as FAILED/TIMEOUT without aborting the load test.
         except Exception:  # pylint: disable=broad-exception-caught
-            elapsed = time.time() - start
+            elapsed: float = time.time() - start
             if elapsed >= timeout:
                 return (STATUS_TIMEOUT, None, "", 0.0, {})
             # Include the full chained traceback so the root cause
             # (ReadTimeout, ConnectionError, HTTPError, ...) survives
             # the generic help text raised by the session client.
-            error_text = traceback.format_exc()
+            error_text: str = traceback.format_exc()
             logger.debug("HTTP request failed:\n%s", error_text)
             return (STATUS_FAILED, None, error_text, 0.0, {})
 
@@ -158,16 +163,11 @@ class HttpClient:
         if elapsed >= timeout:
             return (STATUS_TIMEOUT, None, "", 0.0, {})
 
-        answer_text = state.get("last_chat_response") or ""
-        token_accounting = state.get(
-            "token_accounting",
-        ) or {}
+        answer_text: str = state.get("last_chat_response") or ""
+        token_accounting: Dict[str, Any] = state.get("token_accounting") or {}
 
-        status = (
-            STATUS_CREATED if answer_text
-            else STATUS_FAILED
-        )
-        ttft = first_response[0] if first_response else 0.0
+        status: str = STATUS_CREATED if answer_text else STATUS_FAILED
+        ttft: float = first_response[0] if first_response else 0.0
         return (
             status, processor.get_message_processor(), answer_text,
             ttft, token_accounting,
@@ -191,20 +191,27 @@ class HttpClient:
 
     @staticmethod
     def _extract_string_fields(
-            obj, parsed_fields,
-    ):
-        """Recursively collect string-valued fields into parsed_fields."""
-        if isinstance(obj, dict):
-            for key, value in obj.items():
+            sly_data_node: Union[Dict[str, Any], List[Any]],
+            parsed_fields: Dict[str, str],
+    ) -> None:
+        """
+        Recursively collect string-valued fields into parsed_fields.
+
+        DictionaryExtractor from leaf-common is not used here because it
+        resolves one dotted key at a time and does not descend into lists;
+        this walks the whole tree, lists included, with no key given.
+
+        :param sly_data_node: A dict or list somewhere inside sly_data
+        :param parsed_fields: Field name to string value, filled in place;
+                              the first occurrence of a name wins
+        """
+        if isinstance(sly_data_node, dict):
+            for key, value in sly_data_node.items():
                 if isinstance(value, str):
                     parsed_fields.setdefault(key, value)
                 elif isinstance(value, (dict, list)):
-                    HttpClient._extract_string_fields(
-                        value, parsed_fields,
-                    )
-        elif isinstance(obj, list):
-            for item in obj:
+                    HttpClient._extract_string_fields(value, parsed_fields)
+        elif isinstance(sly_data_node, list):
+            for item in sly_data_node:
                 if isinstance(item, (dict, list)):
-                    HttpClient._extract_string_fields(
-                        item, parsed_fields,
-                    )
+                    HttpClient._extract_string_fields(item, parsed_fields)

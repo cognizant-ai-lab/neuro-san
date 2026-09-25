@@ -24,6 +24,7 @@ from unittest import TestCase
 
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.load_test_cli import LoadTestOrchestrator
+from tests.load_tests.prompts.agent_profile import AgentProfile
 
 
 # These tests call a deliberately-internal helper directly; suppress
@@ -50,8 +51,8 @@ class TestExportRawJsonAggregates(TestCase):
         orchestrator._server_ns_version = "0.6.92"
         orchestrator.server_log = None
         orchestrator.hocon_files = []
-        orchestrator.profile = SimpleNamespace(
-            estimated_tokens_per_request=1000,
+        orchestrator.profile = AgentProfile(
+            "hello_world", {"estimated_tokens_per_request": 1000},
         )
         orchestrator.resource_reporter = SimpleNamespace(
             resource_rows=[], client_rows=[],

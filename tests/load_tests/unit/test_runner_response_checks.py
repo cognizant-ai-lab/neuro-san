@@ -13,7 +13,9 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""Unit tests for TrafficRunner response checks via the data-driven evaluators."""
+"""
+Unit tests for TrafficRunner response checks via the data-driven evaluators.
+"""
 
 from argparse import Namespace
 from typing import Any
@@ -37,7 +39,8 @@ class TestRunnerResponseChecks(TestCase):
 
     @staticmethod
     def _processor(answer: str, sly_data: Optional[Dict[str, Any]] = None) -> BasicMessageProcessor:
-        """Return a BasicMessageProcessor that has seen an AI answer, then the
+        """
+        Return a BasicMessageProcessor that has seen an AI answer, then the
         final AGENT_FRAMEWORK message that carries chat_context and sly_data
         (the shape a streaming_chat stream ends with)."""
         processor = BasicMessageProcessor()
@@ -50,17 +53,23 @@ class TestRunnerResponseChecks(TestCase):
 
     @staticmethod
     def _runner(failure_patterns: Optional[List[str]] = None) -> TrafficRunner:
-        """Return a runner over a one-prompt profile."""
+        """
+        Return a runner over a one-prompt profile.
+        """
         profile = AgentProfile("x", {"prompts": ["p"], "failure_patterns": failure_patterns or []})
         return TrafficRunner(Namespace(same_prompt=False), profile)
 
     def test_no_checks_passes(self) -> None:
-        """An empty response block and no failure_patterns never fail."""
+        """
+        An empty response block and no failure_patterns never fail.
+        """
         reason = self._runner().check_response(self._processor("hi"), {})
         self.assertIsNone(reason)
 
     def test_not_value_requires_present_non_empty_sly_data(self) -> None:
-        """sly_data.<key>: { not_value: "" } fails on a missing or empty key."""
+        """
+        sly_data.<key>: { not_value: "" } fails on a missing or empty key.
+        """
         checks = {"sly_data": {"agent_reservations": {"not_value": ""}}}
         runner = self._runner()
         self.assertIsNone(runner.check_response(
@@ -74,21 +83,27 @@ class TestRunnerResponseChecks(TestCase):
         ))
 
     def test_keywords_check_on_answer_text(self) -> None:
-        """text: { keywords: [...] } is applied to the answer."""
+        """
+        text: { keywords: [...] } is applied to the answer.
+        """
         checks = {"text": {"keywords": ["Bonjour"]}}
         runner = self._runner()
         self.assertIsNone(runner.check_response(self._processor("Bonjour!"), checks))
         self.assertIsNotNone(runner.check_response(self._processor("Hello!"), checks))
 
     def test_failure_patterns_fail_the_request(self) -> None:
-        """failure_patterns are checked as text.not_keywords."""
+        """
+        failure_patterns are checked as text.not_keywords.
+        """
         runner = self._runner(["No fully-specified LLM found"])
         self.assertIsNone(runner.check_response(self._processor("fine"), {}))
         reason = runner.check_response(self._processor("Error: No fully-specified LLM found"), {})
         self.assertIn("No fully-specified LLM found", reason)
 
     def test_all_failures_are_reported(self) -> None:
-        """Every failed check appears in the reason, not just the first."""
+        """
+        Every failed check appears in the reason, not just the first.
+        """
         checks = {"sly_data": {"a": {"not_value": ""}, "b": {"not_value": ""}}}
         reason = self._runner().check_response(self._processor("ok", {}), checks)
         self.assertIn("sly_data.a", reason)
