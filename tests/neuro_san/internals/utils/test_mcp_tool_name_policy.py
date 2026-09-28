@@ -97,10 +97,12 @@ class TestMcpToolNamePolicy(TestCase):
 
     def test_is_valid_tool_name_length_boundary(self) -> None:
         """
-        128 characters is the longest valid name; 129 is rejected.
+        128 characters is the longest valid name; 129 is rejected. MAX_LENGTH
+        is the constant messages quote, so it must agree with the pattern.
         """
         self.assertTrue(McpToolNamePolicy.is_valid_tool_name("a" * 128))
         self.assertFalse(McpToolNamePolicy.is_valid_tool_name("a" * 129))
+        self.assertEqual(McpToolNamePolicy.MAX_LENGTH, 128)
 
     def test_is_over_soft_limit(self) -> None:
         """
