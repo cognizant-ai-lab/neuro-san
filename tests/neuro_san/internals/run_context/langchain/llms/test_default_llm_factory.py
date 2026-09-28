@@ -28,9 +28,12 @@ from typing_extensions import override
 from neuro_san.internals.run_context.langchain.llms.default_llm_factory import DefaultLlmFactory
 
 
+# The class-and-alias matrix plus get_chat_class_name() legitimately need more than 20 cases.
+# pylint: disable=too-many-public-methods
 class TestDefaultLlmFactory(TestCase):
     """
-    Test cases for DefaultLlmFactory.create_full_llm_config() and the alias resolution behind it.
+    Test cases for DefaultLlmFactory.create_full_llm_config() and the alias resolution behind it,
+    and for get_chat_class_name(), which answers the class question without building a config.
 
     The focus is how "use_model_name" aliases in llm_info are followed, with and without a
     "class" key in the llm_config. See https://github.com/cognizant-ai-lab/neuro-san/issues/1298.
@@ -345,3 +348,98 @@ class TestDefaultLlmFactory(TestCase):
         resolve_model_name_alias() hands back a name llm_info does not know, unchanged.
         """
         self.assertEqual(self.UNKNOWN_MODEL, self.factory.resolve_model_name_alias(self.UNKNOWN_MODEL))
+
+    # ---- get_chat_class_name(): the class without building anything ------------------------------
+
+    def test_get_chat_class_name_explicit_short_class(self) -> None:
+        """
+        An explicit llm_info class is returned as given, whatever the model_name says.
+        """
+        config: Dict[str, Any] = {"class": "anthropic", "model_name": self.OPENAI_ALIAS}
+
+        self.assertEqual("anthropic", self.factory.get_chat_class_name(config))
+
+    def test_get_chat_class_name_explicit_dotted_class(self) -> None:
+        """
+        A dotted user class path is returned as given, since nothing from llm_info applies to it.
+        """
+        config: Dict[str, Any] = {"class": "langchain_anthropic.ChatAnthropic", "model_name": self.ANTHROPIC_ALIAS}
+
+        self.assertEqual("langchain_anthropic.ChatAnthropic", self.factory.get_chat_class_name(config))
+
+    def test_get_chat_class_name_from_model_name(self) -> None:
+        """
+        Without a class, the class comes from the llm_info entry for the model_name.
+        """
+        config: Dict[str, Any] = {"model_name": "gemini-2.5-flash"}
+
+        self.assertEqual("gemini", self.factory.get_chat_class_name(config))
+
+    def test_get_chat_class_name_follows_alias(self) -> None:
+        """
+        A one-key alias is followed to the entry that carries the class.
+        """
+        config: Dict[str, Any] = {"model_name": self.OPENAI_ALIAS}
+
+        self.assertEqual("openai", self.factory.get_chat_class_name(config))
+
+    def test_get_chat_class_name_unknown_model_is_none(self) -> None:
+        """
+        An unknown model_name yields None rather than an error, unlike create_full_llm_config().
+        """
+        config: Dict[str, Any] = {"model_name": self.UNKNOWN_MODEL}
+
+        self.assertIsNone(self.factory.get_chat_class_name(config))
+
+    def test_get_chat_class_name_without_model_name_uses_default_config(self) -> None:
+        """
+        Without a model_name, default_config's model_name decides, the same as create_full_llm_config().
+        """
+        default_config: Dict[str, Any] = self.factory.llm_infos.get("default_config")
+        default_model_name: str = default_config.get("model_name")
+        expected: str = self.factory.get_chat_class_name({"model_name": default_model_name})
+        # The default model must resolve to something, or this test would pass vacuously.
+        self.assertIsNotNone(expected)
+
+        self.assertEqual(expected, self.factory.get_chat_class_name({}))
+
+    def test_get_chat_class_name_non_dict_entry_is_none(self) -> None:
+        """
+        A user llm_info entry that is not a dictionary yields None instead of an AttributeError.
+        """
+        extra_hocon: str = '{ "gemini-2.5-flash": "just a string" }'
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(extra_hocon)
+
+        self.assertIsNone(factory.get_chat_class_name({"model_name": "gemini-2.5-flash"}))
+
+    def test_get_chat_class_name_alias_to_non_dict_entry_is_none(self) -> None:
+        """
+        An alias whose target entry is not a dictionary yields None as well.
+        """
+        extra_hocon: str = """
+        {
+            "weird": {
+                "use_model_name": "target"
+            },
+            "target": "just a string"
+        }
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(extra_hocon)
+
+        self.assertIsNone(factory.get_chat_class_name({"model_name": "weird"}))
+
+    # ---- get_llm_info_file(): which user file, if any, is read on top of the stock one ----------
+
+    def test_get_llm_info_file_stock_is_none(self) -> None:
+        """
+        With no llm_info_file in the config and no AGENT_LLM_INFO_FILE in the environment, there is none.
+        """
+        self.assertIsNone(self.factory.get_llm_info_file())
+
+    def test_get_llm_info_file_from_config(self) -> None:
+        """
+        The config's llm_info_file is reported as given; the constructor does not read it.
+        """
+        factory: DefaultLlmFactory = DefaultLlmFactory({"llm_info_file": "/no/such/llm_info.hocon"})
+
+        self.assertEqual("/no/such/llm_info.hocon", factory.get_llm_info_file())

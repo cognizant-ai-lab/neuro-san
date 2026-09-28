@@ -296,6 +296,58 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         chat_classes: Dict[str, Any] = self.llm_infos.get("classes", {})
         return chat_class_name in chat_classes
 
+    def get_llm_info_file(self) -> Optional[str]:
+        """
+        Tells which user llm_info file this factory reads on top of the stock one.
+
+        :return: The "llm_info_file" from the network config, or the AGENT_LLM_INFO_FILE
+                environment variable when the config has none, as resolved by the constructor.
+                None means only the stock default_llm_info.hocon is read.
+        """
+        return self.llm_info_file
+
+    def get_chat_class_name(self, config: Dict[str, Any]) -> Optional[str]:
+        """
+        Tells which llm_info class an llm_config resolves to, without building anything.
+
+        This mirrors the class selection that create_full_llm_config() performs, for callers
+        such as load-time validators that only need to know which provider an agent would end
+        up talking to. Nothing is instantiated, no defaults are merged in, and unlike
+        create_full_llm_config() nothing is raised for a model llm_info does not know.
+
+        :param config: The llm_config from the user
+        :return: The value of a string "class" key as given (a short llm_info class such as
+                "openai", or the dotted path of a user chat model class). Otherwise the "class"
+                of the llm_info entry that model_name resolves to after any alias hop, where a
+                missing model_name falls back to default_config's model_name the same way
+                create_full_llm_config() does. None when that entry is unknown, is not a
+                dictionary, or has no "class".
+        """
+        class_from_llm_config: Any = config.get("class")
+        if isinstance(class_from_llm_config, str) and len(class_from_llm_config) > 0:
+            # Returned as given: create_full_llm_config() keeps the user's class too.
+            return class_from_llm_config
+
+        model_name: Any = config.get("model_name")
+        if model_name is None:
+            # Same fallback create_full_llm_config() gets from overlaying default_config.
+            default_config: Dict[str, Any] = self.llm_infos.get("default_config") or {}
+            model_name = default_config.get("model_name")
+        if not isinstance(model_name, str):
+            return None
+
+        if not isinstance(self.llm_infos.get(model_name), dict):
+            # Unknown model, or a user llm_info_file entry that is not a dictionary at all.
+            # _find_llm_entry() would trip over the latter; here it just means "no class".
+            return None
+
+        found: Tuple[Optional[Dict[str, Any]], str] = self._find_llm_entry(model_name)
+        llm_entry: Optional[Dict[str, Any]] = found[0]
+        if not isinstance(llm_entry, dict):
+            # A dangling alias, or an alias whose target entry is not a dictionary.
+            return None
+        return llm_entry.get("class")
+
     def _find_llm_entry(self, model_name: str) -> Tuple[Optional[Dict[str, Any]], str]:
         """
         Looks up the llm_info entry for a model name, following at most one alias hop.

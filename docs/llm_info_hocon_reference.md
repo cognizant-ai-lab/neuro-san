@@ -588,7 +588,9 @@ the chat-model constructor.
   `web_search_`, `web_fetch_`, `code_execution_`, `tool_search_`, and `mcp_toolset`. Client-side tools such as
   `bash_`, `text_editor_`, `computer_`, and `memory_` are not executed by neuro-san.
 - Gemini accepts one built-in entry, such as `{"google_search": {}}` or `{"code_execution": {}}`. Do not combine
-  a Gemini built-in with other provider tools or regular function tools.
+  a Gemini built-in with other provider tools or regular function tools. Both rules are checked at load time when
+  the model resolves to the `gemini` class (by `model_name` or the short `class` value); a dotted class path or a
+  `model_name` not listed in llm_info is not checked.
 
 These dictionaries are provider-specific and are passed through unchanged. A non-empty list therefore requires
 every model in a fallback chain, including peer groups, to use the same provider. The `anthropic-bedrock`,

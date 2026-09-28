@@ -370,6 +370,19 @@ OpenAI built-in tools are available only through the Responses API, so `use_resp
 with `provider_tools`. The `azure-openai` (see [#1307](https://github.com/cognizant-ai-lab/neuro-san/issues/1307)),
 `anthropic-bedrock`, `bedrock`, `ollama`, `nvidia`, and `openrouter` classes do not support `provider_tools`.
 
+Load-time validation: when a network is read from the registry, deployed, or checked with the
+[hocon validator CLI](./hocon_validator_cli.md), the following `provider_tools` mistakes are reported as validation
+errors, so they surface then rather than as provider errors at request time:
+
+- `provider_tools` that is not a list, or a list containing something other than a dictionary.
+- Near-miss spellings such as `provider_tool`, `builtin_tools`, `built_in_tools`, or `server_tools`, which the
+  runtime would otherwise ignore silently.
+- A `provider_tools` key inside a [fallbacks](#fallbacks) entry, which the runtime ignores; declare it at the top
+  level of the `llm_config` so it applies to every fallback.
+- An LLM agent whose `model_name`, short `class` value, or any fallback resolves to the `gemini` class and that
+  declares `provider_tools` alongside other `tools`, or more than one Gemini built-in entry. A dotted class path
+  or a `model_name` not listed in llm_info is not checked, and coded tools and toolbox tools never build a model.
+
 #### class
 
 You can use the `class` key in two ways:

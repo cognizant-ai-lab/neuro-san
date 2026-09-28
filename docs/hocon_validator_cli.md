@@ -12,6 +12,8 @@ checking for issues such as:
 - Empty instructions
 - Invalid URL references
 - Malformed function.parameters blocks (nested keys, bad required refs, unrecognized types)
+- Malformed or misplaced `llm_config.provider_tools` (wrong shape, near-miss key names, a copy inside a
+  `fallbacks` entry, Gemini built-ins mixed with other tools or more than one Gemini built-in)
 
 Usage:
 
