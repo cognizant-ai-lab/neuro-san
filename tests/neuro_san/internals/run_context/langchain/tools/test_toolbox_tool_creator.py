@@ -66,14 +66,16 @@ class TestToolboxToolCreator(IsolatedAsyncioTestCase):
         The pass-through applies to a list only when every element is a BaseTool.
         An empty list qualifies; a list with any other element, or a non-list, does not.
         """
+        # The subTest label is a plain string: pytest-xdist has to serialize
+        # subTest parameters to report them, and a MagicMock cannot be pickled.
         cases: List[Any] = [
-            ([MagicMock(spec=BaseTool), MagicMock(spec=BaseTool)], True),
-            ([], True),
-            ([MagicMock(spec=BaseTool), {"description": "not a tool"}], False),
-            ({"description": "a spec, not a list"}, False),
+            ("two base tools", [MagicMock(spec=BaseTool), MagicMock(spec=BaseTool)], True),
+            ("empty list", [], True),
+            ("base tool plus a dict", [MagicMock(spec=BaseTool), {"description": "not a tool"}], False),
+            ("a dict, not a list", {"description": "a spec, not a list"}, False),
         ]
-        for value, expected in cases:
-            with self.subTest(value=value):
+        for label, value, expected in cases:
+            with self.subTest(case=label):
                 # pylint: disable=protected-access
                 self.assertIs(ToolboxToolCreator._is_list_of_base_tools(value), expected)
 

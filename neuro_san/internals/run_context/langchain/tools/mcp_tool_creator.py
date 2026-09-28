@@ -51,7 +51,7 @@ class McpToolCreator(ToolCreator):
                  invocation_context: InvocationContext,
                  journal: Journal,
                  agent_location: str,
-                 exposed_tool_names: ExposedToolNames):
+                 exposed_tool_names: ExposedToolNames) -> None:
         """
         Constructor
 
@@ -126,8 +126,8 @@ class McpToolCreator(ToolCreator):
 
     async def _skip_tools_already_named(self, server_url: str, mcp_tools: List[BaseTool]) -> List[BaseTool]:
         """
-        Drops MCP tools whose exposed name an earlier tool of this agent network
-        already uses.
+        Drops MCP tools whose exposed name an earlier tool of this agent already
+        uses. The record is per agent, so another agent may expose the same name.
 
         LangChainMcpAdapter resolves name collisions within one server only. Two
         servers, or a server and a coded tool, can still expose one name, for

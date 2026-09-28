@@ -49,7 +49,7 @@ class BaseToolFactory:
     def __init__(self,
                  tool_caller: ToolCaller,
                  invocation_context: InvocationContext,
-                 journal: Journal):
+                 journal: Journal) -> None:
         """
         Constructor
 

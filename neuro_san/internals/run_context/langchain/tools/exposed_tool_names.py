@@ -39,7 +39,7 @@ class ExposedToolNames:
     records every created tool through it.
     """
 
-    def __init__(self, journal: Journal, agent_location: str):
+    def __init__(self, journal: Journal, agent_location: str) -> None:
         """
         Constructor
 
@@ -72,7 +72,7 @@ class ExposedToolNames:
     async def remember(self, created: Union[BaseTool, List[BaseTool]]) -> None:
         """
         Records the names of newly created tools and reports any that repeat a
-        name already exposed in this agent network.
+        name this agent has already exposed.
 
         MCP tools that repeat a name never get here: McpToolCreator drops
         them. Any other repeat is only reported, since dropping a coded or

@@ -72,7 +72,7 @@ class ExternalAgentToolCreator(ToolCreator):
                  tool_caller: ToolCaller,
                  invocation_context: InvocationContext,
                  journal: Journal,
-                 agent_location: str):
+                 agent_location: str) -> None:
         """
         Constructor
 
