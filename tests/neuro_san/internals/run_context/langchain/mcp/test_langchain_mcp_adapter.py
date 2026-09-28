@@ -568,7 +568,7 @@ class TestLangChainMcpAdapter(IsolatedAsyncioTestCase):
     async def test_get_mcp_tools_records_unmatched_allow_list_entries(self, mock_client_class: MagicMock) -> None:
         """
         get_unmatched_allowed_tools() returns exactly the allow-list entries that matched
-        no advertised tool in either spelling, so BaseToolFactory can report them
+        no advertised tool in either spelling, so McpToolCreator can report them
         instead of comparing the entries with the renamed tools. It is reset on
         every call and empty without an allow list.
 

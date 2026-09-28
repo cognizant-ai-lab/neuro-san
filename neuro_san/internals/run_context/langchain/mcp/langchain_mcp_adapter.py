@@ -45,7 +45,7 @@ class LangChainMcpAdapter:
     duplicate another from the same server, see _rename_tools_for_providers().
     Only the LangChain-side name changes; the server is still called with the
     original name. Duplicates across servers, and against the network's other
-    tools, are handled by BaseToolFactory.
+    tools, are handled by McpToolCreator with ExposedToolNames.
     """
 
     _mcp_info_lock: Lock = Lock()
@@ -77,7 +77,7 @@ class LangChainMcpAdapter:
         Reports the allow-list entries the last get_mcp_tools() call could not
         match to any tool the server advertised, in either spelling.
 
-        BaseToolFactory reports these to the user. It cannot compute them itself
+        McpToolCreator reports these to the user. It cannot compute them itself
         by comparing the entries with the returned tools, because those carry
         the renamed spelling: "deep/math_guy" would look missing after it was
         exposed as "deep__math_guy".
@@ -357,7 +357,7 @@ class LangChainMcpAdapter:
                 continue
             else:
                 taken_names.add(safe_name)
-                # Expected, per-run housekeeping: create_mcp_tool() builds a fresh
+                # Expected, per-run housekeeping: McpToolCreator.create() builds a fresh
                 # adapter on every agent run, so this would spam WARNING otherwise.
                 self.logger.info(
                     "%sMCP server %s: tool '%s' renamed to '%s' for LLM tool-name compatibility; "
