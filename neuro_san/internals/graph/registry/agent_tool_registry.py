@@ -104,6 +104,12 @@ class AgentToolRegistry(AgentNetworkInspector, AgentToolFactory):
         """
         return self.agent_network.get_name_from_spec(agent_spec)
 
+    def get_network_name(self) -> str:
+        """
+        :return: The name of the agent network, as registered in the manifest
+        """
+        return self.agent_network.get_network_name()
+
     def find_front_man(self) -> str:
         """
         :return: A single tool name to use as the root of the chat agent.
