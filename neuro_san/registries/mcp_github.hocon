@@ -101,7 +101,7 @@
                     #         },
                     #     }
                     # }
-                    # See https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#authentication
+                    # See https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/mcp_tools.md#authentication
                 }
             ]
         }

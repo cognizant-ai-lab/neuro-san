@@ -62,7 +62,6 @@ Items in ***bold*** are essentials. Try to understand these first.
     - [***tools*** - list of other agents/tools that this agent may access](#tools-agents)
         - [External Agents](#external-agents)
         - [MCP Servers](#mcp-servers)
-            - [Authentication](#authentication)
     - [***class*** - Python class name to invoke for Coded Tools](#class-1)
     - [llm_config - agent-specific LLM configuration](#llm_config-2)
     - [command](#command)
@@ -345,8 +344,7 @@ to expose secrets by checking them in.
 
 The optional `provider_tools` key is a list of provider-native tool dictionaries. These tools run on the model
 provider's servers rather than in neuro-san. The dictionaries are passed through unchanged, so their shapes must
-match the provider selected by `model_name` or `class`. See the
-[provider-specific reference](./llm_info_hocon_reference.md#provider-tools) for supported shapes and limitations.
+match the provider selected by `model_name` or `class`.
 
 ```hocon
 "llm_config": {
@@ -358,17 +356,8 @@ match the provider selected by `model_name` or `class`. See the
 }
 ```
 
-An agent-level list replaces the network-level list. Set it to `[]` or `null` to clear inherited tools. The model
-decides whether to use a provider tool; neuro-san does not force a tool choice. All entries in a fallback chain must
-use the same provider when `provider_tools` is non-empty because LangChain binds the same list to every fallback.
-
-Provider tool activity and results are carried over neuro-san's text-only response and history interfaces. Provider
-billing for searches, code execution, or other built-ins is separate from neuro-san's token accounting. Do not put
-API keys or other secrets inside provider tool dictionaries; use the provider's normal credential configuration.
-
-OpenAI built-in tools are available only through the Responses API, so `use_responses_api: false` cannot be used
-with `provider_tools`. The `azure-openai` (see [#1307](https://github.com/cognizant-ai-lab/neuro-san/issues/1307)),
-`anthropic-bedrock`, `bedrock`, `ollama`, `nvidia`, and `openrouter` classes do not support `provider_tools`.
+See [Provider Tools](./provider_tools.md) for the shapes each provider accepts, how an agent-level list combines
+with the network-level one, the fallback rule, and the classes that do not support it.
 
 #### class
 
@@ -542,7 +531,7 @@ Other agents listed can be in any order and can reference each other, forming tr
 Typically any agent that is not the front-man is considered an implementation detail private
 to the agent network definition. It is not possible to call these internal agents except from within
 the agent network that defines them.  If you find your agent networks have some shared functionality
-between them, consider elevating sub-networks to [external agent](#external-agents) status.
+between them, consider elevating sub-networks to [external agent](./external_agents.md) status.
 
 ### metadata
 
@@ -708,9 +697,9 @@ Example networks that advertise that their sly_data_schema needs external API ke
 ##### http_headers
 
 The sly_data dictionary can contain an optional `http_headers` key: a mapping from
-[MCP server](#mcp-servers) URL to a dictionary of HTTP header names/values (for example
+[MCP server](./mcp_tools.md) URL to a dictionary of HTTP header names/values (for example
 `{"Authorization": "Bearer <token>"}`) that neuro-san sends when it calls that server.
-See [Authentication](#authentication) under MCP Servers for the header format.
+See [Authentication](./mcp_tools.md#authentication) for the header format.
 
 Advertising `http_headers` in your `sly_data_schema` — with a `properties` entry per MCP URL and a
 `required` list — lets an OAuth-capable client (for example
@@ -766,9 +755,9 @@ Each entry may be one of the following:
 
 - The name of another agent within the same network definition.
 
-- A string reference to an [external agent](#external-agents)
+- A string reference to an [external agent](./external_agents.md)
 
-- A string or dictionary reference to an [MCP server](#mcp-servers)
+- A string or dictionary reference to an [MCP server](./mcp_tools.md)
 
 Typically the names listed here are other agents within the same agent network definition,
 often forming a tree structure, but overall agent networks are allowed to contain cycles.
@@ -780,153 +769,14 @@ and the context of its query.
 
 #### External Agents
 
-This is not a hocon file key, but more a description of a concept that relates to listings of tools.
-
-It is possible for any agent to reference another agent on the same server by adding a forward-slash
-in front of the served agent's name.  This is typically the stem of an agent network hocon file in
-a deployment's registries directory.
-
-Example: `/date_time` or `/math_guy`
-
-This allows common agent network definitions to be used as functions for other local networks.
-
-Furthermore, it is also possible to reference agents on other neuro-san _servers_ by using a URL as a tool reference.
-
-Examples: `http://localhost:8080/math_guy` or `https://agents.example.com/deep/math_guy`
-
-The path of the URL is the served agent's name. It may contain `/` when the remote server keeps its
-registries in nested directories, as in `deep/math_guy` above.
-
-Which port is used depends on the kind of reference:
-
-- An `https://` reference without an explicit port uses the well-known https port (443), on the assumption
-  that a TLS-terminating proxy or load balancer sits in front of the remote neuro-san server.
-- An `http://` reference without an explicit port uses the neuro-san server's default http port (8080).
-- Exception for `localhost`: a `http://localhost/...` or `https://localhost/...` reference without an explicit
-  port uses the referencing server's own configured port, the same as a `/name` reference, so the 443 default
-  above does not apply to it.
-- A same-server `/name` reference (see above) resolves on the server running the referencing network,
-  so no host or port is involved.
-
-When a server runs with `AGENT_SESSION_REQUIRE_HTTPS=true` (the default in the shipped Dockerfile), only `https://`
-URL references to remote servers are accepted; a remote `http://` reference fails when the tool is called.
-Same-server references are unaffected, because they are resolved in-process without an http session: that is
-every `/name` reference, and an `http://localhost/...` reference to a network this same server serves.
-
-This enables entire ecosystems of agent webs.
+A `/name` entry or a URL entry refers to an agent network outside this one, on the same server or on another
+neuro-san server. See [External Agents](./external_agents.md) for the reference forms, ports and the https rule.
 
 #### MCP Servers
 
-Agents can call tools exposed by external Model Context Protocol (MCP) servers.
-
-MCP server URLs are recognized when they conform to the
-[MCP canonical server URI specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#canonical-server-uri):
-they must use the `http` or `https` scheme, must include a host, and must not contain a fragment.
-To distinguish MCP server URLs from other external agent URLs, the literal `mcp` must appear either
-as a label in the hostname (e.g. `mcp.example.com`) or as any segment of the URL path
-(e.g. `/mcp`, `/mcp/free`, `/server/mcp`, `/v1/mcp/server`).
-
-Examples of URLs that are recognized as MCP servers:
-
-- `https://mcp.example.com/mcp`
-- `https://mcp.example.com`
-- `https://mcp.example.com:8443`
-- `https://example.com/mcp/free`
-- `https://example.com/v1/mcp/server`
-- `http://localhost:8000/mcp/`
-
-If a URL you want to use does not satisfy these rules, fall back to the dictionary form below,
-which is always treated as an MCP reference regardless of URL shape.
-
-MCP servers can be configured in two formats:
-
-- string reference
-
-    ```json
-    "tools": ["https://example.com/mcp"]
-    ```
-
-    - Tool filtering is not available with string reference format unless using environment variable
-    `MCP_SERVERS_INFO_FILE` (see Authentication section below).
-
-- dictionary reference
-
-    ```json
-    "tools": [
-        {
-            "url": "https://example.com/mcp",
-            "tools": ["tool_1"]
-        }
-    ]
-    ```
-
-    - `tools` key filters which specific tools from the MCP server are made available.
-    If omitted, all tools on the server will be accessible.
-    - Any tool name outside `^[a-zA-Z0-9_-]+$` is renamed before the LLM sees it, because OpenAI
-    and Anthropic reject such names and fail the whole request: "/" becomes "__" and any other
-    unsafe character becomes "_". The MCP server is still called with the original name. A current
-    neuro-san server already advertises its nested agent networks under provider-safe names,
-    `deep__math_guy` for the network `deep/math_guy` (see
-    [Agent networks as MCP tools](./mcp_service.md#agent-networks-as-mcp-tools)); a `deep/math_guy`
-    tool from an older neuro-san server is renamed here the same way, so the LLM sees
-    `deep__math_guy` either way. A name longer than 64 characters (OpenAI's cap) or 128 (Anthropic's),
-    renamed or not, is kept but warned about.
-    - Both spellings are accepted in the `tools` allow list, so `"tools": ["deep/math_guy"]` selects
-    the tool whether the server advertises it as `deep/math_guy` or as `deep__math_guy`. When a
-    server offers both spellings of one name, an entry selects the tool it spells exactly.
-    - Two tools on one server that end up with the same name, advertised twice or renamed alike, are a
-    collision: the tool that needed no rename (or, failing that, the first one listed) is kept and the
-    other is dropped with a warning. Across servers, and against the network's other tools, the first
-    tool in the agent's `tools` list to use a name keeps it; a later MCP tool with the same name is
-    skipped with a warning.
-    - Thinking output and journal entries show the renamed name, since that is the name the LLM uses.
-
-##### Authentication
-
-MCP tools can be authenticated using the following methods:
-
-- `http_headers` field in `sly_data`. The required fields depend on the authentication scheme expected by each MCP
-server. Users may specify different authorization credentials for different MCP URLs.
-
-    Example:
-
-    ```json
-    {
-        "http_headers": {
-            "<MCP_URL_1>": {
-                "Authorization": "Bearer <token_value>"
-            },
-            "<MCP_URL_2>": {
-                "client_id": "<client_id_value>",
-                "client_secret": "<client_secret_value>"
-            }
-        }
-    }
-    ```
-
-- Set the `MCP_SERVERS_INFO_FILE` environment variable to point to a HOCON file containing MCP server configurations:
-
-    ```json
-    {
-        "mcp_server_url_1": {
-            "http_headers": {
-                "Authorization": "Bearer <token>",
-            },
-            "tools": ["tool_1", "tool_2"]
-        },
-    }
-    ```
-
-    - Server URLs must match those in the agent network HOCON file
-
-    - If the headers exist in both `sly_data` and the configuration file for the same server,
-    `sly_data` takes precedence
-
-    - Tool filtering from the configuration file is used only if no tool filtering exists in the agent network HOCON
-
-A client can also populate these `http_headers` on the user's behalf: see [http_headers](#http_headers)
-under `sly_data_schema`, where a network advertises the MCP URLs it needs and an OAuth-capable client
-(e.g. nsflow) signs in and injects the bearer token, gating on `http_headers.required`.
+A string or dictionary entry can refer to a Model Context Protocol (MCP) server whose tools the agent may call.
+See [MCP Servers as Tools](./mcp_tools.md) for how URLs are recognized, the `tools` allow list, how tool names
+are made provider-safe, and authentication.
 
 <!--- pyml disable-next-line no-duplicate-heading -->
 ### llm_config
@@ -1057,7 +907,7 @@ Mid-level agents can have this be false to hide certain implementation details.
 
 #### to_downstream
 
-Dictionary which specifies security policy for information go _to_ downstream [external agents](#external-agents).
+Dictionary which specifies security policy for information go _to_ downstream [external agents](./external_agents.md).
 This has no effect on any information flowing between agents internal to the network.
 
 ##### sly_data
@@ -1096,7 +946,7 @@ as a list:
 
 #### from_downstream
 
-Dictionary which specifies security policy for information coming _from_ downstream [external agents](#external-agents).
+Dictionary which specifies security policy for information coming _from_ downstream [external agents](./external_agents.md).
 This has no effect on any information flowing between agents internal to the network.
 
 <!--- pyml disable-next-line no-duplicate-heading -->
@@ -1186,7 +1036,7 @@ that can visualize the network's connectivity.
 When not present, the system determines the value given the configuration of the node
 and will return one of the following strings:
 
-- external_agent - for [External Agents](#external-agents)
+- external_agent - for [External Agents](./external_agents.md)
 - coded_tool - for a [CodedTool](../neuro_san/interfaces/coded_tool.py)
 - langchain_tool - for a langchain tool
 - llm_agent - for LLM-powered agents
