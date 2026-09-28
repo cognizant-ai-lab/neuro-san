@@ -343,9 +343,11 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             # _find_llm_entry() would trip over the latter; here it just means "no class".
             return None
 
-        if not isinstance(entry.get("use_model_name", model_name), str):
+        use_model_name: Any = entry.get("use_model_name")
+        if use_model_name is not None and not isinstance(use_model_name, str):
             # _find_llm_entry() looks the alias target up as a dictionary key, so a list or
             # dictionary there would raise. Such an entry cannot name a class anyway.
+            # None is fine: _find_llm_entry() treats it as "not an alias".
             return None
 
         found: Tuple[Optional[Dict[str, Any]], str] = self._find_llm_entry(model_name)

@@ -443,6 +443,15 @@ class TestDefaultLlmFactory(TestCase):
 
         self.assertIsNone(factory.get_chat_class_name({"model_name": "weird"}))
 
+    def test_get_chat_class_name_null_alias_keeps_own_class(self) -> None:
+        """
+        A null "use_model_name" is not an alias, so the entry's own class is returned.
+        """
+        extra_hocon: str = '{ "my-gemini": { "class": "gemini", "use_model_name": null } }'
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(extra_hocon)
+
+        self.assertEqual("gemini", factory.get_chat_class_name({"model_name": "my-gemini"}))
+
     def test_get_chat_class_name_non_dict_default_config_is_none(self) -> None:
         """
         A default_config that is not a dictionary yields None for a config without model_name.

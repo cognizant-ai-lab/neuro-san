@@ -390,14 +390,18 @@ class ProviderToolsNetworkValidator(AbstractNetworkValidator):
         Tells whether an agent spec builds a model at all.
 
         This mirrors the order of ActivationFactory.BASE_PREPPERS: a "toolbox" key selects
-        a ToolboxActivation and a "class" key a ClassActivation (coded tool), and neither
-        reads llm_config even though DefaultsConfigFilter copies one in. Everything else
-        becomes a Branch or FrontMan activation, whose CallingActivation builds the model.
+        a ToolboxActivation and "function" plus "class" a ClassActivation (coded tool), and
+        neither reads llm_config even though DefaultsConfigFilter copies one in. Everything
+        else becomes a Branch or FrontMan activation, whose CallingActivation builds the model.
 
         :param agent: The agent spec dictionary
         :return: True when the spec is neither a toolbox tool nor a coded tool
         """
-        return agent.get("toolbox") is None and agent.get("class") is None
+        if agent.get("toolbox") is not None:
+            return False
+        # A coded tool needs both keys. With "class" alone the spec falls through to
+        # FrontManActivationPrepper (which only asks for no "function") and builds a model.
+        return agent.get("function") is None or agent.get("class") is None
 
     def validate_gemini_agents(self,
                                candidates: List[Tuple[str, Dict[str, Any], Dict[str, Any]]],

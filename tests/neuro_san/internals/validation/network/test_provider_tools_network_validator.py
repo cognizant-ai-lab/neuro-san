@@ -380,6 +380,23 @@ class TestProviderToolsNetworkValidator(TestCase, AbstractNetworkValidatorTest):
         errors: List[str] = validator.validate(config)
         self.assertEqual(0, len(errors), str(errors))
 
+    def test_class_without_function_is_an_llm_agent(self) -> None:
+        """
+        A spec with "class" but no "function" is not a coded tool at runtime, so it is checked.
+        """
+        validator: DictionaryValidator = self.create_validator()
+        config: Dict[str, Any] = {
+            "llm_config": {"model_name": self.GEMINI_MODEL, "provider_tools": [self.GOOGLE_SEARCH]},
+            "tools": [
+                {"name": "front", "instructions": "x", "class": "my_pkg.my_module.MyTool", "tools": ["leaf"]},
+                {"name": "leaf", "instructions": "y", "function": {"description": "A leaf"}},
+            ],
+        }
+
+        errors: List[str] = validator.validate(config)
+        self.assertEqual(1, len(errors), str(errors))
+        self.assertIn("front declares Gemini provider_tools together with other tools (leaf)", errors[0])
+
     def test_gemini_in_second_fallback(self) -> None:
         """
         A Gemini model anywhere in the fallbacks chain makes the top-level provider_tools subject to the rules.
