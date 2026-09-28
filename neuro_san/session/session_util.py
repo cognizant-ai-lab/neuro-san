@@ -25,8 +25,7 @@ from os import environ
 
 class SessionUtil:
     """
-    Static utility class with common session policy: currently the MAX_AGENTS_FROM_EXTERNAL_SERVER
-    bound on how many entries to take from another server's agent/tool listing.
+    Static utility class with common session policy.
     """
 
     MAX_AGENTS_ENV_VAR: str = "MAX_AGENTS_FROM_EXTERNAL_SERVER"
@@ -34,10 +33,10 @@ class SessionUtil:
     @staticmethod
     def get_max_agents() -> int:
         """
-        Reads MAX_AGENTS_FROM_EXTERNAL_SERVER.  Unset, empty, 0 and negative mean "no limit";
-        a non-integer also means "no limit" and is logged as a warning so a typo is not silent.
+        Reads the MAX_AGENTS_FROM_EXTERNAL_SERVER environment variable.
+        Unset, blank, 0 or negative means "no limit".  A non-integer also means "no limit" and logs a warning.
 
-        :return: The positive limit, or 0 meaning no limit
+        :return: The limit, or 0 for no limit
         """
         max_agents_str: Optional[str] = environ.get(SessionUtil.MAX_AGENTS_ENV_VAR)
         if max_agents_str is None or max_agents_str.strip() == "":
@@ -52,19 +51,17 @@ class SessionUtil:
                            SessionUtil.MAX_AGENTS_ENV_VAR, max_agents_str)
             return 0
 
-        # Negative values are documented as meaning "unlimited", same as 0.
+        # A negative value means unlimited, same as 0.
         return max(max_agents, 0)
 
     @staticmethod
     def limit_agents_list(agents_list: Any) -> Any:
         """
-        Limits an agent/tool listing from a server to at most MAX_AGENTS_FROM_EXTERNAL_SERVER
-        entries.  Typed Any because the value comes straight from the server's JSON; anything
-        that is not a list is returned unchanged.
+        Limits a list of agents/tools from a server to at most MAX_AGENTS_FROM_EXTERNAL_SERVER entries.
+        The argument is typed Any because server JSON can hold anything; a non-list is returned unchanged.
 
         :param agents_list: List of agents/tools as returned by the server
-        :return: The same list when no limit applies, otherwise the first
-                    MAX_AGENTS_FROM_EXTERNAL_SERVER entries (truncation is logged as a warning)
+        :return: The same list, or just its first MAX_AGENTS_FROM_EXTERNAL_SERVER entries (a warning is logged)
         """
         if not isinstance(agents_list, list):
             return agents_list

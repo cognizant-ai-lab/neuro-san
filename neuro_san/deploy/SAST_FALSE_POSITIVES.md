@@ -9,7 +9,7 @@ Note that within this document we do not mention the specific lines of code that
 nor do we mention the specific file in which they are contained because we reserve the right to
 modify source during improvements and refactors more often than this file, however we expect the false
 positive reports to linger.  Please refer to the SAST report itself for the release with which you are
-concerned for the specific files and lines of code; it is attached to each GitHub release as
+concerned for the specific files and lines of code.  The report is attached to each GitHub release as
 `checkmarx-report.pdf`.  When examining those lines of code for yourself,
 note that we tend to add a comment as to the nature of the false positive within the code itself
 as well as this document.
@@ -43,13 +43,11 @@ However, security considerations require us to allow deployments to be more care
 
 For production: set MAX_AGENTS_FROM_EXTERNAL_SERVER to an integer limit comfortable for your deployment.
 
-* A positive integer keeps only that many entries of a listing, and logs a warning when it does.
+* A positive integer keeps at most that many agents from a listing and logs a warning if any are dropped.
 * Unset, 0 (the default) or a negative value means unlimited.
 * A value that is not an integer is ignored with a warning.
 
-The client sessions listed above honor it today;
-[#1398](https://github.com/cognizant-ai-lab/neuro-san/issues/1398) tracks extending it to LangChainMcpAdapter,
-which fetches tool listings from MCP servers on the server side.
+The same complaint is also reported for:
 
 * Source Class: OpenFgaAuthorizer
 * Destination Class: Same
@@ -76,7 +74,7 @@ HTTP support is kept for ease of local development where certificates are often 
 an extreme undue burden on development.
 
 For production: set AGENT_SESSION_REQUIRE_HTTPS=true (and configure https) to forbid http.
-The Dockerfiles already do; `run.sh` sets it back to false for local development.
+The Dockerfiles already set it to true; `run.sh` sets it back to false for local development.
 
 ### Information Exposure Through an Error Message / Filtering Sensitive Logs
 
@@ -98,4 +96,4 @@ for developer convenience, as in all cases the need to impart whatever sensitive
 is to be logged is critical to the development cycle.
 
 For production: set LEAF_LOG_SENSITIVE="false" to keep such information out of the logs.
-The Dockerfiles already do; `run.sh` sets it back to true for local development.
+The Dockerfiles already set it to false; `run.sh` sets it back to true for local development.

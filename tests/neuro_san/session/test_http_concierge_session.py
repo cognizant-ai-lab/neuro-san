@@ -35,11 +35,8 @@ from neuro_san.session.session_util import SessionUtil
 
 class TestHttpConciergeSession(TestCase):
     """
-    Unit tests for HttpConciergeSession.list(): the "agents" listing a server returns is bounded
-    by MAX_AGENTS_FROM_EXTERNAL_SERVER on its way back to the caller, the returned dictionary
-    always carries the "agents" key the ConciergeSession contract promises, and transport or
-    payload failures surface as the ValueError carrying help_message() that the other HTTP
-    sessions raise.
+    Unit tests for HttpConciergeSession.list(): the MAX_AGENTS_FROM_EXTERNAL_SERVER cap,
+    the "agents" key always being present in the result, and failures raised as ValueError.
     """
 
     GET_TARGET: str = "neuro_san.session.http_concierge_session.http_get"
@@ -52,13 +49,11 @@ class TestHttpConciergeSession(TestCase):
     @override
     def setUp(self) -> None:
         """
-        Pins the environment: MAX_AGENTS_FROM_EXTERNAL_SERVER is removed so a value exported in
-        the developer's shell cannot change the listing, and AGENT_SESSION_REQUIRE_HTTPS is set
-        to "false" so the plain-http URL these tests build is not rejected before any request.
+        Unsets MAX_AGENTS_FROM_EXTERNAL_SERVER so the shell cannot change the listing, and sets
+        AGENT_SESSION_REQUIRE_HTTPS=false so the http URL built here is accepted.
         """
-        # patch.dict snapshots os.environ on start() and restores the whole mapping on stop(),
-        # so variables can simply be removed or set here and per test; all of it is undone by
-        # the cleanup, which runs even if the test raises.
+        # patch.dict restores all of os.environ on cleanup, even if the test fails, so variables can be
+        # removed or set freely here and in each test.
         env_patcher: Any = patch.dict(os.environ)
         env_patcher.start()
         self.addCleanup(env_patcher.stop)
@@ -92,7 +87,7 @@ class TestHttpConciergeSession(TestCase):
     @staticmethod
     def make_session() -> HttpConciergeSession:
         """
-        Builds a session against a fixed host and port; nothing is ever actually connected to.
+        Builds a session for a fixed host and port; no connection is ever made.
 
         :return: A new HttpConciergeSession
         """
@@ -121,7 +116,7 @@ class TestHttpConciergeSession(TestCase):
 
     def test_list_keeps_other_keys_from_server(self) -> None:
         """
-        Bounding the listing does not drop anything else the server put in its response.
+        Limiting the listing does not drop the other keys in the server's response.
         """
         os.environ[SessionUtil.MAX_AGENTS_ENV_VAR] = "1"
         session: HttpConciergeSession = self.make_session()
@@ -132,8 +127,7 @@ class TestHttpConciergeSession(TestCase):
 
     def test_list_supplies_agents_key_when_server_omits_it(self) -> None:
         """
-        The ConciergeSession contract says the result always has an "agents" key, so a server
-        response without one comes back as an empty listing rather than a KeyError for the caller.
+        A response with no "agents" key comes back with an empty listing, as ConciergeSession promises.
         """
         session: HttpConciergeSession = self.make_session()
         with self.patch_get({}):
@@ -142,9 +136,8 @@ class TestHttpConciergeSession(TestCase):
 
     def test_list_passes_non_list_agents_through_even_with_limit(self) -> None:
         """
-        A server that sends "agents": null gets that handed back unchanged even when a limit is
-        set, rather than list() raising from a slice of None: the malformed shape is left for
-        the caller to notice, the same as it is without a limit.
+        A non-list "agents" value (here null) is handed back unchanged even with a limit set,
+        rather than raising from a slice of None.
         """
         os.environ[SessionUtil.MAX_AGENTS_ENV_VAR] = "1"
         session: HttpConciergeSession = self.make_session()
@@ -154,9 +147,8 @@ class TestHttpConciergeSession(TestCase):
 
     def test_list_wraps_transport_failure_in_value_error(self) -> None:
         """
-        Failing to reach the server surfaces as a ValueError carrying help_message() for the
-        /list request path, with the original exception chained as its cause so the real
-        reason is still in the traceback.
+        A connection failure is raised as a ValueError carrying help_message() for the /list path,
+        with the original exception chained as its cause.
         """
         session: HttpConciergeSession = self.make_session()
         with patch(self.GET_TARGET, side_effect=RequestsConnectionError("refused")):
@@ -167,9 +159,8 @@ class TestHttpConciergeSession(TestCase):
 
     def test_list_wraps_non_dict_body_in_value_error(self) -> None:
         """
-        A body that parses but is not a dictionary (here JSON null) is reported the same way as
-        a transport failure, since the caller cannot do anything useful with it either; the
-        chained cause is the AttributeError from treating None as a dictionary.
+        A body that is not a dictionary (here JSON null) is reported like a transport failure,
+        with the AttributeError from treating None as a dictionary as the cause.
         """
         session: HttpConciergeSession = self.make_session()
         with self.patch_get(None):

@@ -60,12 +60,10 @@ class TestMcpServiceAgentSession(TestCase):
     @override
     def setUp(self) -> None:
         """
-        Pins the environment so that a MAX_AGENTS_FROM_EXTERNAL_SERVER exported in the
-        developer's shell cannot truncate the tools/list these tests advertise.
+        Clears MAX_AGENTS_FROM_EXTERNAL_SERVER so a value set in the shell cannot affect these tests.
         """
-        # patch.dict snapshots os.environ on start() and restores the whole mapping on stop(),
-        # so the variable can simply be removed here and any per-test value set later; both
-        # are undone by the cleanup, which runs even if the test raises.
+        # patch.dict restores all of os.environ on cleanup, even if the test fails, so variables can be
+        # removed or set freely here and in each test.
         env_patcher: Any = patch.dict(os.environ)
         env_patcher.start()
         self.addCleanup(env_patcher.stop)
@@ -312,9 +310,8 @@ class TestMcpServiceAgentSession(TestCase):
 
     def test_function_applies_max_agents_limit_before_searching(self) -> None:
         """
-        MAX_AGENTS_FROM_EXTERNAL_SERVER bounds the tools/list entries considered, and does so
-        before the search: a network listed beyond the limit is not found, and the truncation
-        is logged so the "not implemented" the CLI then reports can be traced to the setting.
+        The limit is applied before the search: with MAX_AGENTS_FROM_EXTERNAL_SERVER=1 a network
+        listed second is not found, and the truncation is logged as a warning.
         """
         os.environ[SessionUtil.MAX_AGENTS_ENV_VAR] = "1"
         with self.patch_post(self.LOOKALIKE_TOOL, self.CUSTOM_TOOL):

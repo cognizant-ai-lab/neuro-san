@@ -30,9 +30,7 @@ from neuro_san.session.session_util import SessionUtil
 
 class TestSessionUtil(TestCase):
     """
-    Unit tests for SessionUtil's MAX_AGENTS_FROM_EXTERNAL_SERVER policy: which values of the
-    variable mean "no limit", which truncate a server listing, and that both a truncation and
-    an unusable value are logged rather than silently applied or silently ignored.
+    Unit tests for SessionUtil: how MAX_AGENTS_FROM_EXTERNAL_SERVER is read and applied to a listing.
     """
 
     AGENTS: List[str] = ["a", "b", "c", "d", "e"]
@@ -41,12 +39,10 @@ class TestSessionUtil(TestCase):
     @override
     def setUp(self) -> None:
         """
-        Pins the environment so that a MAX_AGENTS_FROM_EXTERNAL_SERVER exported in the
-        developer's shell cannot change what these tests see.
+        Starts each test with MAX_AGENTS_FROM_EXTERNAL_SERVER unset, whatever the shell exports.
         """
-        # patch.dict snapshots os.environ on start() and restores the whole mapping on stop(),
-        # so the variable can simply be removed here and any per-test value set later; both
-        # are undone by the cleanup, which runs even if the test raises.
+        # patch.dict restores all of os.environ on cleanup, even if the test fails, so variables can be
+        # removed or set freely here and in each test.
         env_patcher: Any = patch.dict(os.environ)
         env_patcher.start()
         self.addCleanup(env_patcher.stop)
@@ -55,9 +51,9 @@ class TestSessionUtil(TestCase):
     @staticmethod
     def set_limit(value: Optional[str]) -> None:
         """
-        Sets or removes MAX_AGENTS_FROM_EXTERNAL_SERVER for the rest of the current test.
+        Sets or removes MAX_AGENTS_FROM_EXTERNAL_SERVER for the current test.
 
-        :param value: The string to export, or None to leave the variable unset
+        :param value: The value to set, or None to remove the variable
         """
         if value is None:
             os.environ.pop(SessionUtil.MAX_AGENTS_ENV_VAR, None)
@@ -75,8 +71,7 @@ class TestSessionUtil(TestCase):
 
     def test_zero_negative_and_blank_mean_no_limit(self) -> None:
         """
-        "0" (the Dockerfile default), negative numbers and an empty or blank string all mean
-        no limit, and none of them is worth a warning.
+        "0" (the Dockerfile default), negatives and blank strings mean no limit; nothing is logged.
         """
         for value in ["0", "-1", "-999", "", "  "]:
             with self.subTest(value=value):
@@ -87,8 +82,7 @@ class TestSessionUtil(TestCase):
 
     def test_positive_limit_truncates_and_warns(self) -> None:
         """
-        A positive limit keeps the first N entries and logs one warning naming the variable,
-        so that an agent missing from the result can be traced back to the setting.
+        A positive limit keeps the first N entries and logs one warning that names the variable.
         """
         self.set_limit("3")
         self.assertEqual(3, SessionUtil.get_max_agents())
@@ -100,7 +94,7 @@ class TestSessionUtil(TestCase):
 
     def test_limit_not_reached_returns_list_unchanged(self) -> None:
         """
-        A limit the listing already fits within changes nothing and logs nothing.
+        A limit at or above the list length changes nothing and logs nothing.
         """
         for value in ["5", "6", "100"]:
             with self.subTest(value=value):
@@ -110,8 +104,7 @@ class TestSessionUtil(TestCase):
 
     def test_integer_parsing_tolerates_whitespace_and_sign(self) -> None:
         """
-        int() accepts surrounding whitespace and an explicit plus sign, so those spellings
-        are limits, not typos.
+        Values with surrounding whitespace or a leading "+" still parse as a limit.
         """
         for value in [" 2 ", "+2", "2\n"]:
             with self.subTest(value=value):
@@ -120,8 +113,7 @@ class TestSessionUtil(TestCase):
 
     def test_non_integer_is_ignored_with_warning(self) -> None:
         """
-        A value int() cannot parse means no limit, but is logged with the offending value so
-        the typo does not pass for a working limit.
+        A non-integer value means no limit; the warning names the variable and includes the value.
         """
         for value in ["abc", "2.5", "5o"]:
             with self.subTest(value=value):
@@ -134,8 +126,7 @@ class TestSessionUtil(TestCase):
 
     def test_non_list_input_is_returned_unchanged(self) -> None:
         """
-        A malformed payload (None, a dict or a string where a list was expected) is handed back
-        as-is even when a limit is set, rather than raising from a slice in here.
+        Anything that is not a list (None, a dict, a string) is returned unchanged even when a limit is set.
         """
         self.set_limit("2")
         for payload in [None, {"a": 1, "b": 2, "c": 3}, "abcd"]:
