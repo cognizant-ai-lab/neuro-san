@@ -331,14 +331,21 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
         model_name: Any = config.get("model_name")
         if model_name is None:
             # Same fallback create_full_llm_config() gets from overlaying default_config.
-            default_config: Dict[str, Any] = self.llm_infos.get("default_config") or {}
-            model_name = default_config.get("model_name")
+            default_config: Any = self.llm_infos.get("default_config")
+            if isinstance(default_config, dict):
+                model_name = default_config.get("model_name")
         if not isinstance(model_name, str):
             return None
 
-        if not isinstance(self.llm_infos.get(model_name), dict):
+        entry: Any = self.llm_infos.get(model_name)
+        if not isinstance(entry, dict):
             # Unknown model, or a user llm_info_file entry that is not a dictionary at all.
             # _find_llm_entry() would trip over the latter; here it just means "no class".
+            return None
+
+        if not isinstance(entry.get("use_model_name", model_name), str):
+            # _find_llm_entry() looks the alias target up as a dictionary key, so a list or
+            # dictionary there would raise. Such an entry cannot name a class anyway.
             return None
 
         found: Tuple[Optional[Dict[str, Any]], str] = self._find_llm_entry(model_name)

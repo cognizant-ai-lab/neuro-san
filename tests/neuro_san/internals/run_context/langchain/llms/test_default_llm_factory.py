@@ -428,6 +428,30 @@ class TestDefaultLlmFactory(TestCase):
 
         self.assertIsNone(factory.get_chat_class_name({"model_name": "weird"}))
 
+    def test_get_chat_class_name_unhashable_alias_target_is_none(self) -> None:
+        """
+        An alias whose "use_model_name" is a list yields None instead of a TypeError.
+        """
+        extra_hocon: str = """
+        {
+            "weird": {
+                "use_model_name": ["gemini-2.5-flash"]
+            }
+        }
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(extra_hocon)
+
+        self.assertIsNone(factory.get_chat_class_name({"model_name": "weird"}))
+
+    def test_get_chat_class_name_non_dict_default_config_is_none(self) -> None:
+        """
+        A default_config that is not a dictionary yields None for a config without model_name.
+        """
+        extra_hocon: str = '{ "default_config": "just a string" }'
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(extra_hocon)
+
+        self.assertIsNone(factory.get_chat_class_name({}))
+
     # ---- get_llm_info_file(): which user file, if any, is read on top of the stock one ----------
 
     def test_get_llm_info_file_stock_is_none(self) -> None:
