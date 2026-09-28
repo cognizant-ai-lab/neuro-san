@@ -16,19 +16,28 @@
 
 from typing import Any
 from typing import Dict
+from typing import List
 
 from copy import deepcopy
 
+from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
+from unittest.mock import patch
 
-import pytest
+from typing_extensions import override
 
+from langchain_core.tools import BaseTool
+from langchain_core.tools import StructuredTool
+
+from neuro_san.internals.graph.registry.agent_network import AgentNetwork
+from neuro_san.internals.graph.registry.agent_tool_registry import AgentToolRegistry
 from neuro_san.internals.run_context.langchain.core.base_tool_factory import BaseToolFactory
 from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
+from neuro_san.message.types.agent_message import AgentMessage
 
 
-class TestBaseToolFactory:
+class TestBaseToolFactory(IsolatedAsyncioTestCase):
     """
     Test cases for BaseToolFactory.
 
@@ -40,14 +49,20 @@ class TestBaseToolFactory:
 
     EXTERNAL_AGENT_NAME: str = "/network_b"
 
-    @pytest.fixture(autouse=True)
-    def clear_synthesis_warned(self):
+    @override
+    def setUp(self) -> None:
         """
         The synthesis warning is deduplicated per-process via a class-level
-        set. Clear it around each test so tests stay order-independent.
+        set. Clear it before each test so tests stay order-independent.
         """
         BaseToolFactory.synthesis_warned.clear()
-        yield
+
+    @override
+    def tearDown(self) -> None:
+        """
+        Clear the per-process synthesis warning set again so a test that
+        triggered the warning leaves nothing behind for later modules.
+        """
         BaseToolFactory.synthesis_warned.clear()
 
     @staticmethod
@@ -72,33 +87,31 @@ class TestBaseToolFactory:
 
         return BaseToolFactory(tool_caller, invocation_context, journal)
 
-    @pytest.mark.asyncio
-    async def test_external_tool_without_parameters_gets_default_schema(self):
+    async def test_external_tool_without_parameters_gets_default_schema(self) -> None:
         """
         An external front-man with no function.parameters must be presented
         to the calling LLM with the synthesized required "inquiry" parameter,
         not as a zero-argument tool.
         """
-        factory = self.make_factory({"description": "Answers music questions."})
+        factory: BaseToolFactory = self.make_factory({"description": "Answers music questions."})
 
-        tool = await factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
+        tool: BaseTool = await factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
 
-        assert tool is not None
-        assert tool.parameters == BaseToolFactory.DEFAULT_EXTERNAL_PARAMETERS
+        self.assertIsNotNone(tool)
+        self.assertEqual(tool.parameters, BaseToolFactory.DEFAULT_EXTERNAL_PARAMETERS)
 
         # The args_schema is what actually reaches the calling LLM.
         param_name: str = BaseToolFactory.DEFAULT_EXTERNAL_PARAMETER_NAME
         fields = tool.args_schema.model_fields
-        assert list(fields.keys()) == [param_name]
+        self.assertEqual(list(fields.keys()), [param_name])
         # is_required() is the pydantic v2 FieldInfo API; the v1 models this
         # converter used to build exposed a .required attribute instead.
-        assert fields[param_name].is_required() is True
+        self.assertIs(fields[param_name].is_required(), True)
 
         # The substitution must not be silent.
         factory.journal.write_message.assert_awaited_once()
 
-    @pytest.mark.asyncio
-    async def test_external_tool_with_parameters_is_untouched(self):
+    async def test_external_tool_with_parameters_is_untouched(self) -> None:
         """
         An external front-man that declares its own parameters must be
         passed through exactly as declared, with no warning.
@@ -113,19 +126,19 @@ class TestBaseToolFactory:
             },
             "required": ["question"]
         }
-        factory = self.make_factory({
+        factory: BaseToolFactory = self.make_factory({
             "description": "Answers music questions.",
             "parameters": declared_parameters
         })
 
-        tool = await factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
+        tool: BaseTool = await factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
 
-        assert tool is not None
-        assert tool.parameters == declared_parameters
-        assert list(tool.args_schema.model_fields.keys()) == ["question"]
+        self.assertIsNotNone(tool)
+        self.assertEqual(tool.parameters, declared_parameters)
+        self.assertEqual(list(tool.args_schema.model_fields.keys()), ["question"])
         factory.journal.write_message.assert_not_awaited()
 
-    def test_create_function_tool_does_not_mutate_function_json(self):
+    def test_create_function_tool_does_not_mutate_function_json(self) -> None:
         """
         Creating a tool must not add its lookup name to the caller-owned
         function specification.
@@ -144,15 +157,14 @@ class TestBaseToolFactory:
             }
         }
         expected: Dict[str, Any] = deepcopy(function_json)
-        factory = self.make_factory(function_json)
+        factory: BaseToolFactory = self.make_factory(function_json)
 
-        tool = factory.create_function_tool(function_json, self.EXTERNAL_AGENT_NAME)
+        tool: BaseTool = factory.create_function_tool(function_json, self.EXTERNAL_AGENT_NAME)
 
-        assert function_json == expected
-        assert tool.name == ExternalAgentParsing.get_safe_agent_name(self.EXTERNAL_AGENT_NAME)
+        self.assertEqual(function_json, expected)
+        self.assertEqual(tool.name, ExternalAgentParsing.get_safe_agent_name(self.EXTERNAL_AGENT_NAME))
 
-    @pytest.mark.asyncio
-    async def test_external_tool_does_not_mutate_function_json(self):
+    async def test_external_tool_does_not_mutate_function_json(self) -> None:
         """
         A same-server external agent can return its live registry function
         specification by reference. Creating a tool from it must not mutate it.
@@ -171,20 +183,19 @@ class TestBaseToolFactory:
             }
         }
         expected: Dict[str, Any] = deepcopy(function_json)
-        factory = self.make_factory(function_json)
+        factory: BaseToolFactory = self.make_factory(function_json)
 
-        tool = await factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
+        tool: BaseTool = await factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
 
-        assert function_json == expected
-        assert tool.name == ExternalAgentParsing.get_safe_agent_name(self.EXTERNAL_AGENT_NAME)
+        self.assertEqual(function_json, expected)
+        self.assertEqual(tool.name, ExternalAgentParsing.get_safe_agent_name(self.EXTERNAL_AGENT_NAME))
 
-    @pytest.mark.asyncio
-    async def test_external_tool_with_empty_properties_gets_default_schema(self):
+    async def test_external_tool_with_empty_properties_gets_default_schema(self) -> None:
         """
         A parameters block whose properties dictionary is empty is just as
         uncallable as no parameters at all, so it gets the same substitution.
         """
-        factory = self.make_factory({
+        factory: BaseToolFactory = self.make_factory({
             "description": "Answers music questions.",
             "parameters": {
                 "type": "object",
@@ -192,14 +203,13 @@ class TestBaseToolFactory:
             }
         })
 
-        tool = await factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
+        tool: BaseTool = await factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
 
-        assert tool is not None
-        assert tool.parameters == BaseToolFactory.DEFAULT_EXTERNAL_PARAMETERS
+        self.assertIsNotNone(tool)
+        self.assertEqual(tool.parameters, BaseToolFactory.DEFAULT_EXTERNAL_PARAMETERS)
         factory.journal.write_message.assert_awaited_once()
 
-    @pytest.mark.asyncio
-    async def test_external_tool_without_description_is_not_synthesized(self):
+    async def test_external_tool_without_description_is_not_synthesized(self) -> None:
         """
         A front-man spec with no description fails validation no matter what
         parameters it has (e.g. a hocon with no "function" block at all, for
@@ -207,23 +217,22 @@ class TestBaseToolFactory:
         for it - the client would see a promise that the request will get
         through, immediately followed by the tool being dropped.
         """
-        factory = self.make_factory({})
+        factory: BaseToolFactory = self.make_factory({})
 
-        tool = await factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
+        tool: BaseTool = await factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
 
-        assert tool is None
+        self.assertIsNone(tool)
 
         # Only the validation-failure report, never the synthesis message,
         # and under the invalid-definition banner rather than "unreachable" -
         # the agent did respond.
         factory.journal.write_message.assert_awaited_once()
-        reported = factory.journal.write_message.await_args.args[0]
-        assert "synthesized" not in str(reported.content)
-        assert "invalid function definition" in str(reported.content)
-        assert "unreachable" not in str(reported.content)
+        reported: AgentMessage = factory.journal.write_message.await_args.args[0]
+        self.assertNotIn("synthesized", str(reported.content))
+        self.assertIn("invalid function definition", str(reported.content))
+        self.assertNotIn("unreachable", str(reported.content))
 
-    @pytest.mark.asyncio
-    async def test_synthesis_warns_once_per_agent(self):
+    async def test_synthesis_warns_once_per_agent(self) -> None:
         """
         Tool resources are rebuilt on every request, but the synthesis
         warning describes a static config condition - it must be reported
@@ -232,18 +241,17 @@ class TestBaseToolFactory:
         """
         parameterless: Dict[str, Any] = {"description": "Answers music questions."}
 
-        first_factory = self.make_factory(parameterless)
-        first_tool = await first_factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
-        assert first_tool.parameters == BaseToolFactory.DEFAULT_EXTERNAL_PARAMETERS
+        first_factory: BaseToolFactory = self.make_factory(parameterless)
+        first_tool: BaseTool = await first_factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
+        self.assertEqual(first_tool.parameters, BaseToolFactory.DEFAULT_EXTERNAL_PARAMETERS)
         first_factory.journal.write_message.assert_awaited_once()
 
-        second_factory = self.make_factory(parameterless)
-        second_tool = await second_factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
-        assert second_tool.parameters == BaseToolFactory.DEFAULT_EXTERNAL_PARAMETERS
+        second_factory: BaseToolFactory = self.make_factory(parameterless)
+        second_tool: BaseTool = await second_factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
+        self.assertEqual(second_tool.parameters, BaseToolFactory.DEFAULT_EXTERNAL_PARAMETERS)
         second_factory.journal.write_message.assert_not_awaited()
 
-    @pytest.mark.asyncio
-    async def test_synthesis_warning_rearms_when_agent_is_fixed(self):
+    async def test_synthesis_warning_rearms_when_agent_is_fixed(self) -> None:
         """
         Hocon files can be edited and hot-reloaded without a server restart.
         Observing the agent with declared parameters must re-arm the warning,
@@ -264,27 +272,26 @@ class TestBaseToolFactory:
             }
         }
 
-        broken_factory = self.make_factory(parameterless)
+        broken_factory: BaseToolFactory = self.make_factory(parameterless)
         await broken_factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
         broken_factory.journal.write_message.assert_awaited_once()
 
-        fixed_factory = self.make_factory(declared)
+        fixed_factory: BaseToolFactory = self.make_factory(declared)
         await fixed_factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
         fixed_factory.journal.write_message.assert_not_awaited()
 
-        regressed_factory = self.make_factory(parameterless)
+        regressed_factory: BaseToolFactory = self.make_factory(parameterless)
         await regressed_factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
         regressed_factory.journal.write_message.assert_awaited_once()
 
-    @pytest.mark.asyncio
-    async def test_unsupported_schema_dialect_is_not_replaced(self):
+    async def test_unsupported_schema_dialect_is_not_replaced(self) -> None:
         """
         A declared parameters schema in an unsupported JSON Schema dialect
         (no properties, but e.g. additionalProperties) is a declared contract,
         not an absent one. It must be rejected as invalid - never silently
         replaced with the synthesized default.
         """
-        factory = self.make_factory({
+        factory: BaseToolFactory = self.make_factory({
             "description": "Answers music questions.",
             "parameters": {
                 "type": "object",
@@ -292,62 +299,169 @@ class TestBaseToolFactory:
             }
         })
 
-        tool = await factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
+        tool: BaseTool = await factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
 
-        assert tool is None
+        self.assertIsNone(tool)
         factory.journal.write_message.assert_awaited_once()
-        reported = factory.journal.write_message.await_args.args[0]
-        assert "invalid function definition" in str(reported.content)
-        assert "synthesized" not in str(reported.content)
+        reported: AgentMessage = factory.journal.write_message.await_args.args[0]
+        self.assertIn("invalid function definition", str(reported.content))
+        self.assertNotIn("synthesized", str(reported.content))
 
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("bad_parameters", ["none", [], "", False, 0])
-    async def test_non_dict_parameters_reported_as_invalid(self, bad_parameters):
+    async def test_non_dict_parameters_reported_as_invalid(self) -> None:
         """
         A malformed spec whose "parameters" is not a dictionary - truthy or
         falsy - must be reported as an invalid function definition: neither
         crashing the calling agent's resource setup with an AttributeError,
         nor being silently repaired with the synthesized default.
         """
-        factory = self.make_factory({
-            "description": "Answers music questions.",
-            "parameters": bad_parameters
-        })
+        bad_parameters_cases: List[Any] = ["none", [], "", False, 0]
+        for bad_parameters in bad_parameters_cases:
+            with self.subTest(bad_parameters=bad_parameters):
+                # Each case used to be its own test with a fresh warning set;
+                # keep that isolation so no case depends on an earlier one.
+                BaseToolFactory.synthesis_warned.clear()
+                factory: BaseToolFactory = self.make_factory({
+                    "description": "Answers music questions.",
+                    "parameters": bad_parameters
+                })
 
-        tool = await factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
+                tool: BaseTool = await factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
 
-        assert tool is None
-        factory.journal.write_message.assert_awaited_once()
-        reported = factory.journal.write_message.await_args.args[0]
-        assert "invalid function definition" in str(reported.content)
+                self.assertIsNone(tool)
+                factory.journal.write_message.assert_awaited_once()
+                reported: AgentMessage = factory.journal.write_message.await_args.args[0]
+                self.assertIn("invalid function definition", str(reported.content))
 
-    @pytest.mark.asyncio
-    async def test_unreachable_external_tool_reported_as_unreachable(self):
+    async def test_unreachable_external_tool_reported_as_unreachable(self) -> None:
         """
         A transport-level failure fetching the external agent's function spec
         is a connectivity problem and must keep the "unreachable" banner.
         """
-        factory = self.make_factory({})
+        factory: BaseToolFactory = self.make_factory({})
         session = factory.invocation_context.get_async_session_factory().create_session()
         session.function = AsyncMock(side_effect=ValueError("connection refused"))
 
-        tool = await factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
+        tool: BaseTool = await factory.create_external_tool(self.EXTERNAL_AGENT_NAME)
 
-        assert tool is None
+        self.assertIsNone(tool)
         factory.journal.write_message.assert_awaited_once()
-        reported = factory.journal.write_message.await_args.args[0]
-        assert "unreachable" in str(reported.content)
-        assert "invalid function definition" not in str(reported.content)
+        reported: AgentMessage = factory.journal.write_message.await_args.args[0]
+        self.assertIn("unreachable", str(reported.content))
+        self.assertNotIn("invalid function definition", str(reported.content))
 
-    @pytest.mark.asyncio
-    async def test_ensure_external_parameters_passes_none_through(self):
+    async def test_ensure_external_parameters_passes_none_through(self) -> None:
         """
         An unreachable external agent has no function_json at all.
         That case is reported elsewhere and must pass through untouched.
         """
-        factory = self.make_factory({})
+        factory: BaseToolFactory = self.make_factory({})
 
-        result = await factory.ensure_external_parameters(None, self.EXTERNAL_AGENT_NAME)
+        result: Dict[str, Any] = await factory.ensure_external_parameters(None, self.EXTERNAL_AGENT_NAME)
 
-        assert result is None
+        self.assertIsNone(result)
         factory.journal.write_message.assert_not_awaited()
+
+    @staticmethod
+    def make_mcp_factory() -> BaseToolFactory:
+        """
+        :return: A BaseToolFactory whose inspector knows no local agents (so every
+                 name is treated as external) and whose sly_data carries no headers
+        """
+        inspector = MagicMock()
+        inspector.get_agent_tool_spec = MagicMock(return_value=None)
+        inspector.get_network_name = MagicMock(return_value="deep/math_guy")
+
+        tool_caller = MagicMock()
+        tool_caller.get_inspector = MagicMock(return_value=inspector)
+        tool_caller.get_name = MagicMock(return_value="researcher")
+        tool_caller.get_sly_data = MagicMock(return_value={})
+
+        journal = MagicMock()
+        journal.write_message = AsyncMock()
+
+        return BaseToolFactory(tool_caller, MagicMock(), journal)
+
+    @staticmethod
+    def make_named_tool(name: str) -> MagicMock:
+        """
+        :param name: The exposed tool name
+        :return: A StructuredTool-shaped mock carrying that name
+        """
+        tool = MagicMock(spec=StructuredTool)
+        tool.name = name
+        return tool
+
+    @patch("neuro_san.internals.run_context.langchain.core.base_tool_factory.LangChainMcpAdapter")
+    async def test_mcp_tool_repeating_an_exposed_name_is_skipped(self, mock_adapter_class: MagicMock) -> None:
+        """
+        The adapter resolves collisions within one server only. When a second
+        server exposes a name the first already took ("a/b" renamed to "a__b"
+        on one, a literal "a__b" on the other), the factory keeps the first and
+        skips the second with a journal message, leaving unrelated tools alone.
+
+        :param mock_adapter_class: Patched LangChainMcpAdapter class.
+        """
+        first_server_tool: MagicMock = self.make_named_tool("a__b")
+        second_server_tool: MagicMock = self.make_named_tool("a__b")
+        other_tool: MagicMock = self.make_named_tool("other_tool")
+        mock_adapter: MagicMock = mock_adapter_class.return_value
+        mock_adapter.get_unmatched_allowed_tools = MagicMock(return_value=[])
+        mock_adapter.get_mcp_tools = AsyncMock(side_effect=[[first_server_tool], [second_server_tool, other_tool]])
+        factory: BaseToolFactory = self.make_mcp_factory()
+
+        first: List[BaseTool] = await factory.create_base_tool("https://one.example.com/mcp")
+        second: List[BaseTool] = await factory.create_base_tool("https://two.example.com/mcp")
+
+        self.assertEqual(first, [first_server_tool])
+        self.assertEqual(second, [other_tool])
+        self.assertEqual(factory.exposed_tool_names, {"a__b", "other_tool"})
+        factory.journal.write_message.assert_awaited_once()
+        reported: AgentMessage = factory.journal.write_message.await_args.args[0]
+        agent_location: str = "agent 'researcher' of agent network 'deep/math_guy'"
+        expected_start: str = f"{agent_location}: MCP tool 'a__b' from https://two.example.com/mcp"
+        self.assertTrue(reported.content.startswith(expected_start), reported.content)
+        self.assertIn("skipping it", reported.content)
+        self.assertIn("hocon file", reported.content)
+        # The adapter is told the same agent location, so its own warnings can start with it.
+        for adapter_call in mock_adapter_class.call_args_list:
+            self.assertEqual(adapter_call.args, (agent_location,))
+
+    async def test_non_mcp_tool_repeating_an_exposed_name_is_reported_but_kept(self) -> None:
+        """
+        A coded or internal tool that repeats an exposed name is reported in the
+        journal but not dropped, since dropping it would change behaviour that
+        predates the name check.
+        """
+        factory: BaseToolFactory = self.make_mcp_factory()
+        # pylint: disable=protected-access
+        await factory._remember_tool_names(self.make_named_tool("search"))
+        await factory._remember_tool_names([self.make_named_tool("search"), self.make_named_tool("lookup")])
+
+        self.assertEqual(factory.exposed_tool_names, {"search", "lookup"})
+        factory.journal.write_message.assert_awaited_once()
+        reported: AgentMessage = factory.journal.write_message.await_args.args[0]
+        expected_start: str = ("agent 'researcher' of agent network 'deep/math_guy': "
+                               "tool 'search' has the same name as another tool")
+        self.assertTrue(reported.content.startswith(expected_start), reported.content)
+        self.assertIn("hocon file", reported.content)
+
+    def test_agent_location_is_built_from_the_real_inspector(self) -> None:
+        """
+        At run time the inspector is an AgentToolRegistry, not an AgentNetwork,
+        so the factory must be able to ask it for the network name. A mocked
+        inspector would not catch a method missing from the registry.
+        """
+        config: Dict[str, Any] = {
+            "tools": [
+                {"name": "researcher", "function": {"description": "x"}}
+            ]
+        }
+        registry: AgentToolRegistry = AgentToolRegistry(AgentNetwork(config, "deep/math_guy"))
+        tool_caller = MagicMock()
+        tool_caller.get_inspector = MagicMock(return_value=registry)
+        tool_caller.get_name = MagicMock(return_value="researcher")
+        tool_caller.get_sly_data = MagicMock(return_value={})
+
+        factory: BaseToolFactory = BaseToolFactory(tool_caller, MagicMock(), MagicMock())
+
+        self.assertEqual(factory.agent_location, "agent 'researcher' of agent network 'deep/math_guy'")
