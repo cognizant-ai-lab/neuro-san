@@ -18,8 +18,7 @@ neuro-san agent network directly, see [External Agents](./external_agents.md).
 
 ## Recognized server URLs
 
-MCP server URLs are recognized when they conform to the
-[MCP canonical server URI specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#canonical-server-uri):
+MCP server URLs are recognized when they conform to the [MCP canonical server URI specification][mcp-uri]:
 they must use the `http` or `https` scheme, must include a host, and must not contain a fragment.
 To distinguish MCP server URLs from other external agent URLs, the literal `mcp` must appear either
 as a label in the hostname (e.g. `mcp.example.com`) or as any segment of the URL path
@@ -112,7 +111,7 @@ server. Users may specify different authorization credentials for different MCP 
 
 - Set the `MCP_SERVERS_INFO_FILE` environment variable to point to a HOCON file containing MCP server configurations:
 
-    ```json
+    ```hocon
     {
         "mcp_server_url_1": {
             "http_headers": {
@@ -134,3 +133,5 @@ A client can also populate these `http_headers` on the user's behalf: see
 [http_headers](./agent_hocon_reference.md#http_headers) under `sly_data_schema`, where a network advertises the
 MCP URLs it needs and an OAuth-capable client (e.g. nsflow) signs in and injects the bearer token, gating on
 `http_headers.required`.
+
+[mcp-uri]: https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#canonical-server-uri

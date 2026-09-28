@@ -62,6 +62,7 @@ Items in ***bold*** are essentials. Try to understand these first.
     - [***tools*** - list of other agents/tools that this agent may access](#tools-agents)
         - [External Agents](#external-agents)
         - [MCP Servers](#mcp-servers)
+            - [Authentication](#authentication)
     - [***class*** - Python class name to invoke for Coded Tools](#class-1)
     - [llm_config - agent-specific LLM configuration](#llm_config-2)
     - [command](#command)
@@ -775,8 +776,13 @@ neuro-san server. See [External Agents](./external_agents.md) for the reference 
 #### MCP Servers
 
 A string or dictionary entry can refer to a Model Context Protocol (MCP) server whose tools the agent may call.
-See [MCP Servers as Tools](./mcp_tools.md) for how URLs are recognized, the `tools` allow list, how tool names
-are made provider-safe, and authentication.
+See [MCP Servers as Tools](./mcp_tools.md) for how URLs are recognized, the `tools` allow list, and how tool names
+are made provider-safe.
+
+##### Authentication
+
+Credentials for an MCP server come from `http_headers` in `sly_data` or from the `MCP_SERVERS_INFO_FILE`
+environment variable. See [Authentication](./mcp_tools.md#authentication) in MCP Servers as Tools.
 
 <!--- pyml disable-next-line no-duplicate-heading -->
 ### llm_config
@@ -946,7 +952,8 @@ as a list:
 
 #### from_downstream
 
-Dictionary which specifies security policy for information coming _from_ downstream [external agents](./external_agents.md).
+Dictionary which specifies security policy for information coming _from_ downstream
+[external agents](./external_agents.md).
 This has no effect on any information flowing between agents internal to the network.
 
 <!--- pyml disable-next-line no-duplicate-heading -->
