@@ -137,4 +137,8 @@ message ChatMessage {
     // which then grab the values by programmatic means, but these tools
     // might also have private data to send back to the client as well.
     google.protobuf.Struct sly_data = 8 [json_name="sly_data"];
+
+    // LangChain v1 standard content blocks, carried verbatim; text remains
+    // the always-populated flattened view.
+    repeated google.protobuf.Struct content_blocks = 9 [json_name="content_blocks"];
 }

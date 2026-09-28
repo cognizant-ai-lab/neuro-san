@@ -178,6 +178,13 @@ replicated from neuro-san OpenAPI specification:
                         "sly_data": {
                           "type": "object",
                           "description": "This is an entirely optional map whose keys refer to data that is better left out of the LLM chat stream."
+                        },
+                        "content_blocks": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          },
+                          "description": "LangChain v1 standard content blocks, carried verbatim; text remains the always-populated flattened view."
                         }
                       },
                       "description": "Structure describing a single chat message."
