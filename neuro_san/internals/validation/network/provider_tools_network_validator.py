@@ -126,6 +126,15 @@ class ProviderToolsNetworkValidator(AbstractNetworkValidator):
         network_llm_config: Optional[Dict[str, Any]] = None
         factory_config: Optional[Dict[str, Any]] = None
         if "tools" in candidate:
+            # The filter chain expects a list of agent dictionaries and raises on anything
+            # else. A malformed top-level "tools" is not this validator's concern, so skip
+            # it rather than crash inside the chain.
+            tools: Any = candidate.get("tools")
+            if not isinstance(tools, list):
+                return []
+            for tool in tools:
+                if not isinstance(tool, dict):
+                    return []
             use_candidate = NetworkConfigFilterChain().filter_config(candidate)
             # The top-level llm_config survives filtering, and comparing agents against the
             # filtered copy (rather than the raw one) means commondefs substitutions do not

@@ -446,6 +446,32 @@ class TestProviderToolsNetworkValidator(TestCase, AbstractNetworkValidatorTest):
         self.assertEqual(1, len(errors), str(errors))
         self.assertIn("announcer 'llm_config.provider_tools' must be a list, got str.", errors[0])
 
+    def test_top_level_tools_not_a_list_is_skipped(self) -> None:
+        """
+        A top-level "tools" that is not a list is left alone instead of crashing inside
+        the filter chain.
+        """
+        validator: DictionaryValidator = self.create_validator()
+        config: Dict[str, Any] = {
+            "llm_config": {"model_name": "gpt-4.1", "provider_tools": [{"type": "web_search"}]},
+            "tools": "announcer",
+        }
+
+        self.assertEqual([], validator.validate(config))
+
+    def test_scalar_tool_entry_is_skipped(self) -> None:
+        """
+        A scalar entry in the top-level "tools" list is left alone instead of crashing
+        inside the filter chain.
+        """
+        validator: DictionaryValidator = self.create_validator()
+        config: Dict[str, Any] = {
+            "llm_config": {"model_name": "gpt-4.1"},
+            "tools": [{"name": "announcer", "llm_config": {"model_name": "gpt-4.1"}}, 5],
+        }
+
+        self.assertEqual([], validator.validate(config))
+
     def test_missing_llm_info_file_still_runs_shape_checks(self) -> None:
         """
         An llm_info_file that does not exist costs only the class checks; shape checks still run and nothing raises.
