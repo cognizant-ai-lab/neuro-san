@@ -18,6 +18,8 @@ import time
 from unittest import TestCase
 from unittest.mock import patch
 
+from neuro_san.message.processors.basic_message_processor import BasicMessageProcessor
+
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.traffic.http_client import HttpClient
@@ -52,13 +54,21 @@ class FakeProcessor:
         """Keep the session whose streaming_chat is consumed."""
         self._session = session
 
+    def get_message_processor(self) -> BasicMessageProcessor:
+        """Return a real message processor that has seen the stream's sly_data."""
+        processor = BasicMessageProcessor()
+        processor.process_message({
+            "type": "AGENT_FRAMEWORK", "chat_context": {},
+            "sly_data": {"reservation_id": "abc-1"},
+        })
+        return processor
+
     def process_once(self, state):
         """Consume every streamed message, as the real processor does."""
         for _ in self._session.streaming_chat({}):
             pass
         updated = dict(state)
         updated["last_chat_response"] = "answer"
-        updated["returned_sly_data"] = {"reservation_id": "abc-1"}
         return updated
 
 
@@ -94,7 +104,7 @@ class TestHttpRequestTimeout(TestCase):
 
     def test_streaming_past_the_cap_is_a_timeout(self):
         """A stream that outruns the cap reports TIMEOUT."""
-        (status, _fields, _text, _ttft, _tokens), _session = self._execute(
+        (status, _processor, _text, _ttft, _tokens), _session = self._execute(
             timeout=0.3, message_count=20, message_interval=0.05,
         )
 
@@ -118,12 +128,12 @@ class TestHttpRequestTimeout(TestCase):
 
     def test_request_within_the_cap_succeeds(self):
         """A request that finishes in time is unaffected."""
-        (status, fields, text, ttft, _tokens), session = self._execute(
+        (status, processor, text, ttft, _tokens), session = self._execute(
             timeout=30, message_count=3, message_interval=0.01,
         )
 
         self.assertEqual(status, STATUS_CREATED)
         self.assertEqual(text, "answer")
-        self.assertEqual(fields.get("reservation_id"), "abc-1")
+        self.assertEqual(processor.get_sly_data().get("reservation_id"), "abc-1")
         self.assertEqual(session.sent, 3)
         self.assertGreater(ttft, 0.0)
