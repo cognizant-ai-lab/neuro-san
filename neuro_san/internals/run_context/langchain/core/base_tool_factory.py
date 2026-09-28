@@ -94,6 +94,10 @@ class BaseToolFactory:
         # Where a problem has to be fixed: the agent whose "tools" list is being
         # built and the network, hence the hocon file, it lives in. Every message
         # for the user starts with it, so nobody has to guess which file to open.
+        # The network name comes from the inspector, not the invocation context:
+        # the context carries the network the client asked for, and it is copied
+        # unchanged when an agent calls another network on the same server, so
+        # inside that network it would name the caller's hocon file.
         inspector: AgentNetworkInspector = tool_caller.get_inspector()
         self.agent_location: str = (f"agent '{tool_caller.get_name()}' of agent network "
                                     f"'{inspector.get_network_name()}'")
