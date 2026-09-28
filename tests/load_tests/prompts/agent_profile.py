@@ -31,44 +31,64 @@ logger = logging.getLogger(__name__)
 
 class AgentProfile:
     """
-    Configuration profile for a specific agent under test.
+    The test material for one agent under load: what to send it and how
+    to judge what comes back. Not a manifest; it does not list files.
+
+    Contents (all optional, read via the get_*() accessors):
+      prompts                      - texts sent, one per request, cycled
+      responses                    - test-case hocon "response" checks,
+                                     parallel to prompts
+      failure_patterns             - substrings that turn CREATED into FAILED
+      success_fields               - JSON profiles only; sly_data keys that
+                                     must come back non-empty
+      estimated_tokens_per_request - for the cost estimate
+      primary_start_pattern /      - regexes locating this agent's requests
+      primary_finish_pattern         in the server log
+
+    Source: AgentProfileFactory builds it either from
+    prompts/profiles/<agent>.json or from the test-case hocon files in
+    <fixtures-hocon-dir>/<agent>/*.hocon (one prompt + response per file).
+
+    Use: TrafficRunner takes the prompt and response checks for each
+    request; LoadTestOrchestrator takes the log patterns and token
+    estimate.
     """
 
-    def __init__(self, agent_name: str, profile_data: Dict[str, Any]) -> None:
+    def __init__(self, agent_name: str, profile: Dict[str, Any]) -> None:
         """
-        Initialize the profile from a loaded profile dict.
+        Keep the profile dict built by AgentProfileFactory.
 
         :param agent_name: Name of the agent under test
-        :param profile_data: The loaded profile (JSON or hocon-derived) as a dict
+        :param profile: The profile as a dict with the keys listed in the class docstring
         """
         self.agent_name: str = agent_name
-        self._data: Dict[str, Any] = profile_data
+        self._profile: Dict[str, Any] = profile
 
     def get_prompts(self) -> List[str]:
         """
         :return: The list of prompts for this agent
         """
-        return self._data.get("prompts", [])
+        return self._profile.get("prompts", [])
 
     def get_estimated_tokens_per_request(self) -> Optional[int]:
         """
         :return: The estimated token usage per request, or None if unknown
         """
-        return self._data.get("estimated_tokens_per_request")
+        return self._profile.get("estimated_tokens_per_request")
 
     def get_primary_start_pattern(self) -> str:
         """
         :return: Regex pattern to identify primary request starts in the server log
         """
         default: str = f"Start {self.agent_name}/streaming_chat"
-        return self._data.get("primary_start_pattern", default)
+        return self._profile.get("primary_start_pattern", default)
 
     def get_primary_finish_pattern(self) -> str:
         """
         :return: Regex pattern to identify primary request completions in the server log
         """
         default: str = f"Finish {self.agent_name}/streaming_chat"
-        return self._data.get("primary_finish_pattern", default)
+        return self._profile.get("primary_finish_pattern", default)
 
     def get_success_fields(self) -> List[str]:
         """
@@ -78,7 +98,7 @@ class AgentProfile:
 
         :return: The JSON profile's sly_data keys that must come back non-empty
         """
-        return self._data.get("success_fields", [])
+        return self._profile.get("success_fields", [])
 
     def get_responses(self) -> List[Dict[str, Any]]:
         """
@@ -90,7 +110,7 @@ class AgentProfile:
 
         :return: The per-prompt response checks, parallel to prompts
         """
-        return self._data.get("responses", [])
+        return self._profile.get("responses", [])
 
     def get_failure_patterns(self) -> List[str]:
         """
@@ -101,7 +121,7 @@ class AgentProfile:
 
         :return: Substrings that indicate a failed response
         """
-        return self._data.get("failure_patterns", [])
+        return self._profile.get("failure_patterns", [])
 
     def get_prompt(self, request_id: int, same_prompt: bool = False,
                    allow_caching: bool = False) -> str:
