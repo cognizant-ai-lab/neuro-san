@@ -104,7 +104,7 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
         self.assertEqual(list(fields.keys()), [param_name])
         # is_required() is the pydantic v2 FieldInfo API; the v1 models this
         # converter used to build exposed a .required attribute instead.
-        self.assertIs(fields[param_name].is_required(), True)
+        self.assertIs(fields.get(param_name).is_required(), True)
 
         # The substitution must not be silent.
         creator.journal.write_message.assert_awaited_once()
