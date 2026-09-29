@@ -14,8 +14,13 @@
 # limitations under the License.
 #
 # END COPYRIGHT
+from typing import List
+from typing import Union
+
 from logging import Logger
 from logging import getLogger
+
+from langchain_core.tools.base import BaseTool
 
 from leaf_common.logging.sensitive_logger import SensitiveLogger
 
@@ -31,9 +36,11 @@ class ToolCreator:
     langchain BaseTool for an agent: function (coded) tools, toolbox tools,
     external agents and MCP servers.
 
-    BaseToolFactory decides which creator a tool reference goes to. Each
-    creator owns the policy for its own kind, so that policy and its tests
-    live next to the code they are about.
+    BaseToolFactory decides which creator a tool reference goes to and builds
+    one creator for that reference. Whatever a kind needs beyond the tool's
+    name is given to its constructor, so every creator is called the same
+    way: create_tool(tool_name). Each creator owns the policy for its own kind,
+    so that policy and its tests live next to the code they are about.
     """
 
     def __init__(self,
@@ -61,6 +68,17 @@ class ToolCreator:
         # through a SensitiveLogger, which respects the LEAF_LOG_SENSITIVE
         # env var setting.
         self.sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+
+    async def create_tool(self, tool_name: str) -> Union[BaseTool, List[BaseTool]]:
+        """
+        Create the tool, or tools, for one entry of the agent's "tools" list.
+
+        :param tool_name: The name the calling agent uses to look the tool up
+        :return: The BaseTool, or list of BaseTools, for the name. None when no
+                 tool can be made, which the creator reports to the client journal.
+        :raises NotImplementedError: When a subclass does not implement it
+        """
+        raise NotImplementedError
 
     async def report_tool_exclusion(self, message: str) -> None:
         """

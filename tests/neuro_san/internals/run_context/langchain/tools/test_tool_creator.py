@@ -48,12 +48,23 @@ class TestToolCreator(IsolatedAsyncioTestCase):
         self.assertEqual(reported.content, "Agent/tool /x was unreachable.")
         creator.sensitive_logger.info.assert_called_once_with("Agent/tool /x was unreachable.")
 
+    async def test_create_tool_is_left_to_the_concrete_creator(self) -> None:
+        """
+        The base class declares create_tool() but leaves it to each kind, so a
+        creator that does not implement it is caught the first time it is called.
+        """
+        creator: ToolCreator = ToolCreator(MagicMock(), MagicMock(), MagicMock(), self.AGENT_LOCATION)
+
+        with self.assertRaises(NotImplementedError):
+            await creator.create_tool("anything")
+
     def test_logger_is_named_after_the_concrete_class(self) -> None:
         """
         Each creator logs under its own class name, so a log line says which
         kind of tool it is about.
         """
-        creator: FunctionToolCreator = FunctionToolCreator(MagicMock(), MagicMock(), MagicMock(), self.AGENT_LOCATION)
+        creator: FunctionToolCreator = FunctionToolCreator(MagicMock(), MagicMock(), MagicMock(), self.AGENT_LOCATION,
+                                                           {"description": "x"})
 
         self.assertEqual(creator.logger.name, "FunctionToolCreator")
         self.assertEqual(creator.agent_location, self.AGENT_LOCATION)
