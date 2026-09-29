@@ -71,6 +71,10 @@ class ContentUtils:
     # to this code and is treated as no usable block content.
     CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1: str = "langchain_v1"
 
+    # Keys of a text block that carry no information beyond its text:
+    # its type, the text itself, and provider bookkeeping (id, index).
+    TRIVIAL_TEXT_BLOCK_KEYS: List[str] = ["type", "text", "id", "index"]
+
     # Standard block types whose payload is data, not conversation text.
     # Providers reject these in assistant-role history, so history
     # projections replace them with a short text reference instead.
@@ -214,13 +218,17 @@ class ContentUtils:
     def is_trivial(blocks: List[Dict[str, Any]]) -> bool:
         """
         Determine whether a standardized block list carries no more information
-        than its flattened text - a single text block with no annotations and
-        no extras. Trivial block lists collapse back to plain-string content
-        so that existing text-only traffic keeps its exact current shape.
+        than its flattened text: a single text block whose only keys are those
+        in TRIVIAL_TEXT_BLOCK_KEYS, or whose other keys are empty. Trivial block
+        lists collapse back to plain-string content so that existing text-only
+        traffic keeps its exact current shape.
 
         Policy: provider bookkeeping keys ("id", "index") do NOT make a text
         block non-trivial - such messages are plain strings on today's wire,
-        and the collapse deliberately drops those keys to keep that shape.
+        and the collapse deliberately drops those keys to keep that shape. Any
+        other key with a value (annotations, extras, an OpenAI Responses
+        "phase", ...) does, so the collapse never drops information a client
+        could use.
 
         :param blocks: A list of standard content-block dictionaries
         :return: True if the list is equivalent to a plain string
@@ -230,9 +238,26 @@ class ContentUtils:
         block: Dict[str, Any] = blocks[0]
         if block.get("type") != "text":
             return False
-        if block.get("annotations") or block.get("extras"):
+        key: str = None
+        value: Any = None
+        for key, value in block.items():
+            if key in ContentUtils.TRIVIAL_TEXT_BLOCK_KEYS:
+                continue
+            if value is None or value == "" or value == [] or value == {}:
+                continue
             return False
         return True
+
+    @staticmethod
+    def wrap_content_blocks(blocks: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Build the ChatMessage.content_blocks wrapper (see ContentBlocks in
+        chat.proto) around a list of langchain v1 standard blocks.
+
+        :param blocks: A JSON-safe list of standard content-block dictionaries
+        :return: The wrapper dictionary: {"format": "langchain_v1", "blocks": blocks}
+        """
+        return {"format": ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1, "blocks": blocks}
 
     @staticmethod
     def normalize_content(message: BaseMessage) -> Union[str, List[Dict[str, Any]]]:

@@ -175,9 +175,14 @@ class TestContentUtils(TestCase):
     def test_is_trivial(self):
         """
         Exactly one text block with no annotations/extras is trivial;
-        anything else is not.
+        anything else is not. Empty annotations/extras do not count, but any
+        other key with a value (an OpenAI Responses "phase") does.
         """
         self.assertTrue(ContentUtils.is_trivial([{"type": "text", "text": "hi"}]))
+        self.assertTrue(ContentUtils.is_trivial([{"type": "text", "text": "hi", "annotations": [], "extras": {}}]))
+        self.assertTrue(ContentUtils.is_trivial([{"type": "text", "text": "hi", "annotations": None, "extras": ""}]))
+        self.assertFalse(ContentUtils.is_trivial([{"type": "text", "text": "hi", "phase": "final_answer"}]))
+        self.assertFalse(ContentUtils.is_trivial([{"type": "text", "text": "hi", "phase": "commentary"}]))
         self.assertFalse(ContentUtils.is_trivial([]))
         self.assertFalse(ContentUtils.is_trivial([{"type": "reasoning", "reasoning": "r"}]))
         self.assertFalse(ContentUtils.is_trivial([{"type": "text", "text": "a"}, {"type": "text", "text": "b"}]))
@@ -394,6 +399,13 @@ class TestContentUtils(TestCase):
         the collapse deliberately drops those keys.
         """
         self.assertTrue(ContentUtils.is_trivial([{"type": "text", "text": "hi", "id": "msg_1", "index": 0}]))
+
+    def test_wrap_content_blocks(self) -> None:
+        """
+        The wire wrapper is the format tag plus the blocks list, as-is.
+        """
+        blocks = [{"type": "text", "text": "hi"}]
+        self.assertEqual(ContentUtils.wrap_content_blocks(blocks), {"format": "langchain_v1", "blocks": blocks})
 
     def test_history_safe_text_references_data_blocks(self):
         """
