@@ -18,7 +18,8 @@ from typing import Optional
 
 
 class SharedRef:
-    """Mutable container for passing a value between threads.
+    """
+    Mutable container for passing a value between threads.
 
     Replaces the bare-dict pattern (e.g., ``result = {}`` /
     ``result.update(...)``), making the intent explicit and the

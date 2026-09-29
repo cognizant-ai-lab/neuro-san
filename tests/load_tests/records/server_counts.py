@@ -18,7 +18,8 @@ from typing_extensions import TypedDict
 
 
 class ServerCounts(TypedDict, total=False):
-    """Request start/finish counts from the server log.
+    """
+    Request start/finish counts from the server log.
 
     All fields are optional because this dict is empty when
     no server log is available.

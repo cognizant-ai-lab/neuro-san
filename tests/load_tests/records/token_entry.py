@@ -19,7 +19,9 @@ from typing_extensions import TypedDict
 
 
 class TokenEntry(TypedDict):
-    """Token accounting data parsed from a server log block."""
+    """
+    Token accounting data parsed from a server log block.
+    """
 
     request_id: str
     total_tokens: int

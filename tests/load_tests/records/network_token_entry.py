@@ -18,7 +18,9 @@ from typing_extensions import TypedDict
 
 
 class NetworkTokenEntry(TypedDict):
-    """Per-sub-network token data from a server log block."""
+    """
+    Per-sub-network token data from a server log block.
+    """
 
     request_id: str
     network: str

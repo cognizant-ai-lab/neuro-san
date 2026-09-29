@@ -20,7 +20,9 @@ from typing_extensions import TypedDict
 
 
 class ValidationEvent(TypedDict):
-    """Per-request validation tracking from server log."""
+    """
+    Per-request validation tracking from server log.
+    """
 
     request_id: str
     attempts: int

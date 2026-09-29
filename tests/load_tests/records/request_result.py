@@ -21,7 +21,8 @@ from typing_extensions import TypedDict
 
 
 class RequestResult(TypedDict):
-    """Per-request result from a load test run.
+    """
+    Per-request result from a load test run.
 
     Required fields are always present.  Optional fields appear when
     token tracking is enabled or when the request fails.

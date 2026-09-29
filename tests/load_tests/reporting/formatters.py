@@ -16,7 +16,9 @@
 
 
 class Formatters:
-    """Reporting helpers for human-readable metrics and derived values."""
+    """
+    Reporting helpers for human-readable metrics and derived values.
+    """
 
     @staticmethod
     def format_rss(rss_mb: float) -> str:

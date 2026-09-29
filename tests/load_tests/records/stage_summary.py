@@ -27,7 +27,8 @@ from tests.load_tests.records.validation_event import ValidationEvent
 
 
 class StageSummary(TypedDict, total=False):
-    """Aggregate data for a single load test stage.
+    """
+    Aggregate data for a single load test stage.
 
     All fields are optional because resource monitoring and server
     log parsing are not always enabled.

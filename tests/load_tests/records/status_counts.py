@@ -18,7 +18,9 @@ from typing_extensions import TypedDict
 
 
 class StatusCounts(TypedDict):
-    """Per-status request counts from a load test stage."""
+    """
+    Per-status request counts from a load test stage.
+    """
 
     CREATED: int
     FAILED: int

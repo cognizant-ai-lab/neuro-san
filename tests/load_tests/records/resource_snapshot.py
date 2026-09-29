@@ -18,7 +18,9 @@ from typing_extensions import TypedDict
 
 
 class ResourceSnapshot(TypedDict):
-    """Point-in-time resource usage of a process."""
+    """
+    Point-in-time resource usage of a process.
+    """
 
     rss: float
     fds: int
