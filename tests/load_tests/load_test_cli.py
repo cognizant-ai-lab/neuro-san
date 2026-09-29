@@ -38,6 +38,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -2484,14 +2485,15 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         avg_duration = (
             round(sum(durations) / completed, 2) if completed else 0.0
         )
-        ttfts = [
-            r.get("ttft", 0.0) for r in results
-            if r.get("status") == STATUS_CREATED
-            and r.get("ttft", 0.0) > 0
-        ]
-        avg_first_response = (
-            round(sum(ttfts) / len(ttfts), 2) if ttfts else 0.0
-        )
+        first_responses: List[float] = []
+        result: Dict[str, Any]
+        for result in results:
+            time_to_first_response: float = result.get("time_to_first_response", 0.0)
+            if result.get("status") == STATUS_CREATED and time_to_first_response > 0:
+                first_responses.append(time_to_first_response)
+        avg_first_response: float = 0.0
+        if first_responses:
+            avg_first_response = round(sum(first_responses) / len(first_responses), 2)
         server_errors: List[Dict[str, str]] = []
         tool_warnings: List[Dict[str, str]] = []
         for summary in stage_summaries:

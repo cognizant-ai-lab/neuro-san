@@ -17,7 +17,8 @@
 from typing import Any
 from typing import Dict
 from typing import List
-from typing import Union
+
+from typing_extensions import override
 
 from langchain_core.tools.base import BaseTool
 
@@ -35,8 +36,8 @@ from neuro_san.message.types.agent_message import AgentMessage
 class McpToolCreator(ToolCreator):
     """
     Creates the langchain BaseTools through which an agent calls the tools of
-    one MCP server, from a string or dictionary reference in the agent's
-    "tools" list.
+    one MCP server named in the agent's "tools" list, by URL alone or with an
+    allow list of tool names.
 
     LangChainMcpAdapter fetches the server's tools, applies the allow list and
     renames provider-unsafe names within that one server. The policy that
@@ -51,7 +52,8 @@ class McpToolCreator(ToolCreator):
                  invocation_context: InvocationContext,
                  journal: Journal,
                  agent_location: str,
-                 exposed_tool_names: ExposedToolNames) -> None:
+                 exposed_tool_names: ExposedToolNames,
+                 allowed_tools: List[str] = None) -> None:
         """
         Constructor
 
@@ -61,38 +63,27 @@ class McpToolCreator(ToolCreator):
         :param journal: The journal to use when sending framework-level messages to the client
         :param agent_location: Where a problem has to be fixed, in words a reader can act on
         :param exposed_tool_names: The names already exposed by this agent's other tools
+        :param allowed_tools: The "tools" allow list of a dictionary reference. None for a
+                    reference by URL alone, so the adapter applies its own defaults.
         """
         super().__init__(tool_caller, invocation_context, journal, agent_location)
         self.exposed_tool_names: ExposedToolNames = exposed_tool_names
+        self.allowed_tools: List[str] = allowed_tools
 
-    async def create(self, mcp_info: Union[str, Dict[str, Any]]) -> List[BaseTool]:
+    @override
+    async def create_tool(self, tool_name: str) -> List[BaseTool]:
         """
-        Create MCP tools from the provided MCP configuration.
+        Create the tools of one MCP server.
 
-        The configuration can be one of:
-        - **String**: A canonical MCP server URI (see
-          https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#canonical-server-uri).
-          Must use http(s), no fragment, with "mcp" appearing either as a host label
-          (e.g. "mcp.example.com") or as a path segment (e.g. "/mcp", "/mcp/free", "/server/mcp").
-        - **Dictionary**:
-            - "url" (str): MCP server URL.
-            - "tools" (List[str], optional): List of tool names to allow from the server.
-
-        :param mcp_info: MCP server URL (string) or a configuration dictionary
+        :param tool_name: The MCP server URL: a canonical MCP server URI (see
+                    https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#canonical-server-uri)
+                    over http(s), with no fragment, and with "mcp" as a host label
+                    (e.g. "mcp.example.com") or a path segment (e.g. "/mcp", "/mcp/free", "/server/mcp").
         :return: A list of MCP tools as base tools, or None when the server was unreachable
         """
-        # By default, assume no allowed tools. This may get updated below or in the LangChainMcpAdapter.
-        allowed_tools: List[str] = None
+        server_url: str = tool_name
         # Get HTTP headers from sly_data if available
         http_headers: Dict[str, Any] = self.tool_caller.get_sly_data().get("http_headers", {})
-
-        server_url: str = None
-        if isinstance(mcp_info, str):
-            server_url = mcp_info
-        else:
-            server_url = mcp_info.get("url")
-            allowed_tools = mcp_info.get("tools")
-
         # Get specific headers for the MCP server if available
         headers: Dict[str, Any] = http_headers.get(server_url)
 
@@ -100,7 +91,7 @@ class McpToolCreator(ToolCreator):
         mcp_tools: List[BaseTool] = None
         try:
             mcp_adapter = LangChainMcpAdapter(self.agent_location)
-            mcp_tools = await mcp_adapter.get_mcp_tools(server_url, allowed_tools, headers)
+            mcp_tools = await mcp_adapter.get_mcp_tools(server_url, self.allowed_tools, headers)
 
         # MCP errors are nested exceptions.
         except ExceptionGroup as nested_exception:

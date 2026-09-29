@@ -357,7 +357,7 @@ class LangChainMcpAdapter:
                 continue
             else:
                 taken_names.add(safe_name)
-                # Expected, per-run housekeeping: McpToolCreator.create() builds a fresh
+                # Expected, per-run housekeeping: McpToolCreator.create_tool() builds a fresh
                 # adapter on every agent run, so this would spam WARNING otherwise.
                 self.logger.info(
                     "%sMCP server %s: tool '%s' renamed to '%s' for LLM tool-name compatibility; "
