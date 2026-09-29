@@ -52,6 +52,7 @@ from tests.load_tests.config import THREAD_JOIN_TIMEOUT
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.prompts.agent_profile import AgentProfile
+from tests.load_tests.reporting.sly_data_flattener import SlyDataFlattener
 from tests.load_tests.traffic.agent_request_executor import AgentRequestExecutor
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 from tests.load_tests.traffic.load_test_assert_forwarder import LoadTestAssertForwarder
@@ -137,7 +138,7 @@ class TrafficRunner:
 
         parsed_fields: Dict[str, str] = {}
         if processor is not None:
-            parsed_fields = AgentRequestExecutor.flatten_string_fields(processor.get_sly_data())
+            parsed_fields = SlyDataFlattener.flatten_string_fields(processor.get_sly_data())
         failure_reason: Optional[str] = None
         if status == STATUS_CREATED:
             failure_reason = self.check_response(

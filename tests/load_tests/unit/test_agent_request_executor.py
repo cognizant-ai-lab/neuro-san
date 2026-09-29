@@ -154,11 +154,11 @@ class TestAgentRequestExecutor(TestCase):
         label the request correctly while the worker stayed occupied,
         which is the behaviour being fixed.
         """
-        start: float = time.time()
+        start: float = time.perf_counter()
         _result, session = self._execute(
             timeout=0.3, message_count=20, message_interval=0.05,
         )
-        elapsed: float = time.time() - start
+        elapsed: float = time.perf_counter() - start
 
         self.assertLess(session.sent, 20)
         self.assertLess(elapsed, 20 * 0.05)
