@@ -145,7 +145,7 @@ class TrendHistory:
             f"<{int(threshold)}s"
             for threshold in HISTORY_THRESHOLDS_SECONDS
         )
-        header.extend(["ttfr", "avg", "wall", "err", "warn"])
+        header.extend(["first_resp", "avg", "wall", "err", "warn"])
         return header
 
     @staticmethod

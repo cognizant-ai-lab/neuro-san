@@ -103,7 +103,7 @@ class RequestResult(_RequestResultRequired, total=False):
     """
 
     error: Optional[str]
-    ttft: float
+    time_to_first_response: float
     start_time: float
     end_time: float
     total_tokens: int
