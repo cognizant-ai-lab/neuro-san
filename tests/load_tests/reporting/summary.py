@@ -163,14 +163,14 @@ class SummaryReporter:
 
     def _log_performance_stats(self) -> None:
         """Log time-to-first-response and request-duration stats."""
-        first_response: Optional[Dict[str, float]] = self._time_to_first_response_stats()
-        if first_response is not None:
+        first_response_stats: Optional[Dict[str, float]] = self._time_to_first_response_stats()
+        if first_response_stats is not None:
             logger.info(
                 "  Time to first response: %s min"
                 " / %s avg / %s max",
-                Formatters.fmt_duration(first_response.get("min", 0)),
-                Formatters.fmt_duration(first_response.get("avg", 0)),
-                Formatters.fmt_duration(first_response.get("max", 0)),
+                Formatters.fmt_duration(first_response_stats.get("min", 0)),
+                Formatters.fmt_duration(first_response_stats.get("avg", 0)),
+                Formatters.fmt_duration(first_response_stats.get("max", 0)),
             )
 
         duration = self._request_duration_stats()
@@ -449,9 +449,9 @@ class SummaryReporter:
         for summary in self._summaries:
             result: Dict[str, Any]
             for result in summary.get("results", []):
-                first_response: float = result.get("time_to_first_response", 0)
-                if first_response > 0:
-                    values.append(first_response)
+                time_to_first_response: float = result.get("time_to_first_response", 0)
+                if time_to_first_response > 0:
+                    values.append(time_to_first_response)
         if not values:
             return None
         return {
