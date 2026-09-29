@@ -24,6 +24,7 @@ import logging
 import time
 import traceback
 from typing import Any
+from typing import Callable
 from typing import Dict
 from typing import Iterator
 from typing import List
@@ -38,10 +39,10 @@ from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 # Timeout for the initial TCP connection (seconds).
-_CONNECT_TIMEOUT = 30
+_CONNECT_TIMEOUT: int = 30
 
 
 class _RequestTimeout(Exception):
@@ -90,6 +91,7 @@ class AgentRequestExecutor:
         # request surface rather than an internal design.
         # pylint: disable=too-many-arguments,too-many-locals
         start: float = time.time()
+        elapsed: float
 
         security_cfg: Optional[Dict[str, Any]] = {} if use_https else None
         session: HttpServiceAgentSession = HttpServiceAgentSession(
@@ -105,7 +107,7 @@ class AgentRequestExecutor:
         # first streamed chat message is timestamped. process_once() iterates
         # this generator internally.
         first_response: List[float] = []
-        original_streaming_chat = session.streaming_chat
+        original_streaming_chat: Callable[[Dict[str, Any]], Iterator[Dict[str, Any]]] = session.streaming_chat
 
         def timed_streaming_chat(request_dict: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
             # Nested to close over original_streaming_chat, start, and
@@ -147,7 +149,7 @@ class AgentRequestExecutor:
         # is a per-request isolation boundary — any single request must
         # be recorded as FAILED/TIMEOUT without aborting the load test.
         except Exception:  # pylint: disable=broad-exception-caught
-            elapsed: float = time.time() - start
+            elapsed = time.time() - start
             if elapsed >= timeout:
                 return AgentRequestResult(STATUS_TIMEOUT, None, "", 0.0, {})
             # Include the full chained traceback so the root cause

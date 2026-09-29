@@ -31,6 +31,8 @@ class AgentRequestResult:
     ``TrafficRunner`` to build the ``RequestResult`` that goes into the report.
     """
 
+    # One argument per field of the request outcome; nothing to group.
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(
             self,
             status: str,

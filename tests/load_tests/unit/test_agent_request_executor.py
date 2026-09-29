@@ -15,6 +15,9 @@
 #
 # END COPYRIGHT
 import time
+from typing import Any
+from typing import Dict
+from typing import Iterator
 from typing import Tuple
 from unittest import TestCase
 from unittest.mock import patch
@@ -30,14 +33,25 @@ from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 class FakeSession:
     """Stand-in for HttpServiceAgentSession that streams on a timer."""
 
-    def __init__(self, *, message_count, message_interval, **_kwargs):
-        """Stream ``message_count`` messages, one per interval."""
-        self._message_count = message_count
-        self._message_interval = message_interval
-        self.sent = 0
+    def __init__(self, *, message_count: int, message_interval: float, **_kwargs: Any):
+        """
+        Constructor.
 
-    def streaming_chat(self, _request_dict):
-        """Yield one message per interval, counting what was consumed."""
+        :param message_count: How many messages to stream
+        :param message_interval: Seconds between messages
+        :param _kwargs: The real session's constructor arguments, ignored
+        """
+        self._message_count: int = message_count
+        self._message_interval: float = message_interval
+        self.sent: int = 0
+
+    def streaming_chat(self, _request_dict: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
+        """
+        Yield one message per interval, counting what was consumed.
+
+        :param _request_dict: The streaming_chat request, ignored
+        :return: One AI chat message per interval
+        """
         for _ in range(self._message_count):
             time.sleep(self._message_interval)
             self.sent += 1
@@ -52,24 +66,36 @@ class FakeSession:
 class FakeProcessor:
     """Stand-in for StreamingInputProcessor that drains the stream."""
 
-    def __init__(self, *, session, **_kwargs):
-        """Keep the session whose streaming_chat is consumed."""
-        self._session = session
+    def __init__(self, *, session: FakeSession, **_kwargs: Any):
+        """
+        Constructor.
+
+        :param session: The session whose streaming_chat is consumed
+        :param _kwargs: The real processor's constructor arguments, ignored
+        """
+        self._session: FakeSession = session
 
     def get_message_processor(self) -> BasicMessageProcessor:
-        """Return a real message processor that has seen the stream's sly_data."""
-        processor = BasicMessageProcessor()
+        """
+        :return: A real message processor that has seen the stream's sly_data
+        """
+        processor: BasicMessageProcessor = BasicMessageProcessor()
         processor.process_message({
             "type": "AGENT_FRAMEWORK", "chat_context": {},
             "sly_data": {"reservation_id": "abc-1"},
         })
         return processor
 
-    def process_once(self, state):
-        """Consume every streamed message, as the real processor does."""
+    def process_once(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Consume every streamed message, as the real processor does.
+
+        :param state: The request state
+        :return: A copy of the state with the answer filled in
+        """
         for _ in self._session.streaming_chat({}):
             pass
-        updated = dict(state)
+        updated: Dict[str, Any] = dict(state)
         updated["last_chat_response"] = "answer"
         return updated
 
@@ -113,7 +139,7 @@ class TestAgentRequestExecutor(TestCase):
             )
         return result, session
 
-    def test_streaming_past_the_cap_is_a_timeout(self):
+    def test_streaming_past_the_cap_is_a_timeout(self) -> None:
         """A stream that outruns the cap reports TIMEOUT."""
         result, _session = self._execute(
             timeout=0.3, message_count=20, message_interval=0.05,
@@ -121,23 +147,23 @@ class TestAgentRequestExecutor(TestCase):
 
         self.assertEqual(result.get_status(), STATUS_TIMEOUT)
 
-    def test_streaming_past_the_cap_stops_early(self):
+    def test_streaming_past_the_cap_stops_early(self) -> None:
         """The request is abandoned rather than drained to the end.
 
         Reporting TIMEOUT after draining the whole stream would still
         label the request correctly while the worker stayed occupied,
         which is the behaviour being fixed.
         """
-        start = time.time()
+        start: float = time.time()
         _result, session = self._execute(
             timeout=0.3, message_count=20, message_interval=0.05,
         )
-        elapsed = time.time() - start
+        elapsed: float = time.time() - start
 
         self.assertLess(session.sent, 20)
         self.assertLess(elapsed, 20 * 0.05)
 
-    def test_request_within_the_cap_succeeds(self):
+    def test_request_within_the_cap_succeeds(self) -> None:
         """A request that finishes in time is unaffected."""
         result, session = self._execute(
             timeout=30, message_count=3, message_interval=0.01,
