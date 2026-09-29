@@ -78,6 +78,6 @@ class ErrorDetector:
             return output
 
         formatter: ErrorFormatter = ErrorFormatterFactory.create_formatter(self.error_formatter_name)
-        error_output = formatter.format(self.agent_name, output, details)
+        error_output: str = formatter.format(self.agent_name, output, details)
 
         return error_output
