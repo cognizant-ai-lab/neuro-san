@@ -89,14 +89,16 @@ A neuro-san server uses HTTP under the hood. You can check out the protobufs def
 API under neuro_san/api/grpc.  The place to start is agent.proto for the service definitions.
 The next most important file there is chat.proto for the chat message definitions.
 
-A chat message carries its visible text in `text`. When the model returned more than text (reasoning
-or thinking summaries, images, files, provider extras such as signatures), the AI message of the agent
-that produced it also carries `content_blocks`: a `format` string and a `blocks` list. The first
-format is `langchain_v1`, LangChain's standard content blocks. Whenever `content_blocks` is present,
-`text` holds the flattened text, so a client that does not recognize the format can ignore the
-blocks. These AI messages reach clients under the MAXIMAL chat filter; the final AGENT_FRAMEWORK
-answer that MINIMAL clients receive stays text-only for now. A message that is only text has no
-`content_blocks` key, so existing clients see no change.
+A chat message carries its visible text in `text`. When a message's content is more than one plain
+text (model reasoning or thinking summaries, images, files, several text blocks, provider extras such
+as signatures), the message also carries `content_blocks`: a `format` string and a `blocks` list. The
+first format is `langchain_v1`, LangChain's standard content blocks. Whenever `content_blocks` is
+present, `text` holds the flattened text of the blocks, so a client that does not recognize the format
+can ignore the blocks. Today this applies to the AI message of the agent whose model returned the
+blocks, which clients receive under the MAXIMAL chat filter, and to a HUMAN message echoed back with
+the attachments a multimodal client sent. The final AGENT_FRAMEWORK answer that MINIMAL clients
+receive stays text-only for now. A message whose content is a plain string, the shape every existing
+client receives today, has no `content_blocks` key, so existing clients see no change.
 
 ### Using curl to interact with a neuro-san server
 

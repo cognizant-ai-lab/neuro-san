@@ -148,24 +148,32 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         to text, so only real block content is wrapped. The provider
         translators it runs raise on malformed blocks (a text block with no
         "text", a non_standard block with no "value", ...) where the text
-        projection never did; such a message goes out text-only rather than
-        failing the journal write that carries it.
+        projection never did, and they skip content items they do not
+        recognize (a bare string inside a block list), which can drop text.
+        In both cases the message goes out text-only: the wrapper is only
+        emitted while its blocks still flatten to the message's text.
 
         :param message: A BaseMessage whose content is a non-empty list
         :return: The wrapper dictionary, or None when the content is only text
-                 or could not be standardized
+                 or could not be standardized without losing text
         """
+        logger: logging.Logger = logging.getLogger(self.__class__.__name__)
         try:
             normalized: Union[str, List[Dict[str, Any]]] = ContentUtils.normalize_content(message)
         except (KeyError, ValueError, TypeError, AttributeError) as exception:
-            logging.getLogger(self.__class__.__name__).warning(
-                "Could not standardize the block content of a %s; sending its text only: %s",
-                message.__class__.__name__, exception)
+            logger.warning("Could not standardize the block content of a %s; sending its text only: %s",
+                           message.__class__.__name__, exception)
             return None
 
-        if isinstance(normalized, list):
-            return ContentUtils.wrap_content_blocks(normalized)
-        return None
+        if not isinstance(normalized, list):
+            return None
+
+        if ContentUtils.flatten_to_text(normalized) != ContentUtils.flatten_to_text(message):
+            logger.warning("Standardizing the block content of a %s lost text; sending its text only",
+                           message.__class__.__name__)
+            return None
+
+        return ContentUtils.wrap_content_blocks(normalized)
 
     def from_dict(self, obj_dict: Dict[str, Any]) -> BaseMessage:
         """

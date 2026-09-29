@@ -310,6 +310,28 @@ class TestBaseMessageDictionaryConverter(TestCase):
             "text": "",
         })
 
+    def test_to_dict_blocks_that_lose_text_fall_back_to_text(self) -> None:
+        """
+        A mixed list of a bare string and blocks: the Anthropic translator
+        drops the string, so the blocks would flatten to less than the
+        message's text. The message goes out text-only, with a warning, so
+        text and content_blocks can never disagree.
+        """
+        converter = BaseMessageDictionaryConverter()
+        message = AIMessage(
+            content=[
+                "hello ",
+                {"type": "thinking", "thinking": "t", "signature": "s"},
+                {"type": "text", "text": "world"},
+            ],
+            response_metadata={"model_provider": "anthropic"})
+        with self.assertLogs("BaseMessageDictionaryConverter", level="WARNING"):
+            result = converter.to_dict(message)
+        self.assertEqual(result, {
+            "type": ChatMessageType.AI,
+            "text": "hello world",
+        })
+
     def test_to_dict_text_block_with_phase_emits_content_blocks(self) -> None:
         """
         A lone text block carrying a provider key with a value (OpenAI's
