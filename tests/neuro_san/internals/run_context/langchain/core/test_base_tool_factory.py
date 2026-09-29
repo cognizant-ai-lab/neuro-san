@@ -258,3 +258,24 @@ class TestBaseToolFactory(IsolatedAsyncioTestCase):
         expected_start: str = f"{self.AGENT_LOCATION}: MCP tool 'a__b' from https://two.example.com/mcp"
         self.assertTrue(reported.content.startswith(expected_start), reported.content)
         self.assertIn("skipping it", reported.content)
+
+    @patch(MCP_ADAPTER_PATH)
+    async def test_mcp_dictionary_reference_is_split_into_url_and_allow_list(self,
+                                                                             mock_adapter_class: MagicMock) -> None:
+        """
+        A dictionary MCP reference is split at the dispatch point: the MCP creator
+        is built with the "tools" allow list and called with the "url".
+
+        :param mock_adapter_class: Patched LangChainMcpAdapter class.
+        """
+        mock_adapter: MagicMock = mock_adapter_class.return_value
+        mock_adapter.get_unmatched_allowed_tools = MagicMock(return_value=[])
+        mock_adapter.get_mcp_tools = AsyncMock(return_value=[self.make_named_tool("a")])
+        factory: BaseToolFactory = self.make_factory(agent_spec=None)
+
+        tools: Union[BaseTool, List[BaseTool]] = await factory.create_base_tool(
+            {"url": "https://mcp.example.com/mcp", "tools": ["a"]})
+
+        self.assertEqual(len(tools), 1)
+        # make_factory() gives the agent empty sly_data, so the adapter gets no headers.
+        mock_adapter.get_mcp_tools.assert_awaited_once_with("https://mcp.example.com/mcp", ["a"], None)

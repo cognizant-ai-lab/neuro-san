@@ -93,7 +93,7 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
         """
         creator: ExternalAgentToolCreator = self.make_creator({"description": "Answers music questions."})
 
-        tool: BaseTool = await creator.create(self.EXTERNAL_AGENT_NAME)
+        tool: BaseTool = await creator.create_tool(self.EXTERNAL_AGENT_NAME)
 
         self.assertIsNotNone(tool)
         self.assertEqual(tool.parameters, ExternalAgentToolCreator.DEFAULT_EXTERNAL_PARAMETERS)
@@ -129,7 +129,7 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
             "parameters": declared_parameters
         })
 
-        tool: BaseTool = await creator.create(self.EXTERNAL_AGENT_NAME)
+        tool: BaseTool = await creator.create_tool(self.EXTERNAL_AGENT_NAME)
 
         self.assertIsNotNone(tool)
         self.assertEqual(tool.parameters, declared_parameters)
@@ -157,7 +157,7 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
         expected: Dict[str, Any] = deepcopy(function_json)
         creator: ExternalAgentToolCreator = self.make_creator(function_json)
 
-        tool: BaseTool = await creator.create(self.EXTERNAL_AGENT_NAME)
+        tool: BaseTool = await creator.create_tool(self.EXTERNAL_AGENT_NAME)
 
         self.assertEqual(function_json, expected)
         self.assertEqual(tool.name, ExternalAgentParsing.get_safe_agent_name(self.EXTERNAL_AGENT_NAME))
@@ -175,7 +175,7 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
             }
         })
 
-        tool: BaseTool = await creator.create(self.EXTERNAL_AGENT_NAME)
+        tool: BaseTool = await creator.create_tool(self.EXTERNAL_AGENT_NAME)
 
         self.assertIsNotNone(tool)
         self.assertEqual(tool.parameters, ExternalAgentToolCreator.DEFAULT_EXTERNAL_PARAMETERS)
@@ -191,7 +191,7 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
         """
         creator: ExternalAgentToolCreator = self.make_creator({})
 
-        tool: BaseTool = await creator.create(self.EXTERNAL_AGENT_NAME)
+        tool: BaseTool = await creator.create_tool(self.EXTERNAL_AGENT_NAME)
 
         self.assertIsNone(tool)
 
@@ -214,12 +214,12 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
         parameterless: Dict[str, Any] = {"description": "Answers music questions."}
 
         first_creator: ExternalAgentToolCreator = self.make_creator(parameterless)
-        first_tool: BaseTool = await first_creator.create(self.EXTERNAL_AGENT_NAME)
+        first_tool: BaseTool = await first_creator.create_tool(self.EXTERNAL_AGENT_NAME)
         self.assertEqual(first_tool.parameters, ExternalAgentToolCreator.DEFAULT_EXTERNAL_PARAMETERS)
         first_creator.journal.write_message.assert_awaited_once()
 
         second_creator: ExternalAgentToolCreator = self.make_creator(parameterless)
-        second_tool: BaseTool = await second_creator.create(self.EXTERNAL_AGENT_NAME)
+        second_tool: BaseTool = await second_creator.create_tool(self.EXTERNAL_AGENT_NAME)
         self.assertEqual(second_tool.parameters, ExternalAgentToolCreator.DEFAULT_EXTERNAL_PARAMETERS)
         second_creator.journal.write_message.assert_not_awaited()
 
@@ -245,15 +245,15 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
         }
 
         broken_creator: ExternalAgentToolCreator = self.make_creator(parameterless)
-        await broken_creator.create(self.EXTERNAL_AGENT_NAME)
+        await broken_creator.create_tool(self.EXTERNAL_AGENT_NAME)
         broken_creator.journal.write_message.assert_awaited_once()
 
         fixed_creator: ExternalAgentToolCreator = self.make_creator(declared)
-        await fixed_creator.create(self.EXTERNAL_AGENT_NAME)
+        await fixed_creator.create_tool(self.EXTERNAL_AGENT_NAME)
         fixed_creator.journal.write_message.assert_not_awaited()
 
         regressed_creator: ExternalAgentToolCreator = self.make_creator(parameterless)
-        await regressed_creator.create(self.EXTERNAL_AGENT_NAME)
+        await regressed_creator.create_tool(self.EXTERNAL_AGENT_NAME)
         regressed_creator.journal.write_message.assert_awaited_once()
 
     async def test_unsupported_schema_dialect_is_not_replaced(self) -> None:
@@ -271,7 +271,7 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
             }
         })
 
-        tool: BaseTool = await creator.create(self.EXTERNAL_AGENT_NAME)
+        tool: BaseTool = await creator.create_tool(self.EXTERNAL_AGENT_NAME)
 
         self.assertIsNone(tool)
         creator.journal.write_message.assert_awaited_once()
@@ -296,7 +296,7 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
                     "parameters": bad_parameters
                 })
 
-                tool: BaseTool = await creator.create(self.EXTERNAL_AGENT_NAME)
+                tool: BaseTool = await creator.create_tool(self.EXTERNAL_AGENT_NAME)
 
                 self.assertIsNone(tool)
                 creator.journal.write_message.assert_awaited_once()
@@ -312,7 +312,7 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
         session = creator.invocation_context.get_async_session_factory().create_session()
         session.function = AsyncMock(side_effect=ValueError("connection refused"))
 
-        tool: BaseTool = await creator.create(self.EXTERNAL_AGENT_NAME)
+        tool: BaseTool = await creator.create_tool(self.EXTERNAL_AGENT_NAME)
 
         self.assertIsNone(tool)
         creator.journal.write_message.assert_awaited_once()
@@ -339,7 +339,7 @@ class TestExternalAgentToolCreator(IsolatedAsyncioTestCase):
         """
         creator: ExternalAgentToolCreator = self.make_creator({"description": "x"})
 
-        tool: BaseTool = await creator.create("local_agent")
+        tool: BaseTool = await creator.create_tool("local_agent")
 
         self.assertIsNone(tool)
         session_factory = creator.invocation_context.get_async_session_factory()

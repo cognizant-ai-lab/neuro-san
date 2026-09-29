@@ -33,7 +33,7 @@ from neuro_san.message.types.agent_message import AgentMessage
 
 class TestMcpToolCreator(IsolatedAsyncioTestCase):
     """
-    Unit tests for McpToolCreator: how an MCP reference reaches the adapter,
+    Unit tests for McpToolCreator: what reaches the adapter for one MCP server,
     and the policy the creator applies on top of what the adapter returns.
     """
 
@@ -54,11 +54,12 @@ class TestMcpToolCreator(IsolatedAsyncioTestCase):
         tool.name = name
         return tool
 
-    def make_creator(self, with_headers: bool = True) -> McpToolCreator:
+    def make_creator(self, with_headers: bool = True, allowed_tools: List[str] = None) -> McpToolCreator:
         """
         Builds a creator with an empty ExposedToolNames record.
 
         :param with_headers: True to give sly_data headers for SERVER_URL, False for empty sly_data
+        :param allowed_tools: The allow list to build the creator with, None for none
         :return: An McpToolCreator over mocked collaborators
         """
         sly_data: Dict[str, Any] = {}
@@ -71,7 +72,8 @@ class TestMcpToolCreator(IsolatedAsyncioTestCase):
         journal.write_message = AsyncMock()
 
         exposed_tool_names: ExposedToolNames = ExposedToolNames(journal, self.AGENT_LOCATION)
-        return McpToolCreator(tool_caller, MagicMock(), journal, self.AGENT_LOCATION, exposed_tool_names)
+        return McpToolCreator(tool_caller, MagicMock(), journal, self.AGENT_LOCATION, exposed_tool_names,
+                              allowed_tools)
 
     @staticmethod
     def prepare_adapter(mock_adapter_class: MagicMock, tools: List[BaseTool],
@@ -90,20 +92,19 @@ class TestMcpToolCreator(IsolatedAsyncioTestCase):
         return mock_adapter
 
     @patch(ADAPTER_PATH)
-    async def test_dictionary_reference_passes_url_allow_list_and_headers(self, mock_adapter_class: MagicMock) -> None:
+    async def test_allow_list_and_headers_reach_the_adapter(self, mock_adapter_class: MagicMock) -> None:
         """
-        A dictionary reference hands the adapter the URL, the allow list and the
-        headers sly_data holds for that URL, and the adapter is told where the
-        request comes from so its warnings can say so.
+        The creator hands the adapter the URL, the allow list it was built with
+        and the headers sly_data holds for that URL, and the adapter is told
+        where the request comes from so its warnings can say so.
 
         :param mock_adapter_class: Patched LangChainMcpAdapter class.
         """
         tool: MagicMock = self.make_named_tool("tool_1")
         mock_adapter: MagicMock = self.prepare_adapter(mock_adapter_class, [tool])
-        creator: McpToolCreator = self.make_creator()
-        mcp_info: Dict[str, Any] = {"url": self.SERVER_URL, "tools": ["tool_1"]}
+        creator: McpToolCreator = self.make_creator(allowed_tools=["tool_1"])
 
-        result: List[BaseTool] = await creator.create(mcp_info)
+        result: List[BaseTool] = await creator.create_tool(self.SERVER_URL)
 
         self.assertEqual(result, [tool])
         mock_adapter_class.assert_called_once_with(self.AGENT_LOCATION)
@@ -111,33 +112,33 @@ class TestMcpToolCreator(IsolatedAsyncioTestCase):
         creator.journal.write_message.assert_not_awaited()
 
     @patch(ADAPTER_PATH)
-    async def test_dictionary_without_tools_or_headers_passes_none_for_both(self,
-                                                                            mock_adapter_class: MagicMock) -> None:
+    async def test_no_allow_list_or_headers_passes_none_for_both(self, mock_adapter_class: MagicMock) -> None:
         """
-        A dictionary reference with no "tools" key, for an agent whose sly_data holds
-        no headers, hands the adapter None for both, so the adapter's own defaults apply.
+        A creator built without an allow list, for an agent whose sly_data holds no
+        headers, hands the adapter None for both, so the adapter's own defaults apply.
 
         :param mock_adapter_class: Patched LangChainMcpAdapter class.
         """
         mock_adapter: MagicMock = self.prepare_adapter(mock_adapter_class, [self.make_named_tool("tool_1")])
         creator: McpToolCreator = self.make_creator(with_headers=False)
 
-        await creator.create({"url": self.SERVER_URL})
+        await creator.create_tool(self.SERVER_URL)
 
         mock_adapter.get_mcp_tools.assert_awaited_once_with(self.SERVER_URL, None, None)
 
     @patch(ADAPTER_PATH)
-    async def test_string_reference_has_no_allow_list(self, mock_adapter_class: MagicMock) -> None:
+    async def test_without_allow_list_the_adapter_decides(self, mock_adapter_class: MagicMock) -> None:
         """
-        A plain URL reference lets the adapter decide the allow list (None here,
-        the MCP servers info file may still supply one).
+        A server referenced by URL alone lets the adapter decide the allow list
+        (None here, the MCP servers info file may still supply one), while the
+        headers for that URL still apply.
 
         :param mock_adapter_class: Patched LangChainMcpAdapter class.
         """
         mock_adapter: MagicMock = self.prepare_adapter(mock_adapter_class, [self.make_named_tool("tool_1")])
         creator: McpToolCreator = self.make_creator()
 
-        await creator.create(self.SERVER_URL)
+        await creator.create_tool(self.SERVER_URL)
 
         mock_adapter.get_mcp_tools.assert_awaited_once_with(self.SERVER_URL, None, self.HEADERS)
 
@@ -156,7 +157,7 @@ class TestMcpToolCreator(IsolatedAsyncioTestCase):
         creator: McpToolCreator = self.make_creator()
         await creator.exposed_tool_names.remember(self.make_named_tool("a__b"))
 
-        result: List[BaseTool] = await creator.create(self.SERVER_URL)
+        result: List[BaseTool] = await creator.create_tool(self.SERVER_URL)
 
         self.assertEqual(result, [other])
         creator.journal.write_message.assert_awaited_once()
@@ -176,9 +177,9 @@ class TestMcpToolCreator(IsolatedAsyncioTestCase):
         """
         tool: MagicMock = self.make_named_tool("tool_1")
         self.prepare_adapter(mock_adapter_class, [tool], unmatched=["nope"])
-        creator: McpToolCreator = self.make_creator()
+        creator: McpToolCreator = self.make_creator(allowed_tools=["tool_1", "nope"])
 
-        result: List[BaseTool] = await creator.create({"url": self.SERVER_URL, "tools": ["tool_1", "nope"]})
+        result: List[BaseTool] = await creator.create_tool(self.SERVER_URL)
 
         self.assertEqual(result, [tool])
         creator.journal.write_message.assert_awaited_once()
@@ -200,7 +201,7 @@ class TestMcpToolCreator(IsolatedAsyncioTestCase):
         mock_adapter.get_mcp_tools = AsyncMock(side_effect=ExceptionGroup("boom", [ConnectionError("refused")]))
         creator: McpToolCreator = self.make_creator()
 
-        result: List[BaseTool] = await creator.create(self.SERVER_URL)
+        result: List[BaseTool] = await creator.create_tool(self.SERVER_URL)
 
         self.assertIsNone(result)
         creator.journal.write_message.assert_awaited_once()
