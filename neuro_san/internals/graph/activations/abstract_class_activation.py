@@ -50,6 +50,7 @@ from neuro_san.internals.journals.progress_journal import ProgressJournal
 from neuro_san.internals.journals.tool_argument_reporting import ToolArgumentReporting
 from neuro_san.internals.reservations.accumulating_agent_reservationist import AccumulatingAgentReservationist
 from neuro_san.internals.run_context.factory.run_context_factory import RunContextFactory
+from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.message.types.agent_message import AgentMessage
 
@@ -209,7 +210,8 @@ class AbstractClassActivation(AbstractCallableActivation):
         """
         # "this_agent_tool_path" is the root path from AGENT_TOOL_PATH plus the agent network name.
         this_agent_tool_path: str = self.factory.get_agent_tool_path()
-        agent_network_name: str = self.factory.agent_network.get_network_name()
+        inspector: AgentNetworkInspector = self.factory.get_agent_network()
+        agent_network_name: str = inspector.get_network_name()
         agent_network_name_parts: List[str] = agent_network_name.split("/")
         this_agent_tool_path_parts: List[str] = this_agent_tool_path.split(".")
 
