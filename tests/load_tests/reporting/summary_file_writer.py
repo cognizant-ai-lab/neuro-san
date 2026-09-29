@@ -19,6 +19,7 @@
 import logging
 import os
 import time
+from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -90,12 +91,7 @@ class SummaryFileWriter:
             f"  Total wall time:"
             f" {Formatters.fmt_duration(total_elapsed, precision=1)}"
         )
-        first_response_values: List[float] = [
-            r.get("time_to_first_response", 0)
-            for s in self._summaries
-            for r in s.get("results", [])
-            if r.get("time_to_first_response", 0) > 0
-        ]
+        first_response_values: List[float] = self._time_to_first_response_values()
         if first_response_values:
             avg_first_response: float = sum(first_response_values) / len(first_response_values)
             lines.append(
@@ -136,6 +132,22 @@ class SummaryFileWriter:
         self._write_sys_mem_trajectory(lines)
         self._write_validation_summary(lines)
         lines.append("")
+
+    def _time_to_first_response_values(self) -> List[float]:
+        """
+        Collect the time to first response of every request that got one.
+
+        :return: Seconds to first response per request, zeros left out
+        """
+        values: List[float] = []
+        summary: Dict[str, Any]
+        for summary in self._summaries:
+            result: Dict[str, Any]
+            for result in summary.get("results", []):
+                time_to_first_response: float = result.get("time_to_first_response", 0)
+                if time_to_first_response > 0:
+                    values.append(time_to_first_response)
+        return values
 
     def _write_rss_trajectory(self, lines) -> None:
         """Write server RSS start/peak/end if available."""
