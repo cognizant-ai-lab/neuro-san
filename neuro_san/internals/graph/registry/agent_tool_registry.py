@@ -118,12 +118,6 @@ class AgentToolRegistry(AgentNetworkInspector, AgentToolFactory):
         """
         return self.agent_network.find_front_man()
 
-    def get_agent_llm_info_file(self) -> str:
-        """
-        :return: The absolute path of agent llm info file for llm extension.
-        """
-        return self.agent_network.get_agent_llm_info_file()
-
     def get_size_in_bytes(self) -> int:
         """
         :return: The size in bytes of this AgentNetwork
