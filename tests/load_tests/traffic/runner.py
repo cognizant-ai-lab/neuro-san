@@ -55,9 +55,6 @@ from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.prompts.agent_profile import AgentProfile
-from tests.load_tests.records.network_token_entry import NetworkTokenEntry
-from tests.load_tests.records.request_result import RequestResult
-from tests.load_tests.records.validation_event import ValidationEvent
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.sly_data_flattener import SlyDataFlattener
 from tests.load_tests.shared_ref import SharedRef
@@ -92,7 +89,7 @@ class TrafficRunner:
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _run_one_tracked(self, request_id: int, global_request_id: int,
-                         output_dir: Optional[str], failed_ref: SharedRef) -> RequestResult:
+                         output_dir: Optional[str], failed_ref: SharedRef) -> Dict[str, Any]:
         """
         Run one request and increment failed_ref on failure.
 
@@ -102,7 +99,7 @@ class TrafficRunner:
         :param failed_ref: Shared counter of failed requests
         :return: The request result
         """
-        result: RequestResult = self.run_one_http(
+        result: Dict[str, Any] = self.run_one_http(
             request_id, global_request_id, output_dir,
         )
         if result.get("status") != STATUS_CREATED:
@@ -111,7 +108,7 @@ class TrafficRunner:
 
     # pylint: disable=too-many-locals,too-many-branches
     def run_one_http(self, request_id: int, global_request_id: int,
-                     output_dir: Optional[str] = None) -> RequestResult:
+                     output_dir: Optional[str] = None) -> Dict[str, Any]:
         """
         Execute a single request via in-thread HTTP and check its response.
 
@@ -183,7 +180,7 @@ class TrafficRunner:
             output_dir=output_dir,
         )
 
-        result: RequestResult = {
+        result: Dict[str, Any] = {
             "request_id": f"request-{request_id}",
             "status": status,
             "elapsed": elapsed,
@@ -337,7 +334,7 @@ class TrafficRunner:
         return saved
 
     @staticmethod
-    def _attach_http_token_data(result: RequestResult,
+    def _attach_http_token_data(result: Dict[str, Any],
                                 token_data: Optional[Dict[str, Any]]) -> None:
         """
         Attach token accounting from the HTTP response to the result.
@@ -379,7 +376,7 @@ class TrafficRunner:
                   log_monitor: Optional[ServerLogMonitor] = None,
                   primary_start_pattern: Optional[str] = None,
                   ) -> Tuple[
-        float, List[RequestResult], SharedRef, SharedRef,
+        float, List[Dict[str, Any]], SharedRef, SharedRef,
         SharedRef, SharedRef, SharedRef, SharedRef, bool, bool,
     ]:
         """
@@ -402,7 +399,7 @@ class TrafficRunner:
                  peak_server_rss_ref, peak_sys_mem_pct_ref, peak_sys_cpu_ref,
                  peak_sys_threads_ref, server_died, interrupted)
         """
-        results_list: List[RequestResult] = []
+        results_list: List[Dict[str, Any]] = []
         peak_threads_ref: SharedRef = SharedRef()
         peak_client_rss_ref: SharedRef = SharedRef()
         peak_server_rss_ref: SharedRef = SharedRef()
@@ -496,7 +493,7 @@ class TrafficRunner:
     @staticmethod
     # pylint: disable=too-many-branches
     def _collect_with_timeout(
-            futures: List[Future], results_list: List[RequestResult], *,
+            futures: List[Future], results_list: List[Dict[str, Any]], *,
             start: float, stage_timeout: Optional[float],
             cancel_event: Optional[threading.Event] = None,
     ) -> Tuple[int, bool]:
@@ -663,9 +660,9 @@ class TrafficRunner:
 
     @staticmethod
     def log_token_summary(
-            results: List[RequestResult], *, output_dir: Optional[str] = None,
-            network_tokens: Optional[List[NetworkTokenEntry]] = None,
-            validation_events: Optional[List[ValidationEvent]] = None,
+            results: List[Dict[str, Any]], *, output_dir: Optional[str] = None,
+            network_tokens: Optional[List[Dict[str, Any]]] = None,
+            validation_events: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
         """
         Log token usage summary to console, detail to file.
@@ -697,7 +694,7 @@ class TrafficRunner:
             TrafficRunner._log_token_per_request(results)
 
     @staticmethod
-    def _log_token_per_request(results: List[RequestResult]) -> None:
+    def _log_token_per_request(results: List[Dict[str, Any]]) -> None:
         """
         Log per-request token lines to the console.
 
@@ -723,9 +720,9 @@ class TrafficRunner:
 
     @staticmethod
     def _write_token_file(
-            results: List[RequestResult], output_dir: str, *,
-            network_tokens: Optional[List[NetworkTokenEntry]] = None,
-            validation_events: Optional[List[ValidationEvent]] = None,
+            results: List[Dict[str, Any]], output_dir: str, *,
+            network_tokens: Optional[List[Dict[str, Any]]] = None,
+            validation_events: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
         """
         Write per-request token detail to server_tokens.log.
@@ -735,10 +732,10 @@ class TrafficRunner:
         :param network_tokens: Per-agent token entries parsed from the server log
         :param validation_events: Validation retry events parsed from the server log
         """
-        by_request: Dict[str, List[NetworkTokenEntry]] = TrafficRunner._group_network_tokens(
+        by_request: Dict[str, List[Dict[str, Any]]] = TrafficRunner._group_network_tokens(
             network_tokens,
         )
-        by_validation: Dict[str, ValidationEvent] = TrafficRunner._group_validation_events(
+        by_validation: Dict[str, Dict[str, Any]] = TrafficRunner._group_validation_events(
             validation_events,
         )
         path: str = os.path.join(output_dir, "server_tokens.log")
@@ -755,15 +752,15 @@ class TrafficRunner:
 
     @staticmethod
     def _group_network_tokens(
-            network_tokens: Optional[List[NetworkTokenEntry]],
-    ) -> Dict[str, List[NetworkTokenEntry]]:
+            network_tokens: Optional[List[Dict[str, Any]]],
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """
         Group network token entries by request_id.
 
         :param network_tokens: Per-agent token entries parsed from the server log
         :return: request_id -> its token entries
         """
-        by_request: Dict[str, List[NetworkTokenEntry]] = {}
+        by_request: Dict[str, List[Dict[str, Any]]] = {}
         for entry in (network_tokens or []):
             rid: str = entry.get("request_id", "")
             by_request.setdefault(rid, []).append(entry)
@@ -771,15 +768,15 @@ class TrafficRunner:
 
     @staticmethod
     def _group_validation_events(
-            validation_events: Optional[List[ValidationEvent]],
-    ) -> Dict[str, ValidationEvent]:
+            validation_events: Optional[List[Dict[str, Any]]],
+    ) -> Dict[str, Dict[str, Any]]:
         """
         Index validation events by request_id.
 
         :param validation_events: Validation retry events parsed from the server log
         :return: request_id -> its validation event
         """
-        by_request: Dict[str, ValidationEvent] = {}
+        by_request: Dict[str, Dict[str, Any]] = {}
         for event in (validation_events or []):
             rid: str = event.get("request_id", "")
             by_request[rid] = event
@@ -787,9 +784,9 @@ class TrafficRunner:
 
     @staticmethod
     def _write_token_request(
-            fh: TextIO, result: RequestResult,
-            by_request: Dict[str, List[NetworkTokenEntry]],
-            by_validation: Dict[str, ValidationEvent],
+            fh: TextIO, result: Dict[str, Any],
+            by_request: Dict[str, List[Dict[str, Any]]],
+            by_validation: Dict[str, Dict[str, Any]],
     ) -> None:
         """
         Write one request's token line with agent breakdown.
@@ -819,7 +816,7 @@ class TrafficRunner:
             fh, rid, by_validation,
         )
         server_rid: str = result.get("server_request_id", rid)
-        agents: List[NetworkTokenEntry] = (
+        agents: List[Dict[str, Any]] = (
             by_request.get(server_rid)
             or by_request.get(rid)
             or []
@@ -853,7 +850,7 @@ class TrafficRunner:
 
     @staticmethod
     def _write_validation_detail(
-            fh: TextIO, rid: str, by_validation: Dict[str, ValidationEvent],
+            fh: TextIO, rid: str, by_validation: Dict[str, Dict[str, Any]],
     ) -> None:
         """
         Write per-request validation retry detail.
@@ -862,7 +859,7 @@ class TrafficRunner:
         :param rid: request_id of the request being written
         :param by_validation: request_id -> validation event
         """
-        event: Optional[ValidationEvent] = by_validation.get(rid)
+        event: Optional[Dict[str, Any]] = by_validation.get(rid)
         if not event:
             return
         attempts: int = event.get("attempts", 0)
@@ -876,7 +873,7 @@ class TrafficRunner:
             fh.write(f"    - {err}\n")
 
     @staticmethod
-    def _log_token_totals(results: List[RequestResult]) -> None:
+    def _log_token_totals(results: List[Dict[str, Any]]) -> None:
         """
         Log aggregate token totals to the console.
 

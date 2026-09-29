@@ -67,11 +67,6 @@ from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.prompts.agent_profile_factory import AgentProfileFactory
-from tests.load_tests.records.network_token_entry import NetworkTokenEntry
-from tests.load_tests.records.resource_snapshot import ResourceSnapshot
-from tests.load_tests.records.server_counts import ServerCounts
-from tests.load_tests.records.stage_summary import StageSummary
-from tests.load_tests.records.validation_event import ValidationEvent
 from tests.load_tests.reporting.cross_run_comparison import CrossRunComparison
 from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.rebuild_results import ResultsRebuilder
@@ -200,7 +195,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         return "json profile"
 
     # pylint: disable=too-many-locals
-    def _run_all_stages(self, stages, total_cap) -> List[StageSummary]:
+    def _run_all_stages(self, stages, total_cap) -> List[Dict[str, Any]]:
         """Execute all stages of the load test, collecting data per stage."""
         monitor_resources = (
             self.args.level != LEVEL_MIN
@@ -213,7 +208,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             len(stages) == 1 and self.args.num_rounds == 1
         )
 
-        stage_summaries: List[StageSummary] = []
+        stage_summaries: List[Dict[str, Any]] = []
         global_offset = 0
         total_sent = 0
         test_start = time.time()
@@ -295,7 +290,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             stage_num, round_num, global_offset,
             monitor_resources, has_server_log,
             probe_result, only_stage=False,
-    ) -> Tuple[StageSummary, bool, bool]:
+    ) -> Tuple[Dict[str, Any], bool, bool]:
         """Execute one stage of the load test.
 
         Returns (stage_summary, probe_was_used, should_abort).
@@ -612,19 +607,19 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             peak_client, settled_client,
             server_log_requests=None,
     ) -> Tuple[
-        ServerCounts, List[Dict[str, str]],
-        List[NetworkTokenEntry], Optional[ResourceSnapshot],
+        Dict[str, Any], List[Dict[str, str]],
+        List[Dict[str, Any]], Optional[Dict[str, Any]],
     ]:
         """Settle, snapshot, and analyze server log after a stage.
 
         Returns (server_counts, disconnections, network_tokens,
         after_server_snapshot).
         """
-        server_counts: ServerCounts = {}
+        server_counts: Dict[str, Any] = {}
         disconnections: List[Dict[str, str]] = []
         server_errors: List[Dict[str, str]] = []
         tool_warnings: List[Dict[str, str]] = []
-        network_tokens: List[NetworkTokenEntry] = []
+        network_tokens: List[Dict[str, Any]] = []
         after_server = None
 
         if monitor_resources or has_server_log:
@@ -707,9 +702,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             before_sys=None,
             after_sys=None,
             peak_sys_threads=None,
-    ) -> StageSummary:
+    ) -> Dict[str, Any]:
         """Assemble the stage summary dict."""
-        summary_entry: StageSummary = {
+        summary_entry: Dict[str, Any] = {
             "stage": stage_num,
             "round": round_num,
             "concurrent": actual_requests,
@@ -812,21 +807,21 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             self, has_server_log,
             log_pos, *, results, actual_requests,
     ) -> Tuple[
-        ServerCounts, List[Dict[str, str]], List[Dict[str, str]],
+        Dict[str, Any], List[Dict[str, str]], List[Dict[str, str]],
         List[Dict[str, str]],
-        List[NetworkTokenEntry], List[ValidationEvent],
+        List[Dict[str, Any]], List[Dict[str, Any]],
     ]:
         """Analyze server log or report unavailability.
 
         Returns (server_counts, disconnections, server_errors,
         tool_warnings, network_tokens, validation_events).
         """
-        server_counts: ServerCounts = {}
+        server_counts: Dict[str, Any] = {}
         disconnections: List[Dict[str, str]] = []
         server_errors: List[Dict[str, str]] = []
         tool_warnings: List[Dict[str, str]] = []
-        network_tokens: List[NetworkTokenEntry] = []
-        validation_events: List[ValidationEvent] = []
+        network_tokens: List[Dict[str, Any]] = []
+        validation_events: List[Dict[str, Any]] = []
         if has_server_log:
             server_counts = (
                 self.log_monitor.count_requests_since(
@@ -2296,7 +2291,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 f"{self.profile.get_estimated_tokens_per_request():,}",
             )
 
-        stage_summaries: List[StageSummary] = []
+        stage_summaries: List[Dict[str, Any]] = []
         exit_code = 1
         pre_test_log_pos = (
             self.log_monitor.read_position()

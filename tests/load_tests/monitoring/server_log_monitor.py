@@ -28,6 +28,7 @@ import sys
 import threading
 import time
 
+from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -50,9 +51,6 @@ from tests.load_tests.config import VALIDATION_ERROR_PATTERN
 from tests.load_tests.config import VALIDATION_REINVOKE_PATTERN
 from tests.load_tests.config import VALIDATION_REQUEST_ID_PATTERN
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
-from tests.load_tests.records.network_token_entry import NetworkTokenEntry
-from tests.load_tests.records.token_entry import TokenEntry
-from tests.load_tests.records.validation_event import ValidationEvent
 from tests.load_tests.shared_ref import SharedRef
 
 logger = logging.getLogger(__name__)
@@ -244,7 +242,7 @@ class ServerLogMonitor:
 
     def parse_token_accounting_since(
             self, position,
-    ) -> Dict[str, TokenEntry]:
+    ) -> Dict[str, Dict[str, Any]]:
         """Parse Request reporting entries for token accounting data.
 
         Returns a dict of request_id -> token data, where each entry has:
@@ -256,7 +254,7 @@ class ServerLogMonitor:
         lines = self._read_lines_since(position, "tokens")
         if not lines:
             return {}
-        results: Dict[str, TokenEntry] = {}
+        results: Dict[str, Dict[str, Any]] = {}
         for block in self._collect_reporting_blocks(lines):
             entry = self._extract_token_entry(
                 block.get("text", ""),
@@ -273,7 +271,7 @@ class ServerLogMonitor:
         return results
 
     @staticmethod
-    def _extract_token_entry(block: str) -> Optional[TokenEntry]:
+    def _extract_token_entry(block: str) -> Optional[Dict[str, Any]]:
         """Extract token accounting fields from a Request reporting log block."""
         rid_match = re.search(r'"request_id": "([^"]+)"', block)
         if not rid_match:
@@ -296,7 +294,7 @@ class ServerLogMonitor:
 
     def parse_per_network_tokens_since(
             self, position,
-    ) -> List[NetworkTokenEntry]:
+    ) -> List[Dict[str, Any]]:
         """Parse per-sub-network token data from Request reporting blocks.
 
         For multi-agent networks (e.g. AND), each sub-network produces
@@ -335,9 +333,9 @@ class ServerLogMonitor:
         return blocks
 
     @staticmethod
-    def _resolve_network_names(blocks, lines) -> List[NetworkTokenEntry]:
+    def _resolve_network_names(blocks, lines) -> List[Dict[str, Any]]:
         """Match each block to its network via Done-with log lines."""
-        results: List[NetworkTokenEntry] = []
+        results: List[Dict[str, Any]] = []
         for block in blocks:
             block_text = block.get("text", "")
             entry = ServerLogMonitor._extract_token_entry(
@@ -391,7 +389,7 @@ class ServerLogMonitor:
 
     def parse_validation_events_since(
             self, position,
-    ) -> List[ValidationEvent]:
+    ) -> List[Dict[str, Any]]:
         """Parse validation attempts and fix cycles per request.
 
         Scans for 'Validating toolbox agents' (attempt),
@@ -409,7 +407,7 @@ class ServerLogMonitor:
         return self._collect_validation_events(lines)
 
     @staticmethod
-    def _collect_validation_events(lines) -> List[ValidationEvent]:
+    def _collect_validation_events(lines) -> List[Dict[str, Any]]:
         """Group validation log lines by request_id."""
         by_request: Dict[str, Dict[str, object]] = {}
         for line in lines:
@@ -433,7 +431,7 @@ class ServerLogMonitor:
                 raw = err_match.group(1)
                 for err in re.findall(r'"([^"]+)"', raw):
                     entry["errors"].append(err)
-        results: List[ValidationEvent] = []
+        results: List[Dict[str, Any]] = []
         for rid, data in sorted(by_request.items()):
             if data.get("fix_cycles", 0) > 0:
                 results.append({

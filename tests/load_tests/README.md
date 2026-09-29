@@ -600,8 +600,8 @@ not record. Server-only runs appear with `mode=server-only`, and their
 
 Conventions: one class per file, no standalone functions, `.get()` for
 dict reads, `%`-formatting for logger calls, specific exception types,
-named constants, TypedDicts (`RequestResult`, `StageSummary`, …) at data
-boundaries, keyword-only arguments and explicit return types.
+named constants, plain `Dict[str, Any]` records at data boundaries,
+keyword-only arguments and explicit return types.
 
 ```bash
 flake8 tests/load_tests
@@ -632,16 +632,6 @@ tests/load_tests/
     agent_profile.py           AgentProfile (data: prompts, responses, failure_patterns)
     agent_profile_factory.py   AgentProfileFactory (builds it from the JSON profile or hocon files)
     profiles/                  Per-agent JSON profiles
-
-  records/                     TypedDicts shared across the framework
-    network_token_entry.py     NetworkTokenEntry
-    request_result.py          RequestResult
-    resource_snapshot.py       ResourceSnapshot
-    server_counts.py           ServerCounts
-    stage_summary.py           StageSummary
-    status_counts.py           StatusCounts
-    token_entry.py             TokenEntry
-    validation_event.py        ValidationEvent
 
   reporting/
     disconnection_reporter.py  DisconnectionReporter
