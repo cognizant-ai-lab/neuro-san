@@ -20,12 +20,11 @@ from typing import Set
 
 from copy import deepcopy
 
+from typing_extensions import override
+
 from langchain_core.tools.base import BaseTool
 
 from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
-from neuro_san.internals.interfaces.invocation_context import InvocationContext
-from neuro_san.internals.journals.journal import Journal
-from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
 from neuro_san.internals.run_context.langchain.tools.function_tool_creator import FunctionToolCreator
 from neuro_san.internals.run_context.langchain.tools.tool_creator import ToolCreator
 from neuro_san.internals.run_context.utils.external_tool_adapter import ExternalToolAdapter
@@ -60,38 +59,21 @@ class ExternalAgentToolCreator(ToolCreator):
         "required": [DEFAULT_EXTERNAL_PARAMETER_NAME]
     }
 
-    # Class-level because creators are per-request: remembers which external
-    # agents this process has already warned about synthesizing parameters
-    # for, so the warning is not repeated on every request.
+    # Class-level because a creator lives for one tool reference of one
+    # request: remembers which external agents this process has already
+    # warned about synthesizing parameters for, so the warning is not
+    # repeated on every request.
     # An agent later observed with declared parameters is removed again, so a
     # network that is fixed and then regresses warns anew - hocon files can be
     # edited and hot-reloaded without a server restart.
     synthesis_warned: Set[str] = set()
 
-    def __init__(self,
-                 tool_caller: ToolCaller,
-                 invocation_context: InvocationContext,
-                 journal: Journal,
-                 agent_location: str) -> None:
-        """
-        Constructor
-
-        :param tool_caller: The ToolCaller the tools are created for
-        :param invocation_context: The context policy container that pertains to the invocation
-                    of the agent.
-        :param journal: The journal to use when sending framework-level messages to the client
-        :param agent_location: Where a problem has to be fixed, in words a reader can act on
-        """
-        super().__init__(tool_caller, invocation_context, journal, agent_location)
-        # The reported function specification becomes an ordinary function tool.
-        self.function_tool_creator: FunctionToolCreator = FunctionToolCreator(tool_caller, invocation_context,
-                                                                              journal, agent_location)
-
-    async def create(self, name: str) -> BaseTool:
+    @override
+    async def create_tool(self, tool_name: str) -> BaseTool:
         """
         Create the tool for an external agent network.
 
-        :param name: The reference to the external agent, "/name" or a URL
+        :param tool_name: The reference to the external agent, "/name" or a URL
         :return: The BaseTool for the external agent, or None when the reference is not
                  an external agent, the agent was unreachable, or what it reported
                  cannot be made into a tool. The last two cases are reported to the
@@ -99,7 +81,7 @@ class ExternalAgentToolCreator(ToolCreator):
         """
 
         # See if the agent name given could reference an external agent.
-        if not ExternalAgentParsing.is_external_agent(name):
+        if not ExternalAgentParsing.is_external_agent(tool_name):
             return None
 
         # Use the ExternalToolAdapter to get the function specification
@@ -110,23 +92,25 @@ class ExternalAgentToolCreator(ToolCreator):
         #   It's possible we might want to cache these results somehow to minimize
         #   network calls.
         session_factory: AsyncAgentSessionFactory = self.invocation_context.get_async_session_factory()
-        adapter = ExternalToolAdapter(session_factory, name)
+        adapter = ExternalToolAdapter(session_factory, tool_name)
         function_json: Dict[str, Any] = None
         try:
             function_json = await adapter.get_function_json(self.invocation_context)
         except ValueError as exception:
             # Could not reach the server for the external agent, so tell about it
-            message: str = f"Agent/tool {name} was unreachable. Not including it as a tool.\n"
+            message: str = f"Agent/tool {tool_name} was unreachable. Not including it as a tool.\n"
             message += str(exception)
             await self.report_tool_exclusion(message)
             return None
 
         try:
-            use_function_json: Dict[str, Any] = await self.ensure_external_parameters(function_json, name)
-            return self.function_tool_creator.create(use_function_json, name)
+            use_function_json: Dict[str, Any] = await self.ensure_external_parameters(function_json, tool_name)
+            function_tool_creator: FunctionToolCreator = FunctionToolCreator(
+                self.tool_caller, self.invocation_context, self.journal, self.agent_location, use_function_json)
+            return await function_tool_creator.create_tool(tool_name)
         except ValueError as exception:
             # The agent was reachable, but what it reported cannot be made into a tool.
-            message: str = f"Agent/tool {name} reported an invalid function definition. " + \
+            message: str = f"Agent/tool {tool_name} reported an invalid function definition. " + \
                            "Not including it as a tool.\n"
             message += str(exception)
             await self.report_tool_exclusion(message)
@@ -155,7 +139,7 @@ class ExternalAgentToolCreator(ToolCreator):
                     otherwise a copy with DEFAULT_EXTERNAL_PARAMETERS substituted in.
         """
         if function_json is None:
-            # Unreachable external agent. FunctionToolCreator.create() reports this case.
+            # Unreachable external agent. FunctionToolCreator.create_tool() reports this case.
             return None
 
         if function_json.get("description") is None:

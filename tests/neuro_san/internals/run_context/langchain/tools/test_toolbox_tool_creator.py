@@ -41,7 +41,7 @@ class TestToolboxToolCreator(IsolatedAsyncioTestCase):
 
     def make_creator(self, tool_from_toolbox: Any = None, error: Exception = None) -> ToolboxToolCreator:
         """
-        Builds a creator whose toolbox factory returns, or raises, what the test needs.
+        Builds a creator for AGENT_SPEC whose toolbox factory returns, or raises, what the test needs.
 
         :param tool_from_toolbox: What the toolbox factory should return
         :param error: What the toolbox factory should raise instead, if anything
@@ -59,7 +59,7 @@ class TestToolboxToolCreator(IsolatedAsyncioTestCase):
         journal = MagicMock()
         journal.write_message = AsyncMock()
 
-        return ToolboxToolCreator(MagicMock(), invocation_context, journal, self.AGENT_LOCATION)
+        return ToolboxToolCreator(MagicMock(), invocation_context, journal, self.AGENT_LOCATION, self.AGENT_SPEC)
 
     def test_list_check_requires_every_element_to_be_a_base_tool(self) -> None:
         """
@@ -82,12 +82,13 @@ class TestToolboxToolCreator(IsolatedAsyncioTestCase):
     async def test_base_tool_from_toolbox_is_returned_as_is(self) -> None:
         """
         A langchain BaseTool from the toolbox already carries its own schema and
-        is returned unchanged, with the agent's args and name passed to the toolbox.
+        is returned unchanged. The spec's toolbox entry and args and the agent's
+        name are what reach the toolbox.
         """
         predefined: MagicMock = MagicMock(spec=BaseTool)
         creator: ToolboxToolCreator = self.make_creator(tool_from_toolbox=predefined)
 
-        result: Union[BaseTool, List[BaseTool]] = await creator.create("web_search", self.AGENT_SPEC, "searcher")
+        result: Union[BaseTool, List[BaseTool]] = await creator.create_tool("searcher")
 
         self.assertIs(result, predefined)
         toolbox_factory = creator.invocation_context.get_toolbox_factory()
@@ -101,7 +102,7 @@ class TestToolboxToolCreator(IsolatedAsyncioTestCase):
         predefined: List[MagicMock] = [MagicMock(spec=BaseTool), MagicMock(spec=BaseTool)]
         creator: ToolboxToolCreator = self.make_creator(tool_from_toolbox=predefined)
 
-        result: Union[BaseTool, List[BaseTool]] = await creator.create("web_search", self.AGENT_SPEC, "searcher")
+        result: Union[BaseTool, List[BaseTool]] = await creator.create_tool("searcher")
 
         self.assertIs(result, predefined)
 
@@ -122,7 +123,7 @@ class TestToolboxToolCreator(IsolatedAsyncioTestCase):
         }
         creator: ToolboxToolCreator = self.make_creator(tool_from_toolbox=function_json)
 
-        result: Union[BaseTool, List[BaseTool]] = await creator.create("web_search", self.AGENT_SPEC, "searcher")
+        result: Union[BaseTool, List[BaseTool]] = await creator.create_tool("searcher")
 
         self.assertIsInstance(result, BaseTool)
         self.assertEqual(result.name, "searcher")
@@ -136,7 +137,7 @@ class TestToolboxToolCreator(IsolatedAsyncioTestCase):
         """
         creator: ToolboxToolCreator = self.make_creator(error=ToolSpecError("properties must be a dictionary"))
 
-        result: Union[BaseTool, List[BaseTool]] = await creator.create("web_search", self.AGENT_SPEC, "searcher")
+        result: Union[BaseTool, List[BaseTool]] = await creator.create_tool("searcher")
 
         self.assertIsNone(result)
         creator.journal.write_message.assert_awaited_once()
@@ -151,7 +152,7 @@ class TestToolboxToolCreator(IsolatedAsyncioTestCase):
         """
         creator: ToolboxToolCreator = self.make_creator(error=ValueError("no such toolbox entry"))
 
-        result: Union[BaseTool, List[BaseTool]] = await creator.create("web_search", self.AGENT_SPEC, "searcher")
+        result: Union[BaseTool, List[BaseTool]] = await creator.create_tool("searcher")
 
         self.assertIsNone(result)
         creator.journal.write_message.assert_awaited_once()

@@ -66,6 +66,11 @@ class ContentUtils:
     # (which would wrap already-standard blocks as "non_standard").
     OUTPUT_VERSION_V1: str = "v1"
 
+    # The ContentBlocks.format value (see chat.proto) that says the blocks
+    # are langchain v1 standard content blocks. Any other format is unknown
+    # to this code and is treated as no usable block content.
+    CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1: str = "langchain_v1"
+
     # Standard block types whose payload is data, not conversation text.
     # Providers reject these in assistant-role history, so history
     # projections replace them with a short text reference instead.
@@ -359,11 +364,16 @@ class ContentUtils:
         dictionary, if it carries any block-form content.
 
         Precedence:
-        1. A "content_blocks" list of standard blocks is used verbatim.
-           A content_blocks value that is present but NOT valid standard
-           blocks yields None (fail safe) - it does not fall through to
-           mime_data. Note the verbatim path aliases the caller's list;
-           callers must not mutate the result.
+        1. A "content_blocks" wrapper ({"format": "langchain_v1",
+           "blocks": [...]} per chat.proto) supplies its blocks list as-is.
+           A wrapper with a format this code does not know, a bare list, or
+           blocks that are NOT valid standard blocks yields None (fail safe)
+           - it does not fall through to mime_data. A wrapper with no blocks
+           (member absent, null or an empty list - proto3 JSON omits an empty
+           repeated field, so these are one and the same on the wire) carries
+           nothing and does fall through, whatever its format says: a format
+           can only be judged against blocks. Note the returned list aliases
+           the caller's list; callers must not mutate the result.
         2. Otherwise a non-empty "mime_data" list ({"mime_type": ...,
            "mime_bytes": <base64 string>} entries per chat.proto) is mapped to
            data blocks, preceded by a text block for any "text" field.
@@ -380,11 +390,23 @@ class ContentUtils:
             return None
 
         content_blocks: Any = chat_message.get("content_blocks")
-        content_blocks_list: List[Any] = content_blocks
-        if content_blocks is not None and not (isinstance(content_blocks, list) and len(content_blocks_list) == 0):
-            if ContentUtils.looks_like_blocks(content_blocks):
-                return content_blocks
-            return None
+        if content_blocks is not None:
+            # Only the tagged wrapper from chat.proto is accepted. A bare list
+            # is the shape from before the format tag existed and is refused
+            # rather than guessed at.
+            if not isinstance(content_blocks, dict):
+                return None
+            wrapper: Dict[str, Any] = content_blocks
+            blocks_value: Any = wrapper.get("blocks")
+            is_empty_list: bool = isinstance(blocks_value, list) and len(blocks_value) == 0
+            if blocks_value is not None and not is_empty_list:
+                if wrapper.get("format") != ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1:
+                    return None
+                if ContentUtils.looks_like_blocks(blocks_value):
+                    return blocks_value
+                return None
+            # A wrapper without blocks carries nothing, so its format is moot;
+            # fall through to mime_data.
 
         mime_data: Any = chat_message.get("mime_data")
         if not isinstance(mime_data, list):

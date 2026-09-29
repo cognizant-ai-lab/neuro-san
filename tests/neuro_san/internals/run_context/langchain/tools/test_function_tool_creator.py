@@ -19,7 +19,7 @@ from typing import Dict
 
 from copy import deepcopy
 
-from unittest import TestCase
+from unittest import IsolatedAsyncioTestCase
 from unittest.mock import MagicMock
 
 from langchain_core.tools import BaseTool
@@ -27,7 +27,7 @@ from langchain_core.tools import BaseTool
 from neuro_san.internals.run_context.langchain.tools.function_tool_creator import FunctionToolCreator
 
 
-class TestFunctionToolCreator(TestCase):
+class TestFunctionToolCreator(IsolatedAsyncioTestCase):
     """
     Unit tests for FunctionToolCreator.
     """
@@ -35,15 +35,17 @@ class TestFunctionToolCreator(TestCase):
     AGENT_LOCATION: str = "agent 'researcher' of agent network 'deep/math_guy'"
 
     @staticmethod
-    def make_creator() -> FunctionToolCreator:
+    def make_creator(function_json: Dict[str, Any]) -> FunctionToolCreator:
         """
-        Builds a creator with mocked collaborators.
+        Builds a creator for a function specification, with mocked collaborators.
 
+        :param function_json: The function specification the creator is built for
         :return: A FunctionToolCreator with mocked collaborators
         """
-        return FunctionToolCreator(MagicMock(), MagicMock(), MagicMock(), TestFunctionToolCreator.AGENT_LOCATION)
+        return FunctionToolCreator(MagicMock(), MagicMock(), MagicMock(), TestFunctionToolCreator.AGENT_LOCATION,
+                                   function_json)
 
-    def test_create_does_not_mutate_function_json(self) -> None:
+    async def test_create_tool_does_not_mutate_function_json(self) -> None:
         """
         Creating a tool must not add its lookup name to the caller-owned
         function specification, which can be a registry's live spec.
@@ -62,22 +64,22 @@ class TestFunctionToolCreator(TestCase):
             }
         }
         expected: Dict[str, Any] = deepcopy(function_json)
-        creator: FunctionToolCreator = self.make_creator()
+        creator: FunctionToolCreator = self.make_creator(function_json)
 
-        tool: BaseTool = creator.create(function_json, "music_guy")
+        tool: BaseTool = await creator.create_tool("music_guy")
 
         self.assertEqual(function_json, expected)
         self.assertEqual(tool.name, "music_guy")
 
-    def test_none_function_json_raises_value_error(self) -> None:
+    async def test_none_function_json_raises_value_error(self) -> None:
         """
         An external agent that responded without a function has no spec.
         That is a ValueError naming the agent, so the external agent creator
         reports it as an invalid function definition.
         """
-        creator: FunctionToolCreator = self.make_creator()
+        creator: FunctionToolCreator = self.make_creator(None)
 
         with self.assertRaises(ValueError) as context:
-            creator.create(None, "/network_b")
+            await creator.create_tool("/network_b")
 
         self.assertIn("/network_b", str(context.exception))
