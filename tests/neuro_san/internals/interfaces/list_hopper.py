@@ -31,7 +31,7 @@ class ListHopper(AsyncHopper):
         """
         self.items: List[Any] = []
 
-    async def put(self, item: Any):
+    async def put(self, item: Any, synchronous: bool = False, check_last_item_sent: bool = True):
         """
         :param item: The item to put in the hopper.
         """

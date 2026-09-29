@@ -25,9 +25,49 @@ easy scalability of neuro-san/MCP deployment.
 
 ## Agent networks as MCP tools
 
-In the scope of MCP protocol, each public neuro-san agent network is represented by an MCP tool
-(see [MCP tools](https://modelcontextprotocol.io/specification/2025-06-18/server/tools))
-with the name of a tool being the same as the network name.
+In the scope of MCP protocol, each public neuro-san agent network with MCP enabled is represented by an
+MCP tool
+(see [MCP tools](https://modelcontextprotocol.io/specification/2025-06-18/server/tools)).
+This is how a manifest entry such as `"deep/math_guy.hocon": { "serve": true, "mcp": true }`
+becomes one:
+
+1. **The entry is read.** `"mcp": true` also makes the network public, since only public networks
+   are visible over MCP. Like any dictionary entry it still needs `"serve": true`, or the network
+   is not served at all, and it needs an `"mcp"` entry that switches the tool on: a dictionary entry
+   that only says `"public": true` is listed by the Concierge service but is not an MCP tool. A plain
+   `"deep/math_guy.hocon": true` entry means served, public and MCP all at once. `"mcp"` also
+   takes a dictionary, `"mcp": { "name": "calculator" }`, which switches it on as well
+   (see [manifest reference](./manifest_hocon_reference.md#mcp)).
+2. **The tool name is chosen when the network is loaded.** It is the `"name"` inside the `"mcp"`
+   dictionary if the entry gives one. Otherwise it is derived from the network name: every "/"
+   becomes "__" and any other
+   character outside `A-Z`, `a-z`, `0-9`, `_` and `-` becomes `_`, so `deep/math_guy` is advertised
+   as `deep__math_guy` and `Agent.1` as `Agent_1`. A top-level name made only of those characters
+   is unchanged. The rename exists because LLM providers such as OpenAI and Anthropic only accept
+   tool names matching `^[a-zA-Z0-9_-]+$`, so a "/" in a tool name fails the whole request
+   (see [neuro-san-studio#600](https://github.com/cognizant-ai-lab/neuro-san-studio/issues/600)).
+   A name that still breaks that rule is exposed anyway, with a warning at server startup.
+3. **Name clashes are resolved once every manifest is loaded.** Two networks may not end up with
+   the same tool name, and no network may be advertised under another public network's network
+   name (`a/b` cannot be advertised as `a__b` while a network `a__b` exists). The network that is
+   really called that keeps the name; when neither network is, the first in sorted order keeps it.
+   The other network is dropped from MCP with an error in the log and stays reachable over the
+   http and gRPC APIs. See the
+   [manifest reference](./manifest_hocon_reference.md#mcp) for the exact rule.
+4. **`tools/list` advertises the network under its tool name.** When that differs from the network
+   name, the entry also carries the optional MCP `title` field holding the network name, which is
+   how neuro-san's own MCP client finds the network it was asked for. The tool description is the
+   network's front-man description, the same text the `function` API call returns.
+5. **`tools/call` maps the name back.** An advertised name is translated to the network name before
+   authorization and lookup. Any other name is passed through unchanged, so existing clients that
+   still send `deep/math_guy` keep working. The chat is streamed back as the tool result.
+
+The same rename runs in the other direction. When an agent network lists an MCP server among its
+tools (see [MCP Servers as Tools](./mcp_tools.md)), neuro-san renames any tool name
+that breaks the provider rule before the LLM sees it, and still calls the server with the original
+name. Tools from a current neuro-san server normally arrive already renamed, so this covers other
+MCP servers and older neuro-san servers.
+
 Chat request to an agent network becomes a tool call, with the following json schema,
 replicated from neuro-san OpenAPI specification:
 
@@ -138,6 +178,9 @@ replicated from neuro-san OpenAPI specification:
                         "sly_data": {
                           "type": "object",
                           "description": "This is an entirely optional map whose keys refer to data that is better left out of the LLM chat stream."
+                        },
+                        "content_blocks": {
+                          "$ref": "#/components/schemas/ContentBlocks"
                         }
                       },
                       "description": "Structure describing a single chat message."
@@ -164,6 +207,23 @@ replicated from neuro-san OpenAPI specification:
                         "user_message"
                       ],
                       "additionalProperties": false
+                    },
+                    "ContentBlocks": {
+                      "type": "object",
+                      "properties": {
+                        "format": {
+                          "type": "string",
+                          "description": "Identifies the schema of the blocks, for example \"langchain_v1\". Clients that do not recognize a format should ignore the blocks and fall back to the text field of the ChatMessage. The server does the same: a message with blocks but no format is treated as an unknown format, its blocks are ignored and only the text is used."
+                        },
+                        "blocks": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          },
+                          "description": "The blocks themselves: text, reasoning or thinking summaries, images, audio, files and provider-specific extras such as signatures."
+                        }
+                      },
+                      "description": "Optional structured content of a ChatMessage, tagged with the schema its blocks follow so the format can evolve without breaking clients."
                     },
                     "MimeData": {
                       "type": "object",
@@ -200,7 +260,9 @@ replicated from neuro-san OpenAPI specification:
             }
     }
     ```
-where tool name is a name of an agent network,
+where the tool name is the advertised MCP tool name (the network name with "/" replaced by "__"
+and any other unsafe character by "_", or the `"name"` in the manifest entry's `"mcp"` settings,
+see [above](#agent-networks-as-mcp-tools)),
 and tool description is what is returned by "function" neuro-san API call.
 See [Infrastructure](../README.md#infrastructure)
 

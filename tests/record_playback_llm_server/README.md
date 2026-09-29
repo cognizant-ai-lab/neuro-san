@@ -12,9 +12,11 @@ Two goals:
    deterministic.
 
 It is wire-compatible with the OpenAI Chat Completions API, so any neuro-san
-agent network configured for `class = "openai"` can be redirected at it with a
-single `openai_api_base` change — the same seam the sibling `mock_llm_server`
-uses.
+agent network configured for `class = "openai"` can be redirected at it with an
+`openai_api_base` change plus `use_responses_api = false` — the `openai` class
+defaults to the Responses API, which this proxy does not implement. See
+[Pointing a neuro-san agent network at the proxy](#pointing-a-neuro-san-agent-network-at-the-proxy).
+This is the same seam the sibling `mock_llm_server` uses.
 
 ## Modes
 
@@ -183,10 +185,17 @@ llm_config {
     model_name = "gpt-4.1"
     openai_api_base = "http://localhost:8899/v1"
     openai_api_key = "not-needed"
+    use_responses_api = false
 }
 ```
 
 - `openai_api_base` must include the `/v1` path segment.
+- `use_responses_api = false` is required: the `openai` class defaults to the
+  Responses API, and the proxy only implements `/v1/chat/completions`, so
+  without it every request is a 404 on `/v1/responses`. To pin every
+  openai-class model server-wide instead, start the neuro-san server with
+  `AGENT_LLM_INFO_FILE=tests/mock_llm_server/llm_info_chat_completions.hocon`
+  (a network that sets its own `llm_info_file` ignores that variable).
 - Use the **same** agent network and inputs for record and playback — the
   match key is derived from the request, so a changed prompt is a new
   (unrecorded) request.
@@ -207,8 +216,11 @@ Canonicalization (`RequestCanonicalizer`):
   incidental key ordering does not change the key.
 - Keeps the `stream` flag as part of the key (a streamed request and a
   one-shot request map to different recorded responses).
-- Drops any fields listed in `VOLATILE_BODY_KEYS` (empty by default; extend it
-  if a client is found to inject a per-run random value into the body).
+- Drops the fields listed in `VOLATILE_BODY_KEYS`. Today that is only `store`,
+  which tells OpenAI whether to keep the response server-side and never changes
+  the answer; neuro-san now sends `store: false` on every request, and dropping
+  it keeps cassettes recorded before that default matching. Extend the tuple if
+  a client is found to inject a per-run random value into the body.
 
 The key is `sha256(f"{METHOD} {path}\n{canonical_body}")`.
 

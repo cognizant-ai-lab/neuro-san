@@ -45,6 +45,15 @@ class AgentNetworkInspector:
         """
         raise NotImplementedError
 
+    def get_network_name(self) -> str:
+        """
+        :return: The name of the agent network these specs belong to, as it is
+                 registered in the manifest (for example "deep/math_guy"), which
+                 is also how its hocon file is found. Messages use it to tell the
+                 reader where a problem has to be fixed.
+        """
+        raise NotImplementedError
+
     def find_front_man(self) -> str:
         """
         :return: A single tool name to use as the root of the chat agent.

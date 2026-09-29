@@ -20,6 +20,10 @@ import json
 import logging
 import os
 import re
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
 
 from tests.load_tests.config import Formatters
 from tests.load_tests.config import SEPARATOR_WIDTH
@@ -132,6 +136,11 @@ class CrossRunComparison:
         all_results = []
         for stage in stages:
             all_results.extend(stage.get("results", []))
+        created_results: List[Dict[str, Any]] = []
+        result: Dict[str, Any]
+        for result in all_results:
+            if result.get("status") == STATUS_CREATED:
+                created_results.append(result)
 
         agent = data.get("config", {}).get(
             "agent", "unknown",
@@ -147,19 +156,9 @@ class CrossRunComparison:
             "wall_time": aggregates.get(
                 "total_elapsed_seconds", 0,
             ),
-            "avg_success": CrossRunComparison._avg(
-                [
-                    r for r in all_results
-                    if r.get("status") == STATUS_CREATED
-                ],
-                "elapsed",
-            ),
-            "ttfr_avg": CrossRunComparison._avg(
-                [
-                    r for r in all_results
-                    if r.get("status") == STATUS_CREATED
-                ],
-                "ttft",
+            "avg_success": CrossRunComparison._avg(created_results, "elapsed"),
+            "time_to_first_response_avg": CrossRunComparison._avg(
+                created_results, "time_to_first_response",
             ),
             "peak_rss": max(
                 (s.get("peak_server_rss", 0) or 0
@@ -232,14 +231,14 @@ class CrossRunComparison:
             "Folder", "Requests", "Succeeded",
             "Wall Time",
             "Avg success (duration)",
-            "TTFR avg", "Peak RSS",
+            "First resp avg", "Peak RSS",
             "Failed requests",
         ]
         rows = []
         metric_keys = [
             "num_requests", "wall_time",
             "avg_success",
-            "ttfr_avg", "peak_rss",
+            "time_to_first_response_avg", "peak_rss",
             "failed",
         ]
         baseline = runs[0] if runs else None
@@ -263,9 +262,9 @@ class CrossRunComparison:
                     run.get("avg_success", 0),
                     deltas.get("avg_success"),
                 ),
-                CrossRunComparison._fmt_ttfr(
-                    run.get("ttfr_avg", 0),
-                    deltas.get("ttfr_avg"),
+                CrossRunComparison._fmt_time_to_first_response(
+                    run.get("time_to_first_response_avg", 0),
+                    deltas.get("time_to_first_response_avg"),
                 ),
                 CrossRunComparison._fmt_rss(
                     run.get("peak_rss", 0),
@@ -399,8 +398,14 @@ class CrossRunComparison:
         )
 
     @staticmethod
-    def _fmt_ttfr(value, delta_pct):
-        """Format TTFR, showing a dash when data is missing."""
+    def _fmt_time_to_first_response(value: float, delta_pct: Optional[float]) -> str:
+        """
+        Format time to first response, showing a dash when data is missing.
+
+        :param value: Average time to first response in seconds; 0 when unknown
+        :param delta_pct: Percent change against the baseline run, or None
+        :return: The formatted value, or a dash when value is 0
+        """
         if value <= 0:
             return "\u2014"
         return CrossRunComparison._val_with_delta(

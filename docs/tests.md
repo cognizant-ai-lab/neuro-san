@@ -174,6 +174,19 @@ A few conventions keep the unit tests consistent across contributors:
   for example a mock `side_effect` that records calls into a list, bind them
   with `functools.partial` on a `@staticmethod` instead of writing a `lambda`.
 
+### Golden files
+
+A test that locks an exact output, such as the response stream a client
+receives for a whole request, keeps the expected value in a JSON file under a
+`golden/` directory next to the test module, for example
+`tests/neuro_san/session/golden/`. The test writes these files; do not edit
+them by hand. To regenerate them after an intended change, run the test with
+`NEURO_SAN_TEST_UPDATE_GOLDEN=1`, review the diff, then run again without the
+variable. A regeneration run reports its tests as skipped, so it can never pass
+by comparing a file with itself. `golden/` holds data only and needs no
+`__init__.py`. The files are JSON rather than HOCON: `json.dumps` with sorted
+keys gives stable diffs, and they record the JSON the wire carries.
+
 ## Note on Markdown Linting
 
 We use [pymarkdown](https://pymarkdown.readthedocs.io/en/latest/) to run linting on .md files.

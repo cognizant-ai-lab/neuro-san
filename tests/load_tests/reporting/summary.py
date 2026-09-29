@@ -17,6 +17,10 @@
 """Summary reporting — ramp-up and overall results."""
 
 import logging
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
 
 from collections import Counter
 
@@ -158,15 +162,15 @@ class SummaryReporter:
         self._log_system_resources()
 
     def _log_performance_stats(self) -> None:
-        """Log TTFR and request-duration stats."""
-        ttfr = self._ttfr_stats()
-        if ttfr is not None:
+        """Log time-to-first-response and request-duration stats."""
+        first_response_stats: Optional[Dict[str, float]] = self._time_to_first_response_stats()
+        if first_response_stats is not None:
             logger.info(
                 "  Time to first response: %s min"
                 " / %s avg / %s max",
-                Formatters.fmt_duration(ttfr.get("min", 0)),
-                Formatters.fmt_duration(ttfr.get("avg", 0)),
-                Formatters.fmt_duration(ttfr.get("max", 0)),
+                Formatters.fmt_duration(first_response_stats.get("min", 0)),
+                Formatters.fmt_duration(first_response_stats.get("avg", 0)),
+                Formatters.fmt_duration(first_response_stats.get("max", 0)),
             )
 
         duration = self._request_duration_stats()
@@ -433,14 +437,21 @@ class SummaryReporter:
                 fallback_requests,
             )
 
-    def _ttfr_stats(self):
-        """Compute min/avg/max time-to-first-response."""
-        values = []
+    def _time_to_first_response_stats(self) -> Optional[Dict[str, float]]:
+        """
+        Compute min/avg/max time-to-first-response.
+
+        :return: Dictionary with "min", "avg" and "max" in seconds over the
+                 requests that received a first response; None when none did
+        """
+        values: List[float] = []
+        summary: Dict[str, Any]
         for summary in self._summaries:
+            result: Dict[str, Any]
             for result in summary.get("results", []):
-                ttfr = result.get("ttft", 0)
-                if ttfr > 0:
-                    values.append(ttfr)
+                time_to_first_response: float = result.get("time_to_first_response", 0)
+                if time_to_first_response > 0:
+                    values.append(time_to_first_response)
         if not values:
             return None
         return {

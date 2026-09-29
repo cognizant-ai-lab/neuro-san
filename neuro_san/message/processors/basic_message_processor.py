@@ -40,9 +40,9 @@ class BasicMessageProcessor(CompositeMessageProcessor):
         :param message_processors: An ordered List of additional MessageProcessors with which
                      this instance will process messages
         """
-        super().__init__(message_processors)
+        super().__init__(message_processors, False)
 
-        self.answer = AnswerMessageProcessor()
+        self.answer = AnswerMessageProcessor(None)
         self.chat_context = ChatContextMessageProcessor()
         self.token_accounting = TokenAccountingMessageProcessor()
 

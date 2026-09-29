@@ -65,6 +65,7 @@ class MessageProcessor:
         Convenience method for processing lists of messages.
         :param chat_message_dicts: The messages to process.
         """
+        message: Dict[str, Any] = None
         for message in chat_message_dicts:
             message_type: ChatMessageType = message.get("type")
             self.process_message(message, message_type)
@@ -74,6 +75,7 @@ class MessageProcessor:
         Convenience method for asynchronouslt processing lists of messages.
         :param chat_message_dicts: The messages to process.
         """
+        message: Dict[str, Any] = None
         for message in chat_message_dicts:
             message_type: ChatMessageType = message.get("type")
             await self.async_process_message(message, message_type)

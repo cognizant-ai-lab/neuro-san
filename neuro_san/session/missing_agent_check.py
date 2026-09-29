@@ -34,8 +34,9 @@ class MissingAgentCheck:
         """
 
         if agent_network is None:
+            manifest_file: str = environ.get("AGENT_MANIFEST_FILE")
             message = f"""
-Agent named "{agent_name}" not found in manifest file: {environ.get("AGENT_MANIFEST_FILE")}.
+Agent named "{agent_name}" not found in manifest file: {manifest_file}.
 
 Some things to check:
 1. If the manifest file named above is None, know that the default points

@@ -52,7 +52,7 @@
                     # note that tools [read_wiki_content & ask_question] not work on www.wikipedia.org/cognizant-ai-lab/neuro-san
                     "tools": ["read_wiki_structure"]
 
-                    # For authentication, see https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#authentication
+                    # For authentication, see https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/mcp_tools.md#authentication
                 }
             ]
         }

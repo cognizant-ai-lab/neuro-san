@@ -96,6 +96,7 @@ class Origination:
 
         # Connect all the elements of the origin by the delimiter "."
         origin_list: List[str] = []
+        origin_dict: Dict[str, Any] = None
         for origin_dict in origin:
 
             # Get basic fields from the dict

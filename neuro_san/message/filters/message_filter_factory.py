@@ -56,7 +56,8 @@ class MessageFilterFactory:
 
         # Change strings so they are suitable for lookup
         if isinstance(chat_filter_type, str):
-            chat_filter_type = chat_filter_type.upper()
+            chat_filter_type_string: str = chat_filter_type
+            chat_filter_type = chat_filter_type_string.upper()
 
         chat_filter_class: MessageFilter = TYPE_TO_MESSAGE_FILTER_CLASS.get(chat_filter_type)
         if chat_filter_class is None:

@@ -35,7 +35,7 @@ class MaximalMessageFilter(MessageFilter):
         :return: True if the message should be allowed through to the client. False otherwise.
         """
         # As long as the dictionary has some keys in it, we will pass it on.
-        if any(chat_message_dict):
+        if any(chat_message_dict.keys()):
             return True
 
         return False

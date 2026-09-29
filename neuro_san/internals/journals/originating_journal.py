@@ -111,7 +111,8 @@ class OriginatingJournal(Journal):
             chat_history_message: BaseMessage = None
             if isinstance(message, AgentToolResultMessage) or \
                     (isinstance(message, AIMessage) and not isinstance(message.content, str)):
-                chat_history_message = AIMessage(content=ContentUtils.history_safe_text(message))
+                safe_text: str = ContentUtils.history_safe_text(message)
+                chat_history_message = AIMessage(content=safe_text)
             else:
                 chat_history_message = message
 

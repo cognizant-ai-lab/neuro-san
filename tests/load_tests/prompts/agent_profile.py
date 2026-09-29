@@ -14,75 +14,119 @@
 #
 # END COPYRIGHT
 
-"""Agent profile loader — reads agent-specific prompts and configuration."""
+"""
+Agent profile — agent-specific prompts and response checks.
 
-import json
+Built by AgentProfileFactory; this class only carries the data.
+"""
+
 import logging
-import os
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
 
-from neuro_san.test.util.tests_util import TestsUtil
-from tests.load_tests.project_paths import ProjectPaths
-
 logger = logging.getLogger(__name__)
 
 
 class AgentProfile:
-    """Configuration profile for a specific agent under test."""
+    """
+    The test material for one agent under load: what to send it and how
+    to judge what comes back. Not a manifest; it does not list files.
 
-    def __init__(self, agent_name, profile_data) -> None:
-        """Initialize the profile from a loaded profile dict."""
-        self.agent_name = agent_name
-        self._data = profile_data
+    Contents (all optional, read via the get_*() accessors):
+      prompts                      - texts sent, one per request, cycled
+      responses                    - test-case hocon "response" checks,
+                                     parallel to prompts
+      failure_patterns             - substrings that turn CREATED into FAILED
+      success_fields               - JSON profiles only; sly_data keys that
+                                     must come back non-empty
+      estimated_tokens_per_request - for the cost estimate
+      primary_start_pattern /      - regexes locating this agent's requests
+      primary_finish_pattern         in the server log
 
-    @property
-    def prompts(self) -> List[str]:
-        """Return the list of prompts for this agent."""
-        return self._data.get("prompts", [])
+    Source: AgentProfileFactory builds it either from
+    prompts/profiles/<agent>.json or from the test-case hocon files in
+    <fixtures-hocon-dir>/<agent>/*.hocon (one prompt + response per file).
 
-    @property
-    def estimated_tokens_per_request(self) -> Optional[int]:
-        """Return the estimated token usage per request, or None if unknown."""
-        return self._data.get("estimated_tokens_per_request")
+    Use: TrafficRunner takes the prompt and response checks for each
+    request; LoadTestOrchestrator takes the log patterns and token
+    estimate.
+    """
 
-    @property
-    def primary_start_pattern(self) -> str:
-        """Return regex pattern to identify primary request starts in server log."""
-        default = f"Start {self.agent_name}/streaming_chat"
-        return self._data.get("primary_start_pattern", default)
-
-    @property
-    def primary_finish_pattern(self) -> str:
-        """Return regex pattern to identify primary request completions in server log."""
-        default = f"Finish {self.agent_name}/streaming_chat"
-        return self._data.get("primary_finish_pattern", default)
-
-    @property
-    def success_fields(self) -> List[str]:
-        """Return list of stdout fields that must be present for success.
-
-        For agent_network_designer: ["reservation_id", "agent_network_name"]
-        For generic agents: [] (just check exit code)
+    def __init__(self, agent_name: str, profile: Dict[str, Any]) -> None:
         """
-        return self._data.get("success_fields", [])
+        Keep the profile dict built by AgentProfileFactory.
 
-    @property
-    def failure_patterns(self) -> List[str]:
-        """Return substrings that indicate a failed response.
+        :param agent_name: Name of the agent under test
+        :param profile: The profile as a dict with the keys listed in the class docstring
+        """
+        self.agent_name: str = agent_name
+        self._profile: Dict[str, Any] = profile
 
-        When any pattern is found in stdout, a request that would
+    def get_prompts(self) -> List[str]:
+        """
+        :return: The list of prompts for this agent
+        """
+        return self._profile.get("prompts", [])
+
+    def get_estimated_tokens_per_request(self) -> Optional[int]:
+        """
+        :return: The estimated token usage per request, or None if unknown
+        """
+        return self._profile.get("estimated_tokens_per_request")
+
+    def get_primary_start_pattern(self) -> str:
+        """
+        :return: Regex pattern to identify primary request starts in the server log
+        """
+        default: str = f"Start {self.agent_name}/streaming_chat"
+        return self._profile.get("primary_start_pattern", default)
+
+    def get_primary_finish_pattern(self) -> str:
+        """
+        :return: Regex pattern to identify primary request completions in the server log
+        """
+        default: str = f"Finish {self.agent_name}/streaming_chat"
+        return self._profile.get("primary_finish_pattern", default)
+
+    def get_success_fields(self) -> List[str]:
+        """
+        Only JSON profiles carry this; AgentProfileFactory turns it into
+        the equivalent `responses` block, which is what TrafficRunner
+        checks. Hocon profiles state their checks in `responses` directly.
+
+        :return: The JSON profile's sly_data keys that must come back non-empty
+        """
+        return self._profile.get("success_fields", [])
+
+    def get_responses(self) -> List[Dict[str, Any]]:
+        """
+        Each entry is a test-case hocon "response" block (text /
+        structure / sly_data with AgentEvaluator checks such as
+        keywords, value, not_value, gist). See
+        docs/test_case_hocon_reference.md. A JSON profile gets one
+        block, built from its success_fields, shared by all prompts.
+
+        :return: The per-prompt response checks, parallel to prompts
+        """
+        return self._profile.get("responses", [])
+
+    def get_failure_patterns(self) -> List[str]:
+        """
+        When any pattern is found in the answer text, a request that would
         otherwise be marked CREATED is downgraded to FAILED.  This
         catches cases where the server returns an error message
         inside a successful HTTP 200 response (e.g. missing API key).
-        """
-        return self._data.get("failure_patterns", [])
 
-    def get_prompt(self, request_id, same_prompt=False,
-                   allow_caching=False) -> str:
-        """Return the prompt for a given request.
+        :return: Substrings that indicate a failed response
+        """
+        return self._profile.get("failure_patterns", [])
+
+    def get_prompt(self, request_id: int, same_prompt: bool = False,
+                   allow_caching: bool = False) -> str:
+        """
+        Return the prompt for a given request.
 
         In same_prompt mode, always returns the first prompt.
         In varied mode, cycles through the pool and appends the request_id.
@@ -91,8 +135,13 @@ class AgentProfile:
         can serve the response.  In allow_caching mode the suffix is
         dropped, so requests that reuse a pool prompt are eligible
         for those caches.
+
+        :param request_id: Global request number, used to cycle through the pool
+        :param same_prompt: When True every request uses the first prompt
+        :param allow_caching: When True the unique request_id suffix is not added
+        :return: The prompt text to send
         """
-        prompts = self.prompts
+        prompts: List[str] = self.get_prompts()
         if not prompts:
             logger.error(
                 "Agent profile '%s' has an empty prompts list.\n"
@@ -101,9 +150,7 @@ class AgentProfile:
                 self.agent_name,
             )
             raise SystemExit(1)
-        if same_prompt:
-            return prompts[0]
-        base_prompt = prompts[request_id % len(prompts)]
+        base_prompt: str = prompts[self._pool_index(request_id, same_prompt, len(prompts))]
         if allow_caching:
             return base_prompt
         # The suffix makes every prompt unique, so no cache along the
@@ -111,157 +158,34 @@ class AgentProfile:
         # response and the run measures real work, not cache hits.
         return f"{base_prompt} (request {request_id})"
 
-    @classmethod
-    def load(cls, agent_name: str, profile_path: Optional[str] = None,
-             project_root: Optional[str] = None,
-             hocon_files: Optional[List[str]] = None) -> "AgentProfile":
-        """Load an agent profile from a JSON file.
-
-        When hocon_files is given, the prompts come from those
-        test-case hocons (interactions[].text) instead of the JSON;
-        every other setting still comes from the JSON profile.
-        See _find_json_profile() for the JSON search order.
+    def get_response(self, request_id: int, same_prompt: bool = False) -> Dict[str, Any]:
         """
-        path: str = cls._find_json_profile(agent_name, profile_path, project_root)
-        data: Dict[str, Any] = cls._read_json(path)
-        if hocon_files:
-            data = {**data, "prompts": cls._prompts_from_hocons(agent_name, hocon_files)}
-        logger.info("Loaded agent profile: %s", path)
-        return cls(agent_name, data)
+        Return the response checks for the prompt get_prompt() gives request_id.
 
-    @classmethod
-    def _find_json_profile(cls, agent_name: str, profile_path: Optional[str],
-                           project_root: Optional[str]) -> str:
-        """Return the path of the JSON profile.
-
-        Search order:
-        1. --profile-path directory: look for {base}.json there
-        2. ./profiles/{agent_name}.json then ./profiles/{base}.json
-        3. {project_root}/tests/load_tests/prompts/profiles/{name}.json
-           where project_root comes from --project-root or PYTHONPATH
-        4. Not found → abort
-
-        When agent_name includes a prefix (e.g. basic/hello_world),
-        the base name (hello_world) is tried as a fallback so
-        --profile-path is not required for prefixed agents.
+        :param request_id: Global request number, used to cycle through the pool
+        :param same_prompt: When True every request uses the first entry
+        :return: The hocon ``response`` block, or {} when the profile has none
         """
-        agent_base: str = ProjectPaths.agent_base_name(agent_name)
+        responses: List[Dict[str, Any]] = self.get_responses()
+        if not responses:
+            return {}
+        return responses[self._pool_index(request_id, same_prompt, len(responses))]
 
-        if profile_path:
-            if os.path.isfile(profile_path):
-                logger.error(
-                    "--profile-path should be a directory, not a "
-                    "file.\n"
-                    "  Got: %s\n"
-                    "  Try: --profile-path %s",
-                    profile_path, os.path.dirname(profile_path),
-                )
-                raise SystemExit(1)
-            candidate = os.path.join(profile_path, f"{agent_base}.json")
-            if not os.path.isfile(candidate):
-                logger.error(
-                    "Profile not found: %s\n"
-                    "  --profile-path directory: %s\n"
-                    "  Expected file: %s.json\n"
-                    "  Aborting.",
-                    candidate, profile_path, agent_base,
-                )
-                raise SystemExit(1)
-            return candidate
-
-        searched = []
-
-        # Search in the built-in profiles directory next to this module
-        profiles_dir = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "profiles",
-        )
-        for name in (agent_name, agent_base):
-            candidate = os.path.join(profiles_dir, f"{name}.json")
-            searched.append(candidate)
-            if os.path.isfile(candidate):
-                return candidate
-
-        # Resolve project root: --project-root flag → PYTHONPATH fallback
-        resolved_root: Optional[str] = ProjectPaths.resolve_project_root(project_root)
-        if resolved_root:
-            for name in (agent_name, agent_base):
-                candidate = os.path.normpath(os.path.join(
-                    resolved_root, "tests", "load_tests",
-                    "prompts", "profiles", f"{name}.json",
-                ))
-                searched.append(candidate)
-                if os.path.isfile(candidate):
-                    return candidate
-
-        logger.error(
-            "No profile found for agent '%s'.\n"
-            "Searched:\n%s\n"
-            "Create a profile JSON or use --profile-path to specify one.\n"
-            "Aborting.",
-            agent_name,
-            "".join(f"  - {p}\n" for p in searched),
-        )
-        raise SystemExit(1)
-
-    @classmethod
-    def _prompts_from_hocons(cls, agent_name: str, hocon_files: List[str]) -> List[str]:
-        """Collect one prompt per test-case hocon file.
-
-        A load-test hocon must hold exactly one interaction: the load test
-        fires each prompt as an independent single-turn request, so a
-        multi-turn conversation cannot be replayed here.
-        Each hocon's "agent" must match agent_name (or its base name).
-        Aborts when a file is for another agent, has more than one
-        interaction, or no text is found.
+    @staticmethod
+    def _pool_index(request_id: int, same_prompt: bool, size: int) -> int:
         """
-        agent_base: str = ProjectPaths.agent_base_name(agent_name)
-        prompts: List[str] = []
-        for path in hocon_files:
-            test_case: Dict[str, Any] = TestsUtil.parse_hocon_test_case(None, path)
-            hocon_agent: str = test_case.get("agent", "")
-            if hocon_agent not in (agent_name, agent_base):
-                logger.error(
-                    "Hocon agent does not match --agent.\n"
-                    "  File: %s\n"
-                    "  Hocon agent: %s\n"
-                    "  --agent: %s\nAborting.",
-                    path, hocon_agent, agent_name,
-                )
-                raise SystemExit(1)
-            interactions: List[Dict[str, Any]] = test_case.get("interactions", [])
-            if len(interactions) > 1:
-                logger.error(
-                    "Load-test hocon must have exactly one interaction.\n"
-                    "  File: %s\n"
-                    "  Interactions: %d\nAborting.",
-                    path, len(interactions),
-                )
-                raise SystemExit(1)
-            first: Dict[str, Any] = interactions[0] if interactions else {}
-            text: Optional[str] = first.get("text")
-            if text:
-                prompts.append(text)
+        Index into a per-prompt pool.
 
-        if not prompts:
-            logger.error(
-                "No interactions[0].text found in %d hocon file(s) for "
-                "agent '%s'.\nAborting.",
-                len(hocon_files), agent_name,
-            )
-            raise SystemExit(1)
-        logger.info(
-            "Loaded %d prompt(s) from %d hocon file(s) for agent '%s'",
-            len(prompts), len(hocon_files), agent_name,
-        )
-        return prompts
-
-    @classmethod
-    def _read_json(cls, path: str) -> Dict[str, Any]:
-        """Read profile data from a JSON file."""
-        try:
-            with open(path, "r", encoding="utf-8") as fh:
-                data: Dict[str, Any] = json.load(fh)
-            return data
-        except (OSError, json.JSONDecodeError) as exc:
-            logger.error("Failed to load profile %s: %s\nAborting.", path, exc)
-            raise SystemExit(1) from exc
+        :param request_id: Global request number
+        :param same_prompt: When True always pick the first entry
+        :param size: Number of entries in the pool
+        :return: 0 in same_prompt mode, else request_id modulo size
+        """
+        if same_prompt:
+            return 0
+        # Requests are numbered 0, 1, 2, ... across the whole run, and the
+        # pool is usually smaller than the run.  The modulo walks the pool
+        # in order so consecutive requests get different prompts, and wraps
+        # back to the first entry once every prompt has been used, so the
+        # same prompt (and its response checks) recur evenly over a long run.
+        return request_id % size

@@ -1,4 +1,3 @@
-
 # Copyright © 2023-2026 Cognizant Technology Solutions Corp, www.cognizant.com.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,13 +14,6 @@
 #
 # END COPYRIGHT
 
-# Load-test prompt for the hello_world agent.
-# Schema: https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/test_case_hocon_reference.md
-{
-    "agent": "hello_world",
-    "interactions": [
-        {
-            "text": "Can you greet me in different languages?"
-        }
-    ]
-}
+
+class RequestTimeoutError(Exception):
+    """Raised inside a streamed request to abandon it once it has outrun --request-timeout."""

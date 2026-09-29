@@ -50,7 +50,7 @@
             # Otherwise, use dictionary format: {"url": "https://example.com"} instead.
             "tools": ["https://mcp.deepwiki.com/mcp"]
             
-            # For authentication, see https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#authentication
+            # For authentication, see https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/mcp_tools.md#authentication
         }
     ]
 }

@@ -38,6 +38,7 @@ from neuro_san.internals.graph.registry.agent_network import AgentNetwork
 from neuro_san.internals.interfaces.agent_tool_factory import AgentToolFactory
 from neuro_san.internals.interfaces.callable_activation import CallableActivation
 from neuro_san.internals.interfaces.front_man import FrontMan
+from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 
 
@@ -250,3 +251,9 @@ Check to be sure your value for PYTHONPATH includes where you expect where your 
         :return: The agent name as per the spec
         """
         return self.agent_network.get_name_from_spec(agent_spec)
+
+    def get_agent_network(self) -> AgentNetworkInspector:
+        """
+        :return: The agent network inspector associated with the instance
+        """
+        return self.agent_network
