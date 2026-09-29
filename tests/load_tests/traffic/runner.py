@@ -52,7 +52,8 @@ from tests.load_tests.config import THREAD_JOIN_TIMEOUT
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.prompts.agent_profile import AgentProfile
-from tests.load_tests.traffic.http_client import HttpClient
+from tests.load_tests.traffic.agent_request_executor import AgentRequestExecutor
+from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 from tests.load_tests.traffic.load_test_assert_forwarder import LoadTestAssertForwarder
 from tests.load_tests.traffic.output_parser import OutputParser
 
@@ -117,28 +118,26 @@ class TrafficRunner:
             allow_caching=self._args.allow_caching,
         )
         start: float = time.time()
-        status: str
-        processor: Optional[BasicMessageProcessor]
-        response_text: str
-        time_to_first_response: float
-        token_data: Dict[str, Any]
-        status, processor, response_text, time_to_first_response, token_data = (
-            HttpClient.execute_request(
-                self._args.host, self._args.port,
-                self._args.agent, prompt,
-                timeout=self._args.request_timeout,
-                idle_timeout=self._args.idle_timeout,
-                use_https=getattr(self._args, "https", False),
-                chat_filter_type=getattr(
-                    self._args, "chat_filter", "maximal",
-                ).upper(),
-            )
+        request_result: AgentRequestResult = AgentRequestExecutor.execute_request(
+            self._args.host, self._args.port,
+            self._args.agent, prompt,
+            timeout=self._args.request_timeout,
+            idle_timeout=self._args.idle_timeout,
+            use_https=getattr(self._args, "https", False),
+            chat_filter_type=getattr(
+                self._args, "chat_filter", "maximal",
+            ).upper(),
         )
         elapsed: float = time.time() - start
+        status: str = request_result.get_status()
+        processor: Optional[BasicMessageProcessor] = request_result.get_processor()
+        response_text: str = request_result.get_response_text()
+        time_to_first_response: float = request_result.get_time_to_first_response()
+        token_data: Dict[str, Any] = request_result.get_token_accounting()
 
         parsed_fields: Dict[str, str] = {}
         if processor is not None:
-            parsed_fields = HttpClient.flatten_string_fields(processor.get_sly_data())
+            parsed_fields = AgentRequestExecutor.flatten_string_fields(processor.get_sly_data())
         failure_reason: Optional[str] = None
         if status == STATUS_CREATED:
             failure_reason = self.check_response(
@@ -153,7 +152,7 @@ class TrafficRunner:
         elif status == STATUS_FAILED and not response_text:
             failure_reason = "empty response from agent"
 
-        # A FAILED status with no failure_reason means HttpClient caught an
+        # A FAILED status with no failure_reason means AgentRequestExecutor caught an
         # exception and returned its traceback as response_text. Route that
         # to stderr instead of saving it as the agent's answer.
         stderr: str = ""

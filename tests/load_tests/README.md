@@ -647,7 +647,8 @@ tests/load_tests/
     trend_history.py           TrendHistory (--trend output)
 
   traffic/
-    http_client.py             HttpClient (in-thread HTTP streaming)
+    agent_request_executor.py  AgentRequestExecutor (one in-thread streaming_chat request)
+    agent_request_result.py    AgentRequestResult (what one request produced)
     output_parser.py           OutputParser (sly_data / token parsing)
     runner.py                  TrafficRunner (thread pool executor)
 
