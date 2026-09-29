@@ -20,8 +20,8 @@ import logging
 from typing import List
 from typing import Tuple
 
-from tests.load_tests.config import ResourceSnapshot
 from tests.load_tests.config import SEPARATOR_WIDTH
+from tests.load_tests.records.resource_snapshot import ResourceSnapshot
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
 # (display_row, before_snapshot, after_snapshot)

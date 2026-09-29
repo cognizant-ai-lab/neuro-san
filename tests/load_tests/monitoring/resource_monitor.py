@@ -25,7 +25,7 @@ from typing import Optional
 
 import psutil
 
-from tests.load_tests.config import ResourceSnapshot
+from tests.load_tests.records.resource_snapshot import ResourceSnapshot
 
 logger = logging.getLogger(__name__)
 

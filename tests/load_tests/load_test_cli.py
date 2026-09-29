@@ -46,12 +46,6 @@ from typing import Tuple
 
 import psutil
 
-from tests.load_tests.config import NetworkTokenEntry
-from tests.load_tests.config import ValidationEvent
-from tests.load_tests.config import ResourceSnapshot
-from tests.load_tests.config import ServerCounts
-from tests.load_tests.config import StageSummary
-from tests.load_tests.config import Formatters
 from tests.load_tests.config import LEVEL_ADV
 from tests.load_tests.config import LEVEL_MIN
 from tests.load_tests.config import LOCAL_HOSTS
@@ -73,7 +67,13 @@ from tests.load_tests.monitoring.heartbeat import Heartbeat
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.prompts.agent_profile_factory import AgentProfileFactory
+from tests.load_tests.records.network_token_entry import NetworkTokenEntry
+from tests.load_tests.records.resource_snapshot import ResourceSnapshot
+from tests.load_tests.records.server_counts import ServerCounts
+from tests.load_tests.records.stage_summary import StageSummary
+from tests.load_tests.records.validation_event import ValidationEvent
 from tests.load_tests.reporting.cross_run_comparison import CrossRunComparison
+from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.rebuild_results import ResultsRebuilder
 from tests.load_tests.reporting.disconnection_reporter import DisconnectionReporter
 from tests.load_tests.reporting.json_metadata import JsonMetadata

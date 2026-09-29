@@ -38,22 +38,22 @@ import psutil
 from tests.load_tests.config import CLIENT_DISCONNECT_PATTERN
 from tests.load_tests.config import DONE_STREAMING_PATTERN
 from tests.load_tests.config import NETWORK_LOOKAHEAD_LINES
-from tests.load_tests.config import NetworkTokenEntry
 from tests.load_tests.config import PROVIDER_RETRY_PATTERN
 from tests.load_tests.config import REQUEST_FINISH_PATTERN
 from tests.load_tests.config import REQUEST_START_PATTERN
 from tests.load_tests.config import RETRY_LOG_PATTERN
 from tests.load_tests.config import SERVER_ERROR_PATTERN
 from tests.load_tests.config import STREAM_CLOSED_REQUEST_PATTERN
-from tests.load_tests.config import SharedRef
 from tests.load_tests.config import TASK_CANCELLED_PATTERN
-from tests.load_tests.config import TokenEntry
 from tests.load_tests.config import VALIDATION_ATTEMPT_PATTERN
 from tests.load_tests.config import VALIDATION_ERROR_PATTERN
-from tests.load_tests.config import ValidationEvent
 from tests.load_tests.config import VALIDATION_REINVOKE_PATTERN
 from tests.load_tests.config import VALIDATION_REQUEST_ID_PATTERN
 from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
+from tests.load_tests.records.network_token_entry import NetworkTokenEntry
+from tests.load_tests.records.token_entry import TokenEntry
+from tests.load_tests.records.validation_event import ValidationEvent
+from tests.load_tests.shared_ref import SharedRef
 
 logger = logging.getLogger(__name__)
 

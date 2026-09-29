@@ -614,7 +614,8 @@ python -m pytest tests/load_tests/unit -q
 ```
 tests/load_tests/
   load_test_cli.py             LoadTestOrchestrator (main entry point)
-  config.py                    Constants, TypedDicts, compiled patterns
+  config.py                    Constants and compiled patterns
+  shared_ref.py                SharedRef (value handed between threads)
   confirm.py                   Confirm (strict y/n prompt)
   cost_estimator.py            CostEstimator (per-model pricing)
   duration.py                  DurationParser (`90s`/`20m`/`2h` flag values)
@@ -632,8 +633,19 @@ tests/load_tests/
     agent_profile_factory.py   AgentProfileFactory (builds it from the JSON profile or hocon files)
     profiles/                  Per-agent JSON profiles
 
+  records/                     TypedDicts shared across the framework
+    network_token_entry.py     NetworkTokenEntry
+    request_result.py          RequestResult
+    resource_snapshot.py       ResourceSnapshot
+    server_counts.py           ServerCounts
+    stage_summary.py           StageSummary
+    status_counts.py           StatusCounts
+    token_entry.py             TokenEntry
+    validation_event.py        ValidationEvent
+
   reporting/
     disconnection_reporter.py  DisconnectionReporter
+    formatters.py              Formatters (RSS, duration, amplification)
     json_metadata.py           JsonMetadata (self-documenting JSON)
     cross_run_comparison.py   CrossRunComparison (--compare output)
     latency_analyzer.py        LatencyAnalyzer (completion timeline, degradation)

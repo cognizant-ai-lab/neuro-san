@@ -25,15 +25,15 @@ import logging
 
 from typing import List
 
-from tests.load_tests.config import Formatters
-from tests.load_tests.config import RequestResult
 from tests.load_tests.config import RETRY_ERROR_TYPES
 from tests.load_tests.config import RETRY_LABELS
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
-from tests.load_tests.config import StatusCounts
+from tests.load_tests.records.request_result import RequestResult
+from tests.load_tests.records.status_counts import StatusCounts
+from tests.load_tests.reporting.formatters import Formatters
 
 logger = logging.getLogger(__name__)
 

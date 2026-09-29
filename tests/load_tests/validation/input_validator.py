@@ -32,10 +32,10 @@ import psutil
 
 from tests.load_tests.config import DEFAULT_STAGES
 from tests.load_tests.config import LEVEL_ADV
-from tests.load_tests.config import RequestResult
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.confirm import Confirm
 from tests.load_tests.project_paths import ProjectPaths
+from tests.load_tests.records.request_result import RequestResult
 from tests.load_tests.reporting.system_resources import SystemResources
 
 logger = logging.getLogger(__name__)
