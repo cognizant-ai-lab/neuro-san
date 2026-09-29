@@ -164,7 +164,6 @@ then moves to the next. Output labels each batch as `[STAGE N]`.
 | `--no-dry-run`             | off         | Skip the dry-run probe + cost confirmation (which run by default at min/norm; adv skips them already) |
 | `--full-concurrency`       | off         | Match `--max-workers` to `--num-requests` so all fire at once |
 | `--scale`                  | 1           | Multiply `--num-requests`, `--max-workers`, `--request-timeout`, `--idle-timeout`, `--stage-timeout`, `--total-timeout` by this factor. `--max-requests` auto-adjusts. |
-| `--skip-reservation-check` | off         | Drop `reservation_id` from the required `success_fields` (servers without reservation storage) |
 | `--https`                  | off         | Use HTTPS/TLS to reach the server; `--port` then defaults to 443 |
 | `--client-only`            | off         | Split-machine: fire requests and monitor the client only; forces `min` |
 | `--server-only`            | off         | Split-machine: monitor the server process/log only, fire nothing; forces `min` |
@@ -288,10 +287,10 @@ to a custom directory (the filename is always derived from `--agent`).
 }
 ```
 
-`success_fields`: fields that must come back non-empty in the response's
-`sly_data` (or as `"field": "value"` in the answer text) for success.
-Example: `["reservation_id", "agent_network_name"]` for
-agent_network_designer — the request is marked FAILED if any are missing.
+`success_fields`: `sly_data` fields that must come back non-empty; each
+becomes a `sly_data.<field>: { "not_value": "" }` response check (see
+below). Example: `["agent_reservations", "agent_network_name"]` for
+agent_network_designer — the request is marked FAILED if any is missing.
 
 `failure_patterns`: substrings matched against the answer text to catch
 server-side errors returned inside a successful HTTP 200 response
@@ -333,8 +332,8 @@ e.g. `--fixtures-hocon-dir /path/to/neuro-san-studio/tests/fixtures`.
             "text": "Create an agent network for a pet grooming salon",
             "response": {
                 "sly_data": {
-                    "reservation_id": {},
-                    "agent_network_name": {}
+                    "agent_network_name": { "not_value": "" },
+                    "agent_reservations": { "not_value": "" }
                 }
             }
         }
@@ -345,14 +344,22 @@ e.g. `--fixtures-hocon-dir /path/to/neuro-san-studio/tests/fixtures`.
 | Hocon key | Becomes | Merged across files |
 |---|---|---|
 | `interactions[0].text` | one prompt | list, file order |
-| `interactions[0].response.sly_data` keys | `success_fields` — each key must come back with a non-empty value | union |
+| `interactions[0].response` | the response checks for that prompt | list, parallel to prompts |
 | `failure_patterns` (optional) | `failure_patterns` | union |
 | `estimated_tokens_per_request` (optional, reporting only) | `estimated_tokens_per_request` | max |
 
-Only the *presence* of each `sly_data` key is checked today; the check
-body (`keywords`, `value`, …) is reserved for a follow-up. The built-in
-checks (request completed, non-empty answer, no failure pattern) always
-apply.
+The `response` block is evaluated by the data-driven test framework
+(`DataDrivenTestsDriver.test_response_keys` and the `AgentEvaluator`s),
+so the same checks as in `docs/test_case_hocon_reference.md` apply:
+`keywords`, `not_keywords`, `value`, `not_value`, `gist`, `greater`,
+`less`, … under `text`, `structure` or `sly_data.<field>`. An empty body
+(`"field": {}`) is *not* a check; require a present, non-empty field
+with `{ "not_value": "" }`. Field names are `DictionaryExtractor` paths
+from the top of `sly_data` and do not index lists, so a value nested in
+a list (`agent_reservations[0].reservation_id`) is named by its
+top-level key (`agent_reservations`). Every failed check is listed in
+the request's failure reason. `failure_patterns` are applied through
+the same path, as `text: { not_keywords: [...] }`.
 
 The run aborts (exit 1) when the folder has no `*.hocon` files, a file's
 `agent` does not match `--agent`, a file has more than one interaction,
@@ -388,8 +395,9 @@ Expected: `LOAD TEST PASSED: all 2 requests completed successfully`, and
 `/tmp/lt_ande/min/<run>/raw_results.json` lists each request as
 `CREATED` with `agent_network_name` and `reservation_id` populated.
 Without `AGENT_NETWORK_DESIGNER_USE_RESERVATIONS=true` the server returns
-no `reservation_id`, so every request fails with `missing reservation_id`;
-add `--skip-reservation-check` to waive that field on such a server.
+no reservation, so every request fails with
+`sly_data.agent_reservations: ... is None`; to run against such a server,
+drop `agent_reservations` from the fixtures' `response.sly_data`.
 
 ## Output
 
@@ -620,7 +628,7 @@ tests/load_tests/
     server_log_monitor.py      ServerLogMonitor (log parsing)
 
   prompts/
-    agent_profile.py           AgentProfile (data: prompts, success_fields, failure_patterns)
+    agent_profile.py           AgentProfile (data: prompts, responses, failure_patterns)
     agent_profile_factory.py   AgentProfileFactory (builds it from the JSON profile or hocon files)
     profiles/                  Per-agent JSON profiles
 

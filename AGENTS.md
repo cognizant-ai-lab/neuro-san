@@ -20,6 +20,8 @@ Rules for coding agents in neuro-san. Follow them and make sure the checks in §
   commented-out code and stray `TODO`s before opening a PR.
 - Update the matching reference doc in the same PR when you change documented behavior:
   [agent_hocon_reference.md](docs/agent_hocon_reference.md),
+  [external_agents.md](docs/external_agents.md), [mcp_tools.md](docs/mcp_tools.md),
+  [provider_tools.md](docs/provider_tools.md),
   [manifest_hocon_reference.md](docs/manifest_hocon_reference.md),
   [llm_info_hocon_reference.md](docs/llm_info_hocon_reference.md),
   [toolbox_info_hocon_reference.md](docs/toolbox_info_hocon_reference.md),
