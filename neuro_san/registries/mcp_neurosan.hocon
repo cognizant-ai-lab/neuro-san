@@ -62,7 +62,7 @@ If there is no tool, respond with "Error: cannot connect to `music_nerd_pro` via
                     # If omitted, all tools are enabled.
                     "tools": ["music_nerd_pro"]
 
-                    # For authentication, see https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/agent_hocon_reference.md#authentication
+                    # For authentication, see https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/mcp_tools.md#authentication
                 }
             ],
 

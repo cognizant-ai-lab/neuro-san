@@ -556,24 +556,6 @@
         "model_launch_date": "2024-01-25",
         "model_retirement_date": "2026-10-23",
     },
-    "gpt-3.5-turbo-1106": {
-        # FYI: LLMs that do not support tools cannot be used as front-men or branch nodes
-        "class": "openai",
-        "model_info_url": "https://platform.openai.com/docs/models/gpt-3.5-turbo",
-        "modalities": {
-            "input": [ "text" ],
-            "output": [ "text" ],
-        },
-        "capabilities": [],
-        "context_window_size": 16384,
-        "max_output_tokens": 4096,
-        "knowledge_cutoff": "08/31/2021",
-        # https://developers.openai.com/api/docs/pricing/
-        "price_per_1k_input_tokens": 0.001,
-        "price_per_1k_output_tokens": 0.002,
-        "model_launch_date": "2023-11-06",
-        "model_retirement_date": "2026-09-28",
-    },
 
     # Azure models
 

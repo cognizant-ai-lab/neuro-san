@@ -361,7 +361,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     stage_requests, time.time(),
                     client_proc=client_proc,
                     primary_start_pattern=(
-                        self.profile.primary_start_pattern
+                        self.profile.get_primary_start_pattern()
                     ),
                     output_dir=self._output_dir,
                 )
@@ -384,7 +384,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 cancel_event=self._cancel_event,
                 log_monitor=self.log_monitor,
                 primary_start_pattern=(
-                    self.profile.primary_start_pattern
+                    self.profile.get_primary_start_pattern()
                 ),
             )
         )
@@ -428,9 +428,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             actual_requests, counts, elapsed,
             timeout=self.args.request_timeout,
             idle_timeout=self.args.idle_timeout,
-            skip_reservation_check=(
-                self.args.skip_reservation_check
-            ),
             show_counts=not only_stage,
         )
         should_abort = server_died or interrupted
@@ -833,15 +830,15 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             server_counts = (
                 self.log_monitor.count_requests_since(
                     log_pos,
-                    self.profile.primary_start_pattern,
-                    self.profile.primary_finish_pattern,
+                    self.profile.get_primary_start_pattern(),
+                    self.profile.get_primary_finish_pattern(),
                 )
             )
             disconnections = (
                 self.log_monitor.scan_disconnections_since(
                     log_pos,
                     primary_start_pattern=(
-                        self.profile.primary_start_pattern
+                        self.profile.get_primary_start_pattern()
                     ),
                 )
             )
@@ -1374,11 +1371,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         at the prompt.
         """
         primary_start_pattern = (
-            self.profile.primary_start_pattern
+            self.profile.get_primary_start_pattern()
         )
         pri_start_re = re.compile(primary_start_pattern)
         primary_finish_pattern = (
-            self.profile.primary_finish_pattern
+            self.profile.get_primary_finish_pattern()
         )
         pri_finish_re = re.compile(
             primary_finish_pattern,
@@ -2292,10 +2289,10 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 "  tokens_per_request=%s (measured by probe)",
                 f"{self.probe_result.get('total_tokens'):,}",
             )
-        elif self.profile.estimated_tokens_per_request:
+        elif self.profile.get_estimated_tokens_per_request():
             logger.info(
                 "  estimated_tokens_per_request=%s",
-                f"{self.profile.estimated_tokens_per_request:,}",
+                f"{self.profile.get_estimated_tokens_per_request():,}",
             )
 
         stage_summaries: List[StageSummary] = []
@@ -2731,7 +2728,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 "chat_filter": self.args.chat_filter,
                 "server_log": self.server_log,
                 "estimated_tokens_per_request": (
-                    self.profile.estimated_tokens_per_request
+                    self.profile.get_estimated_tokens_per_request()
                 ),
             },
             "aggregates": {
