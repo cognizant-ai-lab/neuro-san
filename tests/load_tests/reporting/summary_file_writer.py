@@ -90,19 +90,19 @@ class SummaryFileWriter:
             f"  Total wall time:"
             f" {Formatters.fmt_duration(total_elapsed, precision=1)}"
         )
-        ttfr_values = [
-            r.get("ttft", 0)
+        first_response_values = [
+            r.get("time_to_first_response", 0)
             for s in self._summaries
             for r in s.get("results", [])
-            if r.get("ttft", 0) > 0
+            if r.get("time_to_first_response", 0) > 0
         ]
-        if ttfr_values:
-            avg_ttfr = sum(ttfr_values) / len(ttfr_values)
+        if first_response_values:
+            avg_first_response = sum(first_response_values) / len(first_response_values)
             lines.append(
                 f"  Time to first response:"
-                f" {Formatters.fmt_duration(min(ttfr_values))} min"
-                f" / {Formatters.fmt_duration(avg_ttfr)} avg"
-                f" / {Formatters.fmt_duration(max(ttfr_values))} max"
+                f" {Formatters.fmt_duration(min(first_response_values))} min"
+                f" / {Formatters.fmt_duration(avg_first_response)} avg"
+                f" / {Formatters.fmt_duration(max(first_response_values))} max"
             )
         durations = [
             r.get("elapsed", 0)

@@ -588,8 +588,8 @@ Choose between the two views by the question being asked:
 
 Only `--trend` shows `neuro_san_version`, which `raw_results.json` does
 not record. Server-only runs appear with `mode=server-only`, and their
-`ttfr` is blank because a server log cannot measure the client's time to
-first response.
+`ttfr` (client time to first response, `time_to_first_response` in
+`raw_results.json`) is blank because a server log cannot measure it.
 
 ## Exit Codes
 

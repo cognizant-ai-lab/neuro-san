@@ -158,15 +158,15 @@ class SummaryReporter:
         self._log_system_resources()
 
     def _log_performance_stats(self) -> None:
-        """Log TTFR and request-duration stats."""
-        ttfr = self._ttfr_stats()
-        if ttfr is not None:
+        """Log time-to-first-response and request-duration stats."""
+        first_response = self._time_to_first_response_stats()
+        if first_response is not None:
             logger.info(
                 "  Time to first response: %s min"
                 " / %s avg / %s max",
-                Formatters.fmt_duration(ttfr.get("min", 0)),
-                Formatters.fmt_duration(ttfr.get("avg", 0)),
-                Formatters.fmt_duration(ttfr.get("max", 0)),
+                Formatters.fmt_duration(first_response.get("min", 0)),
+                Formatters.fmt_duration(first_response.get("avg", 0)),
+                Formatters.fmt_duration(first_response.get("max", 0)),
             )
 
         duration = self._request_duration_stats()
@@ -433,14 +433,14 @@ class SummaryReporter:
                 fallback_requests,
             )
 
-    def _ttfr_stats(self):
+    def _time_to_first_response_stats(self):
         """Compute min/avg/max time-to-first-response."""
         values = []
         for summary in self._summaries:
             for result in summary.get("results", []):
-                ttfr = result.get("ttft", 0)
-                if ttfr > 0:
-                    values.append(ttfr)
+                first_response = result.get("time_to_first_response", 0)
+                if first_response > 0:
+                    values.append(first_response)
         if not values:
             return None
         return {

@@ -154,12 +154,12 @@ class CrossRunComparison:
                 ],
                 "elapsed",
             ),
-            "ttfr_avg": CrossRunComparison._avg(
+            "time_to_first_response_avg": CrossRunComparison._avg(
                 [
                     r for r in all_results
                     if r.get("status") == STATUS_CREATED
                 ],
-                "ttft",
+                "time_to_first_response",
             ),
             "peak_rss": max(
                 (s.get("peak_server_rss", 0) or 0
@@ -239,7 +239,7 @@ class CrossRunComparison:
         metric_keys = [
             "num_requests", "wall_time",
             "avg_success",
-            "ttfr_avg", "peak_rss",
+            "time_to_first_response_avg", "peak_rss",
             "failed",
         ]
         baseline = runs[0] if runs else None
@@ -263,9 +263,9 @@ class CrossRunComparison:
                     run.get("avg_success", 0),
                     deltas.get("avg_success"),
                 ),
-                CrossRunComparison._fmt_ttfr(
-                    run.get("ttfr_avg", 0),
-                    deltas.get("ttfr_avg"),
+                CrossRunComparison._fmt_time_to_first_response(
+                    run.get("time_to_first_response_avg", 0),
+                    deltas.get("time_to_first_response_avg"),
                 ),
                 CrossRunComparison._fmt_rss(
                     run.get("peak_rss", 0),
@@ -399,8 +399,8 @@ class CrossRunComparison:
         )
 
     @staticmethod
-    def _fmt_ttfr(value, delta_pct):
-        """Format TTFR, showing a dash when data is missing."""
+    def _fmt_time_to_first_response(value, delta_pct):
+        """Format time to first response, showing a dash when data is missing."""
         if value <= 0:
             return "\u2014"
         return CrossRunComparison._val_with_delta(

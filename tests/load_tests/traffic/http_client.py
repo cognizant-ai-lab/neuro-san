@@ -82,7 +82,7 @@ class HttpClient:
         :param idle_timeout: Cap in seconds between streamed messages (--idle-timeout)
         :param use_https: When True connect over HTTPS/TLS
         :param chat_filter_type: chat_filter_type to send with the request
-        :return: (status, processor, response_text, ttft, token_accounting).
+        :return: (status, processor, response_text, time_to_first_response, token_accounting).
                  ``processor`` is the BasicMessageProcessor that saw the
                  whole stream (answer, structure, sly_data), for the
                  caller's response checks; None when the request did not
@@ -167,10 +167,10 @@ class HttpClient:
         token_accounting: Dict[str, Any] = state.get("token_accounting") or {}
 
         status: str = STATUS_CREATED if answer_text else STATUS_FAILED
-        ttft: float = first_response[0] if first_response else 0.0
+        time_to_first_response: float = first_response[0] if first_response else 0.0
         return (
             status, processor.get_message_processor(), answer_text,
-            ttft, token_accounting,
+            time_to_first_response, token_accounting,
         )
 
     @staticmethod

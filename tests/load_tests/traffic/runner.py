@@ -120,9 +120,9 @@ class TrafficRunner:
         status: str
         processor: Optional[BasicMessageProcessor]
         response_text: str
-        ttft: float
+        time_to_first_response: float
         token_data: Dict[str, Any]
-        status, processor, response_text, ttft, token_data = (
+        status, processor, response_text, time_to_first_response, token_data = (
             HttpClient.execute_request(
                 self._args.host, self._args.port,
                 self._args.agent, prompt,
@@ -179,7 +179,7 @@ class TrafficRunner:
             "request_id": f"request-{request_id}",
             "status": status,
             "elapsed": elapsed,
-            "ttft": ttft,
+            "time_to_first_response": time_to_first_response,
             "start_time": start,
             "end_time": start + elapsed,
             "prompt": prompt,
@@ -525,7 +525,7 @@ class TrafficRunner:
                     "stderr": reason,
                     "returncode": -1,
                     "elapsed": time.time() - start,
-                    "ttft": 0.0,
+                    "time_to_first_response": 0.0,
                     "prompt": "",
                 })
             else:
