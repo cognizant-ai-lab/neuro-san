@@ -24,8 +24,6 @@ from typing import Optional
 from neuro_san.client.streaming_input_processor import StreamingInputProcessor
 from neuro_san.session.http_service_agent_session import HttpServiceAgentSession
 
-from tests.load_tests.config import STATUS_FAILED
-from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 from tests.load_tests.traffic.request_status_policy import RequestStatusPolicy
 from tests.load_tests.traffic.request_timeout_error import RequestTimeoutError
@@ -111,31 +109,32 @@ class AgentRequestExecutor:
         }
 
         elapsed: float
+        error_text: str = ""
         try:
             state = processor.process_once(state)
         except RequestTimeoutError:
-            return AgentRequestResult(STATUS_TIMEOUT, None, "", 0.0, {})
+            # Raised by TimedStreamingChat at or past the cap; the elapsed
+            # check below records it as TIMEOUT.
+            pass
         # Broad by design: process_once() drives the third-party
         # HTTP/streaming stack, whose failure surface (connection,
         # decode, gRPC/transport errors) is not enumerable here.  This
         # is a per-request isolation boundary — any single request must
         # be recorded as FAILED/TIMEOUT without aborting the load test.
         except Exception:  # pylint: disable=broad-exception-caught
-            elapsed = time.perf_counter() - start
-            if policy.is_timed_out(elapsed):
-                return AgentRequestResult(STATUS_TIMEOUT, None, "", 0.0, {})
             # Include the full chained traceback so the root cause
             # (ReadTimeout, ConnectionError, HTTPError, ...) survives
             # the generic help text raised by the session client.
-            error_text: str = traceback.format_exc()
+            error_text = traceback.format_exc()
             logger.debug("HTTP request failed:\n%s", error_text)
-            return AgentRequestResult(STATUS_FAILED, None, error_text, 0.0, {})
 
         elapsed = time.perf_counter() - start
         answer_text: str = state.get("last_chat_response") or ""
-        status: str = policy.status_for(elapsed, answer_text)
-        if status == STATUS_TIMEOUT:
-            return AgentRequestResult(STATUS_TIMEOUT, None, "", 0.0, {})
+        status: str = policy.status_for(elapsed, answer_text, error_text)
+        if policy.is_timed_out(elapsed):
+            return AgentRequestResult(status, None, "", 0.0, {})
+        if error_text:
+            return AgentRequestResult(status, None, error_text, 0.0, {})
 
         token_accounting: Dict[str, Any] = state.get("token_accounting") or {}
         return AgentRequestResult(

@@ -35,6 +35,8 @@ class SlyDataFlattener:
     @staticmethod
     def flatten_string_fields(sly_data: Dict[str, Any]) -> Dict[str, str]:
         """
+        Collect every string-valued field at any depth of sly_data.
+
         :param sly_data: The sly_data dictionary returned by the agent
         :return: Field name to string value; the first occurrence of a name wins
         """

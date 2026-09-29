@@ -71,6 +71,8 @@ class TimedStreamingChat:
 
     def get_time_to_first_response(self) -> float:
         """
+        Report when the first streamed message arrived.
+
         :return: Seconds from start to the first streamed message; 0.0 when none arrived
         """
         if self._time_to_first_response is None:

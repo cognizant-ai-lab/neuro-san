@@ -43,6 +43,11 @@ class TestRequestStatusPolicy(TestCase):
         policy: RequestStatusPolicy = RequestStatusPolicy(timeout=10.0)
         self.assertEqual(policy.status_for(1.0, ""), STATUS_FAILED)
 
+    def test_status_for_error_is_failed(self) -> None:
+        """A raised request within the cap is FAILED even with answer text."""
+        policy: RequestStatusPolicy = RequestStatusPolicy(timeout=10.0)
+        self.assertEqual(policy.status_for(1.0, "answer", "Traceback"), STATUS_FAILED)
+
     def test_status_for_answer_is_created(self) -> None:
         """Answer text within the cap is CREATED."""
         policy: RequestStatusPolicy = RequestStatusPolicy(timeout=10.0)
