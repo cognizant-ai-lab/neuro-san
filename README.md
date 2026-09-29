@@ -206,6 +206,10 @@ see the [neuro-san-studio repo.](https://github.com/cognizant-ai-lab/neuro-san-s
 
 For a complete list of agent networks keys, see the [agent hocon file reference](docs/agent_hocon_reference.md)
 
+To call other agent networks or MCP servers from an agent, see [external agents](docs/external_agents.md)
+and [MCP servers as tools](docs/mcp_tools.md). For tools that run on the model provider's servers, see
+[provider tools](docs/provider_tools.md).
+
 ### Manifest file
 
 All agents used need to have an entry in a single manifest hocon file.
@@ -305,4 +309,6 @@ To create clients, follow the [instructions](docs/clients.md) here.
 
 ## Using neuro-san MCP protocol API
 
-To use neuro-san as an MCP server, see details in [mcp](docs/mcp_service.md)
+To use neuro-san as an MCP server, see details in [mcp](docs/mcp_service.md).
+
+To call MCP servers _from_ an agent network instead, see [MCP servers as tools](docs/mcp_tools.md).
