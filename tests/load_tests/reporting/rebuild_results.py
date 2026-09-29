@@ -269,7 +269,7 @@ class ResultsRebuilder:
             "request_id": f"request-{req_id}",
             "status": status,
             "elapsed": elapsed,
-            "ttft": 0,
+            "time_to_first_response": 0,
             "failure_reason": ResultsRebuilder._diagnose(
                 status, stdout, parsed_fields,
             ),

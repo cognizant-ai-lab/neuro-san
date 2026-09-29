@@ -545,9 +545,9 @@ Output:
 ============================================================
   CROSS-RUN COMPARISON
 ============================================================
-                    Folder  Requests  Wall Time  Avg/req  TTFR avg  Failed
------------------------------------------------------------------------------------
-  20260622_151428_50        50        1200s (20m)    24s      45s       0
+                    Folder  Requests  Wall Time  Avg/req  First resp avg  Failed
+-----------------------------------------------------------------------------------------
+  20260622_151428_50        50        1200s (20m)    24s            45s       0
   20260622_151531_100      100        3600s (60m)    36s      90s       2
   20260622_151648_150      150        6066s (101m)   40s     120s       8
 ```
@@ -568,11 +568,11 @@ Output:
 
 ```text
 TREND HISTORY (/tmp/load_test_alice/adv/history.jsonl, 3 run(s))
-       timestamp  neuro-san        agent    mode   via  reqs  done  <70s  <300s  ttfr    avg    wall  err  warn
----------------------------------------------------------------------------------------------------------------
-2026-07-20 14:02     0.5.51  hello_world  client  http   200   200   181    200  2.1s  41.2s  612.0s    0     0
-2026-07-24 09:15     0.5.52  hello_world  client  http   200   200   176    200  2.3s  44.8s  659.1s    0     0
-2026-07-25 18:31     0.5.52  hello_world  client  http   200   188   120    188  3.9s  61.5s  812.7s    7     0
+       timestamp  neuro-san        agent    mode   via  reqs  done  <70s  <300s  first_resp    avg    wall  err  warn
+---------------------------------------------------------------------------------------------------------------------
+2026-07-20 14:02     0.5.51  hello_world  client  http   200   200   181    200        2.1s  41.2s  612.0s    0     0
+2026-07-24 09:15     0.5.52  hello_world  client  http   200   200   176    200        2.3s  44.8s  659.1s    0     0
+2026-07-25 18:31     0.5.52  hello_world  client  http   200   188   120    188        3.9s  61.5s  812.7s    7     0
 ```
 
 `PATH` may be the history file or a directory containing
@@ -588,8 +588,8 @@ Choose between the two views by the question being asked:
 
 Only `--trend` shows `neuro_san_version`, which `raw_results.json` does
 not record. Server-only runs appear with `mode=server-only`, and their
-`ttfr` is blank because a server log cannot measure the client's time to
-first response.
+`first_resp` (client time to first response, `time_to_first_response` in
+`raw_results.json`) is blank because a server log cannot measure it.
 
 ## Exit Codes
 

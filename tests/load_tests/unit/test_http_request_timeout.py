@@ -104,7 +104,7 @@ class TestHttpRequestTimeout(TestCase):
 
     def test_streaming_past_the_cap_is_a_timeout(self):
         """A stream that outruns the cap reports TIMEOUT."""
-        (status, _processor, _text, _ttft, _tokens), _session = self._execute(
+        (status, _processor, _text, _time_to_first_response, _tokens), _session = self._execute(
             timeout=0.3, message_count=20, message_interval=0.05,
         )
 
@@ -128,7 +128,7 @@ class TestHttpRequestTimeout(TestCase):
 
     def test_request_within_the_cap_succeeds(self):
         """A request that finishes in time is unaffected."""
-        (status, processor, text, ttft, _tokens), session = self._execute(
+        (status, processor, text, time_to_first_response, _tokens), session = self._execute(
             timeout=30, message_count=3, message_interval=0.01,
         )
 
@@ -136,4 +136,4 @@ class TestHttpRequestTimeout(TestCase):
         self.assertEqual(text, "answer")
         self.assertEqual(processor.get_sly_data().get("reservation_id"), "abc-1")
         self.assertEqual(session.sent, 3)
-        self.assertGreater(ttft, 0.0)
+        self.assertGreater(time_to_first_response, 0.0)
