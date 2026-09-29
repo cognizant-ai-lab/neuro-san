@@ -2484,12 +2484,12 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         avg_duration = (
             round(sum(durations) / completed, 2) if completed else 0.0
         )
-        first_responses = [
+        first_responses: List[float] = [
             r.get("time_to_first_response", 0.0) for r in results
             if r.get("status") == STATUS_CREATED
             and r.get("time_to_first_response", 0.0) > 0
         ]
-        avg_first_response = (
+        avg_first_response: float = (
             round(sum(first_responses) / len(first_responses), 2) if first_responses else 0.0
         )
         server_errors: List[Dict[str, str]] = []

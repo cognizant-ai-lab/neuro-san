@@ -90,14 +90,14 @@ class SummaryFileWriter:
             f"  Total wall time:"
             f" {Formatters.fmt_duration(total_elapsed, precision=1)}"
         )
-        first_response_values = [
+        first_response_values: List[float] = [
             r.get("time_to_first_response", 0)
             for s in self._summaries
             for r in s.get("results", [])
             if r.get("time_to_first_response", 0) > 0
         ]
         if first_response_values:
-            avg_first_response = sum(first_response_values) / len(first_response_values)
+            avg_first_response: float = sum(first_response_values) / len(first_response_values)
             lines.append(
                 f"  Time to first response:"
                 f" {Formatters.fmt_duration(min(first_response_values))} min"

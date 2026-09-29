@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import re
+from typing import Optional
 
 from tests.load_tests.config import Formatters
 from tests.load_tests.config import SEPARATOR_WIDTH
@@ -399,8 +400,14 @@ class CrossRunComparison:
         )
 
     @staticmethod
-    def _fmt_time_to_first_response(value, delta_pct):
-        """Format time to first response, showing a dash when data is missing."""
+    def _fmt_time_to_first_response(value: float, delta_pct: Optional[float]) -> str:
+        """
+        Format time to first response, showing a dash when data is missing.
+
+        :param value: Average time to first response in seconds; 0 when unknown
+        :param delta_pct: Percent change against the baseline run, or None
+        :return: The formatted value, or a dash when value is 0
+        """
         if value <= 0:
             return "\u2014"
         return CrossRunComparison._val_with_delta(

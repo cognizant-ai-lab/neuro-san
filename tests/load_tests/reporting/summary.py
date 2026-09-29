@@ -17,6 +17,10 @@
 """Summary reporting — ramp-up and overall results."""
 
 import logging
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
 
 from collections import Counter
 
@@ -159,7 +163,7 @@ class SummaryReporter:
 
     def _log_performance_stats(self) -> None:
         """Log time-to-first-response and request-duration stats."""
-        first_response = self._time_to_first_response_stats()
+        first_response: Optional[Dict[str, float]] = self._time_to_first_response_stats()
         if first_response is not None:
             logger.info(
                 "  Time to first response: %s min"
@@ -433,12 +437,19 @@ class SummaryReporter:
                 fallback_requests,
             )
 
-    def _time_to_first_response_stats(self):
-        """Compute min/avg/max time-to-first-response."""
-        values = []
+    def _time_to_first_response_stats(self) -> Optional[Dict[str, float]]:
+        """
+        Compute min/avg/max time-to-first-response.
+
+        :return: Dictionary with "min", "avg" and "max" in seconds over the
+                 requests that received a first response; None when none did
+        """
+        values: List[float] = []
+        summary: Dict[str, Any]
         for summary in self._summaries:
+            result: Dict[str, Any]
             for result in summary.get("results", []):
-                first_response = result.get("time_to_first_response", 0)
+                first_response: float = result.get("time_to_first_response", 0)
                 if first_response > 0:
                     values.append(first_response)
         if not values:
