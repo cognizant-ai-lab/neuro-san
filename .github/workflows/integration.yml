@@ -24,7 +24,7 @@ jobs:
         export AGENT_TOOL_PATH="./neuro_san/coded_tools" &&
         export PYTHONPATH="${PYTHONPATH:+$PYTHONPATH:}." &&
         export AGENT_MANIFEST_FILE="./neuro_san/registries/manifest.hocon" &&
-        pytest --capture=no --verbose -m "integration" --timer-top-n 100
+        pytest --capture=no --verbose -m "integration" --durations=100
     secrets:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
