@@ -1,0 +1,57 @@
+# Copyright © 2023-2026 Cognizant Technology Solutions Corp, www.cognizant.com.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# END COPYRIGHT
+
+
+from tests.load_tests.config import STATUS_CREATED
+from tests.load_tests.config import STATUS_FAILED
+from tests.load_tests.config import STATUS_TIMEOUT
+
+
+class RequestStatusPolicy:
+    """
+    Decides the status recorded for one load-test request.
+
+    TIMEOUT when the request took at least --request-timeout, whether or not
+    it raised; otherwise FAILED when it raised or produced no answer text,
+    and CREATED when it produced one.
+    """
+
+    def __init__(self, timeout: float):
+        """
+        Constructor.
+
+        :param timeout: Cap in seconds on the whole request (--request-timeout)
+        """
+        self._timeout: float = timeout
+
+    def is_timed_out(self, elapsed: float) -> bool:
+        """
+        :param elapsed: Seconds the request has taken so far
+        :return: True when the request has reached the cap
+        """
+        return elapsed >= self._timeout
+
+    def status_for(self, elapsed: float, answer_text: str) -> str:
+        """
+        :param elapsed: Seconds the completed request took
+        :param answer_text: The final chat response text, empty when none
+        :return: STATUS_TIMEOUT, STATUS_FAILED or STATUS_CREATED
+        """
+        if self.is_timed_out(elapsed):
+            return STATUS_TIMEOUT
+        if not answer_text:
+            return STATUS_FAILED
+        return STATUS_CREATED
