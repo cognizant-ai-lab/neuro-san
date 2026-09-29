@@ -400,6 +400,9 @@ class TestProviderToolsNetworkValidator(TestCase, AbstractNetworkValidatorTest):
     def test_gemini_in_second_fallback(self) -> None:
         """
         A Gemini model anywhere in the fallbacks chain makes the top-level provider_tools subject to the rules.
+
+        The chain also mixes providers and binds a Gemini dictionary to the OpenAI model, so
+        those two inherited problems are reported once each under the network label.
         """
         validator: DictionaryValidator = self.create_validator()
         config: Dict[str, Any] = self.restore("hello_world.hocon")
@@ -412,8 +415,32 @@ class TestProviderToolsNetworkValidator(TestCase, AbstractNetworkValidatorTest):
         })
 
         errors: List[str] = validator.validate(config)
+        self.assertEqual(3, len(errors), str(errors))
+        self.assertEqual("network 'llm_config.provider_tools' requires every fallback model to use the same provider;"
+                         " found classes gemini, openai.", errors[0])
+        self.assertEqual("network 'llm_config.provider_tools[0]' has no string 'type';"
+                         ' OpenAI built-ins look like {"type": "web_search"}.', errors[1])
+        self.assertEqual("announcer declares Gemini provider_tools together with other tools (synonymizer); Gemini"
+                         " rejects built-in tools mixed with function tools and mis-converts the other tools' schemas,"
+                         " so move the built-in to an agent with no other tools.", errors[2])
+
+    def test_agent_overriding_model_inherits_openai_list(self) -> None:
+        """
+        An agent that moves the inherited OpenAI list onto a Claude model is reported under its own name.
+
+        The synonymizer keeps the network's OpenAI model and list, which fit, so nothing is
+        reported for it or for the network.
+        """
+        validator: DictionaryValidator = self.create_validator()
+        config: Dict[str, Any] = self.restore("hello_world.hocon")
+        self._with_network_llm_config(config, {"model_name": "gpt-5.2", "provider_tools": [self.WEB_SEARCH]})
+        self._agent(config, "announcer")["llm_config"] = {"model_name": "claude-sonnet"}
+
+        errors: List[str] = validator.validate(config)
         self.assertEqual(1, len(errors), str(errors))
-        self.assertIn("announcer declares Gemini provider_tools together with other tools", errors[0])
+        self.assertEqual("announcer 'llm_config.provider_tools[0]' type 'web_search' is not an Anthropic server tool;"
+                         " supported families are web_search_, web_fetch_, code_execution_, tool_search_"
+                         " and mcp_toolset.", errors[0])
 
     def test_dotted_user_class_is_not_gemini(self) -> None:
         """

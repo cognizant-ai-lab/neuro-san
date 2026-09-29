@@ -476,3 +476,155 @@ class TestDefaultLlmFactory(TestCase):
         factory: DefaultLlmFactory = DefaultLlmFactory({"llm_info_file": "/no/such/llm_info.hocon"})
 
         self.assertEqual("/no/such/llm_info.hocon", factory.get_llm_info_file())
+
+    # ---- get_chat_class_family(): the root class behind "extends" --------------------------------
+
+    def _user_class_hocon(self, with_marker: bool) -> str:
+        """
+        Builds llm_info hocon text defining a user class that extends openai, with or without
+        the provider_tools marker in its own args.
+
+        :param with_marker: True to declare "provider_tools" in the class's own args
+        :return: The hocon text
+        """
+        marker: str = ""
+        if with_marker:
+            marker = '"provider_tools": null,'
+        return f"""
+        {{
+            "classes": {{
+                "my-openai": {{
+                    "extends": "openai",
+                    "args": {{
+                        {marker}
+                        "openai_api_base": "http://localhost:1234/v1"
+                    }}
+                }}
+            }}
+        }}
+        """
+
+    def test_get_chat_class_family_root_class_is_itself(self) -> None:
+        """
+        A class with no "extends" is its own family.
+        """
+        self.assertEqual("openai", self.factory.get_chat_class_family("openai"))
+
+    def test_get_chat_class_family_azure_openai_is_openai(self) -> None:
+        """
+        azure-openai extends openai, so its family is openai.
+        """
+        self.assertEqual("openai", self.factory.get_chat_class_family("azure-openai"))
+
+    def test_get_chat_class_family_anthropic_bedrock_is_anthropic(self) -> None:
+        """
+        anthropic-bedrock extends anthropic, so its family is anthropic.
+        """
+        self.assertEqual("anthropic", self.factory.get_chat_class_family("anthropic-bedrock"))
+
+    def test_get_chat_class_family_is_case_insensitive(self) -> None:
+        """
+        "Gemini" is looked up lowercased, the way the runtime looks up its policy.
+        """
+        self.assertEqual("gemini", self.factory.get_chat_class_family("Gemini"))
+
+    def test_get_chat_class_family_unknown_is_none(self) -> None:
+        """
+        A class that is not in the classes table, or no class at all, has no family.
+        """
+        self.assertIsNone(self.factory.get_chat_class_family("no-such-class"))
+        self.assertIsNone(self.factory.get_chat_class_family(None))
+
+    def test_get_chat_class_family_dotted_class_is_none(self) -> None:
+        """
+        The python path of a langchain chat model class is not in the table, so it has no family.
+        """
+        self.assertIsNone(self.factory.get_chat_class_family("langchain_openai.chat_models.base.ChatOpenAI"))
+
+    def test_get_chat_class_family_dangling_extends_stops_at_last_known_class(self) -> None:
+        """
+        A class whose "extends" names nothing in the table is reported as its own family.
+        """
+        extra_hocon: str = '{ "classes": { "orphan": { "extends": "no-such-class", "args": {} } } }'
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(extra_hocon)
+
+        self.assertEqual("orphan", factory.get_chat_class_family("orphan"))
+
+    def test_get_chat_class_family_cycle_ends(self) -> None:
+        """
+        Two classes extending each other end the walk at one of them instead of looping forever.
+        """
+        extra_hocon: str = """
+        {
+            "classes": {
+                "cycle-a": { "extends": "cycle-b", "args": {} },
+                "cycle-b": { "extends": "cycle-a", "args": {} }
+            }
+        }
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(extra_hocon)
+
+        self.assertIn(factory.get_chat_class_family("cycle-a"), ["cycle-a", "cycle-b"])
+
+    # ---- declares_provider_tools(): the class's own args, not its parent's -----------------------
+
+    def test_declares_provider_tools_stock_supported_classes(self) -> None:
+        """
+        The stock openai, anthropic and gemini classes declare provider_tools in their own args.
+        """
+        for class_name in ["openai", "anthropic", "gemini"]:
+            self.assertTrue(self.factory.declares_provider_tools(class_name), class_name)
+
+    def test_declares_provider_tools_stock_unsupported_classes(self) -> None:
+        """
+        Classes that only inherit the key through "extends", or never had it, do not declare it.
+        """
+        for class_name in ["azure-openai", "anthropic-bedrock", "ollama"]:
+            self.assertFalse(self.factory.declares_provider_tools(class_name), class_name)
+
+    def test_declares_provider_tools_unknown_is_false(self) -> None:
+        """
+        A class that is not in the table, or no class at all, declares nothing.
+        """
+        self.assertFalse(self.factory.declares_provider_tools("no-such-class"))
+        self.assertFalse(self.factory.declares_provider_tools(None))
+
+    def test_declares_provider_tools_user_class_with_marker(self) -> None:
+        """
+        A user class extending openai that declares the key in its own args is supported.
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(self._user_class_hocon(True))
+
+        self.assertTrue(factory.declares_provider_tools("my-openai"))
+        self.assertEqual("openai", factory.get_chat_class_family("my-openai"))
+
+    def test_declares_provider_tools_user_class_without_marker(self) -> None:
+        """
+        A user class extending openai without the key in its own args is not supported, even
+        though get_chat_class_args() would merge the parent's key in.
+        """
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(self._user_class_hocon(False))
+
+        self.assertFalse(factory.declares_provider_tools("my-openai"))
+        self.assertEqual("openai", factory.get_chat_class_family("my-openai"))
+        self.assertIn("provider_tools", factory.get_chat_class_args("my-openai"))
+
+    def test_declares_provider_tools_string_class_entry_is_false(self) -> None:
+        """
+        A class entry that is not a dictionary declares nothing and is its own family, without raising.
+        """
+        extra_hocon: str = '{ "classes": { "stringy": "just a string" } }'
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(extra_hocon)
+
+        self.assertFalse(factory.declares_provider_tools("stringy"))
+        self.assertEqual("stringy", factory.get_chat_class_family("stringy"))
+
+    def test_declares_provider_tools_non_dict_args_is_false(self) -> None:
+        """
+        A class whose "args" is not a dictionary declares nothing, while its "extends" still gives it a family.
+        """
+        extra_hocon: str = '{ "classes": { "no-args": { "extends": "openai", "args": "oops" } } }'
+        factory: DefaultLlmFactory = self._load_factory_with_extra_llm_info(extra_hocon)
+
+        self.assertFalse(factory.declares_provider_tools("no-args"))
+        self.assertEqual("openai", factory.get_chat_class_family("no-args"))

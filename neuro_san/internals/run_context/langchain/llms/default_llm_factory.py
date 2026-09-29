@@ -357,6 +357,72 @@ class DefaultLlmFactory(ContextTypeLlmFactory, LangChainLlmFactory):
             return None
         return llm_entry.get("class")
 
+    def get_chat_class_family(self, chat_class_name: Optional[str]) -> Optional[str]:
+        """
+        Tells which root llm_info class a class descends from through "extends".
+
+        The lookup is lowercased because the runtime lowercases "class" before its policy
+        lookup (StandardLangChainLlmFactory.create_llm_resources), so "Gemini" builds a
+        Gemini model just the same. Nothing is raised for a malformed table: a cycle or a
+        dangling "extends" ends the walk at the last class that is in the table.
+
+        :param chat_class_name: A "class" value from an llm_config or an llm_info entry, or None
+        :return: The lowercased name of the class at the top of the "extends" chain, for
+                example "openai" for "azure-openai" and "anthropic" for "anthropic-bedrock".
+                None when chat_class_name is None or not in the llm_info "classes" table.
+        """
+        if not isinstance(chat_class_name, str):
+            return None
+        chat_classes: Any = self.llm_infos.get("classes")
+        if not isinstance(chat_classes, dict):
+            return None
+
+        current: str = chat_class_name.lower()
+        if current not in chat_classes:
+            return None
+
+        seen: Set[str] = set()
+        while current not in seen:
+            seen.add(current)
+            entry: Any = chat_classes.get(current)
+            if not isinstance(entry, dict):
+                break
+            extends: Any = entry.get("extends")
+            if not isinstance(extends, str):
+                break
+            parent: str = extends.lower()
+            if parent not in chat_classes:
+                # A dangling "extends": the class we have is the last one in the table.
+                break
+            current = parent
+        return current
+
+    def declares_provider_tools(self, chat_class_name: Optional[str]) -> bool:
+        """
+        Tells whether an llm_info class supports provider_tools.
+
+        A class opts in by declaring the "provider_tools" key in its own "args"; the stock
+        file does this for openai, anthropic and gemini. The class's own args are read here
+        instead of get_chat_class_args(), because that merges the parent's args in through
+        "extends" and would make azure-openai look supported when only openai is.
+
+        :param chat_class_name: A "class" value from an llm_config or an llm_info entry, or None
+        :return: True when the class is in the llm_info "classes" table (lowercased lookup)
+                and its own "args" dictionary has a "provider_tools" key
+        """
+        if not isinstance(chat_class_name, str):
+            return False
+        chat_classes: Any = self.llm_infos.get("classes")
+        if not isinstance(chat_classes, dict):
+            return False
+        entry: Any = chat_classes.get(chat_class_name.lower())
+        if not isinstance(entry, dict):
+            return False
+        args: Any = entry.get("args")
+        if not isinstance(args, dict):
+            return False
+        return "provider_tools" in args
+
     def _find_llm_entry(self, model_name: str) -> Tuple[Optional[Dict[str, Any]], str]:
         """
         Looks up the llm_info entry for a model name, following at most one alias hop.

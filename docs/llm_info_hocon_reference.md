@@ -313,6 +313,11 @@ definitions.
 The arguments of the stock classes whose effect is not obvious from their name are described in
 [Provider-Specific Arguments](#provider-specific-arguments) below.
 
+Declaring the `provider_tools` key in a class's `args` (the stock `openai`, `anthropic` and `gemini` classes set it
+to `null`) marks that class as supporting [`provider_tools`](./provider_tools.md), and load-time validation reports
+an agent that binds the list to a class without it. The marker is read from the class's own `args` only, not
+inherited through `extends`, so a class that extends `openai` must declare it itself to opt in.
+
 #### `factories`
 
 You can list your own factory classes that create a BaseLanguageModel instance given a config if the

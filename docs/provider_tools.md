@@ -45,7 +45,11 @@ it to the chat-model constructor.
 
 ## Supported shapes per provider
 
-`provider_tools` is available for the `openai`, `anthropic`, and `gemini` classes.
+`provider_tools` is available for the `openai`, `anthropic`, and `gemini` classes. A class supports
+`provider_tools` when its own `args` in the llm_info [`classes`](./llm_info_hocon_reference.md#classes) table declare
+the `provider_tools` key; the stock file does this for `openai`, `anthropic` and `gemini`, and a class in a user
+`llm_info_file` can opt in the same way. The key is not inherited through `extends`, which is why `azure-openai`
+and `anthropic-bedrock` are not supported even though they extend classes that are.
 
 - OpenAI accepts Responses API built-ins such as `{"type": "web_search"}` and
   `{"type": "code_interpreter", "container": {"type": "auto"}}`. Provider tools require the Responses API; do
@@ -68,9 +72,18 @@ errors, so they surface then rather than as provider errors at request time:
   runtime would otherwise ignore silently.
 - A `provider_tools` key inside a [fallbacks](./agent_hocon_reference.md#fallbacks) entry, which the runtime
   ignores; declare it at the top level of the `llm_config` so it applies to every fallback.
+- `provider_tools` on an LLM agent whose `model_name`, short `class` value, or any fallback resolves to a class that
+  does not support it, such as `ollama` or `azure-openai`.
+- A fallback chain whose models resolve to more than one class while `provider_tools` is non-empty, since the same
+  list is bound to every fallback and the runtime rejects such a chain.
+- A dictionary that does not match the provider: a Gemini entry with a `type` key, an OpenAI or Anthropic entry
+  without a string `type`, or an Anthropic `type` that is not a server tool. Anthropic client-side tools (`bash_`,
+  `text_editor_`, `computer_`, `memory_`) are reported here because neuro-san does not execute them.
 - An LLM agent whose `model_name`, short `class` value, or any fallback resolves to the `gemini` class and that
-  declares `provider_tools` alongside other `tools`, or more than one Gemini built-in entry. A dotted class path
-  or a `model_name` not listed in llm_info is not checked, and coded tools and toolbox tools never build a model.
+  declares `provider_tools` alongside other `tools`, or more than one Gemini built-in entry.
+
+A model whose short `class` or `model_name` is not in llm_info, or whose `class` is a dotted path, resolves to no
+llm_info class and is skipped by the last four rules. Coded tools and toolbox tools never build a model.
 
 ## Limitations
 
@@ -80,4 +93,4 @@ API keys or other secrets inside provider tool dictionaries; use the provider's 
 
 OpenAI built-in tools are available only through the Responses API, so `use_responses_api: false` cannot be used
 with `provider_tools`. The `azure-openai`, `anthropic-bedrock`, `bedrock`, `ollama`, `nvidia`, and `openrouter`
-classes do not support `provider_tools`.
+classes do not support `provider_tools`; a network that declares it for one of them is reported at load time.
