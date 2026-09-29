@@ -280,7 +280,7 @@ class TestContentUtils(TestCase):
         blocks = ContentUtils.blocks_from_chat_message(chat_message)
         self.assertEqual(blocks, [{"type": "text", "text": "from blocks"}])
 
-    def test_blocks_from_chat_message_empty_wrapper_falls_through(self):
+    def test_blocks_from_chat_message_empty_wrapper_falls_through(self) -> None:
         """
         A wrapper without blocks carries nothing, so mime_data is still mapped.
         Absent, null and [] are the same wrapper on the wire (proto3 JSON omits
@@ -304,7 +304,7 @@ class TestContentUtils(TestCase):
                 }
                 self.assertEqual(ContentUtils.blocks_from_chat_message(chat_message), expected)
 
-    def test_blocks_from_chat_message_unknown_format_or_bare_list_fails_safe(self):
+    def test_blocks_from_chat_message_unknown_format_or_bare_list_fails_safe(self) -> None:
         """
         A wrapper whose format this code does not know, and a bare list of
         blocks (the shape from before the format tag), both yield None and do
