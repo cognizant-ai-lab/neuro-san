@@ -70,10 +70,11 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         Convert the BaseMessage to a chat.ChatMessage dictionary.
 
         text always carries the flattened text. Block content that says more
-        than its text (reasoning, images, provider extras, ...) also rides in
-        content_blocks, the format-tagged wrapper from chat.proto; a message
-        that is only text carries no content_blocks key, so text-only traffic
-        keeps its exact shape.
+        than its text (reasoning, images, several text blocks, provider extras,
+        ...) also rides in content_blocks, the format-tagged wrapper from
+        chat.proto. Content that normalizes to a plain string (see
+        ContentUtils.normalize_content) carries no content_blocks key, so
+        text-only traffic keeps its exact shape.
 
         :param obj: The BaseMessage to convert
         :return: The ChatMessage in dictionary form
