@@ -17,8 +17,13 @@
 from typing import Any
 from typing import Dict
 
+from typing_extensions import override
+
 from langchain_core.tools.base import BaseTool
 
+from neuro_san.internals.interfaces.invocation_context import InvocationContext
+from neuro_san.internals.journals.journal import Journal
+from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
 from neuro_san.internals.run_context.langchain.core.langchain_openai_function_tool import LangChainOpenAIFunctionTool
 from neuro_san.internals.run_context.langchain.tools.tool_creator import ToolCreator
 
@@ -30,15 +35,35 @@ class FunctionToolCreator(ToolCreator):
     agent reports, or a shared coded tool from the toolbox.
     """
 
-    def create(self, function_json: Dict[str, Any], name: str) -> BaseTool:
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
+    def __init__(self,
+                 tool_caller: ToolCaller,
+                 invocation_context: InvocationContext,
+                 journal: Journal,
+                 agent_location: str,
+                 function_json: Dict[str, Any]) -> None:
         """
-        Create a function tool from a JSON specification.
+        Constructor
 
+        :param tool_caller: The ToolCaller the tools are created for
+        :param invocation_context: The context policy container that pertains to the invocation
+                    of the agent.
+        :param journal: The journal to use when sending framework-level messages to the client
+        :param agent_location: Where a problem has to be fixed, in words a reader can act on
         :param function_json: The function specification. None when an external agent
                     responded without reporting a function.
+        """
+        super().__init__(tool_caller, invocation_context, journal, agent_location)
+        self.function_json: Dict[str, Any] = function_json
+
+    @override
+    async def create_tool(self, name: str) -> BaseTool:
+        """
+        Create a function tool from the function specification.
+
         :param name: The name the calling agent uses to look the tool up
         :return: The BaseTool for the specification
-        :raises ValueError: When function_json is None, so that the caller's
+        :raises ValueError: When the function specification is None, so that the caller's
                     invalid-function-definition handling reports it.
         """
 
@@ -47,7 +72,7 @@ class FunctionToolCreator(ToolCreator):
         # Also, most internal agents do not have a name identifier on their functional
         # JSON, which is required.  Use the agent name we are using for look-up for that
         # regardless of intent.
-        if function_json is None:
+        if self.function_json is None:
             # An external agent that responded without reporting a function has
             # no function_json. Raise ValueError so the external agent creator's
             # invalid-function-definition handler reports this instead of
@@ -63,6 +88,6 @@ class FunctionToolCreator(ToolCreator):
         # name into it would leak this caller's reference string into that
         # shared state (issue #1230). The copy is deliberately shallow: only
         # the top-level "name" key is written here, so nested dicts stay shared.
-        use_function_json: Dict[str, Any] = dict(function_json)
+        use_function_json: Dict[str, Any] = dict(self.function_json)
         use_function_json["name"] = name
         return LangChainOpenAIFunctionTool.from_function_json(use_function_json, self.tool_caller)

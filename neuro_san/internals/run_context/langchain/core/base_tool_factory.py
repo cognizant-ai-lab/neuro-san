@@ -29,6 +29,7 @@ from neuro_san.internals.run_context.langchain.tools.exposed_tool_names import E
 from neuro_san.internals.run_context.langchain.tools.external_agent_tool_creator import ExternalAgentToolCreator
 from neuro_san.internals.run_context.langchain.tools.function_tool_creator import FunctionToolCreator
 from neuro_san.internals.run_context.langchain.tools.mcp_tool_creator import McpToolCreator
+from neuro_san.internals.run_context.langchain.tools.tool_creator import ToolCreator
 from neuro_san.internals.run_context.langchain.tools.toolbox_tool_creator import ToolboxToolCreator
 from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
 
@@ -37,11 +38,14 @@ class BaseToolFactory:
     """
     Creates langchain BaseTools for the tools an agent lists.
 
-    This class only decides which kind of tool a reference is and hands it to
-    the creator for that kind, all in the tools package: FunctionToolCreator
+    This class only decides which kind of tool a reference is and builds the
+    creator for that kind, all in the tools package: FunctionToolCreator
     for coded tools and internal agents, ToolboxToolCreator for toolbox
     entries, ExternalAgentToolCreator for other agent networks, and
-    McpToolCreator for MCP servers. Each creator owns the policy for its kind.
+    McpToolCreator for MCP servers. A creator is built for one reference,
+    with what its kind needs in its constructor, and every creator is then
+    called the same way: create_tool(name). Each creator owns the policy for
+    its kind.
     The one thing kept across kinds is ExposedToolNames, so that a later tool
     repeating a name is caught whatever kind either tool is.
     """
@@ -59,6 +63,8 @@ class BaseToolFactory:
         :param journal: The journal to use when sending framework-level messages to the client
         """
         self.tool_caller: ToolCaller = tool_caller
+        self.invocation_context: InvocationContext = invocation_context
+        self.journal: Journal = journal
         # Where a problem has to be fixed: the agent whose "tools" list is being
         # built and the network, hence the hocon file, it lives in. Every message
         # for the user starts with it, so nobody has to guess which file to open.
@@ -72,20 +78,14 @@ class BaseToolFactory:
         # Shared across every kind of tool, so the MCP creator can see names
         # that coded tools or other servers already took.
         self.exposed_tool_names: ExposedToolNames = ExposedToolNames(journal, self.agent_location)
-        self.function_tool_creator: FunctionToolCreator = FunctionToolCreator(
-            tool_caller, invocation_context, journal, self.agent_location)
-        self.toolbox_tool_creator: ToolboxToolCreator = ToolboxToolCreator(
-            tool_caller, invocation_context, journal, self.agent_location)
-        self.external_agent_tool_creator: ExternalAgentToolCreator = ExternalAgentToolCreator(
-            tool_caller, invocation_context, journal, self.agent_location)
-        self.mcp_tool_creator: McpToolCreator = McpToolCreator(
-            tool_caller, invocation_context, journal, self.agent_location, self.exposed_tool_names)
 
-    async def create_base_tool(self, name: str) -> Union[BaseTool, List[BaseTool]]:
+    async def create_base_tool(self, name: Union[str, Dict[str, Any]]) -> Union[BaseTool, List[BaseTool]]:
         """
         Create base tools for the agent to call.
 
-        :param name: The name of the tool to create
+        :param name: One entry of the agent's "tools" list: the name of an agent or
+                     coded tool of this network, an external agent reference, or an
+                     MCP server reference, which may be a dictionary
         :return: The BaseTools associated with the name
         """
 
@@ -112,18 +112,20 @@ class BaseToolFactory:
                  function tool for the spec's "function"; None when the spec has neither.
         """
 
-        toolbox: str = agent_spec.get("toolbox")
+        creator: ToolCreator = None
+        if agent_spec.get("toolbox"):
+            # Handle toolbox-based tools
+            creator = ToolboxToolCreator(self.tool_caller, self.invocation_context, self.journal,
+                                         self.agent_location, agent_spec)
+        else:
+            # Handle coded tools
+            function_json: Dict[str, Any] = agent_spec.get("function")
+            if function_json is None:
+                return None
+            creator = FunctionToolCreator(self.tool_caller, self.invocation_context, self.journal,
+                                          self.agent_location, function_json)
 
-        # Handle toolbox-based tools
-        if toolbox:
-            return await self.toolbox_tool_creator.create(toolbox, agent_spec, name)
-
-        # Handle coded tools
-        function_json: Dict[str, Any] = agent_spec.get("function")
-        if function_json is None:
-            return None
-
-        return self.function_tool_creator.create(function_json, name)
+        return await creator.create_tool(name)
 
     async def create_external_tool(self, name: Union[str, Dict[str, Any]]) -> Union[BaseTool, List[BaseTool]]:
         """
@@ -139,8 +141,21 @@ class BaseToolFactory:
         if not isinstance(name, (dict, str)):
             raise TypeError(f"Tools must be string or dict, got {type(name)}")
 
-        # Handle MCP-based tool as external tool
+        creator: ToolCreator = None
         if ExternalAgentParsing.is_mcp_tool(name):
-            return await self.mcp_tool_creator.create(name)
+            # An MCP reference is the server URL alone, or a dictionary with the
+            # URL under "url" and an optional allow list of tool names under "tools".
+            server_url: str = None
+            allowed_tools: List[str] = None
+            if isinstance(name, dict):
+                server_url = name.get("url")
+                allowed_tools = name.get("tools")
+            else:
+                server_url = name
+            creator = McpToolCreator(self.tool_caller, self.invocation_context, self.journal,
+                                     self.agent_location, self.exposed_tool_names, allowed_tools)
+            return await creator.create_tool(server_url)
 
-        return await self.external_agent_tool_creator.create(name)
+        creator = ExternalAgentToolCreator(self.tool_caller, self.invocation_context, self.journal,
+                                           self.agent_location)
+        return await creator.create_tool(name)
