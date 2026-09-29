@@ -83,10 +83,13 @@ class MockCodedToolWithConstructor(CodedTool):
 @pytest.fixture
 def mock_factory():
     """Create a mock AgentToolFactory."""
+    inspector = MagicMock()
+    inspector.get_network_name.return_value = "network/subnetwork"
+
     factory = MagicMock()
     factory.get_agent_tool_path.return_value = "test_tools.network.subnetwork"
-    factory.agent_network.get_network_name.return_value = "network/subnetwork"
     factory.get_name_from_spec.return_value = "test_agent"
+    factory.get_agent_network.return_value = inspector
     return factory
 
 
