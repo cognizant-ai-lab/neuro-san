@@ -44,8 +44,8 @@ class BaseToolFactory:
     entries, ExternalAgentToolCreator for other agent networks, and
     McpToolCreator for MCP servers. A creator is built for one reference,
     with what its kind needs in its constructor, and every creator is then
-    called the same way: create_tool(name). Each creator owns the policy for
-    its kind.
+    called the same way: create_tool(tool_name). Each creator owns the policy
+    for its kind.
     The one thing kept across kinds is ExposedToolNames, so that a later tool
     repeating a name is caught whatever kind either tool is.
     """

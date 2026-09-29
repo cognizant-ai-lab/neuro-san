@@ -39,8 +39,8 @@ class ToolCreator:
     BaseToolFactory decides which creator a tool reference goes to and builds
     one creator for that reference. Whatever a kind needs beyond the tool's
     name is given to its constructor, so every creator is called the same
-    way: create_tool(name). Each creator owns the policy for its own kind, so
-    that policy and its tests live next to the code they are about.
+    way: create_tool(tool_name). Each creator owns the policy for its own kind,
+    so that policy and its tests live next to the code they are about.
     """
 
     def __init__(self,
@@ -69,11 +69,11 @@ class ToolCreator:
         # env var setting.
         self.sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
 
-    async def create_tool(self, name: str) -> Union[BaseTool, List[BaseTool]]:
+    async def create_tool(self, tool_name: str) -> Union[BaseTool, List[BaseTool]]:
         """
         Create the tool, or tools, for one entry of the agent's "tools" list.
 
-        :param name: The name the calling agent uses to look the tool up
+        :param tool_name: The name the calling agent uses to look the tool up
         :return: The BaseTool, or list of BaseTools, for the name. None when no
                  tool can be made, which the creator reports to the client journal.
         :raises NotImplementedError: When a subclass does not implement it

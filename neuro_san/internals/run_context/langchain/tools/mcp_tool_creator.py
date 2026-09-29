@@ -71,17 +71,17 @@ class McpToolCreator(ToolCreator):
         self.allowed_tools: List[str] = allowed_tools
 
     @override
-    async def create_tool(self, name: str) -> List[BaseTool]:
+    async def create_tool(self, tool_name: str) -> List[BaseTool]:
         """
         Create the tools of one MCP server.
 
-        :param name: The MCP server URL: a canonical MCP server URI (see
+        :param tool_name: The MCP server URL: a canonical MCP server URI (see
                     https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#canonical-server-uri)
                     over http(s), with no fragment, and with "mcp" as a host label
                     (e.g. "mcp.example.com") or a path segment (e.g. "/mcp", "/mcp/free", "/server/mcp").
         :return: A list of MCP tools as base tools, or None when the server was unreachable
         """
-        server_url: str = name
+        server_url: str = tool_name
         # Get HTTP headers from sly_data if available
         http_headers: Dict[str, Any] = self.tool_caller.get_sly_data().get("http_headers", {})
         # Get specific headers for the MCP server if available

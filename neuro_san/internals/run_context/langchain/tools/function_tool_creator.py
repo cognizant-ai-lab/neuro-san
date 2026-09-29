@@ -57,11 +57,11 @@ class FunctionToolCreator(ToolCreator):
         self.function_json: Dict[str, Any] = function_json
 
     @override
-    async def create_tool(self, name: str) -> BaseTool:
+    async def create_tool(self, tool_name: str) -> BaseTool:
         """
         Create a function tool from the function specification.
 
-        :param name: The name the calling agent uses to look the tool up
+        :param tool_name: The name the calling agent uses to look the tool up
         :return: The BaseTool for the specification
         :raises ValueError: When the function specification is None, so that the caller's
                     invalid-function-definition handling reports it.
@@ -77,7 +77,8 @@ class FunctionToolCreator(ToolCreator):
             # no function_json. Raise ValueError so the external agent creator's
             # invalid-function-definition handler reports this instead of
             # the TypeError that the assignment below would otherwise raise.
-            message: str = f"Could not create tool to call external agent '{name}'. Its function_json is None."
+            message: str = (f"Could not create tool to call external agent '{tool_name}'. "
+                            "Its function_json is None.")
             raise ValueError(message)
 
         # Copy before adding the name. function_json can be a dictionary that
@@ -89,5 +90,5 @@ class FunctionToolCreator(ToolCreator):
         # shared state (issue #1230). The copy is deliberately shallow: only
         # the top-level "name" key is written here, so nested dicts stay shared.
         use_function_json: Dict[str, Any] = dict(self.function_json)
-        use_function_json["name"] = name
+        use_function_json["name"] = tool_name
         return LangChainOpenAIFunctionTool.from_function_json(use_function_json, self.tool_caller)

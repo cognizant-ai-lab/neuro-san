@@ -69,11 +69,11 @@ class ExternalAgentToolCreator(ToolCreator):
     synthesis_warned: Set[str] = set()
 
     @override
-    async def create_tool(self, name: str) -> BaseTool:
+    async def create_tool(self, tool_name: str) -> BaseTool:
         """
         Create the tool for an external agent network.
 
-        :param name: The reference to the external agent, "/name" or a URL
+        :param tool_name: The reference to the external agent, "/name" or a URL
         :return: The BaseTool for the external agent, or None when the reference is not
                  an external agent, the agent was unreachable, or what it reported
                  cannot be made into a tool. The last two cases are reported to the
@@ -81,7 +81,7 @@ class ExternalAgentToolCreator(ToolCreator):
         """
 
         # See if the agent name given could reference an external agent.
-        if not ExternalAgentParsing.is_external_agent(name):
+        if not ExternalAgentParsing.is_external_agent(tool_name):
             return None
 
         # Use the ExternalToolAdapter to get the function specification
@@ -92,25 +92,25 @@ class ExternalAgentToolCreator(ToolCreator):
         #   It's possible we might want to cache these results somehow to minimize
         #   network calls.
         session_factory: AsyncAgentSessionFactory = self.invocation_context.get_async_session_factory()
-        adapter = ExternalToolAdapter(session_factory, name)
+        adapter = ExternalToolAdapter(session_factory, tool_name)
         function_json: Dict[str, Any] = None
         try:
             function_json = await adapter.get_function_json(self.invocation_context)
         except ValueError as exception:
             # Could not reach the server for the external agent, so tell about it
-            message: str = f"Agent/tool {name} was unreachable. Not including it as a tool.\n"
+            message: str = f"Agent/tool {tool_name} was unreachable. Not including it as a tool.\n"
             message += str(exception)
             await self.report_tool_exclusion(message)
             return None
 
         try:
-            use_function_json: Dict[str, Any] = await self.ensure_external_parameters(function_json, name)
+            use_function_json: Dict[str, Any] = await self.ensure_external_parameters(function_json, tool_name)
             function_tool_creator: FunctionToolCreator = FunctionToolCreator(
                 self.tool_caller, self.invocation_context, self.journal, self.agent_location, use_function_json)
-            return await function_tool_creator.create_tool(name)
+            return await function_tool_creator.create_tool(tool_name)
         except ValueError as exception:
             # The agent was reachable, but what it reported cannot be made into a tool.
-            message: str = f"Agent/tool {name} reported an invalid function definition. " + \
+            message: str = f"Agent/tool {tool_name} reported an invalid function definition. " + \
                            "Not including it as a tool.\n"
             message += str(exception)
             await self.report_tool_exclusion(message)
