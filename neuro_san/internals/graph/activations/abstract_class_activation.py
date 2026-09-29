@@ -200,6 +200,7 @@ class AbstractClassActivation(AbstractCallableActivation):
 
         return message
 
+    # pylint: disable=too-many-locals
     def resolve_class(self, class_name: str, module_name: str):
         """
         Resolve the class by trying progressively higher levels in the agent network hierarchy.
@@ -233,7 +234,8 @@ class AbstractClassActivation(AbstractCallableActivation):
 
         # If we exhausted all levels without success, warn and raise an error
         agent_name: str = self.factory.get_name_from_spec(self.agent_tool_spec)
-        agent_tool_path: str = ".".join(this_agent_tool_path_parts[:-len(agent_network_name_parts)])
+        use_tool_path_parts: List[str] = this_agent_tool_path_parts[:-len(agent_network_name_parts)]
+        agent_tool_path: str = ".".join(use_tool_path_parts)
         strict_note: str = ""
         if self.is_agent_tool_path_only():
             strict_note = """
