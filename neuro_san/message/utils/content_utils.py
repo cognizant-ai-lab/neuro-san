@@ -368,9 +368,12 @@ class ContentUtils:
            "blocks": [...]} per chat.proto) supplies its blocks list as-is.
            A wrapper with a format this code does not know, a bare list, or
            blocks that are NOT valid standard blocks yields None (fail safe)
-           - it does not fall through to mime_data. A wrapper without blocks
-           carries nothing and does fall through. Note the returned list
-           aliases the caller's list; callers must not mutate the result.
+           - it does not fall through to mime_data. A wrapper with no blocks
+           (member absent, null or an empty list - proto3 JSON omits an empty
+           repeated field, so these are one and the same on the wire) carries
+           nothing and does fall through, whatever its format says: a format
+           can only be judged against blocks. Note the returned list aliases
+           the caller's list; callers must not mutate the result.
         2. Otherwise a non-empty "mime_data" list ({"mime_type": ...,
            "mime_bytes": <base64 string>} entries per chat.proto) is mapped to
            data blocks, preceded by a text block for any "text" field.
@@ -402,7 +405,8 @@ class ContentUtils:
                 if ContentUtils.looks_like_blocks(blocks_value):
                     return blocks_value
                 return None
-            # A wrapper without blocks carries nothing; fall through to mime_data.
+            # A wrapper without blocks carries nothing, so its format is moot;
+            # fall through to mime_data.
 
         mime_data: Any = chat_message.get("mime_data")
         if not isinstance(mime_data, list):

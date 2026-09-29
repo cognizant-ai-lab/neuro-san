@@ -283,14 +283,26 @@ class TestContentUtils(TestCase):
     def test_blocks_from_chat_message_empty_wrapper_falls_through(self):
         """
         A wrapper without blocks carries nothing, so mime_data is still mapped.
+        Absent, null and [] are the same wrapper on the wire (proto3 JSON omits
+        an empty repeated field), and with nothing to interpret the format is
+        not checked.
         """
-        chat_message = {
-            "type": "HUMAN",
-            "content_blocks": {"format": ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1, "blocks": []},
-            "mime_data": [{"mime_type": "image/png", "mime_bytes": "AAAA"}],
-        }
-        blocks = ContentUtils.blocks_from_chat_message(chat_message)
-        self.assertEqual(blocks, [{"type": "image", "base64": "AAAA", "mime_type": "image/png"}])
+        expected = [{"type": "image", "base64": "AAAA", "mime_type": "image/png"}]
+        empty_wrappers = [
+            {"format": ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1, "blocks": []},
+            {"format": ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1},
+            {"format": ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1, "blocks": None},
+            {"format": "somebody_elses_v2", "blocks": []},
+            {},
+        ]
+        for wrapper in empty_wrappers:
+            with self.subTest(content_blocks=wrapper):
+                chat_message = {
+                    "type": "HUMAN",
+                    "content_blocks": wrapper,
+                    "mime_data": [{"mime_type": "image/png", "mime_bytes": "AAAA"}],
+                }
+                self.assertEqual(ContentUtils.blocks_from_chat_message(chat_message), expected)
 
     def test_blocks_from_chat_message_unknown_format_or_bare_list_fails_safe(self):
         """
