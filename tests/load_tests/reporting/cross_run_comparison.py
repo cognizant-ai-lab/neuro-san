@@ -233,7 +233,7 @@ class CrossRunComparison:
             "Folder", "Requests", "Succeeded",
             "Wall Time",
             "Avg success (duration)",
-            "TTFR avg", "Peak RSS",
+            "First resp avg", "Peak RSS",
             "Failed requests",
         ]
         rows = []
