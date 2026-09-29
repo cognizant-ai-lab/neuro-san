@@ -20,6 +20,7 @@ from typing import Any
 from typing import Dict
 
 from neuro_san.internals.interfaces.callable_activation import CallableActivation
+from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 
 
@@ -69,5 +70,11 @@ class AgentToolFactory:
         """
         :param agent_spec: A single agent to register
         :return: The agent name as per the spec
+        """
+        raise NotImplementedError
+
+    def get_agent_network(self) -> AgentNetworkInspector:
+        """
+        :return: The agent network inspector associated with the instance
         """
         raise NotImplementedError

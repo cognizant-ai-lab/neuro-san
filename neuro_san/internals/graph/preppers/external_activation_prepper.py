@@ -17,6 +17,7 @@
 
 from typing import Any
 from typing import Dict
+from typing import List
 
 from leaf_common.parsers.dictionary_extractor import DictionaryExtractor
 
@@ -94,6 +95,7 @@ class ExternalActivationPrepper(ActivationPrepper):
         if parent_run_context is not None:
             parent_spec = parent_run_context.get_agent_tool_spec()
 
-        redactor = SlyDataRedactor(parent_spec, config_keys=["allow.sly_data", "allow.to_downstream.sly_data"])
+        config_keys: List[str] = ["allow.sly_data", "allow.to_downstream.sly_data"]
+        redactor = SlyDataRedactor(parent_spec, config_keys=config_keys)
         redacted: Dict[str, Any] = redactor.filter_config(sly_data)
         return redacted

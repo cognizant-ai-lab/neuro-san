@@ -129,3 +129,9 @@ class AgentToolRegistry(AgentNetworkInspector, AgentToolFactory):
         :return: The size in bytes of this AgentNetwork
         """
         return self.agent_network.get_size_in_bytes()
+
+    def get_agent_network(self) -> AgentNetworkInspector:
+        """
+        :return: The agent network inspector associated with the instance
+        """
+        return self.agent_network
