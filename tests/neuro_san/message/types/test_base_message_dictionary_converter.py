@@ -332,6 +332,33 @@ class TestBaseMessageDictionaryConverter(TestCase):
             "text": "hello world",
         })
 
+    def test_to_dict_agent_tool_result_with_blocks_emits_content_blocks(self) -> None:
+        """
+        A tool that returned content blocks is journaled as an
+        AgentToolResultMessage with list content; its wire dict carries both
+        origins, the flattened text and the wrapper with the blocks intact.
+        """
+        converter = BaseMessageDictionaryConverter(origin=self.ORIGIN)
+        message = AgentToolResultMessage(
+            content=[
+                {"type": "text", "text": "tool says"},
+                {"type": "image", "base64": "aW1n", "mime_type": "image/png"},
+            ],
+            tool_result_origin=self.ORIGIN)
+        self.assertEqual(converter.to_dict(message), {
+            "type": ChatMessageType.AGENT_TOOL_RESULT,
+            "origin": self.ORIGIN,
+            "text": "tool says",
+            "tool_result_origin": self.ORIGIN,
+            "content_blocks": {
+                "format": "langchain_v1",
+                "blocks": [
+                    {"type": "text", "text": "tool says"},
+                    {"type": "image", "base64": "aW1n", "mime_type": "image/png"},
+                ],
+            },
+        })
+
     def test_to_dict_text_block_with_phase_emits_content_blocks(self) -> None:
         """
         A lone text block carrying a provider key with a value (OpenAI's
