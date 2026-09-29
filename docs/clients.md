@@ -95,7 +95,8 @@ as signatures), the message also carries `content_blocks`: a `format` string and
 first format is `langchain_v1`, LangChain's standard content blocks. Whenever `content_blocks` is
 present, `text` holds the flattened text of the blocks, so a client that does not recognize the format
 can ignore the blocks. Today this applies to the AI message of the agent whose model returned the
-blocks, which clients receive under the MAXIMAL chat filter. The final AGENT_FRAMEWORK answer that
+blocks, and to the AGENT_TOOL_RESULT message of a tool that returned content blocks; clients receive
+both under the MAXIMAL chat filter. The final AGENT_FRAMEWORK answer that
 MINIMAL clients receive stays text-only for now, and sending attachments from a client is not
 supported yet: the server reads only the `text` of the message a client sends. A message whose
 content is a plain string, the shape every existing client receives today, has no `content_blocks`
