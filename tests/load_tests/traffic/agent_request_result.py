@@ -14,8 +14,6 @@
 #
 # END COPYRIGHT
 
-"""Outcome of one streaming_chat request sent by AgentRequestExecutor."""
-
 from typing import Any
 from typing import Dict
 from typing import Optional

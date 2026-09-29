@@ -641,6 +641,7 @@ tests/load_tests/
     pool_analyzer.py           PoolAnalyzer
     rebuild_results.py         RebuildResults (--rebuild)
     resource_reporter.py       ResourceReporter
+    sly_data_flattener.py      SlyDataFlattener (string fields of sly_data for the report)
     summary.py                 SummaryReporter
     system_resources.py        SystemResources (whole-system mem/cpu/threads)
     table_formatter.py         TableFormatter
@@ -650,7 +651,10 @@ tests/load_tests/
     agent_request_executor.py  AgentRequestExecutor (one in-thread streaming_chat request)
     agent_request_result.py    AgentRequestResult (what one request produced)
     output_parser.py           OutputParser (sly_data / token parsing)
+    request_status_policy.py   RequestStatusPolicy (CREATED / FAILED / TIMEOUT decision)
+    request_timeout_error.py   RequestTimeoutError (raised past --request-timeout)
     runner.py                  TrafficRunner (thread pool executor)
+    timed_streaming_chat.py    TimedStreamingChat (first-response timing, request-timeout check)
 
   validation/
     environment_validator.py   EnvironmentValidator (mock LLM, server)

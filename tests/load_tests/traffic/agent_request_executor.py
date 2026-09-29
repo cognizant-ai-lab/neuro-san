@@ -14,30 +14,20 @@
 #
 # END COPYRIGHT
 
-"""In-thread streaming_chat request executor for load testing.
-
-Instantiates ``HttpServiceAgentSession`` and ``StreamingInputProcessor``
-directly in the calling thread, costing ~1-2 MB per concurrent request.
-"""
-
 import logging
 import time
 import traceback
 from typing import Any
-from typing import Callable
 from typing import Dict
-from typing import Iterator
-from typing import List
 from typing import Optional
-from typing import Union
 
 from neuro_san.client.streaming_input_processor import StreamingInputProcessor
 from neuro_san.session.http_service_agent_session import HttpServiceAgentSession
 
-from tests.load_tests.config import STATUS_CREATED
-from tests.load_tests.config import STATUS_FAILED
-from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
+from tests.load_tests.traffic.request_status_policy import RequestStatusPolicy
+from tests.load_tests.traffic.request_timeout_error import RequestTimeoutError
+from tests.load_tests.traffic.timed_streaming_chat import TimedStreamingChat
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -45,12 +35,14 @@ logger: logging.Logger = logging.getLogger(__name__)
 _CONNECT_TIMEOUT: int = 30
 
 
-class _RequestTimeout(Exception):
-    """Raised to abandon a request that outran --request-timeout."""
-
-
 class AgentRequestExecutor:
-    """Drives one streaming_chat request in-thread via HttpServiceAgentSession."""
+    """
+    Sends one streaming_chat request in the calling thread.
+
+    Instantiates ``HttpServiceAgentSession`` and ``StreamingInputProcessor``
+    directly, costing ~1-2 MB per concurrent request.  Timing is done by
+    ``TimedStreamingChat`` and the recorded status by ``RequestStatusPolicy``.
+    """
 
     @staticmethod
     def execute_request(
@@ -61,18 +53,10 @@ class AgentRequestExecutor:
         """
         Send one streaming_chat request in-thread.
 
-        Creates an ``HttpServiceAgentSession`` and a
-        ``StreamingInputProcessor``, then calls ``process_once()``
-        to send the request and consume the streaming response.  When ``use_https`` is True,
-        a ``security_cfg`` is supplied so the session connects
-        over HTTPS/TLS instead of plain HTTP.
-
-        ``timeout`` (from ``--request-timeout``) is enforced while the
-        response streams, so a request that keeps producing messages
-        cannot outlive the cap.  The check happens per streamed
-        message, so a request is abandoned within one message of the
-        cap rather than exactly at it; the wait for that message is
-        itself bounded by ``idle_timeout``.
+        Creates an ``HttpServiceAgentSession`` and a ``StreamingInputProcessor``,
+        then calls ``process_once()`` to send the request and consume the
+        streaming response.  When ``use_https`` is True, a ``security_cfg`` is
+        supplied so the session connects over HTTPS/TLS instead of plain HTTP.
 
         :param host: Server host name
         :param port: Server port
@@ -87,11 +71,10 @@ class AgentRequestExecutor:
                  structure, sly_data), for the caller's response checks,
                  and None when the request did not complete
         """
-        # The argument list and local state track the streaming_chat
-        # request surface rather than an internal design.
+        # The argument list tracks the streaming_chat request surface.
         # pylint: disable=too-many-arguments,too-many-locals
-        start: float = time.time()
-        elapsed: float
+        start: float = time.perf_counter()
+        policy: RequestStatusPolicy = RequestStatusPolicy(timeout)
 
         security_cfg: Optional[Dict[str, Any]] = {} if use_https else None
         session: HttpServiceAgentSession = HttpServiceAgentSession(
@@ -103,24 +86,10 @@ class AgentRequestExecutor:
             streaming_timeout_in_seconds=idle_timeout,
         )
 
-        # Time-to-first-response: wrap the session's streaming_chat so the
-        # first streamed chat message is timestamped. process_once() iterates
-        # this generator internally.
-        first_response: List[float] = []
-        original_streaming_chat: Callable[[Dict[str, Any]], Iterator[Dict[str, Any]]] = session.streaming_chat
-
-        def timed_streaming_chat(request_dict: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
-            # Nested to close over original_streaming_chat, start, and
-            # first_response so the first streamed message is timed
-            # without threading that state through process_once().
-            for chat_response in original_streaming_chat(request_dict):
-                if not first_response:
-                    first_response.append(time.time() - start)
-                if time.time() - start >= timeout:
-                    raise _RequestTimeout()
-                yield chat_response
-
-        session.streaming_chat = timed_streaming_chat
+        # process_once() iterates session.streaming_chat internally, so the
+        # timing wrapper is installed on the session.
+        timed_chat: TimedStreamingChat = TimedStreamingChat(session.streaming_chat, start, timeout)
+        session.streaming_chat = timed_chat.streaming_chat
 
         processor: StreamingInputProcessor = StreamingInputProcessor(
             default_input="DEFAULT",
@@ -139,79 +108,36 @@ class AgentRequestExecutor:
             },
         }
 
+        elapsed: float
+        error_text: str = ""
         try:
             state = processor.process_once(state)
-        except _RequestTimeout:
-            return AgentRequestResult(STATUS_TIMEOUT, None, "", 0.0, {})
+        except RequestTimeoutError:
+            # Raised by TimedStreamingChat at or past the cap; the elapsed
+            # check below records it as TIMEOUT.
+            pass
         # Broad by design: process_once() drives the third-party
         # HTTP/streaming stack, whose failure surface (connection,
         # decode, gRPC/transport errors) is not enumerable here.  This
         # is a per-request isolation boundary — any single request must
         # be recorded as FAILED/TIMEOUT without aborting the load test.
         except Exception:  # pylint: disable=broad-exception-caught
-            elapsed = time.time() - start
-            if elapsed >= timeout:
-                return AgentRequestResult(STATUS_TIMEOUT, None, "", 0.0, {})
             # Include the full chained traceback so the root cause
             # (ReadTimeout, ConnectionError, HTTPError, ...) survives
             # the generic help text raised by the session client.
-            error_text: str = traceback.format_exc()
+            error_text = traceback.format_exc()
             logger.debug("HTTP request failed:\n%s", error_text)
-            return AgentRequestResult(STATUS_FAILED, None, error_text, 0.0, {})
 
-        elapsed = time.time() - start
-        if elapsed >= timeout:
-            return AgentRequestResult(STATUS_TIMEOUT, None, "", 0.0, {})
-
+        elapsed = time.perf_counter() - start
         answer_text: str = state.get("last_chat_response") or ""
-        token_accounting: Dict[str, Any] = state.get("token_accounting") or {}
+        status: str = policy.status_for(elapsed, answer_text, error_text)
+        if policy.is_timed_out(elapsed):
+            return AgentRequestResult(status, None, "", 0.0, {})
+        if error_text:
+            return AgentRequestResult(status, None, error_text, 0.0, {})
 
-        status: str = STATUS_CREATED if answer_text else STATUS_FAILED
-        time_to_first_response: float = first_response[0] if first_response else 0.0
+        token_accounting: Dict[str, Any] = state.get("token_accounting") or {}
         return AgentRequestResult(
             status, processor.get_message_processor(), answer_text,
-            time_to_first_response, token_accounting,
+            timed_chat.get_time_to_first_response(), token_accounting,
         )
-
-    @staticmethod
-    def flatten_string_fields(sly_data: Dict[str, Any]) -> Dict[str, str]:
-        """
-        Return every string-valued field in sly_data, keyed by its own name.
-
-        For reporting: fields like ``reservation_id`` may be nested inside
-        lists (``sly_data["agent_reservations"][0]["reservation_id"]``),
-        and a flat top-level scan would miss them.
-
-        :param sly_data: The sly_data dictionary returned by the agent
-        :return: Field name to string value, first occurrence wins
-        """
-        parsed_fields: Dict[str, str] = {}
-        AgentRequestExecutor._extract_string_fields(sly_data, parsed_fields)
-        return parsed_fields
-
-    @staticmethod
-    def _extract_string_fields(
-            sly_data_node: Union[Dict[str, Any], List[Any]],
-            parsed_fields: Dict[str, str],
-    ) -> None:
-        """
-        Recursively collect string-valued fields into parsed_fields.
-
-        DictionaryExtractor from leaf-common is not used here because it
-        resolves one dotted key at a time and does not descend into lists;
-        this walks the whole tree, lists included, with no key given.
-
-        :param sly_data_node: A dict or list somewhere inside sly_data
-        :param parsed_fields: Field name to string value, filled in place;
-                              the first occurrence of a name wins
-        """
-        if isinstance(sly_data_node, dict):
-            for key, value in sly_data_node.items():
-                if isinstance(value, str):
-                    parsed_fields.setdefault(key, value)
-                elif isinstance(value, (dict, list)):
-                    AgentRequestExecutor._extract_string_fields(value, parsed_fields)
-        elif isinstance(sly_data_node, list):
-            for item in sly_data_node:
-                if isinstance(item, (dict, list)):
-                    AgentRequestExecutor._extract_string_fields(item, parsed_fields)
