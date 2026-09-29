@@ -299,11 +299,7 @@
             "description": "This is an entirely optional map whose keys refer to data that is better left out of the LLM chat stream.  The keys themselves might appear in the chat stream, referring to the data, but the data itself does not. The intent is for the key references to be passed to tools, which then grab the values by programmatic means, but these tools might also have private data to send back to the client as well."
           },
           "content_blocks": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            },
-            "description": "LangChain v1 standard content blocks, carried verbatim; text remains the always-populated flattened view."
+            "$ref": "#/components/schemas/ContentBlocks"
           }
         },
         "description": "Structure describing a single chat message. This could be a single response, or a list of these might comprise a chat history."
@@ -392,6 +388,23 @@
           }
         },
         "description": "Response structure for Connectivity gRPC method"
+      },
+      "ContentBlocks": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "description": "Identifies the schema of the blocks, for example \"langchain_v1\". Clients that do not recognize a format should ignore the blocks and fall back to the text field of the ChatMessage. The server does the same: a message with blocks but no format is treated as an unknown format, its blocks are ignored and only the text is used."
+          },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "The blocks themselves: text, reasoning or thinking summaries, images, audio, files and provider-specific extras such as signatures."
+          }
+        },
+        "description": "Optional structured content of a ChatMessage, tagged with the schema its blocks follow so the format can evolve without breaking clients."
       },
       "Function": {
         "type": "object",

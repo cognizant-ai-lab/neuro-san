@@ -265,16 +265,52 @@ class TestContentUtils(TestCase):
 
     def test_blocks_from_chat_message_prefers_content_blocks(self):
         """
-        content_blocks wins over mime_data when both are present.
+        A content_blocks wrapper in the langchain_v1 format wins over mime_data
+        when both are present, and its blocks list is returned as-is.
         """
         chat_message = {
             "type": "HUMAN",
             "text": "caption",
-            "content_blocks": [{"type": "text", "text": "from blocks"}],
+            "content_blocks": {
+                "format": ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1,
+                "blocks": [{"type": "text", "text": "from blocks"}],
+            },
             "mime_data": [{"mime_type": "image/png", "mime_bytes": "AAAA"}],
         }
         blocks = ContentUtils.blocks_from_chat_message(chat_message)
         self.assertEqual(blocks, [{"type": "text", "text": "from blocks"}])
+
+    def test_blocks_from_chat_message_empty_wrapper_falls_through(self):
+        """
+        A wrapper without blocks carries nothing, so mime_data is still mapped.
+        """
+        chat_message = {
+            "type": "HUMAN",
+            "content_blocks": {"format": ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1, "blocks": []},
+            "mime_data": [{"mime_type": "image/png", "mime_bytes": "AAAA"}],
+        }
+        blocks = ContentUtils.blocks_from_chat_message(chat_message)
+        self.assertEqual(blocks, [{"type": "image", "base64": "AAAA", "mime_type": "image/png"}])
+
+    def test_blocks_from_chat_message_unknown_format_or_bare_list_fails_safe(self):
+        """
+        A wrapper whose format this code does not know, and a bare list of
+        blocks (the shape from before the format tag), both yield None and do
+        NOT fall through to mime_data.
+        """
+        mime_data = [{"mime_type": "image/png", "mime_bytes": "AAAA"}]
+        unknown_format = {
+            "type": "HUMAN",
+            "content_blocks": {"format": "somebody_elses_v2", "blocks": [{"type": "text", "text": "hi"}]},
+            "mime_data": mime_data,
+        }
+        self.assertIsNone(ContentUtils.blocks_from_chat_message(unknown_format))
+        bare_list = {
+            "type": "HUMAN",
+            "content_blocks": [{"type": "text", "text": "hi"}],
+            "mime_data": mime_data,
+        }
+        self.assertIsNone(ContentUtils.blocks_from_chat_message(bare_list))
 
     def test_blocks_from_chat_message_maps_mime_data(self):
         """
@@ -387,7 +423,10 @@ class TestContentUtils(TestCase):
         chat_message = {
             "type": "HUMAN",
             "text": "caption",
-            "content_blocks": [{"type": "bogus-type", "x": 1}],
+            "content_blocks": {
+                "format": ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1,
+                "blocks": [{"type": "bogus-type", "x": 1}],
+            },
             "mime_data": [{"mime_type": "image/png", "mime_bytes": "AAAA"}],
         }
         self.assertIsNone(ContentUtils.blocks_from_chat_message(chat_message))

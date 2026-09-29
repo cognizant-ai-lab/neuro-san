@@ -63,6 +63,23 @@ message ChatContext {
 }
 
 
+// Optional structured content of a ChatMessage, tagged with the schema
+// its blocks follow so the format can evolve without breaking clients.
+message ContentBlocks {
+
+    // Identifies the schema of the blocks, for example "langchain_v1".
+    // Clients that do not recognize a format should ignore the blocks
+    // and fall back to the text field of the ChatMessage. The server does
+    // the same: a message with blocks but no format is treated as an
+    // unknown format, its blocks are ignored and only the text is used.
+    string format = 1 [json_name="format"];
+
+    // The blocks themselves: text, reasoning or thinking summaries, images,
+    // audio, files and provider-specific extras such as signatures.
+    repeated google.protobuf.Struct blocks = 2 [json_name="blocks"];
+}
+
+
 // Structure describing a single chat message.
 // This could be a single response, or a list of these might comprise
 // a chat history.
@@ -138,7 +155,7 @@ message ChatMessage {
     // might also have private data to send back to the client as well.
     google.protobuf.Struct sly_data = 8 [json_name="sly_data"];
 
-    // LangChain v1 standard content blocks, carried verbatim; text remains
-    // the always-populated flattened view.
-    repeated google.protobuf.Struct content_blocks = 9 [json_name="content_blocks"];
+    // Optional structured content of the message, tagged with its format.
+    // The text field is always populated and remains the flattened view.
+    ContentBlocks content_blocks = 9 [json_name="content_blocks"];
 }

@@ -33,7 +33,7 @@ class TestToolRequestValidator(TestCase):
     from the service OpenAPI spec (agent_service.json) and validates tool-call
     requests against it. The spec is loaded from the package the way
     ServerMainLoop loads it, so these tests also lock what a regenerated spec
-    advertises for ChatMessage, including the content_blocks field.
+    advertises for ChatMessage, including the content_blocks wrapper.
     """
 
     # Same path ServerMainLoop uses for the default spec, relative to the package.
@@ -41,8 +41,16 @@ class TestToolRequestValidator(TestCase):
 
     # The components a ChatRequest can reach; the validator prunes every other one.
     CHAT_REQUEST_COMPONENTS: List[str] = [
-        "ChatContext", "ChatFilter", "ChatHistory", "ChatMessage", "ChatRequest", "MimeData", "Origin",
+        "ChatContext", "ChatFilter", "ChatHistory", "ChatMessage", "ChatRequest", "ContentBlocks", "MimeData",
+        "Origin",
     ]
+
+    # A user_message carrying one text block in the tagged wrapper from chat.proto.
+    BLOCKS_MESSAGE: Dict[str, Any] = {
+        "type": "HUMAN",
+        "text": "hello",
+        "content_blocks": {"format": "langchain_v1", "blocks": [{"type": "text", "text": "hello"}]},
+    }
 
     @staticmethod
     def make_validator() -> ToolRequestValidator:
@@ -71,17 +79,23 @@ class TestToolRequestValidator(TestCase):
 
     def test_chat_message_advertises_content_blocks(self) -> None:
         """
-        ChatMessage advertises content_blocks as an array of free-form objects,
-        which is how the repeated google.protobuf.Struct field in chat.proto
-        renders in the generated spec.
+        ChatMessage advertises content_blocks as the ContentBlocks wrapper: a
+        format string plus an array of free-form objects, which is how the
+        repeated google.protobuf.Struct field in chat.proto renders.
         """
         validator: ToolRequestValidator = self.make_validator()
         schema: Dict[str, Any] = validator.get_request_schema()
         content_blocks: Dict[str, Any] = schema["components"]["schemas"]["ChatMessage"]["properties"]["content_blocks"]
+        self.assertEqual(content_blocks, {"$ref": "#/components/schemas/ContentBlocks"})
 
-        self.assertEqual(content_blocks.get("type"), "array")
-        self.assertEqual(content_blocks.get("items"), {"type": "object"})
-        self.assertIn("LangChain v1 standard content blocks", content_blocks.get("description", ""))
+        wrapper: Dict[str, Any] = schema["components"]["schemas"]["ContentBlocks"]
+        self.assertEqual(wrapper.get("type"), "object")
+        self.assertIn("Optional", wrapper.get("description", ""))
+        properties: Dict[str, Any] = wrapper.get("properties", {})
+        self.assertEqual(sorted(properties), ["blocks", "format"])
+        self.assertEqual(properties["format"].get("type"), "string")
+        self.assertEqual(properties["blocks"].get("type"), "array")
+        self.assertEqual(properties["blocks"].get("items"), {"type": "object"})
 
     def test_text_only_request_validates(self) -> None:
         """
@@ -93,31 +107,32 @@ class TestToolRequestValidator(TestCase):
 
     def test_request_with_content_blocks_validates(self) -> None:
         """
-        A request whose user_message carries a list of block dicts validates.
+        A request whose user_message carries the tagged wrapper with a list of
+        block dicts validates.
         """
         validator: ToolRequestValidator = self.make_validator()
-        request: Dict[str, Any] = {
-            "user_message": {
-                "type": "HUMAN",
-                "text": "hello",
-                "content_blocks": [{"type": "text", "text": "hello"}],
-            },
-        }
-        errors: Optional[List[str]] = validator.validate(request)
+        errors: Optional[List[str]] = validator.validate({"user_message": self.BLOCKS_MESSAGE})
         self.assertIsNone(errors)
 
-    def test_content_blocks_must_be_a_list_of_objects(self) -> None:
+    def test_content_blocks_must_be_the_tagged_wrapper(self) -> None:
         """
-        content_blocks that is not a list, or whose items are not objects, is
-        rejected with the validator's single summary error.
+        content_blocks that is not an object, a bare list of blocks (the shape
+        from before the format tag), a non-string format, blocks that is not a
+        list, or a block that is not an object is rejected with the validator's
+        single summary error.
         """
         validator: ToolRequestValidator = self.make_validator()
-
-        not_a_list: Optional[List[str]] = validator.validate({"user_message": {"text": "hello", "content_blocks": 42}})
-        self.assertEqual(len(not_a_list), 1)
-        self.assertIn("Request validation FAILED", not_a_list[0])
-
-        not_objects: Optional[List[str]] = validator.validate(
-            {"user_message": {"text": "hello", "content_blocks": ["oops"]}})
-        self.assertEqual(len(not_objects), 1)
-        self.assertIn("Request validation FAILED", not_objects[0])
+        bad_values: List[Any] = [
+            42,
+            [{"type": "text", "text": "hello"}],
+            {"format": 1, "blocks": [{"type": "text", "text": "hello"}]},
+            {"format": "langchain_v1", "blocks": 42},
+            {"format": "langchain_v1", "blocks": ["oops"]},
+        ]
+        bad_value: Any = None
+        for bad_value in bad_values:
+            with self.subTest(content_blocks=bad_value):
+                request: Dict[str, Any] = {"user_message": {"text": "hello", "content_blocks": bad_value}}
+                errors: Optional[List[str]] = validator.validate(request)
+                self.assertEqual(len(errors), 1)
+                self.assertIn("Request validation FAILED", errors[0])
