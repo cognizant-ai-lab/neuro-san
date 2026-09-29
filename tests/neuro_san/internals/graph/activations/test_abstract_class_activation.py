@@ -88,7 +88,6 @@ def mock_factory():
 
     factory = MagicMock()
     factory.get_agent_tool_path.return_value = "test_tools.network.subnetwork"
-    factory.agent_network = inspector
     factory.get_name_from_spec.return_value = "test_agent"
     factory.get_agent_network.return_value = inspector
     return factory

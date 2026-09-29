@@ -71,7 +71,6 @@ def make_activation(mock_run_context, agent_tool_path: str, network_name: str,
 
     factory = MagicMock()
     factory.get_agent_tool_path.return_value = agent_tool_path
-    factory.agent_network = inspector
     factory.get_name_from_spec.return_value = agent_name
     factory.get_agent_network.return_value = inspector
 

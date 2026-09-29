@@ -93,7 +93,7 @@ class ArgumentAssigner:
             args_value_str = args_value_str[1:-1]
 
         elif value_type == "array" or isinstance(args_value, list):
-            str_values = []
+            str_values: List[str] = []
             args_value_list: List[Any] = args_value
             item: Any = None
             for item in args_value_list:
