@@ -20,6 +20,7 @@ import logging
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Tuple
 
 from tests.load_tests.config import SEPARATOR_WIDTH
@@ -57,9 +58,7 @@ class ResourceReporter:
         """Return the accumulated client resource rows."""
         return list(self._client_rows)
 
-    def add_resource_row(
-            self, stage_label, before, after,
-    ) -> ServerResourceRow:
+    def add_resource_row(self, stage_label: str, before: Dict[str, Any], after: Dict[str, Any]) -> ServerResourceRow:
         """Build and store a server resource row from before/after snapshots.
 
         Returns (display_row, before_snapshot, after_snapshot) so that
@@ -84,9 +83,8 @@ class ResourceReporter:
         self._resource_rows.append(row)
         return row
 
-    def add_client_row(
-            self, stage_label, before, peak, settled,
-    ) -> ClientResourceRow:
+    def add_client_row(self, stage_label: str, before: Dict[str, Any], peak: Optional[Dict[str, Any]],
+                       settled: Dict[str, Any]) -> ClientResourceRow:
         """Build and store a client resource row from before/peak/settled.
 
         Returns (display_row, before_snapshot, peak_snapshot,
@@ -113,9 +111,7 @@ class ResourceReporter:
     # component produced no data at all.
     _NA_METRICS = ("na",) * 11
 
-    def log_combined_analysis(
-            self, total_client_reqs, total_server_calls,
-    ) -> None:
+    def log_combined_analysis(self, total_client_reqs: int, total_server_calls: int) -> None:
         """Log one combined server-app + client-app resource table.
 
         Server-app and client-app rows share a single table.  Columns
@@ -212,7 +208,8 @@ class ResourceReporter:
         )
 
     @staticmethod
-    def _log_snapshot_deltas(label, before, after, *, fields):
+    def _log_snapshot_deltas(label: str, before: Dict[str, Any], after: Dict[str, Any],
+                             fields: List[Tuple[str, str, str]]) -> None:
         """Log deltas between two ResourceSnapshots."""
         max_name = max(len(name) for name, _, _ in fields)
         logger.info(
