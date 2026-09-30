@@ -406,7 +406,9 @@ class TestAzureLlmPolicy(TestCase):
         With neither deployment_name nor the environment variable, the resolved model id is sent, which
         serves llm_configs whose model_name is a deployment name llm_info does not know (and so leaves as is).
         """
-        _, llm = self._build_policy({"deployment_name": None}, model_name="my-deployment")
+        # In production the model name create_llm() receives comes from the config, so give both.
+        _, llm = self._build_policy({"deployment_name": None, "model_name": "my-deployment"},
+                                    model_name="my-deployment")
 
         self.assertEqual(llm.model_name, "my-deployment")
         self.assertEqual(self._request_payload(llm)["model"], "my-deployment")
