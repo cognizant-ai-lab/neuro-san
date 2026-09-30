@@ -42,7 +42,7 @@ class TestValidateFixturesHoconDir(TestCase):
     """
 
     @staticmethod
-    def _validator(*, agent: str = "hello_world",
+    def _validator(agent: str = "hello_world",
                    fixtures_hocon_dir: Optional[str] = None,
                    project_root: Optional[str] = PROJECT_ROOT) -> InputValidator:
         """Build a validator with only the args this method reads."""

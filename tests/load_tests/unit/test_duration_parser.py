@@ -28,44 +28,44 @@ class TestDurationParser(TestCase):
     changes what a run measures rather than failing visibly.
     """
 
-    def test_bare_number_is_seconds(self):
+    def test_bare_number_is_seconds(self) -> None:
         """Existing numeric commands keep their meaning."""
         self.assertEqual(DurationParser.parse("1200"), 1200)
 
-    def test_suffixes_scale(self):
+    def test_suffixes_scale(self) -> None:
         """s/m/h scale the value."""
         self.assertEqual(DurationParser.parse("90s"), 90)
         self.assertEqual(DurationParser.parse("20m"), 1200)
         self.assertEqual(DurationParser.parse("2h"), 7200)
 
-    def test_fractional_and_uppercase_are_accepted(self):
+    def test_fractional_and_uppercase_are_accepted(self) -> None:
         """A fraction with an uppercase suffix still parses."""
         self.assertEqual(DurationParser.parse("0.5H"), 1800)
 
-    def test_surrounding_whitespace_is_ignored(self):
+    def test_surrounding_whitespace_is_ignored(self) -> None:
         """Values arriving with whitespace parse the same."""
         self.assertEqual(DurationParser.parse("  20m  "), 1200)
 
-    def test_result_is_whole_seconds(self):
+    def test_result_is_whole_seconds(self) -> None:
         """Fractional seconds round rather than truncate."""
         self.assertEqual(DurationParser.parse("1.5"), 2)
         self.assertIsInstance(DurationParser.parse("1.5"), int)
 
-    def test_zero_is_allowed(self):
+    def test_zero_is_allowed(self) -> None:
         """Zero is a legitimate "no timeout" value for these flags."""
         self.assertEqual(DurationParser.parse("0"), 0)
 
-    def test_empty_value_is_rejected(self):
+    def test_empty_value_is_rejected(self) -> None:
         """An empty string is not a duration."""
         with self.assertRaises(ArgumentTypeError):
             DurationParser.parse("   ")
 
-    def test_garbage_is_rejected(self):
+    def test_garbage_is_rejected(self) -> None:
         """Unparseable text raises the argparse error, not ValueError."""
         with self.assertRaises(ArgumentTypeError):
             DurationParser.parse("soon")
 
-    def test_unknown_suffix_is_rejected(self):
+    def test_unknown_suffix_is_rejected(self) -> None:
         """A plausible-looking unit that is not supported is rejected.
 
         'd' is not in the unit table, so it must not be silently
@@ -74,7 +74,7 @@ class TestDurationParser(TestCase):
         with self.assertRaises(ArgumentTypeError):
             DurationParser.parse("5d")
 
-    def test_negative_is_rejected(self):
+    def test_negative_is_rejected(self) -> None:
         """A negative timeout would abort every request immediately."""
         with self.assertRaises(ArgumentTypeError):
             DurationParser.parse("-5m")

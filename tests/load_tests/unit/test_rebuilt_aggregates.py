@@ -18,6 +18,8 @@ import json
 import os
 import shutil
 import tempfile
+from typing import Any
+from typing import Dict
 from unittest import TestCase
 
 from tests.load_tests.reporting.rebuild_results import ResultsRebuilder
@@ -32,13 +34,13 @@ class TestRebuiltAggregates(TestCase):
     run, so its headline numbers have to mean what they say.
     """
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Create a run directory removed again after each test."""
         self._dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self._dir)
         os.makedirs(os.path.join(self._dir, "requests"))
 
-    def _build_run(self, elapsed_by_id) -> dict:
+    def _build_run(self, elapsed_by_id: Dict[int, float]) -> Dict[str, Any]:
         """Rebuild a run of successful requests with the given timings."""
         lines = []
         for req_id, elapsed in elapsed_by_id.items():
@@ -61,7 +63,7 @@ class TestRebuiltAggregates(TestCase):
         with open(json_path, "r", encoding="utf-8") as handle:
             return json.load(handle)["aggregates"]
 
-    def test_average_latency_is_the_mean_request_time(self):
+    def test_average_latency_is_the_mean_request_time(self) -> None:
         """Latency averages the requests, not the run.
 
         Requests overlap, so dividing the slowest request by the
@@ -72,13 +74,13 @@ class TestRebuiltAggregates(TestCase):
 
         self.assertEqual(aggregates["avg_latency_seconds"], 30.0)
 
-    def test_average_latency_reflects_uneven_requests(self):
+    def test_average_latency_reflects_uneven_requests(self) -> None:
         """The mean is taken over every request's own elapsed time."""
         aggregates = self._build_run({1: 1.0, 2: 2.0, 3: 6.0})
 
         self.assertEqual(aggregates["avg_latency_seconds"], 3.0)
 
-    def test_total_elapsed_is_the_slowest_request(self):
+    def test_total_elapsed_is_the_slowest_request(self) -> None:
         """Total elapsed still stands in for the run's wall clock."""
         aggregates = self._build_run({1: 1.0, 2: 2.0, 3: 6.0})
 

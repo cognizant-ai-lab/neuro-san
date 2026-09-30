@@ -20,6 +20,9 @@ import shutil
 import tempfile
 from argparse import Namespace
 from types import SimpleNamespace
+from typing import Any
+from typing import Dict
+from typing import List
 from unittest import TestCase
 
 from tests.load_tests.config import STATUS_CREATED
@@ -39,7 +42,7 @@ class TestExportRawJsonAggregates(TestCase):
     the two compares unlike numbers.
     """
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Create an output directory removed again after each test."""
         self._dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self._dir)
@@ -68,7 +71,7 @@ class TestExportRawJsonAggregates(TestCase):
         )
         return orchestrator
 
-    def _export(self, elapsed_values) -> dict:
+    def _export(self, elapsed_values: List[float]) -> Dict[str, Any]:
         """Export one stage of successful requests and read it back."""
         results = [
             {
@@ -94,7 +97,7 @@ class TestExportRawJsonAggregates(TestCase):
         with open(path, "r", encoding="utf-8") as handle:
             return json.load(handle)["aggregates"]
 
-    def test_average_latency_is_the_mean_request_time(self):
+    def test_average_latency_is_the_mean_request_time(self) -> None:
         """Concurrency must not divide the reported latency.
 
         Ten overlapping 30-second requests average 30 seconds, not the
@@ -105,13 +108,13 @@ class TestExportRawJsonAggregates(TestCase):
 
         self.assertEqual(aggregates["avg_latency_seconds"], 30.0)
 
-    def test_average_latency_reflects_uneven_requests(self):
+    def test_average_latency_reflects_uneven_requests(self) -> None:
         """The mean is taken over every request's own elapsed time."""
         aggregates = self._export([1.0, 2.0, 6.0])
 
         self.assertEqual(aggregates["avg_latency_seconds"], 3.0)
 
-    def test_wall_clock_total_is_reported_separately(self):
+    def test_wall_clock_total_is_reported_separately(self) -> None:
         """Throughput is still derivable from the elapsed total."""
         aggregates = self._export([1.0, 2.0, 6.0])
 
