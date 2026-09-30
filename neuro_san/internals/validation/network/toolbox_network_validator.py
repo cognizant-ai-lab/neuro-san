@@ -50,16 +50,23 @@ class ToolboxNetworkValidator(AbstractNetworkValidator):
 
         self.logger.info("Validating toolbox agents...")
 
+        agent_name: str = None
         for agent_name, agent in name_to_spec.items():
-            if agent.get("instructions") is None:  # This is a toolbox agent
+            agent_dict: Dict[str, Any] = agent
+
+            if agent_dict.get("instructions") is None:  # This is a toolbox agent
                 if self.tools is None or not isinstance(self.tools, Dict):
                     errors.append(f"Toolbox is unavailable. Cannot create Toolbox agent '{agent_name}'.")
-                elif agent_name not in self.tools:
+                    return errors
+
+                tools_dict: Dict[str, Any] = self.tools
+                if agent_name not in tools_dict.keys():
                     errors.append(f"Toolbox agent '{agent_name}' has no matching tool in toolbox.")
-                elif agent.get("tools"):
+                    return errors
+                if agent_dict.get("tools"):
                     errors.append(
                         "Toolbox agent cannot have 'tools'. "
-                        f"[{agent.get('tools')}] cannot be under Toolbox agent '{agent_name}'"
+                        f"[{agent_dict.get('tools')}] cannot be under Toolbox agent '{agent_name}'"
                     )
 
         return errors

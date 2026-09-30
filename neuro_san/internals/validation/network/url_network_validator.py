@@ -88,15 +88,16 @@ class UrlNetworkValidator(AbstractNetworkValidator):
         :param errors: List of errors. Modified in place when invalid tools are found.
         """
         for tool in safe_tools:
+            tool_string: str = tool
             # pylint: disable=too-many-boolean-expressions
-            if self.is_url_or_path(tool) and \
-                    tool not in urls and \
-                    not tool.startswith("http://") and \
-                    not tool.startswith("https://") and \
-                    not tool.endswith("mcp") and \
-                    not tool.endswith("mcp/"):
+            if self.is_url_or_path(tool_string) and \
+                    tool_string not in urls and \
+                    not tool_string.startswith("http://") and \
+                    not tool_string.startswith("https://") and \
+                    not tool_string.endswith("mcp") and \
+                    not tool_string.endswith("mcp/"):
                 error_msg = (
-                    f"Agent '{agent_name}' references an unrecognized URL or path tool '{tool}'."
+                    f"Agent '{agent_name}' references an unrecognized URL or path tool '{tool_string}'."
                     " Expected an external agent or network name starting with '/'"
                     " (e.g. '/bank_ops'), an MCP server, an http(s):// URL,"
                     f" or an MCP endpoint. Available URLs: {urls}"

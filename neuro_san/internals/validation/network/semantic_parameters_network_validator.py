@@ -160,7 +160,7 @@ class SemanticParametersNetworkValidator(AbstractNetworkValidator):
             return found
 
         schema_dict: Dict[str, Any] = schema
-        if "parameters" in schema_dict:
+        if "parameters" in schema_dict.keys():
             found.append(path)
 
         for child, child_path in cls._iter_subschemas(schema_dict, path):
