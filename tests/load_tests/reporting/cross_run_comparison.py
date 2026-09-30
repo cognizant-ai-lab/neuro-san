@@ -47,12 +47,8 @@ class CrossRunComparison:
     """Scans a base directory for raw_results.json files and logs
     a comparison table across runs."""
 
-    def __init__(
-        self, base_dir, *,
-        agent_filter=None,
-        baseline_requests=0,
-        run_filter=None,
-    ) -> None:
+    def __init__(self, base_dir: str, agent_filter: Optional[List[str]] = None, baseline_requests: int = 0,
+                 run_filter: Optional[List[str]] = None) -> None:
         self._base_dir = base_dir
         self._agent_filter: set = (
             set(agent_filter) if agent_filter else set()
@@ -92,7 +88,7 @@ class CrossRunComparison:
             self._log_table(runs, agent_name)
             self._log_validation_loops(runs)
 
-    def _collect_runs(self):
+    def _collect_runs(self) -> List[Dict[str, Any]]:
         """Walk subdirectories for raw_results.json and extract metrics."""
         runs = []
         for entry in os.listdir(self._base_dir):
@@ -110,7 +106,7 @@ class CrossRunComparison:
         return runs
 
     @staticmethod
-    def _deduplicate(runs):
+    def _deduplicate(runs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Keep only the latest run per request count."""
         by_count = {}
         for run in runs:
@@ -123,7 +119,7 @@ class CrossRunComparison:
         return list(by_count.values())
 
     @staticmethod
-    def _extract_metrics(json_path, folder_name):
+    def _extract_metrics(json_path: str, folder_name: str) -> Optional[Dict[str, Any]]:
         """Parse a raw_results.json and return key metrics."""
         try:
             with open(json_path, "r", encoding="utf-8") as fh:
@@ -173,7 +169,7 @@ class CrossRunComparison:
         }
 
     @staticmethod
-    def _classify_failures(all_results):
+    def _classify_failures(all_results: List[Dict[str, Any]]) -> Dict[str, int]:
         """Categorize failed requests by failure reason."""
         counts = {
             "empty_llm": 0,
@@ -199,7 +195,7 @@ class CrossRunComparison:
         return counts
 
     @staticmethod
-    def _avg(results, key):
+    def _avg(results: List[Dict[str, Any]], key: str) -> float:
         """Compute average of a result field, ignoring zeros."""
         values = [
             r.get(key, 0) for r in results
@@ -209,7 +205,7 @@ class CrossRunComparison:
             return 0
         return sum(values) / len(values)
 
-    def _group_by_agent(self, runs):
+    def _group_by_agent(self, runs: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
         """Group runs by agent name, applying filter if set."""
         groups = {}
         for run in runs:
@@ -221,7 +217,7 @@ class CrossRunComparison:
         return groups
 
     @staticmethod
-    def _log_table(runs, agent_name):
+    def _log_table(runs: List[Dict[str, Any]], agent_name: str) -> None:
         """Log the comparison table with pct change from baseline."""
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         logger.info("  CROSS-RUN COMPARISON: %s", agent_name)
@@ -278,7 +274,7 @@ class CrossRunComparison:
             ))
         TableFormatter.log_table(header, rows)
 
-    def _log_validation_loops(self, runs):
+    def _log_validation_loops(self, runs: List[Dict[str, Any]]) -> None:
         """Log validation loop summary for runs that have them."""
         for run in runs:
             folder = run.get("folder", "")
@@ -291,7 +287,7 @@ class CrossRunComparison:
             self._print_loop_summary(folder, loops)
 
     @staticmethod
-    def _parse_validation_loops(log_path):
+    def _parse_validation_loops(log_path: str) -> List[Dict[str, Any]]:
         """Parse server_tokens.log for validation loop requests."""
         if not os.path.isfile(log_path):
             return []
@@ -328,7 +324,7 @@ class CrossRunComparison:
         return loops
 
     @staticmethod
-    def _print_loop_summary(folder, loops):
+    def _print_loop_summary(folder: str, loops: List[Dict[str, Any]]) -> None:
         """Print aggregated validation loop stats."""
         total_retries = sum(
             lp.get("retries", 0) for lp in loops
@@ -366,7 +362,7 @@ class CrossRunComparison:
             )
 
     @staticmethod
-    def _compute_deltas(prev, current, keys):
+    def _compute_deltas(prev: Optional[Dict[str, Any]], current: Dict[str, Any], keys: List[str]) -> Dict[str, float]:
         """Compute percentage change from prev to current for each key."""
         if prev is None:
             return {}
@@ -381,7 +377,7 @@ class CrossRunComparison:
         return deltas
 
     @staticmethod
-    def _val_with_delta(formatted_val, delta_pct):
+    def _val_with_delta(formatted_val: str, delta_pct: Optional[float]) -> str:
         """Append percentage change suffix if available."""
         if delta_pct is None:
             return formatted_val
@@ -389,7 +385,7 @@ class CrossRunComparison:
         return f"{formatted_val} ({sign}{delta_pct:.0f}%)"
 
     @staticmethod
-    def _fmt_optional(value, delta_pct):
+    def _fmt_optional(value: float, delta_pct: Optional[float]) -> str:
         """Format a duration, showing a dash when data is missing."""
         if value <= 0:
             return "\u2014"
@@ -413,7 +409,7 @@ class CrossRunComparison:
         )
 
     @staticmethod
-    def _fmt_rss(value, delta_pct):
+    def _fmt_rss(value: float, delta_pct: Optional[float]) -> str:
         """Format peak RSS, showing a dash when data is missing."""
         if value <= 0:
             return "\u2014"
@@ -422,7 +418,7 @@ class CrossRunComparison:
         )
 
     @staticmethod
-    def _fmt_failed(count, total, breakdown):
+    def _fmt_failed(count: int, total: int, breakdown: Dict[str, int]) -> str:
         """Format failed count with optional breakdown."""
         if count == 0:
             return "0"
