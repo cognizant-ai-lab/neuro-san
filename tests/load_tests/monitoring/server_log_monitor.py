@@ -594,7 +594,7 @@ class ServerLogMonitor:
 
     # pylint: disable=too-many-arguments
     def start_log_monitor(self, position,
-                          expected_count, fire_time, *,
+                          expected_count, fire_time: float, *,
                           client_proc, primary_start_pattern,
                           output_dir=None,
                           ) -> Tuple[
@@ -604,6 +604,7 @@ class ServerLogMonitor:
     ]:
         """Start a background thread to monitor server log for request arrivals.
 
+        fire_time is a time.perf_counter() value taken when the stage fired.
         Returns (stop_event, thread, peak_client_ref).
         Returns (None, None, None) if monitoring is not available.
         """
@@ -630,7 +631,7 @@ class ServerLogMonitor:
     @staticmethod
     def _log_monitor_worker(server_log, position,
                             expected_count, stop_event,
-                            fire_time, *, client_proc,
+                            fire_time: float, *, client_proc,
                             peak_client_ref,
                             primary_start_pattern,
                             output_dir=None) -> None:
@@ -671,7 +672,7 @@ class ServerLogMonitor:
     @staticmethod
     def _tail_arrivals(
             log_fh, stop_event, pri_start_re,
-            expected_count, fire_time, *,
+            expected_count, fire_time: float, *,
             agent_label, receipt_fh,
             client_proc, peak_client_ref,
     ) -> None:
@@ -686,9 +687,9 @@ class ServerLogMonitor:
             if not pri_start_re.search(line):
                 continue
             count += 1
-            now = time.time()
+            now: float = time.perf_counter()
             ts = time.strftime(
-                "%H:%M:%S", time.localtime(now),
+                "%H:%M:%S", time.localtime(),
             )
             delta = now - fire_time
             detail = (
