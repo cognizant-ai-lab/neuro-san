@@ -25,6 +25,11 @@ import json
 import logging
 import os
 import re
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
+from typing import Tuple
 
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
@@ -51,7 +56,7 @@ _CONFIG_NUM_REQ_RE = re.compile(
 class ResultsRebuilder:
     """Reconstructs raw_results.json from per-request files."""
 
-    def __init__(self, output_dir, *, force=False) -> None:
+    def __init__(self, output_dir: str, force: bool = False) -> None:
         self._output_dir = output_dir
         self._force = force
 
@@ -186,7 +191,7 @@ class ResultsRebuilder:
         )
         logger.info("  Saved to: %s", json_path)
 
-    def _parse_timing(self):
+    def _parse_timing(self) -> Dict[int, Dict[str, Any]]:
         """Extract request timing from log files."""
         timing = {}
         for filename in ("load_test.log", "progress.log"):
@@ -206,7 +211,7 @@ class ResultsRebuilder:
                         }
         return timing
 
-    def _parse_config(self):
+    def _parse_config(self) -> Tuple[str, int]:
         """Extract agent name and num_requests from log."""
         agent = "unknown"
         num_requests = 0
@@ -225,7 +230,7 @@ class ResultsRebuilder:
                     num_requests = int(match.group(1))
         return agent, num_requests
 
-    def _scan_requests(self, requests_dir, timing):
+    def _scan_requests(self, requests_dir: str, timing: Dict[int, Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Parse each request stdout file into a result dict."""
         results = []
         for filename in sorted(os.listdir(requests_dir)):
@@ -250,7 +255,7 @@ class ResultsRebuilder:
         return results
 
     @staticmethod
-    def _build_result(req_id, stdout, timing):
+    def _build_result(req_id: int, stdout: str, timing: Dict[int, Dict[str, Any]]) -> Dict[str, Any]:
         """Build a single result dict from stdout and timing."""
         parsed_fields = {
             "reservation_id": OutputParser.parse_stdout_field(
@@ -279,7 +284,7 @@ class ResultsRebuilder:
         return result
 
     @staticmethod
-    def _attach_tokens(result, stdout):
+    def _attach_tokens(result: Dict[str, Any], stdout: str) -> None:
         """Add token accounting fields to a result dict."""
         token_data = OutputParser.parse_token_accounting(stdout)
         if token_data:
@@ -299,7 +304,7 @@ class ResultsRebuilder:
             })
 
     @staticmethod
-    def _load_stdout_cache(requests_dir):
+    def _load_stdout_cache(requests_dir: str) -> Dict[int, str]:
         """Load all request stdout files into a dict keyed by id."""
         cache = {}
         for filename in os.listdir(requests_dir):
@@ -318,7 +323,7 @@ class ResultsRebuilder:
                 cache[req_id] = fh.read()
         return cache
 
-    def _reclassify(self, json_path, requests_dir):
+    def _reclassify(self, json_path: str, requests_dir: str) -> None:
         """Update failure_reason and config in existing JSON."""
         with open(json_path, "r", encoding="utf-8") as fh:
             data = json.load(fh)
@@ -362,7 +367,7 @@ class ResultsRebuilder:
             "  Updated %s failure reason(s)", updated,
         )
 
-    def _fix_config(self, data):
+    def _fix_config(self, data: Dict[str, Any]) -> None:
         """Repair config.num_requests from log if needed."""
         _agent, num_requests = self._parse_config()
         if num_requests <= 0:
@@ -377,7 +382,7 @@ class ResultsRebuilder:
             )
 
     @staticmethod
-    def _resolve_status(timing_info):
+    def _resolve_status(timing_info: Dict[str, Any]) -> str:
         """Determine request status from the log line for the request.
 
         Every status the runner reports is preserved, including TIMEOUT
@@ -395,7 +400,7 @@ class ResultsRebuilder:
         return STATUS_FAILED
 
     @staticmethod
-    def _diagnose(status, stdout, parsed_fields):
+    def _diagnose(status: str, stdout: str, parsed_fields: Dict[str, Optional[str]]) -> Optional[str]:
         """Build a failure reason string for failed requests."""
         if status == STATUS_CREATED:
             return None

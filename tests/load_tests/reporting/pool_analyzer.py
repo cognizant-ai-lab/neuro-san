@@ -17,6 +17,8 @@
 """Analyzes executor thread pool reuse across load test stages."""
 
 import logging
+from typing import Any
+from typing import Dict
 from typing import List
 
 from tests.load_tests.config import SEPARATOR_WIDTH
@@ -31,7 +33,7 @@ class PoolAnalyzer:
     Holds the collected stage summaries for analysis.
     """
 
-    def __init__(self, stage_summaries) -> None:
+    def __init__(self, stage_summaries: List[Dict[str, Any]]) -> None:
         self._summaries = stage_summaries
 
     # pylint: disable=too-many-locals
@@ -111,10 +113,7 @@ class PoolAnalyzer:
         )
 
     @staticmethod
-    def _log_pool_diagnostics(
-            reuse_pcts, total_new_threads, *,
-            first_demand,
-    ) -> None:
+    def _log_pool_diagnostics(reuse_pcts: List[float], total_new_threads: int, first_demand: int) -> None:
         """Log summary diagnostics for pool reuse."""
         if len(reuse_pcts) < 2:
             return
