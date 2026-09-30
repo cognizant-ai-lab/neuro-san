@@ -24,12 +24,12 @@ from typing import Optional
 
 from collections import Counter
 
-from tests.load_tests.config import Formatters
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
+from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.system_resources import SystemResources
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
