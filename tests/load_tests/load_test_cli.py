@@ -38,6 +38,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -45,12 +46,6 @@ from typing import Tuple
 
 import psutil
 
-from tests.load_tests.config import NetworkTokenEntry
-from tests.load_tests.config import ValidationEvent
-from tests.load_tests.config import ResourceSnapshot
-from tests.load_tests.config import ServerCounts
-from tests.load_tests.config import StageSummary
-from tests.load_tests.config import Formatters
 from tests.load_tests.config import LEVEL_ADV
 from tests.load_tests.config import LEVEL_MIN
 from tests.load_tests.config import LOCAL_HOSTS
@@ -73,6 +68,7 @@ from tests.load_tests.monitoring.resource_monitor import ResourceMonitor
 from tests.load_tests.monitoring.server_log_monitor import ServerLogMonitor
 from tests.load_tests.prompts.agent_profile_factory import AgentProfileFactory
 from tests.load_tests.reporting.cross_run_comparison import CrossRunComparison
+from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.rebuild_results import ResultsRebuilder
 from tests.load_tests.reporting.disconnection_reporter import DisconnectionReporter
 from tests.load_tests.reporting.json_metadata import JsonMetadata
@@ -199,7 +195,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         return "json profile"
 
     # pylint: disable=too-many-locals
-    def _run_all_stages(self, stages, total_cap) -> List[StageSummary]:
+    def _run_all_stages(self, stages, total_cap) -> List[Dict[str, Any]]:
         """Execute all stages of the load test, collecting data per stage."""
         monitor_resources = (
             self.args.level != LEVEL_MIN
@@ -212,7 +208,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             len(stages) == 1 and self.args.num_rounds == 1
         )
 
-        stage_summaries: List[StageSummary] = []
+        stage_summaries: List[Dict[str, Any]] = []
         global_offset = 0
         total_sent = 0
         test_start = time.time()
@@ -294,7 +290,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             stage_num, round_num, global_offset,
             monitor_resources, has_server_log,
             probe_result, only_stage=False,
-    ) -> Tuple[StageSummary, bool, bool]:
+    ) -> Tuple[Dict[str, Any], bool, bool]:
         """Execute one stage of the load test.
 
         Returns (stage_summary, probe_was_used, should_abort).
@@ -361,7 +357,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                     stage_requests, time.time(),
                     client_proc=client_proc,
                     primary_start_pattern=(
-                        self.profile.primary_start_pattern
+                        self.profile.get_primary_start_pattern()
                     ),
                     output_dir=self._output_dir,
                 )
@@ -384,7 +380,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 cancel_event=self._cancel_event,
                 log_monitor=self.log_monitor,
                 primary_start_pattern=(
-                    self.profile.primary_start_pattern
+                    self.profile.get_primary_start_pattern()
                 ),
             )
         )
@@ -428,9 +424,6 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             actual_requests, counts, elapsed,
             timeout=self.args.request_timeout,
             idle_timeout=self.args.idle_timeout,
-            skip_reservation_check=(
-                self.args.skip_reservation_check
-            ),
             show_counts=not only_stage,
         )
         should_abort = server_died or interrupted
@@ -614,19 +607,19 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             peak_client, settled_client,
             server_log_requests=None,
     ) -> Tuple[
-        ServerCounts, List[Dict[str, str]],
-        List[NetworkTokenEntry], Optional[ResourceSnapshot],
+        Dict[str, Any], List[Dict[str, str]],
+        List[Dict[str, Any]], Optional[Dict[str, Any]],
     ]:
         """Settle, snapshot, and analyze server log after a stage.
 
         Returns (server_counts, disconnections, network_tokens,
         after_server_snapshot).
         """
-        server_counts: ServerCounts = {}
+        server_counts: Dict[str, Any] = {}
         disconnections: List[Dict[str, str]] = []
         server_errors: List[Dict[str, str]] = []
         tool_warnings: List[Dict[str, str]] = []
-        network_tokens: List[NetworkTokenEntry] = []
+        network_tokens: List[Dict[str, Any]] = []
         after_server = None
 
         if monitor_resources or has_server_log:
@@ -709,9 +702,9 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             before_sys=None,
             after_sys=None,
             peak_sys_threads=None,
-    ) -> StageSummary:
+    ) -> Dict[str, Any]:
         """Assemble the stage summary dict."""
-        summary_entry: StageSummary = {
+        summary_entry: Dict[str, Any] = {
             "stage": stage_num,
             "round": round_num,
             "concurrent": actual_requests,
@@ -814,34 +807,34 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             self, has_server_log,
             log_pos, *, results, actual_requests,
     ) -> Tuple[
-        ServerCounts, List[Dict[str, str]], List[Dict[str, str]],
+        Dict[str, Any], List[Dict[str, str]], List[Dict[str, str]],
         List[Dict[str, str]],
-        List[NetworkTokenEntry], List[ValidationEvent],
+        List[Dict[str, Any]], List[Dict[str, Any]],
     ]:
         """Analyze server log or report unavailability.
 
         Returns (server_counts, disconnections, server_errors,
         tool_warnings, network_tokens, validation_events).
         """
-        server_counts: ServerCounts = {}
+        server_counts: Dict[str, Any] = {}
         disconnections: List[Dict[str, str]] = []
         server_errors: List[Dict[str, str]] = []
         tool_warnings: List[Dict[str, str]] = []
-        network_tokens: List[NetworkTokenEntry] = []
-        validation_events: List[ValidationEvent] = []
+        network_tokens: List[Dict[str, Any]] = []
+        validation_events: List[Dict[str, Any]] = []
         if has_server_log:
             server_counts = (
                 self.log_monitor.count_requests_since(
                     log_pos,
-                    self.profile.primary_start_pattern,
-                    self.profile.primary_finish_pattern,
+                    self.profile.get_primary_start_pattern(),
+                    self.profile.get_primary_finish_pattern(),
                 )
             )
             disconnections = (
                 self.log_monitor.scan_disconnections_since(
                     log_pos,
                     primary_start_pattern=(
-                        self.profile.primary_start_pattern
+                        self.profile.get_primary_start_pattern()
                     ),
                 )
             )
@@ -1374,11 +1367,11 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         at the prompt.
         """
         primary_start_pattern = (
-            self.profile.primary_start_pattern
+            self.profile.get_primary_start_pattern()
         )
         pri_start_re = re.compile(primary_start_pattern)
         primary_finish_pattern = (
-            self.profile.primary_finish_pattern
+            self.profile.get_primary_finish_pattern()
         )
         pri_finish_re = re.compile(
             primary_finish_pattern,
@@ -2292,13 +2285,13 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 "  tokens_per_request=%s (measured by probe)",
                 f"{self.probe_result.get('total_tokens'):,}",
             )
-        elif self.profile.estimated_tokens_per_request:
+        elif self.profile.get_estimated_tokens_per_request():
             logger.info(
                 "  estimated_tokens_per_request=%s",
-                f"{self.profile.estimated_tokens_per_request:,}",
+                f"{self.profile.get_estimated_tokens_per_request():,}",
             )
 
-        stage_summaries: List[StageSummary] = []
+        stage_summaries: List[Dict[str, Any]] = []
         exit_code = 1
         pre_test_log_pos = (
             self.log_monitor.read_position()
@@ -2487,14 +2480,15 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         avg_duration = (
             round(sum(durations) / completed, 2) if completed else 0.0
         )
-        ttfts = [
-            r.get("ttft", 0.0) for r in results
-            if r.get("status") == STATUS_CREATED
-            and r.get("ttft", 0.0) > 0
-        ]
-        avg_first_response = (
-            round(sum(ttfts) / len(ttfts), 2) if ttfts else 0.0
-        )
+        first_responses: List[float] = []
+        result: Dict[str, Any]
+        for result in results:
+            time_to_first_response: float = result.get("time_to_first_response", 0.0)
+            if result.get("status") == STATUS_CREATED and time_to_first_response > 0:
+                first_responses.append(time_to_first_response)
+        avg_first_response: float = 0.0
+        if first_responses:
+            avg_first_response = round(sum(first_responses) / len(first_responses), 2)
         server_errors: List[Dict[str, str]] = []
         tool_warnings: List[Dict[str, str]] = []
         for summary in stage_summaries:
@@ -2731,7 +2725,7 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
                 "chat_filter": self.args.chat_filter,
                 "server_log": self.server_log,
                 "estimated_tokens_per_request": (
-                    self.profile.estimated_tokens_per_request
+                    self.profile.get_estimated_tokens_per_request()
                 ),
             },
             "aggregates": {

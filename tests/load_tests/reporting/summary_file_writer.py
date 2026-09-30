@@ -19,6 +19,7 @@
 import logging
 import os
 import time
+from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -27,8 +28,8 @@ from collections import Counter
 
 import psutil
 
-from tests.load_tests.config import Formatters
 from tests.load_tests.config import STATUS_CREATED
+from tests.load_tests.reporting.formatters import Formatters
 
 logger = logging.getLogger(__name__)
 
@@ -90,19 +91,14 @@ class SummaryFileWriter:
             f"  Total wall time:"
             f" {Formatters.fmt_duration(total_elapsed, precision=1)}"
         )
-        ttfr_values = [
-            r.get("ttft", 0)
-            for s in self._summaries
-            for r in s.get("results", [])
-            if r.get("ttft", 0) > 0
-        ]
-        if ttfr_values:
-            avg_ttfr = sum(ttfr_values) / len(ttfr_values)
+        first_response_values: List[float] = self._time_to_first_response_values()
+        if first_response_values:
+            avg_first_response: float = sum(first_response_values) / len(first_response_values)
             lines.append(
                 f"  Time to first response:"
-                f" {Formatters.fmt_duration(min(ttfr_values))} min"
-                f" / {Formatters.fmt_duration(avg_ttfr)} avg"
-                f" / {Formatters.fmt_duration(max(ttfr_values))} max"
+                f" {Formatters.fmt_duration(min(first_response_values))} min"
+                f" / {Formatters.fmt_duration(avg_first_response)} avg"
+                f" / {Formatters.fmt_duration(max(first_response_values))} max"
             )
         durations = [
             r.get("elapsed", 0)
@@ -136,6 +132,22 @@ class SummaryFileWriter:
         self._write_sys_mem_trajectory(lines)
         self._write_validation_summary(lines)
         lines.append("")
+
+    def _time_to_first_response_values(self) -> List[float]:
+        """
+        Collect the time to first response of every request that got one.
+
+        :return: Seconds to first response per request, zeros left out
+        """
+        values: List[float] = []
+        summary: Dict[str, Any]
+        for summary in self._summaries:
+            result: Dict[str, Any]
+            for result in summary.get("results", []):
+                time_to_first_response: float = result.get("time_to_first_response", 0)
+                if time_to_first_response > 0:
+                    values.append(time_to_first_response)
+        return values
 
     def _write_rss_trajectory(self, lines) -> None:
         """Write server RSS start/peak/end if available."""

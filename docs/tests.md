@@ -132,7 +132,7 @@ To add a new test case:
         export PYTHONPATH=$(pwd)
         export AGENT_TOOL_PATH="./neuro_san/coded_tools"
         export AGENT_MANIFEST_FILE="./neuro_san/registries/manifest.hocon"
-        pytest -s --verbose -m "integration" -k "my_agent_my_new_test" --timer-top-n 100
+        pytest -s --verbose -m "integration" -k "my_agent_my_new_test" --durations=100
 
    The `-k` filter name is derived from the HOCON path: slashes become `_`
    and `.hocon` is stripped.
@@ -173,6 +173,19 @@ A few conventions keep the unit tests consistent across contributors:
   module-level or nested functions. Where a callback needs bound arguments,
   for example a mock `side_effect` that records calls into a list, bind them
   with `functools.partial` on a `@staticmethod` instead of writing a `lambda`.
+
+### Golden files
+
+A test that locks an exact output, such as the response stream a client
+receives for a whole request, keeps the expected value in a JSON file under a
+`golden/` directory next to the test module, for example
+`tests/neuro_san/session/golden/`. The test writes these files; do not edit
+them by hand. To regenerate them after an intended change, run the test with
+`NEURO_SAN_TEST_UPDATE_GOLDEN=1`, review the diff, then run again without the
+variable. A regeneration run reports its tests as skipped, so it can never pass
+by comparing a file with itself. `golden/` holds data only and needs no
+`__init__.py`. The files are JSON rather than HOCON: `json.dumps` with sorted
+keys gives stable diffs, and they record the JSON the wire carries.
 
 ## Note on Markdown Linting
 

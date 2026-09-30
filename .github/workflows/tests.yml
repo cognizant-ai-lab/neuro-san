@@ -39,7 +39,7 @@ jobs:
         export PYTHONPATH="${PYTHONPATH:+$PYTHONPATH:}." &&
         build_scripts/server_start.sh &&
         pytest --verbose -m "not integration and not smoke"
-        --timer-top-n 10 -n auto --cov-config=.coveragerc --cov
+        --durations=10 -n auto --cov-config=.coveragerc --cov
     secrets:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

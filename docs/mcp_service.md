@@ -62,6 +62,12 @@ becomes one:
    authorization and lookup. Any other name is passed through unchanged, so existing clients that
    still send `deep/math_guy` keep working. The chat is streamed back as the tool result.
 
+The same rename runs in the other direction. When an agent network lists an MCP server among its
+tools (see [MCP Servers as Tools](./mcp_tools.md)), neuro-san renames any tool name
+that breaks the provider rule before the LLM sees it, and still calls the server with the original
+name. Tools from a current neuro-san server normally arrive already renamed, so this covers other
+MCP servers and older neuro-san servers.
+
 Chat request to an agent network becomes a tool call, with the following json schema,
 replicated from neuro-san OpenAPI specification:
 
@@ -172,6 +178,9 @@ replicated from neuro-san OpenAPI specification:
                         "sly_data": {
                           "type": "object",
                           "description": "This is an entirely optional map whose keys refer to data that is better left out of the LLM chat stream."
+                        },
+                        "content_blocks": {
+                          "$ref": "#/components/schemas/ContentBlocks"
                         }
                       },
                       "description": "Structure describing a single chat message."
@@ -198,6 +207,23 @@ replicated from neuro-san OpenAPI specification:
                         "user_message"
                       ],
                       "additionalProperties": false
+                    },
+                    "ContentBlocks": {
+                      "type": "object",
+                      "properties": {
+                        "format": {
+                          "type": "string",
+                          "description": "Identifies the schema of the blocks, for example \"langchain_v1\". Clients that do not recognize a format should ignore the blocks and fall back to the text field of the ChatMessage. The server does the same: a message with blocks but no format is treated as an unknown format, its blocks are ignored and only the text is used."
+                        },
+                        "blocks": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          },
+                          "description": "The blocks themselves: text, reasoning or thinking summaries, images, audio, files and provider-specific extras such as signatures."
+                        }
+                      },
+                      "description": "Optional structured content of a ChatMessage, tagged with the schema its blocks follow so the format can evolve without breaking clients."
                     },
                     "MimeData": {
                       "type": "object",

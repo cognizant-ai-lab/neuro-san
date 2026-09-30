@@ -104,6 +104,12 @@ class AgentToolRegistry(AgentNetworkInspector, AgentToolFactory):
         """
         return self.agent_network.get_name_from_spec(agent_spec)
 
+    def get_network_name(self) -> str:
+        """
+        :return: The name of the agent network, as registered in the manifest
+        """
+        return self.agent_network.get_network_name()
+
     def find_front_man(self) -> str:
         """
         :return: A single tool name to use as the root of the chat agent.
@@ -112,14 +118,14 @@ class AgentToolRegistry(AgentNetworkInspector, AgentToolFactory):
         """
         return self.agent_network.find_front_man()
 
-    def get_agent_llm_info_file(self) -> str:
-        """
-        :return: The absolute path of agent llm info file for llm extension.
-        """
-        return self.agent_network.get_agent_llm_info_file()
-
     def get_size_in_bytes(self) -> int:
         """
         :return: The size in bytes of this AgentNetwork
         """
         return self.agent_network.get_size_in_bytes()
+
+    def get_agent_network(self) -> AgentNetworkInspector:
+        """
+        :return: The agent network inspector associated with the instance
+        """
+        return self.agent_network

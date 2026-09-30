@@ -17,64 +17,43 @@
 from typing import Any
 from typing import Dict
 from typing import List
-from typing import Set
 from typing import Union
-
-from copy import deepcopy
-from logging import Logger
-from logging import getLogger
 
 from langchain_core.tools.base import BaseTool
 
-from leaf_common.logging.sensitive_logger import SensitiveLogger
-from leaf_common.utils.exception_util import ExceptionUtil
-
-from neuro_san.internals.interfaces.async_agent_session_factory import AsyncAgentSessionFactory
-from neuro_san.internals.interfaces.context_type_toolbox_factory import ContextTypeToolboxFactory
 from neuro_san.internals.interfaces.invocation_context import InvocationContext
 from neuro_san.internals.journals.journal import Journal
 from neuro_san.internals.run_context.interfaces.agent_network_inspector import AgentNetworkInspector
 from neuro_san.internals.run_context.interfaces.tool_caller import ToolCaller
-from neuro_san.internals.run_context.langchain.core.langchain_openai_function_tool import LangChainOpenAIFunctionTool
-from neuro_san.internals.run_context.langchain.core.tool_spec_error import ToolSpecError
-from neuro_san.internals.run_context.langchain.mcp.langchain_mcp_adapter import LangChainMcpAdapter
-from neuro_san.internals.run_context.utils.external_tool_adapter import ExternalToolAdapter
+from neuro_san.internals.run_context.langchain.tools.exposed_tool_names import ExposedToolNames
+from neuro_san.internals.run_context.langchain.tools.external_agent_tool_creator import ExternalAgentToolCreator
+from neuro_san.internals.run_context.langchain.tools.function_tool_creator import FunctionToolCreator
+from neuro_san.internals.run_context.langchain.tools.mcp_tool_creator import McpToolCreator
+from neuro_san.internals.run_context.langchain.tools.tool_creator import ToolCreator
+from neuro_san.internals.run_context.langchain.tools.toolbox_tool_creator import ToolboxToolCreator
 from neuro_san.internals.utils.external_agent_parsing import ExternalAgentParsing
-from neuro_san.message.types.agent_message import AgentMessage
 
 
 class BaseToolFactory:
     """
-    Creates langchain BaseTools.
+    Creates langchain BaseTools for the tools an agent lists.
+
+    This class only decides which kind of tool a reference is and builds the
+    creator for that kind, all in the tools package: FunctionToolCreator
+    for coded tools and internal agents, ToolboxToolCreator for toolbox
+    entries, ExternalAgentToolCreator for other agent networks, and
+    McpToolCreator for MCP servers. A creator is built for one reference,
+    with what its kind needs in its constructor, and every creator is then
+    called the same way: create_tool(tool_name). Each creator owns the policy
+    for its kind.
+    The one thing kept across kinds is ExposedToolNames, so that a later tool
+    repeating a name is caught whatever kind either tool is.
     """
 
-    # Parameters substituted for an external agent whose front-man declares
-    # none of its own. See ensure_external_parameters() for the full rationale.
-    DEFAULT_EXTERNAL_PARAMETER_NAME: str = "inquiry"
-    DEFAULT_EXTERNAL_PARAMETERS: Dict[str, Any] = {
-        "type": "object",
-        "properties": {
-            DEFAULT_EXTERNAL_PARAMETER_NAME: {
-                "type": "string",
-                "description": "The request to send to this agent network."
-            }
-        },
-        "required": [DEFAULT_EXTERNAL_PARAMETER_NAME]
-    }
-
-    # Class-level because BaseToolFactory instances are per-request: remembers
-    # which external agents this process has already warned about synthesizing
-    # parameters for, so the warning is not repeated on every request.
-    # An agent later observed with declared parameters is removed again, so a
-    # network that is fixed and then regresses warns anew - hocon files can be
-    # edited and hot-reloaded without a server restart.
-    synthesis_warned: Set[str] = set()
-
-    # pylint: disable=too-many-arguments, too-many-positional-arguments
     def __init__(self,
                  tool_caller: ToolCaller,
                  invocation_context: InvocationContext,
-                 journal: Journal):
+                 journal: Journal) -> None:
         """
         Constructor
 
@@ -86,16 +65,27 @@ class BaseToolFactory:
         self.tool_caller: ToolCaller = tool_caller
         self.invocation_context: InvocationContext = invocation_context
         self.journal: Journal = journal
-        self.logger: Logger = getLogger(self.__class__.__name__)
-        # Exception messages can carry sensitive request data, so log them
-        # through a SensitiveLogger, which respects the LEAF_LOG_SENSITIVE
-        # env var setting.
-        self.sensitive_logger: SensitiveLogger = SensitiveLogger(self.logger)
+        # Where a problem has to be fixed: the agent whose "tools" list is being
+        # built and the network, hence the hocon file, it lives in. Every message
+        # for the user starts with it, so nobody has to guess which file to open.
+        # The network name comes from the inspector, not the invocation context:
+        # the context carries the network the client asked for, and it is copied
+        # unchanged when an agent calls another network on the same server, so
+        # inside that network it would name the caller's hocon file.
+        inspector: AgentNetworkInspector = tool_caller.get_inspector()
+        self.agent_location: str = (f"agent '{tool_caller.get_name()}' of agent network "
+                                    f"'{inspector.get_network_name()}'")
+        # Shared across every kind of tool, so the MCP creator can see names
+        # that coded tools or other servers already took.
+        self.exposed_tool_names: ExposedToolNames = ExposedToolNames(journal, self.agent_location)
 
-    async def create_base_tool(self, name: str) -> Union[BaseTool, List[BaseTool]]:
+    async def create_base_tool(self, name: Union[str, Dict[str, Any]]) -> Union[BaseTool, List[BaseTool]]:
         """
         Create base tools for the agent to call.
-        :param name: The name of the tool to create
+
+        :param name: One entry of the agent's "tools" list: the name of an agent or
+                     coded tool of this network, an external agent reference, or an
+                     MCP server reference, which may be a dictionary
         :return: The BaseTools associated with the name
         """
 
@@ -103,284 +93,69 @@ class BaseToolFactory:
         inspector: AgentNetworkInspector = self.tool_caller.get_inspector()
         agent_spec: Dict[str, Any] = inspector.get_agent_tool_spec(name)
 
+        created: Union[BaseTool, List[BaseTool]] = None
         if agent_spec is None:
-            return await self.create_external_tool(name)
+            created = await self.create_external_tool(name)
+        else:
+            created = await self.create_internal_tool(name, agent_spec)
 
-        return await self.create_internal_tool(name, agent_spec)
+        await self.exposed_tool_names.remember(created)
+        return created
+
+    async def create_internal_tool(self, name: str, agent_spec: Dict[str, Any]) -> Union[BaseTool, List[BaseTool]]:
+        """
+        Create the tool for an agent or coded tool of this agent network.
+
+        :param name: The name of the agent or coded tool
+        :param agent_spec: Its spec from the network's registry
+        :return: The tool from the toolbox when the spec names one, otherwise the
+                 function tool for the spec's "function"; None when the spec has neither.
+        """
+
+        creator: ToolCreator = None
+        if agent_spec.get("toolbox"):
+            # Handle toolbox-based tools
+            creator = ToolboxToolCreator(self.tool_caller, self.invocation_context, self.journal,
+                                         self.agent_location, agent_spec)
+        else:
+            # Handle coded tools
+            function_json: Dict[str, Any] = agent_spec.get("function")
+            if function_json is None:
+                return None
+            creator = FunctionToolCreator(self.tool_caller, self.invocation_context, self.journal,
+                                          self.agent_location, function_json)
+
+        return await creator.create_tool(name)
 
     async def create_external_tool(self, name: Union[str, Dict[str, Any]]) -> Union[BaseTool, List[BaseTool]]:
         """
-        Create external agent/tool.
-        :param name: The name of the external agent/tool
-        :return: External agent as base tools
+        Create the tool(s) for a reference that names nothing in this agent
+        network: an MCP server, or an external agent network.
+
+        :param name: The reference: a string, or a dictionary MCP reference
+        :return: The MCP server's tools, the external agent's tool, or None when
+                 the reference is neither
+        :raises TypeError: When the reference is neither a string nor a dictionary
         """
 
         if not isinstance(name, (dict, str)):
             raise TypeError(f"Tools must be string or dict, got {type(name)}")
 
-        # Handle MCP-based tool as external tool
+        creator: ToolCreator = None
         if ExternalAgentParsing.is_mcp_tool(name):
-            return await self.create_mcp_tool(name)
+            # An MCP reference is the server URL alone, or a dictionary with the
+            # URL under "url" and an optional allow list of tool names under "tools".
+            server_url: str = None
+            allowed_tools: List[str] = None
+            if isinstance(name, dict):
+                server_url = name.get("url")
+                allowed_tools = name.get("tools")
+            else:
+                server_url = name
+            creator = McpToolCreator(self.tool_caller, self.invocation_context, self.journal,
+                                     self.agent_location, self.exposed_tool_names, allowed_tools)
+            return await creator.create_tool(server_url)
 
-        # See if the agent name given could reference an external agent.
-        if not ExternalAgentParsing.is_external_agent(name):
-            return None
-
-        # Use the ExternalToolAdapter to get the function specification
-        # from the service call to the external agent.
-        # We should be able to use the same BaseTool for langchain integration
-        # purposes as we do for any other tool, though.
-        # Optimization:
-        #   It's possible we might want to cache these results somehow to minimize
-        #   network calls.
-        session_factory: AsyncAgentSessionFactory = self.invocation_context.get_async_session_factory()
-        adapter = ExternalToolAdapter(session_factory, name)
-        function_json: Dict[str, Any] = None
-        try:
-            function_json = await adapter.get_function_json(self.invocation_context)
-        except ValueError as exception:
-            # Could not reach the server for the external agent, so tell about it
-            message: str = f"Agent/tool {name} was unreachable. Not including it as a tool.\n"
-            message += str(exception)
-            await self.report_tool_exclusion(message)
-            return None
-
-        try:
-            use_function_json = await self.ensure_external_parameters(function_json, name)
-            return self.create_function_tool(use_function_json, name)
-        except ValueError as exception:
-            # The agent was reachable, but what it reported cannot be made into a tool.
-            message: str = f"Agent/tool {name} reported an invalid function definition. " + \
-                           "Not including it as a tool.\n"
-            message += str(exception)
-            await self.report_tool_exclusion(message)
-            return None
-
-    async def report_tool_exclusion(self, message: str):
-        """
-        Report to both the client journal and the server logs that a tool
-        is being left out of the calling agent's tool list.
-
-        :param message: The message describing which tool and why
-        """
-        agent_message = AgentMessage(content=message)
-        await self.journal.write_message(agent_message)
-        self.sensitive_logger.info(message)
-
-    async def ensure_external_parameters(self, function_json: Dict[str, Any], name: str) -> Dict[str, Any]:
-        """
-        Guarantee that an external agent's function spec declares parameters.
-
-        The tool-call arguments are the only message channel through which a
-        calling agent passes its request to an external agent network
-        (sly_data is a separate, opt-in channel for private data).
-        An external front-man that declares no function.parameters would
-        therefore be presented to the calling LLM as a zero-argument tool,
-        which the LLM would invoke with an empty {} - and the external network
-        would silently never receive the caller's request (issue #1228).
-
-        Note this is external-tools-only on purpose: internal tools without
-        parameters (e.g. no-argument coded tools) legitimately take no
-        arguments and are left alone.
-
-        :param function_json: The function spec reported by the external agent.
-                    Can be None when the agent was unreachable.
-        :param name: The name of the external agent, for reporting.
-        :return: The function_json as-is when it already declares parameters,
-                    otherwise a copy with DEFAULT_EXTERNAL_PARAMETERS substituted in.
-        """
-        if function_json is None:
-            # Unreachable external agent. create_function_tool() reports this case.
-            return None
-
-        if function_json.get("description") is None:
-            # A spec with no description fails verify_function_json() no matter
-            # what parameters it has. Leave it alone so that validation reports
-            # the real problem, instead of journaling a promise here that a
-            # synthesized parameter will get the request through, immediately
-            # followed by the tool being dropped.
-            return function_json
-
-        raw_parameters: Any = function_json.get("parameters")
-        if raw_parameters is not None and not isinstance(raw_parameters, Dict):
-            # Not a schema we can reason about, however truthy or falsy
-            # (e.g. a string, a list, a boolean).
-            # Let verify_function_json() report it as invalid.
-            return function_json
-
-        parameters: Dict[str, Any] = raw_parameters or {}
-        properties: Dict[str, Any] = parameters.get("properties") or {}
-        if properties:
-            # The network declares its own parameters. Re-arm the synthesis
-            # warning in case the network regresses later.
-            BaseToolFactory.synthesis_warned.discard(name)
-            return function_json
-
-        # A parameters block carrying anything beyond an empty properties
-        # declaration is a declared schema in an unsupported dialect
-        # (e.g. additionalProperties, anyOf, $ref). Let verify_function_json()
-        # report it rather than silently replacing the declared contract
-        # with the synthesized one.
-        if parameters and not {"type", "properties", "required"}.issuperset(parameters.keys()):
-            return function_json
-
-        if name not in BaseToolFactory.synthesis_warned:
-            BaseToolFactory.synthesis_warned.add(name)
-            message: str = (
-                f"The front-man of external agent {name} declares no parameters "
-                f"in its function definition, so a single required "
-                f"'{self.DEFAULT_EXTERNAL_PARAMETER_NAME}' string parameter "
-                "is being synthesized for it to receive the calling agent's request. "
-                "To control what this agent network receives, declare at least one parameter "
-                "in the function definition of its front-man."
-            )
-            agent_message = AgentMessage(content=message)
-            await self.journal.write_message(agent_message)
-            self.logger.warning(message)
-
-        use_function_json: Dict[str, Any] = dict(function_json)
-        use_function_json["parameters"] = deepcopy(self.DEFAULT_EXTERNAL_PARAMETERS)
-        return use_function_json
-
-    async def create_internal_tool(self, name: str, agent_spec: Dict[str, Any]) -> BaseTool:
-        """
-        Create internal agent/tool.
-        :param name: The name of the agent or coded tool
-        :return: Agent as base tools
-        """
-
-        toolbox: str = agent_spec.get("toolbox")
-
-        # Handle toolbox-based tools
-        if toolbox:
-            return await self.create_toolbox_tool(toolbox, agent_spec, name)
-
-        # Handle coded tools
-        function_json: Dict[str, Any] = agent_spec.get("function")
-        if function_json is None:
-            return None
-
-        return self.create_function_tool(function_json, name)
-
-    async def create_mcp_tool(self, mcp_info: Union[str, Dict[str, Any]]) -> List[BaseTool]:
-        """
-        Create MCP tools from the provided MCP configuration.
-
-        The configuration can be one of:
-        - **String**: A canonical MCP server URI (see
-          https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#canonical-server-uri).
-          Must use http(s), no fragment, with "mcp" appearing either as a host label
-          (e.g. "mcp.example.com") or as a path segment (e.g. "/mcp", "/mcp/free", "/server/mcp").
-        - **Dictionary**:
-            - "url" (str): MCP server URL.
-            - "tools" (List[str], optional): List of tool names to allow from the server.
-
-        :param mcp_info: MCP server URL (string) or a configuration dictionary
-        :return: A list of MCP tools as base tools
-        """
-        # By default, assume no allowed tools. This may get updated below or in the LangChainMcpAdadter.
-        allowed_tools: List[str] = None
-        # Get HTTP headers from sly_data if available
-        http_headers: Dict[str, Any] = self.tool_caller.get_sly_data().get("http_headers", {})
-
-        server_url: str = None
-        if isinstance(mcp_info, str):
-            server_url = mcp_info
-        else:
-            server_url = mcp_info.get("url")
-            allowed_tools = mcp_info.get("tools")
-
-        # Get specific headers for the MCP server if available
-        headers: Dict[str, Any] = http_headers.get(server_url)
-
-        mcp_adapter: LangChainMcpAdapter = None
-        mcp_tools: List[BaseTool] = None
-        try:
-            mcp_adapter = LangChainMcpAdapter()
-            mcp_tools = await mcp_adapter.get_mcp_tools(server_url, allowed_tools, headers)
-
-        # MCP errors are nested exceptions.
-        except ExceptionGroup as nested_exception:
-            # Could not reach the MCP server
-            message: str = f"The URL {server_url} was unreachable. Not including it as a tool.\n"
-            message += ExceptionUtil.get_exception_details(nested_exception)
-            agent_message = AgentMessage(content=message)
-            await self.journal.write_message(agent_message)
-            self.sensitive_logger.info(message)
-            return None
-
-        # The allowed tools list might have been updated by the MCP adapter
-        use_allowed_tools: List[str] = mcp_adapter.client_allowed_tools
-        tool_names: List[str] = [tool.name for tool in mcp_tools]
-        invalid_names: Set[str] = set(use_allowed_tools) - set(tool_names)
-        # Check if there are invalid tool names in the list.
-        if invalid_names:
-            message = f"The following tools cannot be found in {server_url}: {invalid_names}"
-            agent_message = AgentMessage(content=message)
-            await self.journal.write_message(agent_message)
-            self.logger.info(message)
-
-        return mcp_tools
-
-    async def create_toolbox_tool(self, toolbox: str, agent_spec: Dict[str, Any], name: str) -> BaseTool:
-        """Create tool from toolbox"""
-
-        toolbox_factory: ContextTypeToolboxFactory = self.invocation_context.get_toolbox_factory()
-        try:
-            tool_from_toolbox = toolbox_factory.create_tool_from_toolbox(toolbox, agent_spec.get("args"), name)
-            # If the tool from toolbox is base tool or list of base tool, return the tool as is
-            # since tool's definition and args schema are predefined in these the class of the tool.
-            if isinstance(tool_from_toolbox, BaseTool) or (
-                isinstance(tool_from_toolbox, list) and
-                all(isinstance(tool, BaseTool) for tool in tool_from_toolbox)
-            ):
-                return tool_from_toolbox
-
-            # Otherwise, it is a shared coded tool.
-            return self.create_function_tool(tool_from_toolbox, name)
-
-        except ToolSpecError as tool_spec_exception:
-            # The toolbox entry itself was found, but its function spec could
-            # not be turned into a tool.  Toolbox specs are not covered by the
-            # registry-load validators, so this is the first place the problem
-            # can be reported.
-            message: str = f"Agent/tool '{name}' has an invalid function spec: {tool_spec_exception}"
-            agent_message = AgentMessage(content=message)
-            await self.journal.write_message(agent_message)
-            self.sensitive_logger.warning(message)
-            return None
-        except ValueError as tool_creation_exception:
-            # There are errors in tool creation process
-            message: str = f"Failed to create Agent/tool '{name}': {tool_creation_exception}"
-            agent_message = AgentMessage(content=message)
-            await self.journal.write_message(agent_message)
-            self.sensitive_logger.warning(message)
-            return None
-
-    def create_function_tool(self, function_json: Dict[str, Any], name: str) -> BaseTool:
-        """Create a function tool from JSON specification"""
-
-        # In the case of external agents, if they report a name at all, they will
-        # report something different that does not identify them as external.
-        # Also, most internal agents do not have a name identifier on their functional
-        # JSON, which is required.  Use the agent name we are using for look-up for that
-        # regardless of intent.
-        if function_json is None:
-            # An external agent that responded without reporting a function has
-            # no function_json. Raise ValueError so create_external_tool's
-            # invalid-function-definition handler reports this instead of
-            # the TypeError that the assignment below would otherwise raise.
-            message: str = f"Could not create tool to call external agent '{name}'. Its function_json is None."
-            raise ValueError(message)
-
-        # Copy before adding the name. function_json can be a dictionary that
-        # outlives this call: for a same-server external agent it is the
-        # referenced network's live registry spec (AsyncDirectAgentSession
-        # returns it by reference), and internal and toolbox tools funnel
-        # here with their registry/toolbox entries too. Writing the lookup
-        # name into it would leak this caller's reference string into that
-        # shared state (issue #1230). The copy is deliberately shallow: only
-        # the top-level "name" key is written here, so nested dicts stay shared.
-        use_function_json: Dict[str, Any] = dict(function_json)
-        use_function_json["name"] = name
-        return LangChainOpenAIFunctionTool.from_function_json(use_function_json, self.tool_caller)
+        creator = ExternalAgentToolCreator(self.tool_caller, self.invocation_context, self.journal,
+                                           self.agent_location)
+        return await creator.create_tool(name)

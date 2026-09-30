@@ -66,10 +66,13 @@ def make_activation(mock_run_context, agent_tool_path: str, network_name: str,
     :param agent_name: The name the factory reports for the spec.
     :return: A ready-to-use ConcreteClassActivation.
     """
+    inspector = MagicMock()
+    inspector.get_network_name.return_value = network_name
+
     factory = MagicMock()
     factory.get_agent_tool_path.return_value = agent_tool_path
-    factory.agent_network.get_network_name.return_value = network_name
     factory.get_name_from_spec.return_value = agent_name
+    factory.get_agent_network.return_value = inspector
 
     with patch(CREATE_RUN_CONTEXT_PATH, return_value=mock_run_context):
         with patch(GET_FULL_NAME_FROM_ORIGIN_PATH, return_value="test_full_name"):

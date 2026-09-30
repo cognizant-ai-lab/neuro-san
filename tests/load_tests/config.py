@@ -18,100 +18,6 @@
 
 import os
 import re
-from typing import Dict
-from typing import List
-from typing import Optional
-
-from typing_extensions import NotRequired
-from typing_extensions import TypedDict
-
-
-class TokenEntry(TypedDict):
-    """Token accounting data parsed from a server log block."""
-
-    request_id: str
-    total_tokens: int
-    prompt_tokens: int
-    completion_tokens: int
-    llm_calls: int
-    model: str
-    reporting_agent: NotRequired[str]
-
-
-class NetworkTokenEntry(TypedDict):
-    """Per-sub-network token data from a server log block."""
-
-    request_id: str
-    network: str
-    total_tokens: int
-    prompt_tokens: int
-    completion_tokens: int
-    llm_calls: int
-    duration: float
-    model: str
-    cost: float
-
-
-class ValidationEvent(TypedDict):
-    """Per-request validation tracking from server log."""
-
-    request_id: str
-    attempts: int
-    fix_cycles: int
-    errors: List[str]
-
-
-class ResourceSnapshot(TypedDict):
-    """Point-in-time resource usage of a process."""
-
-    rss: float
-    fds: int
-    threads: int
-    connections: int
-    children: int
-    cpu: float
-    cpu_seconds: float
-
-
-class ServerCounts(TypedDict, total=False):
-    """Request start/finish counts from the server log.
-
-    All fields are optional because this dict is empty when
-    no server log is available.
-    """
-
-    primary_started: int
-    primary_finished: int
-    total_started: int
-    total_finished: int
-
-
-class _RequestResultRequired(TypedDict):
-    """Required fields in every request result."""
-
-    request_id: str
-    status: str
-    elapsed: float
-    prompt: str
-
-
-class RequestResult(_RequestResultRequired, total=False):
-    """Per-request result from a load test run.
-
-    Required fields are always present.  Optional fields appear when
-    token tracking is enabled or when the request fails.
-    """
-
-    error: Optional[str]
-    ttft: float
-    start_time: float
-    end_time: float
-    total_tokens: int
-    prompt_tokens: int
-    completion_tokens: int
-    llm_calls: int
-    model: str
-    cost_usd: float
 
 
 # Result status constants
@@ -119,64 +25,6 @@ STATUS_CREATED = "CREATED"
 STATUS_FAILED = "FAILED"
 STATUS_TIMEOUT = "TIMEOUT"
 STATUS_KILLED = "KILLED"
-
-
-class StatusCounts(TypedDict):
-    """Per-status request counts from a load test stage."""
-
-    CREATED: int
-    FAILED: int
-    TIMEOUT: int
-    KILLED: int
-
-
-class StageSummary(TypedDict, total=False):
-    """Aggregate data for a single load test stage.
-
-    All fields are optional because resource monitoring and server
-    log parsing are not always enabled.
-    """
-
-    stage: int
-    round: int
-    concurrent: int
-    counts: StatusCounts
-    elapsed: float
-    retries: Dict[str, int]
-    total_retries: int
-    amplification: float
-    results: List[RequestResult]
-    primary_started: Optional[int]
-    primary_finished: Optional[int]
-    total_started: Optional[int]
-    total_finished: Optional[int]
-    disconnections: List[Dict[str, str]]
-    server_errors: List[Dict[str, str]]
-    network_tokens: List[NetworkTokenEntry]
-    validation_events: List[ValidationEvent]
-    has_server_log: bool
-    has_tokens: bool
-    before_threads: Optional[int]
-    after_threads: Optional[int]
-    peak_threads: Optional[int]
-    before_server_rss: Optional[float]
-    after_server_rss: Optional[float]
-    peak_server_rss: Optional[float]
-    before_client_rss: Optional[float]
-    after_client_rss: Optional[float]
-    peak_client_rss: Optional[float]
-    before_sys_mem_pct: Optional[float]
-    after_sys_mem_pct: Optional[float]
-    peak_sys_mem_pct: Optional[float]
-    before_sys_mem_avail_gb: Optional[float]
-    after_sys_mem_avail_gb: Optional[float]
-    peak_sys_mem_avail_gb: Optional[float]
-    before_sys_cpu: Optional[float]
-    after_sys_cpu: Optional[float]
-    peak_sys_cpu: Optional[float]
-    before_sys_threads: Optional[int]
-    after_sys_threads: Optional[int]
-    peak_sys_threads: Optional[int]
 
 
 # Load test levels
@@ -214,6 +62,9 @@ TOKENS_PER_MILLION = 1_000_000
 # Max per-request failure blocks printed to the console before the rest
 # are suppressed (full detail always remains in raw_results.json).
 FAILURE_LOG_LIMIT = 10
+# Max length of one failed-check line in a request's failure reason;
+# longer evaluator messages are cut and end with "...".
+FAILURE_REASON_LINE_LIMIT = 200
 
 # Timeouts for short-lived operations (seconds)
 SOCKET_CHECK_TIMEOUT = 2
@@ -226,20 +77,6 @@ STALE_LOG_THRESHOLD_SECONDS = 300
 HISTORY_FILE_NAME = "history.jsonl"
 HISTORY_UNKNOWN_FILE_NAME = "history_unknown.jsonl"
 HISTORY_THRESHOLDS_SECONDS = (70, 300)
-
-
-class SharedRef:
-    """Mutable container for passing a value between threads.
-
-    Replaces the bare-dict pattern (e.g., ``result = {}`` /
-    ``result.update(...)``), making the intent explicit and the
-    expected type visible.
-    """
-
-    __slots__ = ("value",)
-
-    def __init__(self) -> None:
-        self.value = None
 
 
 # Heartbeat
@@ -308,38 +145,3 @@ MODEL_PRICING = {
 }
 # Fallback pricing when model is unknown
 DEFAULT_PRICING = {"prompt": 2.50, "completion": 10.00}
-
-
-class Formatters:
-    """Reporting helpers for human-readable metrics and derived values."""
-
-    @staticmethod
-    def format_rss(rss_mb: float) -> str:
-        """Format RSS in human-readable units."""
-        if rss_mb >= 1024:
-            return f"{rss_mb / 1024:.1f}G"
-        return f"{rss_mb:.0f}M"
-
-    @staticmethod
-    def fmt_duration(seconds: float, *, precision: int = 0) -> str:
-        """Format seconds with minutes suffix when >= 60s.
-
-        Returns e.g. '1870s (31m)' or '45s' for short durations.
-        """
-        base = f"{seconds:.{precision}f}s"
-        if seconds >= 60:
-            mins = int(seconds) // 60
-            return f"{base} ({mins}m)"
-        return base
-
-    @staticmethod
-    def compute_amplification(
-            actual_requests: int, total_retries: int,
-    ) -> float:
-        """Return the retry amplification factor.
-
-        1.0 means no retries; >1.0 means some LLM calls were retried.
-        """
-        if actual_requests <= 0:
-            return 1.0
-        return (actual_requests + total_retries) / actual_requests

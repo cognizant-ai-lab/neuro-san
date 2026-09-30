@@ -97,6 +97,7 @@ class AllowUtil:
             return False
 
         # Maybe look in the deeper_keys for the allow key
+        deeper_key: str = None
         for deeper_key in deeper_keys:
 
             # Make the value a list if we don't get one to consolidate on iterative logic
@@ -104,6 +105,7 @@ class AllowUtil:
             if not isinstance(deeper_list, list):
                 deeper_list = [deeper_list]
 
+            deeper_spec: Dict[str, Any] = None
             for deeper_spec in deeper_list:
                 deeper_extractor = DictionaryExtractor(deeper_spec)
                 if deeper_extractor.get(look_for_key, False):

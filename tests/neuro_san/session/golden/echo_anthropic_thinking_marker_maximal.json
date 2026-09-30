@@ -1,0 +1,143 @@
+[
+  {
+    "response": {
+      "origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "echoer"
+        }
+      ],
+      "text": "System prompt for the mock llm",
+      "type": 1
+    }
+  },
+  {
+    "response": {
+      "origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "echoer"
+        }
+      ],
+      "text": "emit anthropic thinking: the answer",
+      "type": 2
+    }
+  },
+  {
+    "response": {
+      "origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "echoer"
+        }
+      ],
+      "text": "the answer",
+      "type": 4
+    }
+  },
+  {
+    "response": {
+      "origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "echoer"
+        }
+      ],
+      "structure": {
+        "caveats": [
+          "Token usage from agents of the main agent network only. Usage from external agents is not included.",
+          "Token counts are approximate and estimated using tiktoken.",
+          "time_taken_in_seconds includes overhead from Langchain and Neuro SAN"
+        ],
+        "completion_tokens": 7,
+        "empty_responses": 0,
+        "prompt_tokens": 7,
+        "successful_requests": 1,
+        "time_taken_in_seconds": 0.0,
+        "total_cost": 0.0,
+        "total_tokens": 14
+      },
+      "text": "",
+      "type": 100
+    }
+  },
+  {
+    "response": {
+      "origin": [
+        {
+          "instantiation_index": 1,
+          "tool": "echoer"
+        }
+      ],
+      "structure": {
+        "caveats": [
+          "Request total: includes token usage from external agents invoked via direct sessions on this server. Usage from external agents reached over the network is not included.",
+          "Token counts are approximate and estimated using tiktoken.",
+          "time_taken_in_seconds includes overhead from Langchain and Neuro SAN"
+        ],
+        "completion_tokens": 7,
+        "empty_responses": 0,
+        "models": {
+          "ChatMockLlm": {
+            "echo": {
+              "completion_tokens": 7,
+              "empty_responses": 0,
+              "prompt_tokens": 7,
+              "successful_requests": 1,
+              "time_taken_in_seconds": 0.0,
+              "total_cost": 0.0,
+              "total_tokens": 14
+            }
+          }
+        },
+        "prompt_tokens": 7,
+        "successful_requests": 1,
+        "time_taken_in_seconds": 0.0,
+        "total_cost": 0.0,
+        "total_tokens": 14
+      },
+      "text": "",
+      "type": 100
+    }
+  },
+  {
+    "response": {
+      "chat_context": {
+        "chat_histories": [
+          {
+            "messages": [
+              {
+                "origin": [
+                  {
+                    "instantiation_index": 1,
+                    "tool": "echoer"
+                  }
+                ],
+                "text": "emit anthropic thinking: the answer",
+                "type": 2
+              },
+              {
+                "origin": [
+                  {
+                    "instantiation_index": 1,
+                    "tool": "echoer"
+                  }
+                ],
+                "text": "the answer",
+                "type": 4
+              }
+            ],
+            "origin": [
+              {
+                "instantiation_index": 1,
+                "tool": "echoer"
+              }
+            ]
+          }
+        ]
+      },
+      "text": "the answer",
+      "type": 101
+    }
+  }
+]

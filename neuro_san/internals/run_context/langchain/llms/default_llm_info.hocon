@@ -28,6 +28,20 @@
     # Retirement dates come from OpenAI's deprecations page:
     # https://platform.openai.com/docs/deprecations
     # For models with no announced retirement, "model_retirement_date" is null.
+
+    "gpt-luna": {
+        "use_model_name": "gpt-6-luna"
+    },
+    "gpt-terra": {
+        "use_model_name": "gpt-5.6-terra"
+    },
+    "gpt-sol": {
+        "use_model_name": "gpt-6.1-sol"
+    },
+    "gpt-astra": {
+        "use_model_name": "gpt-6-astra"
+    },
+
     "o3-mini": {
         "use_model_name": "o3-mini-2025-01-31",
     },
@@ -68,6 +82,27 @@
         "price_per_1k_output_tokens": 0.060,
         "model_launch_date": "2024-12-17",
         "model_retirement_date": "2026-10-23",
+    },
+
+    "gpt-6.1-sol": {
+        "class": "openai",
+        "model_info_url": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        # Tool calling works with the class defaults (the Responses API is the default endpoint). Do not set
+        # "use_responses_api": false for this model: Chat Completions rejects tools combined with reasoning and the
+        # model rejects reasoning_effort "none", so there is no Chat Completions path. See
+        # https://github.com/cognizant-ai-lab/neuro-san/blob/main/docs/llm_info_hocon_reference.md#openai-reasoning-and-responses-api-parameters
+        "context_window_size": 1050000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "04/30/2026",
+        "price_per_1k_input_tokens": 0.002,
+        "price_per_1k_output_tokens": 0.010,
+        "model_launch_date": "2026-09-29",
+        "model_retirement_date": null,
     },
 
     "gpt-6-astra": {
@@ -556,24 +591,6 @@
         "model_launch_date": "2024-01-25",
         "model_retirement_date": "2026-10-23",
     },
-    "gpt-3.5-turbo-1106": {
-        # FYI: LLMs that do not support tools cannot be used as front-men or branch nodes
-        "class": "openai",
-        "model_info_url": "https://platform.openai.com/docs/models/gpt-3.5-turbo",
-        "modalities": {
-            "input": [ "text" ],
-            "output": [ "text" ],
-        },
-        "capabilities": [],
-        "context_window_size": 16384,
-        "max_output_tokens": 4096,
-        "knowledge_cutoff": "08/31/2021",
-        # https://developers.openai.com/api/docs/pricing/
-        "price_per_1k_input_tokens": 0.001,
-        "price_per_1k_output_tokens": 0.002,
-        "model_launch_date": "2023-11-06",
-        "model_retirement_date": "2026-09-28",
-    },
 
     # Azure models
     #
@@ -658,7 +675,7 @@
         "use_model_name": "claude-haiku-4-5-20251001"
     },
     "claude-sonnet": {
-        "use_model_name": "claude-sonnet-5"
+        "use_model_name": "claude-sonnet-5-5"
     },
     "claude-opus": {
         "use_model_name": "claude-opus-5-5"
@@ -741,10 +758,27 @@
         "max_output_tokens": 128000,
         "knowledge_cutoff": "01/2026",
         # https://platform.claude.com/docs/en/about-claude/pricing
-        # Standard pricing shown. Introductory pricing of $2 / $10 per MTok applies through 2026-08-31.
-        "price_per_1k_input_tokens": 0.003,
-        "price_per_1k_output_tokens": 0.015,
+        "price_per_1k_input_tokens": 0.002,
+        "price_per_1k_output_tokens": 0.010,
         "model_launch_date": "2026-06-30",
+        "model_retirement_date": null,
+    },
+    "claude-sonnet-5-5": {
+        "class": "anthropic",
+        "model_info_url": "https://platform.claude.com/docs/en/about-claude/models/overview",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        # Tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "06/2026",
+        # https://platform.claude.com/docs/en/about-claude/pricing
+        "price_per_1k_input_tokens": 0.002,
+        "price_per_1k_output_tokens": 0.010,
+        "model_launch_date": "2026-09-28",
         "model_retirement_date": null,
     },
 
@@ -932,6 +966,33 @@
     # entry key, e.g.:
     #     global.anthropic.claude-opus-4-8  ->  us.anthropic.claude-opus-4-8
 
+    "bedrock-claude-fable": {
+        "use_model_name": "global.anthropic.claude-fable-5-1"
+    },
+    "global.anthropic.claude-fable-5-1": {
+        "class": "anthropic-bedrock",
+        "model_info_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-fable-5-1.html",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "06/2026",
+    },
+    "global.anthropic.claude-fable-5": {
+        "class": "anthropic-bedrock",
+        "model_info_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-fable-5.html",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "01/2026",
+    },
     "bedrock-claude-opus": {
         "use_model_name": "global.anthropic.claude-opus-5-5"
     },
@@ -972,7 +1033,19 @@
         "knowledge_cutoff": "01/2026",
     },
     "bedrock-claude-sonnet": {
-        "use_model_name": "global.anthropic.claude-sonnet-5"
+        "use_model_name": "global.anthropic.claude-sonnet-5-5"
+    },
+    "global.anthropic.claude-sonnet-5-5": {
+        "class": "anthropic-bedrock",
+        "model_info_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-5-5.html",
+        "modalities": {
+            "input": [ "text", "image" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "06/2026",
     },
     "global.anthropic.claude-sonnet-5": {
         "class": "anthropic-bedrock",
@@ -1561,6 +1634,8 @@
 
         "openai": {
             "args": {
+                # Consumed by LangChainRunContext, not passed to the chat-model constructor.
+                "provider_tools": null,
                 # Note that we can only supply arguments that are "Just Data" in nature.
                 # See https://python.langchain.com/api_reference/openai/chat_models/langchain_openai.chat_models.base.ChatOpenAI.html
                 "temperature": null,
@@ -1690,6 +1765,8 @@
         },
         "anthropic": {
             "args": {
+                # Consumed by LangChainRunContext, not passed to the chat-model constructor.
+                "provider_tools": null,
                 # Note that we can only supply arguments that are "Just Data" in nature.
                 # See https://python.langchain.com/api_reference/anthropic/chat_models/langchain_anthropic.chat_models.ChatAnthropic.html#langchain_anthropic.chat_models.ChatAnthropic
                 "max_tokens": null,
@@ -1859,6 +1936,8 @@
         },
         "gemini": {
             "args": {
+                # Consumed by LangChainRunContext, not passed to the chat-model constructor.
+                "provider_tools": null,
                 # Note that we can only supply arguments that are "Just Data" in nature.
                 # See https://python.langchain.com/api_reference/google_genai/chat_models/langchain_google_genai.chat_models.ChatGoogleGenerativeAI.html
                 "google_api_key": null,

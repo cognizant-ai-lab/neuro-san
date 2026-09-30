@@ -42,6 +42,7 @@ Sub-keys to those dictionaries will be described in the next-level down heading 
         - [OpenAI Reasoning and Responses API Parameters](#openai-reasoning-and-responses-api-parameters)
         - [Anthropic Thinking Parameters](#anthropic-thinking-parameters)
         - [Gemini Thinking Parameters](#gemini-thinking-parameters)
+        - [Provider Tools](#provider-tools)
     - [Extending LLM Info Specifications](#extending-llm-info-specifications)
         - [AGENT_LLM_INFO_FILE environment variable](#agent_llm_info_file-environment-variable)
         - [llm_info_file key in specific agent hocon files](#llm_info_file-keys-in-agent-network-hocon)
@@ -597,6 +598,12 @@ is `0.7`, so set `"temperature": 1.0` explicitly in the llm_config of any Gemini
     "include_thoughts": true
 }
 ```
+
+### Provider Tools
+
+`provider_tools` is not a class argument: neuro-san consumes the list when creating the agent and does not pass
+it to the chat-model constructor. See [Provider Tools](./provider_tools.md) for the shapes each provider accepts
+and the classes that support it.
 
 ## Extending LLM Info Specifications
 
