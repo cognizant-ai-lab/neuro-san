@@ -51,18 +51,20 @@ class TestApiKeyErrorCheck(TestCase):
         self.assertIsNotNone(hint)
         self.assertIn("AZURE_OPENAI_DEPLOYMENT_NAME", hint)
 
-    def test_policy_credential_error_names_both_key_variables(self) -> None:
+    def test_policy_credential_error_lists_the_credential_alternatives(self) -> None:
         """
-        AzureLlmPolicy's credential error names AZURE_OPENAI_API_KEY, which also contains OPENAI_API_KEY, so the
-        guidance lists both: the OpenAI key really is the documented fallback.
+        AzureLlmPolicy's credential error names AZURE_OPENAI_API_KEY, which also contains OPENAI_API_KEY. The
+        guidance treats that as one situation and lists the accepted credentials as alternatives, instead of
+        demanding both variables.
         """
         message: str = ("Azure OpenAI needs a credential: set openai_api_key in llm_config or the "
                         "AZURE_OPENAI_API_KEY environment variable (OPENAI_API_KEY is used as a fallback)")
         hint: Optional[str] = ApiKeyErrorCheck.check_for_api_key_exception(Exception(message))
 
         self.assertIsNotNone(hint)
-        self.assertIn("AZURE_OPENAI_API_KEY", hint)
-        self.assertIn("OPENAI_API_KEY", hint)
+        self.assertIn("AZURE_OPENAI_API_KEY (or AZURE_OPENAI_AD_TOKEN", hint)
+        self.assertIn("OPENAI_API_KEY is accepted as a fallback", hint)
+        self.assertNotIn("OPENAI_API_KEY, AZURE_OPENAI_API_KEY", hint)
 
     def test_unrelated_error_gets_no_guidance(self) -> None:
         """

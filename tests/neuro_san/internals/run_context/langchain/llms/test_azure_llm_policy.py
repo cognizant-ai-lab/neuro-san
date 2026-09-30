@@ -440,7 +440,7 @@ class TestAzureLlmPolicy(TestCase):
         self.assertEqual(llm.model_name, "prod-reasoning")
         self.assertEqual(payload.get("model"), "prod-reasoning")
         self.assertEqual(payload.get("temperature"), 0.7)
-        self.assertEqual(llm.metadata[PRICE_MODEL_METADATA_KEY], "gpt-5.4-2026-03-05")
+        self.assertEqual(llm.metadata.get(PRICE_MODEL_METADATA_KEY), "gpt-5.4-2026-03-05")
 
     # ---- The payload ----------------------------------------------------------------------------
 
@@ -564,9 +564,9 @@ class TestAzureLlmPolicy(TestCase):
 
         self.assertIsInstance(llm, ChatOpenAI)
         self.assertEqual(dumpd(llm).get("id")[-1], "ChatOpenAI")
-        self.assertEqual(llm.metadata[PROVIDER_METADATA_KEY], "azure-openai")
-        self.assertEqual(llm.metadata[PRICE_MODEL_METADATA_KEY], self.MODEL_NAME)
-        self.assertEqual(deployment_only.metadata[PROVIDER_METADATA_KEY], "azure-openai")
+        self.assertEqual(llm.metadata.get(PROVIDER_METADATA_KEY), "azure-openai")
+        self.assertEqual(llm.metadata.get(PRICE_MODEL_METADATA_KEY), self.MODEL_NAME)
+        self.assertEqual(deployment_only.metadata.get(PROVIDER_METADATA_KEY), "azure-openai")
         self.assertNotIn(PRICE_MODEL_METADATA_KEY, deployment_only.metadata)
 
     def test_usage_is_booked_under_azure_openai_and_priced_by_the_openai_model(self) -> None:
@@ -732,4 +732,4 @@ class TestAzureLlmPolicy(TestCase):
         self.assertEqual(llm.openai_api_base, self.V1_BASE_URL)
         self.assertEqual(str(llm.root_async_client.base_url), self.V1_BASE_URL)
         self.assertEqual(llm.model_name, self.DEPLOYMENT_NAME)
-        self.assertEqual(llm.metadata[PRICE_MODEL_METADATA_KEY], self.MODEL_NAME)
+        self.assertEqual(llm.metadata.get(PRICE_MODEL_METADATA_KEY), self.MODEL_NAME)

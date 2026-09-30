@@ -67,6 +67,13 @@ API_KEY_DOCUMENTATION: Dict[str, str] = {
     "AZURE_OPENAI_DEPLOYMENT_NAME": AZURE_DOCUMENTATION,
 }
 
+# How a matched key is named in the guidance when plain "X must be set" would mislead: Azure accepts
+# any one of three credentials, so the guidance lists them as alternatives.
+API_KEY_ALTERNATIVES: Dict[str, str] = {
+    "AZURE_OPENAI_API_KEY": "AZURE_OPENAI_API_KEY (or AZURE_OPENAI_AD_TOKEN for a Microsoft Entra token; "
+                            "OPENAI_API_KEY is accepted as a fallback)",
+}
+
 INTERNAL_ERRORS_LIST: List[str] = ["bound to a different event loop"]
 
 
@@ -97,8 +104,16 @@ class ApiKeyErrorCheck:
                     # No need to check the remaining strings for this key
                     break
 
+        # "AZURE_OPENAI_API_KEY" contains "OPENAI_API_KEY", so an Azure credential error matches the generic
+        # OpenAI row too. It is one situation, not two variables to set.
+        if "AZURE_OPENAI_API_KEY" in matched_keys and "OPENAI_API_KEY" in matched_keys:
+            matched_keys.remove("OPENAI_API_KEY")
+
         if matched_keys:
-            keys_str = ", ".join(matched_keys)
+            key_names: List[str] = []
+            for matched_key in matched_keys:
+                key_names.append(API_KEY_ALTERNATIVES.get(matched_key, matched_key))
+            keys_str = ", ".join(key_names)
             return f"""
 A value for the {keys_str} environment variable must be correctly set in the neuro-san
 server or run-time environment in order to use this agent network.
