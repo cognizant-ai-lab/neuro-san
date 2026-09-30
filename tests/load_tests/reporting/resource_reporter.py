@@ -17,19 +17,20 @@
 """Builds and logs server and client resource delta tables."""
 
 import logging
+from typing import Any
+from typing import Dict
 from typing import List
 from typing import Tuple
 
-from tests.load_tests.config import ResourceSnapshot
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
 # (display_row, before_snapshot, after_snapshot)
-ServerResourceRow = Tuple[tuple, ResourceSnapshot, ResourceSnapshot]
+ServerResourceRow = Tuple[tuple, Dict[str, Any], Dict[str, Any]]
 
 # (display_row, before_snapshot, peak_snapshot, settled_snapshot)
 ClientResourceRow = Tuple[
-    tuple, ResourceSnapshot, ResourceSnapshot, ResourceSnapshot,
+    tuple, Dict[str, Any], Dict[str, Any], Dict[str, Any],
 ]
 
 logger = logging.getLogger(__name__)

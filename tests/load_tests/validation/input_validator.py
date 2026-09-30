@@ -24,6 +24,8 @@ actual token usage before committing to a full run.
 import logging
 import os
 import sys
+from typing import Any
+from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -32,7 +34,6 @@ import psutil
 
 from tests.load_tests.config import DEFAULT_STAGES
 from tests.load_tests.config import LEVEL_ADV
-from tests.load_tests.config import RequestResult
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.confirm import Confirm
 from tests.load_tests.project_paths import ProjectPaths
@@ -181,7 +182,7 @@ class InputValidator:
     def confirm_cost(
             self, stages, total_cap, *, runner,
             output_dir=None, stale_log_age=None,
-    ) -> Optional[RequestResult]:
+    ) -> Optional[Dict[str, Any]]:
         """Display PRE-RUN SUMMARY and optionally run a dry-run probe.
 
         The dry-run probe + cost confirmation runs by default at min
@@ -450,7 +451,7 @@ class InputValidator:
 
     def _run_cost_probe(
             self, runner, output_dir,
-    ) -> Tuple[RequestResult, dict]:
+    ) -> Tuple[Dict[str, Any], dict]:
         """Fire one probe request and return results.
 
         Fires a single request (tokens are enabled by default)

@@ -21,11 +21,12 @@ monitoring and telemetry when those features become available.
 """
 
 import logging
+from typing import Any
+from typing import Dict
 from typing import Optional
 
 import psutil
 
-from tests.load_tests.config import ResourceSnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ class ResourceMonitor:
         return None
 
     @staticmethod
-    def snapshot(proc) -> Optional[ResourceSnapshot]:
+    def snapshot(proc) -> Optional[Dict[str, Any]]:
         """Capture a point-in-time resource snapshot of a process."""
         if proc is None:
             return None

@@ -32,10 +32,10 @@ from typing import Optional
 
 import psutil
 
-from tests.load_tests.config import Formatters
 from tests.load_tests.config import HEARTBEAT_INTERVAL_SECONDS
-from tests.load_tests.config import SharedRef
+from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.system_resources import SystemResources
+from tests.load_tests.shared_ref import SharedRef
 
 logger = logging.getLogger(__name__)
 

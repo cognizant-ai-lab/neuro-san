@@ -25,10 +25,10 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from tests.load_tests.config import Formatters
 from tests.load_tests.config import SEPARATOR_WIDTH
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.cost_estimator import CostEstimator
+from tests.load_tests.reporting.formatters import Formatters
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
 _NORMAL_LLM_CALLS = 4
