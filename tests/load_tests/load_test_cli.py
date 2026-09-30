@@ -368,16 +368,14 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
         sys_before = SystemResources.snapshot()
         before_sys_mem_pct = sys_before["mem_pct"]
 
+        first_request_number: int = global_offset + (1 if probe_used else 0)
+        plan: StagePlan = StagePlan(stage_requests, stage_workers, first_request_number, self._output_dir)
         (elapsed, results, peak_threads, peak_client_rss,
          peak_server_rss, peak_sys_mem_pct, peak_sys_cpu,
          peak_sys_threads,
          server_died, interrupted) = (
             self.runner.run_stage(
-                StagePlan(
-                    stage_requests, stage_workers,
-                    global_offset + (1 if probe_used else 0),
-                    self._output_dir,
-                ),
+                plan,
                 server_proc=self.server_proc,
                 client_proc=client_proc,
                 log_monitor=self.log_monitor,

@@ -196,7 +196,7 @@ class TokenLogWriter:
                 "  (agent data not found in server log)\n"
             )
         TokenLogWriter._write_agent_breakdown(fh, agents)
-        if agents or agent or rid in by_validation:
+        if agents or agent or rid in by_validation.keys():
             fh.write("\n")
 
     @staticmethod

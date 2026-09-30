@@ -23,8 +23,7 @@ class StagePlan:
     with how many workers, how they are numbered, and where their output goes.
     """
 
-    def __init__(self, num_requests: int, max_workers: int, global_offset: int,
-                 output_dir: Optional[str]) -> None:
+    def __init__(self, num_requests: int, max_workers: int, global_offset: int, output_dir: Optional[str]) -> None:
         """
         :param num_requests: Requests to fire in this stage
         :param max_workers: Thread pool size

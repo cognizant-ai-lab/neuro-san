@@ -646,9 +646,9 @@ class ServerLogMonitor:
         :param primary_start_pattern: Regex for the log line of a primary agent request arriving
         :param output_dir: Directory for server_receipts.log, or None for console only
         """
-        pri_start_re = re.compile(primary_start_pattern)
-        agent_label = primary_start_pattern.split("/")[0].split(" ")[-1]
-        receipt_path = (
+        pri_start_re: re.Pattern = re.compile(primary_start_pattern)
+        agent_label: str = primary_start_pattern.split("/")[0].split(" ")[-1]
+        receipt_path: Optional[str] = (
             os.path.join(output_dir, "server_receipts.log")
             if output_dir else None
         )
@@ -696,10 +696,10 @@ class ServerLogMonitor:
         :param client_proc: Client process for the snapshot once all requests arrive, or None
         :param peak_client_ref: Receives the client snapshot once all requests arrive
         """
-        count = 0
-        use_dots = receipt_fh is not None
+        count: int = 0
+        use_dots: bool = receipt_fh is not None
         while not stop_event.is_set() and count < expected_count:
-            line = log_fh.readline()
+            line: str = log_fh.readline()
             if not line:
                 stop_event.wait(0.5)
                 continue
@@ -707,11 +707,11 @@ class ServerLogMonitor:
                 continue
             count += 1
             now: float = time.perf_counter()
-            ts = time.strftime(
+            ts: str = time.strftime(
                 "%H:%M:%S", time.localtime(),
             )
             delta: float = now - fire_time
-            detail = (
+            detail: str = (
                 f"  [server] {agent_label} request"
                 f" {count}/{expected_count}"
                 f" received [{ts}] (+{delta:.1f}s)"

@@ -23,7 +23,8 @@ from tests.load_tests.config import STATUS_TIMEOUT
 
 class RequestStatusPolicy:
     """
-    Decides the status recorded for one load-test request.
+    Decides the status recorded for one load-test request, and which
+    recorded statuses count as failures or carry a traceback.
 
     TIMEOUT when the request took at least --request-timeout, whether or not
     it raised; otherwise FAILED when it raised or produced no answer text,

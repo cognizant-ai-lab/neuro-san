@@ -17,6 +17,7 @@
 Unit tests for TrafficRunner response checks via the data-driven evaluators.
 """
 
+import threading
 import time
 from argparse import Namespace
 from functools import partial
@@ -24,6 +25,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Tuple
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -33,6 +35,7 @@ from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.prompts.agent_profile import AgentProfile
+from tests.load_tests.shared_ref import SharedRef
 from tests.load_tests.traffic.agent_request_executor import AgentRequestExecutor
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 from tests.load_tests.traffic.runner import TrafficRunner
@@ -78,7 +81,7 @@ class TestRunnerResponseChecks(TestCase):
         :return: The runner
         """
         profile: AgentProfile = AgentProfile("x", {"prompts": ["p"], "failure_patterns": failure_patterns or []})
-        return TrafficRunner(Namespace(same_prompt=False), profile)
+        return TrafficRunner(Namespace(same_prompt=False), profile, threading.Event())
 
     def test_no_checks_passes(self) -> None:
         """
@@ -138,13 +141,13 @@ class TestRunnerResponseChecks(TestCase):
         :param stage_timeout: Seconds after which run_stage() kills unfinished requests, or None
         :return: The runner
         """
-        profile = AgentProfile("x", {"prompts": ["p"]})
-        args = Namespace(
+        profile: AgentProfile = AgentProfile("x", {"prompts": ["p"]})
+        args: Namespace = Namespace(
             same_prompt=False, allow_caching=False, host="localhost", port=8080, https=False, agent="x",
             chat_filter="maximal",
             request_timeout=5.0, idle_timeout=5.0, include_tokens=False, stage_timeout=stage_timeout,
         )
-        return TrafficRunner(args, profile)
+        return TrafficRunner(args, profile, threading.Event())
 
     def _run_one_http(self, request_result: AgentRequestResult) -> Dict[str, Any]:
         """
@@ -218,6 +221,8 @@ class TestRunnerResponseChecks(TestCase):
         """
         run_stage() returns one result per request, numbered from the plan's global offset.
         """
+        stage: Tuple[float, List[Dict[str, Any]], SharedRef, SharedRef, SharedRef, SharedRef, SharedRef, SharedRef,
+                     bool, bool]
         with patch.object(TrafficRunner, "run_one_http", side_effect=partial(self._fake_request, 0.0)):
             stage = self._stage_runner().run_stage(StagePlan(3, 2, 10, None))
         global_ids: List[int] = []
@@ -231,6 +236,8 @@ class TestRunnerResponseChecks(TestCase):
         """
         Requests still running at --stage-timeout come back KILLED with the reason as stderr.
         """
+        stage: Tuple[float, List[Dict[str, Any]], SharedRef, SharedRef, SharedRef, SharedRef, SharedRef, SharedRef,
+                     bool, bool]
         with patch.object(TrafficRunner, "run_one_http", side_effect=partial(self._fake_request, 0.5)):
             stage = self._stage_runner(stage_timeout=0.1).run_stage(StagePlan(2, 2, 0, None))
         self.assertEqual(2, len(stage[1]))

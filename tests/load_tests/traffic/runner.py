@@ -77,16 +77,15 @@ class TrafficRunner:
     do not need to thread them through every method.
     """
 
-    def __init__(self, args: Namespace, profile: AgentProfile,
-                 cancel_event: Optional[threading.Event] = None) -> None:
+    def __init__(self, args: Namespace, profile: AgentProfile, cancel_event: threading.Event) -> None:
         """
         :param args: Parsed load-test command line
         :param profile: Prompts and response checks for the agent under test
-        :param cancel_event: Set by the Ctrl-C handler to stop a stage early, or None
+        :param cancel_event: Set by the Ctrl-C handler to stop a stage early
         """
         self._args: Namespace = args
         self._profile: AgentProfile = profile
-        self._cancel_event: Optional[threading.Event] = cancel_event
+        self._cancel_event: threading.Event = cancel_event
         self._failure_log_lock: threading.Lock = threading.Lock()
         self._failures_logged: int = 0
 
@@ -108,8 +107,7 @@ class TrafficRunner:
             failed_ref.value = (failed_ref.value or 0) + 1
         return result
 
-    def run_one_http(self, request_id: int, global_request_id: int,
-                     output_dir: Optional[str] = None) -> Dict[str, Any]:
+    def run_one_http(self, request_id: int, global_request_id: int, output_dir: Optional[str] = None) -> Dict[str, Any]:
         """
         Execute a single request via in-thread HTTP and check its response.
 
@@ -523,8 +521,7 @@ class TrafficRunner:
 
     @staticmethod
     def _collect_with_timeout(futures: List[Future], results_list: List[Dict[str, Any]], start: float,
-                              stage_timeout: Optional[float],
-                              cancel_event: Optional[threading.Event] = None) -> Tuple[int, bool]:
+                              stage_timeout: Optional[float], cancel_event: threading.Event) -> Tuple[int, bool]:
         """
         Collect future results, cancelling stragglers on timeout/Ctrl-C.
 
@@ -543,7 +540,7 @@ class TrafficRunner:
         remaining: float
         wait_slice: float
         while pending:
-            if cancel_event is not None and cancel_event.is_set():
+            if cancel_event.is_set():
                 interrupted = True
                 break
             elapsed = time.perf_counter() - start
