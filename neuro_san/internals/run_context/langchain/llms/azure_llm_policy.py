@@ -25,6 +25,8 @@ from typing import Tuple
 from logging import Logger
 from logging import getLogger
 
+from typing_extensions import override
+
 from langchain_core.language_models.base import BaseLanguageModel
 
 from leaf_common.config.config_util import ConfigUtil
@@ -79,6 +81,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
     # Process-wide so the legacy-key warning appears once, not once per agent instantiation.
     legacy_keys_warned: bool = False
 
+    @override
     def __init__(self, llm: BaseLanguageModel = None) -> None:
         """
         Constructor.
