@@ -15,13 +15,24 @@
 #
 # END COPYRIGHT
 
+from typing import Any
 from typing import Dict
+from uuid import UUID
+from uuid import uuid4
 
 import logging
 
 import pytest
 
+from langchain_core.messages import AIMessage
+from langchain_core.outputs import ChatGeneration
+from langchain_core.outputs import LLMResult
+
 from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import LlmTokenCallbackHandler
+from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import PRICE_MODEL_METADATA_KEY
+from neuro_san.internals.run_context.langchain.token_counting.llm_token_callback_handler import PROVIDER_METADATA_KEY
+
+from tests.neuro_san.internals.run_context.langchain.token_counting.owning_agent_scope import owning_agent_scope
 
 
 class TestLlmTokenCallbackHandler:
@@ -146,3 +157,82 @@ class TestLlmTokenCallbackHandler:
         cost = handler.calculate_token_costs("gpt-4", completion_tokens, prompt_tokens)
 
         assert abs(cost - expected_cost) < 0.000001  # Account for floating point precision
+
+    # ---- Accounting hints in the chat model's metadata ------------------------------------------
+
+    SERIALIZED_CHAT_OPENAI: Dict[str, Any] = {"id": ["langchain", "chat_models", "openai", "ChatOpenAI"]}
+
+    @staticmethod
+    def _result_naming(response_model: str) -> LLMResult:
+        """
+        Build an LLMResult whose response names the given model, with 1000 tokens each way.
+
+        :param response_model: What the provider reported as the model (Azure echoes the deployment)
+        :return: The LLMResult on_llm_end() receives
+        """
+        message: AIMessage = AIMessage(
+            content="hello",
+            usage_metadata={"input_tokens": 1000, "output_tokens": 1000, "total_tokens": 2000},
+            response_metadata={"model_name": response_model},
+        )
+        return LLMResult(generations=[[ChatGeneration(message=message)]])
+
+    @pytest.mark.asyncio
+    async def test_metadata_keys_pick_the_bucket_and_the_price_model(
+            self, handler_with_model_infos: LlmTokenCallbackHandler):
+        """A policy's metadata books a stock ChatOpenAI under its own bucket, priced by the model it names."""
+        run_id: UUID = uuid4()
+        with owning_agent_scope(handler_with_model_infos):
+            await handler_with_model_infos.on_chat_model_start(
+                self.SERIALIZED_CHAT_OPENAI, [], run_id=run_id,
+                metadata={PROVIDER_METADATA_KEY: "azure-openai", PRICE_MODEL_METADATA_KEY: "gpt-4"})
+            await handler_with_model_infos.on_llm_end(self._result_naming("my-deployment"), run_id=run_id)
+
+        assert "openai" not in handler_with_model_infos.models_token_dict
+        entry: Dict[str, Any] = handler_with_model_infos.models_token_dict["azure-openai"]["gpt-4"]
+        assert entry["total_tokens"] == 2000
+        # 1000 input tokens at 0.01 per 1k plus 1000 output tokens at 0.03 per 1k
+        assert entry["total_cost"] == pytest.approx(0.04)
+        assert handler_with_model_infos.total_cost == pytest.approx(0.04)
+        # The hint is consumed with the run it was recorded for.
+        assert not handler_with_model_infos.price_model_names
+
+    @pytest.mark.asyncio
+    async def test_without_metadata_the_class_table_and_the_response_model_apply(
+            self, handler_with_model_infos: LlmTokenCallbackHandler):
+        """Without the keys, the bucket comes from CLASS_TABLE and the response's own model is priced."""
+        run_id: UUID = uuid4()
+        with owning_agent_scope(handler_with_model_infos):
+            await handler_with_model_infos.on_chat_model_start(
+                self.SERIALIZED_CHAT_OPENAI, [], run_id=run_id, metadata={})
+            await handler_with_model_infos.on_llm_end(self._result_naming("my-deployment"), run_id=run_id)
+
+        entry: Dict[str, Any] = handler_with_model_infos.models_token_dict["openai"]["my-deployment"]
+        assert entry["total_tokens"] == 2000
+        assert entry["total_cost"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_price_model_also_applies_to_a_downstream_agents_call(
+            self, handler_with_model_infos: LlmTokenCallbackHandler):
+        """A downstream agent's call is not booked per model here, but its cost joins the totals at the named price."""
+        run_id: UUID = uuid4()
+        # No owning_agent_scope: the events belong to a downstream agent's chat model.
+        await handler_with_model_infos.on_chat_model_start(
+            self.SERIALIZED_CHAT_OPENAI, [], run_id=run_id,
+            metadata={PROVIDER_METADATA_KEY: "azure-openai", PRICE_MODEL_METADATA_KEY: "gpt-4"})
+        await handler_with_model_infos.on_llm_end(self._result_naming("my-deployment"), run_id=run_id)
+
+        assert not handler_with_model_infos.models_token_dict
+        assert handler_with_model_infos.total_cost == pytest.approx(0.04)
+
+    @pytest.mark.asyncio
+    async def test_failed_run_drops_its_price_model(self, handler_with_model_infos: LlmTokenCallbackHandler):
+        """A run that ends in on_llm_error() never reaches on_llm_end(), so its hint is released there instead."""
+        run_id: UUID = uuid4()
+        with owning_agent_scope(handler_with_model_infos):
+            await handler_with_model_infos.on_chat_model_start(
+                self.SERIALIZED_CHAT_OPENAI, [], run_id=run_id, metadata={PRICE_MODEL_METADATA_KEY: "gpt-4"})
+            await handler_with_model_infos.on_llm_error(RuntimeError("boom"), run_id=run_id)
+
+        assert not handler_with_model_infos.price_model_names
+        assert handler_with_model_infos.successful_requests == 0

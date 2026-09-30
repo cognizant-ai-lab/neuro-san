@@ -295,6 +295,7 @@ ENV ANTHROPIC_API_KEY=""
 # MicroSoft Azure/OpenAI access
 # OPENAI_API_KEY is a fallback for AZURE_OPENAI_API_KEY
 # ENV AZURE_OPENAI_API_KEY=""
+# Empty means "not configured": AzureLlmPolicy treats it as unset and reports a missing endpoint.
 ENV AZURE_OPENAI_ENDPOINT=""
 
 # Google/Gemini access

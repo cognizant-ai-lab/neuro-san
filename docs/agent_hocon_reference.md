@@ -221,7 +221,7 @@ to use LLMs from various providers.
 | Amazon Bedrock             | AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or AWS_PROFILE        |
 | Anthropic                  | ANTHROPIC_API_KEY                                                  |
 | Anthropic via Bedrock      | AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or AWS_PROFILE        |
-| Azure OpenAI               | AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT and OPENAI_API_VERSION |
+| Azure OpenAI               | AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT                     |
 | Google Gemini              | GOOGLE_API_KEY                                                     |
 | NVidia                     | NVIDIA_API_KEY                                                     |
 | Ollama                     | &lt;None required&gt;                                              |
@@ -229,8 +229,14 @@ to use LLMs from various providers.
 | OpenRouter                 | OPENROUTER_API_KEY                                                 |
 
 Azure OpenAI also needs to know which deployment to call.  Give it as `deployment_name` in the llm_config
-or set the `AZURE_OPENAI_DEPLOYMENT_NAME` environment variable.  See
-[music_nerd_pro_llm_azure.hocon](../neuro_san/registries/music_nerd_pro_llm_azure.hocon) for a working example.
+or set the `AZURE_OPENAI_DEPLOYMENT_NAME` environment variable.  With neither, the model id that `model_name`
+resolves to is sent as the deployment name (`gpt-4o` resolves to `gpt-4o-2024-08-06`), which rarely matches a
+real deployment, so give `deployment_name`.  The usual llm_config is `"class": "azure-openai"` plus the OpenAI
+`model_name` behind the deployment (it prices the tokens) and your `deployment_name`.  Requests go to the
+resource's v1 API (`https://<resource>.openai.azure.com/openai/v1/`), which takes no api-version, so
+`OPENAI_API_VERSION` is not needed.
+[music_nerd_pro_llm_azure.hocon](../neuro_san/registries/music_nerd_pro_llm_azure.hocon) explains each key; it
+is turned off in manifest.hocon because it names a specific deployment.
 
 For the Bedrock-based entries you can either set explicit credentials via
 `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` (plus optional `AWS_SESSION_TOKEN`

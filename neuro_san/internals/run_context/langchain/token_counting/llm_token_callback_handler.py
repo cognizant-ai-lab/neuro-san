@@ -24,6 +24,7 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 from typing import Tuple
+from uuid import UUID
 from typing_extensions import override
 
 from langchain_core.callbacks.base import AsyncCallbackHandler
@@ -63,6 +64,13 @@ CLASS_TABLE = {
     "ChatOpenAI": "openai",
 }
 
+# Keys an LlmPolicy can put in a chat model's "metadata" to steer how that model's usage is booked.
+# langchain hands the metadata to on_chat_model_start(), so a policy can use a stock chat model class
+# for another provider and still say which bucket the usage belongs to and which llm_info entry prices
+# it. AzureLlmPolicy does this: Azure's response names the deployment, which has no price of its own.
+PROVIDER_METADATA_KEY = "neuro_san_provider_class"
+PRICE_MODEL_METADATA_KEY = "neuro_san_price_model_name"
+
 
 # pylint: disable=too-many-ancestors
 # pylint: disable=too-many-instance-attributes
@@ -100,6 +108,9 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
     Token cost is calculated using prices from the LLM info file
     ("price_per_1k_input_tokens" / "price_per_1k_output_tokens") when available.
     If no price information is found, the cost defaults to 0 and a warning is logged.
+    The model priced is the one the response names, unless the LlmPolicy that built the chat model
+    put PRICE_MODEL_METADATA_KEY in the model's metadata; PROVIDER_METADATA_KEY likewise overrides
+    the provider bucket CLASS_TABLE would pick from the class name.
     """
 
     # Token stats
@@ -117,6 +128,9 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         self.llm_infos: Dict[str, Any] = llm_infos
         self.provider_class: str = None
         self.start_time: float = None
+        # run_id -> llm_info entry to price that run's usage as, when the policy said so through the
+        # chat model's metadata (see PRICE_MODEL_METADATA_KEY). Filled at start, dropped at end or on error.
+        self.price_model_names: Dict[UUID, str] = {}
 
         # Dictionary for accumulating token stats of models. For example
         # {"openai": {"gpt-4o": {"total_tokens": 100, "prompt_tokens": 80, ...}, "gpt_4.1": {...}}, }
@@ -157,8 +171,20 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
     ):
         """
         Extract the LLM class and start timer when chat model starts.
+        Also reads the accounting hints a policy put in the chat model's metadata
+        (PROVIDER_METADATA_KEY and PRICE_MODEL_METADATA_KEY).
         :param serialized: Dictionary of metadata of the invoked model
+        :param messages: The prompts being sent (unused)
         """
+        metadata: Dict[str, Any] = kwargs.get("metadata") or {}
+
+        # Remember what to price this run as before the own-call check: a downstream agent's
+        # cost also lands in this handler's totals, so its price model matters here too.
+        price_model_name: Optional[str] = metadata.get(PRICE_MODEL_METADATA_KEY)
+        run_id: Optional[UUID] = kwargs.get("run_id")
+        if price_model_name and run_id is not None:
+            self.price_model_names[run_id] = price_model_name
+
         if not self._is_own_call():
             # A downstream agent's chat model is starting.  Only that agent's own
             # handler tracks per-model state for it.
@@ -171,6 +197,9 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         # If no match found, use chat model class instead
         if not self.provider_class:
             self.provider_class = chat_model_class
+        # A policy can name the bucket itself when it uses a stock chat model class for another provider.
+        if metadata.get(PROVIDER_METADATA_KEY):
+            self.provider_class = metadata.get(PROVIDER_METADATA_KEY)
         if self.provider_class not in self.models_token_dict:
             self.models_token_dict[self.provider_class] = {}
 
@@ -234,7 +263,10 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         if is_own_call and self.start_time is not None:
             time_taken_in_seconds = time() - self.start_time
 
-        usage_metadata, model_name, is_empty_response = self._extract_usage(response)
+        usage_metadata, response_model_name, is_empty_response = self._extract_usage(response)
+        # A policy may have said which llm_info entry prices this run (see PRICE_MODEL_METADATA_KEY);
+        # otherwise the model the response names is priced.
+        model_name: str = self.price_model_names.pop(kwargs.get("run_id"), None) or response_model_name
 
         if usage_metadata:
             total_tokens: int = usage_metadata.get("total_tokens", 0)
@@ -270,6 +302,15 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
                 self.successful_requests += 1
                 self.empty_responses += int(is_empty_response)
                 self.total_cost += total_cost
+
+    @override
+    async def on_llm_error(self, error: BaseException, **kwargs: Any) -> None:
+        """
+        Forget the price model of a run that failed, since on_llm_end() never runs for it.
+        :param error: The exception the chat model raised (unused)
+        """
+        _ = error
+        self.price_model_names.pop(kwargs.get("run_id"), None)
 
     def calculate_token_costs(self, model_name: str, completion_tokens: int, prompt_tokens: int) -> float:
         """

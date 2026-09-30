@@ -43,7 +43,7 @@ class TestSmokeTestHocons(TestCase):
     # resolved.
     DISABLED_HOCONS = {
         "music_nerd_pro_llm_azure/combination_responses_with_history_direct.hocon":
-            "Issue #910: disabled until #909 is resolved.",
+            "Off in manifest.hocon and needs an Azure deployment named gpt-5-2; see issues #910 and #909.",
         "music_nerd_pro_llm_bedrock_claude/combination_responses_with_history_direct.hocon":
             "Issue #910: disabled until #909 is resolved.",
         "music_nerd_pro_llm_openrouter/combination_responses_with_history_direct.hocon":
