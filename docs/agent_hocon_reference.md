@@ -222,7 +222,7 @@ to use LLMs from various providers.
 | Amazon Bedrock             | AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or AWS_PROFILE        |
 | Anthropic                  | ANTHROPIC_API_KEY                                                  |
 | Anthropic via Bedrock      | AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or AWS_PROFILE        |
-| Azure OpenAI               | AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT                     |
+| Azure OpenAI               | AZURE_OPENAI_API_KEY or AZURE_OPENAI_AD_TOKEN, and AZURE_OPENAI_ENDPOINT |
 | Google Gemini              | GOOGLE_API_KEY                                                     |
 | NVidia                     | NVIDIA_API_KEY                                                     |
 | Ollama                     | &lt;None required&gt;                                              |

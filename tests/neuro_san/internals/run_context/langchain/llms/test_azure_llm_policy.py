@@ -417,9 +417,11 @@ class TestAzureLlmPolicy(TestCase):
         A class-only llm_config without any deployment fails clearly instead of sending model: null.
         """
         with self.assertRaises(OpenAIError) as context:
-            self._build_policy({"deployment_name": None}, model_name=None)
+            self._build_policy({"deployment_name": None, "model_name": None}, model_name=None)
 
         self.assertIn("AZURE_OPENAI_DEPLOYMENT_NAME", str(context.exception))
+        # Checked in create_client() before the httpx client is opened, so nothing leaks.
+        self.assertIsNone(getattr(self.policies[-1], "http_client", None))
         hint: str = ApiKeyErrorCheck.check_for_api_key_exception(context.exception)
         self.assertIn("AZURE_OPENAI_DEPLOYMENT_NAME", hint)
 

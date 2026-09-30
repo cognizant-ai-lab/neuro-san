@@ -102,8 +102,8 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         :return: The web client that accesses the LLM.
                 By default this is None, as many BaseLanguageModels
                 do not allow a web client to be passed in as an arg.
-        :raises OpenAIError: When no endpoint or no credential can be found (see resolve_base_url()
-                and resolve_credential())
+        :raises OpenAIError: When no endpoint, credential or deployment can be found (see
+                resolve_base_url(), resolve_credential() and resolve_deployment_name())
         """
         # Azure's v1 API serves the OpenAI wire format under {endpoint}/openai/v1/, so the plain
         # OpenAI SDK client is all it needs. Same lazy-loading resolver rigamarole as the other policies.
@@ -118,6 +118,9 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         # first would leak on a missing endpoint or credential.
         api_key: str = self.resolve_credential(config)
         base_url: str = self.resolve_base_url(config)
+        # The deployment is checked here for the same reason: create_llm() would only find it
+        # missing once this client exists.
+        self.resolve_deployment_name(config, self.model_name_from_config(config))
 
         self.create_http_client(config)
 
@@ -240,6 +243,17 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         )
 
         return llm
+
+    @staticmethod
+    def model_name_from_config(config: Dict[str, Any]) -> Optional[str]:
+        """
+        Reads the model name the way LlmPolicy.create_llm_resources_components() does before it calls
+        create_llm(), so that create_client() checks the deployment against the same value.
+
+        :param config: The fully specified llm config
+        :return: model_name, model or model_id from the config, whichever is set first; None when none is
+        """
+        return config.get("model_name") or config.get("model") or config.get("model_id")
 
     @staticmethod
     def build_accounting_metadata(deployment_name: str, model_name: Optional[str]) -> Dict[str, Any]:
