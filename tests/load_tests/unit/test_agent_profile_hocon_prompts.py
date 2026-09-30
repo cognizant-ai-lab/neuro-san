@@ -61,8 +61,7 @@ class TestAgentProfileHoconPrompts(TestCase):
         )
 
     @staticmethod
-    def _write_hocon(folder: str, name: str, agent: str, texts: List[str],
-                     **extra: Any) -> str:
+    def _write_hocon(folder: str, name: str, agent: str, texts: List[str], **extra: Any) -> str:
         """Write a minimal test-case hocon (JSON is valid hocon) and return its path."""
         path: str = os.path.join(folder, name)
         test_case: Dict[str, Any] = {

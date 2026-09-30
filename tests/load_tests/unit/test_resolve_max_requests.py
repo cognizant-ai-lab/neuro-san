@@ -15,6 +15,7 @@
 #
 # END COPYRIGHT
 from argparse import Namespace
+from typing import Optional
 from unittest import TestCase
 
 from tests.load_tests.validation.input_validator import InputValidator
@@ -30,26 +31,26 @@ class TestResolveMaxRequests(TestCase):
     """
 
     @staticmethod
-    def _validator(*, num_rounds=1, max_requests=None) -> InputValidator:
+    def _validator(num_rounds: int = 1, max_requests: Optional[int] = None) -> InputValidator:
         """Build a validator with only the args these methods read."""
         return InputValidator(Namespace(
             num_rounds=num_rounds,
             max_requests=max_requests,
         ))
 
-    def test_cap_is_stage_total_times_rounds(self):
+    def test_cap_is_stage_total_times_rounds(self) -> None:
         """The default cap covers every stage of every round."""
         validator = self._validator(num_rounds=3)
 
         self.assertEqual(validator.resolve_max_requests([2, 4, 8]), 42)
 
-    def test_explicit_max_requests_wins(self):
+    def test_explicit_max_requests_wins(self) -> None:
         """--max-requests overrides the computed cap."""
         validator = self._validator(num_rounds=3, max_requests=5)
 
         self.assertEqual(validator.resolve_max_requests([2, 4, 8]), 5)
 
-    def test_zero_rounds_exits(self):
+    def test_zero_rounds_exits(self) -> None:
         """--num-rounds 0 must exit before the probe spends tokens."""
         validator = self._validator(num_rounds=0)
 
@@ -58,7 +59,7 @@ class TestResolveMaxRequests(TestCase):
 
         self.assertEqual(caught.exception.code, 1)
 
-    def test_negative_rounds_exits(self):
+    def test_negative_rounds_exits(self) -> None:
         """A negative --num-rounds is rejected the same way."""
         validator = self._validator(num_rounds=-3)
 
@@ -67,7 +68,7 @@ class TestResolveMaxRequests(TestCase):
 
         self.assertEqual(caught.exception.code, 1)
 
-    def test_rounds_are_validated_before_explicit_max_requests(self):
+    def test_rounds_are_validated_before_explicit_max_requests(self) -> None:
         """--max-requests must not mask an invalid --num-rounds.
 
         The rounds check runs first, so passing both does not slip
@@ -80,7 +81,7 @@ class TestResolveMaxRequests(TestCase):
 
         self.assertEqual(caught.exception.code, 1)
 
-    def test_zero_max_requests_exits(self):
+    def test_zero_max_requests_exits(self) -> None:
         """--max-requests 0 caps the run at nothing, so it is rejected."""
         validator = self._validator(max_requests=0)
 
