@@ -35,7 +35,7 @@ class ResourceMonitor:
     """Captures and logs psutil-based process resource snapshots."""
 
     @staticmethod
-    def find_process(keyword) -> Optional[psutil.Process]:
+    def find_process(keyword: str) -> Optional[psutil.Process]:
         """Find a running process whose command line contains the given keyword."""
         for proc in psutil.process_iter(["pid", "cmdline"]):
             try:
@@ -47,7 +47,7 @@ class ResourceMonitor:
         return None
 
     @staticmethod
-    def find_process_by_port(port) -> Optional[psutil.Process]:
+    def find_process_by_port(port: int) -> Optional[psutil.Process]:
         """Find a process listening on the given port."""
         for proc in psutil.process_iter(["pid"]):
             try:
@@ -59,7 +59,7 @@ class ResourceMonitor:
         return None
 
     @staticmethod
-    def snapshot(proc) -> Optional[Dict[str, Any]]:
+    def snapshot(proc: Optional[psutil.Process]) -> Optional[Dict[str, Any]]:
         """Capture a point-in-time resource snapshot of a process."""
         if proc is None:
             return None
@@ -83,7 +83,7 @@ class ResourceMonitor:
             return None
 
     @staticmethod
-    def log_snapshot(label, snap) -> None:
+    def log_snapshot(label: str, snap: Optional[Dict[str, Any]]) -> None:
         """Log a single resource snapshot."""
         if snap is None:
             logger.info("  %s: process not found", label)

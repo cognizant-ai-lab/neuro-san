@@ -27,7 +27,7 @@ class OutputParser:
     """Parses agent response fields and token accounting."""
 
     @staticmethod
-    def parse_stdout_field(stdout, field_name) -> Optional[str]:
+    def parse_stdout_field(stdout: str, field_name: str) -> Optional[str]:
         """Extract a JSON field value from agent response text."""
         match = re.search(rf'"{field_name}"\s*:\s*"([^"]+)"', stdout)
         if match:
@@ -35,7 +35,7 @@ class OutputParser:
         return None
 
     @staticmethod
-    def parse_token_accounting(stdout) -> Dict[str, Any]:
+    def parse_token_accounting(stdout: str) -> Dict[str, Any]:
         """Extract Token Accounting JSON block from agent response text."""
         marker = "Token Accounting:"
         idx = stdout.find(marker)
@@ -60,7 +60,7 @@ class OutputParser:
             return {}
 
     @staticmethod
-    def last_stderr_line(stderr) -> str:
+    def last_stderr_line(stderr: Optional[str]) -> str:
         """Extract the last line of stderr for error reporting."""
         stripped = stderr.strip() if stderr else ""
         if not stripped:
