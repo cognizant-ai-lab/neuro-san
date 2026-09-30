@@ -175,6 +175,7 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         (PROVIDER_METADATA_KEY and PRICE_MODEL_METADATA_KEY).
         :param serialized: Dictionary of metadata of the invoked model
         :param messages: The prompts being sent (unused)
+        :param kwargs: The run's callback arguments; "run_id" and "metadata" are read here
         """
         metadata: Dict[str, Any] = kwargs.get("metadata") or {}
 
@@ -251,6 +252,7 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         """
         Collect token usage when llm ends.
         :param response: Output from chat model
+        :param kwargs: The run's callback arguments; "run_id" is read here
         """
         # Per-model stats are only tracked for this agent's own LLM calls.
         # Downstream agents' calls still contribute to the scalar subtree totals below.
@@ -308,6 +310,7 @@ class LlmTokenCallbackHandler(AsyncCallbackHandler):
         """
         Forget the price model of a run that failed, since on_llm_end() never runs for it.
         :param error: The exception the chat model raised (unused)
+        :param kwargs: The run's callback arguments; "run_id" is read here
         """
         _ = error
         self.price_model_names.pop(kwargs.get("run_id"), None)

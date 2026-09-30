@@ -388,8 +388,8 @@ class TestAzureLlmPolicy(TestCase):
         _, chat_llm = self._build_policy({"use_responses_api": False})
 
         self.assertEqual(responses_llm.model_name, self.DEPLOYMENT_NAME)
-        self.assertEqual(self._request_payload(responses_llm)["model"], self.DEPLOYMENT_NAME)
-        self.assertEqual(self._request_payload(chat_llm)["model"], self.DEPLOYMENT_NAME)
+        self.assertEqual(self._request_payload(responses_llm).get("model"), self.DEPLOYMENT_NAME)
+        self.assertEqual(self._request_payload(chat_llm).get("model"), self.DEPLOYMENT_NAME)
 
     def test_deployment_name_falls_back_to_the_environment(self) -> None:
         """
@@ -399,7 +399,7 @@ class TestAzureLlmPolicy(TestCase):
             _, llm = self._build_policy({"deployment_name": None})
 
         self.assertEqual(llm.model_name, "env-deployment")
-        self.assertEqual(self._request_payload(llm)["model"], "env-deployment")
+        self.assertEqual(self._request_payload(llm).get("model"), "env-deployment")
 
     def test_model_name_is_the_last_resort_deployment_name(self) -> None:
         """
@@ -411,7 +411,7 @@ class TestAzureLlmPolicy(TestCase):
                                     model_name="my-deployment")
 
         self.assertEqual(llm.model_name, "my-deployment")
-        self.assertEqual(self._request_payload(llm)["model"], "my-deployment")
+        self.assertEqual(self._request_payload(llm).get("model"), "my-deployment")
         self.assertNotIn(PRICE_MODEL_METADATA_KEY, llm.metadata)
 
     def test_no_deployment_name_at_all_raises(self) -> None:
@@ -438,8 +438,8 @@ class TestAzureLlmPolicy(TestCase):
         payload: Dict[str, Any] = self._request_payload(llm)
 
         self.assertEqual(llm.model_name, "prod-reasoning")
-        self.assertEqual(payload["model"], "prod-reasoning")
-        self.assertEqual(payload["temperature"], 0.7)
+        self.assertEqual(payload.get("model"), "prod-reasoning")
+        self.assertEqual(payload.get("temperature"), 0.7)
         self.assertEqual(llm.metadata[PRICE_MODEL_METADATA_KEY], "gpt-5.4-2026-03-05")
 
     # ---- The payload ----------------------------------------------------------------------------
@@ -485,9 +485,9 @@ class TestAzureLlmPolicy(TestCase):
                                      "include": ["reasoning.encrypted_content"], "reasoning_effort": "low"})
         payload: Dict[str, Any] = self._request_payload(llm)
 
-        self.assertIs(payload["store"], False)
-        self.assertEqual(payload["include"], ["reasoning.encrypted_content"])
-        self.assertEqual(payload["reasoning"], {"effort": "low"})
+        self.assertIs(payload.get("store"), False)
+        self.assertEqual(payload.get("include"), ["reasoning.encrypted_content"])
+        self.assertEqual(payload.get("reasoning"), {"effort": "low"})
         self._assert_binds_to_responses_create(payload)
 
     def test_chat_completions_only_parameters_are_forwarded(self) -> None:
@@ -498,9 +498,9 @@ class TestAzureLlmPolicy(TestCase):
                                      "stop": ["END"]})
         payload: Dict[str, Any] = self._request_payload(llm)
 
-        self.assertEqual(payload["presence_penalty"], 0.5)
-        self.assertEqual(payload["seed"], 7)
-        self.assertEqual(payload["stop"], ["END"])
+        self.assertEqual(payload.get("presence_penalty"), 0.5)
+        self.assertEqual(payload.get("seed"), 7)
+        self.assertEqual(payload.get("stop"), ["END"])
 
     # ---- On the wire ----------------------------------------------------------------------------
 
@@ -519,9 +519,9 @@ class TestAzureLlmPolicy(TestCase):
         request: Request = self.requests[0]
         self.assertEqual(request.url.path, "/openai/v1/chat/completions")
         self.assertEqual(request.url.query, b"")
-        self.assertEqual(request.headers["authorization"], "Bearer " + self.API_KEY)
+        self.assertEqual(request.headers.get("authorization"), "Bearer " + self.API_KEY)
         body: Dict[str, Any] = self._sent_body(request)
-        self.assertEqual(body["model"], self.DEPLOYMENT_NAME)
+        self.assertEqual(body.get("model"), self.DEPLOYMENT_NAME)
         self.assertNotIn("n", body)
 
     def test_responses_request_hits_v1_responses_with_store_false(self) -> None:
@@ -537,8 +537,8 @@ class TestAzureLlmPolicy(TestCase):
         self.assertEqual(request.url.path, "/openai/v1/responses")
         self.assertEqual(request.url.query, b"")
         body: Dict[str, Any] = self._sent_body(request)
-        self.assertEqual(body["model"], self.DEPLOYMENT_NAME)
-        self.assertIs(body["store"], False)
+        self.assertEqual(body.get("model"), self.DEPLOYMENT_NAME)
+        self.assertIs(body.get("store"), False)
         self.assertNotIn("n", body)
 
     def test_entra_token_is_sent_as_the_bearer_token(self) -> None:
@@ -549,7 +549,7 @@ class TestAzureLlmPolicy(TestCase):
 
         asyncio.run(llm.ainvoke([HumanMessage("hi")]))
 
-        self.assertEqual(self.requests[0].headers["authorization"], "Bearer entra-token")
+        self.assertEqual(self.requests[0].headers.get("authorization"), "Bearer entra-token")
 
     # ---- Class and bucket -----------------------------------------------------------------------
 
@@ -563,7 +563,7 @@ class TestAzureLlmPolicy(TestCase):
         _, deployment_only = self._build_policy({}, model_name=None)
 
         self.assertIsInstance(llm, ChatOpenAI)
-        self.assertEqual(dumpd(llm)["id"][-1], "ChatOpenAI")
+        self.assertEqual(dumpd(llm).get("id")[-1], "ChatOpenAI")
         self.assertEqual(llm.metadata[PROVIDER_METADATA_KEY], "azure-openai")
         self.assertEqual(llm.metadata[PRICE_MODEL_METADATA_KEY], self.MODEL_NAME)
         self.assertEqual(deployment_only.metadata[PROVIDER_METADATA_KEY], "azure-openai")
@@ -583,11 +583,11 @@ class TestAzureLlmPolicy(TestCase):
             asyncio.run(llm.ainvoke([HumanMessage("hi")], config={"callbacks": [handler]}))
 
         self.assertNotIn("openai", handler.models_token_dict)
-        self.assertNotIn(self.DEPLOYMENT_NAME, handler.models_token_dict["azure-openai"])
-        entry: Dict[str, Any] = handler.models_token_dict["azure-openai"][self.MODEL_NAME]
-        self.assertEqual(entry["successful_requests"], 1)
-        self.assertGreater(entry["total_cost"], 0.0)
-        self.assertEqual(handler.total_cost, entry["total_cost"])
+        self.assertNotIn(self.DEPLOYMENT_NAME, handler.models_token_dict.get("azure-openai", {}))
+        entry: Dict[str, Any] = handler.models_token_dict.get("azure-openai", {}).get(self.MODEL_NAME, {})
+        self.assertEqual(entry.get("successful_requests"), 1)
+        self.assertGreater(entry.get("total_cost"), 0.0)
+        self.assertEqual(handler.total_cost, entry.get("total_cost"))
 
     def test_deployment_only_usage_is_booked_by_what_the_response_names(self) -> None:
         """
@@ -608,12 +608,12 @@ class TestAzureLlmPolicy(TestCase):
                 with owning_agent_scope(handler):
                     asyncio.run(llm.ainvoke([HumanMessage("hi")], config={"callbacks": [handler]}))
 
-                entry: Dict[str, Any] = handler.models_token_dict["azure-openai"][expected_key]
-                self.assertEqual(entry["successful_requests"], 1)
+                entry: Dict[str, Any] = handler.models_token_dict.get("azure-openai", {}).get(expected_key, {})
+                self.assertEqual(entry.get("successful_requests"), 1)
                 if use_responses_api:
-                    self.assertEqual(entry["total_cost"], 0.0)
+                    self.assertEqual(entry.get("total_cost"), 0.0)
                 else:
-                    self.assertGreater(entry["total_cost"], 0.0)
+                    self.assertGreater(entry.get("total_cost"), 0.0)
 
     # ---- SDK client settings --------------------------------------------------------------------
 
@@ -641,8 +641,8 @@ class TestAzureLlmPolicy(TestCase):
         configured: Dict[str, str] = {"x-unit-test": "1"}
         policy, _ = self._build_policy({"default_headers": configured})
 
-        self.assertEqual(policy.async_openai_client.default_headers["x-unit-test"], "1")
-        self.assertEqual(policy.async_openai_client.default_headers["User-Agent"],
+        self.assertEqual(policy.async_openai_client.default_headers.get("x-unit-test"), "1")
+        self.assertEqual(policy.async_openai_client.default_headers.get("User-Agent"),
                          "langchain-partner-python-azure-openai")
         self.assertEqual(configured, {"x-unit-test": "1"})
 
@@ -675,9 +675,9 @@ class TestAzureLlmPolicy(TestCase):
         result: Any = factory.create_llm_with_fallbacks(config, None)
 
         self.assertIsInstance(result, dict)
-        guidance: str = " ".join(result["api_key_errors"])
+        guidance: str = " ".join(result.get("api_key_errors"))
         self.assertIn("AZURE_OPENAI_API_KEY", guidance)
-        self.assertEqual(len(result["construction_errors"]), 0)
+        self.assertEqual(len(result.get("construction_errors")), 0)
 
     # ---- Legacy keys ----------------------------------------------------------------------------
 

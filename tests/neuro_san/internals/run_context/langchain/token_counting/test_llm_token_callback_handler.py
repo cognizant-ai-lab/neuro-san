@@ -205,10 +205,10 @@ class TestLlmTokenCallbackHandler(IsolatedAsyncioTestCase):
             await self.priced_handler.on_llm_end(self._result_naming("my-deployment"), run_id=run_id)
 
         self.assertNotIn("openai", self.priced_handler.models_token_dict)
-        entry: Dict[str, Any] = self.priced_handler.models_token_dict["azure-openai"]["gpt-4"]
-        self.assertEqual(entry["total_tokens"], 2000)
+        entry: Dict[str, Any] = self.priced_handler.models_token_dict.get("azure-openai", {}).get("gpt-4", {})
+        self.assertEqual(entry.get("total_tokens"), 2000)
         # 1000 input tokens at 0.01 per 1k plus 1000 output tokens at 0.03 per 1k
-        self.assertAlmostEqual(entry["total_cost"], 0.04)
+        self.assertAlmostEqual(entry.get("total_cost"), 0.04)
         self.assertAlmostEqual(self.priced_handler.total_cost, 0.04)
         # The hint is consumed with the run it was recorded for.
         self.assertEqual(self.priced_handler.price_model_names, {})
@@ -223,9 +223,9 @@ class TestLlmTokenCallbackHandler(IsolatedAsyncioTestCase):
                 self.SERIALIZED_CHAT_OPENAI, [], run_id=run_id, metadata={})
             await self.priced_handler.on_llm_end(self._result_naming("my-deployment"), run_id=run_id)
 
-        entry: Dict[str, Any] = self.priced_handler.models_token_dict["openai"]["my-deployment"]
-        self.assertEqual(entry["total_tokens"], 2000)
-        self.assertEqual(entry["total_cost"], 0.0)
+        entry: Dict[str, Any] = self.priced_handler.models_token_dict.get("openai", {}).get("my-deployment", {})
+        self.assertEqual(entry.get("total_tokens"), 2000)
+        self.assertEqual(entry.get("total_cost"), 0.0)
 
     async def test_price_model_also_applies_to_a_downstream_agents_call(self) -> None:
         """
