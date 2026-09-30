@@ -31,6 +31,7 @@ import logging
 import os
 import socket
 import sys
+from argparse import Namespace
 from typing import Optional
 
 import psutil
@@ -88,7 +89,7 @@ class EnvironmentValidator:
         logger.info("No mock LLM environment detected.")
 
     @staticmethod
-    def is_port_open(host, port) -> bool:
+    def is_port_open(host: str, port: int) -> bool:
         """Check if a TCP port is accepting connections."""
         try:
             with socket.create_connection(
@@ -99,7 +100,7 @@ class EnvironmentValidator:
             return False
 
     @staticmethod
-    def find_local_server(args) -> Optional[psutil.Process]:
+    def find_local_server(args: Namespace) -> Optional[psutil.Process]:
         """Locate the neuro-san server process for resource monitoring.
 
         Searches by process keyword first, then falls back to port
@@ -143,7 +144,7 @@ class EnvironmentValidator:
         return server_proc
 
     @staticmethod
-    def try_auto_detect_server_log(args) -> Optional[str]:
+    def try_auto_detect_server_log(args: Namespace) -> Optional[str]:
         """Best-effort local server-log detection; None if unavailable.
 
         Unlike auto_detect_server_log, this never aborts.  It is used
@@ -177,7 +178,7 @@ class EnvironmentValidator:
         return None
 
     @staticmethod
-    def auto_detect_server_log(server_proc) -> str:
+    def auto_detect_server_log(server_proc: Optional[psutil.Process]) -> str:
         """Auto-detect server log from server process CWD.
 
         Looks for logs/server.log relative to the server's working
