@@ -26,6 +26,7 @@ import json
 import logging
 import os
 
+from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -40,7 +41,7 @@ logger = logging.getLogger(__name__)
 class TrendHistory:
     """Reads history JSONL records and logs them in run order."""
 
-    def __init__(self, path, *, agent_filter=None) -> None:
+    def __init__(self, path: str, agent_filter: Optional[List[str]] = None) -> None:
         self._path = path
         self._agent_filter: set = (
             set(agent_filter) if agent_filter else set()
@@ -98,14 +99,14 @@ class TrendHistory:
         return None
 
     @staticmethod
-    def _read_records(history_path) -> List[Dict]:
+    def _read_records(history_path: str) -> List[Dict[str, Any]]:
         """Parse the JSONL file, skipping unreadable lines.
 
         A partially written final line is expected when a run is
         interrupted, so a bad line is reported and skipped rather than
         losing every earlier record.
         """
-        records: List[Dict] = []
+        records: List[Dict[str, Any]] = []
         skipped = 0
         try:
             with open(history_path, "r", encoding="utf-8") as handle:
@@ -149,7 +150,7 @@ class TrendHistory:
         return header
 
     @staticmethod
-    def _row(record) -> List[str]:
+    def _row(record: Dict[str, Any]) -> List[str]:
         """Format one history record as a table row.
 
         Client and server-only records count requests under different
@@ -195,7 +196,7 @@ class TrendHistory:
         return row
 
     @staticmethod
-    def _fmt_timestamp(timestamp) -> str:
+    def _fmt_timestamp(timestamp: str) -> str:
         """Shorten an ISO timestamp to "YYYY-MM-DD HH:MM"."""
         if not timestamp:
             return "-"
@@ -203,7 +204,7 @@ class TrendHistory:
         return text[:16]
 
     @staticmethod
-    def _fmt_seconds(value) -> str:
+    def _fmt_seconds(value: Optional[float]) -> str:
         """Format a seconds value, rendering absent or zero as "-"."""
         if not isinstance(value, (int, float)) or value <= 0:
             return "-"

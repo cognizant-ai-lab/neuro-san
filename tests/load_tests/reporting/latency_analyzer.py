@@ -20,6 +20,7 @@ timeline, and server-side timing for diagnosing LLM bottlenecks.
 
 import logging
 import math
+from typing import Any
 from typing import Dict
 from typing import List
 from typing import Tuple
@@ -40,11 +41,11 @@ COUNT_MILESTONE_STEP = 50
 class LatencyAnalyzer:
     """Analyse per-request latency data across stages."""
 
-    def __init__(self, stage_summaries) -> None:
+    def __init__(self, stage_summaries: List[Dict[str, Any]]) -> None:
         self._summaries = stage_summaries
 
     @staticmethod
-    def _percentile(sorted_values, pct):
+    def _percentile(sorted_values: List[float], pct: float) -> float:
         """Compute the pct-th percentile from pre-sorted values."""
         if not sorted_values:
             return 0.0
@@ -60,7 +61,7 @@ class LatencyAnalyzer:
     # 1. Cumulative completion timeline per stage
     # ----------------------------------------------------------
 
-    def log_latency_analysis(self, *, is_ramp=True) -> None:
+    def log_latency_analysis(self, is_ramp: bool = True) -> None:
         """Log completion timeline for each stage."""
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         logger.info("  LATENCY ANALYSIS")
@@ -68,7 +69,7 @@ class LatencyAnalyzer:
 
         self._log_completion_timeline(is_ramp=is_ramp)
 
-    def _log_completion_timeline(self, *, is_ramp) -> None:
+    def _log_completion_timeline(self, is_ramp: bool) -> None:
         """Log completion latency percentiles per stage on one line."""
         for summary in self._summaries:
             latencies = self._extract_latencies(summary)
@@ -100,7 +101,7 @@ class LatencyAnalyzer:
             self._log_count_milestones(latencies)
 
     @staticmethod
-    def _log_count_milestones(sorted_latencies) -> None:
+    def _log_count_milestones(sorted_latencies: List[float]) -> None:
         """Log completion times at round-number request counts."""
         total = len(sorted_latencies)
         if total <= COUNT_MILESTONE_STEP:
@@ -126,9 +127,7 @@ class LatencyAnalyzer:
     # 2. Round-over-round degradation
     # ----------------------------------------------------------
 
-    def log_degradation(  # pylint: disable=unused-argument
-            self, *, is_ramp=True,
-    ) -> None:
+    def log_degradation(self, is_ramp: bool = True) -> None:  # pylint: disable=unused-argument
         """Compare avg latency across rounds/stages at same concurrency."""
         if len(self._summaries) < 2:
             return
@@ -196,9 +195,7 @@ class LatencyAnalyzer:
     # ----------------------------------------------------------
 
     @staticmethod
-    def _extract_latencies(
-            summary,
-    ) -> List[float]:
+    def _extract_latencies(summary: Dict[str, Any]) -> List[float]:
         """Extract elapsed times from stage results."""
         results = summary.get("results", [])
         return [
@@ -207,20 +204,16 @@ class LatencyAnalyzer:
             if r.get("elapsed", 0) > 0
         ]
 
-    def _group_by_concurrency(
-            self,
-    ) -> Dict[int, list]:
+    def _group_by_concurrency(self) -> Dict[int, List[Dict[str, Any]]]:
         """Group stage summaries by their concurrency level."""
-        groups: Dict[int, list] = {}
+        groups: Dict[int, List[Dict[str, Any]]] = {}
         for s in self._summaries:
             conc = s.get("concurrent", 0)
             groups.setdefault(conc, []).append(s)
         return groups
 
     @staticmethod
-    def _build_timeline(
-            results,
-    ) -> List[Tuple[float, int]]:
+    def _build_timeline(results: List[Dict[str, Any]]) -> List[Tuple[float, int]]:
         """Build a concurrency-over-time timeline from results.
 
         Returns list of (relative_seconds, in_flight_count) tuples.
@@ -244,9 +237,7 @@ class LatencyAnalyzer:
         return timeline
 
     @staticmethod
-    def _log_timeline_chart(
-            timeline,
-    ) -> None:
+    def _log_timeline_chart(timeline: List[Tuple[float, int]]) -> None:
         """Log a simple ASCII chart of concurrency over time."""
         if not timeline:
             return

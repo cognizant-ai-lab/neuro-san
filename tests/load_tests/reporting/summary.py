@@ -19,6 +19,7 @@
 import logging
 from typing import Any
 from typing import Dict
+from typing import Iterable
 from typing import List
 from typing import Optional
 
@@ -30,6 +31,7 @@ from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.reporting.formatters import Formatters
+from tests.load_tests.reporting.system_resources import SysSnapshot
 from tests.load_tests.reporting.system_resources import SystemResources
 from tests.load_tests.reporting.table_formatter import TableFormatter
 
@@ -43,13 +45,13 @@ class SummaryReporter:
     reporting methods can access them without re-passing.
     """
 
-    def __init__(self, stage_summaries, neuro_san_version=None,
-                 client_token_source="HTTP token_accounting") -> None:
+    def __init__(self, stage_summaries: List[Dict[str, Any]], neuro_san_version: Optional[str] = None,
+                 client_token_source: str = "HTTP token_accounting") -> None:
         self._summaries = stage_summaries
         self._neuro_san_version = neuro_san_version
         self._client_token_source = client_token_source
 
-    def log_ramp_summary(self, *, is_ramp=True) -> None:
+    def log_ramp_summary(self, is_ramp: bool = True) -> None:
         """Log the ramp-up summary table across all stages."""
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         title = "RAMP-UP SUMMARY" if is_ramp else "ROUND SUMMARY"
@@ -208,7 +210,8 @@ class SummaryReporter:
             self._log_model_distribution()
 
     @staticmethod
-    def render_token_usage(client, server, *, client_source) -> bool:
+    def render_token_usage(client: Optional[Dict[str, int]], server: Optional[Dict[str, int]],
+                           client_source: str) -> bool:
         """Render the LLM & TOKEN USAGE block; return True if printed.
 
         ``client`` and ``server`` are token-stat dicts (from
@@ -229,7 +232,7 @@ class SummaryReporter:
         return True
 
     @staticmethod
-    def _log_token_source(label, stats) -> None:
+    def _log_token_source(label: str, stats: Optional[Dict[str, int]]) -> None:
         """Log one source's LLM/token lines, or 'not available'."""
         if stats is None:
             logger.info("  %s: not available", label)
@@ -249,7 +252,7 @@ class SummaryReporter:
         )
 
     @staticmethod
-    def _log_token_match(client, server) -> None:
+    def _log_token_match(client: Dict[str, int], server: Dict[str, int]) -> None:
         """Log whether client and server-log totals agree."""
         calls_ok = client["calls_total"] == server["calls_total"]
         tok_ok = client["tok_total"] == server["tok_total"]
@@ -264,7 +267,7 @@ class SummaryReporter:
         )
 
     @staticmethod
-    def aggregate_token_entries(entries):
+    def aggregate_token_entries(entries: Iterable[Dict[str, Any]]) -> Optional[Dict[str, int]]:
         """Aggregate token dicts into a stats dict, or None if empty.
 
         Each entry needs total_tokens, prompt_tokens,
@@ -307,7 +310,7 @@ class SummaryReporter:
                     return True
         return False
 
-    def _token_stats(self, prefix):
+    def _token_stats(self, prefix: str) -> Optional[Dict[str, int]]:
         """Aggregate per-request token fields (optionally prefixed)."""
         entries = []
         for summary in self._summaries:
@@ -336,7 +339,7 @@ class SummaryReporter:
             self._sys_edge_snapshot("after"),
         )
 
-    def _sys_edge_snapshot(self, edge):
+    def _sys_edge_snapshot(self, edge: str) -> Optional[SysSnapshot]:
         """Build the before/after whole-system snapshot across stages.
 
         ``before`` takes the first stage's start values; ``after``
@@ -360,7 +363,7 @@ class SummaryReporter:
             chosen = snap
         return chosen
 
-    def _sys_peak_snapshot(self):
+    def _sys_peak_snapshot(self) -> Optional[SysSnapshot]:
         """Build the whole-system peak snapshot (per-metric max)."""
         peak_pct = None
         peak_avail = None
@@ -387,7 +390,7 @@ class SummaryReporter:
             "threads": peak_threads,
         }
 
-    def _request_duration_stats(self):
+    def _request_duration_stats(self) -> Optional[Dict[str, float]]:
         """Compute min/avg/max elapsed time across requests."""
         durations = []
         for summary in self._summaries:
@@ -484,7 +487,7 @@ class SummaryReporter:
         if all_errors:
             self._log_top_errors(all_errors)
 
-    def _log_validation_time_impact(self, events) -> None:
+    def _log_validation_time_impact(self, events: List[Dict[str, Any]]) -> None:
         """Log avg duration of requests with/without fixes."""
         fix_rids = {e.get("request_id") for e in events}
         with_fixes = []
@@ -508,7 +511,7 @@ class SummaryReporter:
             )
 
     @staticmethod
-    def _log_top_errors(all_errors) -> None:
+    def _log_top_errors(all_errors: List[str]) -> None:
         """Log the most common validation errors."""
         counts = Counter(all_errors)
         top = counts.most_common(3)
@@ -520,7 +523,7 @@ class SummaryReporter:
             len(all_errors), ", ".join(parts),
         )
 
-    def _collect_validation_events(self):
+    def _collect_validation_events(self) -> List[Dict[str, Any]]:
         """Gather all validation events across stages."""
         events = []
         for summary in self._summaries:

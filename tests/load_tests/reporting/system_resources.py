@@ -83,7 +83,7 @@ class SystemResources:
         return user_limit, sys_max
 
     @classmethod
-    def snapshot(cls, *, cpu_interval: float = 0.1) -> SysSnapshot:
+    def snapshot(cls, cpu_interval: float = 0.1) -> SysSnapshot:
         """Capture a point-in-time whole-system snapshot."""
         mem = psutil.virtual_memory()
         return {
@@ -172,10 +172,7 @@ class SystemResources:
         return f"{pct:.0f}% ({pct / 100.0 * ncores:.2f} of {ncores} cores)"
 
     @staticmethod
-    def _fmt_threads(
-            snap: SysSnapshot, tag: str,
-            user_limit: str, sys_max: str,
-    ) -> str:
+    def _fmt_threads(snap: SysSnapshot, tag: str, user_limit: str, sys_max: str) -> str:
         """Format a threads row; limits only on the before row."""
         threads = int(snap["threads"])
         if tag == "before":
