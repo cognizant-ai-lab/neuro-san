@@ -600,8 +600,8 @@ not record. Server-only runs appear with `mode=server-only`, and their
 
 Conventions: one class per file, no standalone functions, `.get()` for
 dict reads, `%`-formatting for logger calls, specific exception types,
-named constants, TypedDicts (`RequestResult`, `StageSummary`, …) at data
-boundaries, keyword-only arguments and explicit return types.
+named constants, plain `Dict[str, Any]` records at data boundaries,
+keyword-only arguments and explicit return types.
 
 ```bash
 flake8 tests/load_tests
@@ -614,7 +614,8 @@ python -m pytest tests/load_tests/unit -q
 ```
 tests/load_tests/
   load_test_cli.py             LoadTestOrchestrator (main entry point)
-  config.py                    Constants, TypedDicts, compiled patterns
+  config.py                    Constants and compiled patterns
+  shared_ref.py                SharedRef (value handed between threads)
   confirm.py                   Confirm (strict y/n prompt)
   cost_estimator.py            CostEstimator (per-model pricing)
   duration.py                  DurationParser (`90s`/`20m`/`2h` flag values)
@@ -634,6 +635,7 @@ tests/load_tests/
 
   reporting/
     disconnection_reporter.py  DisconnectionReporter
+    formatters.py              Formatters (RSS, duration, amplification)
     json_metadata.py           JsonMetadata (self-documenting JSON)
     cross_run_comparison.py   CrossRunComparison (--compare output)
     latency_analyzer.py        LatencyAnalyzer (completion timeline, degradation)

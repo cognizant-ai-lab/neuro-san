@@ -24,9 +24,9 @@ from typing import Dict
 from typing import List
 from typing import Tuple
 
-from tests.load_tests.config import Formatters
 
 from tests.load_tests.config import SEPARATOR_WIDTH
+from tests.load_tests.reporting.formatters import Formatters
 
 logger = logging.getLogger(__name__)
 
