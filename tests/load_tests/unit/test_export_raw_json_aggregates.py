@@ -73,14 +73,13 @@ class TestExportRawJsonAggregates(TestCase):
 
     def _export(self, elapsed_values: List[float]) -> Dict[str, Any]:
         """Export one stage of successful requests and read it back."""
-        results = [
-            {
+        results: List[Dict[str, Any]] = []
+        for index, elapsed in enumerate(elapsed_values, start=1):
+            results.append({
                 "request_id": f"request-{index}",
                 "status": STATUS_CREATED,
                 "elapsed": elapsed,
-            }
-            for index, elapsed in enumerate(elapsed_values, start=1)
-        ]
+            })
         # One stage whose wall-clock time is the slowest request,
         # because the requests ran concurrently.
         stage_summaries = [{

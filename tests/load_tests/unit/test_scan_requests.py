@@ -67,7 +67,10 @@ class TestScanRequests(TestCase):
         results = rebuilder._scan_requests(
             os.path.join(self._dir, "requests"), rebuilder._parse_timing(),
         )
-        return {result["request_id"]: result for result in results}
+        keyed: Dict[str, Dict[str, Any]] = {}
+        for result in results:
+            keyed[result.get("request_id")] = result
+        return keyed
 
     def test_partial_output_does_not_promote_a_timeout(self) -> None:
         """A TIMEOUT with a reservation_id stays a TIMEOUT."""
