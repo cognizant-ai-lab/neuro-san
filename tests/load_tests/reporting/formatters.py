@@ -33,7 +33,7 @@ class Formatters:
         return f"{rss_mb:.0f}M"
 
     @staticmethod
-    def fmt_duration(seconds: float, *, precision: int = 0) -> str:
+    def fmt_duration(seconds: float, precision: int = 0) -> str:
         """
         Format seconds with a minutes suffix when >= 60s.
 
@@ -48,9 +48,7 @@ class Formatters:
         return base
 
     @staticmethod
-    def compute_amplification(
-            actual_requests: int, total_retries: int,
-    ) -> float:
+    def compute_amplification(actual_requests: int, total_retries: int) -> float:
         """
         Return the retry amplification factor.
 
