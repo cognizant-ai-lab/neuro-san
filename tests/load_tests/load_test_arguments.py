@@ -45,6 +45,9 @@ class LoadTestArguments:
 
         The epilog is supplied by the caller so that ``--help``
         still ends with the entrypoint module's usage notes.
+
+        :param epilog: Text shown at the end of --help
+        :return: Parsed arguments, with explicit_args set to the dest names the user passed
         """
         parser = argparse.ArgumentParser(
             description=(
@@ -450,6 +453,10 @@ class LoadTestArguments:
         supplied.  This recognizes "--port=8080" as well as
         "--port 8080", and still counts a value that happens to equal
         the default.
+
+        :param parser: Parser holding every argument; its defaults are replaced by a sentinel
+        :param args: Arguments from the first parse; their names are the dests checked
+        :return: Dest names given on the command line
         """
         sentinel: object = object()
         sentinel_defaults: Dict[str, object] = {}

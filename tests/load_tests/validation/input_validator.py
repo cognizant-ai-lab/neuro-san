@@ -52,6 +52,11 @@ class InputValidator:
     """
 
     def __init__(self, args: Namespace) -> None:
+        """
+        Constructor.
+
+        :param args: Parsed command-line arguments
+        """
         self._args = args
 
     def validate_agent_name(self) -> None:
@@ -86,6 +91,8 @@ class InputValidator:
         tests/fixtures/load_tests); the agent subfolder is derived
         from --agent the same way AgentProfileFactory derives the JSON
         filename: basic/hello_world -> hello_world.
+
+        :return: Sorted *.hocon paths in the agent's fixtures folder; empty when --fixtures-hocon-dir is not given
         """
         parent_dir: Optional[str] = self._args.fixtures_hocon_dir
         if not parent_dir:
@@ -129,6 +136,8 @@ class InputValidator:
         If --ramp is set and --stages provided, parse the CSV.
         If --ramp is set without --stages, use DEFAULT_STAGES.
         Otherwise return a single-stage list from --num-requests.
+
+        :return: Requests per stage
         """
         if self._args.ramp:
             if self._args.stages is not None:
@@ -163,7 +172,12 @@ class InputValidator:
         return [self._args.num_requests]
 
     def resolve_max_requests(self, stages: List[int]) -> int:
-        """Return the effective max-requests cap."""
+        """
+        Return the effective max-requests cap.
+
+        :param stages: Requests per stage
+        :return: --max-requests when given, else sum(stages) * --num-rounds
+        """
         if self._args.num_rounds <= 0:
             logger.error(
                 "--num-rounds must be a positive integer. Got: %s",
@@ -195,6 +209,13 @@ class InputValidator:
         confirm.
 
         Returns the probe result dict if a probe was run, else None.
+
+        :param stages: Requests per stage
+        :param total_cap: Most requests to send, from resolve_max_requests
+        :param runner: Traffic runner used to fire the probe request
+        :param output_dir: Directory for the probe's output files, or None
+        :param stale_log_age: Minutes since the server log was last modified when it looks stale, or None
+        :return: The probe result, or None when no probe was run
         """
         total_planned = sum(stages) * self._args.num_rounds
         capped = min(total_planned, total_cap)
@@ -254,7 +275,13 @@ class InputValidator:
         return probe_result
 
     def _print_summary_header(self, stages: List[int], total_planned: int, capped: int) -> None:
-        """Print the PRE-RUN SUMMARY header block."""
+        """
+        Print the PRE-RUN SUMMARY header block.
+
+        :param stages: Requests per stage, shown with --ramp
+        :param total_planned: Planned requests: sum(stages) * --num-rounds
+        :param capped: Requests after the --max-requests cap
+        """
         args = self._args
         logger.info("\n%s", "=" * SEPARATOR_WIDTH)
         logger.info("  PRE-RUN SUMMARY")
@@ -305,13 +332,28 @@ class InputValidator:
         LLM is the bottleneck, so concurrent requests do not
         scale linearly.  Estimate as probe_time x remaining
         requests (the probe already ran, so it is excluded).
+
+        :param probe_elapsed: Seconds the probe request took
+        :param remaining: Requests still to send after the probe
+        :return: Estimated stage seconds: probe_elapsed * remaining
         """
         return probe_elapsed * remaining
 
     def _collect_warnings(self, capped: int, total_planned: int, stale_log_age: Optional[int] = None,
                           est_stage_duration: Optional[float] = None, probe_tokens: Optional[int] = None,
                           probe_cost: Optional[float] = None, probe_model: Optional[str] = None) -> List[str]:
-        """Collect all pre-run warnings as a list of strings."""
+        """
+        Collect all pre-run warnings as a list of strings.
+
+        :param capped: Requests after the --max-requests cap
+        :param total_planned: Planned requests before the cap
+        :param stale_log_age: Minutes since the server log was last modified when it looks stale, or None
+        :param est_stage_duration: Estimated stage seconds, or None when no probe ran
+        :param probe_tokens: Tokens the probe used, or None
+        :param probe_cost: Probe cost in USD, or None
+        :param probe_model: Model the probe used, or None
+        :return: Warning texts; empty when there is nothing to warn about
+        """
         warnings: List[str] = []
 
         if probe_cost is not None and probe_tokens:
@@ -376,6 +418,8 @@ class InputValidator:
         message in the chat stream, which the server's MINIMAL filter
         drops.  Without a server log to fall back on, the run then
         reports no LLM or token usage at all.
+
+        :return: One warning when --minimal is used with token accounting, else empty
         """
         args = self._args
         if getattr(args, "chat_filter", "maximal") != "minimal":
@@ -405,6 +449,9 @@ class InputValidator:
 
         Uses a conservative per-request estimate based on
         typical server thread overhead.
+
+        :param num_requests: Requests that may run at once
+        :return: Warning text, or None when available memory looks sufficient
         """
         mem = psutil.virtual_memory()
         avail_gb = mem.available / (1024 ** 3)
@@ -427,7 +474,11 @@ class InputValidator:
 
     @staticmethod
     def _print_warnings(warnings: List[str]) -> None:
-        """Print numbered warnings or 'No warnings'."""
+        """
+        Print numbered warnings or 'No warnings'.
+
+        :param warnings: Warning texts from _collect_warnings
+        """
         if not warnings:
             logger.info("\n  No warnings.")
             return
@@ -449,6 +500,10 @@ class InputValidator:
         and logs the outcome.
 
         Returns (probe_result, probe_data_dict).
+
+        :param runner: Traffic runner used to fire the probe request
+        :param output_dir: Directory for the probe's output files, or None
+        :return: (probe_result, probe_data), where probe_data holds tokens, cost, model and elapsed
         """
         logger.info(
             "\n  Running 1 dry-run probe to measure actual "

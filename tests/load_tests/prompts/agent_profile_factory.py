@@ -50,6 +50,12 @@ class AgentProfileFactory:
         _profile_from_hocons() for the hocon keys used.
         Otherwise the profile comes from a JSON file; see
         _find_json_profile() for the search order.
+
+        :param agent_name: --agent value, e.g. basic/hello_world
+        :param profile_path: --profile-path directory, or None
+        :param project_root: --project-root value, or None to use PYTHONPATH
+        :param hocon_files: Test-case hocon files; when given, no JSON profile is read
+        :return: The agent's profile
         """
         if hocon_files:
             return AgentProfile(agent_name, self._profile_from_hocons(agent_name, hocon_files))
@@ -95,6 +101,11 @@ class AgentProfileFactory:
         When agent_name includes a prefix (e.g. basic/hello_world),
         the base name (hello_world) is tried as a fallback so
         --profile-path is not required for prefixed agents.
+
+        :param agent_name: --agent value, e.g. basic/hello_world
+        :param profile_path: --profile-path directory, or None
+        :param project_root: --project-root value, or None to use PYTHONPATH
+        :return: Path of the JSON profile file
         """
         agent_base: str = ProjectPaths.agent_base_name(agent_name)
 
@@ -167,6 +178,10 @@ class AgentProfileFactory:
           estimated_tokens_per_request -> max
 
         Aborts when no text is found in any file.
+
+        :param agent_name: --agent value, checked against each hocon's agent
+        :param hocon_files: Test-case hocon files, one prompt each
+        :return: Profile data with prompts, responses, failure_patterns and, when set, estimated_tokens_per_request
         """
         prompts: List[str] = []
         responses: List[Dict[str, Any]] = []
@@ -222,6 +237,10 @@ class AgentProfileFactory:
         response and response.sly_data, if present, must be maps as in
         docs/test_case_hocon_reference.md (a bare list is a common mistake).
         Aborts on any of these.
+
+        :param agent_name: --agent value; the hocon's agent must match it or its base name
+        :param path: Path to the hocon file
+        :return: The parsed test case
         """
         test_case: Dict[str, Any] = TestsUtil.parse_hocon_test_case(None, path)
         hocon_agent: str = test_case.get("agent", "")
@@ -278,13 +297,23 @@ class AgentProfileFactory:
 
     @staticmethod
     def _extend_unique(target: List[str], items: List[str]) -> None:
-        """Append items not already in target, preserving order."""
+        """
+        Append items not already in target, preserving order.
+
+        :param target: List appended to in place
+        :param items: Items to append
+        """
         for item in items:
             if item not in target:
                 target.append(item)
 
     def _read_json(self, path: str) -> Dict[str, Any]:
-        """Read profile data from a JSON file via leaf-common persistence."""
+        """
+        Read profile data from a JSON file via leaf-common persistence.
+
+        :param path: Path to the JSON profile file
+        :return: The profile data
+        """
         try:
             data: Dict[str, Any] = EasyJsonPersistence(full_ref=path, must_exist=True).restore()
             return data

@@ -33,6 +33,9 @@ class ProjectPaths:
 
         Priority: explicit --project-root -> first entry in PYTHONPATH.
         Returns None when neither yields an existing directory.
+
+        :param project_root: --project-root value, or None
+        :return: Absolute --project-root, else the first PYTHONPATH entry if it is a directory, else None
         """
         if project_root:
             return os.path.abspath(project_root)
@@ -51,5 +54,8 @@ class ProjectPaths:
 
         basic/hello_world -> hello_world. Profile files and fixture
         folders are keyed by this base name.
+
+        :param agent_name: Agent name, with or without a registry prefix
+        :return: The name after the last /
         """
         return agent_name.rsplit("/", 1)[-1]

@@ -36,7 +36,12 @@ class ResourceMonitor:
 
     @staticmethod
     def find_process(keyword: str) -> Optional[psutil.Process]:
-        """Find a running process whose command line contains the given keyword."""
+        """
+        Find a running process whose command line contains the given keyword.
+
+        :param keyword: Text to look for in each process command line
+        :return: The first matching process, or None
+        """
         for proc in psutil.process_iter(["pid", "cmdline"]):
             try:
                 cmdline = " ".join(proc.info.get("cmdline") or [])
@@ -48,7 +53,12 @@ class ResourceMonitor:
 
     @staticmethod
     def find_process_by_port(port: int) -> Optional[psutil.Process]:
-        """Find a process listening on the given port."""
+        """
+        Find a process listening on the given port.
+
+        :param port: TCP port the process listens on
+        :return: The first process listening on the port, or None
+        """
         for proc in psutil.process_iter(["pid"]):
             try:
                 for conn in proc.net_connections():
@@ -60,7 +70,12 @@ class ResourceMonitor:
 
     @staticmethod
     def snapshot(proc: Optional[psutil.Process]) -> Optional[Dict[str, Any]]:
-        """Capture a point-in-time resource snapshot of a process."""
+        """
+        Capture a point-in-time resource snapshot of a process.
+
+        :param proc: Process to measure, or None
+        :return: rss (MB), fds, threads, connections, children, cpu and cpu_seconds; None if proc cannot be read
+        """
         if proc is None:
             return None
         try:
@@ -84,7 +99,12 @@ class ResourceMonitor:
 
     @staticmethod
     def log_snapshot(label: str, snap: Optional[Dict[str, Any]]) -> None:
-        """Log a single resource snapshot."""
+        """
+        Log a single resource snapshot.
+
+        :param label: Label shown before the values
+        :param snap: Snapshot from snapshot(), or None
+        """
         if snap is None:
             logger.info("  %s: process not found", label)
             return
