@@ -477,7 +477,8 @@ else from `openai_api_base` in the llm_config (the full base URL of a gateway, u
   not sent to Azure; `AzureLlmPolicy` hands it to token accounting, which books the usage under `azure-openai`
   and prices it by that model. Give a `model_name` even when the deployment alone would do: Azure's Responses API
   echoes the deployment name as the response model, and token costs are priced by the OpenAI model, so a
-  deployment-only llm_config reports its usage under the deployment name with no price. The `azure-*` entries
+  deployment-only llm_config reports its usage under the deployment name with no price there (Chat Completions
+  names the OpenAI snapshot instead, which is priced). The `azure-*` entries
   are a shorthand for the same thing (each resolves to an OpenAI snapshot such as `gpt-4o-2024-08-06`) and exist
   only for some models; they still need a `deployment_name`.
 - Azure offers the Responses API in most but not all regions and not for every model. An llm_config that hits

@@ -118,6 +118,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         # first would leak on a missing endpoint or credential.
         api_key: str = self.resolve_credential(config)
         base_url: str = self.resolve_base_url(config)
+        default_headers: Dict[str, str] = self.build_default_headers(config)
         # The deployment is checked here for the same reason: create_llm() would only find it
         # missing once this client exists.
         self.resolve_deployment_name(config, self.model_name_from_config(config))
@@ -129,7 +130,7 @@ class AzureLlmPolicy(OpenAILlmPolicy):
             "base_url": base_url,
             "organization": self.get_value_or_env(config, "openai_organization", "OPENAI_ORG_ID"),
             "timeout": config.get("request_timeout"),
-            "default_headers": self.build_default_headers(config),
+            "default_headers": default_headers,
             "http_client": self.http_client,
         }
         # The SDK rejects max_retries=None outright (TypeError), so leave it out to get the SDK default.
