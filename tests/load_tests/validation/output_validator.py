@@ -23,6 +23,8 @@ request validation (sent vs received), and client disconnections.
 
 import logging
 
+from typing import Any
+from typing import Dict
 from typing import List
 
 from tests.load_tests.config import RETRY_ERROR_TYPES
@@ -31,8 +33,6 @@ from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
 from tests.load_tests.config import STATUS_TIMEOUT
-from tests.load_tests.records.request_result import RequestResult
-from tests.load_tests.records.status_counts import StatusCounts
 from tests.load_tests.reporting.formatters import Formatters
 
 logger = logging.getLogger(__name__)
@@ -42,9 +42,9 @@ class OutputValidator:
     """Counts results and logs server-side request verification."""
 
     @staticmethod
-    def count_results(results) -> StatusCounts:
+    def count_results(results) -> Dict[str, Any]:
         """Count results by status type."""
-        counts: StatusCounts = {
+        counts: Dict[str, Any] = {
             STATUS_CREATED: 0,
             STATUS_FAILED: 0,
             STATUS_TIMEOUT: 0,
@@ -228,7 +228,7 @@ class OutputValidator:
 
     @staticmethod
     def check_permission_failures(
-            results: List[RequestResult], agent_name: str,
+            results: List[Dict[str, Any]], agent_name: str,
     ) -> bool:
         """Check if all requests failed with a permissions error.
 
@@ -282,7 +282,7 @@ class OutputValidator:
 
     @staticmethod
     def check_timeout_abort(
-            counts: "StatusCounts",
+            counts: Dict[str, Any],
     ) -> bool:
         """Check if any requests hit a timeout or were killed.
 
