@@ -120,10 +120,10 @@ Today the blocks a model produces are `text` and `reasoning`, with one exception
 object, such as a thinking signature, and a text block from OpenAI may carry a `phase`. The `image`,
 `audio` and `file` shapes are how attachments travel. Today they can only come from a tool that returns
 content blocks, on an AGENT_TOOL_RESULT message; models do not produce them yet, and a client cannot send
-them yet. Inline binary data is always a base64 string in `base64` next to a `mime_type`, never raw bytes; a
-block may instead point at its data with a `url` or a `file_id`, as the schema allows. `non_standard` wraps a
-provider block that has no standard shape, with the provider's original block in `value`. The complete schema
-is LangChain's [standard content blocks](https://docs.langchain.com/oss/python/langchain/messages#message-content).
+them yet. Their binary data is a base64 string in `base64` next to a `mime_type`, never raw bytes.
+`non_standard` wraps a provider block that has no standard shape, with the provider's original block in
+`value`. The complete schema is LangChain's
+[standard content blocks](https://docs.langchain.com/oss/python/langchain/messages#message-content).
 
 ### Using curl to interact with a neuro-san server
 
