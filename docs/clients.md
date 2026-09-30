@@ -101,6 +101,28 @@ stays text-only for now, and sending attachments from a client is not supported 
 `text` of the message a client sends. A message whose content is a plain string, the shape every existing
 client receives today, has no `content_blocks` key, so existing clients see no change.
 
+### Content block shapes
+
+The blocks are plain JSON objects, each with a `type` key, so no library is needed to read them. In the
+`langchain_v1` format these are the shapes a client will see:
+
+```json
+{"type": "text", "text": "the answer"}
+{"type": "reasoning", "reasoning": "the model's thinking summary"}
+{"type": "image", "base64": "<base64 data>", "mime_type": "image/png"}
+{"type": "audio", "base64": "<base64 data>", "mime_type": "audio/wav"}
+{"type": "file", "base64": "<base64 data>", "mime_type": "application/pdf"}
+{"type": "non_standard", "value": {"...": "the provider's own block"}}
+```
+
+Today the blocks a model produces are `text` and `reasoning`. Any block may carry provider details in an
+`extras` object, such as a thinking signature, and a text block from OpenAI may carry a `phase`. The `image`,
+`audio` and `file` shapes are how attachments will travel once multimodal input and output are supported,
+which is not the case yet. When they do appear, binary data is always a base64 string in `base64` next to a
+`mime_type`, never raw bytes. `non_standard` wraps a provider block that has no standard shape, with the
+provider's original block in `value`. The complete schema is LangChain's
+[standard content blocks](https://docs.langchain.com/oss/python/langchain/messages#message-content).
+
 ### Using curl to interact with a neuro-san server
 
 In one window start up a neuro-san server:

@@ -169,7 +169,9 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
         if not isinstance(normalized, list):
             return None
 
-        if ContentUtils.flatten_to_text(normalized) != ContentUtils.flatten_to_text(message):
+        blocks_text: str = ContentUtils.flatten_to_text(normalized)
+        message_text: str = ContentUtils.flatten_to_text(message)
+        if blocks_text != message_text:
             logger.warning("Standardizing the block content of a %s lost text; sending its text only",
                            message.__class__.__name__)
             return None

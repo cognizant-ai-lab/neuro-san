@@ -243,10 +243,29 @@ class ContentUtils:
         for key, value in block.items():
             if key in ContentUtils.TRIVIAL_TEXT_BLOCK_KEYS:
                 continue
-            if value is None or value == "" or value == [] or value == {}:
+            if ContentUtils.is_empty_value(value):
                 continue
             return False
         return True
+
+    @staticmethod
+    def is_empty_value(value: Any) -> bool:
+        """
+        Determine whether a block field value carries nothing: None, an empty
+        string, an empty list or an empty dictionary.
+
+        :param value: The value of one key of a content block
+        :return: True if the value is empty in that sense
+        """
+        if value is None:
+            return True
+        if isinstance(value, str):
+            return len(value) == 0
+        if isinstance(value, list):
+            return len(value) == 0
+        if isinstance(value, dict):
+            return len(value) == 0
+        return False
 
     @staticmethod
     def wrap_content_blocks(blocks: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -254,10 +273,47 @@ class ContentUtils:
         Build the ChatMessage.content_blocks wrapper (see ContentBlocks in
         chat.proto) around a list of langchain v1 standard blocks.
 
+        This and unwrap_content_blocks are the only two places that know the
+        wrapper's layout and format value, so a second format only touches them.
+
         :param blocks: A JSON-safe list of standard content-block dictionaries
         :return: The wrapper dictionary: {"format": "langchain_v1", "blocks": blocks}
         """
         return {"format": ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1, "blocks": blocks}
+
+    @staticmethod
+    def unwrap_content_blocks(wrapper: Any) -> Optional[List[Dict[str, Any]]]:
+        """
+        Take the blocks back out of a ChatMessage.content_blocks wrapper.
+
+        The blocks themselves are returned as-is, not validated (see
+        looks_like_blocks for that). An empty wrapper is one whose "blocks"
+        member is absent, None or an empty list: proto3 JSON omits an empty
+        repeated field, so these are one and the same on the wire, and such a
+        wrapper carries nothing whatever its format says.
+
+        :param wrapper: The value of a "content_blocks" key
+        :return: The blocks list; an empty list for an empty wrapper; None when
+                 the value is not a wrapper (a bare list, the shape from before
+                 the format tag), its blocks are not a list, or its format is
+                 one this code does not know - callers fall back to text
+        """
+        if not isinstance(wrapper, dict):
+            return None
+        wrapper_dict: Dict[str, Any] = wrapper
+
+        blocks: Any = wrapper_dict.get("blocks")
+        if blocks is None:
+            return []
+        if not isinstance(blocks, list):
+            return None
+        blocks_list: List[Dict[str, Any]] = blocks
+        if len(blocks_list) == 0:
+            return []
+
+        if wrapper_dict.get("format") != ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1:
+            return None
+        return blocks_list
 
     @staticmethod
     def normalize_content(message: BaseMessage) -> Union[str, List[Dict[str, Any]]]:
@@ -416,22 +472,15 @@ class ContentUtils:
 
         content_blocks: Any = chat_message.get("content_blocks")
         if content_blocks is not None:
-            # Only the tagged wrapper from chat.proto is accepted. A bare list
-            # is the shape from before the format tag existed and is refused
-            # rather than guessed at.
-            if not isinstance(content_blocks, dict):
+            unwrapped: Optional[List[Dict[str, Any]]] = ContentUtils.unwrap_content_blocks(content_blocks)
+            if unwrapped is None:
+                # Not a wrapper this code knows: fail safe to text.
                 return None
-            wrapper: Dict[str, Any] = content_blocks
-            blocks_value: Any = wrapper.get("blocks")
-            is_empty_list: bool = isinstance(blocks_value, list) and len(blocks_value) == 0
-            if blocks_value is not None and not is_empty_list:
-                if wrapper.get("format") != ContentUtils.CONTENT_BLOCKS_FORMAT_LANGCHAIN_V1:
-                    return None
-                if ContentUtils.looks_like_blocks(blocks_value):
-                    return blocks_value
+            if len(unwrapped) > 0:
+                if ContentUtils.looks_like_blocks(unwrapped):
+                    return unwrapped
                 return None
-            # A wrapper without blocks carries nothing, so its format is moot;
-            # fall through to mime_data.
+            # An empty wrapper carries nothing; fall through to mime_data.
 
         mime_data: Any = chat_message.get("mime_data")
         if not isinstance(mime_data, list):

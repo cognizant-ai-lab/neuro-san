@@ -407,6 +407,39 @@ class TestContentUtils(TestCase):
         blocks = [{"type": "text", "text": "hi"}]
         self.assertEqual(ContentUtils.wrap_content_blocks(blocks), {"format": "langchain_v1", "blocks": blocks})
 
+    def test_unwrap_content_blocks(self) -> None:
+        """
+        unwrap returns the blocks of a langchain_v1 wrapper as-is, an empty
+        list for an empty wrapper whatever its format, and None for anything
+        that is not a wrapper this code knows.
+        """
+        blocks = [{"type": "text", "text": "hi"}]
+        self.assertIs(ContentUtils.unwrap_content_blocks({"format": "langchain_v1", "blocks": blocks}), blocks)
+        self.assertEqual(ContentUtils.unwrap_content_blocks({"format": "langchain_v1", "blocks": []}), [])
+        self.assertEqual(ContentUtils.unwrap_content_blocks({"format": "langchain_v1"}), [])
+        self.assertEqual(ContentUtils.unwrap_content_blocks({"format": "somebody_elses_v2", "blocks": []}), [])
+        self.assertEqual(ContentUtils.unwrap_content_blocks({}), [])
+        self.assertIsNone(ContentUtils.unwrap_content_blocks({"format": "somebody_elses_v2", "blocks": blocks}))
+        self.assertIsNone(ContentUtils.unwrap_content_blocks({"blocks": blocks}))
+        self.assertIsNone(ContentUtils.unwrap_content_blocks({"format": "langchain_v1", "blocks": 42}))
+        self.assertIsNone(ContentUtils.unwrap_content_blocks(blocks))
+        self.assertIsNone(ContentUtils.unwrap_content_blocks(42))
+
+    def test_is_empty_value(self) -> None:
+        """
+        None, "", [] and {} are empty; anything with content, and other
+        types, are not.
+        """
+        self.assertTrue(ContentUtils.is_empty_value(None))
+        self.assertTrue(ContentUtils.is_empty_value(""))
+        self.assertTrue(ContentUtils.is_empty_value([]))
+        self.assertTrue(ContentUtils.is_empty_value({}))
+        self.assertFalse(ContentUtils.is_empty_value("final_answer"))
+        self.assertFalse(ContentUtils.is_empty_value([{"type": "citation"}]))
+        self.assertFalse(ContentUtils.is_empty_value({"signature": "s"}))
+        self.assertFalse(ContentUtils.is_empty_value(0))
+        self.assertFalse(ContentUtils.is_empty_value(False))
+
     def test_history_safe_text_references_data_blocks(self):
         """
         The assistant-history projection keeps text and replaces data blocks
