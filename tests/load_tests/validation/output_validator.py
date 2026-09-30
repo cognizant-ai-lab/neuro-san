@@ -59,8 +59,8 @@ class OutputValidator:
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     @staticmethod
-    def log_stage_results(actual_requests: int, counts: Dict[str, Any], elapsed: float, timeout: int, idle_timeout: int,
-                          show_counts: bool = True) -> None:
+    def log_stage_results(actual_requests: int, counts: Dict[str, Any], elapsed: float, timeout: float,
+                          idle_timeout: float, show_counts: bool = True) -> None:
         """Log per-stage summary of request results.
 
         When ``show_counts`` is False (single-stage runs, where the
