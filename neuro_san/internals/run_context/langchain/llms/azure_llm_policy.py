@@ -113,11 +113,17 @@ class AzureLlmPolicy(OpenAILlmPolicy):
                                                             module_name="openai",
                                                             install_if_missing="langchain-openai")
 
+        # Resolve the configuration before opening anything: the factory drops a policy whose
+        # create_client() raised without calling delete_resources(), so an httpx client opened
+        # first would leak on a missing endpoint or credential.
+        api_key: str = self.resolve_credential(config)
+        base_url: str = self.resolve_base_url(config)
+
         self.create_http_client(config)
 
         client_args: Dict[str, Any] = {
-            "api_key": self.resolve_credential(config),
-            "base_url": self.resolve_base_url(config),
+            "api_key": api_key,
+            "base_url": base_url,
             "organization": self.get_value_or_env(config, "openai_organization", "OPENAI_ORG_ID"),
             "timeout": config.get("request_timeout"),
             "default_headers": self.build_default_headers(config),
@@ -243,7 +249,9 @@ class AzureLlmPolicy(OpenAILlmPolicy):
         The stock ChatOpenAI class would be booked under "openai", and Azure's Responses API names the
         deployment as the response model, which has no llm_info entry to price by. So the metadata names
         the "azure-openai" bucket and, when an OpenAI model is configured behind the deployment, that
-        model as the one to price the usage by. A deployment-only llm_config gets no price.
+        model as the one to price the usage by. A deployment-only llm_config gets no price hint, so the
+        model the response names decides: the deployment echo on the Responses API has no price, while
+        the OpenAI snapshot Chat Completions names is priced.
 
         :param deployment_name: The Azure deployment the requests name
         :param model_name: The OpenAI model behind it, or None when the llm_config gives none

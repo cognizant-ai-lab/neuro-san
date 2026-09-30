@@ -204,7 +204,9 @@ class TestAzureLlmPolicy(TestCase):
         self.requests.append(request)
         body: Dict[str, Any] = self.CHAT_RESPONSE
         if request.url.path.endswith("/responses"):
-            body = self.RESPONSES_RESPONSE
+            # Azure's Responses API echoes whatever deployment it was asked for as the response model.
+            body = dict(self.RESPONSES_RESPONSE)
+            body["model"] = json.loads(request.content).get("model")
         return Response(200, json=body, request=request)
 
     @staticmethod
@@ -279,6 +281,8 @@ class TestAzureLlmPolicy(TestCase):
                 self._build_policy({"azure_endpoint": None})
 
         self.assertIn("AZURE_OPENAI_ENDPOINT", str(context.exception))
+        # Nothing to leak: the configuration is checked before the httpx client is opened.
+        self.assertIsNone(getattr(self.policies[-1], "http_client", None))
         hint: str = ApiKeyErrorCheck.check_for_api_key_exception(context.exception)
         self.assertIn("AZURE_OPENAI_ENDPOINT", hint)
 
@@ -369,6 +373,7 @@ class TestAzureLlmPolicy(TestCase):
             self._build_policy({"openai_api_key": None})
 
         self.assertIn("AZURE_OPENAI_API_KEY", str(context.exception))
+        self.assertIsNone(getattr(self.policies[-1], "http_client", None))
         hint: str = ApiKeyErrorCheck.check_for_api_key_exception(context.exception)
         self.assertIn("AZURE_OPENAI_API_KEY", hint)
 
@@ -579,6 +584,32 @@ class TestAzureLlmPolicy(TestCase):
         self.assertEqual(entry["successful_requests"], 1)
         self.assertGreater(entry["total_cost"], 0.0)
         self.assertEqual(handler.total_cost, entry["total_cost"])
+
+    def test_deployment_only_usage_is_booked_by_what_the_response_names(self) -> None:
+        """
+        Without a model_name there is no price hint, so the response model decides: the Responses API echoes
+        the deployment, which has no price, while Chat Completions names the OpenAI snapshot, which is priced.
+        Both still land in the "azure-openai" bucket.
+        """
+        factory: DefaultLlmFactory = DefaultLlmFactory()
+        factory.load()
+        # A deployment name the catalogue does not know, unlike "gpt-4o", which happens to be an alias in it.
+        for use_responses_api, expected_key in ((True, "my-deployment"), (False, self.MODEL_NAME)):
+            with self.subTest(use_responses_api=use_responses_api):
+                self.requests = []
+                _, llm = self._build_policy({"use_responses_api": use_responses_api,
+                                             "deployment_name": "my-deployment"}, model_name=None, capture=True)
+                handler: LlmTokenCallbackHandler = LlmTokenCallbackHandler(factory.llm_infos)
+
+                with owning_agent_scope(handler):
+                    asyncio.run(llm.ainvoke([HumanMessage("hi")], config={"callbacks": [handler]}))
+
+                entry: Dict[str, Any] = handler.models_token_dict["azure-openai"][expected_key]
+                self.assertEqual(entry["successful_requests"], 1)
+                if use_responses_api:
+                    self.assertEqual(entry["total_cost"], 0.0)
+                else:
+                    self.assertGreater(entry["total_cost"], 0.0)
 
     # ---- SDK client settings --------------------------------------------------------------------
 
