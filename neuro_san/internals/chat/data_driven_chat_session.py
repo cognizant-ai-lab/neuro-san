@@ -358,7 +358,7 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         """
         # OK if this is None
         max_message_history: int = self.front_man.get_agent_tool_spec().get("max_message_history")
-        processor: MessageProcessor = ChatHistoryMessageProcessor(max_message_history)
+        processor = ChatHistoryMessageProcessor(max_message_history)
         processor.process_messages(chat_message_history)
 
         chat_history: Dict[str, Any] = {
@@ -397,7 +397,7 @@ class DataDrivenChatSession(RunTarget, LingeringResource):
         """
         Close any sly data value that can be closed.
         """
-        if self.sly_data is None or len(self.sly_data) == 0:
+        if self.sly_data is None or len(self.sly_data.keys()) == 0:
             # Nothing to close
             return
 
