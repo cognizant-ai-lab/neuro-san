@@ -33,26 +33,6 @@ class AbstractNetworkValidator(DictionaryValidator):
     # "key present but null" can compare against this with ``is``.
     _PARAMS_NOT_FOUND: Any = object()
 
-    @staticmethod
-    def _locate_parameters(agent_spec: Any) -> Any:
-        """
-        Locate the parameters block on an agent spec, checking
-        ``function.parameters`` (OpenAI-style) first, then a top-level
-        ``parameters`` key.
-
-        :return: The raw value if the key exists (may be ``None`` for
-                 explicitly null entries), or ``_PARAMS_NOT_FOUND`` when
-                 no parameters key is present at all.
-        """
-        if not isinstance(agent_spec, dict):
-            return AbstractNetworkValidator._PARAMS_NOT_FOUND
-        function_block: Any = agent_spec.get("function")
-        if isinstance(function_block, dict) and "parameters" in function_block:
-            return function_block.get("parameters")
-        if "parameters" in agent_spec:
-            return agent_spec.get("parameters")
-        return AbstractNetworkValidator._PARAMS_NOT_FOUND
-
     def validate(self, candidate: Dict[str, Any]) -> List[str]:
         """
         Validate the agent network.
@@ -181,3 +161,30 @@ class AbstractNetworkValidator(DictionaryValidator):
         if isinstance(args_tools, list):
             return args_tools
         return no_tools
+
+    @staticmethod
+    def _locate_parameters(agent_spec: Any) -> Any:
+        """
+        Locate the parameters block on an agent spec, checking
+        ``function.parameters`` (OpenAI-style) first, then a top-level
+        ``parameters`` key.
+
+        :return: The raw value if the key exists (may be ``None`` for
+                 explicitly null entries), or ``_PARAMS_NOT_FOUND`` when
+                 no parameters key is present at all.
+        """
+        if not isinstance(agent_spec, dict):
+            return AbstractNetworkValidator._PARAMS_NOT_FOUND
+
+        agent_spec_dict: Dict[str, Any] = agent_spec
+
+        function_block: Any = agent_spec_dict.get("function")
+        if isinstance(function_block, dict):
+            function_block_dict: Dict[str, Any] = function_block
+            if "parameters" in function_block_dict.keys():
+                return function_block_dict.get("parameters")
+
+        if "parameters" in agent_spec_dict.keys():
+            return agent_spec_dict.get("parameters")
+
+        return AbstractNetworkValidator._PARAMS_NOT_FOUND

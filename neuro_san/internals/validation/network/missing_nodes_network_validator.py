@@ -49,9 +49,15 @@ class MissingNodesNetworkValidator(AbstractNetworkValidator):
         # Validate that agent tools have corresponding nodes
         missing_nodes: Dict[str, List[str]] = self.find_missing_agent_nodes(name_to_spec)
         if missing_nodes:
+            agent: str = None
+            missing_tools: List[str] = None
             for agent, missing_tools in missing_nodes.items():
                 # Format the comma-separated list of missing tools
-                tools_str: str = ", ".join(f"'{tool}'" for tool in missing_tools)
+                tools_list: List[str] = []
+                tool: str = None
+                for tool in missing_tools:
+                    tools_list.append(f"'{tool}'")
+                tools_str: str = ", ".join(tools_list)
                 errors.append(
                     f"Agent '{agent}' references non-existent agent(s) in tools: {tools_str}"
                 )
@@ -73,6 +79,8 @@ class MissingNodesNetworkValidator(AbstractNetworkValidator):
         missing_nodes: Dict[str, List[str]] = {}
 
         # Iterate through all agents in the network
+        agent_name: str = None
+        agent_data: Dict[str, Any] = None
         for agent_name, agent_data in name_to_spec.items():
 
             # coerce_tools treats a malformed `tools` (non-list) as empty so this
@@ -82,15 +90,17 @@ class MissingNodesNetworkValidator(AbstractNetworkValidator):
             safe_tools: List[str] = self.remove_dictionary_tools(tools)
 
             # Check each tool in the agent's tools list
+            tool: str = None
             for tool in safe_tools:
                 # Skip URL/path tools - they're not agents and don't need nodes
                 if self.is_url_or_path(tool):
                     continue
 
                 # If tool is an agent reference but has no node in network, it's invalid
-                if tool not in name_to_spec:
-                    if agent_name not in missing_nodes:
+                if tool not in name_to_spec.keys():
+                    if agent_name not in missing_nodes.keys():
                         missing_nodes[agent_name] = []
-                    missing_nodes[agent_name].append(tool)
+                    missing_nodes_entry: List[str] = missing_nodes[agent_name]
+                    missing_nodes_entry.append(tool)
 
         return missing_nodes

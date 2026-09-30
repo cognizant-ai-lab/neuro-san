@@ -120,10 +120,19 @@ class SemanticParametersNetworkValidator(AbstractNetworkValidator):
         if not isinstance(params, dict):
             return errors
 
-        properties: Any = params.get("properties")
-        required: Any = params.get("required")
+        params_dict: Dict[str, Any] = params
+        properties: Any = params_dict.get("properties")
+        required: Any = params_dict.get("required")
         if isinstance(required, list) and isinstance(properties, dict):
-            missing: List[str] = [r for r in required if r not in properties]
+            required_list: List[str] = required
+            properties_dict: Dict[str, Any] = properties
+
+            missing: List[str] = []
+            one_required: str = None
+            for one_required in required_list:
+                if one_required not in properties_dict.keys():
+                    missing.append(one_required)
+
             if missing:
                 errors.append(
                     f"{agent_name}: {path}.required has undefined props {missing}"
@@ -150,10 +159,11 @@ class SemanticParametersNetworkValidator(AbstractNetworkValidator):
         if not isinstance(schema, dict):
             return found
 
-        if "parameters" in schema:
+        schema_dict: Dict[str, Any] = schema
+        if "parameters" in schema_dict:
             found.append(path)
 
-        for child, child_path in cls._iter_subschemas(schema, path):
+        for child, child_path in cls._iter_subschemas(schema_dict, path):
             found.extend(cls._find_nested_parameters_keys(child, child_path))
 
         return found
