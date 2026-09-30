@@ -55,8 +55,13 @@ class TestRunnerResponseChecks(TestCase):
         """
         Return a BasicMessageProcessor that has seen an AI answer, then the
         final AGENT_FRAMEWORK message that carries chat_context and sly_data
-        (the shape a streaming_chat stream ends with)."""
-        processor = BasicMessageProcessor()
+        (the shape a streaming_chat stream ends with).
+
+        :param answer: Text of the AI message
+        :param sly_data: sly_data of the final AGENT_FRAMEWORK message, or None to send no such message
+        :return: The processor
+        """
+        processor: BasicMessageProcessor = BasicMessageProcessor()
         processor.process_message({"type": "AI", "text": answer})
         if sly_data is not None:
             processor.process_message({
@@ -68,8 +73,11 @@ class TestRunnerResponseChecks(TestCase):
     def _runner(failure_patterns: Optional[List[str]] = None) -> TrafficRunner:
         """
         Return a runner over a one-prompt profile.
+
+        :param failure_patterns: failure_patterns of the profile, or None for none
+        :return: The runner
         """
-        profile = AgentProfile("x", {"prompts": ["p"], "failure_patterns": failure_patterns or []})
+        profile: AgentProfile = AgentProfile("x", {"prompts": ["p"], "failure_patterns": failure_patterns or []})
         return TrafficRunner(Namespace(same_prompt=False), profile)
 
     def test_no_checks_passes(self) -> None:

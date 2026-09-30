@@ -556,7 +556,8 @@ class Heartbeat:  # pylint: disable=too-many-instance-attributes
         progress_file.flush()
 
     def _write_to_console(self, tick_count: int, line: str, force: bool = False) -> None:
-        """Write progress to console.
+        """
+        Write progress to console.
 
         Prints the full line on tick 1, then every
         ``CONSOLE_TICK_INTERVAL`` ticks (currently every tick), and

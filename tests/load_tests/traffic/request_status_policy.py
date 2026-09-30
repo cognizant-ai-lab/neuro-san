@@ -30,7 +30,7 @@ class RequestStatusPolicy:
     and CREATED when it produced one.
     """
 
-    def __init__(self, timeout: float):
+    def __init__(self, timeout: float) -> None:
         """
         Constructor.
 

@@ -179,8 +179,8 @@ class LoadTestOrchestrator:  # pylint: disable=too-many-instance-attributes
             ServerLogMonitor(self.server_log)
             if self.server_log else None
         )
-        self._cancel_event = threading.Event()
-        self.runner = TrafficRunner(args, self.profile, self._cancel_event)
+        self._cancel_event: threading.Event = threading.Event()
+        self.runner: TrafficRunner = TrafficRunner(args, self.profile, self._cancel_event)
         self.resource_reporter = ResourceReporter()
         self.probe_result = None
         self._output_dir = None
