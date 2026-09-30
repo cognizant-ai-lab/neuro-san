@@ -430,9 +430,9 @@ class RunContextRunnable(NeuroSanRunnable):
         carries block content (Anthropic thinking, OpenAI Responses reasoning,
         ...), that message is preserved instead, with its content normalized
         to standard v1 blocks (see ContentUtils.normalize_message) so the
-        blocks and its usage_metadata reach the journal. The wire is the
-        same either way: the converter projects block content to the same
-        text and emits nothing else for it in this phase.
+        blocks and its usage_metadata reach the journal. The wire carries
+        the same text either way; for preserved block content the converter
+        also emits the content_blocks wrapper.
 
         The chat history does not depend on which shape is chosen:
         OriginatingJournal.write_message appends a text-only copy of any
@@ -483,9 +483,10 @@ class RunContextRunnable(NeuroSanRunnable):
         # its opaque data, see ContentUtils.standard_blocks), an OpenAI
         # Responses answer with reasoning summaries on (reasoning items, then
         # text, with their ids kept on the blocks), or any answer whose text
-        # arrives as two or more text blocks or as text blocks carrying
-        # annotations or extras (citations), since is_trivial collapses only
-        # a single plain text block. Not expected here: tool-call blocks
+        # arrives as two or more text blocks or as a text block carrying a
+        # key with a value beyond type/text/id/index (annotations, extras, an
+        # OpenAI Responses "phase"), since is_trivial collapses only a single
+        # plain text block. Not expected here: tool-call blocks
         # (standard_blocks leaves them out), data blocks (providers do not
         # emit them in assistant answers), chunks (converted above) and mixed
         # string-and-block lists (caught by the text check above).
