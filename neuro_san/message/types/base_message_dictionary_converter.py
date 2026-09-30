@@ -18,6 +18,10 @@
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
+from typing import Union
+
+import logging
 
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.base import BaseMessage
@@ -63,7 +67,14 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
 
     def to_dict(self, obj: BaseMessage) -> Dict[str, Any]:
         """
-        Convert the BaseMessage to a chat.ChatMessage dictionary
+        Convert the BaseMessage to a chat.ChatMessage dictionary.
+
+        text always carries the flattened text. Block content that says more
+        than its text (reasoning, images, several text blocks, provider extras,
+        ...) also rides in content_blocks, the format-tagged wrapper from
+        chat.proto. Content that normalizes to a plain string (see
+        ContentUtils.normalize_content) carries no content_blocks key, so
+        text-only traffic keeps its exact shape.
 
         :param obj: The BaseMessage to convert
         :return: The ChatMessage in dictionary form
@@ -90,6 +101,7 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
             "structure": "structure",
             "sly_data": "sly_data",
         }
+        content_blocks: Optional[Dict[str, Any]] = None
         for src, dest in optionals.items():
             value: Any = None
             try:
@@ -119,11 +131,52 @@ class BaseMessageDictionaryConverter(DictionaryConverter):
                     # flatten, and this projection preserves that wire shape
                     # exactly.
                     value = ContentUtils.flatten_to_text(value)
+                    content_blocks = self.content_blocks_for(message)
 
             if value is not None:
                 chat_message[dest] = value
 
+        if content_blocks is not None:
+            chat_message["content_blocks"] = content_blocks
+
         return chat_message
+
+    def content_blocks_for(self, message: BaseMessage) -> Optional[Dict[str, Any]]:
+        """
+        Build the content_blocks wrapper for a message with list content.
+
+        normalize_content collapses a lone text block (and a list of strings)
+        to text, so only real block content is wrapped. The provider
+        translators it runs raise on malformed blocks (a text block with no
+        "text", a non_standard block with no "value", ...) where the text
+        projection never did, and they skip content items they do not
+        recognize (a bare string inside a block list), which can drop text.
+        In both cases the message goes out text-only: the wrapper is only
+        emitted while its blocks still flatten to the message's text.
+
+        :param message: A BaseMessage whose content is a non-empty list
+        :return: The wrapper dictionary, or None when the content is only text
+                 or could not be standardized without losing text
+        """
+        logger: logging.Logger = logging.getLogger(self.__class__.__name__)
+        try:
+            normalized: Union[str, List[Dict[str, Any]]] = ContentUtils.normalize_content(message)
+        except (KeyError, ValueError, TypeError, AttributeError) as exception:
+            logger.warning("Could not standardize the block content of a %s; sending its text only: %s",
+                           message.__class__.__name__, exception)
+            return None
+
+        if not isinstance(normalized, list):
+            return None
+
+        blocks_text: str = ContentUtils.flatten_to_text(normalized)
+        message_text: str = ContentUtils.flatten_to_text(message)
+        if blocks_text != message_text:
+            logger.warning("Standardizing the block content of a %s lost text; sending its text only",
+                           message.__class__.__name__)
+            return None
+
+        return ContentUtils.wrap_content_blocks(normalized)
 
     def from_dict(self, obj_dict: Dict[str, Any]) -> BaseMessage:
         """
