@@ -13,9 +13,7 @@
 # limitations under the License.
 #
 # END COPYRIGHT
-"""
-Unit tests for StagePlan.
-"""
+
 
 from unittest import TestCase
 

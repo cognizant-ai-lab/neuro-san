@@ -522,11 +522,9 @@ class TrafficRunner:
             futures.append(future)
 
     @staticmethod
-    def _collect_with_timeout(
-            futures: List[Future], results_list: List[Dict[str, Any]], *,
-            start: float, stage_timeout: Optional[float],
-            cancel_event: Optional[threading.Event] = None,
-    ) -> Tuple[int, bool]:
+    def _collect_with_timeout(futures: List[Future], results_list: List[Dict[str, Any]], start: float,
+                              stage_timeout: Optional[float],
+                              cancel_event: Optional[threading.Event] = None) -> Tuple[int, bool]:
         """
         Collect future results, cancelling stragglers on timeout/Ctrl-C.
 
@@ -679,8 +677,8 @@ class TrafficRunner:
                 logger.info("  stderr: %s", last_err)
 
     @staticmethod
-    def _write_result_to_file(output_dir: str, request_id: int, status: str,
-                              elapsed: float, *, parsed_fields: Dict[str, str]) -> None:
+    def _write_result_to_file(output_dir: str, request_id: int, status: str, elapsed: float,
+                              parsed_fields: Dict[str, str]) -> None:
         """
         Append a successful request result to progress.log.
 
