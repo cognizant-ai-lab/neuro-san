@@ -48,7 +48,6 @@ from tests.load_tests.config import FAILURE_REASON_LINE_LIMIT
 from tests.load_tests.config import STATUS_CREATED
 from tests.load_tests.config import STATUS_FAILED
 from tests.load_tests.config import STATUS_KILLED
-from tests.load_tests.config import STATUS_TIMEOUT
 from tests.load_tests.config import THREAD_JOIN_TIMEOUT
 from tests.load_tests.cost_estimator import CostEstimator
 from tests.load_tests.monitoring.heartbeat import Heartbeat
@@ -61,6 +60,7 @@ from tests.load_tests.traffic.agent_request_executor import AgentRequestExecutor
 from tests.load_tests.traffic.agent_request_result import AgentRequestResult
 from tests.load_tests.traffic.load_test_assert_forwarder import LoadTestAssertForwarder
 from tests.load_tests.traffic.output_parser import OutputParser
+from tests.load_tests.traffic.request_status_policy import RequestStatusPolicy
 from tests.load_tests.traffic.stage_plan import StagePlan
 
 logger = logging.getLogger(__name__)
@@ -131,10 +131,8 @@ class TrafficRunner:
             self._args.agent, prompt,
             timeout=self._args.request_timeout,
             idle_timeout=self._args.idle_timeout,
-            use_https=getattr(self._args, "https", False),
-            chat_filter_type=getattr(
-                self._args, "chat_filter", "maximal",
-            ).upper(),
+            use_https=self._args.https,
+            chat_filter_type=self._args.chat_filter.upper(),
         )
         elapsed: float = time.perf_counter() - start
         status: str = request_result.get_status()
@@ -179,19 +177,9 @@ class TrafficRunner:
             )
         if status != STATUS_FAILED:
             return None
-        if not TrafficRunner._is_traceback(request_result):
+        if not RequestStatusPolicy.is_traceback(status, response_text):
             return "empty response from agent"
         return OutputParser.last_stderr_line(response_text)
-
-    @staticmethod
-    def _is_traceback(request_result: AgentRequestResult) -> bool:
-        """
-        Tell whether AgentRequestExecutor caught an exception and returned its traceback as the response text.
-
-        :param request_result: What AgentRequestExecutor returned for the request
-        :return: True for a FAILED status with a response text
-        """
-        return request_result.get_status() == STATUS_FAILED and bool(request_result.get_response_text())
 
     def _record_request(self, request_id: int, output_dir: Optional[str],
                         request_result: AgentRequestResult, result: Dict[str, Any]) -> None:
@@ -213,14 +201,14 @@ class TrafficRunner:
         # A traceback goes to stderr instead of being saved as the agent's answer.
         stderr: str = ""
         stdout: str = self._http_saved_stdout(response_text, token_data)
-        if TrafficRunner._is_traceback(request_result):
+        if RequestStatusPolicy.is_traceback(request_result.get_status(), response_text):
             stderr = response_text
             stdout = ""
 
         self._save_request_output(output_dir, request_id, stdout, stderr)
 
         status: str = result.get("status")
-        if output_dir and not self._is_failure(status):
+        if output_dir and not RequestStatusPolicy.is_failure(status):
             self._write_result_to_file(
                 output_dir, request_id, status, result.get("elapsed"),
                 parsed_fields=parsed_fields,
@@ -638,18 +626,6 @@ class TrafficRunner:
                 results_list.append(fut.result())
         return killed
 
-    @staticmethod
-    def _is_failure(status: str) -> bool:
-        """
-        Tell whether a status counts as a failure.
-
-        :param status: One of the STATUS_* values
-        :return: True for FAILED, TIMEOUT and KILLED
-        """
-        return status in (
-            STATUS_FAILED, STATUS_TIMEOUT, STATUS_KILLED,
-        )
-
     def _log_request_result(self, request_id: int, result: Dict[str, Any],
                             parsed_fields: Dict[str, str], stderr: str) -> None:
         """
@@ -665,7 +641,7 @@ class TrafficRunner:
         status: str = result.get("status")
         elapsed: float = result.get("elapsed")
         failure_reason: Optional[str] = result.get("failure_reason")
-        is_failure: bool = self._is_failure(status)
+        is_failure: bool = RequestStatusPolicy.is_failure(status)
         if is_failure:
             rank: int
             with self._failure_log_lock:

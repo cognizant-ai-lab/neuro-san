@@ -132,7 +132,8 @@ class TestRunnerResponseChecks(TestCase):
         """
         profile = AgentProfile("x", {"prompts": ["p"]})
         args = Namespace(
-            same_prompt=False, allow_caching=False, host="localhost", port=8080, agent="x",
+            same_prompt=False, allow_caching=False, host="localhost", port=8080, https=False, agent="x",
+            chat_filter="maximal",
             request_timeout=5.0, idle_timeout=5.0, include_tokens=False, stage_timeout=stage_timeout,
         )
         return TrafficRunner(args, profile)
