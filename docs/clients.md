@@ -115,8 +115,9 @@ The blocks are plain JSON objects, each with a `type` key, so no library is need
 {"type": "non_standard", "value": {"...": "the provider's own block"}}
 ```
 
-Today the blocks a model produces are `text` and `reasoning`. Any block may carry provider details in an
-`extras` object, such as a thinking signature, and a text block from OpenAI may carry a `phase`. The `image`,
+Today the blocks a model produces are `text` and `reasoning`, with one exception: an Anthropic
+`redacted_thinking` block arrives as `non_standard`. Any block may carry provider details in an `extras`
+object, such as a thinking signature, and a text block from OpenAI may carry a `phase`. The `image`,
 `audio` and `file` shapes are how attachments travel. Today they can only come from a tool that returns
 content blocks, on an AGENT_TOOL_RESULT message; models do not produce them yet, and a client cannot send
 them yet. Inline binary data is always a base64 string in `base64` next to a `mime_type`, never raw bytes; a
