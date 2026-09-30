@@ -46,7 +46,6 @@ from neuro_san.internals.run_context.factory.run_context_factory import RunConte
 from neuro_san.internals.run_context.factory.master_tracing_context_factory import MasterTracingContextFactory
 from neuro_san.internals.run_context.interfaces.run_context import RunContext
 from neuro_san.message.processors.answer_message_processor import AnswerMessageProcessor
-from neuro_san.message.processors.message_processor import MessageProcessor
 from neuro_san.message.types.agent_framework_message import AgentFrameworkMessage
 from neuro_san.message.types.base_message_dictionary_converter import BaseMessageDictionaryConverter
 from neuro_san.message.utils.sly_data_redactor import SlyDataRedactor
